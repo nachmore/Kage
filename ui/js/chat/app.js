@@ -1214,8 +1214,17 @@ export class ChatApp {
             return;
         }
 
-        // Sort: default session first, then by updated_at descending
-        const defaultId = this.currentAcpSessionId || this.floatingSessionId;
+        // "Default session" is the floating window's pinned session — the
+        // one launcher chats land in. We pin it to the top of the sidebar
+        // and badge it so the user can always find their main thread.
+        // Pre-fix this also folded in `currentAcpSessionId` (this window's
+        // active selection), which had two visible bugs: (1) clicking
+        // around the list reshuffled which item lived in the top "default"
+        // slot; (2) when the chat window's pinned session diverged from
+        // floating's, both rows got the badge at once. The active
+        // selection already gets the `.active` highlight, so it doesn't
+        // need to also masquerade as the default.
+        const defaultId = this.floatingSessionId;
         const sorted = [...this.sessions].sort((a, b) => {
             const aIsDefault = a.session_id === defaultId;
             const bIsDefault = b.session_id === defaultId;
@@ -1228,10 +1237,17 @@ export class ChatApp {
         const filtered = searchQuery
             ? sorted.filter((s) => (s.title || 'New Chat').toLowerCase().includes(searchQuery))
             : sorted.filter((s) => {
-                  // Hide steering-only sessions ("New Chat") unless it's the current session
-                  if ((s.title || 'New Chat') === 'New Chat' && s.session_id !== defaultId)
-                      return false;
-                  return true;
+                  // Hide steering-only sessions ("New Chat") unless it's the
+                  // default session OR the user's current selection. Without
+                  // the second case, switching to a freshly-created "New
+                  // Chat" peer would make it vanish from the sidebar mid-click.
+                  const title = s.title || 'New Chat';
+                  if (title !== 'New Chat') return true;
+                  return (
+                      s.session_id === defaultId ||
+                      s.session_id === this.currentAcpSessionId ||
+                      s.session_id === this.activeSessionId
+                  );
               });
 
         if (filtered.length === 0) {
@@ -1263,9 +1279,7 @@ export class ChatApp {
         for (const session of filtered) {
             sessionById.set(session.session_id, session);
             desiredIds.push(session.session_id);
-            const isDefault =
-                session.session_id === this.currentAcpSessionId ||
-                session.session_id === this.floatingSessionId;
+            const isDefault = session.session_id === this.floatingSessionId;
             if (isDefault && !searchQuery) {
                 desiredIds.push('__separator__');
             }
@@ -1298,7 +1312,6 @@ export class ChatApp {
 
             const session = sessionById.get(key);
             const isFloating = session.session_id === this.floatingSessionId;
-            const isCurrent = session.session_id === this.currentAcpSessionId;
             const isActive = session.session_id === this.activeSessionId;
             const isNew = !this._seenSessionIds.has(session.session_id);
             const title = stripKageTags(session.title) || t('chat.session.default_title');
@@ -1315,23 +1328,23 @@ export class ChatApp {
                 const newDot = isNew
                     ? `<span class="session-new-dot" title="${t('chat.session.new_dot_title')}">●</span>`
                     : '';
-                const badges =
-                    isCurrent || isFloating ? '<span class="session-current-badge">●</span>' : '';
+                // Badge + "default session" suffix represent floating's
+                // pinned thread only — the row this window happens to
+                // have selected gets `.active` styling instead.
+                const badges = isFloating ? '<span class="session-current-badge">●</span>' : '';
                 const newTitleHtml = `${newDot}${escapeHtml(title)}${badges}`;
                 if (titleEl && titleEl.innerHTML !== newTitleHtml) titleEl.innerHTML = newTitleHtml;
 
                 const dateEl = item.querySelector('.session-item-date');
-                const dateSuffix =
-                    isCurrent || isFloating
-                        ? ' · <span class="session-default-label">default session</span>'
-                        : '';
+                const dateSuffix = isFloating
+                    ? ' · <span class="session-default-label">default session</span>'
+                    : '';
                 const newDateHtml = `${dateStr}${dateSuffix}`;
                 if (dateEl && dateEl.innerHTML !== newDateHtml) dateEl.innerHTML = newDateHtml;
             } else {
                 // Create new item
                 item = this._createSessionItem(session, {
                     isFloating,
-                    isCurrent,
                     isActive,
                     isNew,
                     title,
@@ -1368,7 +1381,7 @@ export class ChatApp {
     }
 
     /** Create a new session-item DOM element with event listeners. */
-    _createSessionItem(session, { isFloating, isCurrent, isActive, isNew, title, dateStr }) {
+    _createSessionItem(session, { isFloating, isActive, isNew, title, dateStr }) {
         const item = document.createElement('div');
         item.className =
             'session-item' + (isActive ? ' active' : '') + (isNew ? ' session-new' : '');
@@ -1377,12 +1390,12 @@ export class ChatApp {
         const newDot = isNew
             ? `<span class="session-new-dot" title="${t('chat.session.new_dot_title')}">●</span>`
             : '';
-        const badges =
-            isCurrent || isFloating ? '<span class="session-current-badge">●</span>' : '';
-        const dateSuffix =
-            isCurrent || isFloating
-                ? ' · <span class="session-default-label">default session</span>'
-                : '';
+        // See note in renderSessionList — only floating's pinned row
+        // gets the default-session badge + suffix.
+        const badges = isFloating ? '<span class="session-current-badge">●</span>' : '';
+        const dateSuffix = isFloating
+            ? ' · <span class="session-default-label">default session</span>'
+            : '';
 
         item.innerHTML = `
                 <div class="session-item-content">
