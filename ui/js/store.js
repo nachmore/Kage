@@ -624,7 +624,13 @@ async function uninstallItem(id, kind) {
 
 function openSettings(extensionId) {
     const invoke = window.__TAURI__.core.invoke;
-    invoke('open_settings_window', { section: extensionId });
+    // Sandboxed extension settings modules register with id
+    // `ext-<extensionId>` (see SandboxedExtensionSettingsModule in
+    // settings/manager.js). switchSection() matches on that id; if
+    // we passed the bare extension id the sidebar lookup would miss
+    // and every `[data-section-content]` would end up hidden,
+    // leaving the right pane empty.
+    invoke('open_settings_window', { section: `ext-${extensionId}` });
 }
 
 let searchTimeout;

@@ -6,11 +6,25 @@ body {
     color: var(--kage-text);
     overflow: hidden;
     height: 100vh;
+    /* Save bar height — used by .settings-container so the
+       scrollable content area ends ABOVE the fixed save bar's top
+       edge (rather than running full-viewport with the bar floating
+       on top of the scrollbar track). The 56px figure is the bar's
+       padding (12+12) + button height (~32 with 13px font + 8+8
+       padding) + 1px border. Tweak this if the save bar's vertical
+       metrics ever change. */
+    --kage-save-bar-height: 56px;
 }
 
 .settings-container {
     display: flex;
-    height: 100vh;
+    /* Reserve the bottom strip for the fixed save bar so the
+       content area's scrollbar terminates at the bar's top edge,
+       not under it. Without this, the scrollbar visually tunneled
+       through the save bar and the last setting in any section
+       could only be revealed by scrolling slightly past the
+       padding cushion — feels broken even though it works. */
+    height: calc(100vh - var(--kage-save-bar-height));
     width: 100%;
 }
 
@@ -101,13 +115,11 @@ body {
 .settings-content {
     flex: 1;
     overflow-y: auto;
-    /* Bottom padding has to clear the fixed save bar (~52px tall: 24px
-       padding * 2 + 36px button) plus a small breathing buffer, otherwise
-       the last setting in any section stays permanently hidden under the
-       bar. The previous 60px just barely worked for short rows but cut
-       off help text on multi-line description rows. 80px gives every row
-       a clean reveal at the scroll bottom. */
-    padding: 30px 40px 80px 40px;
+    /* The container clips us short of the save bar (see
+       --kage-save-bar-height in body); padding-bottom is just a
+       breathing buffer so the last row doesn't sit flush against
+       the save bar's top border. */
+    padding: 30px 40px 24px 40px;
 }
 .settings-section {
     margin-bottom: 40px;
