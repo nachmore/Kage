@@ -4,6 +4,7 @@
  */
 
 import { errLabel } from '../shared/error-message.js';
+import { applyManifestI18n, fetchExtensionLocaleViaInvoke } from '../shared/extension-manager.js';
 import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
 import { renderSchema } from '../shared/settings-renderer.js';
@@ -124,6 +125,7 @@ export class SandboxedExtensionSettingsModule {
  * rendering, fetch the declared schema, and build the adapter module.
  */
 export async function buildSandboxedSettingsModule({
+    invoke,
     pool,
     manifest,
     capabilities,
@@ -138,11 +140,28 @@ export async function buildSandboxedSettingsModule({
     // Extension config values the provider should see.
     const extConfig = currentConfig?.extensions?.[manifest.id] || {};
 
+    // Fetch the extension's _locales/ catalog and apply __MSG_*__ token
+    // resolution to the manifest. Without this the section header,
+    // sidebar entry, and capability description all rendered raw tokens
+    // ("__MSG_manifest.name__"), and the sandbox runtime's `t()` proxy
+    // returned bare keys ("settings.show_overlay.label") because the
+    // catalog wasn't seeded. The extension manager applies the same
+    // pair (manifest tokens + sandbox catalog) for runtime extensions;
+    // settings was missing both.
+    const i18n = invoke
+        ? await fetchExtensionLocaleViaInvoke(invoke, manifest)
+        : { catalog: {}, fallback: {}, language: 'en', rtl: false };
+    const localizedManifest = applyManifestI18n(manifest, i18n.catalog, i18n.fallback);
+
     const sandbox = await pool.load({
         extensionId: manifest.id,
         capabilities,
         config: extConfig,
         sources,
+        i18nCatalog: i18n.catalog,
+        i18nFallback: i18n.fallback,
+        i18nLanguage: i18n.language,
+        i18nRtl: i18n.rtl,
     });
 
     if (!sandbox.hasSettings) {
@@ -168,7 +187,7 @@ export async function buildSandboxedSettingsModule({
 
     return new SandboxedExtensionSettingsModule({
         extensionId: manifest.id,
-        manifest,
+        manifest: localizedManifest,
         sandbox,
         rendered,
         capabilities,

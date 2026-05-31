@@ -243,6 +243,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     async function loadSandboxedSettings({ manifest, sourceCode }) {
         const capabilities = resolveCaps(manifest);
         const mod = await buildSandboxedSettingsModule({
+            invoke,
             pool: sandboxPool,
             manifest,
             capabilities,
@@ -250,7 +251,10 @@ window.addEventListener('DOMContentLoaded', async () => {
             currentConfig,
         });
         settingsManager.registerModule(mod);
-        addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
+        // Use the module's already-localized title (set on the adapter
+        // from `localizedManifest.name`). Passing the raw `manifest.name`
+        // here would surface `__MSG_manifest.name__` in the sidebar.
+        addExtensionSidebarItem(mod.id, manifest.icon || '📦', mod.title);
     }
 
     // Load extension settings. Every extension lives under the per-user
@@ -362,6 +366,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                     });
                     const capabilities = resolveCaps(manifest);
                     const mod = await buildSandboxedSettingsModule({
+                        invoke,
                         pool: sandboxPool,
                         manifest,
                         capabilities,
@@ -370,7 +375,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                     });
                     const insertIdx = Math.max(0, settingsManager.modules.length - 2);
                     settingsManager.modules.splice(insertIdx, 0, mod);
-                    addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
+                    addExtensionSidebarItem(mod.id, manifest.icon || '📦', mod.title);
                     added = true;
                     console.log(
                         `[Settings] Hot-loaded extension settings: ${manifest.id} v${manifest.version}`

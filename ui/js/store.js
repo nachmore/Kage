@@ -87,28 +87,36 @@ async function refreshInstalled() {
     // when the store is offline. The store window's "browse online" view
     // normally pulls these from the catalog; offline we synthesise rows
     // from this same map so the user can still see what they have.
-    const captureManifest = (e, kind) => ({
-        version: e.manifest.version,
-        kind,
-        hasSettings: !!e.manifest.contributes?.settingsProvider,
-        name: e.manifest.name,
-        description: e.manifest.description || '',
-        icon: e.manifest.icon || '',
-        author: e.manifest.author || null,
-        permissions: Array.isArray(e.manifest.permissions) ? e.manifest.permissions : [],
-    });
-    try {
-        const exts = await invoke('list_extensions');
-        exts.forEach((e) => installedMap.set(e.manifest.id, captureManifest(e, 'extension')));
-    } catch {}
-    try {
-        const themes = await invoke('list_themes');
-        themes.forEach((e) => installedMap.set(e.manifest.id, captureManifest(e, 'theme')));
-    } catch {}
-    try {
-        const packs = await invoke('list_command_packs');
-        packs.forEach((e) => installedMap.set(e.manifest.id, captureManifest(e, 'commands')));
-    } catch {}
+    //
+    // Resolve `__MSG_*__` tokens in name/description by reading the
+    // extension's _locales/<lang>/messages.json. Without this the
+    // offline view shows raw tokens for any extension that uses the
+    // Chrome convention, which looks like "this install is broken."
+    const captureManifest = async (e, kind) => {
+        const localized = await localizeManifestForPrompt(invoke, e.manifest);
+        return {
+            version: e.manifest.version,
+            kind,
+            hasSettings: !!e.manifest.contributes?.settingsProvider,
+            name: localized.name,
+            description: localized.description || '',
+            icon: e.manifest.icon || '',
+            author: e.manifest.author || null,
+            permissions: Array.isArray(e.manifest.permissions) ? e.manifest.permissions : [],
+        };
+    };
+    const collect = async (cmd, kind) => {
+        try {
+            const items = await invoke(cmd);
+            const captured = await Promise.all(items.map((e) => captureManifest(e, kind)));
+            items.forEach((e, i) => installedMap.set(e.manifest.id, captured[i]));
+        } catch {}
+    };
+    await Promise.all([
+        collect('list_extensions', 'extension'),
+        collect('list_themes', 'theme'),
+        collect('list_command_packs', 'commands'),
+    ]);
 }
 
 function hasUpdate(itemId, remoteVersion) {

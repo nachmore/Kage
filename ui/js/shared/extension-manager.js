@@ -115,22 +115,23 @@ export function applyManifestI18n(manifest, catalog, fallback) {
 }
 
 /**
- * One-shot helper for callers outside the manager that need a localized
- * manifest — e.g. the install-time permission prompt, which shows the
- * extension's name and description before the manager has loaded the
- * extension. Reads `_locales/<lang>/messages.json` via
- * `read_extension_locale` and applies tokens to a copy of the manifest.
+ * Fetch an extension's `_locales/<lang>/messages.json` payload and pick
+ * the right catalog for the host language (with EN fallback). Shared
+ * between the manager's runtime sandbox boot and any caller outside the
+ * manager — install prompt, settings window — that needs the same
+ * catalog the live extensions see.
  *
- * Returns the original manifest unchanged if anything fails — the prompt
- * is allowed to fall back to displaying raw `__MSG_*__` tokens rather
- * than blocking the install on a locale read.
+ * Returns `{ catalog, fallback, language, rtl }`. Empty catalog/fallback
+ * if the extension ships no `_locales/` or anything fails — the caller
+ * is allowed to surface raw `__MSG_*__` tokens rather than block on the
+ * locale read.
  */
-export async function localizeManifestForPrompt(invoke, manifest) {
+export async function fetchExtensionLocaleViaInvoke(invoke, manifest) {
     try {
         const id = manifest?.id;
-        if (!id) return manifest;
+        if (!id) return { catalog: {}, fallback: {}, language: hostLanguage(), rtl: hostIsRtl() };
         const kind = manifest?.type || 'extension';
-        const i18n = await _resolveExtensionCatalog(async (code) => {
+        return await _resolveExtensionCatalog(async (code) => {
             try {
                 const v = await invoke('read_extension_locale', {
                     extensionId: id,
@@ -142,6 +143,21 @@ export async function localizeManifestForPrompt(invoke, manifest) {
                 return null;
             }
         });
+    } catch {
+        return { catalog: {}, fallback: {}, language: hostLanguage(), rtl: hostIsRtl() };
+    }
+}
+
+/**
+ * One-shot helper for callers that need a localized manifest only —
+ * e.g. the install-time permission prompt, which shows the extension's
+ * name and description before the manager has loaded the extension.
+ *
+ * Returns the original manifest unchanged if anything fails.
+ */
+export async function localizeManifestForPrompt(invoke, manifest) {
+    try {
+        const i18n = await fetchExtensionLocaleViaInvoke(invoke, manifest);
         return applyManifestI18n(manifest, i18n.catalog, i18n.fallback);
     } catch {
         return manifest;
@@ -778,10 +794,11 @@ export class ExtensionManager {
             try {
                 const tools = await ext.sandbox.call('getTools', {});
                 if (Array.isArray(tools) && tools.length > 0) {
+                    const display = ext.localizedManifest || ext.manifest;
                     result.push({
                         extensionId: id,
-                        extensionName: ext.manifest.name || id,
-                        extensionIcon: ext.manifest.icon || '🧩',
+                        extensionName: display.name || id,
+                        extensionIcon: display.icon || '🧩',
                         tools,
                     });
                 }
@@ -915,10 +932,11 @@ export class ExtensionManager {
             try {
                 const triggers = await ext.sandbox.call('getTriggers', {});
                 if (Array.isArray(triggers) && triggers.length > 0) {
+                    const display = ext.localizedManifest || ext.manifest;
                     defs.push({
                         extensionId: id,
-                        extensionName: ext.manifest.name,
-                        extensionIcon: ext.manifest.icon || '🔌',
+                        extensionName: display.name,
+                        extensionIcon: display.icon || '🔌',
                         triggers,
                     });
                 }
