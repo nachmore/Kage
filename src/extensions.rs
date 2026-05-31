@@ -187,28 +187,9 @@ pub const VALID_CAPABILITIES: &[&str] = &[
     "tts",
 ];
 
-/// Legacy capability aliases. A manifest that declares one of these
-/// gets the expansion stored as the actual grant. Keep in sync with
-/// `LEGACY_PERMISSION_ALIASES` in `ui/js/shared/extension-permissions.js`.
-///
-/// `shell` historically bundled URL-handoff + arbitrary file/app launch
-/// under one badge labelled "Open URLs, file paths, and launch other
-/// apps." That description was a bigger surface than most extensions
-/// actually need (most call only `open_url`), so it was split into
-/// `urls` and `launch`. Manifests that still say `shell` get both for
-/// backwards compatibility.
-fn legacy_aliases(cap: &str) -> Option<&'static [&'static str]> {
-    match cap {
-        "shell" => Some(&["urls", "launch"]),
-        _ => None,
-    }
-}
-
 /// Filter a raw permission list from a manifest down to a deduped,
 /// lowercase set of known capabilities. Unknown entries are logged
-/// and dropped; legacy aliases (see [`legacy_aliases`]) are expanded
-/// into their current-cap equivalents. The returned vector is safe to
-/// store as a grant.
+/// and dropped; the returned vector is safe to store as a grant.
 ///
 /// This is the single point of authority for what can land in
 /// `config.extension_grants[*].granted`. Both the welcome batch path
@@ -218,29 +199,9 @@ fn legacy_aliases(cap: &str) -> Option<&'static [&'static str]> {
 pub fn normalize_permissions(raw: &[String], context: &str) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::with_capacity(raw.len());
-    let mut push = |cap: String, out: &mut Vec<String>| {
-        if seen.insert(cap.clone()) {
-            out.push(cap);
-        }
-    };
     for entry in raw {
         let cap = entry.trim().to_lowercase();
         if cap.is_empty() {
-            continue;
-        }
-        if let Some(expanded) = legacy_aliases(&cap) {
-            log::warn!(
-                "Extension '{}': capability '{}' is deprecated; expanding to {}. \
-                 Update manifest.json to declare these directly.",
-                context,
-                cap,
-                expanded.join(" + ")
-            );
-            for e in expanded {
-                if VALID_CAPABILITIES.contains(e) {
-                    push((*e).to_string(), &mut out);
-                }
-            }
             continue;
         }
         if !VALID_CAPABILITIES.contains(&cap.as_str()) {
@@ -251,7 +212,9 @@ pub fn normalize_permissions(raw: &[String], context: &str) -> Vec<String> {
             );
             continue;
         }
-        push(cap, &mut out);
+        if seen.insert(cap.clone()) {
+            out.push(cap);
+        }
     }
     out
 }

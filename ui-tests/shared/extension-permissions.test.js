@@ -63,10 +63,8 @@ describe('normalizePermissions', () => {
     });
 
     it('trims, lowercases, and dedupes', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const result = normalizePermissions([' Storage ', 'storage', 'CLIPBOARD', 'urls'], 'x');
         expect(result).toEqual(['storage', 'clipboard', 'urls']);
-        warn.mockRestore();
     });
 
     it('drops unknown capabilities with a warning', () => {
@@ -77,25 +75,21 @@ describe('normalizePermissions', () => {
         warn.mockRestore();
     });
 
+    it('drops the now-removed legacy "shell" alias', () => {
+        // Pre-launch we ripped out the back-compat path: 'shell' is no
+        // longer recognised. A manifest declaring it gets the unknown-cap
+        // warning treatment, same as any typo. Tests guard against the
+        // alias accidentally returning.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const result = normalizePermissions(['storage', 'shell'], 'old-ext');
+        expect(result).toEqual(['storage']);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('shell'));
+        warn.mockRestore();
+    });
+
     it('ignores non-string entries', () => {
         const result = normalizePermissions([null, 42, 'storage', {}], 'x');
         expect(result).toEqual(['storage']);
-    });
-
-    it('expands legacy "shell" into "urls" + "launch"', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const result = normalizePermissions(['storage', 'shell'], 'old-ext');
-        expect(result).toEqual(['storage', 'urls', 'launch']);
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
-        warn.mockRestore();
-    });
-
-    it('does not double-add when "shell" + "urls" both appear', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const result = normalizePermissions(['shell', 'urls'], 'mixed');
-        // shell expands to urls + launch; the explicit urls is a no-op.
-        expect(result).toEqual(['urls', 'launch']);
-        warn.mockRestore();
     });
 });
 

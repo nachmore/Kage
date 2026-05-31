@@ -180,17 +180,6 @@ If you add a new Tauri command you want extensions to be able to
 call, add it to that table under an existing capability (or propose
 a new one).
 
-#### Legacy aliases
-
-`shell` was the previous catch-all for "open URLs, file paths, and
-launch other apps." It still parses — manifests that declare it get
-`urls + launch` for backwards compatibility — but new manifests
-should use the granular caps directly so the install prompt and the
-post-install permission badges are accurate. The Rust loader
-([`extensions::normalize_permissions`](../src/extensions.rs)) and the
-JS loader both expand the alias, so old shipped extensions keep
-working without a manifest update.
-
 ### Forbidden commands
 
 Some commands are never callable from any extension regardless of

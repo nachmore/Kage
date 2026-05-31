@@ -408,29 +408,8 @@ export const CAPABILITIES = Object.freeze({
 export const KNOWN_CAPABILITIES = Object.freeze(Object.keys(CAPABILITIES));
 
 /**
- * Legacy capabilities that the manifest may still declare. Each maps to
- * one or more current caps so old shipped extensions keep working
- * without a manifest update. Authoring new manifests should use the
- * granular caps directly.
- *
- * `shell` originally bundled URL opening + file opening + app launching
- * under one badge labelled "Open URLs, file paths, and launch other
- * apps." That was overly broad \u2014 most "shell"-using extensions only
- * actually call `open_url`. We split it into `urls` (browser handoff,
- * scheme-limited at the Rust boundary) and `launch` (arbitrary file/app
- * execution). Existing manifests that say `shell` get both for
- * compatibility, but the user-visible description on the install
- * prompt will list both pills, prompting authors to tighten down.
- */
-const LEGACY_PERMISSION_ALIASES = Object.freeze({
-    shell: ['urls', 'launch'],
-});
-
-/**
  * Normalize whatever the manifest provided into a deduped list of valid
  * capabilities. Unknown capabilities are dropped (with a warning).
- * Legacy aliases (see LEGACY_PERMISSION_ALIASES) expand into one or
- * more current caps; the alias itself is dropped from the output.
  * @param {unknown} raw
  * @param {string} extensionId - for log messages
  * @returns {string[]}
@@ -439,30 +418,17 @@ export function normalizePermissions(raw, extensionId) {
     if (!Array.isArray(raw)) return [];
     const seen = new Set();
     const out = [];
-    const push = (cap) => {
-        if (seen.has(cap)) return;
-        seen.add(cap);
-        out.push(cap);
-    };
     for (const entry of raw) {
         if (typeof entry !== 'string') continue;
         const cap = entry.trim().toLowerCase();
         if (!cap) continue;
-        const expanded = LEGACY_PERMISSION_ALIASES[cap];
-        if (expanded) {
-            console.warn(
-                `Extension '${extensionId}': capability '${cap}' is deprecated; expanding to ${expanded.join(' + ')}. Update manifest.json to declare these directly.`
-            );
-            for (const e of expanded) {
-                if (e in CAPABILITIES) push(e);
-            }
-            continue;
-        }
         if (!(cap in CAPABILITIES)) {
             console.warn(`Extension '${extensionId}': unknown capability '${cap}' \u2014 ignored`);
             continue;
         }
-        push(cap);
+        if (seen.has(cap)) continue;
+        seen.add(cap);
+        out.push(cap);
     }
     return out;
 }
