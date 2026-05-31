@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "language": "hi",
+    "name": "हिन्दी",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "गणित कैलकुलेटर",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e89420bcd5594f39"
+  },
+  "manifest.description": {
+    "message": "इकाई रूपांतरण के साथ इनलाइन गणितीय अभिव्यक्ति मूल्यांकनकर्ता",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "81e3a03cfd046a50"
+  },
+  "result.copy_hint": {
+    "message": "परिणाम कॉपी करने के लिए Enter दबाएँ",
+    "description": "Description shown on a math result row",
+    "_machine_translated": true,
+    "_source_hash": "b5b318ec95f5f477"
+  },
+  "settings.description": {
+    "message": "गणितीय अभिव्यक्तियों को एजेंट को भेजे बिना सीधे इनपुट बार में मूल्यांकन करें।",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "83232d2e406cdab5"
+  },
+  "settings.precision.label": {
+    "message": "दशमलव परिशुद्धता",
+    "description": "Label for the decimal-precision number input",
+    "_machine_translated": true,
+    "_source_hash": "e8b855800859f237"
+  },
+  "settings.precision.description": {
+    "message": "प्रदर्शित करने के लिए दशमलव स्थानों की संख्या (-1 = स्वतः, 0 = पूर्णांक)",
+    "description": "Helper for the precision input",
+    "_machine_translated": true,
+    "_source_hash": "d320f0a6c6ff4fb8"
+  },
+  "settings.auto_copy.label": {
+    "message": "परिणाम स्वतः कॉपी करें",
+    "description": "Toggle: copy math result to clipboard on Enter",
+    "_machine_translated": true,
+    "_source_hash": "d6ca34a24bd63a0b"
+  },
+  "settings.auto_copy.description": {
+    "message": "Enter दबाने पर उत्तर को स्वचालित रूप से क्लिपबोर्ड पर कॉपी करें",
+    "description": "Helper for the auto-copy toggle",
+    "_machine_translated": true,
+    "_source_hash": "b5bc779ee463b01f"
+  },
+  "settings.thousands.label": {
+    "message": "हज़ार विभाजक का उपयोग करें",
+    "description": "Toggle: format large numbers with thousands separators",
+    "_machine_translated": true,
+    "_source_hash": "153820c35293c297"
+  },
+  "settings.thousands.description": {
+    "message": "बड़ी संख्याओं को अल्पविराम के साथ प्रारूपित करें (जैसे 1,000,000)",
+    "description": "Helper for the thousands-separator toggle",
+    "_machine_translated": true,
+    "_source_hash": "3f3decae940dec70"
+  },
+  "settings.precision.error": {
+    "message": "गणित परिशुद्धता -1 और 15 के बीच होनी चाहिए",
+    "description": "Validation error when precision is out of range",
+    "_machine_translated": true,
+    "_source_hash": "f8c4a655091ad748"
+  }
+}

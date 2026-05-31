@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "language": "ro",
+    "name": "Română",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "Window Walker",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e461f5c7b456156a"
+  },
+  "manifest.description": {
+    "message": "Comută între ferestrele deschise. Tastează „w ” pentru a lista și filtra ferestrele.",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "9c096abe13b12377"
+  },
+  "settings.description": {
+    "message": "Comută rapid între ferestrele deschise. Tastează cuvântul-cheie de declanșare pentru a lista și filtra ferestrele.",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "77f26e9ea3c53b9a"
+  },
+  "settings.trigger.label": {
+    "message": "Cuvânt-cheie de declanșare",
+    "description": "Label for the trigger-keyword input",
+    "_machine_translated": true,
+    "_source_hash": "728cfaa4f5528e04"
+  },
+  "settings.trigger.description": {
+    "message": "Tastează acest cuvânt în fereastra flotantă pentru a activa căutarea ferestrelor. (Un spațiu final este adăugat automat.)",
+    "description": "Helper for the trigger input",
+    "_machine_translated": true,
+    "_source_hash": "ed6f5927e1104039"
+  },
+  "settings.trigger.error_empty": {
+    "message": "Cuvântul-cheie de declanșare nu poate fi gol",
+    "description": "Validation error when the trigger field is blank",
+    "_machine_translated": true,
+    "_source_hash": "32a931c473b57115"
+  },
+  "settings.show_icons.label": {
+    "message": "Afișează pictogramele ferestrelor",
+    "description": "Toggle: extract and show app icons",
+    "_machine_translated": true,
+    "_source_hash": "9d1876afe5350bd8"
+  },
+  "settings.show_icons.description": {
+    "message": "Extrage și afișează pictogramele aplicațiilor lângă fiecare fereastră. Dezactivează pentru rezultate mai rapide pe mașini mai lente.",
+    "description": "Helper for show-icons toggle",
+    "_machine_translated": true,
+    "_source_hash": "c2790afe699e28b6"
+  },
+  "settings.hide_minimized.label": {
+    "message": "Ascunde ferestrele minimizate",
+    "description": "Toggle: filter out minimized windows",
+    "_machine_translated": true,
+    "_source_hash": "583f54293cdc6323"
+  },
+  "settings.hide_minimized.description": {
+    "message": "Exclude ferestrele minimizate din listă.",
+    "description": "Helper for hide-minimized toggle",
+    "_machine_translated": true,
+    "_source_hash": "969c657a8dc12e02"
+  }
+}

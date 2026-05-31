@@ -1,0 +1,224 @@
+{
+  "_meta": {
+    "language": "hu",
+    "name": "Magyar",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "Naptár",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "deaee5f26fe3910c"
+  },
+  "manifest.description": {
+    "message": "Közelgő értekezletek megjelenítése csatlakozás gombbal",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "9995e48c379faedf"
+  },
+  "result.refresh.label": {
+    "message": "Naptár frissítése",
+    "description": "Result label for the cal-refresh command",
+    "_machine_translated": true,
+    "_source_hash": "7f7f6c7ff83c4764"
+  },
+  "result.refresh.description": {
+    "message": "Naptáradatok kényszerített frissítése az Outlookból",
+    "description": "Result description for cal-refresh",
+    "_machine_translated": true,
+    "_source_hash": "b81eb1027c27d0a8"
+  },
+  "result.refresh.executed": {
+    "message": "Naptár frissítve",
+    "description": "Display value after a refresh succeeds",
+    "_machine_translated": true,
+    "_source_hash": "dc201b0db11b21f8"
+  },
+  "result.no_match.label": {
+    "message": "Nincs találat erre: „{query}”",
+    "description": "Result label when a search term matches no events",
+    "_machine_translated": true,
+    "_source_hash": "6dc99d340583fd45"
+  },
+  "result.no_match.description": {
+    "message": "Próbálj másik keresőkifejezést vagy dátumot",
+    "description": "Helper for the no-match result",
+    "_machine_translated": true,
+    "_source_hash": "f71f445852614b88"
+  },
+  "result.no_upcoming.label": {
+    "message": "Nincs közelgő értekezlet",
+    "description": "Result label when the lookahead window is empty",
+    "_machine_translated": true,
+    "_source_hash": "6ad6eb26159be8c8"
+  },
+  "result.no_upcoming.description": {
+    "message": "{count, plural, one {Nincs esemény a következő 1 órában} other {Nincs esemény a következő # órában}}",
+    "description": "Helper showing the lookahead window in hours",
+    "_machine_translated": true,
+    "_source_hash": "70182f28562fb223"
+  },
+  "result.no_date.label": {
+    "message": "Nincs értekezlet ekkor: {label}",
+    "description": "Result label when a specific date has no events",
+    "_machine_translated": true,
+    "_source_hash": "2ec823dbfc847027"
+  },
+  "result.day.tomorrow": {
+    "message": "[Holnap]",
+    "description": "Bracketed prefix for tomorrow's events in time labels",
+    "_machine_translated": true,
+    "_source_hash": "e01bba2eec41bce1"
+  },
+  "result.duration.minutes": {
+    "message": "{minutes} p",
+    "description": "Duration: minutes",
+    "_machine_translated": true,
+    "_source_hash": "d8033fac94061ace"
+  },
+  "result.duration.hours_minutes": {
+    "message": "{hours} ó {minutes} p",
+    "description": "Duration: hours and minutes",
+    "_machine_translated": true,
+    "_source_hash": "7b2679f2465bb2f2"
+  },
+  "result.duration.hours": {
+    "message": "{hours} ó",
+    "description": "Duration: hours only",
+    "_machine_translated": true,
+    "_source_hash": "ffa7ad4097cbdd71"
+  },
+  "result.duration.day": {
+    "message": "1 nap",
+    "description": "Duration: exactly one day",
+    "_machine_translated": true,
+    "_source_hash": "bdd994788a6c682b"
+  },
+  "result.duration.days": {
+    "message": "{days} nap",
+    "description": "Duration: multiple days",
+    "_machine_translated": true,
+    "_source_hash": "d3e665f25ffefa82"
+  },
+  "result.join_btn": {
+    "message": "Csatlakozás",
+    "description": "Button label to open a meeting URL",
+    "_machine_translated": true,
+    "_source_hash": "9fc8def40d86588c"
+  },
+  "widget.now": {
+    "message": "Most",
+    "description": "Widget time label when a meeting is currently happening",
+    "_machine_translated": true,
+    "_source_hash": "f9a080f0f5bc54a8"
+  },
+  "widget.in_minutes": {
+    "message": "{minutes} p múlva",
+    "description": "Widget time label for an imminent meeting",
+    "_machine_translated": true,
+    "_source_hash": "c5c476cf12e732ec"
+  },
+  "widget.concurrent_more": {
+    "message": "+{count} további",
+    "description": "Suffix when multiple concurrent meetings overlap",
+    "_machine_translated": true,
+    "_source_hash": "aabdb39e2a185161"
+  },
+  "widget.dismiss_title": {
+    "message": "Értekezlet elvetése",
+    "description": "Tooltip on the widget's ✕ dismiss button",
+    "_machine_translated": true,
+    "_source_hash": "28b5a47a84f35a8f"
+  },
+  "settings.description": {
+    "message": "Írd be a „cal” vagy „meetings” parancsot a közelgő események megtekintéséhez.",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "2054e64f3dd76e2c"
+  },
+  "settings.show_overlay.label": {
+    "message": "Következő értekezlet rétegének megjelenítése",
+    "description": "Toggle: show the next-meeting widget",
+    "_machine_translated": true,
+    "_source_hash": "913e71166c2a8140"
+  },
+  "settings.show_overlay.description": {
+    "message": "A következő közelgő értekezlet megjelenítése a beviteli mező felett csatlakozás gombbal.",
+    "description": "Helper for the show-overlay toggle",
+    "_machine_translated": true,
+    "_source_hash": "2f0034038a2af079"
+  },
+  "settings.lookahead.label": {
+    "message": "Előretekintés (óra)",
+    "description": "Label for the lookahead-hours number input",
+    "_machine_translated": true,
+    "_source_hash": "fd6e854b2f0def05"
+  },
+  "settings.lookahead.description": {
+    "message": "Mennyivel előre keressen találkozókat (1–72 óra).",
+    "description": "Helper for the lookahead input",
+    "_machine_translated": true,
+    "_source_hash": "73761da573a1d353"
+  },
+  "settings.lookahead.error": {
+    "message": "Az előretekintésnek 1 és 72 óra között kell lennie",
+    "description": "Validation error when lookahead is out of range",
+    "_machine_translated": true,
+    "_source_hash": "c5d76039b007abbb"
+  },
+  "settings.test_btn": {
+    "message": "🔄 Naptár-hozzáférés tesztelése",
+    "description": "Button: probe whether the OS calendar permission is granted",
+    "_machine_translated": true,
+    "_source_hash": "202279eb2f463f78"
+  },
+  "settings.commands.label": {
+    "message": "Indítóparancsok",
+    "description": "Label for the launcher-commands info panel",
+    "_machine_translated": true,
+    "_source_hash": "6fd4e431b62d84f0"
+  },
+  "settings.commands.html": {
+    "message": "<code>cal</code> vagy <code>meetings</code> – közelgő események megjelenítése<br><code>cal tomorrow</code> – egy adott nap eseményei<br><code>cal-refresh</code> – naptáradatok kényszerített frissítése az Outlookból",
+    "description": "HTML body for the launcher-commands info panel (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "f299f0003902ada8"
+  },
+  "settings.test.success": {
+    "message": "{count, plural, =0 {✅ Nincs esemény a következő {hours, plural, one {1 órában} other {# órában}}} one {✅ 1 esemény található a következő {hours, plural, one {1 órában} other {# órában}}} other {✅ # esemény található a következő {hours, plural, one {1 órában} other {# órában}}}}",
+    "description": "Status after a successful calendar-access test",
+    "_machine_translated": true,
+    "_source_hash": "0146c09409199151"
+  },
+  "settings.test.denied": {
+    "message": "❌ Naptár-hozzáférés megtagadva – a Rendszerbeállítások megnyitva. Adj naptár-engedélyt a Kage számára, majd próbáld újra.",
+    "description": "Status after a permission-denied result on macOS",
+    "_machine_translated": true,
+    "_source_hash": "3e10dab1cb27e94f"
+  },
+  "settings.test.failed": {
+    "message": "❌ {message}",
+    "description": "Status when the test_calendar_access call throws",
+    "_machine_translated": true,
+    "_source_hash": "abf5dc3fb17e031c"
+  },
+  "trigger.meeting_starting.description": {
+    "message": "Egy találkozó 5 percen belül kezdődik",
+    "description": "Description shown in the automations trigger picker",
+    "_machine_translated": true,
+    "_source_hash": "05c4ec71a8a4d3b4"
+  },
+  "trigger.meeting_started.description": {
+    "message": "Egy találkozó elkezdődött (időpont elérve)",
+    "description": "Description shown in the automations trigger picker",
+    "_machine_translated": true,
+    "_source_hash": "a4799c2ef2b7e704"
+  },
+  "trigger.day_summary.description": {
+    "message": "Napi összefoglaló a közelgő találkozókról",
+    "description": "Description shown in the automations trigger picker",
+    "_machine_translated": true,
+    "_source_hash": "307ad39d978c7ff1"
+  }
+}

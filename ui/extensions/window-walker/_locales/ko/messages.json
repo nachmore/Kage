@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "language": "ko",
+    "name": "한국어",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "윈도우 워커",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e461f5c7b456156a"
+  },
+  "manifest.description": {
+    "message": "열려 있는 창 사이를 전환합니다. 'w '를 입력하여 창을 나열하고 필터링하세요.",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "9c096abe13b12377"
+  },
+  "settings.description": {
+    "message": "열려 있는 창 사이를 빠르게 전환합니다. 트리거 키워드를 입력하여 창을 나열하고 필터링하세요.",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "77f26e9ea3c53b9a"
+  },
+  "settings.trigger.label": {
+    "message": "트리거 키워드",
+    "description": "Label for the trigger-keyword input",
+    "_machine_translated": true,
+    "_source_hash": "728cfaa4f5528e04"
+  },
+  "settings.trigger.description": {
+    "message": "플로팅 창에서 이것을 입력하여 창 검색을 활성화합니다. (뒤에 공백이 자동으로 추가됩니다.)",
+    "description": "Helper for the trigger input",
+    "_machine_translated": true,
+    "_source_hash": "ed6f5927e1104039"
+  },
+  "settings.trigger.error_empty": {
+    "message": "트리거 키워드는 비워 둘 수 없습니다",
+    "description": "Validation error when the trigger field is blank",
+    "_machine_translated": true,
+    "_source_hash": "32a931c473b57115"
+  },
+  "settings.show_icons.label": {
+    "message": "창 아이콘 표시",
+    "description": "Toggle: extract and show app icons",
+    "_machine_translated": true,
+    "_source_hash": "9d1876afe5350bd8"
+  },
+  "settings.show_icons.description": {
+    "message": "각 창 옆에 애플리케이션 아이콘을 추출하여 표시합니다. 느린 컴퓨터에서 더 빠른 결과를 원한다면 비활성화하세요.",
+    "description": "Helper for show-icons toggle",
+    "_machine_translated": true,
+    "_source_hash": "c2790afe699e28b6"
+  },
+  "settings.hide_minimized.label": {
+    "message": "최소화된 창 숨기기",
+    "description": "Toggle: filter out minimized windows",
+    "_machine_translated": true,
+    "_source_hash": "583f54293cdc6323"
+  },
+  "settings.hide_minimized.description": {
+    "message": "최소화된 창을 목록에서 제외합니다.",
+    "description": "Helper for hide-minimized toggle",
+    "_machine_translated": true,
+    "_source_hash": "969c657a8dc12e02"
+  }
+}

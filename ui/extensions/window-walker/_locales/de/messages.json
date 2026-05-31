@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "language": "de",
+    "name": "Deutsch",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "Window Walker",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e461f5c7b456156a"
+  },
+  "manifest.description": {
+    "message": "Zwischen offenen Fenstern wechseln. Geben Sie „w “ ein, um Fenster aufzulisten und zu filtern.",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "9c096abe13b12377"
+  },
+  "settings.description": {
+    "message": "Schnell zwischen offenen Fenstern wechseln. Geben Sie das Auslöse-Schlüsselwort ein, um Fenster aufzulisten und zu filtern.",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "77f26e9ea3c53b9a"
+  },
+  "settings.trigger.label": {
+    "message": "Auslöse-Schlüsselwort",
+    "description": "Label for the trigger-keyword input",
+    "_machine_translated": true,
+    "_source_hash": "728cfaa4f5528e04"
+  },
+  "settings.trigger.description": {
+    "message": "Geben Sie dies im Schwebefenster ein, um die Fenstersuche zu aktivieren. (Ein abschließendes Leerzeichen wird automatisch hinzugefügt.)",
+    "description": "Helper for the trigger input",
+    "_machine_translated": true,
+    "_source_hash": "ed6f5927e1104039"
+  },
+  "settings.trigger.error_empty": {
+    "message": "Auslöse-Schlüsselwort darf nicht leer sein",
+    "description": "Validation error when the trigger field is blank",
+    "_machine_translated": true,
+    "_source_hash": "32a931c473b57115"
+  },
+  "settings.show_icons.label": {
+    "message": "Fenstersymbole anzeigen",
+    "description": "Toggle: extract and show app icons",
+    "_machine_translated": true,
+    "_source_hash": "9d1876afe5350bd8"
+  },
+  "settings.show_icons.description": {
+    "message": "Anwendungssymbole neben jedem Fenster extrahieren und anzeigen. Auf langsameren Geräten für schnellere Ergebnisse deaktivieren.",
+    "description": "Helper for show-icons toggle",
+    "_machine_translated": true,
+    "_source_hash": "c2790afe699e28b6"
+  },
+  "settings.hide_minimized.label": {
+    "message": "Minimierte Fenster ausblenden",
+    "description": "Toggle: filter out minimized windows",
+    "_machine_translated": true,
+    "_source_hash": "583f54293cdc6323"
+  },
+  "settings.hide_minimized.description": {
+    "message": "Minimierte Fenster aus der Liste ausschließen.",
+    "description": "Helper for hide-minimized toggle",
+    "_machine_translated": true,
+    "_source_hash": "969c657a8dc12e02"
+  }
+}

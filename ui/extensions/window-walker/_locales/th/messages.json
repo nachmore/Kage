@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "language": "th",
+    "name": "ไทย",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "Window Walker",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e461f5c7b456156a"
+  },
+  "manifest.description": {
+    "message": "สลับระหว่างหน้าต่างที่เปิดอยู่ พิมพ์ 'w ' เพื่อแสดงรายการและกรองหน้าต่าง",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "9c096abe13b12377"
+  },
+  "settings.description": {
+    "message": "สลับระหว่างหน้าต่างที่เปิดอยู่อย่างรวดเร็ว พิมพ์คีย์เวิร์ดทริกเกอร์เพื่อแสดงรายการและกรองหน้าต่าง",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "77f26e9ea3c53b9a"
+  },
+  "settings.trigger.label": {
+    "message": "คีย์เวิร์ดทริกเกอร์",
+    "description": "Label for the trigger-keyword input",
+    "_machine_translated": true,
+    "_source_hash": "728cfaa4f5528e04"
+  },
+  "settings.trigger.description": {
+    "message": "พิมพ์คำนี้ในหน้าต่างลอยเพื่อเปิดใช้งานการค้นหาหน้าต่าง (ระบบจะเพิ่มเว้นวรรคต่อท้ายให้อัตโนมัติ)",
+    "description": "Helper for the trigger input",
+    "_machine_translated": true,
+    "_source_hash": "ed6f5927e1104039"
+  },
+  "settings.trigger.error_empty": {
+    "message": "คีย์เวิร์ดทริกเกอร์ต้องไม่ว่างเปล่า",
+    "description": "Validation error when the trigger field is blank",
+    "_machine_translated": true,
+    "_source_hash": "32a931c473b57115"
+  },
+  "settings.show_icons.label": {
+    "message": "แสดงไอคอนหน้าต่าง",
+    "description": "Toggle: extract and show app icons",
+    "_machine_translated": true,
+    "_source_hash": "9d1876afe5350bd8"
+  },
+  "settings.show_icons.description": {
+    "message": "ดึงและแสดงไอคอนแอปพลิเคชันถัดจากแต่ละหน้าต่าง ปิดใช้งานเพื่อให้ได้ผลลัพธ์ที่เร็วขึ้นบนเครื่องที่ช้ากว่า",
+    "description": "Helper for show-icons toggle",
+    "_machine_translated": true,
+    "_source_hash": "c2790afe699e28b6"
+  },
+  "settings.hide_minimized.label": {
+    "message": "ซ่อนหน้าต่างที่ย่อเล็กสุด",
+    "description": "Toggle: filter out minimized windows",
+    "_machine_translated": true,
+    "_source_hash": "583f54293cdc6323"
+  },
+  "settings.hide_minimized.description": {
+    "message": "ไม่รวมหน้าต่างที่ย่อเล็กสุดในรายการ",
+    "description": "Helper for hide-minimized toggle",
+    "_machine_translated": true,
+    "_source_hash": "969c657a8dc12e02"
+  }
+}

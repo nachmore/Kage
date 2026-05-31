@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "language": "th",
+    "name": "ไทย",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "เครื่องคิดเลขคณิตศาสตร์",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e89420bcd5594f39"
+  },
+  "manifest.description": {
+    "message": "ตัวประเมินนิพจน์คณิตศาสตร์แบบอินไลน์พร้อมการแปลงหน่วย",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "81e3a03cfd046a50"
+  },
+  "result.copy_hint": {
+    "message": "กด Enter เพื่อคัดลอกผลลัพธ์",
+    "description": "Description shown on a math result row",
+    "_machine_translated": true,
+    "_source_hash": "b5b318ec95f5f477"
+  },
+  "settings.description": {
+    "message": "ประเมินนิพจน์คณิตศาสตร์ในแถบป้อนข้อมูลโดยตรงโดยไม่ต้องส่งไปยังเอเจนต์",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "83232d2e406cdab5"
+  },
+  "settings.precision.label": {
+    "message": "ความแม่นยำทศนิยม",
+    "description": "Label for the decimal-precision number input",
+    "_machine_translated": true,
+    "_source_hash": "e8b855800859f237"
+  },
+  "settings.precision.description": {
+    "message": "จำนวนตำแหน่งทศนิยมที่แสดง (-1 = อัตโนมัติ, 0 = จำนวนเต็ม)",
+    "description": "Helper for the precision input",
+    "_machine_translated": true,
+    "_source_hash": "d320f0a6c6ff4fb8"
+  },
+  "settings.auto_copy.label": {
+    "message": "คัดลอกผลลัพธ์อัตโนมัติ",
+    "description": "Toggle: copy math result to clipboard on Enter",
+    "_machine_translated": true,
+    "_source_hash": "d6ca34a24bd63a0b"
+  },
+  "settings.auto_copy.description": {
+    "message": "คัดลอกคำตอบไปยังคลิปบอร์ดอัตโนมัติเมื่อกด Enter",
+    "description": "Helper for the auto-copy toggle",
+    "_machine_translated": true,
+    "_source_hash": "b5bc779ee463b01f"
+  },
+  "settings.thousands.label": {
+    "message": "ใช้ตัวคั่นหลักพัน",
+    "description": "Toggle: format large numbers with thousands separators",
+    "_machine_translated": true,
+    "_source_hash": "153820c35293c297"
+  },
+  "settings.thousands.description": {
+    "message": "จัดรูปแบบตัวเลขขนาดใหญ่ด้วยเครื่องหมายจุลภาค (เช่น 1,000,000)",
+    "description": "Helper for the thousands-separator toggle",
+    "_machine_translated": true,
+    "_source_hash": "3f3decae940dec70"
+  },
+  "settings.precision.error": {
+    "message": "ความแม่นยำทางคณิตศาสตร์ต้องอยู่ระหว่าง -1 ถึง 15",
+    "description": "Validation error when precision is out of range",
+    "_machine_translated": true,
+    "_source_hash": "f8c4a655091ad748"
+  }
+}

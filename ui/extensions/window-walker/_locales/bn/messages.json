@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "language": "bn",
+    "name": "বাংলা",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "উইন্ডো ওয়াকার",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e461f5c7b456156a"
+  },
+  "manifest.description": {
+    "message": "খোলা উইন্ডোগুলির মধ্যে স্যুইচ করুন। উইন্ডো তালিকাভুক্ত ও ফিল্টার করতে 'w ' টাইপ করুন।",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "9c096abe13b12377"
+  },
+  "settings.description": {
+    "message": "খোলা উইন্ডোগুলির মধ্যে দ্রুত স্যুইচ করুন। উইন্ডো অনুসন্ধান চালু করতে ট্রিগার কীওয়ার্ড টাইপ করে উইন্ডো তালিকাভুক্ত ও ফিল্টার করুন।",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "77f26e9ea3c53b9a"
+  },
+  "settings.trigger.label": {
+    "message": "ট্রিগার কীওয়ার্ড",
+    "description": "Label for the trigger-keyword input",
+    "_machine_translated": true,
+    "_source_hash": "728cfaa4f5528e04"
+  },
+  "settings.trigger.description": {
+    "message": "উইন্ডো অনুসন্ধান চালু করতে ফ্লোটিং উইন্ডোতে এটি টাইপ করুন। (একটি ট্রেইলিং স্পেস স্বয়ংক্রিয়ভাবে যোগ হয়।)",
+    "description": "Helper for the trigger input",
+    "_machine_translated": true,
+    "_source_hash": "ed6f5927e1104039"
+  },
+  "settings.trigger.error_empty": {
+    "message": "ট্রিগার কীওয়ার্ড খালি রাখা যাবে না",
+    "description": "Validation error when the trigger field is blank",
+    "_machine_translated": true,
+    "_source_hash": "32a931c473b57115"
+  },
+  "settings.show_icons.label": {
+    "message": "উইন্ডো আইকন দেখান",
+    "description": "Toggle: extract and show app icons",
+    "_machine_translated": true,
+    "_source_hash": "9d1876afe5350bd8"
+  },
+  "settings.show_icons.description": {
+    "message": "প্রতিটি উইন্ডোর পাশে অ্যাপ্লিকেশন আইকন এক্সট্র্যাক্ট করে দেখান। ধীর মেশিনে দ্রুত ফলাফলের জন্য এটি নিষ্ক্রিয় করুন।",
+    "description": "Helper for show-icons toggle",
+    "_machine_translated": true,
+    "_source_hash": "c2790afe699e28b6"
+  },
+  "settings.hide_minimized.label": {
+    "message": "মিনিমাইজ করা উইন্ডো লুকান",
+    "description": "Toggle: filter out minimized windows",
+    "_machine_translated": true,
+    "_source_hash": "583f54293cdc6323"
+  },
+  "settings.hide_minimized.description": {
+    "message": "তালিকা থেকে মিনিমাইজ করা উইন্ডোগুলি বাদ দিন।",
+    "description": "Helper for hide-minimized toggle",
+    "_machine_translated": true,
+    "_source_hash": "969c657a8dc12e02"
+  }
+}

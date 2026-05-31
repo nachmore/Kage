@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "language": "ja",
+    "name": "日本語",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "数式計算ツール",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e89420bcd5594f39"
+  },
+  "manifest.description": {
+    "message": "単位変換に対応したインライン数式評価ツール",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "81e3a03cfd046a50"
+  },
+  "result.copy_hint": {
+    "message": "Enter キーで結果をコピー",
+    "description": "Description shown on a math result row",
+    "_machine_translated": true,
+    "_source_hash": "b5b318ec95f5f477"
+  },
+  "settings.description": {
+    "message": "エージェントに送信せず、入力バーで直接数式を評価します。",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "83232d2e406cdab5"
+  },
+  "settings.precision.label": {
+    "message": "小数点以下の桁数",
+    "description": "Label for the decimal-precision number input",
+    "_machine_translated": true,
+    "_source_hash": "e8b855800859f237"
+  },
+  "settings.precision.description": {
+    "message": "表示する小数点以下の桁数（-1 = 自動、0 = 整数）",
+    "description": "Helper for the precision input",
+    "_machine_translated": true,
+    "_source_hash": "d320f0a6c6ff4fb8"
+  },
+  "settings.auto_copy.label": {
+    "message": "結果を自動コピー",
+    "description": "Toggle: copy math result to clipboard on Enter",
+    "_machine_translated": true,
+    "_source_hash": "d6ca34a24bd63a0b"
+  },
+  "settings.auto_copy.description": {
+    "message": "Enter キーを押したときに、回答を自動的にクリップボードへコピーします",
+    "description": "Helper for the auto-copy toggle",
+    "_machine_translated": true,
+    "_source_hash": "b5bc779ee463b01f"
+  },
+  "settings.thousands.label": {
+    "message": "桁区切りを使用",
+    "description": "Toggle: format large numbers with thousands separators",
+    "_machine_translated": true,
+    "_source_hash": "153820c35293c297"
+  },
+  "settings.thousands.description": {
+    "message": "大きな数値をカンマで区切って表示します（例：1,000,000）",
+    "description": "Helper for the thousands-separator toggle",
+    "_machine_translated": true,
+    "_source_hash": "3f3decae940dec70"
+  },
+  "settings.precision.error": {
+    "message": "桁数は -1 から 15 の範囲で指定してください",
+    "description": "Validation error when precision is out of range",
+    "_machine_translated": true,
+    "_source_hash": "f8c4a655091ad748"
+  }
+}

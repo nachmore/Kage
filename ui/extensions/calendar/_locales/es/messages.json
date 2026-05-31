@@ -1,0 +1,224 @@
+{
+  "_meta": {
+    "language": "es",
+    "name": "Español",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "Calendario",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "deaee5f26fe3910c"
+  },
+  "manifest.description": {
+    "message": "Muestra las próximas reuniones con un botón de unirse superpuesto",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "9995e48c379faedf"
+  },
+  "result.refresh.label": {
+    "message": "Actualizar calendario",
+    "description": "Result label for the cal-refresh command",
+    "_machine_translated": true,
+    "_source_hash": "7f7f6c7ff83c4764"
+  },
+  "result.refresh.description": {
+    "message": "Forzar la actualización de los datos del calendario desde Outlook",
+    "description": "Result description for cal-refresh",
+    "_machine_translated": true,
+    "_source_hash": "b81eb1027c27d0a8"
+  },
+  "result.refresh.executed": {
+    "message": "Calendario actualizado",
+    "description": "Display value after a refresh succeeds",
+    "_machine_translated": true,
+    "_source_hash": "dc201b0db11b21f8"
+  },
+  "result.no_match.label": {
+    "message": "No hay reuniones que coincidan con «{query}»",
+    "description": "Result label when a search term matches no events",
+    "_machine_translated": true,
+    "_source_hash": "6dc99d340583fd45"
+  },
+  "result.no_match.description": {
+    "message": "Prueba con otro término de búsqueda o fecha",
+    "description": "Helper for the no-match result",
+    "_machine_translated": true,
+    "_source_hash": "f71f445852614b88"
+  },
+  "result.no_upcoming.label": {
+    "message": "No hay próximas reuniones",
+    "description": "Result label when the lookahead window is empty",
+    "_machine_translated": true,
+    "_source_hash": "6ad6eb26159be8c8"
+  },
+  "result.no_upcoming.description": {
+    "message": "{count, plural, one {No se encontraron eventos en la próxima 1 hora} other {No se encontraron eventos en las próximas # horas}}",
+    "description": "Helper showing the lookahead window in hours",
+    "_machine_translated": true,
+    "_source_hash": "70182f28562fb223"
+  },
+  "result.no_date.label": {
+    "message": "No hay reuniones el {label}",
+    "description": "Result label when a specific date has no events",
+    "_machine_translated": true,
+    "_source_hash": "2ec823dbfc847027"
+  },
+  "result.day.tomorrow": {
+    "message": "[Mañana]",
+    "description": "Bracketed prefix for tomorrow's events in time labels",
+    "_machine_translated": true,
+    "_source_hash": "e01bba2eec41bce1"
+  },
+  "result.duration.minutes": {
+    "message": "{minutes} min",
+    "description": "Duration: minutes",
+    "_machine_translated": true,
+    "_source_hash": "d8033fac94061ace"
+  },
+  "result.duration.hours_minutes": {
+    "message": "{hours} h {minutes} min",
+    "description": "Duration: hours and minutes",
+    "_machine_translated": true,
+    "_source_hash": "7b2679f2465bb2f2"
+  },
+  "result.duration.hours": {
+    "message": "{hours} h",
+    "description": "Duration: hours only",
+    "_machine_translated": true,
+    "_source_hash": "ffa7ad4097cbdd71"
+  },
+  "result.duration.day": {
+    "message": "1 día",
+    "description": "Duration: exactly one day",
+    "_machine_translated": true,
+    "_source_hash": "bdd994788a6c682b"
+  },
+  "result.duration.days": {
+    "message": "{days} días",
+    "description": "Duration: multiple days",
+    "_machine_translated": true,
+    "_source_hash": "d3e665f25ffefa82"
+  },
+  "result.join_btn": {
+    "message": "Unirse",
+    "description": "Button label to open a meeting URL",
+    "_machine_translated": true,
+    "_source_hash": "9fc8def40d86588c"
+  },
+  "widget.now": {
+    "message": "Ahora",
+    "description": "Widget time label when a meeting is currently happening",
+    "_machine_translated": true,
+    "_source_hash": "f9a080f0f5bc54a8"
+  },
+  "widget.in_minutes": {
+    "message": "en {minutes} min",
+    "description": "Widget time label for an imminent meeting",
+    "_machine_translated": true,
+    "_source_hash": "c5c476cf12e732ec"
+  },
+  "widget.concurrent_more": {
+    "message": "+{count} más",
+    "description": "Suffix when multiple concurrent meetings overlap",
+    "_machine_translated": true,
+    "_source_hash": "aabdb39e2a185161"
+  },
+  "widget.dismiss_title": {
+    "message": "Descartar esta reunión",
+    "description": "Tooltip on the widget's ✕ dismiss button",
+    "_machine_translated": true,
+    "_source_hash": "28b5a47a84f35a8f"
+  },
+  "settings.description": {
+    "message": "Escribe «cal» o «meetings» para ver los próximos eventos.",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "2054e64f3dd76e2c"
+  },
+  "settings.show_overlay.label": {
+    "message": "Mostrar superposición de la próxima reunión",
+    "description": "Toggle: show the next-meeting widget",
+    "_machine_translated": true,
+    "_source_hash": "913e71166c2a8140"
+  },
+  "settings.show_overlay.description": {
+    "message": "Muestra la próxima reunión sobre el campo de entrada con un botón de unirse.",
+    "description": "Helper for the show-overlay toggle",
+    "_machine_translated": true,
+    "_source_hash": "2f0034038a2af079"
+  },
+  "settings.lookahead.label": {
+    "message": "Anticipación (horas)",
+    "description": "Label for the lookahead-hours number input",
+    "_machine_translated": true,
+    "_source_hash": "fd6e854b2f0def05"
+  },
+  "settings.lookahead.description": {
+    "message": "Con cuánta antelación buscar reuniones (1–72 horas).",
+    "description": "Helper for the lookahead input",
+    "_machine_translated": true,
+    "_source_hash": "73761da573a1d353"
+  },
+  "settings.lookahead.error": {
+    "message": "La antelación debe estar entre 1 y 72 horas",
+    "description": "Validation error when lookahead is out of range",
+    "_machine_translated": true,
+    "_source_hash": "c5d76039b007abbb"
+  },
+  "settings.test_btn": {
+    "message": "🔄 Probar acceso al calendario",
+    "description": "Button: probe whether the OS calendar permission is granted",
+    "_machine_translated": true,
+    "_source_hash": "202279eb2f463f78"
+  },
+  "settings.commands.label": {
+    "message": "Comandos del lanzador",
+    "description": "Label for the launcher-commands info panel",
+    "_machine_translated": true,
+    "_source_hash": "6fd4e431b62d84f0"
+  },
+  "settings.commands.html": {
+    "message": "<code>cal</code> o <code>meetings</code> — mostrar próximos eventos<br><code>cal tomorrow</code> — eventos de un día concreto<br><code>cal-refresh</code> — forzar la actualización de los datos del calendario desde Outlook",
+    "description": "HTML body for the launcher-commands info panel (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "f299f0003902ada8"
+  },
+  "settings.test.success": {
+    "message": "{count, plural, =0 {✅ No hay eventos en {hours, plural, one {la próxima 1 hora} other {las próximas # horas}}} one {✅ Se encontró 1 evento en {hours, plural, one {la próxima 1 hora} other {las próximas # horas}}} other {✅ Se encontraron # eventos en {hours, plural, one {la próxima 1 hora} other {las próximas # horas}}}}",
+    "description": "Status after a successful calendar-access test",
+    "_machine_translated": true,
+    "_source_hash": "0146c09409199151"
+  },
+  "settings.test.denied": {
+    "message": "❌ Acceso al calendario denegado — se abrió Ajustes del Sistema. Concede permiso de Calendario a Kage y vuelve a probar.",
+    "description": "Status after a permission-denied result on macOS",
+    "_machine_translated": true,
+    "_source_hash": "3e10dab1cb27e94f"
+  },
+  "settings.test.failed": {
+    "message": "❌ {message}",
+    "description": "Status when the test_calendar_access call throws",
+    "_machine_translated": true,
+    "_source_hash": "abf5dc3fb17e031c"
+  },
+  "trigger.meeting_starting.description": {
+    "message": "Una reunión va a comenzar en los próximos 5 minutos",
+    "description": "Description shown in the automations trigger picker",
+    "_machine_translated": true,
+    "_source_hash": "05c4ec71a8a4d3b4"
+  },
+  "trigger.meeting_started.description": {
+    "message": "Una reunión ha comenzado (hora alcanzada)",
+    "description": "Description shown in the automations trigger picker",
+    "_machine_translated": true,
+    "_source_hash": "a4799c2ef2b7e704"
+  },
+  "trigger.day_summary.description": {
+    "message": "Resumen diario de las próximas reuniones",
+    "description": "Description shown in the automations trigger picker",
+    "_machine_translated": true,
+    "_source_hash": "307ad39d978c7ff1"
+  }
+}

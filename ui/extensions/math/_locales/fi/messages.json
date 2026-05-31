@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "language": "fi",
+    "name": "Suomi",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "manifest.name": {
+    "message": "Matematiikkalaskin",
+    "description": "Extension display name",
+    "_machine_translated": true,
+    "_source_hash": "e89420bcd5594f39"
+  },
+  "manifest.description": {
+    "message": "Sisäinen matemaattisten lausekkeiden laskin yksikkömuunnoksilla",
+    "description": "Extension description",
+    "_machine_translated": true,
+    "_source_hash": "81e3a03cfd046a50"
+  },
+  "result.copy_hint": {
+    "message": "Kopioi tulos painamalla Enter",
+    "description": "Description shown on a math result row",
+    "_machine_translated": true,
+    "_source_hash": "b5b318ec95f5f477"
+  },
+  "settings.description": {
+    "message": "Laske matemaattiset lausekkeet suoraan syötepalkissa lähettämättä niitä agentille.",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "83232d2e406cdab5"
+  },
+  "settings.precision.label": {
+    "message": "Desimaalitarkkuus",
+    "description": "Label for the decimal-precision number input",
+    "_machine_translated": true,
+    "_source_hash": "e8b855800859f237"
+  },
+  "settings.precision.description": {
+    "message": "Näytettävien desimaalien määrä (-1 = automaattinen, 0 = kokonaisluku)",
+    "description": "Helper for the precision input",
+    "_machine_translated": true,
+    "_source_hash": "d320f0a6c6ff4fb8"
+  },
+  "settings.auto_copy.label": {
+    "message": "Kopioi tulos automaattisesti",
+    "description": "Toggle: copy math result to clipboard on Enter",
+    "_machine_translated": true,
+    "_source_hash": "d6ca34a24bd63a0b"
+  },
+  "settings.auto_copy.description": {
+    "message": "Kopioi vastaus automaattisesti leikepöydälle Enteriä painettaessa",
+    "description": "Helper for the auto-copy toggle",
+    "_machine_translated": true,
+    "_source_hash": "b5bc779ee463b01f"
+  },
+  "settings.thousands.label": {
+    "message": "Käytä tuhaterotinta",
+    "description": "Toggle: format large numbers with thousands separators",
+    "_machine_translated": true,
+    "_source_hash": "153820c35293c297"
+  },
+  "settings.thousands.description": {
+    "message": "Muotoile suuret luvut erottimilla (esim. 1,000,000)",
+    "description": "Helper for the thousands-separator toggle",
+    "_machine_translated": true,
+    "_source_hash": "3f3decae940dec70"
+  },
+  "settings.precision.error": {
+    "message": "Matemaattisen tarkkuuden on oltava välillä -1 ja 15",
+    "description": "Validation error when precision is out of range",
+    "_machine_translated": true,
+    "_source_hash": "f8c4a655091ad748"
+  }
+}
