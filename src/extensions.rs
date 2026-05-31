@@ -175,6 +175,8 @@ pub const VALID_CAPABILITIES: &[&str] = &[
     "clipboard",
     "urls",
     "launch",
+    "network",
+    "oauth",
     "filesystem",
     "window",
     "windows",

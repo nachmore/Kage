@@ -164,6 +164,67 @@ export async function localizeManifestForPrompt(invoke, manifest) {
     }
 }
 
+/**
+ * Walk the relative imports of `entrySources` (a `{ name → source }`
+ * object), recursively pulling in every sibling module they reference
+ * via `import './x.js'` / `import '../y/z.js'` etc. Returns a
+ * `{ relPath → source }` map suitable for the sandbox's
+ * `sharedSources` payload, or `undefined` if no relative imports are
+ * found.
+ *
+ * Same behaviour as the manager's private `_fetchSharedSources`, but
+ * exported as a free function so the settings window (which builds
+ * its own per-extension sandbox in buildSandboxedSettingsModule and
+ * doesn't go through the manager's _fetchProviderSources path) can
+ * resolve relative imports the same way. Without this, an extension
+ * whose settings.js imports a sibling like `./auth.js` (Spotify
+ * does, for the OAuth helpers) fails to load with "Failed to resolve
+ * module specifier" because the sandbox runtime has no blob URL
+ * registered for the sibling.
+ */
+export async function fetchSharedSourcesViaInvoke(invoke, extensionId, entrySources) {
+    const collected = new Map();
+    const queue = [];
+
+    const scan = (src) => {
+        if (typeof src !== 'string') return;
+        // Matches both `import X from './x.js'` and `import './x.js'`.
+        const re = /\bimport\s+(?:[^'"]+?\s+from\s+)?['"](\.{1,2}\/[^'"]+?)['"]/g;
+        let m;
+        while ((m = re.exec(src)) !== null) {
+            const rel = m[1];
+            if (!collected.has(rel) && !queue.includes(rel)) queue.push(rel);
+        }
+    };
+
+    for (const [, val] of Object.entries(entrySources || {})) {
+        scan(val);
+    }
+
+    while (queue.length) {
+        const rel = queue.shift();
+        if (collected.has(rel)) continue;
+        let text = null;
+        try {
+            text = await invoke('read_extension_file', {
+                extensionId,
+                kind: 'extension',
+                filePath: rel.replace('./', ''),
+            });
+        } catch (e) {
+            console.warn(`Failed to read extension file '${extensionId}/${rel}':`, e);
+        }
+        if (text == null) continue;
+        collected.set(rel, text);
+        scan(text);
+    }
+
+    if (collected.size === 0) return undefined;
+    const out = {};
+    for (const [k, v] of collected) out[k] = v;
+    return out;
+}
+
 async function _resolveExtensionCatalog(fetchByCode) {
     const want = [hostLanguage(), 'en'];
     let catalog = {};

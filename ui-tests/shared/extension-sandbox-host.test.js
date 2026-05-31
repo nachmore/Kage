@@ -97,9 +97,12 @@ describe('ExtensionSandbox._handleInvoke', () => {
 
     it('does not trust args to override the extension identity', async () => {
         // Storage commands are scoped per extension on the backend, so the
-        // host force-injects extension_id into args from its own record
+        // host force-injects extensionId into args from its own record
         // before forwarding. Any value the sandbox supplied is overwritten.
         // This blocks cross-extension data theft via the storage capability.
+        // The arg name MUST be camelCase — Tauri 2's IPC layer renames
+        // the Rust param `extension_id: String` to `extensionId` over
+        // the wire, and a snake_case field would be silently rejected.
         const rawInvoke = vi.fn().mockResolvedValue(null);
         const { sb } = makeSandbox({
             capabilities: ['storage'],
@@ -109,7 +112,7 @@ describe('ExtensionSandbox._handleInvoke', () => {
         await sb._handleInvoke({
             id: 6,
             command: 'save_extension_data',
-            args: { key: 'x', data: '{}', extension_id: 'not-me' },
+            args: { key: 'x', data: '{}', extensionId: 'not-me' },
         });
 
         expect(rawInvoke).toHaveBeenCalled();
@@ -117,11 +120,11 @@ describe('ExtensionSandbox._handleInvoke', () => {
         expect(passedArgs.key).toBe('x');
         // The sandbox's claimed identity ('not-me') must NOT survive into
         // the backend call — the host overrides with its own record.
-        expect(passedArgs.extension_id).toBe('test-ext');
+        expect(passedArgs.extensionId).toBe('test-ext');
     });
 
-    it('force-injects extension_id even when storage args omit it', async () => {
-        // Even if the sandbox omits extension_id, the host must add it.
+    it('force-injects extensionId even when storage args omit it', async () => {
+        // Even if the sandbox omits extensionId, the host must add it.
         // Otherwise a sandbox could call the bare command and the backend
         // would error out unexpectedly — or worse, fall into a default.
         const rawInvoke = vi.fn().mockResolvedValue(null);
@@ -137,13 +140,13 @@ describe('ExtensionSandbox._handleInvoke', () => {
         });
 
         const [, passedArgs] = rawInvoke.mock.calls[0];
-        expect(passedArgs.extension_id).toBe('test-ext');
+        expect(passedArgs.extensionId).toBe('test-ext');
         expect(passedArgs.key).toBe('todos');
     });
 
-    it('does not inject extension_id into non-storage commands', async () => {
+    it('does not inject extensionId into non-storage commands', async () => {
         // Only the storage commands need namespacing. Other commands have
-        // their own access models and shouldn't get a phantom extension_id
+        // their own access models and shouldn't get a phantom extensionId
         // arg appearing in their backend call.
         const rawInvoke = vi.fn().mockResolvedValue(null);
         const { sb } = makeSandbox({
@@ -159,7 +162,7 @@ describe('ExtensionSandbox._handleInvoke', () => {
 
         const [, passedArgs] = rawInvoke.mock.calls[0];
         expect(passedArgs).toEqual({ url: 'https://example.com' });
-        expect(passedArgs.extension_id).toBeUndefined();
+        expect(passedArgs.extensionId).toBeUndefined();
     });
 
     // ---- urls cap: scheme allowlist ----------------------------------

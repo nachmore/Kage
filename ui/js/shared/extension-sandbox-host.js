@@ -413,11 +413,20 @@ export class ExtensionSandbox {
 
         // For storage commands, force-inject the extension's identity. The
         // host owns the sandbox -> extension mapping (it created the
-        // iframe), so this is authoritative. Any extension_id the sandbox
+        // iframe), so this is authoritative. Any extensionId the sandbox
         // tried to supply is overwritten — sandboxes can't read or write
         // another extension's data even if they know the key.
+        //
+        // Tauri 2 expects camelCase arg names on the IPC boundary
+        // (`save_extension_data(extension_id: String)` in Rust ⇄
+        // `{ extensionId }` in JS) — our previous snake_case
+        // injection was silently failing the auto-rename: the
+        // command rejected the call with "missing required key
+        // extensionId" and the spotify widget's now-playing fetch
+        // came up empty, with the install never persisting because
+        // commit_extension_install couldn't write its grant payload.
         const forwardedArgs = STORAGE_COMMANDS.has(command)
-            ? { ...(args || {}), extension_id: this.extensionId }
+            ? { ...(args || {}), extensionId: this.extensionId }
             : args || {};
 
         try {

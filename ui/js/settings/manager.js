@@ -4,7 +4,11 @@
  */
 
 import { errLabel } from '../shared/error-message.js';
-import { applyManifestI18n, fetchExtensionLocaleViaInvoke } from '../shared/extension-manager.js';
+import {
+    applyManifestI18n,
+    fetchExtensionLocaleViaInvoke,
+    fetchSharedSourcesViaInvoke,
+} from '../shared/extension-manager.js';
 import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
 import { renderSchema } from '../shared/settings-renderer.js';
@@ -140,6 +144,17 @@ export async function buildSandboxedSettingsModule({
     // in the floating/chat windows' own sandbox pools.
     const sources = { settingsProvider: settingsProviderSource };
 
+    // Walk relative imports in the settings provider so siblings like
+    // `./auth.js` (Spotify uses this for OAuth helpers) can resolve
+    // inside the sandbox. Without this the sandbox's blob-URL
+    // registry has nothing for the sibling specifier and the import
+    // fails with "Failed to resolve module specifier './auth.js'."
+    // Skipping the call when there's no `invoke` keeps the function
+    // callable from the legacy bootstrap path that doesn't have one.
+    const sharedSources = invoke
+        ? await fetchSharedSourcesViaInvoke(invoke, manifest.id, sources)
+        : undefined;
+
     // Extension config values the provider should see.
     const extConfig = currentConfig?.extensions?.[manifest.id] || {};
 
@@ -161,6 +176,7 @@ export async function buildSandboxedSettingsModule({
         capabilities,
         config: extConfig,
         sources,
+        sharedSources,
         i18nCatalog: i18n.catalog,
         i18nFallback: i18n.fallback,
         i18nLanguage: i18n.language,
