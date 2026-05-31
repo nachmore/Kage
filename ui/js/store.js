@@ -13,6 +13,7 @@
  */
 
 import { errLabel, errMessage } from './shared/error-message.js';
+import { localizeManifestForPrompt } from './shared/extension-manager.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { showPermissionPrompt } from './shared/permission-prompt.js';
 import { cmdOrCtrlPressed } from './shared/shortcuts.js';
@@ -388,7 +389,13 @@ async function runStagedInstall(stager, { onSuccess } = {}) {
         // Auto-approve: no capability expansion, user already said yes.
         decision = { approved: true, granted: requested };
     } else {
-        decision = await showPermissionPrompt(manifest, {
+        // Resolve `__MSG_*__` tokens in name/description against the
+        // freshly-staged extension's `_locales/<lang>/messages.json`.
+        // Without this the prompt shows raw tokens like
+        // `__MSG_manifest.name__` because store_install returns the
+        // wire-form manifest.
+        const localized = await localizeManifestForPrompt(invoke, manifest);
+        decision = await showPermissionPrompt(localized, {
             isUpgrade,
             previouslyGranted,
         });
