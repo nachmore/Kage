@@ -12,7 +12,8 @@
  * are easier to follow.
  */
 
-import { errLabel, errMessage } from './shared/error-message.js';
+import { alertDialog, confirmDialog } from './shared/confirm-dialog.js';
+import { errMessage } from './shared/error-message.js';
 import { localizeManifestForPrompt } from './shared/extension-manager.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { showPermissionPrompt } from './shared/permission-prompt.js';
@@ -535,7 +536,11 @@ async function installFromStore(id) {
             renderTab();
         }
     } catch (e) {
-        alert(errLabel('Install failed', e));
+        await alertDialog({
+            icon: '⚠️',
+            title: t('store.install.failed.title'),
+            message: errMessage(e),
+        });
         renderTab();
     }
 }
@@ -551,7 +556,11 @@ async function updateItem(id) {
         });
         renderTab();
     } catch (e) {
-        alert(errLabel('Update failed', e));
+        await alertDialog({
+            icon: '⚠️',
+            title: t('store.update.failed.title'),
+            message: errMessage(e),
+        });
         renderTab();
     }
 }
@@ -567,13 +576,36 @@ async function reinstallItem(id) {
         });
         renderTab();
     } catch (e) {
-        alert(errLabel('Reinstall failed', e));
+        await alertDialog({
+            icon: '⚠️',
+            title: t('store.reinstall.failed.title'),
+            message: errMessage(e),
+        });
         renderTab();
     }
 }
 
 async function uninstallItem(id, kind) {
-    if (!confirm(t('store.uninstall.confirm', { id }))) return;
+    // Use the in-app modal rather than `window.confirm`. The browser
+    // primitive misbehaves under WebView2 in Tauri 2 — the dialog
+    // blocks the renderer's main thread but our async handler
+    // still proceeds past `await` calls scheduled before the modal
+    // opened, which has produced "Cancel doesn't actually cancel"
+    // bugs in the wild. The themed dialog is async-clean: we await
+    // the user's choice and only invoke uninstall on a `true`
+    // resolve.
+    const localInfo = installedMap.get(id);
+    const displayName = localInfo?.name || id;
+    const ok = await confirmDialog({
+        icon: '🗑️',
+        title: t('store.uninstall.confirm.title', { name: displayName }),
+        message: t('store.uninstall.confirm.message'),
+        confirmLabel: t('store.uninstall.confirm.btn'),
+        cancelLabel: t('store.uninstall.cancel.btn'),
+        destructive: true,
+    });
+    if (!ok) return;
+
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Removing…');
     try {
@@ -581,7 +613,11 @@ async function uninstallItem(id, kind) {
         await refreshInstalled();
         renderTab();
     } catch (e) {
-        alert(errLabel('Uninstall failed', e));
+        await alertDialog({
+            icon: '⚠️',
+            title: t('store.uninstall.failed.title'),
+            message: errMessage(e),
+        });
         renderTab();
     }
 }

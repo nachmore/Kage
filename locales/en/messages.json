@@ -3881,9 +3881,37 @@
     "message": "Unknown error",
     "description": "Fallback when an error has no message"
   },
-  "store.uninstall.confirm": {
-    "message": "Uninstall \"{id}\"?",
-    "description": "confirm() prompt before uninstalling an extension"
+  "store.uninstall.confirm.title": {
+    "message": "Uninstall {name}?",
+    "description": "Title of the in-app confirm dialog before uninstalling an extension"
+  },
+  "store.uninstall.confirm.message": {
+    "message": "This deletes the files and revokes its capability grant. You can reinstall it later from the store.",
+    "description": "Body of the in-app uninstall confirm dialog"
+  },
+  "store.uninstall.confirm.btn": {
+    "message": "Uninstall",
+    "description": "Confirm button on the uninstall dialog"
+  },
+  "store.uninstall.cancel.btn": {
+    "message": "Keep it",
+    "description": "Cancel button on the uninstall dialog"
+  },
+  "store.install.failed.title": {
+    "message": "Install failed",
+    "description": "Title of the alert shown when an extension install fails"
+  },
+  "store.update.failed.title": {
+    "message": "Update failed",
+    "description": "Title of the alert shown when an extension update fails"
+  },
+  "store.reinstall.failed.title": {
+    "message": "Reinstall failed",
+    "description": "Title of the alert shown when an extension reinstall fails"
+  },
+  "store.uninstall.failed.title": {
+    "message": "Uninstall failed",
+    "description": "Title of the alert shown when an extension uninstall fails"
   },
   "settings.assistant.translate.description": {
     "message": "Default target language for the Translate action. Leave empty to use the system default ({language}).",

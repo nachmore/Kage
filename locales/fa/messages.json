@@ -6599,12 +6599,6 @@
     "_machine_translated": true,
     "_source_hash": "3390fb4776e3a2e5"
   },
-  "store.uninstall.confirm": {
-    "message": "حذف نصب «{id}»؟",
-    "description": "confirm() prompt before uninstalling an extension",
-    "_machine_translated": true,
-    "_source_hash": "8c9098802c436605"
-  },
   "settings.assistant.translate.description": {
     "message": "زبان مقصد پیش‌فرض برای عملیات ترجمه. برای استفاده از پیش‌فرض سیستم ({language}) خالی بگذارید.",
     "description": "Helper text under the Translate-action target language input",
@@ -7576,5 +7570,53 @@
     "description": "Capability badge tooltip",
     "_machine_translated": true,
     "_source_hash": "635884ef7f1b2346"
+  },
+  "store.uninstall.confirm.title": {
+    "message": "{name} حذف شود؟",
+    "description": "Title of the in-app confirm dialog before uninstalling an extension",
+    "_machine_translated": true,
+    "_source_hash": "5c2a9de3bec4bab0"
+  },
+  "store.uninstall.confirm.message": {
+    "message": "این کار فایل‌ها را حذف و مجوز آن را لغو می‌کند. بعداً می‌توانید آن را دوباره از فروشگاه نصب کنید.",
+    "description": "Body of the in-app uninstall confirm dialog",
+    "_machine_translated": true,
+    "_source_hash": "787ce4357b09fd43"
+  },
+  "store.uninstall.confirm.btn": {
+    "message": "حذف نصب",
+    "description": "Confirm button on the uninstall dialog",
+    "_machine_translated": true,
+    "_source_hash": "6489cd7e4d749a1a"
+  },
+  "store.uninstall.cancel.btn": {
+    "message": "نگه داشتن",
+    "description": "Cancel button on the uninstall dialog",
+    "_machine_translated": true,
+    "_source_hash": "106c01f2f0a66dfb"
+  },
+  "store.install.failed.title": {
+    "message": "نصب ناموفق بود",
+    "description": "Title of the alert shown when an extension install fails",
+    "_machine_translated": true,
+    "_source_hash": "a6c2e1495d3cbd39"
+  },
+  "store.update.failed.title": {
+    "message": "به‌روزرسانی ناموفق بود",
+    "description": "Title of the alert shown when an extension update fails",
+    "_machine_translated": true,
+    "_source_hash": "0985d78e8bc4622e"
+  },
+  "store.reinstall.failed.title": {
+    "message": "نصب مجدد ناموفق بود",
+    "description": "Title of the alert shown when an extension reinstall fails",
+    "_machine_translated": true,
+    "_source_hash": "f17fa3a2af561f0b"
+  },
+  "store.uninstall.failed.title": {
+    "message": "حذف نصب ناموفق بود",
+    "description": "Title of the alert shown when an extension uninstall fails",
+    "_machine_translated": true,
+    "_source_hash": "17171c8c80af3e4f"
   }
 }
