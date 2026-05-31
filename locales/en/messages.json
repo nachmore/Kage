@@ -3818,11 +3818,11 @@
     "description": "Fallback when a module's validate() returns no error message"
   },
   "settings.manager.status.saved_restart_needed": {
-    "message": "Settings saved. Restart required for connection changes.",
+    "message": "Settings saved. Restart required to apply some changes.",
     "description": "Status banner when a save succeeded but requires a restart"
   },
   "settings.manager.dialog.restart.message": {
-    "message": "Connection settings changed. The app needs to restart to apply these changes.\n\nRestart now?",
+    "message": "Some changes need a restart to apply.\n\nRestart now?",
     "description": "Tauri ask() dialog body"
   },
   "settings.manager.dialog.restart.title": {
@@ -3830,7 +3830,7 @@
     "description": "Tauri ask() dialog title"
   },
   "settings.manager.dialog.restart.fallback": {
-    "message": "Connection settings changed. Restart now?",
+    "message": "Some changes need a restart. Restart now?",
     "description": "Native confirm() fallback when the Tauri dialog plugin isn't available"
   },
   "settings.manager.dialog.restart.now_btn": {

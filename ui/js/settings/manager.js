@@ -180,6 +180,21 @@ export class SettingsManager {
         this.modules = [];
         this.invoke = window.__TAURI__.core.invoke;
         this.appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+
+        // The settings window's lifetime is short (modal-ish: opened to
+        // change a thing, closed when done) and it has no streaming /
+        // typed-state to lose. Reloading it is the cleanest way to pick
+        // up a language change — full re-render cycle for the manager
+        // would also need to re-mount every sandboxed extension iframe,
+        // re-bind every per-module event listener, and preserve the
+        // active section. A page reload does all that for free, and the
+        // language change has just been persisted by save() so the new
+        // catalog is what the reloaded window fetches at startup.
+        document.addEventListener('kage:i18n-changed', () => {
+            // The hash + section query param survive the reload, so the
+            // user stays on the section they were on.
+            window.location.reload();
+        });
     }
 
     /**
@@ -427,7 +442,11 @@ export class SettingsManager {
                 // the user in the same surface and lets them keep
                 // adjusting other settings if they're not done.
                 this.showRestartPrompt();
-                return true;
+                // Return false so saveAndClose doesn't immediately close
+                // the window — the user needs to see and act on the
+                // restart prompt. The save itself succeeded; we just
+                // don't want to dismiss the surface that hosts the prompt.
+                return false;
             }
 
             this.showStatus(t('settings.manager.status.saved'), 'success');

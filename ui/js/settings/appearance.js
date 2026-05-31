@@ -212,22 +212,24 @@ export class AppearanceSettingsModule extends SettingsModule {
             // system-locale change is still honoured. Anything else is a hard
             // override the user explicitly picked.
             config.ui.language = v || null;
-            // A language change requires a window restart to fully reflow.
-            // The catalog reload event flips data-i18n attributes inline,
-            // but most surfaces render their strings via t() at render time
-            // — chat session list, settings rows, floating banners, etc.
-            // — and the existing DOM stays frozen until the next render
-            // pass. Rather than trigger a full re-render of every window
-            // (a significant refactor), the manager.js save flow surfaces a
-            // restart prompt when this flag is set, mirroring the same
-            // pattern as connection-mode changes.
-            if ((this._initialLanguage || '') !== (v || '')) {
-                this._needsRestart = true;
-            }
-            // Ask the backend to switch locales immediately. The backend
-            // also persists this in config.ui.language and broadcasts
-            // config_updated, but we save explicitly here so the rest of
-            // the save() flow doesn't lose the value.
+            // Hot-reload path (no restart):
+            //   1. set_language flips the active locale on the Rust side
+            //      and emits config_updated.
+            //   2. Every window's i18n.js listener re-fetches the catalog
+            //      and re-applies data-i18n attributes inline — that
+            //      covers all the static chrome (headers, buttons,
+            //      placeholders, tooltips).
+            //   3. The settings window re-renders itself by listening
+            //      for kage:i18n-changed (see manager.js constructor)
+            //      because most of its content is dynamically rendered
+            //      via t() rather than data-i18n.
+            //   4. Floating / chat windows pick up the language change
+            //      lazily — chrome flips immediately via data-i18n,
+            //      dynamic content updates the next time the user
+            //      triggers a re-render of that view (e.g. opens a new
+            //      chat, types a query). Acceptable trade-off vs. the
+            //      complexity of forcing a full re-render of every
+            //      open window's currently-rendered content.
             const invoke = window.__TAURI__?.core?.invoke;
             if (invoke) {
                 invoke('set_language', { language: v || null }).catch((e) =>
