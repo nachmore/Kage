@@ -28,9 +28,8 @@
     <div class="floating-container">
         <div class="mascot-container" id="floatingMascot">
         </div>
-        
+
         <div class="speech-bubble">
-            <div class="resize-handle" id="resizeHandle"></div>
             <div class="loading-dots" id="loadingDots">
                 <div class="loading-dot"></div>
                 <div class="loading-dot"></div>
@@ -133,6 +132,14 @@
             <input type="file" id="floatingImageInput" style="display:none" accept="image/*" multiple>
             <div class="app-suggestions" id="appSuggestions"></div>
         </div>
+        <!-- Resize handle is a sibling of the speech bubble (not a child)
+             so it pins to the floating-container's bottom-right edge in
+             both LTR and RTL. Inside the speech bubble it would land on
+             the seam with the mascot under RTL — invisible behind the
+             mascot. As a container child it stays in the corner of the
+             window, which matches OS-level resize-handle conventions
+             (macOS, Windows, CSS `resize:` — all unflipped under RTL). -->
+        <div class="resize-handle" id="resizeHandle"></div>
     </div>
 
     <!-- Permission Modal -->

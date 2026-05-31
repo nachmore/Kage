@@ -32,6 +32,10 @@ body {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    /* Anchor for the resize handle (which is a sibling of speech-bubble
+       /  mascot-container so it sits in the window's bottom-right corner
+       regardless of LTR/RTL flex direction). */
+    position: relative;
     /* No CSS height transition — the OS window is already animated smoothly
      * from JS via WindowManager._animateResize() (rAF-driven). A CSS transition
      * here fights with that: body follows the OS window instantly while the
