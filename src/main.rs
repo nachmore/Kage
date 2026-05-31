@@ -367,16 +367,26 @@ async fn run() {
         // allocations; the rest is `Arc::new(Mutex::new(...))`), so the
         // second-instance cost stays bounded by the plugin's own IPC dance
         // (well under 50ms over named pipes / AF_UNIX).
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             use tauri::Emitter;
             info!("Second instance signaled via single-instance plugin");
-            let _ = app.emit(events::SHOW_SESSIONS, ());
-            // Note: when this second-instance launch was triggered by a
-            // `kage://...` deep link, the URL is in `_argv` and the
-            // single-instance plugin's `deep-link` feature flag forwards
-            // it to the deep-link plugin's `on_open_url` channel. We
-            // listen for that channel in src/setup.rs::install_deep_link_handler
-            // rather than re-deriving the URL from argv here.
+            // Suppress the chat-window pop when the second launch was
+            // a deep-link click. The intent there is "install this
+            // extension," which the deep-link plugin handles
+            // independently via `on_open_url` (the `deep-link`
+            // feature flag on single-instance forwards the URL into
+            // that channel before this callback runs). Showing the
+            // chat sessions on top of the store window confused users
+            // — the click had nothing to do with sessions.
+            //
+            // For every other second-instance launch (a user clicking
+            // the tray icon's launcher again, double-clicking the exe,
+            // etc.) we still want the focus-the-chat behaviour, which
+            // is the original raison d'être of this callback.
+            let is_deep_link = argv.iter().any(|a| a.starts_with("kage://"));
+            if !is_deep_link {
+                let _ = app.emit(events::SHOW_SESSIONS, ());
+            }
         }))
         // Custom URL scheme handler for `kage://`. Registered after
         // single-instance so the second-instance argv has already been
