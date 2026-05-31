@@ -212,30 +212,14 @@ export class AppearanceSettingsModule extends SettingsModule {
             // system-locale change is still honoured. Anything else is a hard
             // override the user explicitly picked.
             config.ui.language = v || null;
-            // Hot-reload path (no restart):
-            //   1. set_language flips the active locale on the Rust side
-            //      and emits config_updated.
-            //   2. Every window's i18n.js listener re-fetches the catalog
-            //      and re-applies data-i18n attributes inline — that
-            //      covers all the static chrome (headers, buttons,
-            //      placeholders, tooltips).
-            //   3. The settings window re-renders itself by listening
-            //      for kage:i18n-changed (see manager.js constructor)
-            //      because most of its content is dynamically rendered
-            //      via t() rather than data-i18n.
-            //   4. Floating / chat windows pick up the language change
-            //      lazily — chrome flips immediately via data-i18n,
-            //      dynamic content updates the next time the user
-            //      triggers a re-render of that view (e.g. opens a new
-            //      chat, types a query). Acceptable trade-off vs. the
-            //      complexity of forcing a full re-render of every
-            //      open window's currently-rendered content.
-            const invoke = window.__TAURI__?.core?.invoke;
-            if (invoke) {
-                invoke('set_language', { language: v || null }).catch((e) =>
-                    console.warn('set_language failed', e)
-                );
-            }
+            // No separate `set_language` invoke here. `save_config` on the
+            // Rust side notices the language override and calls
+            // `i18n::set_language` BEFORE emitting `config_updated`, so
+            // every window's i18n.js listener refetches a catalog that
+            // already reflects the new active locale and dispatches
+            // `kage:i18n-changed`. A separate fire-and-forget
+            // `set_language` here would race with `save_config` and could
+            // arrive after the event was already processed.
         }
         config.ui.theme = document.getElementById('theme')?.value || 'system';
         config.ui.floating_window_opacity = parseFloat(

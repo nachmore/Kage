@@ -37,6 +37,7 @@ pub async fn save_config(
     // even staler picture. Lock-mutate-save-drop is the only correct order.
     let new_terminator = config.tool_permissions.terminator_mode;
     let new_log_buffer_size = config.system.log_buffer_size;
+    let new_language = config.ui.language.clone();
     let prior_terminator = {
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
@@ -54,6 +55,19 @@ pub async fn save_config(
 
     // Update app log buffer size if changed
     crate::app_log::set_max_size(new_log_buffer_size);
+
+    // Apply the language override BEFORE emitting `config_updated`. The
+    // settings UI persists language via the normal save_config path; the
+    // event fires once and every window's `i18n.js` listener immediately
+    // calls `get_i18n_catalog`. If we left active locale untouched here,
+    // those windows would refetch the OLD catalog and conclude nothing
+    // changed — surfaces wouldn't reflow until a separate `set_language`
+    // command landed. `None` / empty means "follow system".
+    let preferred = new_language
+        .clone()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(sys_locale::get_locale);
+    crate::i18n::set_language(preferred.as_deref().unwrap_or("en"));
 
     if prior_terminator != new_terminator {
         crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
