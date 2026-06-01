@@ -301,7 +301,13 @@ body {
 .save-button-container {
     position: fixed;
     bottom: 0;
-    left: 180px;
+    /* Match the sidebar width exactly so the bar is flush against
+       the sidebar's right edge — never overlaps it. The previous
+       180px hard-coded a stale measurement and ate into the
+       bottom 30px of the sidebar, which made it look like the
+       sidebar was being pushed up by the save bar. Keep this in
+       sync with `.settings-sidebar { width: 210px }` above. */
+    left: 210px;
     right: 0;
     padding: 12px 40px;
     background: var(--kage-bg-elevated);

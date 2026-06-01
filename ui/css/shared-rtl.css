@@ -175,10 +175,11 @@ html[dir="rtl"] .msg-timestamp {
 }
 
 /* Settings save bar pins to the LEFT in LTR (flush against the sidebar).
-   In RTL the sidebar is on the right, so the bar pins flush-right. */
+   In RTL the sidebar is on the right, so the bar pins flush-right.
+   Matches the sidebar's 210px width — see settings-layout.css. */
 html[dir="rtl"] .save-button-container {
     left: 0;
-    right: 180px;
+    right: 210px;
 }
 
 /* The restart-prompt banner uses fixed positioning with explicit
