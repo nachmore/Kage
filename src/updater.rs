@@ -28,7 +28,7 @@ use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// Compile-time endpoint URLs per channel (from Cargo.toml
@@ -815,7 +815,11 @@ pub fn start_update_loop(
                     updater_state.update_ready.store(true, Ordering::SeqCst);
 
                     // Notify the UI so the banner can light up.
-                    let _ = app_handle.emit(crate::events::UPDATE_AVAILABLE, &version);
+                    crate::event_targets::emit_update_audience(
+                        &app_handle,
+                        crate::events::UPDATE_AVAILABLE,
+                        &version,
+                    );
 
                     if let Ok(mut cfg) = config.try_lock() {
                         cfg.updates.last_check_time = Some(chrono::Utc::now().to_rfc3339());

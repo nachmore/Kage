@@ -5,7 +5,7 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::io::BufRead;
 use std::process::{Command, Stdio};
-use tauri::{Emitter, State};
+use tauri::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PocketTtsStatus {
@@ -196,7 +196,11 @@ pub async fn pocket_tts_install(
             std::thread::spawn(move || {
                 let reader = std::io::BufReader::new(out);
                 for line in reader.lines().map_while(Result::ok) {
-                    let _ = app.emit("pocket_tts_install_output", &line);
+                    crate::event_targets::emit_to_settings(
+                        &app,
+                        "pocket_tts_install_output",
+                        &line,
+                    );
                 }
             })
         });
@@ -208,7 +212,11 @@ pub async fn pocket_tts_install(
             std::thread::spawn(move || {
                 let reader = std::io::BufReader::new(err);
                 for line in reader.lines().map_while(Result::ok) {
-                    let _ = app.emit("pocket_tts_install_output", &line);
+                    crate::event_targets::emit_to_settings(
+                        &app,
+                        "pocket_tts_install_output",
+                        &line,
+                    );
                 }
             })
         });
@@ -241,9 +249,10 @@ pub async fn pocket_tts_install(
         match exit_status {
             Some(status) if status.success() => {
                 info!("pocket-tts installed successfully");
-                let _ = app_handle.emit(
+                crate::event_targets::emit_to_settings(
+                    &app_handle,
                     "pocket_tts_install_done",
-                    serde_json::json!({
+                    &serde_json::json!({
                         "success": true,
                         "message": "pocket-tts installed successfully",
                         "python_path": python_for_config,
@@ -251,9 +260,10 @@ pub async fn pocket_tts_install(
                 );
             }
             Some(_status) => {
-                let _ = app_handle.emit(
+                crate::event_targets::emit_to_settings(
+                    &app_handle,
                     "pocket_tts_install_done",
-                    serde_json::json!({
+                    &serde_json::json!({
                         "success": false,
                         "message": "Installation failed (pip returned non-zero exit code)",
                     }),
@@ -261,9 +271,10 @@ pub async fn pocket_tts_install(
             }
             None => {
                 // Process was cancelled
-                let _ = app_handle.emit(
+                crate::event_targets::emit_to_settings(
+                    &app_handle,
                     "pocket_tts_install_done",
-                    serde_json::json!({
+                    &serde_json::json!({
                         "success": false,
                         "message": "Installation cancelled",
                     }),

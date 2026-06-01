@@ -20,6 +20,7 @@ mod config_migrations;
 mod context_rules;
 mod crash_recovery;
 mod error;
+mod event_targets;
 mod events;
 mod extensions;
 mod hotkey_norm;
@@ -506,6 +507,17 @@ async fn run() {
                 setup::handle_window_close(window, api);
             }
         })
+        .on_page_load(|webview, _payload| {
+            // Subscribe to WebView2's ProcessFailed event the moment a
+            // webview finishes its first navigation. Earliest hook that
+            // works for both pre-declared (main/floating/inline-assist)
+            // and on-demand (settings/store/welcome/chat-*) windows;
+            // setup() only runs once at app boot. Idempotent — the
+            // listener tracks installed labels and skips re-registration
+            // on subsequent navigations within the same webview.
+            // No-op on non-Windows.
+            webview_recovery::install_process_failed_for(webview);
+        })
         .setup(move |app| {
             info!("Setting up application");
             info!("=== Kage Setup ===");
@@ -616,6 +628,13 @@ async fn run() {
             // CLI processes, MCP children, etc. No-op on non-Windows where
             // orphan reaping happens via init/launchd.
             os::install_kill_on_exit_job();
+
+            // Wire the AppHandle into webview-recovery so the wedge
+            // detector can interrogate manager state when a wedge fires.
+            // Has to happen after the manager is up (we're inside setup())
+            // but before any wedge could conceivably trigger — the log
+            // shim is already live, so the sooner the better.
+            webview_recovery::set_app_handle(app.handle().clone());
 
             // Config, app_log, AcpClient, AppLauncher, and all Tauri-managed
             // state were constructed before `tauri::Builder::default()` so the

@@ -443,7 +443,6 @@ pub fn start_session_watcher(
     app_handle: tauri::AppHandle,
 ) -> Option<SessionWatcherHandle> {
     use notify::{Event, EventKind, RecursiveMode, Watcher};
-    use tauri::Emitter;
 
     let sessions_dir = match crate::agent_presets::default_sessions_dir() {
         Some(dir) => dir,
@@ -513,7 +512,7 @@ pub fn start_session_watcher(
                     if let Ok(mut c) = cache.lock() {
                         *c = None;
                     }
-                    let _ = app.emit("sessions_changed", ());
+                    crate::event_targets::emit_to_chat_hosts(&app, "sessions_changed", &());
                 }) {
                     Ok(w) => w,
                     Err(e) => {
@@ -865,7 +864,6 @@ pub async fn delete_session(
     features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    use tauri::Emitter;
     let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
 
     for ext in &["json", "jsonl", "lock"] {
@@ -898,12 +896,13 @@ pub async fn delete_session(
         *cache = None;
     }
 
-    // Tell every window: this session is gone. Windows pinned to it
-    // clear their chat area and show a "no longer exists" notice;
-    // others just refresh their sidebar list.
-    let _ = app.emit(
+    // Tell chat-host windows (main + chat-*): this session is gone.
+    // Windows pinned to it clear their chat area and show a "no
+    // longer exists" notice; others just refresh their sidebar list.
+    crate::event_targets::emit_to_chat_hosts(
+        &app,
         "session_changed",
-        serde_json::json!({
+        &serde_json::json!({
             "id": session_id,
             "kind": "deleted",
         }),
@@ -1228,7 +1227,6 @@ pub async fn rename_session(
     ui: State<'_, crate::state::UiState>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    use tauri::Emitter;
     let title = title.trim().to_string();
     if title.is_empty() {
         return Err("Title cannot be empty".to_string().into());
@@ -1276,13 +1274,14 @@ pub async fn rename_session(
         );
     }
 
-    // Broadcast so all windows can refresh their session list / chat
-    // header. The frontend filters by sessionId — windows not showing
-    // this session ignore the event but cheaply re-render their
-    // sidebar so the renamed entry shows the new title.
-    let _ = app.emit(
+    // Tell chat-host windows so their session list / chat header
+    // re-renders. Windows not showing this session ignore the event
+    // but cheaply refresh their sidebar so the renamed entry shows
+    // the new title.
+    crate::event_targets::emit_to_chat_hosts(
+        &app,
         "session_changed",
-        serde_json::json!({
+        &serde_json::json!({
             "id": session_id,
             "kind": "renamed",
             "title": title,
@@ -1395,13 +1394,13 @@ pub fn maybe_generate_ai_title(
             *sc = None;
         }
 
-        // Emit session_changed so existing PR 3 listeners update
-        // window titles, sidebars, and chat headers without us
-        // having to know about each window here.
-        use tauri::Emitter;
-        let _ = app.emit(
+        // Emit session_changed so existing chat-host listeners update
+        // window titles, sidebars, and chat headers without us having
+        // to know about each window here.
+        crate::event_targets::emit_to_chat_hosts(
+            &app,
             "session_changed",
-            serde_json::json!({
+            &serde_json::json!({
                 "id": session_id,
                 "kind": "renamed",
                 "title": title_to_write,

@@ -133,6 +133,15 @@ windows-icons = "0.3"
 windows-collections = "0.3"
 windows-future = "0.3"
 uiautomation = { version = "0.24", features = ["process", "control", "input"] }
+# WebView2 ProcessFailed event subscription. Tauri 2.10's
+# `WebviewWindow::with_webview` hands us the raw `ICoreWebView2Controller`
+# from this crate's re-exports of webview2-com-sys; we need the matching
+# event-handler factory and `ProcessFailedEventArgs` types from webview2-com
+# to wire `add_ProcessFailed`. See src/webview_recovery.rs::install_process_failed_listeners.
+# Pinned to the same version Tauri's own dep tree resolves to so we don't
+# fork the COM type identity (two copies of `ICoreWebView2` in different
+# versions don't compare equal).
+webview2-com = "=0.38.2"
 windows = { version = "0.62", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell",

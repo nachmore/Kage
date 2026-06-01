@@ -816,11 +816,11 @@ pub fn maybe_spawn_default_session(
 /// (since we removed the timeout) — the user types and sees a
 /// "Spinning up agent…" placeholder forever.
 fn emit_session_pin_failed(app: &tauri::AppHandle, label: &str, reason: &str) {
-    use tauri::Emitter;
     log::warn!("session_pin_failed for {}: {}", label, reason);
-    let _ = app.emit(
+    crate::event_targets::emit_to_floating(
+        app,
         "session_pin_failed",
-        serde_json::json!({
+        &serde_json::json!({
             "label": label,
             "reason": reason,
         }),
@@ -834,7 +834,6 @@ fn pin_session_to_floating(
     session_cache_arc: &Arc<std::sync::Mutex<Option<crate::commands::sessions::SessionCache>>>,
     session_id: &str,
 ) {
-    use tauri::Emitter;
     if let Ok(mut ws) = window_sessions.lock() {
         ws.insert(window_labels::FLOATING.to_string(), session_id.to_string());
     }
@@ -845,14 +844,15 @@ fn pin_session_to_floating(
         window_labels::FLOATING,
         session_id,
     );
-    // Broadcast so the floating webview can adopt this id without
-    // racing against the launch sequence. The frontend listens for
+    // Tell the floating webview to adopt this id without racing
+    // against the launch sequence. The frontend listens for
     // `session_pinned { label: "floating", sessionId }` during init
     // and falls back to creating its own session if the event hasn't
     // arrived within a short timeout.
-    let _ = app.emit(
+    crate::event_targets::emit_to_floating(
+        app,
         "session_pinned",
-        serde_json::json!({
+        &serde_json::json!({
             "label": window_labels::FLOATING,
             "sessionId": session_id,
         }),

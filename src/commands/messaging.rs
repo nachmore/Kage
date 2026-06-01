@@ -136,9 +136,13 @@ pub fn setup_notification_handler(
                                 }
                             }
                         }
-                        // Forward unconditionally; frontend filters by
-                        // sessionId in the payload.
-                        let _ = app_handle.emit(events::TOOL_CALL_UPDATE, &notification);
+                        // Forward to streaming-aware windows; frontend
+                        // filters by sessionId in the payload.
+                        crate::event_targets::emit_streaming_audience(
+                            &app_handle,
+                            events::TOOL_CALL_UPDATE,
+                            &notification,
+                        );
                         return;
                     }
                 }
@@ -168,10 +172,18 @@ pub fn setup_notification_handler(
                             }
                         }
                     }
-                    let _ = app_handle.emit("slash_commands_available", &notification);
+                    crate::event_targets::emit_to_floating(
+                        &app_handle,
+                        "slash_commands_available",
+                        &notification,
+                    );
                 }
                 "metadata" => {
-                    let _ = app_handle.emit("context_metadata", &notification);
+                    crate::event_targets::emit_to_chat_hosts(
+                        &app_handle,
+                        "context_metadata",
+                        &notification,
+                    );
                 }
                 "compaction/status" => {
                     if let Some(status) = notification.get("params")
@@ -194,7 +206,11 @@ pub fn setup_notification_handler(
                             _ => {}
                         }
                     }
-                    let _ = app_handle.emit(events::COMPACTION_STATUS, &notification);
+                    crate::event_targets::emit_streaming_audience(
+                        &app_handle,
+                        events::COMPACTION_STATUS,
+                        &notification,
+                    );
                 }
                 "error/rate_limit" => {
                     let message = notification.get("params")
@@ -202,13 +218,21 @@ pub fn setup_notification_handler(
                         .and_then(|m| m.as_str())
                         .unwrap_or("Rate limit exceeded. Please wait a moment before trying again.");
                     warn!("Rate limit hit: {}", message);
-                    let _ = app_handle.emit(events::MESSAGE_ERROR, message);
+                    crate::event_targets::emit_streaming_audience(
+                        &app_handle,
+                        events::MESSAGE_ERROR,
+                        &message,
+                    );
                 }
                 _ => {
-                    // Unknown vendor extension — forward to the frontend
-                    // as a generic tool_call_update, mirroring previous
+                    // Unknown vendor extension — forward to streaming-aware
+                    // windows as a generic tool_call_update, mirroring previous
                     // behaviour.
-                    let _ = app_handle.emit(events::TOOL_CALL_UPDATE, &notification);
+                    crate::event_targets::emit_streaming_audience(
+                        &app_handle,
+                        events::TOOL_CALL_UPDATE,
+                        &notification,
+                    );
                 }
             }
             return;
@@ -251,8 +275,26 @@ fn spawn_chunk_flush_thread(
                             "text": text,
                             "sessionId": session_id,
                         });
+                        // Streaming-audience target — chat hosts + floating +
+                        // settings — so the per-frame chunk doesn't fan out
+                        // to every webview that happens to subscribe to
+                        // anything else. We call `emit_filter` directly here
+                        // (rather than the helper) because the chunk-flush
+                        // thread relies on the emit returning Err at app
+                        // shutdown to break the loop; the helper swallows
+                        // errors at debug-log level.
                         app_handle
-                            .emit(events::MESSAGE_CHUNK, payload)
+                            .emit_filter(events::MESSAGE_CHUNK, &payload, |t| match t {
+                                tauri::EventTarget::Window { label }
+                                | tauri::EventTarget::Webview { label }
+                                | tauri::EventTarget::WebviewWindow { label }
+                                | tauri::EventTarget::AnyLabel { label } => {
+                                    window_labels::is_session_host_label(label)
+                                        || label == window_labels::FLOATING
+                                        || label == window_labels::SETTINGS
+                                }
+                                _ => false,
+                            })
                             .map_err(|e| format!("{}", e))
                     });
                 if !alive {
@@ -430,8 +472,13 @@ fn handle_permission_notification(
                 "source": source,
             });
 
-            // Broadcast to all windows with source info — each window decides whether to show
-            let _ = app_handle.emit("permission_request", &payload);
+            // Fan out to the windows that subscribe to permission prompts
+            // (chat hosts, floating, settings). Each decides whether to show.
+            crate::event_targets::emit_permission_audience(
+                app_handle,
+                "permission_request",
+                &payload,
+            );
 
             // If originated from floating and it's hidden, show it (case 3: background permission)
             if source == window_labels::FLOATING {
@@ -480,7 +527,11 @@ pub async fn send_message_streaming(
 
         if !client.is_connected() {
             if let Err(e) = client.connect() {
-                let _ = window.emit(events::MESSAGE_ERROR, format!("Unable to connect: {}", e));
+                crate::event_targets::emit_to_self(
+                    &window,
+                    events::MESSAGE_ERROR,
+                    &format!("Unable to connect: {}", e),
+                );
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
                 }
@@ -535,14 +586,15 @@ pub async fn send_message_streaming(
                     }
                 };
 
-                // Broadcast to all windows; any window pinned to the
-                // dead `oldSessionId` adopts `newSessionId`. Per-window
-                // emit was correct in the single-session world but
-                // would leave a peer window holding a dead id when
-                // both windows are pinned to the same session.
-                let _ = app_for_send.emit(
+                // Tell every streaming-aware window; any window pinned
+                // to the dead `oldSessionId` adopts `newSessionId`. Per-
+                // window emit was correct in the single-session world but
+                // would leave a peer window holding a dead id when both
+                // windows are pinned to the same session.
+                crate::event_targets::emit_streaming_audience(
+                    &app_for_send,
                     "session_reset",
-                    serde_json::json!({
+                    &serde_json::json!({
                         "reason": "image_unsupported",
                         "reconnected": new_session_id.is_some(),
                         "oldSessionId": &session_id,
@@ -550,9 +602,10 @@ pub async fn send_message_streaming(
                     }),
                 );
             } else {
-                let _ = window.emit(
+                crate::event_targets::emit_to_self(
+                    &window,
                     events::MESSAGE_ERROR,
-                    format!("Failed to send: {}", error_str),
+                    &format!("Failed to send: {}", error_str),
                 );
             }
             if let Ok(mut m) = originators.lock() {
@@ -573,9 +626,10 @@ pub async fn send_message_streaming(
         //  - peers on the active session see sessionId == theirs
         //  - peers stuck on the pre-recovery session see
         //    oldSessionId == theirs and adopt the new id
-        let _ = app_for_send.emit(
+        crate::event_targets::emit_streaming_audience(
+            &app_for_send,
             events::MESSAGE_COMPLETE,
-            serde_json::json!({
+            &serde_json::json!({
                 "sessionId": &active_session_id,
                 "oldSessionId": &session_id,
             }),
@@ -702,8 +756,9 @@ pub async fn send_permission_response(
         *pending = None;
     }
 
-    // Broadcast dismissal to all windows so they close their permission modals
-    let _ = app.emit(events::PERMISSION_DISMISSED, ());
+    // Tell the permission audience (chat hosts + floating + settings) to
+    // close their permission modals. Same fan-out as the original request.
+    crate::event_targets::emit_permission_audience(&app, events::PERMISSION_DISMISSED, &());
 
     Ok(())
 }
@@ -768,7 +823,16 @@ pub async fn open_chat_with_message(
         crate::commands::window::center_window_on_active_monitor(&main);
         let _ = main.show();
         let _ = main.set_focus();
-        let _ = main.emit("initial_message", message.clone());
+        // Targeted emit: send to the main window only. Plain
+        // `main.emit(...)` looks targeted but actually broadcasts to
+        // every webview that has a listener — `emit_to` with a
+        // WebviewWindow target is the one that actually scopes the
+        // dispatch.
+        let _ = app.emit_to(
+            tauri::EventTarget::webview_window(window_labels::MAIN),
+            "initial_message",
+            message.clone(),
+        );
 
         let client = acp.client.clone();
         let window = main.clone();
@@ -777,7 +841,11 @@ pub async fn open_chat_with_message(
         async_runtime::spawn_blocking(move || {
             if !client.is_connected() {
                 if let Err(e) = client.connect() {
-                    let _ = window.emit(events::MESSAGE_ERROR, format!("Unable to connect: {}", e));
+                    crate::event_targets::emit_to_self(
+                        &window,
+                        events::MESSAGE_ERROR,
+                        &format!("Unable to connect: {}", e),
+                    );
                     if let Ok(mut m) = originators.lock() {
                         m.remove(&session_id);
                     }
@@ -791,19 +859,23 @@ pub async fn open_chat_with_message(
                 Err(_) => session_id.clone(),
             };
             if let Err(e) = result {
-                let _ = window.emit(events::MESSAGE_ERROR, format!("Failed to send: {}", e));
+                crate::event_targets::emit_to_self(
+                    &window,
+                    events::MESSAGE_ERROR,
+                    &format!("Failed to send: {}", e),
+                );
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
                 }
                 return;
             }
-            // Broadcast — peer windows pinned to the same session
-            // need to drop their thinking indicator. See the parallel
-            // emit in send_message_streaming for the same reasoning.
-            let app_for_emit = window.app_handle();
-            let _ = app_for_emit.emit(
+            // Streaming-audience emit — peer windows pinned to the same
+            // session need to drop their thinking indicator. See the
+            // parallel emit in send_message_streaming for the reasoning.
+            crate::event_targets::emit_streaming_audience(
+                window.app_handle(),
                 events::MESSAGE_COMPLETE,
-                serde_json::json!({
+                &serde_json::json!({
                     "sessionId": &active_session_id,
                     "oldSessionId": &session_id,
                 }),
@@ -846,9 +918,13 @@ pub async fn dismiss_pending_permission(
                 if let Ok(mut guard) = acp.pending_permission.lock() {
                     *guard = None;
                 }
-                if let Some(main) = app.get_webview_window(window_labels::MAIN) {
-                    let _ = main.emit(events::PERMISSION_DISMISSED, ());
-                }
+                // PERMISSION_DISMISSED listens in chat hosts + floating +
+                // settings; same audience as the original request.
+                crate::event_targets::emit_permission_audience(
+                    &app,
+                    events::PERMISSION_DISMISSED,
+                    &(),
+                );
                 Ok(true)
             }
             Err(e) => {
@@ -983,7 +1059,14 @@ pub async fn execute_slash_command(
         }
     }
 
-    let _ = window.emit("slash_command_result", &result);
+    // Targeted emit back to the calling window — `WebviewWindow::emit`
+    // dispatches to every webview with a listener, but `slash_command_result`
+    // is a single-source-single-sink reply, so scope it.
+    let _ = app.emit_to(
+        tauri::EventTarget::webview_window(window.label()),
+        "slash_command_result",
+        result.clone(),
+    );
     Ok(result)
 }
 
@@ -1079,10 +1162,11 @@ pub async fn execute_automation_plan(
     let total_steps = plan.len();
     info!("Plan has {} steps", total_steps);
 
-    // Emit plan start event
-    let _ = window.emit(
+    // Emit plan start event back to the calling window only.
+    crate::event_targets::emit_to_self(
+        &window,
         "automation_plan_start",
-        serde_json::json!({
+        &serde_json::json!({
             "totalSteps": total_steps,
             "plan": plan,
         }),
@@ -1097,7 +1181,11 @@ pub async fn execute_automation_plan(
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
             if let Err(e) = client.connect() {
-                let _ = window.emit("automation_plan_error", format!("Unable to connect: {}", e));
+                crate::event_targets::emit_to_self(
+                    &window,
+                    "automation_plan_error",
+                    &format!("Unable to connect: {}", e),
+                );
                 return;
             }
         }
@@ -1119,9 +1207,10 @@ pub async fn execute_automation_plan(
             info!("Executing step {}/{}: {}", step_num, total_steps, task);
 
             // Emit step start event
-            let _ = window.emit(
+            crate::event_targets::emit_to_self(
+                &window,
                 "automation_step_start",
-                serde_json::json!({
+                &serde_json::json!({
                     "step": step_num,
                     "totalSteps": total_steps,
                     "task": task,
@@ -1177,9 +1266,10 @@ pub async fn execute_automation_plan(
 
                     let success = !agent_reported_failure;
 
-                    let _ = window.emit(
+                    crate::event_targets::emit_to_self(
+                        &window,
                         events::AUTOMATION_STEP_COMPLETE,
-                        serde_json::json!({
+                        &serde_json::json!({
                             "step": step_num,
                             "totalSteps": total_steps,
                             "task": task,
@@ -1199,9 +1289,10 @@ pub async fn execute_automation_plan(
                                 .get("task")
                                 .and_then(|t| t.as_str())
                                 .unwrap_or("Unknown task");
-                            let _ = window.emit(
+                            crate::event_targets::emit_to_self(
+                                &window,
                                 events::AUTOMATION_STEP_COMPLETE,
-                                serde_json::json!({
+                                &serde_json::json!({
                                     "step": j + 1,
                                     "totalSteps": total_steps,
                                     "task": remaining_task,
@@ -1218,9 +1309,10 @@ pub async fn execute_automation_plan(
                     let error_msg = format!("{}", e);
                     warn!("Step {}/{} failed: {}", step_num, total_steps, error_msg);
 
-                    let _ = window.emit(
+                    crate::event_targets::emit_to_self(
+                        &window,
                         events::AUTOMATION_STEP_COMPLETE,
-                        serde_json::json!({
+                        &serde_json::json!({
                             "step": step_num,
                             "totalSteps": total_steps,
                             "task": task,
@@ -1239,9 +1331,10 @@ pub async fn execute_automation_plan(
                             .get("task")
                             .and_then(|t| t.as_str())
                             .unwrap_or("Unknown task");
-                        let _ = window.emit(
+                        crate::event_targets::emit_to_self(
+                            &window,
                             events::AUTOMATION_STEP_COMPLETE,
-                            serde_json::json!({
+                            &serde_json::json!({
                                 "step": j + 1,
                                 "totalSteps": total_steps,
                                 "task": remaining_task,
@@ -1257,14 +1350,20 @@ pub async fn execute_automation_plan(
         }
 
         // Emit plan complete event
-        let _ = window.emit(
+        crate::event_targets::emit_to_self(
+            &window,
             "automation_plan_complete",
-            serde_json::json!({
+            &serde_json::json!({
                 "totalSteps": total_steps,
             }),
         );
 
-        let _ = window.emit(events::MESSAGE_COMPLETE, ());
+        // MESSAGE_COMPLETE is what closes out the streaming UI in
+        // chat-host windows — emit there regardless of which window
+        // started the plan, otherwise a plan kicked off from the
+        // floating launcher leaves the chat row in "streaming" state.
+        let app = window.app_handle().clone();
+        crate::event_targets::emit_to_chat_hosts(&app, events::MESSAGE_COMPLETE, &());
     });
 
     Ok(())
@@ -1295,7 +1394,11 @@ pub async fn extension_tool_response(
 
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
-            let _ = window.emit(events::MESSAGE_ERROR, "Not connected to agent".to_string());
+            crate::event_targets::emit_to_self(
+                &window,
+                events::MESSAGE_ERROR,
+                &"Not connected to agent".to_string(),
+            );
             return;
         }
 
@@ -1314,16 +1417,18 @@ pub async fn extension_tool_response(
 
         // Send as a follow-up user message so the agent continues
         if let Err(e) = client.send_chat_streaming(&session_id, &content, None) {
-            let _ = window.emit(
+            crate::event_targets::emit_to_self(
+                &window,
                 events::MESSAGE_ERROR,
-                format!("Failed to send tool result: {}", e),
+                &format!("Failed to send tool result: {}", e),
             );
         }
 
-        // Emit message_complete so the frontend knows the follow-up response is done
-        let _ = window.emit(
+        // Tell streaming-aware peers that the follow-up response is done.
+        crate::event_targets::emit_streaming_audience(
+            window.app_handle(),
             events::MESSAGE_COMPLETE,
-            serde_json::json!({ "sessionId": &session_id }),
+            &serde_json::json!({ "sessionId": &session_id }),
         );
     });
 
@@ -1478,9 +1583,10 @@ pub async fn send_inline_assist(
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
             if let Err(e) = client.connect() {
-                let _ = app.emit(
+                crate::event_targets::emit_to_inline_assist(
+                    &app,
                     events::INLINE_ASSIST_ERROR,
-                    format!("Unable to connect: {}", e),
+                    &format!("Unable to connect: {}", e),
                 );
                 return;
             }
@@ -1489,16 +1595,24 @@ pub async fn send_inline_assist(
         // send_chat_streaming resets its own session bucket; once it
         // returns, the response is available in that bucket.
         if let Err(e) = client.send_chat_streaming(&session_id, &message, None) {
-            let _ = app.emit(events::INLINE_ASSIST_ERROR, format!("Failed: {}", e));
+            crate::event_targets::emit_to_inline_assist(
+                &app,
+                events::INLINE_ASSIST_ERROR,
+                &format!("Failed: {}", e),
+            );
             return;
         }
 
         let result = client.take_session_accumulator(&session_id);
         if result.trim().is_empty() {
-            let _ = app.emit(events::INLINE_ASSIST_ERROR, "Empty response");
+            crate::event_targets::emit_to_inline_assist(
+                &app,
+                events::INLINE_ASSIST_ERROR,
+                &"Empty response",
+            );
         } else {
-            let _ = app.emit("inline_assist_chunk", &result);
-            let _ = app.emit("inline_assist_complete", ());
+            crate::event_targets::emit_to_inline_assist(&app, "inline_assist_chunk", &result);
+            crate::event_targets::emit_to_inline_assist(&app, "inline_assist_complete", &());
         }
     });
 
@@ -1524,6 +1638,9 @@ pub async fn execute_macro(
 ) -> Result<String, AppError> {
     let client = acp.client.clone();
     let step_count = steps.len();
+    // Cloned for the post-await telemetry track. Used to also be used
+    // by a per-step `macro_progress` emit, but that event has no
+    // frontend listener so the per-step broadcast was deleted.
     let app_for_event = app.clone();
     let result = async_runtime::spawn_blocking(move || -> Result<String, AppError> {
         let mut current_input = initial_input;
@@ -1531,12 +1648,10 @@ pub async fn execute_macro(
         for (i, step) in steps.iter().enumerate() {
             let step_type = step.get("step_type").and_then(|v| v.as_str()).unwrap_or("ai_prompt");
 
-            // Emit progress
-            let _ = app.emit("macro_progress", serde_json::json!({
-                "step": i + 1,
-                "total": steps.len(),
-                "type": step_type,
-            }));
+            // (Was: emit `macro_progress` here. No frontend listener
+            // ever subscribed, so it was a per-step broadcast doing
+            // nothing. Drop the emit instead of paying the eval cost
+            // on every step.)
 
             match step_type {
                 "ai_prompt" => {

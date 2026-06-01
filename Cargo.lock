@@ -2854,6 +2854,7 @@ dependencies = [
  "uiautomation",
  "url",
  "uuid",
+ "webview2-com",
  "whoami",
  "windows 0.62.2",
  "windows-collections 0.3.2",

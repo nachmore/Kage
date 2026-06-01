@@ -12,7 +12,7 @@ use crate::lock_ext::LockExt;
 use crate::state::FeatureServices;
 use crate::window_labels;
 use log::{error, info, warn};
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 /// Register all global hotkeys from config. Unregisters everything first.
 /// This is the single source of truth for hotkey registration — called from:
@@ -132,7 +132,10 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                             let evt = evt.clone();
                             std::thread::spawn(move || {
                                 std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-                                let _ = handle.emit(&evt, ());
+                                // CLIPBOARD_HISTORY_MODE / VOICE_MODE both
+                                // target the floating launcher; the only
+                                // listener is in `floating/clipboard-history.js`.
+                                crate::event_targets::emit_to_floating(&handle, &evt, &());
                             });
                         },
                     ) {

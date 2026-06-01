@@ -193,6 +193,337 @@ pub fn init_at_startup() {
 
 static STARTUP_STATE: std::sync::OnceLock<RecoveryState> = std::sync::OnceLock::new();
 
+/// Stashed at app startup so the log shim's wedge detector can interrogate
+/// the manager when a wedge fires. Set once via `set_app_handle`; never
+/// cleared. Held by clone so the recovery thread can outlive any scope
+/// that might otherwise drop it.
+static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+/// Wire the running [`tauri::AppHandle`] into the recovery module.
+/// Called from `setup()` after the manager is up so the wedge detector
+/// can list webviews + probe their state when a wedge fires.
+///
+/// Failing to call this doesn't break the recovery state machine — the
+/// per-window diagnostics just degrade to "we don't know which window
+/// wedged." The auto-restart path still runs.
+pub fn set_app_handle(app: tauri::AppHandle) {
+    let _ = APP_HANDLE.set(app);
+}
+
+/// Records the most recent ProcessFailed event observed across all
+/// webviews — written by the per-webview `add_ProcessFailed` listener,
+/// read by `trigger_recovery` so the diagnostic snapshot can name the
+/// dead webview alongside the bare wry log line. Wrapped in `Mutex`
+/// rather than atomics because the payload is two strings.
+static LAST_PROCESS_FAILURE: std::sync::Mutex<Option<ProcessFailureEvent>> =
+    std::sync::Mutex::new(None);
+
+/// Set by `attempt_window_reload` when it kicks off an in-place reload
+/// (option 3, renderer-only recovery). Reads as "we're trying a soft
+/// recovery; suppress the heavy-handed process restart for a few
+/// seconds so the wry log line we may emit during the reload doesn't
+/// bounce us into a full relaunch." Cleared after [`SOFT_RECOVERY_GRACE`].
+static SOFT_RECOVERY_UNTIL: std::sync::Mutex<Option<std::time::Instant>> =
+    std::sync::Mutex::new(None);
+
+/// How long to suppress process-level restart after a per-window reload.
+/// The reload itself can spray a few `evaluate_script` errors as queued
+/// IPC drains against the briefly-detached webview — those would hit
+/// `record_indicates_wedge` and trigger a process restart we don't want.
+/// Long enough to cover the reload + first paint, short enough that a
+/// real wedge after the reload still triggers the bigger hammer.
+const SOFT_RECOVERY_GRACE: Duration = Duration::from_secs(8);
+
+#[derive(Debug, Clone)]
+struct ProcessFailureEvent {
+    /// Window label whose webview emitted ProcessFailed.
+    label: String,
+    /// `kind` value from `ICoreWebView2ProcessFailedEventArgs::ProcessFailedKind`,
+    /// converted to a human string via `process_failed_kind_str`.
+    kind: String,
+    /// Wall-clock instant the event arrived. Used to decide whether a
+    /// subsequent wry-log wedge correlates (events older than a few
+    /// seconds aren't the cause of *this* wedge).
+    at: std::time::Instant,
+}
+
+fn record_process_failure(label: &str, kind: &str) {
+    let evt = ProcessFailureEvent {
+        label: label.to_string(),
+        kind: kind.to_string(),
+        at: std::time::Instant::now(),
+    };
+    log::error!(
+        "webview-recovery: ProcessFailed observed on window '{}' kind={}",
+        label,
+        kind
+    );
+    if let Ok(mut slot) = LAST_PROCESS_FAILURE.lock() {
+        *slot = Some(evt);
+    }
+
+    // Per-window recovery (option 3). For renderer-process failures the
+    // controller itself is healthy — only the page-rendering subprocess
+    // died and WebView2 will respawn it on the next navigation. A
+    // `reload()` is the cheapest way to trigger that without losing the
+    // window or restarting Kage.
+    //
+    // For *browser* process or GPU process failures the controller's
+    // backing process is gone; reload would race against an already-
+    // dead host. Those drop through to the existing process-level
+    // restart path (via the wry log line, which fires shortly after the
+    // browser process actually exits).
+    if matches!(
+        kind,
+        "render_process_exited" | "render_process_unresponsive" | "frame_render_process_exited"
+    ) {
+        attempt_window_reload(label);
+    }
+}
+
+/// Try to reload a single webview in place. Logged at info on success
+/// and warn on failure; the failure path doesn't escalate because the
+/// later wry-log-driven process restart will catch the case where the
+/// reload itself triggers the wedge log.
+fn attempt_window_reload(label: &str) {
+    let Some(app) = APP_HANDLE.get() else {
+        log::warn!(
+            "webview-recovery: can't reload '{}' — no AppHandle stashed",
+            label
+        );
+        return;
+    };
+    use tauri::Manager;
+    let Some(window) = app.get_webview_window(label) else {
+        log::warn!(
+            "webview-recovery: can't reload '{}' — window not in manager",
+            label
+        );
+        return;
+    };
+    match window.reload() {
+        Ok(()) => {
+            log::info!(
+                "webview-recovery: in-place reload triggered on '{}' (renderer-only failure)",
+                label
+            );
+            // Suppress the bigger-hammer process restart during the
+            // reload's settle window — see SOFT_RECOVERY_GRACE.
+            if let Ok(mut slot) = SOFT_RECOVERY_UNTIL.lock() {
+                *slot = Some(std::time::Instant::now() + SOFT_RECOVERY_GRACE);
+            }
+        }
+        Err(e) => log::warn!("webview-recovery: reload of '{}' failed: {}", label, e),
+    }
+}
+
+fn within_soft_recovery_grace() -> bool {
+    if let Ok(slot) = SOFT_RECOVERY_UNTIL.lock() {
+        if let Some(until) = *slot {
+            return std::time::Instant::now() < until;
+        }
+    }
+    false
+}
+
+/// Install the ProcessFailed listener for one webview. Wired into
+/// `tauri::Builder::on_page_load` so it fires every time a webview
+/// completes navigation — that's the earliest reliable point where
+/// `WebviewWindow::with_webview` returns a live controller for both
+/// pre-declared windows (main/floating/inline-assist) and on-demand
+/// ones (settings/store/welcome/chat-*).
+///
+/// Why this matters: the wry log line (`tauri_runtime_wry: WebView2
+/// error: 0x8007139F`) is what we currently catch in `record_indicates_wedge`,
+/// but it doesn't carry the failing webview's label and only fires after
+/// the wedge has already manifested as eval failures. ProcessFailed
+/// fires when the WebView2 renderer / GPU / browser process itself dies —
+/// the upstream root cause — and gives us both the kind of failure
+/// (BrowserProcessExited, RenderProcessExited, RenderProcessUnresponsive)
+/// and direct access to the webview that owns the dead process.
+///
+/// Windows-only — wry's macOS / Linux backends don't expose an analogous
+/// hook. On non-Windows builds this is a no-op.
+#[cfg(target_os = "windows")]
+pub fn install_process_failed_for<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
+    let label = webview.label().to_string();
+    {
+        let installed = match LISTENER_INSTALLED.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        if installed.contains(&label) {
+            return;
+        }
+    }
+    install_for_webview(label, webview.clone());
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn install_process_failed_for<R: tauri::Runtime>(_webview: &tauri::Webview<R>) {}
+
+#[cfg(target_os = "windows")]
+static LISTENER_INSTALLED: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashSet<String>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+
+#[cfg(target_os = "windows")]
+fn install_for_webview<R: tauri::Runtime>(label: String, window: tauri::Webview<R>) {
+    use webview2_com::ProcessFailedEventHandler;
+
+    let label_for_handler = label.clone();
+    let label_for_log = label.clone();
+    if let Err(e) = window.with_webview(move |w| {
+        // SAFETY: `controller()` returns the live ICoreWebView2Controller
+        // owned by wry. The closure runs on the Tauri main thread, where
+        // WebView2 callbacks are also dispatched, so the COM apartment
+        // matches and the resulting registration is valid.
+        let controller = w.controller();
+        let core = match unsafe { controller.CoreWebView2() } {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!(
+                    "webview-recovery: '{}' couldn't fetch CoreWebView2 for ProcessFailed listener: {}",
+                    label_for_handler,
+                    e
+                );
+                return;
+            }
+        };
+
+        let label_for_callback = label_for_handler.clone();
+        let handler = ProcessFailedEventHandler::create(Box::new(move |_sender, args| {
+            // `args` is an `Option<ICoreWebView2ProcessFailedEventArgs>`;
+            // a None here would mean the event fired with no detail,
+            // which the API doesn't actually do but the type allows.
+            let kind_str = args
+                .as_ref()
+                .map(|a| {
+                    let mut k = Default::default();
+                    // SAFETY: callback runs on the same COM apartment
+                    // that owns `args`; the out-pointer points to a
+                    // stack local owned by this frame.
+                    if unsafe { a.ProcessFailedKind(&mut k) }.is_ok() {
+                        process_failed_kind_str(k)
+                    } else {
+                        "unknown_kind"
+                    }
+                })
+                .unwrap_or("no_args");
+            record_process_failure(&label_for_callback, kind_str);
+            Ok(())
+        }));
+        let mut token = Default::default();
+        unsafe {
+            if let Err(e) = core.add_ProcessFailed(&handler, &mut token) {
+                log::warn!(
+                    "webview-recovery: '{}' add_ProcessFailed failed: {}",
+                    label_for_handler,
+                    e
+                );
+                return;
+            }
+        }
+        log::info!(
+            "webview-recovery: ProcessFailed listener installed on window '{}'",
+            label_for_handler
+        );
+        if let Ok(mut set) = LISTENER_INSTALLED.lock() {
+            set.insert(label_for_handler);
+        }
+    }) {
+        log::warn!(
+            "webview-recovery: with_webview failed for '{}': {}",
+            label_for_log,
+            e
+        );
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn process_failed_kind_str(
+    kind: webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_PROCESS_FAILED_KIND,
+) -> &'static str {
+    use webview2_com::Microsoft::Web::WebView2::Win32 as wv;
+    match kind {
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED => "browser_process_exited",
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED => "render_process_exited",
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE => {
+            "render_process_unresponsive"
+        }
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED => {
+            "frame_render_process_exited"
+        }
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_UTILITY_PROCESS_EXITED => "utility_process_exited",
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_SANDBOX_HELPER_PROCESS_EXITED => {
+            "sandbox_helper_process_exited"
+        }
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_GPU_PROCESS_EXITED => "gpu_process_exited",
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_PPAPI_PLUGIN_PROCESS_EXITED => {
+            "ppapi_plugin_process_exited"
+        }
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_PPAPI_BROKER_PROCESS_EXITED => {
+            "ppapi_broker_process_exited"
+        }
+        wv::COREWEBVIEW2_PROCESS_FAILED_KIND_UNKNOWN_PROCESS_EXITED => "unknown_process_exited",
+        _ => "unrecognized_kind",
+    }
+}
+
+/// Snapshot every webview's visible/outer-state at trigger time. The wry
+/// log line that fires `0x8007139F` doesn't carry the failing webview's
+/// label — it just dumps wry's `Error` Display. Without this snapshot we
+/// have no idea which window class (main / floating / settings / chat-*)
+/// is the one whose WebView2 host has gone south, and the rebuild path
+/// needs that.
+///
+/// We don't ask each webview to eval-ping back: that would be the most
+/// authoritative health check but it's async and the recovery flow has
+/// to be synchronous (we're about to spawn a restart thread). Synchronous
+/// visibility / position queries go straight to the OS via Win32, bypassing
+/// wry's IPC, so a wedged WebView2 controller can't hide them.
+///
+/// Combined with option 4 (`ProcessFailed` listener) this pins the
+/// culprit accurately enough to act on.
+fn snapshot_webview_state() -> Vec<WebviewSnapshot> {
+    let Some(app) = APP_HANDLE.get() else {
+        return Vec::new();
+    };
+    use tauri::Manager;
+    app.webview_windows()
+        .into_iter()
+        .map(|(label, window)| WebviewSnapshot {
+            label,
+            is_visible: window.is_visible().ok(),
+            outer_position: window.outer_position().ok().map(|p| (p.x, p.y)),
+            inner_size: window.inner_size().ok().map(|s| (s.width, s.height)),
+            is_focused: window.is_focused().ok(),
+        })
+        .collect()
+}
+
+#[derive(Debug)]
+struct WebviewSnapshot {
+    label: String,
+    is_visible: Option<bool>,
+    outer_position: Option<(i32, i32)>,
+    inner_size: Option<(u32, u32)>,
+    is_focused: Option<bool>,
+}
+
+fn log_snapshot(snapshots: &[WebviewSnapshot]) {
+    if snapshots.is_empty() {
+        warn!("webview-recovery: no app handle stashed; can't snapshot webviews");
+        return;
+    }
+    for s in snapshots {
+        info!(
+            "webview-recovery: snapshot label={} visible={:?} pos={:?} size={:?} focused={:?}",
+            s.label, s.is_visible, s.outer_position, s.inner_size, s.is_focused
+        );
+    }
+}
+
 /// Predicate the log shim asks for every record. Returns `true` if the
 /// caller should hand this record to `trigger_recovery_async`. Lifted
 /// out of the shim so it can be unit-tested without faking the
@@ -213,6 +544,22 @@ pub fn trigger_recovery() {
         // Already triggered — debounce subsequent error bursts.
         return;
     }
+
+    // If we're inside the soft-recovery grace window (a per-window
+    // reload was just kicked off in response to ProcessFailed), the
+    // wry log line is almost certainly a tail-end queued eval error
+    // from the reload itself, NOT a fresh wedge. Suppress the process
+    // restart and clear the trigger flag so a genuine wedge later can
+    // still escalate.
+    if within_soft_recovery_grace() {
+        info!(
+            "webview-recovery: wedge log fired inside soft-recovery grace — \
+             skipping process restart (per-window reload owns this incident)"
+        );
+        RECOVERY_TRIGGERED.store(false, Ordering::SeqCst);
+        return;
+    }
+
     let prior = STARTUP_STATE.get().copied().unwrap_or(RecoveryState::Clean);
 
     error!(
@@ -220,6 +567,33 @@ pub fn trigger_recovery() {
          (prior state: {})",
         prior.as_str()
     );
+
+    // If a ProcessFailed callback fired in the last few seconds, the
+    // wedge we just observed is almost certainly the same incident —
+    // log them side by side so the post-mortem doesn't need to guess.
+    let recent_failure = LAST_PROCESS_FAILURE
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+        .filter(|f| f.at.elapsed() < Duration::from_secs(15));
+    if let Some(f) = &recent_failure {
+        info!(
+            "webview-recovery: correlated with ProcessFailed on '{}' kind={} \
+             ({}s before wedge log)",
+            f.label,
+            f.kind,
+            f.at.elapsed().as_secs()
+        );
+    }
+
+    // Diagnostic: what does the manager think every webview's state is
+    // right now? On a clean wedge one window's `is_visible()` will hang
+    // or stale-read while the others remain healthy. The data here is
+    // also what the rebuild path (option 3) keys off to decide which
+    // single window to destroy + recreate, so logging it now is both
+    // forensics and a checkpoint.
+    let snapshot = snapshot_webview_state();
+    log_snapshot(&snapshot);
 
     match prior {
         RecoveryState::Clean => {

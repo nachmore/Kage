@@ -39,6 +39,7 @@ pub mod window_labels;
 // Tauri-dependent modules
 pub mod automation;
 pub mod commands;
+pub mod event_targets;
 pub mod setup;
 pub mod state;
 pub mod telemetry;

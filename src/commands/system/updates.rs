@@ -8,7 +8,7 @@ use crate::events;
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, FeatureServices, UiState};
 use crate::window_labels;
-use tauri::{Emitter, State};
+use tauri::State;
 
 #[tauri::command]
 pub async fn check_for_update(
@@ -38,9 +38,11 @@ pub async fn check_for_update(
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
-    // Emit event so the floating window can show a banner too.
+    // Tell chat hosts, floating, and settings — they all show
+    // update-available indicators. inline-assist / store / welcome
+    // / context-menu don't subscribe.
     if let Some(ref version) = available {
-        let _ = app.emit(events::UPDATE_AVAILABLE, version);
+        crate::event_targets::emit_update_audience(&app, events::UPDATE_AVAILABLE, version);
     }
 
     Ok(serde_json::json!({

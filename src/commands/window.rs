@@ -6,7 +6,7 @@ use crate::window_labels::{self, is_chat_label, is_session_host_label};
 use log::{error, info, warn};
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{Emitter, Manager, WebviewWindow};
+use tauri::{Manager, WebviewWindow};
 use tauri_plugin_notification::NotificationExt;
 
 /// Get cursor position via OS abstraction
@@ -133,7 +133,7 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
     if let Ok(mut sel) = ui.last_selection.lock() {
         *sel = None;
     }
-    let _ = app.emit("selection_captured", false);
+    crate::event_targets::emit_to_floating(app, "selection_captured", &false);
 }
 
 /// Toggle the floating window visibility and position it
@@ -261,13 +261,17 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                         if let Ok(mut sel) = last_selection.lock() {
                             *sel = selection;
                         }
-                        let _ = app_handle.emit("selection_captured", has_sel);
+                        crate::event_targets::emit_to_floating(
+                            &app_handle,
+                            "selection_captured",
+                            &has_sel,
+                        );
                     });
                 } else {
                     if let Ok(mut sel) = ui_state.last_selection.lock() {
                         *sel = None;
                     }
-                    let _ = app.emit("selection_captured", false);
+                    crate::event_targets::emit_to_floating(app, "selection_captured", &false);
                 }
             }
         }
@@ -986,11 +990,14 @@ pub async fn open_settings_window(
     // both would re-invoke switchSection redundantly (harmless but
     // noisy) and could trigger a flash of a different section.
     if already_open {
+        // The settings window is the only listener — `WebviewWindow::emit`
+        // would fan out to every webview, but the cost adds up if a user
+        // re-opens settings repeatedly. Scope it.
         if let Some(ref s) = section {
-            let _ = window.emit("navigate_settings_section", s);
+            crate::event_targets::emit_to_settings(&app, "navigate_settings_section", s);
         }
         if let Some(ref sub) = sub_section {
-            let _ = window.emit("navigate_settings_subsection", sub);
+            crate::event_targets::emit_to_settings(&app, "navigate_settings_subsection", sub);
         }
     }
     crate::setup::update_activation_policy(&app);
@@ -1371,7 +1378,7 @@ pub async fn show_inline_assist_with_context(
                 "app": app_name,
                 "title": title,
             });
-            let _ = window_clone.emit(events::INLINE_ASSIST_SHOW, &payload);
+            crate::event_targets::emit_to_self(&window_clone, events::INLINE_ASSIST_SHOW, &payload);
         });
     } else {
         warn!("inline-assist window not found — is it defined in tauri.conf.json?");

@@ -162,7 +162,6 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                     });
                 }
                 "test-update-available" => {
-                    use tauri::Emitter;
                     info!("Testing update available banner");
                     if let Some(floating) =
                         app_handle_inner.get_webview_window(window_labels::FLOATING)
@@ -170,7 +169,11 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                         let _ = floating.show();
                         let _ = floating.set_focus();
                     }
-                    let _ = app_handle_inner.emit(events::UPDATE_AVAILABLE, "99.0.0");
+                    crate::event_targets::emit_update_audience(
+                        app_handle_inner,
+                        events::UPDATE_AVAILABLE,
+                        &"99.0.0",
+                    );
                 }
                 "dump-threads" => {
                     info!("Dumping thread info...");

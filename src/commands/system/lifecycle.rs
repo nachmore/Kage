@@ -11,7 +11,7 @@ use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, ChildProcesses, FeatureServices};
 use crate::window_labels;
 use log::{error, info, warn};
-use tauri::{Emitter, Manager, State};
+use tauri::{Manager, State};
 
 /// Consolidated shutdown: hide UI, kill TTS, generate steering, disconnect ACP.
 /// Called from tray quit, quit_app, and restart_app to avoid duplicated cleanup.
@@ -357,9 +357,10 @@ pub fn show_welcome_banner(app: &tauri::AppHandle) {
         let _ = floating.show();
         let _ = floating.set_focus();
     }
-    let _ = app.emit(
+    crate::event_targets::emit_to_floating(
+        app,
         crate::events::SHOW_FLOATING_BANNER,
-        serde_json::json!({
+        &serde_json::json!({
             "icon": "👋",
             "text": text,
             "action_label": "",
@@ -386,9 +387,10 @@ pub fn show_update_banner(app: &tauri::AppHandle) {
         let _ = floating.show();
         let _ = floating.set_focus();
     }
-    let _ = app.emit(
+    crate::event_targets::emit_to_floating(
+        app,
         crate::events::SHOW_FLOATING_BANNER,
-        serde_json::json!({
+        &serde_json::json!({
             "icon": "🎉",
             "text": "Kage has been updated!",
             "action_label": "View changelog →",
