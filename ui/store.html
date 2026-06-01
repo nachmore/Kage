@@ -42,7 +42,8 @@
             color: var(--kage-text-bright);
             flex: 1;
         }
-        .store-header-settings {
+        .store-header-settings,
+        .store-header-refresh {
             -webkit-app-region: no-drag;
             padding: 4px 8px;
             font-size: 14px;
@@ -52,10 +53,23 @@
             color: var(--kage-text-muted);
             cursor: pointer;
             transition: all 0.15s;
+            line-height: 1;
         }
-        .store-header-settings:hover {
+        .store-header-settings:hover,
+        .store-header-refresh:hover {
             border-color: var(--kage-accent);
             color: var(--kage-accent);
+        }
+        .store-header-refresh.is-refreshing .store-refresh-icon {
+            display: inline-block;
+            animation: store-refresh-spin 0.8s linear infinite;
+        }
+        .store-header-refresh[disabled] {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        @keyframes store-refresh-spin {
+            to { transform: rotate(360deg); }
         }
         .store-tabs {
             display: flex;
@@ -118,27 +132,6 @@
             background: var(--kage-accent);
             border-color: var(--kage-accent);
             color: white;
-        }
-        .store-refresh-btn {
-            /* Square-ish icon-only button — same height as the
-               filter button next to it, so the toolbar stays a
-               single tidy row. */
-            padding: 6px 10px;
-            line-height: 1;
-        }
-        .store-refresh-icon {
-            display: inline-block;
-            font-size: 14px;
-        }
-        .store-refresh-btn.is-refreshing .store-refresh-icon {
-            animation: store-refresh-spin 0.8s linear infinite;
-        }
-        .store-refresh-btn[disabled] {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        @keyframes store-refresh-spin {
-            to { transform: rotate(360deg); }
         }
         .store-source-select {
             padding: 6px 10px;
@@ -340,6 +333,9 @@
     <div class="store-container">
         <div class="store-header">
             <h1 data-i18n="store.header_title">🛍️ Extension Store</h1>
+            <button class="store-header-refresh" id="storeRefreshBtn" onclick="window.__kageStore.refresh()" data-i18n-title="store.refresh.title" title="Refresh catalog and check for updates" aria-label="Refresh">
+                <span class="store-refresh-icon" aria-hidden="true">↻</span>
+            </button>
             <button class="store-header-settings" onclick="window.__kageStore.openSettings('store')" data-i18n-title="store.header.settings_title" title="Store settings">⚙️</button>
         </div>
         <div class="store-tabs">
@@ -353,9 +349,6 @@
                 <option value="" data-i18n="store.source.all">All Sources</option>
             </select>
             <button class="store-filter-btn" id="installedFilter" onclick="window.__kageStore.toggleInstalledFilter()" data-i18n="store.filter.installed_only">Installed only</button>
-            <button class="store-filter-btn store-refresh-btn" id="storeRefreshBtn" onclick="window.__kageStore.refresh()" data-i18n-title="store.refresh.title" title="Refresh catalog and check for updates" aria-label="Refresh">
-                <span class="store-refresh-icon" aria-hidden="true">↻</span>
-            </button>
         </div>
         <div class="store-content" id="storeContent"></div>
     </div>
