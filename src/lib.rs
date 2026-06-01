@@ -33,6 +33,7 @@ pub mod process_manager;
 pub mod session_titler;
 pub mod startup;
 pub mod steering_io;
+pub mod webview_recovery;
 pub mod window_labels;
 
 // Tauri-dependent modules

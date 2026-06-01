@@ -109,6 +109,17 @@ impl log::Log for LogShim {
         let target = record.target();
         let message = record.args().to_string();
 
+        // WebView2 wedge detection — see webview_recovery.rs for the
+        // full state machine. We hook here because tauri_runtime_wry's
+        // error path is `log::error!`, so this is the single chokepoint
+        // every wedge record passes through. Detection is dirt cheap
+        // (substring + target compare) so it's fine on the hot log path.
+        if record.level() == Level::Error
+            && crate::webview_recovery::record_indicates_wedge(target, &message)
+        {
+            crate::webview_recovery::trigger_recovery();
+        }
+
         // Try to drain any pre-init buffer first so this entry isn't observed
         // out-of-order relative to the buffered ones.
         drain_preinit_buffer_if_ready();

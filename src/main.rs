@@ -41,6 +41,7 @@ mod steering_io;
 mod telemetry;
 mod tray;
 mod updater;
+mod webview_recovery;
 mod window_labels;
 
 use acp_client::AcpClient;
@@ -136,6 +137,13 @@ async fn run() {
         eprintln!("Failed to initialize logger: {}", e);
         eprintln!("Continuing without file logging...");
     }
+
+    // Read the WebView2 recovery marker BEFORE any tauri / wry code can
+    // emit a wedge error. The marker tells us whether this run is a
+    // restart from a previous wedge — so a second wedge in the new
+    // process knows to escalate (delay-then-restart) instead of
+    // restarting again immediately.
+    webview_recovery::init_at_startup();
 
     info!("=== Kage Starting ===");
     let startup_t0 = std::time::Instant::now();
