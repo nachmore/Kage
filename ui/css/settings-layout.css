@@ -18,13 +18,16 @@ body {
 
 .settings-container {
     display: flex;
-    /* Reserve the bottom strip for the fixed save bar so the
-       content area's scrollbar terminates at the bar's top edge,
-       not under it. Without this, the scrollbar visually tunneled
-       through the save bar and the last setting in any section
-       could only be revealed by scrolling slightly past the
-       padding cushion — feels broken even though it works. */
-    height: calc(100vh - var(--kage-save-bar-height));
+    /* Container runs full viewport height. The sidebar fills it.
+       Only `.settings-content` gets clipped at the save bar — its
+       own height: calc(...) below — so the scrollbar still
+       terminates at the bar's top edge while the sidebar's
+       background continues all the way to the bottom of the window
+       and visually meets the save bar at its top edge. The previous
+       version clipped the whole container, which left a gap of
+       --kage-save-bar-height between the sidebar bottom and the
+       window bottom. */
+    height: 100vh;
     width: 100%;
 }
 
@@ -115,9 +118,12 @@ body {
 .settings-content {
     flex: 1;
     overflow-y: auto;
-    /* The container clips us short of the save bar (see
-       --kage-save-bar-height in body); padding-bottom is just a
-       breathing buffer so the last row doesn't sit flush against
+    /* End the scrollable area at the save bar's top edge so the
+       scrollbar doesn't tunnel under it. Sidebar isn't clipped —
+       it fills the full viewport and visually butts up against the
+       save bar from the side, keeping the chrome looking solid. */
+    height: calc(100vh - var(--kage-save-bar-height));
+    /* Breathing buffer so the last row doesn't sit flush against
        the save bar's top border. */
     padding: 30px 40px 24px 40px;
 }
