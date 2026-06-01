@@ -232,6 +232,12 @@ static SOFT_RECOVERY_UNTIL: std::sync::Mutex<Option<std::time::Instant>> =
 /// `record_indicates_wedge` and trigger a process restart we don't want.
 /// Long enough to cover the reload + first paint, short enough that a
 /// real wedge after the reload still triggers the bigger hammer.
+///
+/// Only consumed on Windows where the ProcessFailed listener actually
+/// installs and can kick off `attempt_window_reload`. macOS / Linux
+/// never set `SOFT_RECOVERY_UNTIL`, so `within_soft_recovery_grace`
+/// always returns false there and the const isn't referenced.
+#[cfg(target_os = "windows")]
 const SOFT_RECOVERY_GRACE: Duration = Duration::from_secs(8);
 
 #[derive(Debug, Clone)]
@@ -247,6 +253,7 @@ struct ProcessFailureEvent {
     at: std::time::Instant,
 }
 
+#[cfg(target_os = "windows")]
 fn record_process_failure(label: &str, kind: &str) {
     let evt = ProcessFailureEvent {
         label: label.to_string(),
@@ -285,6 +292,7 @@ fn record_process_failure(label: &str, kind: &str) {
 /// and warn on failure; the failure path doesn't escalate because the
 /// later wry-log-driven process restart will catch the case where the
 /// reload itself triggers the wedge log.
+#[cfg(target_os = "windows")]
 fn attempt_window_reload(label: &str) {
     let Some(app) = APP_HANDLE.get() else {
         log::warn!(
