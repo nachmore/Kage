@@ -174,6 +174,15 @@ export function renderSuggestions(apps, appSuggestions, selectedIndex, launchApp
 
 export function updateSelection(appSuggestions, selectedIndex) {
     const items = appSuggestions.querySelectorAll('.app-suggestion-item');
+    // The "Ctrl+Enter to send" hint at the bottom is `position: sticky`,
+    // so it OVERLAYS the bottom slice of the visible area equal to its
+    // own height. If we don't compensate, the last item sits exactly
+    // at `scrollTop + clientHeight` and the sticky hint covers the
+    // bottom half of it — visually clipping the row even though the
+    // math says it's "in view."
+    const hint = appSuggestions.querySelector('.suggestions-hint');
+    const hintHeight = hint ? hint.offsetHeight : 0;
+
     items.forEach((item, index) => {
         if (index === selectedIndex) {
             item.classList.add('selected');
@@ -181,10 +190,15 @@ export function updateSelection(appSuggestions, selectedIndex) {
             // which can scroll parent containers and push the input off screen.
             const itemTop = item.offsetTop - appSuggestions.offsetTop;
             const itemBottom = itemTop + item.offsetHeight;
+            // Effective bottom of the un-overlapped visible area.
+            // Subtracting hintHeight keeps the selected row visible
+            // BELOW the sticky hint rather than under it.
+            const visibleBottom =
+                appSuggestions.scrollTop + appSuggestions.clientHeight - hintHeight;
             if (itemTop < appSuggestions.scrollTop) {
                 appSuggestions.scrollTop = itemTop;
-            } else if (itemBottom > appSuggestions.scrollTop + appSuggestions.clientHeight) {
-                appSuggestions.scrollTop = itemBottom - appSuggestions.clientHeight;
+            } else if (itemBottom > visibleBottom) {
+                appSuggestions.scrollTop = itemBottom - (appSuggestions.clientHeight - hintHeight);
             }
         } else {
             item.classList.remove('selected');
