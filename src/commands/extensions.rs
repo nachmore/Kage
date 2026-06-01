@@ -560,9 +560,11 @@ pub async fn store_get_catalog(
     search: Option<String>,
     page: Option<u32>,
     source: Option<String>,
+    force_refresh: Option<bool>,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
 ) -> Result<serde_json::Value, AppError> {
+    let force_refresh = force_refresh.unwrap_or(false);
     let (primary_url, sources) = {
         let config = features.config.lock_or_recover();
         let primary = resolve_store_url(&config, ui.dev_mode);
@@ -607,11 +609,34 @@ pub async fn store_get_catalog(
     let mut handles = Vec::new();
     for (name, base_url) in &store_urls {
         let client = client.clone();
-        let url = format!("{}/catalog.json", base_url);
+        // Cache-bust on explicit refresh. GitHub Pages doesn't honour
+        // `Cache-Control: no-cache` request headers — it serves the
+        // edge-cached object regardless. A unique query param defeats
+        // the cache key entirely. We intentionally don't bust on every
+        // call; the catalog moves rarely and hammering with fresh
+        // queries would push us into the rate-limited tier.
+        let url = if force_refresh {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            format!("{}/catalog.json?_={}", base_url, now)
+        } else {
+            format!("{}/catalog.json", base_url)
+        };
         let name = name.clone();
         let base_url = base_url.clone();
         handles.push(tokio::spawn(async move {
-            match client.get(&url).send().await {
+            match client
+                .get(&url)
+                // Belt-and-suspenders: also send the standard cache
+                // control hints. Some intermediate proxies honour
+                // these even when GitHub Pages doesn't.
+                .header(reqwest::header::CACHE_CONTROL, "no-cache")
+                .header(reqwest::header::PRAGMA, "no-cache")
+                .send()
+                .await
+            {
                 Ok(resp) => match resp.json::<serde_json::Value>().await {
                     Ok(body) => {
                         let mut items = Vec::new();

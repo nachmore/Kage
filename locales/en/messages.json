@@ -3065,6 +3065,10 @@
     "message": "Installed only",
     "description": "Filter button — show only installed extensions"
   },
+  "store.refresh.title": {
+    "message": "Refresh catalog and check for updates",
+    "description": "Tooltip for the refresh button in the store toolbar"
+  },
   "common.cancel": {
     "message": "Cancel",
     "description": "Generic cancel button"

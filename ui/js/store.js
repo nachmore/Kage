@@ -25,6 +25,11 @@ let showInstalledOnly = false;
 let installedMap = new Map(); // id → { version, kind }
 let _isDevMode = false;
 let _hasMultipleSources = false;
+// Set to true for the next renderBrowse() call only — bypasses GitHub
+// Pages' edge cache via a query-param bust on the catalog fetch.
+// Cleared as soon as the call goes out so subsequent renders (e.g.
+// the search-input debounce) stay fast.
+let _forceRefreshNext = false;
 
 function waitForTauri(cb) {
     if (window.__TAURI__?.core) cb();
@@ -246,6 +251,41 @@ function _toggleInstalledFilter() {
     renderTab();
 }
 
+let _refreshing = false;
+async function refresh() {
+    if (_refreshing) return;
+    _refreshing = true;
+    const btn = document.getElementById('storeRefreshBtn');
+    if (btn) {
+        btn.classList.add('is-refreshing');
+        btn.setAttribute('disabled', '');
+    }
+    // Refresh both sides:
+    //   - the local installed list, in case the user side-loaded
+    //     something via the .zip flow since opening the store, and
+    //   - the remote catalog, with a cache-bust so GitHub Pages'
+    //     edge cache doesn't serve us a stale catalog.json (the
+    //     CDN can lag by minutes after a publish).
+    _forceRefreshNext = true;
+    try {
+        await refreshInstalled();
+        renderTab(); // kicks off renderBrowse(), which consumes _forceRefreshNext
+    } finally {
+        // The spinner stays on for a beat after the renderTab() call
+        // returns so the user gets visual confirmation that something
+        // actually happened. renderBrowse() itself is async — by the
+        // time we land here it has fired off the request but may not
+        // have painted the result yet.
+        setTimeout(() => {
+            if (btn) {
+                btn.classList.remove('is-refreshing');
+                btn.removeAttribute('disabled');
+            }
+            _refreshing = false;
+        }, 600);
+    }
+}
+
 function renderTab() {
     const content = document.getElementById('storeContent');
     content.innerHTML =
@@ -259,12 +299,15 @@ async function renderBrowse(container, type) {
     const kind = type === 'commands' ? 'commands' : type === 'themes' ? 'theme' : 'extension';
     const sourceFilter = document.getElementById('sourceFilter')?.value || '';
 
+    const forceRefresh = _forceRefreshNext;
+    _forceRefreshNext = false;
     try {
         const catalog = await invoke('store_get_catalog', {
             kind,
             search: search || null,
             page: 1,
             source: sourceFilter || null,
+            forceRefresh,
         });
         let items = catalog.items || [];
 
@@ -668,6 +711,7 @@ window.__kageStore = {
     toggleInstalledFilter: _toggleInstalledFilter,
     onSearch,
     renderTab,
+    refresh,
     handleDeepLinkInstall,
 };
 // Top-level alias for the eval_script path: the Rust deep-link

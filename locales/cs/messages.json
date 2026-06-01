@@ -7618,5 +7618,11 @@
     "description": "Title of the alert shown when an extension uninstall fails",
     "_machine_translated": true,
     "_source_hash": "17171c8c80af3e4f"
+  },
+  "store.refresh.title": {
+    "message": "Obnovit katalog a zkontrolovat aktualizace",
+    "description": "Tooltip for the refresh button in the store toolbar",
+    "_machine_translated": true,
+    "_source_hash": "e516aaf97865a44c"
   }
 }
