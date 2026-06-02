@@ -171,6 +171,14 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     if (_extensionManager) {
         try {
             const extResults = await _extensionManager.matchAll(query);
+            // Tag sync rows so a later matchAsync() batch from the same
+            // extension can supersede them (see merge loop below). By
+            // contract match() returns a placeholder/cached pass and
+            // matchAsync() the real one; without this, a placeholder whose
+            // id differs from the loaded row (e.g. focus-tracker's
+            // `focus-loading-today` vs `focus-summary-today`) lingers in
+            // the list. Extensions don't have to coordinate ids.
+            for (const r of extResults) r._syncPlaceholder = true;
             results.push(...extResults);
         } catch (e) {
             console.warn('extension matchAll failed:', e);
@@ -510,7 +518,7 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
             entry.promise.then((batch) => {
                 if (entry.name) pending.delete(entry.name);
                 if (Array.isArray(batch) && batch.length > 0) {
-                    results.push(...batch);
+                    _mergeAsyncBatch(results, batch);
                 }
                 const done = pending.size === 0;
                 onPartial(_applyFrecency([...results], query), { done, pending: [...pending] });
@@ -523,11 +531,36 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
         const allPromises = [...asyncTasks.map((t) => t.promise), ...historyPromises];
         const allAsync = await Promise.all(allPromises);
         for (const batch of allAsync) {
-            if (Array.isArray(batch)) results.push(...batch);
+            if (Array.isArray(batch)) _mergeAsyncBatch(results, batch);
         }
     }
 
     return _applyFrecency(results, query);
+}
+
+/**
+ * Merge an async result batch into the accumulated results.
+ *
+ * When an extension's matchAsync() returns rows, they supersede that
+ * extension's sync match() placeholders — the loaded data replaces the
+ * "Loading…" row even when the two carry different ids. Extensions that
+ * return [] from matchAsync() (cache hit) leave their placeholder intact.
+ * Non-extension batches (apps, files, history) are appended as-is.
+ */
+function _mergeAsyncBatch(results, batch) {
+    const supersededExtIds = new Set();
+    for (const r of batch) {
+        if (r?._extensionId) supersededExtIds.add(r._extensionId);
+    }
+    if (supersededExtIds.size > 0) {
+        for (let i = results.length - 1; i >= 0; i--) {
+            const r = results[i];
+            if (r._syncPlaceholder && supersededExtIds.has(r._extensionId)) {
+                results.splice(i, 1);
+            }
+        }
+    }
+    results.push(...batch);
 }
 
 function _applyFrecency(results, query) {

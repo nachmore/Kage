@@ -365,7 +365,11 @@ export default class MySearchProvider {
 
     /**
      * Async match — for expensive operations (network, crypto, etc.).
-     * Called after match(). Results are merged in.
+     * Called after match(). If this returns a non-empty array, those rows
+     * SUPERSEDE this extension's match() rows (the "Loading…" placeholder is
+     * dropped automatically — placeholder and loaded rows do NOT need matching
+     * ids). Return [] to keep the placeholder, e.g. on a cache hit where
+     * match() already returned the real data.
      * @param {string} query
      * @returns {Promise<SearchResult[]>}
      */
