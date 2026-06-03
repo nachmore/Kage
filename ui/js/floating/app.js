@@ -1422,7 +1422,7 @@ export class FloatingApp {
             const matched = await this.invoke('match_context_rule', { executable: exe });
             if (!matched) return;
             this._appModeMatch = matched;
-            labelEl.textContent = `${matched.friendly_name} mode`;
+            labelEl.textContent = matched.friendly_name;
             chip.style.display = 'inline-flex';
             // Wire dismiss once — first event we see clears state.
             // We swap the listener each refresh because the matched
