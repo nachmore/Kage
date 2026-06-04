@@ -701,6 +701,27 @@ export class FloatingApp {
         }
     }
 
+    /**
+     * Fill (or clear) the on-hover preview of the captured selection.
+     * `textContent` keeps the selection inert — it's the user's clipboard
+     * text, so it must never be parsed as HTML. The CSS reveals it on
+     * hover only when `data-has-text` is "true".
+     */
+    _setSelectionPreview(text) {
+        const el = document.getElementById('selectionPreview');
+        if (!el) return;
+        const trimmed = (text || '').trim();
+        if (trimmed) {
+            el.textContent = trimmed;
+            el.dataset.hasText = 'true';
+            el.setAttribute('aria-hidden', 'false');
+        } else {
+            el.textContent = '';
+            el.dataset.hasText = 'false';
+            el.setAttribute('aria-hidden', 'true');
+        }
+    }
+
     setupEventListeners() {
         this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
         this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
@@ -907,6 +928,7 @@ export class FloatingApp {
                 if (this.lastSelection) {
                     if (indicator) indicator.style.display = '';
                     if (checkbox) checkbox.checked = true;
+                    this._setSelectionPreview(this.lastSelection);
                     // Hide datetime to make room for quick actions
                     this.updateDatetimeVisibility();
 
@@ -942,6 +964,7 @@ export class FloatingApp {
             }
             this.lastSelection = null;
             if (indicator) indicator.style.display = 'none';
+            this._setSelectionPreview(null);
             if (quickActionsContainer) quickActionsContainer.style.display = 'none';
             // Restore datetime and resize back to normal
             this.updateDatetimeVisibility();
@@ -2919,6 +2942,7 @@ export class FloatingApp {
         // Hide selection indicator after use
         const indicator = document.getElementById('selectionIndicator');
         if (indicator) indicator.style.display = 'none';
+        this._setSelectionPreview(null);
         const quickActionsContainer = document.getElementById('quickActionsContainer');
         if (quickActionsContainer) quickActionsContainer.style.display = 'none';
         const responseActionsContainer = document.getElementById('responseActionsContainer');
