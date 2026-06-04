@@ -7648,5 +7648,17 @@
     "description": "Helper text for the open-config-folder button",
     "_machine_translated": true,
     "_source_hash": "e1d7df50fb6311cf"
+  },
+  "welcome.skip_defaults": {
+    "message": "छोड़ें और डिफ़ॉल्ट स्वीकार करें",
+    "description": "Welcome step 1 button that accepts all defaults and launches Kage immediately",
+    "_machine_translated": true,
+    "_source_hash": "1f941fa193c7329f"
+  },
+  "welcome.skip_defaults.hint": {
+    "message": "हम पहला मिलने वाला एजेंट चुनेंगे, अनुशंसित एक्सटेंशन इंस्टॉल करेंगे, और उचित डिफ़ॉल्ट का उपयोग करेंगे।",
+    "description": "Helper text under the skip-and-accept-defaults button",
+    "_machine_translated": true,
+    "_source_hash": "70692bccacfc342f"
   }
 }

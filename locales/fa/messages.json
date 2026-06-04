@@ -7648,5 +7648,17 @@
     "description": "Helper text for the open-config-folder button",
     "_machine_translated": true,
     "_source_hash": "e1d7df50fb6311cf"
+  },
+  "welcome.skip_defaults": {
+    "message": "رد کردن و پذیرش پیش‌فرض‌ها",
+    "description": "Welcome step 1 button that accepts all defaults and launches Kage immediately",
+    "_machine_translated": true,
+    "_source_hash": "1f941fa193c7329f"
+  },
+  "welcome.skip_defaults.hint": {
+    "message": "اولین عاملی را که پیدا کنیم انتخاب می‌کنیم، افزونه‌های پیشنهادی را نصب می‌کنیم و از پیش‌فرض‌های منطقی استفاده می‌کنیم.",
+    "description": "Helper text under the skip-and-accept-defaults button",
+    "_machine_translated": true,
+    "_source_hash": "70692bccacfc342f"
   }
 }

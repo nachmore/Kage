@@ -7648,5 +7648,17 @@
     "description": "Helper text for the open-config-folder button",
     "_machine_translated": true,
     "_source_hash": "e1d7df50fb6311cf"
+  },
+  "welcome.skip_defaults": {
+    "message": "Ignorer et accepter les valeurs par défaut",
+    "description": "Welcome step 1 button that accepts all defaults and launches Kage immediately",
+    "_machine_translated": true,
+    "_source_hash": "1f941fa193c7329f"
+  },
+  "welcome.skip_defaults.hint": {
+    "message": "Nous choisirons le premier agent trouvé, installerons les extensions recommandées et utiliserons des paramètres par défaut judicieux.",
+    "description": "Helper text under the skip-and-accept-defaults button",
+    "_machine_translated": true,
+    "_source_hash": "70692bccacfc342f"
   }
 }

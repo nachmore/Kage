@@ -3109,6 +3109,14 @@
     "message": "Launching Kage…",
     "description": "Overlay shown after the user clicks Finish, while the app boots"
   },
+  "welcome.skip_defaults": {
+    "message": "Skip & accept defaults",
+    "description": "Welcome step 1 button that accepts all defaults and launches Kage immediately"
+  },
+  "welcome.skip_defaults.hint": {
+    "message": "We'll pick the first agent we find, install the recommended extensions, and use sensible defaults.",
+    "description": "Helper text under the skip-and-accept-defaults button"
+  },
   "welcome.agent.title": {
     "message": "Agent",
     "description": "Step 2 header — agent connection setup"

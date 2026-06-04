@@ -109,6 +109,20 @@
             font-size: 13px; color: #b0adb5; line-height: 1.6;
             max-width: 400px; margin: 0 auto; text-align: center;
         }
+        .welcome-skip { margin-top: 28px; text-align: center; }
+        .welcome-skip-btn {
+            padding: 8px 20px; border-radius: 8px; cursor: pointer;
+            font-size: 12px; font-weight: 600;
+            background: rgba(255,255,255,0.06); color: #C09CFF;
+            border: 1px solid rgba(192,156,255,0.3);
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .welcome-skip-btn:hover { background: rgba(192,156,255,0.12); border-color: rgba(192,156,255,0.5); }
+        .welcome-skip-btn:disabled { opacity: 0.5; cursor: default; }
+        .welcome-skip-hint {
+            font-size: 11px; color: #7a7782; line-height: 1.5;
+            max-width: 360px; margin: 10px auto 0;
+        }
 
         /* Shared form styles */
         .section-label { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #E5E7EB; }
@@ -220,6 +234,10 @@
                 <div class="welcome-blurb" data-i18n="welcome.blurb">
                     Let's get you set up. We'll configure how Kage connects to your AI backend,
                     set your global hotkey, and choose a few preferences. This only takes a minute.
+                </div>
+                <div class="welcome-skip">
+                    <button type="button" class="welcome-skip-btn" id="skipDefaultsBtn" data-i18n="welcome.skip_defaults">Skip &amp; accept defaults</button>
+                    <div class="welcome-skip-hint" data-i18n="welcome.skip_defaults.hint">We'll pick the first agent we find, install the recommended extensions, and use sensible defaults.</div>
                 </div>
             </div>
         </div>
@@ -813,89 +831,149 @@
                 }
                 showStep(currentStep + 1);
             } else {
-                // Finish — choreographed transition into the floating UI:
-                //
-                //   t=0     launch overlay fades in over welcome
-                //   t=1000  welcome window starts 1s fade-out
-                //   t=1500  floating window + welcome banner appear
-                //           (mid-fade, so the user's eye moves from the
-                //           welcome mascot to the floating one without
-                //           a blank gap)
-                //   t=2000  welcome window closes
-                //
-                // Provisioning runs fire-and-forget on the Rust side
-                // (spawn_blocking); the welcome window doesn't wait for
-                // it. First-run config is synchronous and fast (~50ms).
-                nextBtn.disabled = true;
-                console.log('[welcome] Finish clicked');
-
-                try {
-                    await invoke('complete_first_run', {
-                        launchAtStartup: document.getElementById('launchStartup').checked,
-                        autoUpdate: document.getElementById('autoUpdate').checked,
-                        enableComputerControl: document.getElementById('computerControl').checked,
-                        enablePersonalization: document.getElementById('enablePersonalization').checked,
-                        enableTelemetry: document.getElementById('enableTelemetry')?.checked ?? true,
-                    });
-                    console.log('[welcome] complete_first_run: done');
-                } catch (e) {
-                    console.error('[welcome] complete_first_run failed:', e);
-                    nextBtn.disabled = false;
-                    alert('Setup failed: ' + (e?.message || e) + '\n\nPlease try again.');
-                    return;
-                }
-
                 const decisions = storeExtensions.map((ext, i) => ({
                     id: ext.id,
                     checked: !!document.getElementById('ext-cb-' + i)?.checked,
                 }));
-                console.log(`[welcome] dispatching ${decisions.length} decisions (fire-and-forget)`);
-
-                try {
-                    // Returns after spawning — does NOT wait for the
-                    // extension work to finish. Work runs on the Rust
-                    // async_runtime and emits welcome_provision_complete
-                    // when done (no one listens today; hook in place).
-                    await invoke('welcome_provision_extensions', { decisions });
-                } catch (e) {
-                    // Only fires if the call itself couldn't be routed.
-                    // Logged for diagnostics; we still run the launch
-                    // animation because breaking the UX over a
-                    // telemetry-adjacent failure isn't worth it.
-                    console.error('[welcome] welcome_provision_extensions dispatch failed:', e);
-                }
-
-                // --- t=0: launch overlay fades in over welcome --------
-                showLaunchOverlay();
-
-                // --- t=1000: start welcome fade-out -------------------
-                await new Promise(r => setTimeout(r, 1000));
-                console.log('[welcome] starting fade-out');
-                document.body.classList.add('welcome-fading-out');
-
-                // --- t=1500: show floating + welcome banner ----------
-                // Halfway through the fade. The floating window's own
-                // fade/show animation overlaps with the welcome's
-                // remaining 500ms of opacity, so the user's eye has a
-                // handoff target before welcome disappears.
-                await new Promise(r => setTimeout(r, 500));
-                try {
-                    await invoke('trigger_welcome_banner');
-                } catch (e) {
-                    console.warn('[welcome] trigger_welcome_banner failed:', e);
-                }
-
-                // --- t=2000: welcome fully gone, close window --------
-                // Hide before close — on Windows, OS-level compositor
-                // can briefly flash the window's chrome during the
-                // destroy path, which undoes the fade. Hiding first is
-                // instantaneous and visually clean; close fires a beat
-                // later to actually free the resources.
-                await new Promise(r => setTimeout(r, 500));
-                console.log('[welcome] Hiding then closing welcome window');
-                try { await appWindow.hide(); } catch {}
-                await appWindow.close();
+                await runFinishFlow(decisions, nextBtn);
             }
+        });
+
+        /**
+         * Shared first-run completion + launch choreography. Driven by
+         * both the wizard's Finish button and the step-1 "Skip & accept
+         * defaults" fast path. Reads the preference checkboxes straight
+         * from the DOM — they carry their `checked` defaults even on
+         * steps the user never visited, so the skip path lands on the
+         * same sensible defaults as clicking through.
+         *
+         *   t=0     launch overlay fades in over welcome
+         *   t=1000  welcome window starts 1s fade-out
+         *   t=1500  floating window + welcome banner appear (mid-fade,
+         *           so the user's eye moves from the welcome mascot to
+         *           the floating one without a blank gap)
+         *   t=2000  welcome window closes
+         *
+         * Provisioning runs fire-and-forget on the Rust side
+         * (spawn_blocking); we don't wait for it. First-run config is
+         * synchronous and fast (~50ms).
+         *
+         * @param {{id:string,checked:boolean}[]} decisions extension install decisions
+         * @param {HTMLButtonElement} triggerBtn button to disable / re-enable on failure
+         */
+        async function runFinishFlow(decisions, triggerBtn) {
+            if (triggerBtn) triggerBtn.disabled = true;
+            console.log('[welcome] Finish flow started');
+
+            try {
+                await invoke('complete_first_run', {
+                    launchAtStartup: document.getElementById('launchStartup').checked,
+                    autoUpdate: document.getElementById('autoUpdate').checked,
+                    enableComputerControl: document.getElementById('computerControl').checked,
+                    enablePersonalization: document.getElementById('enablePersonalization').checked,
+                    enableTelemetry: document.getElementById('enableTelemetry')?.checked ?? true,
+                });
+                console.log('[welcome] complete_first_run: done');
+            } catch (e) {
+                console.error('[welcome] complete_first_run failed:', e);
+                if (triggerBtn) triggerBtn.disabled = false;
+                alert('Setup failed: ' + (e?.message || e) + '\n\nPlease try again.');
+                return;
+            }
+
+            console.log(`[welcome] dispatching ${decisions.length} decisions (fire-and-forget)`);
+            try {
+                // Returns after spawning — does NOT wait for the
+                // extension work to finish. Work runs on the Rust
+                // async_runtime and emits welcome_provision_complete
+                // when done (no one listens today; hook in place).
+                await invoke('welcome_provision_extensions', { decisions });
+            } catch (e) {
+                // Only fires if the call itself couldn't be routed.
+                // Logged for diagnostics; we still run the launch
+                // animation because breaking the UX over a
+                // telemetry-adjacent failure isn't worth it.
+                console.error('[welcome] welcome_provision_extensions dispatch failed:', e);
+            }
+
+            // --- t=0: launch overlay fades in over welcome --------
+            showLaunchOverlay();
+
+            // --- t=1000: start welcome fade-out -------------------
+            await new Promise(r => setTimeout(r, 1000));
+            console.log('[welcome] starting fade-out');
+            document.body.classList.add('welcome-fading-out');
+
+            // --- t=1500: show floating + welcome banner ----------
+            // Halfway through the fade. The floating window's own
+            // fade/show animation overlaps with the welcome's
+            // remaining 500ms of opacity, so the user's eye has a
+            // handoff target before welcome disappears.
+            await new Promise(r => setTimeout(r, 500));
+            try {
+                await invoke('trigger_welcome_banner');
+            } catch (e) {
+                console.warn('[welcome] trigger_welcome_banner failed:', e);
+            }
+
+            // --- t=2000: welcome fully gone, close window --------
+            // Hide before close — on Windows, OS-level compositor
+            // can briefly flash the window's chrome during the
+            // destroy path, which undoes the fade. Hiding first is
+            // instantaneous and visually clean; close fires a beat
+            // later to actually free the resources.
+            await new Promise(r => setTimeout(r, 500));
+            console.log('[welcome] Hiding then closing welcome window');
+            try { await appWindow.hide(); } catch {}
+            await appWindow.close();
+        }
+
+        /**
+         * "Skip & accept defaults" — the one-click fast path. Picks the
+         * first detected agent, installs every recommended extension &
+         * theme (all are pre-selected by default), and accepts the
+         * default preferences, then runs the same finish choreography as
+         * the wizard's Finish button. Everything happens in the
+         * background; the user lands straight in the floating window.
+         */
+        async function skipWithDefaults(btn) {
+            if (btn) btn.disabled = true;
+            console.log('[welcome] Skip & accept defaults clicked');
+
+            // Pick the first detected agent (skipping wrapper-needed
+            // entries, which aren't runnable as-is). If none are found we
+            // proceed without a connection — the user can wire one up
+            // later from Settings → Agents.
+            try {
+                const agents = (await invoke('detect_agents')) || [];
+                const first = agents.find(a => !a.needs_wrapper_npm_package) || agents[0];
+                if (first) {
+                    const conn = kageAgentConnections.connectionFromDetected(first);
+                    if (!conn.id) conn.id = kageAgentConnections.uuidLite();
+                    const config = await invoke('get_config');
+                    if (!config.acp) config.acp = {};
+                    config.acp.connections = [conn];
+                    config.acp.active_connection_id = conn.id;
+                    await invoke('save_config', { config });
+                    console.log('[welcome] skip: saved first detected agent', first.name);
+                } else {
+                    console.log('[welcome] skip: no agent detected, proceeding without one');
+                }
+            } catch (e) {
+                console.error('[welcome] skip: agent detection/save failed:', e);
+            }
+
+            // Ensure the recommended catalog is loaded so we have the
+            // full list to install. The render side-effect is harmless on
+            // a step the user never sees.
+            await loadExtensionCatalog();
+            const decisions = storeExtensions.map(ext => ({ id: ext.id, checked: true }));
+
+            await runFinishFlow(decisions, btn);
+        }
+
+        document.getElementById('skipDefaultsBtn')?.addEventListener('click', (e) => {
+            skipWithDefaults(e.currentTarget);
         });
 
         /**
