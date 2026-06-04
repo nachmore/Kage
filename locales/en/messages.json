@@ -3110,12 +3110,36 @@
     "description": "Overlay shown after the user clicks Finish, while the app boots"
   },
   "welcome.skip_defaults": {
-    "message": "Skip & accept defaults",
+    "message": "Set it up for me",
     "description": "Welcome step 1 button that accepts all defaults and launches Kage immediately"
   },
   "welcome.skip_defaults.hint": {
     "message": "We'll pick the first agent we find, install the recommended extensions, and use sensible defaults.",
-    "description": "Helper text under the skip-and-accept-defaults button"
+    "description": "Helper text under the set-it-up-for-me button"
+  },
+  "welcome.launching.quip.1": {
+    "message": "Teaching the owl some new tricks…",
+    "description": "Playful rotating status line on the launch screen while setup runs"
+  },
+  "welcome.launching.quip.2": {
+    "message": "Summoning your extensions from the shadows…",
+    "description": "Playful rotating status line on the launch screen while setup runs"
+  },
+  "welcome.launching.quip.3": {
+    "message": "Warming up the AI engines…",
+    "description": "Playful rotating status line on the launch screen while setup runs"
+  },
+  "welcome.launching.quip.4": {
+    "message": "Arranging your themes just so…",
+    "description": "Playful rotating status line on the launch screen while setup runs"
+  },
+  "welcome.launching.quip.5": {
+    "message": "Sharpening the ninja stars…",
+    "description": "Playful rotating status line on the launch screen while setup runs"
+  },
+  "welcome.launching.quip.6": {
+    "message": "Almost there — this is going to be good…",
+    "description": "Playful rotating status line on the launch screen while setup runs"
   },
   "welcome.agent.title": {
     "message": "Agent",

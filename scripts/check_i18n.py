@@ -128,6 +128,10 @@ KNOWN_DYNAMIC_KEYS: set[str] = {
     # not t() calls inside inline scripts, so list them here.
     "common.next",
     "common.finish",
+    # Launch-screen quips are pulled via a counting loop with a template
+    # literal `welcome.launching.quip.${i}` until the first missing key, so
+    # the static t() scan never sees the individual keys.
+    "welcome.launching.quip.*",
     # Native window titles set by Tauri via .setTitle() — sourced through
     # t() at runtime.
     "window.title.*",

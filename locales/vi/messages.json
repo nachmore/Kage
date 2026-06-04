@@ -7650,15 +7650,51 @@
     "_source_hash": "e1d7df50fb6311cf"
   },
   "welcome.skip_defaults": {
-    "message": "Bỏ qua & chấp nhận mặc định",
+    "message": "Thiết lập giúp tôi",
     "description": "Welcome step 1 button that accepts all defaults and launches Kage immediately",
     "_machine_translated": true,
-    "_source_hash": "1f941fa193c7329f"
+    "_source_hash": "55767bfc99429e61"
   },
   "welcome.skip_defaults.hint": {
-    "message": "Chúng tôi sẽ chọn agent đầu tiên tìm thấy, cài đặt các tiện ích mở rộng được đề xuất và sử dụng các cài đặt mặc định hợp lý.",
-    "description": "Helper text under the skip-and-accept-defaults button",
+    "message": "Chúng tôi sẽ chọn agent đầu tiên tìm thấy, cài đặt các tiện ích mở rộng được đề xuất và dùng các thiết lập mặc định hợp lý.",
+    "description": "Helper text under the set-it-up-for-me button",
     "_machine_translated": true,
-    "_source_hash": "70692bccacfc342f"
+    "_source_hash": "7a556e74dfac9981"
+  },
+  "welcome.launching.quip.1": {
+    "message": "Đang dạy chú cú vài chiêu mới…",
+    "description": "Playful rotating status line on the launch screen while setup runs",
+    "_machine_translated": true,
+    "_source_hash": "25ef07f29f333f69"
+  },
+  "welcome.launching.quip.2": {
+    "message": "Đang triệu hồi các tiện ích mở rộng từ bóng tối…",
+    "description": "Playful rotating status line on the launch screen while setup runs",
+    "_machine_translated": true,
+    "_source_hash": "65c361ac1f650c0b"
+  },
+  "welcome.launching.quip.3": {
+    "message": "Đang khởi động các động cơ AI…",
+    "description": "Playful rotating status line on the launch screen while setup runs",
+    "_machine_translated": true,
+    "_source_hash": "14e0df41993c8697"
+  },
+  "welcome.launching.quip.4": {
+    "message": "Đang sắp xếp các giao diện cho thật chỉn chu…",
+    "description": "Playful rotating status line on the launch screen while setup runs",
+    "_machine_translated": true,
+    "_source_hash": "b3d8056f0ea4478d"
+  },
+  "welcome.launching.quip.5": {
+    "message": "Đang mài sắc những ngôi sao ninja…",
+    "description": "Playful rotating status line on the launch screen while setup runs",
+    "_machine_translated": true,
+    "_source_hash": "9f2166bfbe9d1962"
+  },
+  "welcome.launching.quip.6": {
+    "message": "Sắp xong rồi — sẽ tuyệt lắm đấy…",
+    "description": "Playful rotating status line on the launch screen while setup runs",
+    "_machine_translated": true,
+    "_source_hash": "a26f3a9faa58e828"
   }
 }

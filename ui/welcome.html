@@ -216,6 +216,21 @@
             color: var(--kage-text-primary, #E5E7EB);
             letter-spacing: 0.01em;
         }
+        /* Rotating playful status line under the "Launching Kage…" label.
+         * Sits in a fixed-height row so the layout doesn't jump as lines
+         * of different lengths cycle through. JS toggles .visible to
+         * cross-fade between quips. */
+        .launch-quip {
+            min-height: 18px;
+            margin-top: -8px;
+            font-size: 13px;
+            color: var(--kage-text-muted, #938F9B);
+            text-align: center;
+            max-width: 360px;
+            opacity: 0;
+            transition: opacity 500ms ease-in-out;
+        }
+        .launch-quip.visible { opacity: 1; }
 
         /* Detected agent + connection editor styles now live in
            ui/css/shared-components.css so the settings page can reuse
@@ -429,6 +444,7 @@
     <div class="launch-overlay" id="launchOverlay" aria-hidden="true">
         <div class="launch-mascot" id="launchMascot"></div>
         <div class="launch-label" data-i18n="welcome.launching">Launching Kage…</div>
+        <div class="launch-quip" id="launchQuip" aria-live="polite"></div>
     </div>
 </div>
 
@@ -924,21 +940,33 @@
             // later to actually free the resources.
             await new Promise(r => setTimeout(r, 500));
             console.log('[welcome] Hiding then closing welcome window');
+            stopQuipRotation();
             try { await appWindow.hide(); } catch {}
             await appWindow.close();
         }
 
         /**
-         * "Skip & accept defaults" — the one-click fast path. Picks the
-         * first detected agent, installs every recommended extension &
-         * theme (all are pre-selected by default), and accepts the
-         * default preferences, then runs the same finish choreography as
-         * the wizard's Finish button. Everything happens in the
-         * background; the user lands straight in the floating window.
+         * "Set it up for me" — the one-click fast path. Picks the first
+         * detected agent, installs every recommended extension & theme
+         * (all are pre-selected by default), and accepts the default
+         * preferences, then runs the same finish choreography as the
+         * wizard's Finish button. Everything happens in the background;
+         * the user lands straight in the floating window.
+         *
+         * The launch overlay is shown *immediately*, before any of the
+         * (potentially slow) agent detection or catalog work, so the user
+         * gets instant feedback that something is happening and has no UI
+         * left to fiddle with. The quip rotation entertains them while the
+         * background work completes.
          */
         async function skipWithDefaults(btn) {
             if (btn) btn.disabled = true;
-            console.log('[welcome] Skip & accept defaults clicked');
+            console.log('[welcome] Set it up for me clicked');
+
+            // Instant feedback: cover the wizard with the launch screen
+            // right away. runFinishFlow() calls this again later — it's
+            // idempotent, so the early call just wins.
+            showLaunchOverlay();
 
             // Pick the first detected agent (skipping wrapper-needed
             // entries, which aren't runnable as-is). If none are found we
@@ -976,15 +1004,24 @@
             skipWithDefaults(e.currentTarget);
         });
 
+        // Guards re-entry: the skip path shows the overlay up front for
+        // instant feedback, then runFinishFlow() tries to show it again.
+        let launchOverlayShown = false;
+        let quipTimer = null;
+
         /**
          * Swap the wizard UI for a centred waving mascot + "Launching
-         * Kage…" label. Reuses the same ANIMATIONS import as the first
-         * welcome mascot so we don't have to ship another copy. Called
-         * once, at the start of the Finish fade-out choreography;
-         * there's no "hide" counterpart — the window closes a couple
-         * of seconds later.
+         * Kage…" label, and start cycling the playful status quips.
+         * Reuses the same ANIMATIONS import as the first welcome mascot
+         * so we don't have to ship another copy. Idempotent — safe to
+         * call from both the skip fast-path (early, for instant feedback)
+         * and runFinishFlow(); the second call is a no-op. There's no
+         * "hide" counterpart — the window closes a couple of seconds
+         * later.
          */
         function showLaunchOverlay() {
+            if (launchOverlayShown) return;
+            launchOverlayShown = true;
             const overlay = document.getElementById('launchOverlay');
             if (!overlay) return;
             overlay.setAttribute('aria-hidden', 'false');
@@ -1002,6 +1039,58 @@
                     invert,
                     outline: { color: outlineColor, radius: 2 },
                 });
+            }
+
+            startQuipRotation();
+        }
+
+        /**
+         * Cross-fade through the playful "launching" quips while the
+         * background provisioning runs. Quips live in the catalog as
+         * welcome.launching.quip.1..N; we stop at the first gap so adding
+         * or removing lines is a catalog-only change. Order is shuffled
+         * each run so repeat first-runs (e.g. re-opening the wizard) don't
+         * always read the same opener. Cleared by stopQuipRotation() right
+         * before the window closes.
+         */
+        function startQuipRotation() {
+            const el = document.getElementById('launchQuip');
+            if (!el) return;
+
+            const quips = [];
+            for (let i = 1; ; i++) {
+                const msg = t('welcome.launching.quip.' + i);
+                if (msg === 'welcome.launching.quip.' + i) break; // missing key → end of list
+                quips.push(msg);
+            }
+            if (!quips.length) return;
+            for (let i = quips.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [quips[i], quips[j]] = [quips[j], quips[i]];
+            }
+
+            let idx = 0;
+            const show = () => {
+                el.textContent = quips[idx];
+                el.classList.add('visible');
+                // Hold visible ~2s, fade out (matches the 500ms CSS
+                // transition), swap text while invisible, fade the next
+                // one in.
+                quipTimer = setTimeout(() => {
+                    el.classList.remove('visible');
+                    quipTimer = setTimeout(() => {
+                        idx = (idx + 1) % quips.length;
+                        show();
+                    }, 500);
+                }, 2000);
+            };
+            show();
+        }
+
+        function stopQuipRotation() {
+            if (quipTimer) {
+                clearTimeout(quipTimer);
+                quipTimer = null;
             }
         }
 
