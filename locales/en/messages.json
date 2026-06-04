@@ -2569,6 +2569,14 @@
     "message": "Import…",
     "description": "Button to start the import"
   },
+  "settings.about.backup.config_folder.label": {
+    "message": "Config folder",
+    "description": "Subsection label for opening the config folder"
+  },
+  "settings.about.backup.config_folder.description": {
+    "message": "Open the folder where Kage stores its configuration and data files.",
+    "description": "Helper text for the open-config-folder button"
+  },
   "settings.about.logging.title": {
     "message": "📋 Logging",
     "description": "Logging section header (collapsible)"
@@ -3080,6 +3088,14 @@
   "common.get_started": {
     "message": "Get Started",
     "description": "Welcome-screen primary call-to-action"
+  },
+  "common.next": {
+    "message": "Next",
+    "description": "Generic Next button advancing to the next wizard step"
+  },
+  "common.finish": {
+    "message": "Finish",
+    "description": "Generic Finish button completing a wizard"
   },
   "welcome.subtitle": {
     "message": "Your AI-powered desktop companion",

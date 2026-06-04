@@ -34,7 +34,6 @@ export class AboutSettingsModule extends SettingsModule {
                     </div>
                     <div class="about-actions">
                         <button class="setting-button" id="showWelcomeBtn">${t('settings.about.action.show_welcome')}</button>
-                        <button class="setting-button" id="openConfigFolderBtn" style="margin-left:8px;">${t('settings.about.action.open_config')}</button>
                         <button class="setting-button" id="sendFeedbackBtn" style="margin-left:8px;">${t('settings.about.action.send_feedback')}</button>
                     </div>
                 </div>
@@ -73,6 +72,14 @@ export class AboutSettingsModule extends SettingsModule {
                             <div class="setting-description">${t('settings.about.backup.import.description')}</div>
                             <div class="setting-control" style="margin-top:8px;">
                                 <button class="setting-button" id="backupImportBtn">${t('settings.about.backup.import_btn')}</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-label">${t('settings.about.backup.config_folder.label')}</div>
+                            <div class="setting-description">${t('settings.about.backup.config_folder.description')}</div>
+                            <div class="setting-control" style="margin-top:8px;">
+                                <button class="setting-button" id="openConfigFolderBtn">${t('settings.about.action.open_config')}</button>
                             </div>
                         </div>
 

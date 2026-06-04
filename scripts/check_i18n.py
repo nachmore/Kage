@@ -122,6 +122,12 @@ KNOWN_DYNAMIC_KEYS: set[str] = {
     "welcome.extensions.load_failed",
     "welcome.extensions.section.*",
     "welcome.extensions.toggle.*",
+    # Welcome wizard's footer button relabels its single nextBtn via t()
+    # in the inline <script> (common.next / common.finish, switching on the
+    # current step). The scanner only matches data-i18n attributes in .html,
+    # not t() calls inside inline scripts, so list them here.
+    "common.next",
+    "common.finish",
     # Native window titles set by Tauri via .setTitle() — sourced through
     # t() at runtime.
     "window.title.*",

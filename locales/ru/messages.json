@@ -7624,5 +7624,29 @@
     "description": "Tooltip for the refresh button in the store toolbar",
     "_machine_translated": true,
     "_source_hash": "e516aaf97865a44c"
+  },
+  "common.next": {
+    "message": "Далее",
+    "description": "Generic Next button advancing to the next wizard step",
+    "_machine_translated": true,
+    "_source_hash": "15a91888830833de"
+  },
+  "common.finish": {
+    "message": "Готово",
+    "description": "Generic Finish button completing a wizard",
+    "_machine_translated": true,
+    "_source_hash": "9560a8645fbe89cc"
+  },
+  "settings.about.backup.config_folder.label": {
+    "message": "Папка конфигурации",
+    "description": "Subsection label for opening the config folder",
+    "_machine_translated": true,
+    "_source_hash": "b2138e2935cd670c"
+  },
+  "settings.about.backup.config_folder.description": {
+    "message": "Открыть папку, в которой Kage хранит файлы конфигурации и данных.",
+    "description": "Helper text for the open-config-folder button",
+    "_machine_translated": true,
+    "_source_hash": "e1d7df50fb6311cf"
   }
 }
