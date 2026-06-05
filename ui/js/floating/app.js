@@ -702,23 +702,19 @@ export class FloatingApp {
     }
 
     /**
-     * Fill (or clear) the on-hover preview of the captured selection.
-     * `textContent` keeps the selection inert — it's the user's clipboard
-     * text, so it must never be parsed as HTML. The CSS reveals it on
-     * hover only when `data-has-text` is "true".
+     * Set (or clear) the native hover tooltip previewing the captured
+     * selection. Uses the browser's built-in `title` so multi-line text
+     * doesn't reflow the input layout — the OS renders the tooltip in its
+     * own layer. The value is plain text, never HTML.
      */
     _setSelectionPreview(text) {
-        const el = document.getElementById('selectionPreview');
+        const el = document.getElementById('selectionCheckboxLabel');
         if (!el) return;
         const trimmed = (text || '').trim();
         if (trimmed) {
-            el.textContent = trimmed;
-            el.dataset.hasText = 'true';
-            el.setAttribute('aria-hidden', 'false');
+            el.title = trimmed;
         } else {
-            el.textContent = '';
-            el.dataset.hasText = 'false';
-            el.setAttribute('aria-hidden', 'true');
+            el.removeAttribute('title');
         }
     }
 
