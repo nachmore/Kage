@@ -285,22 +285,57 @@ fn record_process_failure(label: &str, kind: &str) {
         *slot = Some(evt);
     }
 
-    // Per-window recovery (option 3). For renderer-process failures the
-    // controller itself is healthy — only the page-rendering subprocess
-    // died and WebView2 will respawn it on the next navigation. A
-    // `reload()` is the cheapest way to trigger that without losing the
-    // window or restarting Kage.
-    //
-    // For *browser* process or GPU process failures the controller's
-    // backing process is gone; reload would race against an already-
-    // dead host. Those drop through to the existing process-level
-    // restart path (via the wry log line, which fires shortly after the
-    // browser process actually exits).
-    if matches!(
-        kind,
-        "render_process_exited" | "render_process_unresponsive" | "frame_render_process_exited"
-    ) {
-        attempt_window_reload(label);
+    match action_for_process_failed_kind(kind) {
+        ProcessFailedAction::ReloadWindow => attempt_window_reload(label),
+        ProcessFailedAction::RestartApp => {
+            log::error!(
+                "webview-recovery: browser process for '{}' exited — controller is dead, \
+                 driving recovery restart immediately",
+                label
+            );
+            trigger_recovery();
+        }
+        ProcessFailedAction::Ignore => {}
+    }
+}
+
+/// What to do in response to a `ProcessFailed` event of a given kind.
+/// Pure mapping, split out from `record_process_failure` so the policy
+/// can be unit-tested without a live WebView2 controller. Windows-only —
+/// the `ProcessFailed` listener only installs there.
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProcessFailedAction {
+    /// Renderer subprocess died but the controller is healthy — reload
+    /// the page in place; WebView2 respawns the renderer on navigation.
+    ReloadWindow,
+    /// The controller's backing browser process is gone — reload can't
+    /// resurrect it and every getter will wedge. Drive a full restart.
+    RestartApp,
+    /// GPU / utility / sandbox-helper exits: WebView2 respawns these
+    /// transparently and the controller survives, so do nothing.
+    Ignore,
+}
+
+/// Decide the recovery action for a `ProcessFailed` kind string (the
+/// human labels produced by [`process_failed_kind_str`]).
+///
+/// Browser-process death maps to `RestartApp` because field evidence
+/// (Crashpad `ProcessType=browser, SubCode=0x80000003`) showed the
+/// WebView2 browser process CHECK-crashing without ever emitting the
+/// wry `0x8007139F` log line — so the old assumption that the log-shim
+/// path would catch it was wrong, and the wedge sat undetected until the
+/// next hotkey press. Loop protection is owned downstream by
+/// `trigger_recovery` (in-process debounce + on-disk escalation ladder),
+/// so this mapping doesn't need its own backoff.
+#[cfg(target_os = "windows")]
+fn action_for_process_failed_kind(kind: &str) -> ProcessFailedAction {
+    match kind {
+        "render_process_exited" | "render_process_unresponsive" | "frame_render_process_exited" => {
+            ProcessFailedAction::ReloadWindow
+        }
+        "browser_process_exited" => ProcessFailedAction::RestartApp,
+        _ => ProcessFailedAction::Ignore,
     }
 }
 
@@ -809,6 +844,39 @@ fn force_exit() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn process_failed_kind_maps_to_correct_action() {
+        use ProcessFailedAction::*;
+        // Renderer subprocess deaths are recoverable in place.
+        assert_eq!(
+            action_for_process_failed_kind("render_process_exited"),
+            ReloadWindow
+        );
+        assert_eq!(
+            action_for_process_failed_kind("render_process_unresponsive"),
+            ReloadWindow
+        );
+        assert_eq!(
+            action_for_process_failed_kind("frame_render_process_exited"),
+            ReloadWindow
+        );
+        // Browser-process death is terminal → full restart. This is the
+        // case the field crash (ProcessType=browser) actually hit.
+        assert_eq!(
+            action_for_process_failed_kind("browser_process_exited"),
+            RestartApp
+        );
+        // Respawnable helper subprocesses must NOT trigger a restart —
+        // that would be a spurious relaunch loop on healthy GPU churn.
+        assert_eq!(action_for_process_failed_kind("gpu_process_exited"), Ignore);
+        assert_eq!(
+            action_for_process_failed_kind("utility_process_exited"),
+            Ignore
+        );
+        assert_eq!(action_for_process_failed_kind("unrecognized_kind"), Ignore);
+    }
 
     #[test]
     fn detects_the_exact_hresult_from_the_runtime() {
