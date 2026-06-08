@@ -17,9 +17,25 @@
 //!   - The user sees empty/transparent windows and an unresponsive
 //!     floating launcher; the only fix is a full app relaunch.
 //!
-//! The runtime emits the error via `log::error!`, which means our log
-//! adapter (`logger.rs::LogShim`) sees every record before it lands.
-//! That gives us a single chokepoint for detection.
+//! # Two detection paths
+//!
+//! There are two distinct ways the wedge surfaces, and we catch both:
+//!
+//!   1. **Log line** (`record_indicates_wedge`): wry sometimes logs
+//!      `0x8007139F` via `log::error!`. Our log adapter
+//!      (`logger.rs::LogShim`) sees every record before it lands, giving
+//!      us a chokepoint to detect that variant.
+//!   2. **Typed getter error** (`error_indicates_wedge` /
+//!      `note_window_error`): the field-dominant case — after a
+//!      sleep/resume cycle the WebView2 host backing a *pre-existing*
+//!      window dies, wry drops that window's `inner`, and every getter
+//!      (`is_visible`, `outer_position`, …) thereafter returns
+//!      `Err(Runtime(FailedToReceiveMessage))`. This NEVER emits the
+//!      `0x8007139F` log line, so path 1 is blind to it. Window code
+//!      that calls a getter routes the `Err` through `note_window_error`,
+//!      which feeds the same state machine below.
+//!
+//! Both paths converge on [`trigger_recovery`].
 //!
 //! # Recovery state machine
 //!
@@ -540,6 +556,68 @@ pub fn record_indicates_wedge(target: &str, message: &str) -> bool {
     target == WEDGE_TARGET && message.contains(WEDGE_HRESULT)
 }
 
+/// Classify a `tauri::Error` returned by a window *getter*
+/// (`is_visible`, `outer_position`, …) as a webview wedge.
+///
+/// # Why this exists separately from `record_indicates_wedge`
+///
+/// The HRESULT-in-the-log detector catches the case where wry itself
+/// logs `0x8007139F`. But the wedge we actually see in the field after
+/// a sleep/resume cycle never emits that line. Instead the WebView2 host
+/// process backing a *pre-existing* window dies, wry drops that window's
+/// `inner`, and every getter call thereafter returns
+/// `Err(Runtime(FailedToReceiveMessage))` — the reply channel's sender
+/// is dropped without a value (see tauri-runtime-wry's `getter!` macro).
+/// That error never round-trips through `log::error!`, so the log-shim
+/// path is blind to it and recovery never fires; the window stays dead
+/// for the life of the process.
+///
+/// We treat three runtime variants as a wedge:
+///   - `FailedToReceiveMessage` — the canonical "host died, inner gone"
+///     signal described above.
+///   - `FailedToSendMessage` / `EventLoopClosed` — the loop itself has
+///     stopped servicing the user-event channel. Rarer and arguably
+///     more terminal, but the user-visible symptom (window operations
+///     no longer work) and the only fix (relaunch) are identical, so we
+///     fold them into the same recovery path.
+///
+/// `WindowNotFound` is deliberately *not* treated as a wedge: that's the
+/// benign "this label was closed" case our own code hits routinely.
+pub fn error_indicates_wedge(err: &tauri::Error) -> bool {
+    matches!(
+        err,
+        tauri::Error::Runtime(
+            tauri_runtime::Error::FailedToReceiveMessage
+                | tauri_runtime::Error::FailedToSendMessage
+                | tauri_runtime::Error::EventLoopClosed
+        )
+    )
+}
+
+/// Call-site hook for the typed-error wedge path. Window code that calls
+/// a getter (e.g. `toggle_floating_window`'s `window.is_visible()`) and
+/// gets back an `Err` passes it here; if it classifies as a wedge we
+/// kick off the same recovery state machine the log-shim path uses.
+///
+/// `label` is logged for the post-mortem so we know which window's
+/// getter surfaced the wedge — useful because the HRESULT log line never
+/// carried it. Returns `true` if recovery was triggered, so the caller
+/// can bail out of whatever it was doing rather than press on against a
+/// dead window.
+pub fn note_window_error(label: &str, err: &tauri::Error) -> bool {
+    if error_indicates_wedge(err) {
+        error!(
+            "webview-recovery: window '{}' getter returned a wedge error ({}); \
+             routing to recovery state machine",
+            label, err
+        );
+        trigger_recovery();
+        true
+    } else {
+        false
+    }
+}
+
 /// Kick off the recovery flow. Called from the log shim when a wedge
 /// record is observed. Idempotent — only the first call per process
 /// does work; subsequent calls return immediately.
@@ -754,6 +832,41 @@ mod tests {
         assert!(!record_indicates_wedge(
             "tauri_runtime_wry",
             "regular debug output"
+        ));
+    }
+
+    #[test]
+    fn typed_error_wedge_variants_are_detected() {
+        // The field symptom: a getter on a window whose WebView2 host
+        // died returns this. The HRESULT-log path never sees it, so this
+        // typed predicate is the only thing that catches it.
+        assert!(error_indicates_wedge(&tauri::Error::Runtime(
+            tauri_runtime::Error::FailedToReceiveMessage
+        )));
+        // The loop-side failures share the symptom and the fix.
+        assert!(error_indicates_wedge(&tauri::Error::Runtime(
+            tauri_runtime::Error::FailedToSendMessage
+        )));
+        assert!(error_indicates_wedge(&tauri::Error::Runtime(
+            tauri_runtime::Error::EventLoopClosed
+        )));
+    }
+
+    #[test]
+    fn benign_window_errors_are_not_wedges() {
+        // `WindowNotFound` is the routine "label was closed" case — our
+        // own code hits it and it must NOT trigger an app restart.
+        assert!(!error_indicates_wedge(&tauri::Error::Runtime(
+            tauri_runtime::Error::WindowNotFound
+        )));
+        // An unrelated runtime failure (creating a window) isn't a wedge
+        // of an existing one.
+        assert!(!error_indicates_wedge(&tauri::Error::Runtime(
+            tauri_runtime::Error::CreateWindow
+        )));
+        // A non-Runtime tauri error never indicates a webview wedge.
+        assert!(!error_indicates_wedge(
+            &tauri::Error::WindowLabelAlreadyExists("floating".into())
         ));
     }
 

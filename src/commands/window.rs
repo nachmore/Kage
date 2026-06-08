@@ -112,10 +112,22 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
         return;
     }
 
-    // If already visible, hide it (toggle behavior)
-    if window.is_visible().unwrap_or(false) {
-        let _ = window.hide();
-        return;
+    // If already visible, hide it (toggle behavior). A wedge here (the
+    // WebView2 host died across sleep/resume) surfaces as an Err from
+    // this getter; `show()` below is a setter and would silently no-op,
+    // so this getter is our only chance to notice. Route it to recovery.
+    match window.is_visible() {
+        Ok(true) => {
+            let _ = window.hide();
+            return;
+        }
+        Ok(false) => {}
+        Err(e) => {
+            error!("[show_at_mouse] is_visible() failed: {}", e);
+            if crate::webview_recovery::note_window_error(window.label(), &e) {
+                return;
+            }
+        }
     }
 
     // Position before showing so the window appears in its final spot —
@@ -277,6 +289,14 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
         }
         Err(e) => {
             error!("Failed to check visibility: {}", e);
+            // A `FailedToReceiveMessage` here means the floating window's
+            // WebView2 host has died (typically across a sleep/resume
+            // cycle) and every getter against it will fail forever. The
+            // HRESULT-log recovery path never sees this — it's a typed
+            // runtime error, not a wry `log::error!` line — so route it
+            // into the recovery state machine ourselves. If recovery
+            // fires we're about to restart; nothing left to do here.
+            crate::webview_recovery::note_window_error(window.label(), &e);
         }
     }
 }

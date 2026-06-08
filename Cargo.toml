@@ -54,6 +54,11 @@ privacy    = "https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md"
 
 [dependencies]
 tauri = { version = "2.10", features = ["macos-private-api", "tray-icon", "image-png"] }
+# Pulled in directly (it's already a transitive dep of `tauri`) so the
+# webview-wedge detector in `webview_recovery.rs` can pattern-match on
+# the concrete `tauri_runtime::Error` variants (FailedToReceiveMessage
+# etc.) instead of string-matching `tauri::Error`'s Display output.
+tauri-runtime = "2.10"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-shell = "2"
 # `deep-link` feature flag: tells single-instance to forward URLs from
