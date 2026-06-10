@@ -63,6 +63,35 @@ export class WindowManager {
         return sum;
     }
 
+    /**
+     * The minimum physical height the manual resize handle will allow.
+     *
+     * Floors the drag at the natural content height (full sum of the bubble's
+     * flow children — response area + extension bars + input + padding) so a
+     * multi-line response can't be clipped to its first line, and so the next
+     * reflow can't snap the window back up (`_applyNaturalHeight` grows past
+     * `userSetHeight` when content needs more room — if the floor already
+     * equals that, there's nothing to snap from).
+     *
+     * Capped at `maxPhys`: a response taller than the screen ceiling already
+     * scrolls inside `.content-area`, so the user must still be able to shrink
+     * down to the cap. Never goes below the collapsed launcher height.
+     *
+     * Pure arithmetic, extracted for unit testing (jsdom has no real layout).
+     *
+     * @param {number} naturalLogical - logical-px natural content height
+     * @param {number} maxPhys - physical-px screen ceiling
+     * @param {number} scaleFactor - device pixel ratio
+     * @returns {number} physical-px floor for the drag
+     */
+    _resizeFloor(naturalLogical, maxPhys, scaleFactor) {
+        const contentFloor = Math.max(
+            Math.floor(DEFAULT_HEIGHT * scaleFactor),
+            Math.floor(naturalLogical * scaleFactor)
+        );
+        return Math.min(Math.floor(maxPhys), contentFloor);
+    }
+
     _measureFlow(el) {
         const cs = getComputedStyle(el);
         if (cs.display === 'none') return 0;
@@ -569,16 +598,17 @@ export class WindowManager {
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
             const minWidth = Math.floor(570 * scaleFactor);
-            const inputContainer = document.querySelector('.input-container');
-            const inputH = inputContainer?.offsetHeight || 44;
-            let minContentH = inputH + BODY_PADDING;
-            document.querySelectorAll('.extension-bar').forEach((bar) => {
-                if (bar.style.display !== 'none') minContentH += bar.offsetHeight;
-            });
-            const minHeight = Math.max(
-                Math.floor(DEFAULT_HEIGHT * scaleFactor),
-                Math.floor(minContentH * scaleFactor)
-            );
+            // Floor the drag at the natural height — the full sum of the
+            // bubble's flow children (response content area + extension bars +
+            // input + padding). Using only the input height let the user drag
+            // down until a multi-line response was clipped to its first line;
+            // worse, the next reflow (e.g. on keystroke) snapped the window
+            // back up to naturalPhys, since _applyNaturalHeight() grows past
+            // userSetHeight when content needs more room. Flooring here means
+            // userSetHeight can never be smaller than the content needs, so
+            // there's nothing to snap back from.
+            const minContentH = this._measureNaturalHeight();
+            const minHeight = this._resizeFloor(minContentH, maxHeight, scaleFactor);
             const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
             const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + dy));
             this.userSetHeight = newHeight;
