@@ -240,6 +240,16 @@ pub struct ExtensionManifest {
     pub config: Option<serde_json::Value>,
     #[serde(default)]
     pub contributes: Option<ExtensionContributes>,
+    /// Allow-listed vendor libraries the extension loads into its sandbox
+    /// (e.g. `["math"]` for mathjs). The frontend host fetches each against
+    /// `SANDBOX_VENDOR_ALLOWLIST` and injects the source into the extension's
+    /// runSandboxed worker. Must be preserved across the Rust round-trip:
+    /// when math became an installed extension its manifest started passing
+    /// through `list_extensions`, and without this field serde dropped
+    /// `sandboxVendor`, so the worker never received mathjs and every math
+    /// query silently failed.
+    #[serde(default, rename = "sandboxVendor")]
+    pub sandbox_vendor: Option<Vec<String>>,
     /// Capabilities this extension is requesting. See docs/EXTENSIONS.md
     /// for the full list. When the field is absent, the frontend falls
     /// back to a legacy-safe default of `storage` only — pre-permissions
@@ -736,5 +746,54 @@ mod tests {
         let raw: Vec<String> = VALID_CAPABILITIES.iter().map(|s| s.to_string()).collect();
         let out = normalize_permissions(&raw, "test");
         assert_eq!(out.len(), VALID_CAPABILITIES.len());
+    }
+
+    /// The `sandboxVendor` field must survive the parse → re-serialize round
+    /// trip the manifest makes through `list_extensions`. Math regressed
+    /// because the field was missing from the struct: serde silently dropped
+    /// it, the frontend saw `sandboxVendor === undefined`, never fetched
+    /// mathjs, and every math query failed inside the worker with
+    /// `lib.math` undefined. This locks the field in.
+    #[test]
+    fn manifest_preserves_sandbox_vendor_round_trip() {
+        let json = r#"{
+            "id": "math",
+            "name": "Math",
+            "version": "1.0.0",
+            "type": "extension",
+            "sandboxVendor": ["math"],
+            "contributes": { "searchProvider": "./search.js" }
+        }"#;
+        let manifest: ExtensionManifest = serde_json::from_str(json).expect("parse");
+        assert_eq!(
+            manifest.sandbox_vendor.as_deref(),
+            Some(&["math".to_string()][..]),
+            "sandboxVendor must deserialize from the camelCase manifest key"
+        );
+
+        // Re-serialize (as list_extensions does before handing to JS) and
+        // confirm the camelCase key is still present and intact.
+        let reserialized = serde_json::to_string(&manifest).expect("serialize");
+        let value: serde_json::Value = serde_json::from_str(&reserialized).expect("reparse");
+        assert_eq!(
+            value["sandboxVendor"],
+            serde_json::json!(["math"]),
+            "round-tripped JSON must keep sandboxVendor under its camelCase key"
+        );
+    }
+
+    /// A manifest with no `sandboxVendor` stays `None` (not an error) and
+    /// serializes back without inventing the key — most extensions don't
+    /// use vendor libs.
+    #[test]
+    fn manifest_without_sandbox_vendor_is_none() {
+        let json = r#"{
+            "id": "weather",
+            "name": "Weather",
+            "version": "1.0.0",
+            "type": "extension"
+        }"#;
+        let manifest: ExtensionManifest = serde_json::from_str(json).expect("parse");
+        assert_eq!(manifest.sandbox_vendor, None);
     }
 }
