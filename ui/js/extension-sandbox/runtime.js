@@ -304,12 +304,28 @@ function spawnSandboxedWorker(vendorList) {
     `;
     parts.push(bootstrap);
 
+    const loadedVendors = vendorList.filter(
+        (n) => typeof vendorSourcesCache?.[n] === 'string' && vendorSourcesCache[n]
+    );
+    const missingVendors = vendorList.filter((n) => !loadedVendors.includes(n));
+    if (missingVendors.length > 0) {
+        // A requested vendor lib wasn't in the cache the host sent at init.
+        // The worker's `lib.<name>` will be undefined and the run fn will
+        // throw — which evaluateMath() swallows into a silent [] (no match).
+        // Surface it so the failure isn't invisible in the app log.
+        log(
+            'warn',
+            `runSandboxed: missing vendor source(s) [${missingVendors.join(', ')}] for worker; lib globals will be undefined`
+        );
+    }
+
     const blob = new Blob(parts, { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
     try {
         return { worker: new Worker(url), url };
     } catch (e) {
         URL.revokeObjectURL(url);
+        log('warn', `runSandboxed: failed to spawn Worker: ${e?.message || e}`);
         throw e;
     }
 }
@@ -343,12 +359,28 @@ function ensureSandboxedWorker(vendorList) {
         // Ignore messages that don't match the current inflight id.
         // They can arrive from a worker we just replaced after a timeout.
         if (!cur || cur.id !== id) return;
+        if (!ok) {
+            // The run fn threw inside the worker (e.g. a vendor global was
+            // undefined, so `lib.math.evaluate` blew up). Callers like
+            // evaluateMath() swallow this into a silent empty result, so
+            // log it here — this is the single chokepoint every in-worker
+            // throw passes through.
+            log(
+                'warn',
+                `runSandboxed: run fn threw in worker [vendors: ${entry.vendorList.join(', ') || 'none'}]: ${error || 'unknown error'}`
+            );
+        }
         finishInflight(ok, ok ? result : new Error(error || 'runSandboxed: worker error'));
     };
     worker.onerror = (ev) => {
         // The worker has crashed. Kill it (so its entry is dropped from
         // the pool) and reject the inflight task. Queued tasks will be
         // served by a fresh worker.
+        log(
+            'warn',
+            `runSandboxed: worker onerror [vendors: ${entry.vendorList.join(', ') || 'none'}]: ${ev?.message || 'worker error'}` +
+                (ev?.filename ? ` @ ${ev.filename}:${ev.lineno || '?'}` : '')
+        );
         const cur = entry.inflight;
         const err = new Error(`runSandboxed: ${ev?.message || 'worker error'}`);
         if (cur) {
@@ -401,6 +433,10 @@ function pumpSandboxedQueue(entry) {
         const cur = entry.inflight;
         if (!cur || cur.id !== id) return;
         entry.inflight = null;
+        log(
+            'warn',
+            `runSandboxed: task timed out after ${next.deadline}ms [vendors: ${entry.vendorList.join(', ') || 'none'}] — worker terminated`
+        );
         killSandboxedWorker(entry);
         cur.reject(new Error(`runSandboxed: timed out after ${next.deadline}ms`));
         // Reschedule queued tasks against a fresh worker.
