@@ -275,6 +275,25 @@ impl AcpClient {
 
     // --- Recovery ---
 
+    /// The single "rebuild from scratch" recovery primitive: restart the
+    /// connection (force-disconnect → respawn → initialize), create a fresh
+    /// session, and prime it with built-in steering. Returns the new session
+    /// id for the caller to adopt.
+    ///
+    /// Every "we can't keep the old session, start clean" path funnels
+    /// through here — the corrupted-session branch and last-chance attempt of
+    /// `send_chat_streaming_with_recovery`, plus the image-error handler in
+    /// `commands::messaging`. Keeping it in one place means there's exactly
+    /// one respawn-and-reset sequence to reason about (and the respawn itself
+    /// is the single chokepoint in `transport::spawn_backend_process`, which
+    /// reaps the previous child first).
+    pub fn restart_with_fresh_session(&self) -> Result<String> {
+        self.restart_connection()?;
+        let (new_id, _) = self.create_session(None)?;
+        self.send_builtin_steering(&new_id);
+        Ok(new_id)
+    }
+
     /// Send a chat message with automatic recovery on timeout/disconnect.
     ///
     /// Strategy: try normally → restart + reload session → restart + fresh session.
@@ -299,9 +318,7 @@ impl AcpClient {
                     warn!("Prompt failed ({}), attempting recovery…", err_str);
                     if Self::is_corrupted_session(&err_str) {
                         warn!("Session corrupted — skipping reload, creating fresh session");
-                        self.restart_connection()?;
-                        let (new_id, _) = self.create_session(None)?;
-                        self.send_builtin_steering(&new_id);
+                        let new_id = self.restart_with_fresh_session()?;
                         self.send_chat_streaming(&new_id, &content, att_ref)?;
                         return Ok(new_id);
                     }
@@ -344,10 +361,7 @@ impl AcpClient {
         }
 
         // --- Attempt 3: restart + brand-new session + resend (last chance) ---
-        self.restart_connection()?;
-        let (new_id, _) = self.create_session(None)?;
-        self.send_builtin_steering(&new_id);
-
+        let new_id = self.restart_with_fresh_session()?;
         self.send_chat_streaming(&new_id, &content, att_ref)?;
         Ok(new_id)
     }
@@ -362,6 +376,13 @@ impl AcpClient {
             || err_str.contains("Broken pipe")
             || err_str.contains("invalid conversation history")
             || err_str.contains("panicked")
+            // The agent was killed and lazily respawned: the fresh process
+            // has no record of our session id, so the first `session/prompt`
+            // comes back as "No session found with id". Treat it as
+            // recoverable (but NOT corrupted) so we fall through to attempt 2,
+            // which re-initializes and tries `session/load` to restore the
+            // conversation before giving up and creating a fresh session.
+            || err_str.contains("No session found")
     }
 
     fn is_corrupted_session(err_str: &str) -> bool {
@@ -423,5 +444,49 @@ impl AcpClient {
         let result = self.take_session_accumulator(session_id);
         info!("Sub-agent completed ({} chars)", result.len());
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AcpClient;
+
+    #[test]
+    fn no_session_found_is_recoverable_but_not_corrupted() {
+        // A killed-then-respawned agent rejects the first prompt with
+        // "No session found with id" because the fresh process never saw
+        // our session. This must route through attempt 2 (re-init +
+        // session/load), NOT the corrupted-session path that throws the
+        // prior conversation away on a fresh session.
+        let err = "ACP error: Internal error — No session found with id";
+        assert!(AcpClient::is_recoverable_error(err));
+        assert!(!AcpClient::is_corrupted_session(err));
+    }
+
+    #[test]
+    fn corrupted_history_skips_reload() {
+        // Genuinely corrupted history can't be reloaded — go straight to a
+        // fresh session.
+        let err = "ACP error: invalid conversation history";
+        assert!(AcpClient::is_recoverable_error(err));
+        assert!(AcpClient::is_corrupted_session(err));
+    }
+
+    #[test]
+    fn transient_errors_are_recoverable_but_not_corrupted() {
+        for err in [
+            "Timeout waiting for response to session/prompt",
+            "Connection lost while waiting for response",
+            "No write handle available",
+        ] {
+            assert!(AcpClient::is_recoverable_error(err), "{err}");
+            assert!(!AcpClient::is_corrupted_session(err), "{err}");
+        }
+    }
+
+    #[test]
+    fn unrelated_errors_are_not_recoverable() {
+        let err = "ACP error: model declined to respond";
+        assert!(!AcpClient::is_recoverable_error(err));
     }
 }

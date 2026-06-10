@@ -562,26 +562,18 @@ pub async fn send_message_streaming(
 
             if is_image_error {
                 // The ACP connection is likely stuck after an image error.
-                // Disconnect, reconnect, create a fresh session, and tell
-                // the originating window to adopt it. Other windows'
+                // An image error corrupts the conversation, so we always
+                // want a *fresh* session — route through the same
+                // restart-and-reset primitive the recovery ladder uses so
+                // there's exactly one respawn path to reason about. The
+                // originating window adopts the new id; other windows'
                 // sessions are unaffected — they'll reconnect lazily on
                 // their next send.
                 info!("Image-related error detected — resetting ACP connection and session");
-                client.disconnect();
-
-                let new_session_id = match client.connect() {
-                    Ok(_) => match client.create_session(None) {
-                        Ok((id, _)) => {
-                            client.send_builtin_steering(&id);
-                            Some(id)
-                        }
-                        Err(e) => {
-                            error!("Failed to create new session after image error: {}", e);
-                            None
-                        }
-                    },
+                let new_session_id = match client.restart_with_fresh_session() {
+                    Ok(id) => Some(id),
                     Err(e) => {
-                        error!("Failed to reconnect after image error: {}", e);
+                        error!("Failed to reset connection after image error: {}", e);
                         None
                     }
                 };

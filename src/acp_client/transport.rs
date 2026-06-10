@@ -172,6 +172,21 @@ impl AcpTransport {
     fn spawn_backend_process(&self, command_str: &str) -> Result<()> {
         info!("Spawning: {}", command_str);
 
+        // Reap any previously-managed child before spawning a replacement.
+        // This is the single chokepoint that guarantees the old agent
+        // process is killed and `wait()`ed regardless of which `connect()`
+        // caller we arrived from. The motivating leak: when the agent dies
+        // on its own, the reader thread flips `connected=false` on EOF but
+        // never calls `terminate()`, so the dead `Child` handle lingers in
+        // the ProcessManager. A lazy reconnect would then overwrite that
+        // handle in `store_process`, dropping it WITHOUT `wait()` — which
+        // leaves a zombie (defunct) process on macOS/Linux until the app
+        // exits (std `Child` neither kills nor reaps on drop). `connect()`
+        // only reaches here when disconnected, so the old process is always
+        // either already dead (EOF/error) or already terminated (an explicit
+        // disconnect) — killing it here is a cheap no-op in both cases.
+        self.process_manager.lock_or_recover().terminate();
+
         let parts: Vec<&str> = command_str.split_whitespace().collect();
         if parts.is_empty() {
             anyhow::bail!("Empty spawn command");

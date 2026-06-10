@@ -193,7 +193,20 @@ impl AcpClient {
     }
 
     pub fn connect(&self) -> Result<()> {
-        self.transport.connect()
+        // If the transport wasn't connected, this call spawns/reconnects a
+        // *fresh* agent process that has never seen our `initialize`
+        // handshake. Clear `initialized` so the next `create_session` /
+        // `load_existing_session` re-runs `initialize` before issuing a
+        // session op. Without this, a lazy reconnect after the agent died
+        // (reader thread flipped `connected=false` on EOF) would leave
+        // `initialized=true` from the *previous* process and we'd send
+        // `session/load` straight at an un-initialized agent.
+        let was_connected = self.transport.is_connected();
+        self.transport.connect()?;
+        if !was_connected {
+            *self.initialized.lock_or_recover() = false;
+        }
+        Ok(())
     }
 
     pub fn disconnect(&self) {
@@ -204,15 +217,21 @@ impl AcpClient {
         // session/new straight at a fresh kiro-cli that hadn't seen
         // the protocol handshake and it'd reject the request.
         *self.initialized.lock_or_recover() = false;
-        // Reset the compaction-in-flight flag and wake any thread
-        // currently inside `wait_for_compaction`. If the agent died
-        // mid-compaction the "completed" notification was lost; without
-        // this every subsequent `send_chat_streaming` would block in
-        // the wait_timeout_while for the full 60s before giving up.
+        self.clear_compaction_gate();
+    }
+
+    /// Reset the compaction-in-flight flag and wake any thread currently
+    /// inside `wait_for_compaction`. If the agent died mid-compaction the
+    /// "completed" notification was lost; without this every subsequent
+    /// `send_chat_streaming` would block in the wait_timeout_while for the
+    /// full 60s before giving up. Called from every teardown route
+    /// (`disconnect` and `force_disconnect`) so a recovery restart can't
+    /// inherit a stale gate from the dead connection.
+    fn clear_compaction_gate(&self) {
         let (lock, cvar) = &*self.compacting;
         let mut is_compacting = lock.lock_or_recover();
         if *is_compacting {
-            log::info!("Disconnect: clearing in-flight compaction gate");
+            log::info!("Clearing in-flight compaction gate on teardown");
             *is_compacting = false;
             cvar.notify_all();
         }
@@ -281,6 +300,11 @@ impl AcpClient {
     pub(crate) fn force_disconnect(&self) {
         self.transport.force_disconnect();
         *self.initialized.lock_or_recover() = false;
+        // Match `disconnect`'s teardown: clear the compaction gate so a
+        // recovery `restart_connection` (which goes through here) can't
+        // inherit a stale "is_compacting=true" from the dead connection and
+        // stall the next prompt for 60s.
+        self.clear_compaction_gate();
     }
 
     pub(crate) fn restart_connection(&self) -> Result<()> {
