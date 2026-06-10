@@ -132,7 +132,9 @@ function _debounceSave(invoke) {
         // Use the dedicated frecency commands rather than the generic
         // extension-data store. The latter is now namespaced per extension
         // (P0.3); this is host-level state, not extension state.
-        invoke('save_frecency', { data: JSON.stringify(_frecencyData) }).catch(() => {});
+        invoke('save_frecency', { data: JSON.stringify(_frecencyData) }).catch((e) => {
+            console.warn('[search] failed to save frecency data:', e);
+        });
     }, 2000);
 }
 
