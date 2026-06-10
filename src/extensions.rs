@@ -796,4 +796,68 @@ mod tests {
         let manifest: ExtensionManifest = serde_json::from_str(json).expect("parse");
         assert_eq!(manifest.sandbox_vendor, None);
     }
+
+    /// Generic guard against the whole bug class: any manifest field the
+    /// frontend consumes must survive the parse → re-serialize round trip
+    /// the manifest makes through `list_extensions`. serde silently drops
+    /// fields the struct doesn't model, and that drop is invisible until an
+    /// installed extension (whose manifest round-trips through Rust, unlike
+    /// the old bundled path) misbehaves in the field.
+    ///
+    /// CONTRACT: this fixture must contain EVERY top-level manifest key and
+    /// every `contributes.*` key the frontend reads. When you add a new
+    /// manifest field that ui/js consumes, add it here too. If the struct
+    /// doesn't model it, this test fails — which is the point.
+    #[test]
+    fn manifest_round_trip_drops_no_known_keys() {
+        let json = r#"{
+            "id": "fixture",
+            "name": "Fixture",
+            "version": "1.0.0",
+            "type": "extension",
+            "description": "d",
+            "icon": "🧩",
+            "author": "kage",
+            "preview": "p.png",
+            "sandboxVendor": ["math"],
+            "permissions": ["storage"],
+            "config": { "enabled": { "type": "boolean", "default": true } },
+            "contributes": {
+                "searchProvider": "./search.js",
+                "settingsProvider": "./settings.js",
+                "css": ["style.css"],
+                "widgets": [{ "id": "w", "slot": "main", "module": "./w.js" }],
+                "toolbarButtons": "./toolbar.js",
+                "messageFormatters": "./fmt.js",
+                "toolProvider": "./tools.js",
+                "triggerProvider": "./triggers.js"
+            }
+        }"#;
+
+        let input: serde_json::Value = serde_json::from_str(json).expect("parse input");
+        let manifest: ExtensionManifest = serde_json::from_str(json).expect("parse manifest");
+        let output: serde_json::Value =
+            serde_json::to_value(&manifest).expect("re-serialize manifest");
+
+        // Every top-level key present on input must still be present on output.
+        let in_obj = input.as_object().unwrap();
+        let out_obj = output.as_object().unwrap();
+        for key in in_obj.keys() {
+            assert!(
+                out_obj.contains_key(key),
+                "manifest round-trip dropped top-level key '{key}' — add it to ExtensionManifest"
+            );
+        }
+
+        // Same check for the contributes sub-object, where it's just as easy
+        // to consume a field in JS that the Rust struct never modeled.
+        let in_contrib = in_obj["contributes"].as_object().unwrap();
+        let out_contrib = out_obj["contributes"].as_object().unwrap();
+        for key in in_contrib.keys() {
+            assert!(
+                out_contrib.contains_key(key),
+                "manifest round-trip dropped contributes key '{key}' — add it to ExtensionContributes"
+            );
+        }
+    }
 }
