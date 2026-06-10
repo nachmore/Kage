@@ -24,7 +24,81 @@
 
 use crate::os::calendar::CalendarEvent;
 use log::{debug, info, warn};
+use std::io::Read;
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+/// Hard ceiling for the PowerShell calendar query. The JS render/RPC layer
+/// abandons the request after ~10s (RPC_TIMEOUT_MS in extension-sandbox-host.js),
+/// so any result that lands later is thrown away anyway. We kill the child at 9s
+/// and return "no events" rather than leave PowerShell + Outlook COM churning in
+/// the background for a result nobody will read.
+const CALENDAR_QUERY_TIMEOUT: Duration = Duration::from_secs(9);
+
+/// Outcome of running a child process under a deadline.
+#[derive(Debug)]
+enum RunError {
+    /// Failed to spawn the process at all.
+    Spawn(std::io::Error),
+    /// Error while polling for completion.
+    Wait(std::io::Error),
+    /// The process was still running at the deadline and was killed.
+    Timeout,
+}
+
+/// Spawn `cmd` and wait up to `timeout` for it to finish. On timeout the child
+/// is killed and `Err(RunError::Timeout)` is returned.
+///
+/// `cmd` must already have `stdout`/`stderr` set to `Stdio::piped()`. We drain
+/// both pipes on dedicated threads so a child that writes more than a pipe
+/// buffer's worth of output can't deadlock against our wait loop (the classic
+/// "child blocks on write() while parent blocks on wait()" hang).
+fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<std::process::Output, RunError> {
+    let mut child = cmd.spawn().map_err(RunError::Spawn)?;
+
+    let mut stdout_pipe = child.stdout.take();
+    let mut stderr_pipe = child.stderr.take();
+    let out_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(s) = stdout_pipe.as_mut() {
+            let _ = s.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let err_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(s) = stderr_pipe.as_mut() {
+            let _ = s.read_to_end(&mut buf);
+        }
+        buf
+    });
+
+    let start = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(RunError::Timeout);
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => return Err(RunError::Wait(e)),
+        }
+    };
+
+    // Pipes are closed now that the child has exited (or been killed), so the
+    // reader threads will reach EOF and finish.
+    let stdout = out_thread.join().unwrap_or_default();
+    let stderr = err_thread.join().unwrap_or_default();
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
 
 pub fn get_upcoming_events_impl(hours: u32) -> Result<Vec<CalendarEvent>, String> {
     let time_range = format!(
@@ -157,10 +231,22 @@ try {{
         label, time_range_setup
     );
 
-    let output = match cmd.output() {
+    let output = match run_with_timeout(cmd, CALENDAR_QUERY_TIMEOUT) {
         Ok(o) => o,
-        Err(e) => {
+        Err(RunError::Timeout) => {
+            warn!(
+                "[calendar] PowerShell query ({}) exceeded {}s — killed; returning no events",
+                label,
+                CALENDAR_QUERY_TIMEOUT.as_secs()
+            );
+            return Ok(vec![]);
+        }
+        Err(RunError::Spawn(e)) => {
             warn!("[calendar] Failed to run PowerShell ({}): {}", label, e);
+            return Err(format!("Failed to run PowerShell: {}", e));
+        }
+        Err(RunError::Wait(e)) => {
+            warn!("[calendar] Failed waiting on PowerShell ({}): {}", label, e);
             return Err(format!("Failed to run PowerShell: {}", e));
         }
     };
@@ -350,7 +436,55 @@ mod tests {
     //! PowerShell JSON sanitizer. Both are defensive layers against
     //! untrusted Outlook data / malformed PS output, worth locking in.
 
-    use super::{is_strict_iso_date, sanitize_ps_json};
+    use super::{is_strict_iso_date, run_with_timeout, sanitize_ps_json, RunError};
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    // ---- run_with_timeout --------------------------------------------------
+
+    /// A fast-finishing command returns its output before the deadline, with
+    /// stdout drained correctly.
+    #[test]
+    fn run_with_timeout_returns_output_when_fast() {
+        let mut cmd = Command::new("cmd");
+        cmd.args(["/C", "echo", "hello"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let out = run_with_timeout(cmd, Duration::from_secs(5)).expect("should finish in time");
+        assert!(out.status.success());
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(stdout.contains("hello"), "stdout was {:?}", stdout);
+    }
+
+    /// A command that sleeps past the deadline is killed, and we return
+    /// Timeout in well under the command's own runtime (proving we didn't
+    /// just wait it out).
+    #[test]
+    fn run_with_timeout_kills_slow_command() {
+        // `timeout 30` would block for 30s; our deadline is 1s.
+        let mut cmd = Command::new("cmd");
+        cmd.args(["/C", "ping", "-n", "30", "127.0.0.1"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let start = Instant::now();
+        let res = run_with_timeout(cmd, Duration::from_secs(1));
+        let elapsed = start.elapsed();
+        assert!(matches!(res, Err(RunError::Timeout)), "expected Timeout");
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "should have killed near the 1s deadline, took {:?}",
+            elapsed
+        );
+    }
+
+    /// A command that doesn't exist surfaces as a Spawn error, not a hang.
+    #[test]
+    fn run_with_timeout_reports_spawn_failure() {
+        let mut cmd = Command::new("this_binary_does_not_exist_kage_test");
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let res = run_with_timeout(cmd, Duration::from_secs(5));
+        assert!(matches!(res, Err(RunError::Spawn(_))), "expected Spawn err");
+    }
 
     // ---- is_strict_iso_date ------------------------------------------------
 
