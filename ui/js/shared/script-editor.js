@@ -1,5 +1,3 @@
-import { EVT } from './events.js';
-import { WINDOW } from './window-labels.js';
 import { errLabel } from './error-message.js';
 import { t, tHtml } from './i18n.js';
 
@@ -141,37 +139,19 @@ export function createScriptEditor(container, opts = {}) {
 
             try {
                 const invoke = window.__TAURI__?.core?.invoke;
-                const listen = window.__TAURI__?.event?.listen;
-                if (!invoke || !listen) throw new Error('Tauri not available');
+                if (!invoke) throw new Error('Tauri not available');
 
-                let response = '';
-                const unlisten = await listen(EVT.MESSAGE_CHUNK, (event) => {
-                    const delta =
-                        event.payload && typeof event.payload === 'object'
-                            ? event.payload.text || ''
-                            : String(event.payload || '');
-                    response += delta;
-                    if (aiStatus) aiStatus.textContent = t('shared.script_editor.status.receiving');
+                // Generation runs on a throwaway backend session
+                // (generate_script → ephemeral_session), so it works even
+                // when no chat window is open and never pollutes the
+                // user's real conversation. The command blocks until the
+                // agent finishes and returns the full reply.
+                if (aiStatus) aiStatus.textContent = t('shared.script_editor.status.receiving');
+                const response = await invoke('generate_script', {
+                    prompt: parts.join('\n'),
                 });
-                const completionPromise = new Promise((resolve) => {
-                    listen(EVT.MESSAGE_COMPLETE, () => resolve()).then((fn) => {
-                        // Store unlisten for cleanup
-                        completionPromise._unlisten = fn;
-                    });
-                });
-                const sessionId = await invoke('get_window_session', {
-                    label: WINDOW.MAIN,
-                }).catch(() => null);
-                await invoke('send_message_streaming', {
-                    sessionId,
-                    message: parts.join('\n'),
-                    attachments: null,
-                });
-                await completionPromise;
-                unlisten();
-                if (completionPromise._unlisten) completionPromise._unlisten();
 
-                let code = response.trim();
+                let code = (response || '').trim();
                 const fenceMatch = code.match(/```(?:javascript|js)?\s*\n([\s\S]*?)```/);
                 if (fenceMatch) code = fenceMatch[1].trim();
                 code = code

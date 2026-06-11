@@ -7696,5 +7696,11 @@
     "description": "Playful rotating status line on the launch screen while setup runs",
     "_machine_translated": true,
     "_source_hash": "a26f3a9faa58e828"
+  },
+  "errors.script.generate_failed": {
+    "message": "Kunne ikke generere skript: {reason}",
+    "description": "The agent failed to generate a script from the prompt",
+    "_machine_translated": true,
+    "_source_hash": "e8802eddbbdfb5b6"
   }
 }

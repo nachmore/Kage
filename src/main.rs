@@ -19,6 +19,7 @@ mod config_migrations;
 #[allow(dead_code)] // Used in lib.rs; main.rs wires the IPC commands in the next commit.
 mod context_rules;
 mod crash_recovery;
+mod ephemeral_session;
 mod error;
 mod event_targets;
 mod events;
@@ -915,6 +916,7 @@ async fn run() {
             commands::inline_assist_apply,
             commands::send_inline_assist,
             commands::execute_macro,
+            commands::generate_script,
             commands::app_log_write,
             commands::app_log_get_entries,
             commands::app_log_clear,

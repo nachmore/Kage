@@ -17,6 +17,10 @@
     "message": "Could not load session: {reason}",
     "description": "Resuming a stored session against the agent backend failed"
   },
+  "errors.script.generate_failed": {
+    "message": "Could not generate script: {reason}",
+    "description": "The agent failed to generate a script from the prompt"
+  },
   "errors.lock.acquire_failed": {
     "message": "Internal lock could not be acquired",
     "description": "Mutex/RwLock acquisition failed; usually indicates a poisoned lock from a prior panic"

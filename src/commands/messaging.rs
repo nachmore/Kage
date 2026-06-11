@@ -1623,6 +1623,42 @@ pub async fn send_inline_assist(
 }
 
 // ---------------------------------------------------------------------------
+// Script generation — one-shot, ephemeral session
+// ---------------------------------------------------------------------------
+
+/// Generate a script from a natural-language prompt and return the
+/// agent's full response text.
+///
+/// Runs on a throwaway [`crate::ephemeral_session`] rather than a real
+/// chat session: the script editor lives in Settings, which is frequently
+/// open with no chat window present — so there's no session to borrow (the
+/// old frontend passed `get_window_session(main)`, which is `null` in that
+/// case and crashed `send_message_streaming`'s `sessionId: String`
+/// argument). Borrowing a real session would also inject the generation
+/// prompt and its reply into the user's actual conversation history.
+#[tauri::command]
+pub async fn generate_script(
+    prompt: String,
+    acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
+) -> Result<String, AppError> {
+    let client = acp.client.clone();
+    let config = features.config.clone();
+
+    async_runtime::spawn_blocking(move || {
+        crate::ephemeral_session::prompt_once(&client, &config, &prompt).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.script.generate_failed",
+                &[("reason", &e.to_string())],
+            )
+        })
+    })
+    .await
+    .map_err(|e| AppError::internal(format!("generate_script task panicked: {}", e)))?
+}
+
+// ---------------------------------------------------------------------------
 // Macro execution — chained transformation steps (AI, regex, transform, script)
 // ---------------------------------------------------------------------------
 
