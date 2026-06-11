@@ -11,7 +11,7 @@ import {
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
-import { getConfig } from '../shared/config-cache.js';
+import { getConfig, invalidateConfig } from '../shared/config-cache.js';
 import { trackEventOnce } from '../shared/telemetry.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW } from '../shared/window-labels.js';
@@ -48,6 +48,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
     // Re-apply theme and opacity when config changes
     listen(EVT.CONFIG_UPDATED, async () => {
+        // Invalidate the config cache before any getConfig() below; the
+        // cache's own config_updated listener may run after ours.
+        invalidateConfig();
         await loadAndApplyTheme(invoke);
 
         // Pick up changes to the verbose-logging toggle live so the user

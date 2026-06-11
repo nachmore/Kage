@@ -58,7 +58,7 @@ import { executeShortcutCommand, handleEnterAction } from '../shared/result-exec
 import { setupRtlDetection } from '../shared/rtl.js';
 import { escapeHtml, formatBytes } from '../shared/tool-utils.js';
 import { checkOnline, markOnline, onNetworkChange, offlineMessage } from '../shared/network.js';
-import { getConfig } from '../shared/config-cache.js';
+import { getConfig, invalidateConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 import { MessageStreamController } from '../shared/message-stream-controller.js';
@@ -515,6 +515,13 @@ export class FloatingApp {
     _registerAppEventListeners() {
         this.listen(EVT.CONFIG_UPDATED, async () => {
             console.log('Config updated, reloading...');
+            // Invalidate our config cache synchronously, before any
+            // getConfig() below. config-cache.js also clears itself on
+            // config_updated, but Tauri dispatches the two listeners in an
+            // unspecified order — if ours ran first we'd reload from the
+            // stale cache (the bug where a newly-added shortcut never
+            // showed up in search until the next app launch).
+            invalidateConfig();
             await this.loadShortcuts();
             await this.extensionManager.onConfigUpdate();
             await this.extensionManager.reload();

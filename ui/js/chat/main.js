@@ -13,7 +13,7 @@ import {
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
-import { getConfig } from '../shared/config-cache.js';
+import { getConfig, invalidateConfig } from '../shared/config-cache.js';
 import { trackEventOnce } from '../shared/telemetry.js';
 import { EVT } from '../shared/events.js';
 import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
@@ -108,6 +108,11 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
     // Re-apply theme when config changes
     listen(EVT.CONFIG_UPDATED, async () => {
+        // Clear our config cache before any getConfig()/loadShortcuts()
+        // below — config-cache.js clears itself on the same event but the
+        // listener dispatch order isn't guaranteed, so do it here too to
+        // avoid reloading from a stale cache.
+        invalidateConfig();
         loadAndApplyTheme(invoke);
         if (app?.speech) app.speech.updateVisibility();
         if (app?.extensionManager) {
