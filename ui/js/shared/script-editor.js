@@ -44,8 +44,8 @@ export function createScriptEditor(container, opts = {}) {
     // Build HTML
     let html = '';
     if (showAi) {
-        html += `<div class="script-ai-row" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
-            <input type="text" class="setting-input" id="${id}_aiPrompt" placeholder="${t('shared.script_editor.ai_placeholder')}" style="flex:1;font-size:12px;">
+        html += `<div class="script-ai-row" style="display:flex;gap:6px;align-items:flex-start;margin-bottom:6px;">
+            <textarea class="setting-input" id="${id}_aiPrompt" rows="1" placeholder="${t('shared.script_editor.ai_placeholder')}" style="flex:1;font-size:12px;resize:none;overflow-y:hidden;line-height:1.4;"></textarea>
             <button class="setting-button" id="${id}_aiBtn" style="font-size:11px;white-space:nowrap;">${t('shared.script_editor.btn.generate')}</button>
             <button class="setting-button" id="${id}_aiUndo" style="font-size:11px;display:none;">${t('shared.script_editor.btn.undo')}</button>
         </div>
@@ -91,8 +91,32 @@ export function createScriptEditor(container, opts = {}) {
         const aiUndo = document.getElementById(`${id}_aiUndo`);
         const aiStatus = document.getElementById(`${id}_aiStatus`);
 
+        // Auto-grow the prompt up to a few lines, then scroll. Reset to
+        // auto first so the field can shrink when text is deleted, not
+        // just grow. The cap (MAX_AI_PROMPT_PX) keeps a long prompt from
+        // pushing the rest of the dialog off-screen — past it the textarea
+        // scrolls internally.
+        const MAX_AI_PROMPT_PX = 96; // ~5 lines at this font/line-height
+        function autoGrowPrompt() {
+            if (!aiPrompt) return;
+            aiPrompt.style.height = 'auto';
+            // scrollHeight covers content + padding but not the border.
+            // Under box-sizing:border-box (the global default here) the
+            // set height must include the border too, or the field is one
+            // border-width short and shows a phantom scrollbar.
+            const cs = getComputedStyle(aiPrompt);
+            const border =
+                parseFloat(cs.borderTopWidth || '0') + parseFloat(cs.borderBottomWidth || '0');
+            const content = aiPrompt.scrollHeight + border;
+            aiPrompt.style.height = Math.min(content, MAX_AI_PROMPT_PX) + 'px';
+            aiPrompt.style.overflowY = content > MAX_AI_PROMPT_PX ? 'auto' : 'hidden';
+        }
+        aiPrompt?.addEventListener('input', autoGrowPrompt);
+
         aiPrompt?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
+            // Enter submits; Shift+Enter inserts a newline (default
+            // textarea behaviour, so we just don't intercept it).
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 generate();
             }
