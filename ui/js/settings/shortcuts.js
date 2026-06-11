@@ -143,7 +143,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
                             <div class="dialog-field">
                                 <label>${t('settings.shortcuts.dialog.script.ai.label')}</label>
                                 <div class="ai-prompt-row">
-                                    <input type="text" id="scriptAiPrompt" class="setting-input" placeholder="${t('settings.shortcuts.dialog.script.ai.placeholder')}">
+                                    <textarea id="scriptAiPrompt" class="setting-input" rows="1" placeholder="${t('settings.shortcuts.dialog.script.ai.placeholder')}"></textarea>
                                     <button class="setting-button" id="scriptAiBtn" data-action="shortcuts.generateScript">${t('settings.shortcuts.dialog.script.ai.generate')}</button>
                                     <button class="setting-button" id="scriptAiUndo" data-action="shortcuts.undoGenerate" style="display:none">${t('settings.shortcuts.dialog.script.ai.undo')}</button>
                                 </div>
@@ -253,8 +253,9 @@ export class ShortcutsSettingsModule extends SettingsModule {
                     background: none !important; padding: 0 !important; margin: 0 !important;
                     color: inherit; word-wrap: break-word;
                 }
-                .ai-prompt-row { display: flex; gap: 8px; }
+                .ai-prompt-row { display: flex; gap: 8px; align-items: flex-start; }
                 .ai-prompt-row .setting-input { flex: 1; }
+                .ai-prompt-row textarea.setting-input { resize: none; overflow-y: hidden; line-height: 1.4; }
                 .ai-prompt-row .setting-button { white-space: nowrap; }
                 textarea.setting-input { resize: vertical; }
             </style>
@@ -409,7 +410,11 @@ export class ShortcutsSettingsModule extends SettingsModule {
         document.getElementById('shortcutPrompt').value = '';
         document.getElementById('shortcutScript').value = '';
         document.getElementById('shortcutScriptAction').value = 'text';
-        document.getElementById('scriptAiPrompt').value = '';
+        const aiPromptEl = document.getElementById('scriptAiPrompt');
+        aiPromptEl.value = '';
+        // Reset auto-grown height back to a single row.
+        aiPromptEl.style.height = '';
+        aiPromptEl.style.overflowY = 'hidden';
         document.getElementById('scriptAiStatus').textContent = '';
         document.getElementById('scriptAiUndo').style.display = 'none';
         this._previousScript = null;
@@ -437,7 +442,11 @@ export class ShortcutsSettingsModule extends SettingsModule {
         document.getElementById('shortcutPrompt').value = s.prompt || '';
         document.getElementById('shortcutScript').value = s.script || '';
         document.getElementById('shortcutScriptAction').value = s.script_action || 'text';
-        document.getElementById('scriptAiPrompt').value = '';
+        const aiPromptEl = document.getElementById('scriptAiPrompt');
+        aiPromptEl.value = '';
+        // Reset auto-grown height back to a single row.
+        aiPromptEl.style.height = '';
+        aiPromptEl.style.overflowY = 'hidden';
         document.getElementById('scriptAiStatus').textContent = '';
         document.getElementById('scriptAiUndo').style.display = 'none';
         this._previousScript = null;
@@ -924,13 +933,30 @@ export class ShortcutsSettingsModule extends SettingsModule {
         if (script) script.addEventListener('input', () => this.updateHighlight());
 
         const aiPrompt = document.getElementById('scriptAiPrompt');
-        if (aiPrompt)
+        if (aiPrompt) {
+            // Auto-grow up to ~5 lines, then scroll internally. Reset to
+            // auto first so the field shrinks on delete, and account for
+            // the border (box-sizing:border-box) so we don't leave a
+            // phantom scrollbar.
+            const MAX_AI_PROMPT_PX = 96;
+            const autoGrow = () => {
+                aiPrompt.style.height = 'auto';
+                const cs = getComputedStyle(aiPrompt);
+                const border =
+                    parseFloat(cs.borderTopWidth || '0') + parseFloat(cs.borderBottomWidth || '0');
+                const content = aiPrompt.scrollHeight + border;
+                aiPrompt.style.height = Math.min(content, MAX_AI_PROMPT_PX) + 'px';
+                aiPrompt.style.overflowY = content > MAX_AI_PROMPT_PX ? 'auto' : 'hidden';
+            };
+            aiPrompt.addEventListener('input', autoGrow);
             aiPrompt.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
+                // Enter submits; Shift+Enter inserts a newline.
+                if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     this.generateScript();
                 }
             });
+        }
 
         const testArgs = document.getElementById('shortcutTestArgs');
         if (testArgs)
