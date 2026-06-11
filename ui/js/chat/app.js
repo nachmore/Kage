@@ -18,6 +18,7 @@ import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW, isChatLabel } from '../shared/window-labels.js';
+import { getWindowSessionOrNull } from '../shared/session-resolve.js';
 import { errLabel } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { mascotHTML } from '../shared/mascot.js';
@@ -1043,9 +1044,7 @@ export class ChatApp {
         // main — adopt floating's session so the user sees their
         // ongoing conversation. switch_acp_session sends session/load
         // and pins to this window's label (`main`).
-        const floatingId = await this.invoke('get_window_session', {
-            label: WINDOW.FLOATING,
-        }).catch(() => null);
+        const floatingId = await getWindowSessionOrNull(this.invoke, WINDOW.FLOATING);
         if (!floatingId) {
             console.log('[CHAT] main bootstrap: no floating session yet, leaving empty');
             return;

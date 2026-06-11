@@ -4,6 +4,7 @@
 
 import { platformKeyLabel } from './shortcuts.js';
 import { WINDOW } from './window-labels.js';
+import { getWindowSessionOrNull } from './session-resolve.js';
 import { errLabel } from './error-message.js';
 import { t } from './i18n.js';
 
@@ -377,9 +378,7 @@ export function matchSlashCommands(input) {
                 // Slash commands need a session id; the calling window
                 // tells us its label so we can look up its pinned session.
                 const winLabel = _appWindow?.label || WINDOW.FLOATING;
-                const sessionId = await invoke('get_window_session', { label: winLabel }).catch(
-                    () => null
-                );
+                const sessionId = await getWindowSessionOrNull(invoke, winLabel);
 
                 // Selection-type commands: show options as a selectable list
                 if (cmd.meta?.inputType === 'selection') {

@@ -8,6 +8,7 @@ import { createMascot } from './shared/mascot.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
 import { EVT } from './shared/events.js';
 import { WINDOW } from './shared/window-labels.js';
+import { getWindowSessionOrNull } from './shared/session-resolve.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 
 console.log(
@@ -59,9 +60,7 @@ console.log(
         try {
             // Open chat with the selected text as context. Use main's
             // session — this opens in the chat window.
-            const sessionId = await invoke('get_window_session', { label: WINDOW.MAIN }).catch(
-                () => null
-            );
+            const sessionId = await getWindowSessionOrNull(invoke, WINDOW.MAIN);
             const message = selectedText.trim()
                 ? `The following text is currently selected:\n\`\`\`\n${selectedText.trim()}\n\`\`\``
                 : '';
@@ -240,9 +239,7 @@ console.log(
             // Send to the floating UX — hide ourselves first
             await appWindow.hide();
             try {
-                const sessionId = await invoke('get_window_session', {
-                    label: WINDOW.MAIN,
-                }).catch(() => null);
+                const sessionId = await getWindowSessionOrNull(invoke, WINDOW.MAIN);
                 await invoke('open_chat_with_message', { sessionId, message: prompt });
             } catch (e) {
                 console.error('Failed to open chat:', e);
@@ -265,9 +262,7 @@ console.log(
         try {
             // Inline-assist runs on the floating session — that's the
             // hotkey-driven path that triggered this overlay.
-            const sessionId = await invoke('get_window_session', {
-                label: WINDOW.FLOATING,
-            }).catch(() => null);
+            const sessionId = await getWindowSessionOrNull(invoke, WINDOW.FLOATING);
             await invoke('send_inline_assist', { sessionId, message: prompt });
         } catch (e) {
             console.error('Inline assist failed:', e);
@@ -296,9 +291,7 @@ console.log(
             const prompt = `Run these steps on the following text:\n${stepsDesc}\n\nText:\n\`\`\`\n${selectedText.trim()}\n\`\`\``;
             await appWindow.hide();
             try {
-                const sessionId = await invoke('get_window_session', {
-                    label: WINDOW.MAIN,
-                }).catch(() => null);
+                const sessionId = await getWindowSessionOrNull(invoke, WINDOW.MAIN);
                 await invoke('open_chat_with_message', { sessionId, message: prompt });
             } catch (e) {
                 console.error('Failed to open chat:', e);
@@ -323,9 +316,7 @@ console.log(
                 transform: s.transform || '',
                 script: s.script || '',
             }));
-            const sessionId = await invoke('get_window_session', { label: WINDOW.FLOATING }).catch(
-                () => null
-            );
+            const sessionId = await getWindowSessionOrNull(invoke, WINDOW.FLOATING);
             const result = await invoke('execute_macro', {
                 sessionId,
                 steps,

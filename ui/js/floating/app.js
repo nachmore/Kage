@@ -18,6 +18,7 @@ import {
 import { sendAppNotification } from '../shared/notify.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW } from '../shared/window-labels.js';
+import { getWindowSessionOrNull } from '../shared/session-resolve.js';
 import { errLabel, errMessage } from '../shared/error-message.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import {
@@ -1803,9 +1804,7 @@ export class FloatingApp {
 
         try {
             // Setup may have already pinned us before our init ran.
-            const existing = await this.invoke('get_window_session', {
-                label: WINDOW.FLOATING,
-            }).catch(() => null);
+            const existing = await getWindowSessionOrNull(this.invoke, WINDOW.FLOATING);
             if (existing) {
                 this.floatingSessionId = existing;
                 this.bootstrappingSession = false;
