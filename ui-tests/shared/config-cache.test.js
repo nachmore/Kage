@@ -149,4 +149,78 @@ describe('config-cache', () => {
         // listener installed regardless of how many getConfig calls fire.
         expect(listenCallCount).toBe(1);
     });
+
+    // --- onConfigChange: the race-proof subscription path ---------------
+    //
+    // These pin the invariant that fixed the "new shortcut doesn't show up
+    // until restart" bug: a subscriber that reads config inside its handler
+    // must observe the FRESH value, because the cache is invalidated before
+    // any subscriber runs. If someone refactors the ordering, these fail.
+
+    it('onConfigChange subscriber sees fresh config (cache invalidated first)', async () => {
+        const { getConfig, onConfigChange } = await loadModule();
+        const invoke = vi
+            .fn()
+            .mockResolvedValueOnce({ generation: 1 })
+            .mockResolvedValueOnce({ generation: 2 });
+
+        // Prime the cache at generation 1.
+        expect((await getConfig(invoke)).generation).toBe(1);
+
+        // A subscriber that re-reads config when notified must see gen 2,
+        // proving the cache was cleared before the subscriber ran. The
+        // listener dispatches subscribers fire-and-forget (the cache is
+        // already invalidated synchronously by then), so we capture and
+        // await the subscriber's own work to observe its result.
+        let subscriberWork = null;
+        onConfigChange(() => {
+            subscriberWork = getConfig(invoke);
+        });
+
+        expect(typeof listenCb).toBe('function');
+        listenCb({ payload: null });
+
+        const seen = await subscriberWork;
+        expect(seen.generation).toBe(2);
+    });
+
+    it('onConfigChange installs the listener even with no prior getConfig', async () => {
+        const { onConfigChange } = await loadModule();
+        let fired = false;
+        onConfigChange(() => {
+            fired = true;
+        });
+        // The owning config_updated listener must exist now, not only after
+        // a getConfig call.
+        expect(typeof listenCb).toBe('function');
+        listenCb({ payload: null });
+        expect(fired).toBe(true);
+    });
+
+    it('onConfigChange returns an unsubscribe that stops further notifications', async () => {
+        const { onConfigChange } = await loadModule();
+        let count = 0;
+        const off = onConfigChange(() => {
+            count += 1;
+        });
+        listenCb({ payload: null });
+        off();
+        listenCb({ payload: null });
+        expect(count).toBe(1);
+    });
+
+    it('one subscriber throwing does not stop the others', async () => {
+        const { onConfigChange } = await loadModule();
+        const calls = [];
+        onConfigChange(() => {
+            calls.push('a');
+            throw new Error('boom');
+        });
+        onConfigChange(() => {
+            calls.push('b');
+        });
+        // Should not throw out of the listener despite subscriber a.
+        expect(() => listenCb({ payload: null })).not.toThrow();
+        expect(calls).toEqual(['a', 'b']);
+    });
 });

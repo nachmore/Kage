@@ -32,11 +32,22 @@ import { EVT } from './events.js';
 
 let _cachedPromise = null;
 let _listenerInstalled = false;
+const _subscribers = new Set();
 
 /**
  * Install the `config_updated` listener once per module-load. Idempotent —
  * subsequent calls are no-ops. Uses the global `window.__TAURI__.event.listen`
  * so we don't need every caller to plumb it in.
+ *
+ * This module owns the ONLY `config_updated` listener that touches the
+ * config cache. When the event fires it invalidates the cache FIRST, then
+ * notifies every `onConfigChange` subscriber. Because both happen inside
+ * this single callback, a subscriber's `getConfig()` is guaranteed to
+ * re-fetch fresh data — there's no second listener that could race the
+ * invalidation. Windows must therefore subscribe via `onConfigChange`
+ * rather than registering their own `listen(CONFIG_UPDATED, …)`; a raw
+ * listener that reads config can fire before this one and observe a stale
+ * cache (the bug where a newly-added shortcut didn't appear until restart).
  */
 function _ensureInvalidationListener() {
     if (_listenerInstalled) return;
@@ -48,12 +59,42 @@ function _ensureInvalidationListener() {
         return;
     }
     _listenerInstalled = true;
-    listen(EVT.CONFIG_UPDATED, () => {
+    listen(EVT.CONFIG_UPDATED, (event) => {
+        // Invalidate BEFORE notifying so every subscriber's getConfig()
+        // re-fetches. Order is the whole point of routing subscribers
+        // through here.
         _cachedPromise = null;
+        for (const fn of _subscribers) {
+            try {
+                fn(event);
+            } catch (e) {
+                console.error('onConfigChange subscriber threw:', e);
+            }
+        }
     }).catch(() => {
         // listen() rejected — drop the flag so a later getConfig retries.
         _listenerInstalled = false;
     });
+}
+
+/**
+ * Subscribe to config changes. The handler runs AFTER the cache has been
+ * invalidated for the current `config_updated` event, so a `getConfig()`
+ * inside the handler always sees fresh data.
+ *
+ * Use this instead of `listen('config_updated', …)` anywhere you react to
+ * a config change by reading config — it removes the listener-ordering
+ * race against the cache by construction.
+ *
+ * @param {(event?: object) => void | Promise<void>} handler
+ * @returns {() => void} unsubscribe fn
+ */
+export function onConfigChange(handler) {
+    // Make sure our owning listener is installed even if no getConfig has
+    // run yet in this window.
+    _ensureInvalidationListener();
+    _subscribers.add(handler);
+    return () => _subscribers.delete(handler);
 }
 
 /**
