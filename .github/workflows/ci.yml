@@ -38,6 +38,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Opt every JavaScript action into the Node 24 runtime. Some actions we
+# depend on transitively (e.g. actions/cache, pulled in by
+# Swatinem/rust-cache and taiki-e/cache-cargo-install-action) still
+# declare the Node 20 runtime, which the runner warns is deprecated and
+# will force to Node 24 on 2026-06-16 anyway. Setting this now silences
+# the warning and surfaces any Node 24 incompatibility on our schedule
+# rather than GitHub's.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-test:
     name: debug build + test (${{ matrix.os }})
