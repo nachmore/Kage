@@ -3,8 +3,6 @@ import { summarizeNamedPlaceholders } from '../shared/shortcuts.js';
 import { escapeHtml } from '../shared/tool-utils.js';
 import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
-import { EVT } from '../shared/events.js';
-import { WINDOW } from '../shared/window-labels.js';
 import { errLabel } from '../shared/error-message.js';
 /**
  * Commands & Prompts settings module.
@@ -744,39 +742,17 @@ export class ShortcutsSettingsModule extends SettingsModule {
 
         try {
             const invoke = window.__TAURI__.core.invoke;
-            const listen = window.__TAURI__.event.listen;
 
-            // Collect streamed response
-            let response = '';
-            const unlisten = await listen(EVT.MESSAGE_CHUNK, (event) => {
-                const delta =
-                    event.payload && typeof event.payload === 'object'
-                        ? event.payload.text || ''
-                        : String(event.payload || '');
-                response += delta;
-                statusEl.textContent = t('settings.shortcuts.script_ai.status.receiving');
-            });
-
-            const completionPromise = new Promise((resolve) => {
-                const unlistenComplete = listen(EVT.MESSAGE_COMPLETE, () => {
-                    unlistenComplete.then((fn) => fn());
-                    resolve();
-                });
-            });
-
-            const sessionId = await invoke('get_window_session', { label: WINDOW.MAIN }).catch(
-                () => null
-            );
-            await invoke('send_message_streaming', {
-                sessionId,
-                message: fullPrompt,
-                attachments: null,
-            });
-            await completionPromise;
-            unlisten();
+            // Generation runs on a throwaway backend session
+            // (generate_script → ephemeral_session), so it works even when
+            // Settings is open with no chat window and never pollutes the
+            // user's real conversation. Blocks until the agent finishes
+            // and returns the full reply.
+            statusEl.textContent = t('settings.shortcuts.script_ai.status.receiving');
+            const response = await invoke('generate_script', { prompt: fullPrompt });
 
             // Extract code — strip markdown fences if present
-            let code = response.trim();
+            let code = (response || '').trim();
             const fenceMatch = code.match(/```(?:javascript|js)?\s*\n([\s\S]*?)```/);
             if (fenceMatch) code = fenceMatch[1].trim();
             // Also strip bare ``` at start/end

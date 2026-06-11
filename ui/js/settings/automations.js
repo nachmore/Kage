@@ -1,6 +1,4 @@
 import { SettingsModule } from './base.js';
-import { EVT } from '../shared/events.js';
-import { WINDOW } from '../shared/window-labels.js';
 import { t, tHtml } from '../shared/i18n.js';
 /**
  * Automations Settings Module — collapsed/expanded card UI for automation rules.
@@ -662,34 +660,13 @@ export class AutomationsSettingsModule extends SettingsModule {
         this._renderList();
         try {
             const invoke = window.__TAURI__?.core?.invoke;
-            const listen = window.__TAURI__?.event?.listen;
-            if (!invoke || !listen) return;
+            if (!invoke) return;
             const prompt = `<role>You write ultra-concise automation summaries.</role>\n<automation>${JSON.stringify({ steps: auto.steps.map((s) => ({ type: s.step_type, prompt: s.prompt, find: s.find, replace: s.replace, transform: s.transform, condition: s.condition, script: s.script || undefined })), output: auto.output })}</automation>\n<task>Summarize the OUTCOME of this automation in one short sentence. Do NOT mention the name "${auto.name}" or the trigger — the user can already see both. Focus only on what the steps produce. Be concise. No markdown.</task>`;
-            let response = '';
-            const unlisten = await listen(EVT.MESSAGE_CHUNK, (event) => {
-                const delta =
-                    event.payload && typeof event.payload === 'object'
-                        ? event.payload.text || ''
-                        : String(event.payload || '');
-                response += delta;
-            });
-            const done = new Promise((resolve) => {
-                listen(EVT.MESSAGE_COMPLETE, () => resolve()).then((fn) => {
-                    done._ul = fn;
-                });
-            });
-            const sessionId = await invoke('get_window_session', { label: WINDOW.MAIN }).catch(
-                () => null
-            );
-            await invoke('send_message_streaming', {
-                sessionId,
-                message: prompt,
-                attachments: null,
-            });
-            await done;
-            unlisten();
-            if (done._ul) done._ul();
-            let summary = response
+            // One-shot generation on a throwaway backend session
+            // (generate_script → ephemeral_session): works with no chat
+            // window open and never touches the user's real conversation.
+            const response = await invoke('generate_script', { prompt });
+            let summary = (response || '')
                 .trim()
                 .replace(/```[\s\S]*?```/g, '')
                 .trim();
