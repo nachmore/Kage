@@ -128,3 +128,105 @@ pub fn prompt_once(
         Ok(client.take_session_accumulator(session_id))
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    /// A Config whose active connection points its sessions dir at `dir`.
+    /// That's the override `resolve_sessions_dir` honours first, so the
+    /// cleanup guard deletes from `dir`.
+    fn config_with_sessions_dir(dir: &std::path::Path) -> Arc<Mutex<Config>> {
+        let mut cfg = Config::default();
+        cfg.acp
+            .active_connection_mut()
+            .expect("default config seeds a connection")
+            .sessions_directory = Some(dir.to_string_lossy().to_string());
+        Arc::new(Mutex::new(cfg))
+    }
+
+    /// Create the on-disk files the agent would leave for a session:
+    /// `<id>.json`, `<id>.jsonl`, `<id>.lock`.
+    fn touch_session_files(dir: &std::path::Path, id: &str) {
+        for ext in &["json", "jsonl", "lock"] {
+            std::fs::write(dir.join(format!("{id}.{ext}")), b"x").unwrap();
+        }
+    }
+
+    fn session_files_exist(dir: &std::path::Path, id: &str) -> bool {
+        ["json", "jsonl", "lock"]
+            .iter()
+            .any(|ext| dir.join(format!("{id}.{ext}")).exists())
+    }
+
+    #[test]
+    fn cleanup_guard_deletes_session_files_on_drop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let id = "ephemeral-abc";
+        touch_session_files(tmp.path(), id);
+        let config = config_with_sessions_dir(tmp.path());
+
+        assert!(session_files_exist(tmp.path(), id));
+        {
+            let _guard = SessionCleanup {
+                config: config.clone(),
+                session_id: id.to_string(),
+            };
+        } // guard drops here
+        assert!(
+            !session_files_exist(tmp.path(), id),
+            "all session files removed when the guard drops"
+        );
+    }
+
+    #[test]
+    fn cleanup_guard_leaves_other_sessions_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        touch_session_files(tmp.path(), "ephemeral-mine");
+        touch_session_files(tmp.path(), "real-user-session");
+        let config = config_with_sessions_dir(tmp.path());
+
+        {
+            let _guard = SessionCleanup {
+                config: config.clone(),
+                session_id: "ephemeral-mine".to_string(),
+            };
+        }
+        assert!(
+            !session_files_exist(tmp.path(), "ephemeral-mine"),
+            "the ephemeral session is deleted"
+        );
+        assert!(
+            session_files_exist(tmp.path(), "real-user-session"),
+            "an unrelated session is left alone"
+        );
+    }
+
+    #[test]
+    fn cleanup_runs_even_when_closure_errors() {
+        // `run` must tear the session down on the error path too, not just
+        // on success — otherwise a failed generation would leak a session
+        // file. We can't stand up a live ACP agent here, so we exercise
+        // the guard placement directly: a guard armed before fallible work
+        // still fires when that work returns early.
+        let tmp = tempfile::tempdir().unwrap();
+        let id = "ephemeral-erroring";
+        touch_session_files(tmp.path(), id);
+        let config = config_with_sessions_dir(tmp.path());
+
+        let result: Result<()> = (|| {
+            let _guard = SessionCleanup {
+                config: config.clone(),
+                session_id: id.to_string(),
+            };
+            anyhow::bail!("simulated send failure");
+        })();
+
+        assert!(result.is_err());
+        assert!(
+            !session_files_exist(tmp.path(), id),
+            "session files cleaned up despite the error"
+        );
+    }
+}
