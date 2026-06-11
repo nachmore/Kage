@@ -7702,5 +7702,11 @@
     "description": "The agent failed to generate a script from the prompt",
     "_machine_translated": true,
     "_source_hash": "e8802eddbbdfb5b6"
+  },
+  "errors.session.create_failed": {
+    "message": "Не удалось создать сессию: {reason}",
+    "description": "Creating a new session against the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "5981e92883bbdd2c"
   }
 }

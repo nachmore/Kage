@@ -504,6 +504,43 @@ fn handle_permission_notification(
 
 // --- Tauri Commands ---
 
+/// Resolve a caller-supplied session id into a usable *real* session,
+/// creating a fresh one if the caller passed `None`/empty.
+///
+/// Frontend callers fetch their window's session with
+/// `get_window_session(label).catch(() => null)`, which yields `null`
+/// whenever that window hasn't pinned a session yet (e.g. the floating
+/// or main window was never opened this run). Commands used to take
+/// `session_id: String`, so that `null` crashed at Tauri's arg
+/// deserialization with "invalid type: null, expected a string" before
+/// the handler even ran. Taking `Option<String>` and routing through
+/// here turns that into a graceful "make a real session and use it".
+///
+/// This is deliberately NOT an ephemeral session: these paths continue
+/// (or start) a conversation the user will see and keep — inline-assist
+/// on the floating session, slash commands, opening a chat. The session
+/// gets built-in steering primed, exactly like a normal new chat. Call
+/// from a blocking context (the ACP calls are synchronous).
+fn resolve_or_create_session(
+    client: &std::sync::Arc<crate::acp_client::AcpClient>,
+    session_id: Option<String>,
+) -> Result<String, AppError> {
+    if let Some(id) = session_id {
+        if !id.trim().is_empty() {
+            return Ok(id);
+        }
+    }
+    let (id, _) = client.create_session(None).map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.session.create_failed",
+            &[("reason", &e.to_string())],
+        )
+    })?;
+    client.send_builtin_steering(&id);
+    Ok(id)
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // Tauri commands take state via parameters; can't be condensed.
 pub async fn send_message_streaming(
@@ -807,7 +844,7 @@ pub async fn cancel_generation(
 
 #[tauri::command]
 pub async fn open_chat_with_message(
-    session_id: String,
+    session_id: Option<String>,
     message: String,
     acp: State<'_, AcpHandles>,
     ui: State<'_, UiState>,
@@ -815,11 +852,6 @@ pub async fn open_chat_with_message(
 ) -> Result<(), AppError> {
     if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating.hide();
-    }
-    // Tag the in-flight prompt so permission notifications route to
-    // the main chat window, not the (now hidden) floating one.
-    if let Ok(mut m) = ui.pending_prompt_originators.lock() {
-        m.insert(session_id.clone(), window_labels::MAIN.to_string());
     }
     if let Some(main) = app.get_webview_window(window_labels::MAIN) {
         // Center on the active monitor
@@ -849,11 +881,27 @@ pub async fn open_chat_with_message(
                         events::MESSAGE_ERROR,
                         &format!("Unable to connect: {}", e),
                     );
-                    if let Ok(mut m) = originators.lock() {
-                        m.remove(&session_id);
-                    }
                     return;
                 }
+            }
+            // Resolve a real session — the main window may not have pinned
+            // one yet (inline-assist's "inform" mode can fire before main
+            // was ever opened). Must happen after connect so create works.
+            let session_id = match resolve_or_create_session(&client, session_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    crate::event_targets::emit_to_self(
+                        &window,
+                        events::MESSAGE_ERROR,
+                        &format!("Failed to send: {}", e),
+                    );
+                    return;
+                }
+            };
+            // Tag the in-flight prompt so permission notifications route to
+            // the main chat window, not the (now hidden) floating one.
+            if let Ok(mut m) = originators.lock() {
+                m.insert(session_id.clone(), window_labels::MAIN.to_string());
             }
             let result =
                 client.send_chat_streaming_with_recovery(session_id.clone(), message, None);
@@ -969,7 +1017,7 @@ pub async fn get_slash_commands(
 
 #[tauri::command]
 pub async fn execute_slash_command(
-    session_id: String,
+    session_id: Option<String>,
     command: String,
     args: Option<serde_json::Value>,
     acp: State<'_, AcpHandles>,
@@ -990,6 +1038,9 @@ pub async fn execute_slash_command(
                 &[],
             ));
         }
+        // Resolve a real session: the calling window may not have pinned
+        // one yet. We're past the connected guard, so create is safe.
+        let session_id = resolve_or_create_session(&client, session_id)?;
         let cmd_name = command.strip_prefix('/').unwrap_or(&command);
 
         let response = client
@@ -1576,7 +1627,7 @@ pub async fn check_extension_tool_permission(
 /// (typically the floating window's session).
 #[tauri::command]
 pub async fn send_inline_assist(
-    session_id: String,
+    session_id: Option<String>,
     message: String,
     acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
@@ -1594,6 +1645,21 @@ pub async fn send_inline_assist(
                 return;
             }
         }
+
+        // Resolve a real session — the floating window may not have
+        // pinned one yet (inline-assist is hotkey-driven and can fire
+        // before the floating UI was ever opened).
+        let session_id = match resolve_or_create_session(&client, session_id) {
+            Ok(id) => id,
+            Err(e) => {
+                crate::event_targets::emit_to_inline_assist(
+                    &app,
+                    events::INLINE_ASSIST_ERROR,
+                    &format!("Failed: {}", e),
+                );
+                return;
+            }
+        };
 
         // send_chat_streaming resets its own session bucket; once it
         // returns, the response is available in that bucket.
@@ -1669,7 +1735,7 @@ pub async fn generate_script(
 /// pinned session).
 #[tauri::command]
 pub async fn execute_macro(
-    session_id: String,
+    session_id: Option<String>,
     steps: Vec<serde_json::Value>,
     initial_input: String,
     acp: State<'_, AcpHandles>,
@@ -1683,6 +1749,12 @@ pub async fn execute_macro(
     let app_for_event = app.clone();
     let result = async_runtime::spawn_blocking(move || -> Result<String, AppError> {
         let mut current_input = initial_input;
+        // Resolve a real session up front — the inline-assist macro path
+        // borrows the floating window's session, which may be unpinned.
+        // Only ai_prompt steps actually need it, but resolving once here
+        // keeps the per-step code simple and the cost is one create at
+        // most (skipped entirely when the caller passed a live id).
+        let session_id = resolve_or_create_session(&client, session_id)?;
 
         for (i, step) in steps.iter().enumerate() {
             let step_type = step.get("step_type").and_then(|v| v.as_str()).unwrap_or("ai_prompt");
