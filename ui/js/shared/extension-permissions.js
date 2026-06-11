@@ -177,6 +177,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     execute_automation_plan: null,
     execute_macro: null,
     execute_shortcut: null,
+    generate_script: null,
     inline_assist_apply: null,
     send_inline_assist: null,
     show_inline_assist: null,
