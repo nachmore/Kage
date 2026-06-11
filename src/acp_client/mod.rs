@@ -20,6 +20,7 @@ pub use types::{
 use anyhow::Result;
 use log::info;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::lock_ext::LockExt;
@@ -44,6 +45,17 @@ pub struct AcpClient {
     pub streaming_accumulators: SessionAccumulators,
     /// True while the server is compacting context — outgoing prompts should wait
     pub compacting: Arc<(Mutex<bool>, std::sync::Condvar)>,
+    /// True while a `session/load` is in flight. When kiro-cli loads an
+    /// existing session it replays the entire conversation history as a
+    /// burst of `session/update` notifications (agent_message_chunk +
+    /// tool_call) on the reader thread *before* the load response returns.
+    /// Those are history, not live output — without gating, they'd dump the
+    /// prior conversation into the floating window and poison the streaming
+    /// accumulators. The notification handler checks this flag and drops
+    /// session/update replay while it's set. Atomic because it's written by
+    /// the loading thread and read by the reader thread with no other shared
+    /// state.
+    pub loading_session: Arc<AtomicBool>,
     /// Vendor extension namespace observed from incoming notifications.
     /// Two ACP vendor namespaces are recognised: `_kage.dev/` and
     /// `_kiro.dev/`. The extension surface (commands/available,
@@ -83,8 +95,15 @@ impl AcpClient {
             initialized: Arc::new(Mutex::new(false)),
             streaming_accumulators: Arc::new(Mutex::new(HashMap::new())),
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
+            loading_session: Arc::new(AtomicBool::new(false)),
             vendor_prefix: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Whether a `session/load` replay is currently in flight. The
+    /// notification handler consults this to drop replayed history updates.
+    pub fn is_loading_session(&self) -> bool {
+        self.loading_session.load(Ordering::Acquire)
     }
 
     /// Record the vendor prefix observed in an inbound method name. Idempotent

@@ -61,6 +61,17 @@ pub fn setup_notification_handler(
         }
 
         if method == "session/update" {
+            // Drop conversation-history replay. A `session/load` makes
+            // kiro-cli re-emit every prior turn as a burst of session/update
+            // notifications before the load response returns; those are
+            // history, not live output. Without this gate they dump the old
+            // conversation into the floating window and poison the streaming
+            // accumulators (auto_steering / sub-agent reads). The flag is set
+            // for the duration of the load request in `load_existing_session`.
+            if client_for_handler.is_loading_session() {
+                return;
+            }
+
             // Every session/update carries the session id it belongs to.
             // We forward chunks and tool_call events to *all* windows
             // tagged with the session id; each window's frontend filters

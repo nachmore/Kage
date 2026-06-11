@@ -3,12 +3,35 @@
 
 use anyhow::{Context, Result};
 use log::{info, warn};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use super::types::format_acp_error;
 use super::AcpClient;
 use crate::lock_ext::LockExt;
+
+/// RAII guard that marks a `session/load` replay window open for its
+/// lifetime and clears it on drop — including the `?` early-return paths in
+/// `load_existing_session`. While set, the notification handler drops the
+/// conversation-history `session/update`s that kiro-cli replays in answer to
+/// `session/load`. See `AcpClient::loading_session`.
+struct LoadReplayGuard {
+    flag: Arc<AtomicBool>,
+}
+
+impl LoadReplayGuard {
+    fn new(flag: &Arc<AtomicBool>) -> Self {
+        flag.store(true, Ordering::Release);
+        Self { flag: flag.clone() }
+    }
+}
+
+impl Drop for LoadReplayGuard {
+    fn drop(&mut self) {
+        self.flag.store(false, Ordering::Release);
+    }
+}
 
 /// Track when we last injected a timestamp into a user message.
 /// Refreshed every 15 minutes to keep the agent's sense of time current.
@@ -129,6 +152,18 @@ impl AcpClient {
                 .and_then(|p| p.to_str().map(|s| s.to_string()))
                 .unwrap_or_else(|| "/".to_string())
         });
+
+        // Gate the conversation-history replay. kiro-cli answers
+        // `session/load` by re-emitting every prior turn as a burst of
+        // `session/update` notifications (on the reader thread) *before*
+        // the load response returns. The notification handler drops
+        // session/update while this flag is set, so the prior conversation
+        // doesn't dump into the floating window or poison the streaming
+        // accumulators. The reader processes lines in order, so by the time
+        // `send_request` returns the response, every replay notification
+        // ahead of it has already been handled — clearing here (via the
+        // guard's Drop) can't race with a still-pending replay chunk.
+        let _replay_guard = LoadReplayGuard::new(&self.loading_session);
 
         let response = self.send_request(
             "session/load",
@@ -449,7 +484,22 @@ impl AcpClient {
 
 #[cfg(test)]
 mod tests {
-    use super::AcpClient;
+    use super::{AcpClient, LoadReplayGuard};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    #[test]
+    fn load_replay_guard_sets_and_clears_flag() {
+        let flag = Arc::new(AtomicBool::new(false));
+        {
+            let _g = LoadReplayGuard::new(&flag);
+            assert!(flag.load(Ordering::Acquire), "flag set for guard lifetime");
+        }
+        assert!(
+            !flag.load(Ordering::Acquire),
+            "flag cleared when guard drops"
+        );
+    }
 
     #[test]
     fn no_session_found_is_recoverable_but_not_corrupted() {
