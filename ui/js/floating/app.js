@@ -99,6 +99,15 @@ export class FloatingApp {
         this.selectedIndex = -1;
         this.searchTimeout = null;
         this._searchGeneration = 0;
+        // Delay timer for the search "loading more…" hint. The hint only
+        // shows if a search is still running after SEARCH_LOADING_DELAY_MS,
+        // so fast searches never flash it in and out. See
+        // _requestSearchLoading. `_searchLoadingShownGen` records the search
+        // generation whose delay gate has already elapsed, so a render-wipe
+        // mid-stream re-shows the hint immediately instead of re-delaying.
+        this._searchLoadingTimer = null;
+        this._searchLoadingShownGen = -1;
+        this._pendingSearchLoadingLabel = null;
         this.currentResponse = '';
         // Floating window's pinned session id. Bootstrapped from
         // window_sessions["floating"] on init; updated on every message
@@ -2361,6 +2370,95 @@ export class FloatingApp {
         }
     }
 
+    /**
+     * Delay before the search "loading more…" hint appears. Searches that
+     * finish faster than this never show the hint at all, so the common
+     * fast case doesn't flash a spinner in and out. ~half a second is long
+     * enough that a human reads the absence as "instant".
+     */
+    static get SEARCH_LOADING_DELAY_MS() {
+        return 500;
+    }
+
+    /**
+     * Request the search loading hint for generation `gen`, showing it only
+     * if the search is still running after SEARCH_LOADING_DELAY_MS. Calling
+     * again with new text just updates the label (or re-arms the timer if
+     * the hint isn't visible yet). The `gen` guard means a hint armed by an
+     * older search can never appear over a newer one.
+     */
+    _requestSearchLoading(gen, label) {
+        if (gen !== this._searchGeneration) return;
+        const existing = this.elements.appSuggestions.querySelector('.suggestions-loading');
+        if (existing) {
+            // Already visible — just keep the label current.
+            existing.classList.remove('suggestions-loading-out');
+            existing.textContent = label;
+            return;
+        }
+        this._pendingSearchLoadingLabel = label;
+        // The delay gate has already elapsed for this generation (the hint
+        // was shown, then a later partial-render wiped the container via
+        // innerHTML=''). Re-append immediately rather than re-delaying —
+        // otherwise an actively-streaming search keeps resetting its own
+        // 500ms gate and never shows progress.
+        if (this._searchLoadingShownGen === gen) {
+            // Re-append after a render-wipe — no entry animation, so an
+            // actively-streaming search doesn't re-flash the fade-in on
+            // every partial batch.
+            this._appendSearchLoadingHint(label, false);
+            this.windowManager.resizeWindow();
+            return;
+        }
+        // First time for this generation: arm the delay timer so a search
+        // that finishes within the gate never shows the hint at all.
+        if (this._searchLoadingTimer) return; // timer already counting down
+        this._searchLoadingTimer = setTimeout(() => {
+            this._searchLoadingTimer = null;
+            if (gen !== this._searchGeneration) return; // search moved on
+            this._searchLoadingShownGen = gen;
+            this._appendSearchLoadingHint(this._pendingSearchLoadingLabel || label, true);
+            this.windowManager.resizeWindow();
+        }, FloatingApp.SEARCH_LOADING_DELAY_MS);
+    }
+
+    /**
+     * Create + append the loading hint element. `animate` plays the
+     * fade-in (true on first show; false when re-appending after a
+     * render-wipe so streaming partials don't re-trigger the animation).
+     */
+    _appendSearchLoadingHint(label, animate) {
+        const hint = document.createElement('div');
+        hint.className = 'suggestions-hint suggestions-loading';
+        if (!animate) hint.classList.add('suggestions-loading-no-in');
+        hint.textContent = label;
+        this.elements.appSuggestions.appendChild(hint);
+    }
+
+    /**
+     * Hide the search loading hint. Cancels a pending (not-yet-shown) hint
+     * outright — the fast-search path, which is why nothing flashes. If the
+     * hint is already on screen, fade it out before removing so it animates
+     * away instead of vanishing.
+     */
+    _hideSearchLoading() {
+        if (this._searchLoadingTimer) {
+            clearTimeout(this._searchLoadingTimer);
+            this._searchLoadingTimer = null;
+        }
+        this._pendingSearchLoadingLabel = null;
+        this._searchLoadingShownGen = -1;
+        const existing = this.elements.appSuggestions.querySelector('.suggestions-loading');
+        if (!existing) return;
+        existing.classList.add('suggestions-loading-out');
+        const el = existing;
+        const done = () => el.remove();
+        el.addEventListener('animationend', done, { once: true });
+        // Fallback in case the animation is interrupted (element detached,
+        // reduced-motion, etc.) so we never leak a stuck hint.
+        setTimeout(done, 250);
+    }
+
     async handleInputChange(_event) {
         const rawQuery = this.elements.input.value;
         const query = rawQuery.trim();
@@ -2395,6 +2493,7 @@ export class FloatingApp {
         }
 
         if (query.length === 0) {
+            this._hideSearchLoading();
             this.elements.appSuggestions.classList.remove('visible');
             this.currentMatches = [];
             this.selectedIndex = -1;
@@ -2446,11 +2545,12 @@ export class FloatingApp {
                             () => this.windowManager.resizeWindow()
                         );
                     }
-                    // Show/hide loading indicator with provider names
-                    const existing =
-                        this.elements.appSuggestions.querySelector('.suggestions-loading');
+                    // Show/hide loading indicator with provider names.
+                    // _requestSearchLoading delay-gates the hint so fast
+                    // searches (which reach done before the gate fires)
+                    // never flash it; _hideSearchLoading fades it out.
                     if (done) {
-                        if (existing) existing.remove();
+                        this._hideSearchLoading();
                     } else {
                         let label = t('floating.suggestions.loading_more');
                         if (pending && pending.length > 0) {
@@ -2458,23 +2558,16 @@ export class FloatingApp {
                             label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
                         }
                         label += '\u2026';
-                        if (existing) {
-                            existing.textContent = label;
-                        } else {
-                            const hint = document.createElement('div');
-                            hint.className = 'suggestions-hint suggestions-loading';
-                            hint.textContent = label;
-                            this.elements.appSuggestions.appendChild(hint);
-                        }
+                        this._requestSearchLoading(gen, label);
                     }
                     this.windowManager.resizeWindow();
                 }
             );
             // Discard stale results — a newer search was started while this one was in-flight
             if (gen !== this._searchGeneration) return;
-            // Remove loading indicator — all providers have resolved
-            const loadingHint = this.elements.appSuggestions.querySelector('.suggestions-loading');
-            if (loadingHint) loadingHint.remove();
+            // All providers resolved — hide the loading hint (cancels it
+            // outright if the delay gate never fired, fades it out if it did).
+            this._hideSearchLoading();
             if (results.length > 0) {
                 this.selectedIndex = await renderUnifiedResults(
                     results,
@@ -2498,6 +2591,7 @@ export class FloatingApp {
             clearTimeout(this.searchTimeout);
             this.searchTimeout = null;
         }
+        this._hideSearchLoading();
         this.elements.appSuggestions.classList.remove('visible');
         this.currentMatches = [];
         this.selectedIndex = -1;

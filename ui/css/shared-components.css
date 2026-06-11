@@ -1314,7 +1314,43 @@ body.dark-theme .hint-key {
 }
 
 .suggestions-loading {
+    /* Fade in when it appears (only ever shown for slow searches, see
+       the 500ms delay gate in floating/app.js), then settle into the
+       steady pulse. The fade-in is a one-shot; the pulse runs forever. */
+    animation:
+        suggestions-loading-in 0.18s ease-out,
+        suggestions-pulse 1.5s ease-in-out 0.18s infinite;
+}
+
+/* Re-appended mid-stream (after a results render wiped the container):
+   skip the fade-in so an actively-streaming search doesn't re-flash it
+   on every partial batch — just resume the steady pulse. */
+.suggestions-loading.suggestions-loading-no-in {
     animation: suggestions-pulse 1.5s ease-in-out infinite;
+}
+
+/* Fade-out state: added just before removal so the hint animates away
+   instead of vanishing. Overrides the pulse animation. */
+.suggestions-loading.suggestions-loading-out {
+    animation: suggestions-loading-out 0.18s ease-in forwards;
+}
+
+@keyframes suggestions-loading-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes suggestions-loading-out {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
 }
 
 @keyframes suggestions-pulse {
