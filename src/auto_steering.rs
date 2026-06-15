@@ -247,9 +247,11 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
         )
     };
 
-    // Reset this session's accumulator so we read just the response below.
-    client.reset_session_accumulator(session_id);
-
+    // `try_send_prompt` resets this session's accumulator under the
+    // prompt lock right before sending, so the read below sees just the
+    // extraction reply (and a skipped attempt can't wipe a real prompt's
+    // in-flight stream).
+    //
     // Send as a regular prompt on the current session
     // We use a special prefix so the UI can potentially hide this exchange
     let steering_prompt = format!(
@@ -257,13 +259,22 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
         prompt_with_existing
     );
 
-    let response = client.send_request(
-        "session/prompt",
+    let response = match client.try_send_prompt(
+        session_id,
         serde_json::json!({
             "sessionId": session_id,
             "prompt": [{ "type": "text", "text": steering_prompt }]
         }),
-    )?;
+    )? {
+        Some(r) => r,
+        // A real prompt is in flight — defer extraction so we don't make
+        // the user wait behind this background pass. Runs again on the
+        // next eligible message_complete.
+        None => {
+            info!("Prompt in progress — deferring auto-steering extraction to next turn");
+            return Ok(()); // Non-fatal
+        }
+    };
 
     if let Some(error) = response.error {
         warn!("Auto-steering extraction failed: {}", error.message);

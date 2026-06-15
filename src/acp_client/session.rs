@@ -202,10 +202,9 @@ impl AcpClient {
             crate::auto_steering::BUILTIN_STEERING
         );
 
-        self.reset_session_accumulator(session_id);
-
-        let result = self.send_request(
-            "session/prompt",
+        // `send_prompt` resets the accumulator under the prompt lock.
+        let result = self.send_prompt(
+            session_id,
             serde_json::json!({
                 "sessionId": session_id,
                 "prompt": [{ "type": "text", "text": steering_msg }]
@@ -246,10 +245,10 @@ impl AcpClient {
             );
         }
 
-        // Reset only this session's bucket — other sessions' in-flight
-        // accumulators (auto-steering, sub-agents) must not be wiped.
-        self.reset_session_accumulator(session_id);
-
+        // `send_prompt` (below) resets only this session's bucket, under
+        // the prompt lock — other sessions' in-flight accumulators
+        // (auto-steering, sub-agents) are untouched, and a caller waiting
+        // on the lock can't wipe the in-flight prompt's partial stream.
         let mut prompt: Vec<serde_json::Value> = Vec::new();
 
         // Periodically inject current timestamp so the agent's sense of time stays fresh
@@ -287,8 +286,8 @@ impl AcpClient {
             prompt.push(serde_json::json!({ "type": "text", "text": "" }));
         }
 
-        let response = self.send_request(
-            "session/prompt",
+        let response = self.send_prompt(
+            session_id,
             serde_json::json!({
                 "sessionId": session_id,
                 "prompt": prompt
@@ -442,9 +441,8 @@ impl AcpClient {
             &query[..query.len().min(100)]
         );
 
-        // Reset this session's bucket so we read just the sub-agent's reply
-        self.reset_session_accumulator(session_id);
-
+        // `send_prompt` resets this session's bucket under the prompt
+        // lock, so the read below sees just the sub-agent's reply.
         let command = serde_json::json!({
             "command": "invoke_subagents",
             "content": {
@@ -454,8 +452,8 @@ impl AcpClient {
             }
         });
 
-        let response = self.send_request(
-            "session/prompt",
+        let response = self.send_prompt(
+            session_id,
             serde_json::json!({
                 "sessionId": session_id,
                 "prompt": [{

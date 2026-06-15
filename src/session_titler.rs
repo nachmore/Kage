@@ -72,20 +72,27 @@ pub fn generate_title(client: &AcpClient, session_id: &str) -> Result<Option<Str
         &session_id[..session_id.len().min(12)]
     );
 
-    // Don't pollute the user's accumulator if a real prompt is in
-    // flight. The flush thread coalesces by session, so resetting here
-    // is safe — the user's prompt completed before we ran (we're in
-    // the message_complete epilogue).
-    client.reset_session_accumulator(session_id);
-
+    // `try_send_prompt` resets this session's accumulator under the
+    // prompt lock, right before sending — so the bucket we read back
+    // below holds exactly the title reply, and a skipped attempt (lock
+    // held by a real prompt) can't wipe that prompt's in-flight stream.
     let prompt = format!("{} {}", TITLE_PROMPT_PREFIX, TITLE_INSTRUCTIONS);
-    let response = client.send_request(
-        "session/prompt",
+    let response = match client.try_send_prompt(
+        session_id,
         serde_json::json!({
             "sessionId": session_id,
             "prompt": [{ "type": "text", "text": prompt }]
         }),
-    )?;
+    )? {
+        Some(r) => r,
+        // A real prompt is in flight on this session — don't make the
+        // user wait behind a cosmetic title request. Skip; the next
+        // message_complete will try again.
+        None => {
+            info!("Prompt in progress — deferring title generation to next turn");
+            return Ok(None);
+        }
+    };
 
     if let Some(error) = response.error {
         warn!("Title generation failed: {}", error.message);

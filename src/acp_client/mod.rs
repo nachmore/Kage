@@ -65,6 +65,15 @@ pub struct AcpClient {
     /// namespace, and the notification handler matches both
     /// interchangeably (see `vendor_method_suffix`).
     pub vendor_prefix: Arc<Mutex<Option<&'static str>>>,
+    /// Per-session mutex serialising outgoing `session/prompt` requests.
+    /// The agent treats `session/prompt` as exclusive per session — a
+    /// second prompt issued while one is in flight is rejected with
+    /// `-32603 "Prompt already in progress"`. Several callers race to
+    /// prompt the same session the instant a turn ends (the background
+    /// session titler, auto-steering, and extension tool-result
+    /// follow-ups all fire from the message-complete epilogue), so we
+    /// gate each on a per-session lock. See `send_prompt`.
+    prompt_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
 }
 
 /// Recognised JSON-RPC vendor extension prefixes. Both projects ship
@@ -97,6 +106,7 @@ impl AcpClient {
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
             loading_session: Arc::new(AtomicBool::new(false)),
             vendor_prefix: Arc::new(Mutex::new(None)),
+            prompt_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -261,6 +271,83 @@ impl AcpClient {
     /// which is what makes cross-request response delivery impossible.
     pub fn send_request(&self, method: &str, params: serde_json::Value) -> Result<AcpResponse> {
         self.transport.send_request(method, params)
+    }
+
+    /// Per-session lock guarding `session/prompt`. Created lazily on first
+    /// use for a session and never removed — the count is bounded by the
+    /// number of sessions touched in a process lifetime, and each entry is
+    /// a zero-sized `Mutex<()>`, so leaking them is cheaper than the
+    /// bookkeeping needed to reap them safely.
+    fn prompt_lock_for(&self, session_id: &str) -> Arc<Mutex<()>> {
+        let mut locks = self.prompt_locks.lock_or_recover();
+        locks
+            .entry(session_id.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+
+    /// Send a `session/prompt` request, serialised per session.
+    ///
+    /// The agent rejects a `session/prompt` issued while another is in
+    /// flight on the same session with `-32603 "Prompt already in
+    /// progress"`. Multiple callers race to prompt a session the moment a
+    /// turn ends — the background titler and auto-steering fire from the
+    /// message-complete epilogue, and an extension tool-result follow-up
+    /// arrives from the webview at almost the same instant. Holding the
+    /// per-session lock across the request makes the losers queue behind
+    /// the winner and run once it returns, rather than erroring out (and,
+    /// in the tool-result case, dropping the result entirely).
+    ///
+    /// The lock is held for the full request/response round-trip because
+    /// the agent's exclusivity spans exactly that window: the slot frees
+    /// only when the prompt's response (`stopReason`) comes back.
+    ///
+    /// The session's streaming accumulator is reset under the lock, right
+    /// before sending, so the bucket holds exactly this prompt's response.
+    /// Doing it here (rather than in each caller, before the lock) is what
+    /// makes overlap safe: a contending caller can't wipe the in-flight
+    /// prompt's partial stream, because it can't reset until it owns the
+    /// slot.
+    pub fn send_prompt(&self, session_id: &str, params: serde_json::Value) -> Result<AcpResponse> {
+        let lock = self.prompt_lock_for(session_id);
+        let _guard = lock.lock_or_recover();
+        self.reset_session_accumulator(session_id);
+        self.transport.send_request("session/prompt", params)
+    }
+
+    /// Like `send_prompt`, but for *background* prompts that must never
+    /// make a user wait: yields instead of queuing when a prompt is
+    /// already in flight on the session.
+    ///
+    /// Returns `Ok(None)` when the per-session lock was already held —
+    /// the caller should treat this as "skip this round and retry later"
+    /// (both background callers, the session titler and auto-steering,
+    /// re-attempt on the next `message_complete`). `Ok(Some(_))` carries
+    /// the response when we acquired the lock and sent.
+    ///
+    /// This is what keeps an interactive follow-up prompt from waiting
+    /// behind a cosmetic title-generation request: the titler steps aside
+    /// for real traffic rather than contending with it.
+    pub fn try_send_prompt(
+        &self,
+        session_id: &str,
+        params: serde_json::Value,
+    ) -> Result<Option<AcpResponse>> {
+        let lock = self.prompt_lock_for(session_id);
+        let _guard = match lock.try_lock() {
+            Ok(g) => g,
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(None),
+            // Poisoned: a prior holder panicked. Recover the guard rather
+            // than propagating — the data is `()`, so there's nothing to
+            // be inconsistent.
+            Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner(),
+        };
+        // Reset under the lock, mirroring `send_prompt` — only now that we
+        // own the slot is it safe to clear the bucket.
+        self.reset_session_accumulator(session_id);
+        self.transport
+            .send_request("session/prompt", params)
+            .map(Some)
     }
 
     /// Send a JSON-RPC notification (no id, fire-and-forget). Used for
@@ -454,5 +541,89 @@ mod tests {
         client.observe_vendor_prefix("session/update");
         // Still default since no vendor prefix was observed.
         assert_eq!(client.vendor_prefix_for_send(), "_kage.dev/");
+    }
+
+    #[test]
+    fn prompt_lock_is_per_session() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        // Same session id → same lock (so contending prompts serialise).
+        let a1 = client.prompt_lock_for("session-a");
+        let a2 = client.prompt_lock_for("session-a");
+        assert!(Arc::ptr_eq(&a1, &a2));
+        // Different session → independent lock (so unrelated sessions
+        // don't block each other).
+        let b = client.prompt_lock_for("session-b");
+        assert!(!Arc::ptr_eq(&a1, &b));
+    }
+
+    #[test]
+    fn try_send_prompt_yields_when_lock_held() {
+        // The background-caller contract: if the per-session prompt slot
+        // is occupied, `try_send_prompt` returns Ok(None) immediately
+        // rather than blocking or erroring. We simulate an in-flight
+        // prompt by holding the session's lock on another thread, then
+        // assert the background attempt yields. (We can't drive a real
+        // send_request without a live transport, so we exercise the
+        // gate via the lock directly — the same Arc<Mutex<()>> the
+        // method consults.)
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let lock = client.prompt_lock_for("session-a");
+        let held = lock.lock_or_recover();
+
+        // try_lock on the same lock would block → method must yield.
+        assert!(
+            lock.try_lock().is_err(),
+            "precondition: lock is held, so try_lock would block"
+        );
+        drop(held);
+        // Once released, the slot is acquirable again.
+        assert!(lock.try_lock().is_ok());
+    }
+
+    #[test]
+    fn prompt_lock_serialises_same_session() {
+        // Two threads taking the same session's prompt lock must never
+        // hold it simultaneously — this is the property that turns
+        // "Prompt already in progress" collisions into queued prompts.
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let client = Arc::new(AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        }));
+        let inside = Arc::new(AtomicUsize::new(0));
+        let max_seen = Arc::new(AtomicUsize::new(0));
+
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let client = client.clone();
+                let inside = inside.clone();
+                let max_seen = max_seen.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..50 {
+                        let lock = client.prompt_lock_for("session-a");
+                        let _guard = lock.lock_or_recover();
+                        let now = inside.fetch_add(1, Ordering::SeqCst) + 1;
+                        max_seen.fetch_max(now, Ordering::SeqCst);
+                        // Touch the counter again so any overlap has a
+                        // window to be observed before we decrement.
+                        std::thread::yield_now();
+                        inside.fetch_sub(1, Ordering::SeqCst);
+                    }
+                })
+            })
+            .collect();
+
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(
+            max_seen.load(Ordering::SeqCst),
+            1,
+            "more than one thread held the per-session prompt lock at once"
+        );
     }
 }
