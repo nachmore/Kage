@@ -1,5 +1,5 @@
 import { SettingsModule } from './base.js';
-import { registerSettingsActions } from './module-registry.js';
+import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 import { t } from '../shared/i18n.js';
 /**
  * Store Settings Module — auto-update, primary store URL, and additional store sources.
@@ -92,36 +92,33 @@ export class StoreSettingsModule extends SettingsModule {
         });
 
         document.getElementById('checkUpdatesBtn')?.addEventListener('click', async () => {
+            // The in-section span carries the transient "Checking…" hint.
+            // The *result* goes through the manager's persistent status
+            // banner instead: updating extensions emits extensions_changed,
+            // which rebuilds the settings sections (settingsModules) —
+            // detaching this span before we could write to it. The banner
+            // lives outside that container, so it survives the rebuild and
+            // is visible regardless of which section we land on.
             const status = document.getElementById('updateCheckStatus');
             if (status) status.textContent = t('settings.store.update_check.checking');
+            const showResult = (msg, kind) => {
+                if (status) status.textContent = '';
+                getSettingsManager()?.showStatus(msg, kind);
+            };
             try {
                 const invoke = window.__TAURI__?.core?.invoke;
                 if (!invoke) return;
                 const result = await invoke('check_extension_updates');
-                if (status) {
-                    if (result.updated > 0) {
-                        status.textContent = t('settings.store.update_check.updated', {
-                            count: result.updated,
-                        });
-                        status.style.color = 'var(--kage-accent)';
-                    } else {
-                        status.textContent = t('settings.store.update_check.up_to_date');
-                        status.style.color = 'var(--kage-accent)';
-                    }
-                    setTimeout(() => {
-                        if (status) status.textContent = '';
-                    }, 5000);
+                if (result.updated > 0) {
+                    showResult(
+                        t('settings.store.update_check.updated', { count: result.updated }),
+                        'success'
+                    );
+                } else {
+                    showResult(t('settings.store.update_check.up_to_date'), 'success');
                 }
             } catch (e) {
-                if (status) {
-                    status.textContent = t('settings.store.update_check.failed', {
-                        reason: String(e),
-                    });
-                    status.style.color = '#e55';
-                    setTimeout(() => {
-                        if (status) status.textContent = '';
-                    }, 5000);
-                }
+                showResult(t('settings.store.update_check.failed', { reason: String(e) }), 'error');
             }
         });
     }

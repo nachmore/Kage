@@ -408,8 +408,20 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (added) {
+                // render() rebuilds every section with index 0
+                // (Appearance) visible and the rest hidden — so a rebuild
+                // triggered while the user is on, say, the Store section
+                // (clicking "Update all" version-bumps extensions and
+                // emits extensions_changed) would yank them to Appearance.
+                // Capture the active section and restore it after the
+                // rebuild so the user stays put.
+                const activeSection =
+                    document.querySelector('.sidebar-item.active')?.dataset.section;
                 settingsManager.render();
                 await settingsManager.load();
+                if (activeSection) {
+                    settingsManager.switchSection(activeSection);
+                }
             }
         } catch (e) {
             console.warn('[Settings] Failed to reload extensions:', e);
