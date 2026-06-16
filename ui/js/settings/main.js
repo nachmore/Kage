@@ -321,9 +321,24 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.warn('[settings] URL-param navigation failed:', e);
     }
 
-    // Listen for extension install/uninstall — hot-load new settings modules
+    // Listen for extension install/uninstall — hot-load new settings modules.
+    //
+    // "Update all" updates each extension in turn, and the backend emits
+    // extensions_changed once PER extension. Running the full reconcile
+    // (which can call settingsManager.render()) on every event made the
+    // window flash repeatedly. Debounce so a burst of updates collapses
+    // into a single reconcile + at most one rebuild.
     const { listen } = window.__TAURI__.event;
-    listen(EVT.EXTENSIONS_CHANGED, async () => {
+    let _reconcileTimer = null;
+    listen(EVT.EXTENSIONS_CHANGED, () => {
+        if (_reconcileTimer) clearTimeout(_reconcileTimer);
+        _reconcileTimer = setTimeout(() => {
+            _reconcileTimer = null;
+            reconcileExtensionModules();
+        }, 250);
+    });
+
+    async function reconcileExtensionModules() {
         console.log('[Settings] extensions_changed — checking for new modules');
         try {
             const userExts = await invoke('list_extensions');
@@ -426,5 +441,5 @@ window.addEventListener('DOMContentLoaded', async () => {
         } catch (e) {
             console.warn('[Settings] Failed to reload extensions:', e);
         }
-    });
+    }
 });

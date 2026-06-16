@@ -232,7 +232,17 @@ body {
     font-size: 13px;
     display: none;
     text-align: center;
-    margin: 0 20px;
+    /* Pinned above the fixed save bar. Without fixed positioning this
+       block sat at the end of the (viewport-filling) .settings-content
+       flow, i.e. below the fold and behind the save bar — so save and
+       update-check feedback fired but was never visible. Mirror the
+       restart-prompt's anchoring. */
+    position: fixed;
+    bottom: 64px;
+    left: 230px;
+    right: 20px;
+    z-index: 110;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 .status-message.success {
     background: #1e8449;
