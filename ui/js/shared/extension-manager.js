@@ -67,6 +67,14 @@ const WIDGET_SLOW_RENDER_RATIO = 0.7;
  *  burning CPU forever". */
 const WIDGET_FAILURE_TRIP_THRESHOLD = 3;
 
+/** Floor for the "painted content is stale" window. On a failed render
+ *  we clear previously-painted content once it's older than
+ *  max(2× refresh interval, this). The floor stops a fast-cadence
+ *  widget from wiping content on the first hiccup (2× a 1s interval is
+ *  only 2s), while still clearing genuinely stale content promptly.
+ *  90s comfortably exceeds the 10s RPC timeout plus a retry or two. */
+const WIDGET_STALE_CONTENT_FLOOR_MS = 90_000;
+
 import { normalizePermissions } from './extension-permissions.js';
 import { ExtensionSandboxPool } from './extension-sandbox-host.js';
 import { sanitizeExtensionHtml, findExtActions } from './extension-html-sanitizer.js';
@@ -1159,6 +1167,14 @@ export class ExtensionManager {
              *  "Widget paused" message with a retry link; until then we
              *  don't auto-recover. Manual retry resets the counter. */
             tripped: false,
+
+            /** performance.now() of the last render that actually painted
+             *  (RPC returned, content written to the host). Drives the
+             *  stale-content clear on failure: a frozen "Now" bar from
+             *  hours ago misinforms worse than an empty slot, so once a
+             *  render fails and the painted content is well past its
+             *  refresh cadence we wipe it. 0 = never painted. */
+            lastSuccessRenderAt: 0,
         };
         this._widgetInstances.set(key, controller);
 
@@ -1269,6 +1285,11 @@ export class ExtensionManager {
                 failureReason = 'slow_relative';
             }
 
+            // The RPC returned and we're about to paint (either content or
+            // the empty/hidden state). Either way the host now reflects a
+            // fresh render, so reset the staleness clock.
+            controller.lastSuccessRenderAt = performance.now();
+
             if (!out || typeof out.html !== 'string') {
                 // Nothing to render → hide the host so it takes up no layout.
                 controller.host.innerHTML = '';
@@ -1323,10 +1344,38 @@ export class ExtensionManager {
                 `widget render for '${controller.extensionId}:${controller.widgetId}' failed:`,
                 e
             );
+            this._clearIfStale(controller);
             this._noteWidgetFailure(controller, 'throw');
         } finally {
             controller.renderInFlight = false;
         }
+    }
+
+    /** Clear painted widget content once it has gone stale after a failed
+     *  render. A single transient blip shouldn't flicker the bar away —
+     *  but a time-sensitive widget (calendar's "Now" bar, todos' due
+     *  reminders) that keeps failing must not keep showing content that
+     *  was true hours ago. We wipe once the painted content is older than
+     *  a grace window: max(2× refresh interval, STALE_CONTENT_FLOOR_MS).
+     *  The breaker's paused-state notice (after the trip threshold)
+     *  supersedes this; this just stops misinformation in the gap before
+     *  the breaker trips, and for widgets whose cadence never reaches it. */
+    _clearIfStale(controller) {
+        // Never painted, or already empty → nothing stale to clear.
+        if (controller.lastSuccessRenderAt === 0) return;
+        if (!controller.host || controller.host.style.display === 'none') return;
+
+        const interval = controller.refreshIntervalMs || 0;
+        const grace = Math.max(interval * 2, WIDGET_STALE_CONTENT_FLOOR_MS);
+        const age = performance.now() - controller.lastSuccessRenderAt;
+        if (age < grace) return;
+
+        controller.host.innerHTML = '';
+        controller.host.style.display = 'none';
+        // Reset the clock so we don't re-evaluate against the same stamp;
+        // the next successful render re-arms it.
+        controller.lastSuccessRenderAt = 0;
+        document.dispatchEvent(new CustomEvent('kage-resize-request'));
     }
 
     /** Increment the failure counter and trip the breaker if we've hit
