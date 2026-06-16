@@ -1105,6 +1105,17 @@ export class FloatingApp {
                     console.warn('mascot.resume failed:', e);
                 }
             }
+            // Catch up widget renders that were skipped while hidden.
+            // _renderWidget no-ops when _kageFloatingHidden is true, so a
+            // widget mounted while the window was hidden (e.g. after an
+            // extension hot-update) — or whose periodic ticks were all
+            // skipped — would show nothing until its next interval fires.
+            // Force a render now so the first visible paint is current.
+            try {
+                this.extensionManager?.renderAllWidgets();
+            } catch (e) {
+                console.warn('renderAllWidgets on show failed:', e);
+            }
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
 

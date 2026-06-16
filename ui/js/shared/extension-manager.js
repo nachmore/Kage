@@ -1490,6 +1490,21 @@ export class ExtensionManager {
         }
     }
 
+    /** Re-render every mounted widget now. Called when the floating
+     *  window becomes visible: `_renderWidget` skips ticks while the
+     *  window is hidden (window._kageFloatingHidden), so a widget mounted
+     *  while hidden — or whose periodic ticks were all skipped — would
+     *  otherwise show nothing until its next interval fires after the
+     *  window is already open. This catches them up on show so the first
+     *  visible paint has current content. Tripped/destroyed widgets are
+     *  skipped by _renderWidget itself. Fire-and-forget per widget. */
+    renderAllWidgets() {
+        if (!this._widgetInstances) return;
+        for (const ctrl of this._widgetInstances.values()) {
+            this._renderWidget(ctrl);
+        }
+    }
+
     _unmountWidgetsFor(extensionId) {
         if (!this._widgetInstances) return;
         for (const [key, ctrl] of this._widgetInstances) {

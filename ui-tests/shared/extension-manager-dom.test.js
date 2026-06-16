@@ -238,3 +238,78 @@ describe('ExtensionManager formatMessage', () => {
         expect(container.innerHTML).not.toContain('should not appear');
     });
 });
+
+describe('ExtensionManager widget render', () => {
+    // Build a manager with one mounted widget controller wired to a stub
+    // sandbox, returning the host element and the renderWidget call count.
+    function makeMountedWidget(renderImpl) {
+        const calls = { renderWidget: 0 };
+        const sandbox = stubSandbox({
+            renderWidget: (params) => {
+                calls.renderWidget++;
+                return renderImpl(params);
+            },
+        });
+        sandbox.widgetIds = ['w'];
+        const mgr = makeManagerWithExtension({
+            extensionId: 'ext',
+            manifest: { id: 'ext', name: 'Ext', permissions: [] },
+            sandbox,
+        });
+        const host = document.createElement('div');
+        if (!mgr._widgetInstances) mgr._widgetInstances = new Map();
+        mgr._widgetInstances.set('ext:w', {
+            extensionId: 'ext',
+            widgetId: 'w',
+            slot: 'floating-bottom',
+            host,
+            renderInFlight: false,
+            consecutiveFailures: 0,
+            tripped: false,
+            destroyed: false,
+            refreshIntervalMs: 60_000,
+            lastSuccessRenderAt: 0,
+        });
+        return { mgr, host, calls };
+    }
+
+    beforeEach(() => {
+        // Default to "visible" so individual tests opt into the hidden state.
+        window._kageFloatingHidden = false;
+    });
+
+    it('renderAllWidgets paints mounted widgets', async () => {
+        const { mgr, host } = makeMountedWidget(() => ({ html: '<span>hi</span>' }));
+        mgr.renderAllWidgets();
+        // renderAllWidgets is fire-and-forget; flush microtasks.
+        await new Promise((r) => setTimeout(r, 0));
+        expect(host.innerHTML).toContain('hi');
+        expect(host.style.display).not.toBe('none');
+    });
+
+    it('skips rendering while the floating window is hidden', async () => {
+        const { mgr, host, calls } = makeMountedWidget(() => ({ html: '<span>hi</span>' }));
+        window._kageFloatingHidden = true;
+        mgr.renderAllWidgets();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(calls.renderWidget).toBe(0);
+        expect(host.innerHTML).toBe('');
+    });
+
+    it('catches up the render once the window becomes visible', async () => {
+        const { mgr, host, calls } = makeMountedWidget(() => ({ html: '<span>late</span>' }));
+        // Hidden: a render is requested but skipped (e.g. mounted via a
+        // hot-update while the launcher was closed).
+        window._kageFloatingHidden = true;
+        mgr.renderAllWidgets();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(calls.renderWidget).toBe(0);
+
+        // Shown: the catch-up render now paints.
+        window._kageFloatingHidden = false;
+        mgr.renderAllWidgets();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(calls.renderWidget).toBe(1);
+        expect(host.innerHTML).toContain('late');
+    });
+});
