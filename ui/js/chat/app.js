@@ -1238,7 +1238,7 @@ export class ChatApp {
     }
 
     renderSessionList() {
-        // Don't overwrite the list if we're viewing Kage Desktop sessions
+        // Don't overwrite the list if we're viewing Kiro Desktop sessions
         if (window._kageSessionSource === 'desktop') return;
 
         const list = this.elements.sessionList;

@@ -225,9 +225,9 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     agent_list_sessions: null,
     agent_load_session: null,
     agent_check_session_updated: null,
-    kage_desktop_delete_session: null,
-    kage_desktop_open_folder: null,
-    kage_desktop_workspaces: null,
+    kiro_desktop_delete_session: null,
+    kiro_desktop_open_folder: null,
+    kiro_desktop_workspaces: null,
 
     // --- Kage window chrome — opening/closing Kage's own windows ------------
     open_chat_window: null,

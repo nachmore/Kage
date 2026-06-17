@@ -22,7 +22,7 @@
 //!     → skipped (the visible text is empty in Claude Code; only an
 //!     encrypted signature is present).
 //!
-//! Caching matches `KageDesktopProvider`: per-file `(mtime, size)`
+//! Caching matches `KiroDesktopProvider`: per-file `(mtime, size)`
 //! fingerprint, evicted on next-scan retain.
 
 use super::{

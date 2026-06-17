@@ -1,8 +1,8 @@
-//! Kage Desktop (IDE) session provider — reads:
+//! Kiro Desktop (IDE) session provider — reads:
 //!   1. `<base>/workspace-sessions/<encoded-workspace>/<sessionId>.json`
 //!   2. `<base>/<32-char-hex-hash>/*.chat`
 //!
-//! both under the Kage Desktop globalStorage directory. The two formats
+//! both under the Kiro Desktop globalStorage directory. The two formats
 //! coexist on disk for historical reasons; the provider merges them into
 //! one combined session list, deduping `.chat` files by workflow id.
 //!
@@ -32,8 +32,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
-const PROVIDER_ID: &str = "kage-desktop";
-const PROVIDER_LABEL: &str = "Kage IDE & CLI";
+const PROVIDER_ID: &str = "kiro-desktop";
+const PROVIDER_LABEL: &str = "Kiro IDE & CLI";
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 struct FileFingerprint {
@@ -56,12 +56,12 @@ struct CachedSession {
 }
 
 #[derive(Default)]
-pub struct KageDesktopProvider {
+pub struct KiroDesktopProvider {
     workspace_sessions: Mutex<HashMap<PathBuf, CachedSession>>,
     chat_files: Mutex<HashMap<PathBuf, CachedSession>>,
 }
 
-impl KageDesktopProvider {
+impl KiroDesktopProvider {
     pub fn new() -> Self {
         Self::default()
     }
@@ -70,10 +70,10 @@ impl KageDesktopProvider {
         #[cfg(target_os = "windows")]
         {
             dirs::config_dir().map(|d| {
-                d.join("Kage")
+                d.join("Kiro")
                     .join("User")
                     .join("globalStorage")
-                    .join("kage.kageagent")
+                    .join("kiro.kiroagent")
             })
         }
         #[cfg(target_os = "macos")]
@@ -81,10 +81,10 @@ impl KageDesktopProvider {
             dirs::home_dir().map(|d| {
                 d.join("Library")
                     .join("Application Support")
-                    .join("Kage")
+                    .join("Kiro")
                     .join("User")
                     .join("globalStorage")
-                    .join("kage.kageagent")
+                    .join("kiro.kiroagent")
             })
         }
         #[cfg(target_os = "linux")]
@@ -94,10 +94,10 @@ impl KageDesktopProvider {
                 .map(PathBuf::from)
                 .or_else(|| dirs::home_dir().map(|d| d.join(".config")))
                 .map(|d| {
-                    d.join("Kage")
+                    d.join("Kiro")
                         .join("User")
                         .join("globalStorage")
-                        .join("kage.kageagent")
+                        .join("kiro.kiroagent")
                 })
         }
     }
@@ -107,7 +107,7 @@ impl KageDesktopProvider {
 /// `kind` discriminator the frontend sets when it builds the locator.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind")]
-enum KageDesktopLocator {
+enum KiroDesktopLocator {
     /// `workspace-sessions/<encoded>/<sessionId>.json`
     #[serde(rename = "workspace_session")]
     WorkspaceSession {
@@ -119,7 +119,7 @@ enum KageDesktopLocator {
     ChatFile { file_path: String },
 }
 
-impl AgentSessionProvider for KageDesktopProvider {
+impl AgentSessionProvider for KiroDesktopProvider {
     fn id(&self) -> &'static str {
         PROVIDER_ID
     }
@@ -137,7 +137,7 @@ impl AgentSessionProvider for KageDesktopProvider {
             AppError::keyed(
                 ErrorKind::Internal,
                 "errors.session.dir_unavailable",
-                &[("reason", "Kage Desktop data directory could not be located")],
+                &[("reason", "Kiro Desktop data directory could not be located")],
             )
         })?;
         if !base.exists() {
@@ -155,7 +155,7 @@ impl AgentSessionProvider for KageDesktopProvider {
     }
 
     fn load_session(&self, locator: &SessionLocator) -> Result<Vec<AgentMessage>, AppError> {
-        let loc: KageDesktopLocator = serde_json::from_value(locator.clone()).map_err(|e| {
+        let loc: KiroDesktopLocator = serde_json::from_value(locator.clone()).map_err(|e| {
             AppError::keyed(
                 ErrorKind::Internal,
                 "errors.session.parse_failed",
@@ -164,11 +164,11 @@ impl AgentSessionProvider for KageDesktopProvider {
         })?;
 
         match loc {
-            KageDesktopLocator::WorkspaceSession {
+            KiroDesktopLocator::WorkspaceSession {
                 workspace_encoded,
                 session_id,
             } => self.load_workspace_session(&workspace_encoded, &session_id),
-            KageDesktopLocator::ChatFile { file_path } => self.load_chat_file(&file_path),
+            KiroDesktopLocator::ChatFile { file_path } => self.load_chat_file(&file_path),
         }
     }
 
@@ -177,7 +177,7 @@ impl AgentSessionProvider for KageDesktopProvider {
         locator: &SessionLocator,
         since_ms: i64,
     ) -> Result<Option<i64>, AppError> {
-        let loc: KageDesktopLocator = serde_json::from_value(locator.clone()).map_err(|e| {
+        let loc: KiroDesktopLocator = serde_json::from_value(locator.clone()).map_err(|e| {
             AppError::keyed(
                 ErrorKind::Internal,
                 "errors.session.parse_failed",
@@ -186,7 +186,7 @@ impl AgentSessionProvider for KageDesktopProvider {
         })?;
 
         let path = match loc {
-            KageDesktopLocator::WorkspaceSession {
+            KiroDesktopLocator::WorkspaceSession {
                 workspace_encoded,
                 session_id,
             } => {
@@ -194,14 +194,14 @@ impl AgentSessionProvider for KageDesktopProvider {
                     AppError::keyed(
                         ErrorKind::Internal,
                         "errors.session.dir_unavailable",
-                        &[("reason", "Kage Desktop data directory could not be located")],
+                        &[("reason", "Kiro Desktop data directory could not be located")],
                     )
                 })?;
                 base.join("workspace-sessions")
                     .join(workspace_encoded)
                     .join(format!("{}.json", session_id))
             }
-            KageDesktopLocator::ChatFile { file_path } => PathBuf::from(file_path),
+            KiroDesktopLocator::ChatFile { file_path } => PathBuf::from(file_path),
         };
 
         let Some(current) = file_mtime_ms(&path) else {
@@ -219,7 +219,7 @@ impl AgentSessionProvider for KageDesktopProvider {
 // Listing — workspace-sessions
 // ---------------------------------------------------------------------------
 
-impl KageDesktopProvider {
+impl KiroDesktopProvider {
     fn scan_workspace_sessions(
         &self,
         ws_dir: &Path,
@@ -376,7 +376,7 @@ fn parse_workspace_session(path: &Path, ws_name: &str, encoded: &str) -> Option<
 // Listing — .chat files
 // ---------------------------------------------------------------------------
 
-impl KageDesktopProvider {
+impl KiroDesktopProvider {
     fn scan_chat_sessions(&self, base: &Path, limit: usize) -> Result<Vec<AgentSession>, AppError> {
         let mut seen_files: Vec<(PathBuf, FileFingerprint, String)> = Vec::new();
         let entries = std::fs::read_dir(base).map_err(|e| {
@@ -603,7 +603,7 @@ fn parse_chat_session(path: &Path, hash_dir: &str) -> Option<AgentSession> {
 // Loading
 // ---------------------------------------------------------------------------
 
-impl KageDesktopProvider {
+impl KiroDesktopProvider {
     fn load_workspace_session(
         &self,
         workspace_encoded: &str,
@@ -613,7 +613,7 @@ impl KageDesktopProvider {
             AppError::keyed(
                 ErrorKind::Internal,
                 "errors.session.dir_unavailable",
-                &[("reason", "Kage Desktop data directory could not be located")],
+                &[("reason", "Kiro Desktop data directory could not be located")],
             )
         })?;
         let path = base
@@ -719,7 +719,7 @@ impl KageDesktopProvider {
         }
 
         info!(
-            "Loaded Kage Desktop session {}: {} messages",
+            "Loaded Kiro Desktop session {}: {} messages",
             session_id,
             messages.len()
         );
@@ -799,7 +799,7 @@ impl KageDesktopProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers (lifted verbatim from old commands::kage_desktop)
+// Helpers (lifted verbatim from old commands::kiro_desktop)
 // ---------------------------------------------------------------------------
 
 fn base64_decode_path(encoded: &str) -> Option<String> {
@@ -905,23 +905,23 @@ fn read_file_head(path: &Path, max_bytes: usize) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace listing — used by the typed `kage_desktop_workspaces` command
+// Workspace listing — used by the typed `kiro_desktop_workspaces` command
 // (chrome, not part of the trait).
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, serde::Serialize)]
-pub struct KageDesktopWorkspace {
+pub struct KiroDesktopWorkspace {
     pub name: String,
     pub encoded: String,
     pub session_count: usize,
 }
 
-pub fn list_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppError> {
-    let base = KageDesktopProvider::data_dir().ok_or_else(|| {
+pub fn list_workspaces() -> Result<Vec<KiroDesktopWorkspace>, AppError> {
+    let base = KiroDesktopProvider::data_dir().ok_or_else(|| {
         AppError::keyed(
             ErrorKind::Internal,
             "errors.session.dir_unavailable",
-            &[("reason", "Kage Desktop installation not detected")],
+            &[("reason", "Kiro Desktop installation not detected")],
         )
     })?;
     let ws_dir = base.join("workspace-sessions");
@@ -953,7 +953,7 @@ pub fn list_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppError> {
             })
             .unwrap_or(0);
         if session_count > 0 {
-            workspaces.push(KageDesktopWorkspace {
+            workspaces.push(KiroDesktopWorkspace {
                 name,
                 encoded,
                 session_count,

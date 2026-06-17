@@ -5,7 +5,7 @@ import { mascotHTML } from '../shared/mascot.js';
 
 /**
  * Agent session viewer — read-only display of sessions from registered
- * `AgentSessionProvider`s on the Rust side (kiro-cli, kage-desktop,
+ * `AgentSessionProvider`s on the Rust side (kiro-cli, kiro-desktop,
  * future Claude Code / Codex / Ollama).
  *
  * The frontend is provider-agnostic: it bootstraps the list of
@@ -197,7 +197,7 @@ export class AgentSessionViewer {
                             : ''
                     }
                     ${
-                        s.provider_id === 'kage-desktop' && filePath.endsWith('.json')
+                        s.provider_id === 'kiro-desktop' && filePath.endsWith('.json')
                             ? `<button class="kd-action-btn kd-delete-btn" title="${t('chat.session.kd_action.delete_title')}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>`
@@ -234,7 +234,7 @@ export class AgentSessionViewer {
                     e.stopPropagation();
                     const fp = item.dataset.filepath;
                     if (fp)
-                        this.invoke('kage_desktop_open_folder', { filePath: fp }).catch(
+                        this.invoke('kiro_desktop_open_folder', { filePath: fp }).catch(
                             console.warn
                         );
                 });
@@ -247,7 +247,7 @@ export class AgentSessionViewer {
                     const fp = item.dataset.filepath;
                     if (!fp || !confirm(t('chat.session.kd_action.delete_confirm'))) return;
                     try {
-                        await this.invoke('kage_desktop_delete_session', { filePath: fp });
+                        await this.invoke('kiro_desktop_delete_session', { filePath: fp });
                         item.remove();
                         const sid = item.dataset.sessionId;
                         this.sessions = this.sessions.filter((s) => s.session_id !== sid);

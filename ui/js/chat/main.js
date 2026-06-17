@@ -168,7 +168,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             }).catch(() => {});
         });
 
-    // Initialize Kage Desktop viewer
+    // Initialize Kiro Desktop viewer
     let desktopViewer = null;
     let currentSource = 'kage';
     window._kageSessionSource = 'kage';

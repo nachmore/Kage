@@ -1,22 +1,22 @@
-//! Provider-specific *chrome* Tauri commands for the Kage Desktop
+//! Provider-specific *chrome* Tauri commands for the Kiro Desktop
 //! session viewer — list workspaces, open the containing folder, delete
 //! a session file. The hot path (list / load / check_updated) lives
 //! behind the generic `agent_sessions` surface and dispatches through
 //! `AgentSessionProvider`. These typed commands are kept because
 //! they're well-defined per provider and only make sense for the
-//! kage-desktop on-disk layout.
+//! kiro-desktop on-disk layout.
 
-use crate::agent_sessions::kage_desktop::{list_workspaces, KageDesktopWorkspace};
+use crate::agent_sessions::kiro_desktop::{list_workspaces, KiroDesktopWorkspace};
 use crate::error::{AppError, ErrorKind};
 use log::info;
 
 #[tauri::command]
-pub async fn kage_desktop_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppError> {
+pub async fn kiro_desktop_workspaces() -> Result<Vec<KiroDesktopWorkspace>, AppError> {
     list_workspaces()
 }
 
 #[tauri::command]
-pub async fn kage_desktop_open_folder(file_path: String) -> Result<(), AppError> {
+pub async fn kiro_desktop_open_folder(file_path: String) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
     let dir = path.parent().ok_or_else(|| {
         AppError::keyed(
@@ -34,12 +34,12 @@ pub async fn kage_desktop_open_folder(file_path: String) -> Result<(), AppError>
     })
 }
 
-/// Delete a `kage.kageagent`-managed session JSON file. The provider's
+/// Delete a `kiro.kiroagent`-managed session JSON file. The provider's
 /// per-file caches don't need explicit eviction — their next-scan
 /// `retain(|k| seen_keys.contains(k))` already drops entries for files
 /// no longer on disk.
 #[tauri::command]
-pub async fn kage_desktop_delete_session(file_path: String) -> Result<(), AppError> {
+pub async fn kiro_desktop_delete_session(file_path: String) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
     if !path.exists() {
         return Err(AppError::keyed(
@@ -48,15 +48,15 @@ pub async fn kage_desktop_delete_session(file_path: String) -> Result<(), AppErr
             &[],
         ));
     }
-    // Safety: only delete .json files in the kage.kageagent directory
+    // Safety: only delete .json files in the kiro.kiroagent directory
     let path_str = path.to_string_lossy();
-    if !path_str.contains("kage.kageagent") || !path_str.ends_with(".json") {
+    if !path_str.contains("kiro.kiroagent") || !path_str.ends_with(".json") {
         return Err(AppError::keyed(
             ErrorKind::Internal,
             "errors.fs.path_invalid",
             &[(
                 "reason",
-                "session deletion is restricted to .json files inside kage.kageagent",
+                "session deletion is restricted to .json files inside kiro.kiroagent",
             )],
         ));
     }
@@ -67,6 +67,6 @@ pub async fn kage_desktop_delete_session(file_path: String) -> Result<(), AppErr
             &[("reason", &e.to_string())],
         )
     })?;
-    info!("Deleted Kage Desktop session: {}", file_path);
+    info!("Deleted Kiro Desktop session: {}", file_path);
     Ok(())
 }

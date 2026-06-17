@@ -32,7 +32,7 @@ kage/
 │   │   ├── extensions.rs  # Extension management commands
 │   │   ├── folder_tools.rs # Folder/file operations (scan, plan, execute — also used by kage-computer-control-mcp)
 │   │   ├── pocket_tts.rs  # Pocket TTS server management
-│   │   └── kage_desktop.rs # Kage Desktop integration commands
+│   │   └── kiro_desktop.rs # Kiro IDE session viewer commands
 │   └── os/                # OS abstraction layer
 │       ├── mod.rs         # Platform selection and re-exports
 │       ├── cursor.rs      # Cross-platform cursor API
@@ -72,7 +72,7 @@ kage/
 │   │   │   ├── app.js, main.js, window.js, suggestions.js, search-unified.js
 │   │   │   ├── permissions.js, clipboard-history.js, color.js
 │   │   │   └── context-menu.js, devtools.js, timer.js
-│   │   ├── chat/         # Chat window modules (app, main, permissions, kage-desktop)
+│   │   ├── chat/         # Chat window modules (app, main, permissions, agent-sessions)
 │   │   └── settings/     # Settings modules (base, manager, + one per section)
 │   ├── vendor/           # NPM-managed JS dependencies (marked, mermaid, prismjs, mathjs, graphviz)
 │   │                     # Run `npm install` to populate lib/ (not checked into git)

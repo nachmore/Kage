@@ -1,7 +1,7 @@
 //! Agent session providers.
 //!
 //! Read-only views over the on-disk session state of various AI agent
-//! backends (Kiro CLI's sqlite, Kage IDE's JSON files, eventually Claude
+//! backends (Kiro CLI's sqlite, Kiro IDE's JSON files, eventually Claude
 //! Code's jsonl, Codex, Ollama, ...). Each provider implements
 //! `AgentSessionProvider` and registers in `AgentSessionRegistry`.
 //!
@@ -17,8 +17,8 @@
 //! genericizing.
 
 pub mod claude_code;
-pub mod kage_desktop;
 pub mod kiro_cli;
+pub mod kiro_desktop;
 
 use crate::error::AppError;
 use serde::Serialize;
@@ -117,7 +117,7 @@ impl AgentSessionRegistry {
         Self {
             providers: vec![
                 Arc::new(kiro_cli::KiroCliProvider::new()),
-                Arc::new(kage_desktop::KageDesktopProvider::new()),
+                Arc::new(kiro_desktop::KiroDesktopProvider::new()),
                 Arc::new(claude_code::ClaudeCodeProvider::new()),
             ],
         }
@@ -194,7 +194,7 @@ mod tests {
         let reg = AgentSessionRegistry::new();
         let ids: Vec<String> = reg.list_providers().into_iter().map(|p| p.id).collect();
         assert!(ids.contains(&"kiro-cli".to_string()));
-        assert!(ids.contains(&"kage-desktop".to_string()));
+        assert!(ids.contains(&"kiro-desktop".to_string()));
         assert!(ids.contains(&"claude-code".to_string()));
     }
 
