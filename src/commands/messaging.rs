@@ -183,12 +183,27 @@ pub fn setup_notification_handler(
                             .and_then(|c| c.as_array())
                         {
                             let parsed = parse_standard_acp_commands(cmds);
+                            // Augment with the active agent's curated built-in
+                            // catalog — some adapters (Claude) advertise far
+                            // fewer commands than the CLI supports. Advertised
+                            // entries win on name collision; built-ins fill
+                            // gaps. See crate::agent_commands.
+                            let agent_kind = config
+                                .lock()
+                                .ok()
+                                .map(|c| crate::agent_presets::detect(&c))
+                                .unwrap_or(crate::agent_presets::AgentKind::Kiro);
+                            let builtin =
+                                crate::agent_commands::builtin_commands(agent_kind);
+                            let merged =
+                                crate::agent_commands::merge_commands(parsed, builtin);
                             info!(
-                                "Received {} standard-ACP slash commands",
-                                parsed.len()
+                                "Received {} standard-ACP slash commands ({} after built-in merge)",
+                                cmds.len(),
+                                merged.len()
                             );
                             if let Ok(mut slot) = slash_cmds.lock() {
-                                *slot = parsed;
+                                *slot = merged;
                             }
                             crate::event_targets::emit_to_floating(
                                 &app_handle,
