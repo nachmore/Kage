@@ -5,8 +5,11 @@ The main window shows raw JSON-RPC trace. A second console window opens
 for the chat interface. They communicate over a local TCP socket.
 
 Usage:
-    python acp-client.py                          # uses default command
-    python acp-client.py -- <command> [args...]    # custom agent command
+    python acp_client.py                          # default agent (kiro-cli acp)
+    python acp_client.py --agent kiro             # Kiro CLI
+    python acp_client.py --agent claude           # Claude Code ACP
+    python acp_client.py --agent codex            # OpenAI Codex ACP
+    python acp_client.py -- <command> [args...]   # custom agent command
 """
 
 import asyncio
@@ -21,15 +24,39 @@ from acp import spawn_agent_process, text_block, PROTOCOL_VERSION
 from acp.connection import StreamDirection, StreamEvent
 from acp.interfaces import Client
 
+# Force UTF-8 on stdout/stderr. The trace dumps JSON-RPC frames containing
+# agent output with box-drawing glyphs, arrows (→), etc.; a default Windows
+# console is cp1252 and raises UnicodeEncodeError on those, which would crash
+# the trace loop. Python 3.7+ exposes reconfigure().
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 def _default_cli_command() -> str:
-    """Resolve the default agent CLI command: env override → PATH lookup → bare name."""
+    """Resolve the default agent CLI command: env override → bare name.
+
+    Deliberately NOT `shutil.which()`: that resolves to an explicit
+    `kiro-cli.EXE` path, which the Toolbox shim rejects ("doesn't appear to be
+    associated with any tool"), so the agent dies before answering `initialize`
+    and the chat hangs on "thinking…". The bare name lets the shim do its own
+    lookup. Same quirk handled in scripts/probe_slash.py.
+    """
     env = os.environ.get("KAGE_CLI_PATH") or os.environ.get("KIRO_CLI_PATH")
     if env:
         return env
-    import shutil
-    found = shutil.which("kiro-cli") or shutil.which("kiro-cli.exe")
-    return found or "kiro-cli"
+    return "kiro-cli"
 
+
+# Known agent presets, selectable via `--agent <name>`. Mirrors the Rust
+# AgentKind presets (src/agent_presets.rs). Each entry is (command, args).
+# On Windows the npm-installed wrappers are .cmd shims, so we try those first.
+AGENT_PRESETS = {
+    "kiro": ("kiro-cli", ["acp"]),
+    "claude": ("claude-code-acp.cmd" if sys.platform == "win32" else "claude-code-acp", []),
+    "codex": ("codex-acp.cmd" if sys.platform == "win32" else "codex-acp", []),
+}
 
 DEFAULT_COMMAND = _default_cli_command()
 DEFAULT_ARGS = ["acp"]
@@ -146,6 +173,7 @@ class InteractiveClient(Client):
 
 
 def parse_command(argv: list[str]) -> tuple[str, list[str]]:
+    # Explicit command after `--` wins over everything.
     if "--" in argv:
         idx = argv.index("--")
         parts = argv[idx + 1:]
@@ -153,6 +181,19 @@ def parse_command(argv: list[str]) -> tuple[str, list[str]]:
             print("Error: no command after '--'", file=sys.stderr)
             sys.exit(1)
         return parts[0], parts[1:]
+    # `--agent <name>` selects a known preset (kiro | claude | codex).
+    if "--agent" in argv:
+        idx = argv.index("--agent")
+        name = argv[idx + 1] if idx + 1 < len(argv) else ""
+        preset = AGENT_PRESETS.get(name.lower())
+        if not preset:
+            print(
+                f"Error: unknown agent '{name}'. Choose one of: "
+                f"{', '.join(AGENT_PRESETS)}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        return preset[0], list(preset[1])
     return DEFAULT_COMMAND, list(DEFAULT_ARGS)
 
 

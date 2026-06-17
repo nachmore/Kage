@@ -12,6 +12,15 @@ import itertools
 import json
 import sys
 
+# Force UTF-8 on stdout/stderr — agent responses contain Unicode (arrows,
+# box-drawing, emoji) that a default cp1252 Windows console can't encode,
+# which would crash the print loop. Python 3.7+ exposes reconfigure().
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 
 # ANSI colours
