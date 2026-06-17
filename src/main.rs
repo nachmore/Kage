@@ -727,7 +727,7 @@ async fn run() {
             // feedback that their click completed. Idle installs leave
             // the window hidden — banner shows next time the user
             // summons it manually.
-            setup::maybe_show_floating_after_interactive_install(app.handle());
+            setup::maybe_show_floating_after_interactive_install(app);
 
             Ok(())
         })

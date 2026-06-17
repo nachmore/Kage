@@ -606,7 +606,7 @@ pub fn maybe_show_welcome_window(app_handle: &AppHandle, first_run_completed: bo
 /// generous: chat-window first-paint is ~500ms cold, but we'd
 /// rather over-suppress than have the banner vanish on a slower
 /// machine.
-pub fn maybe_show_floating_after_interactive_install(app_handle: &AppHandle) {
+pub fn maybe_show_floating_after_interactive_install(app: &App) {
     use crate::updater::{consume_install_source, InstallSource};
     let Some(source) = consume_install_source() else {
         return;
@@ -615,23 +615,82 @@ pub fn maybe_show_floating_after_interactive_install(app_handle: &AppHandle) {
     if source != InstallSource::Interactive {
         return;
     }
-    if let Some(floating) = app_handle.get_webview_window(window_labels::FLOATING) {
-        // Pre-arm a window-scoped suppression flag the JS blur
-        // handler honours. Eval is queued onto the webview's main
-        // thread; the property assignment runs before the next paint
-        // and before the JS bootstrap has a chance to observe the
-        // first focus event. The matching read in floating/app.js is
-        // a guard at the top of the `tauri://blur` handler. 5s is
-        // generous: chat-window first-paint is ~500ms cold, but
-        // over-suppressing is much less bad than losing the banner.
-        let _ = floating.eval(
-            "window._kagePostUpdateSuppressUntil = Date.now() + 5000; \
-             console.log('[floating] post-update blur-hide suppression armed by Rust');",
+
+    // Warm the session before showing. Post-update, the resume path runs a
+    // `session/load` (full conversation-history replay) that's much slower
+    // than the `session/new` a normal launch does — so if we show the
+    // floating window the instant the app starts, the user catches the
+    // "Spinning up agent…" placeholder while that load is still in flight.
+    // Wait (bounded) for `maybe_spawn_default_session` to pin the floating
+    // session before showing, so the window appears already warm. The wait
+    // is capped so a slow or dead agent still gets the window + celebration
+    // banner — we never trade the banner for a hang.
+    let app_handle = app.handle().clone();
+    let ui: tauri::State<'_, UiState> = app.state();
+    let features: tauri::State<'_, FeatureServices> = app.state();
+    let window_sessions = ui.window_sessions.clone();
+    // Only warm-wait when a session is actually being pre-spun. With
+    // `start_session_on_launch = false`, `maybe_spawn_default_session`
+    // returns early and never pins — waiting would just burn the full
+    // timeout before showing. In that case show immediately.
+    let preload = features
+        .config
+        .lock_or_recover()
+        .acp
+        .agent
+        .start_session_on_launch;
+
+    tauri::async_runtime::spawn(async move {
+        // Cap at ~8s. session/new is sub-second; a long-history session/load
+        // can take several seconds. Past this we show regardless rather than
+        // leave the user staring at nothing after their install click.
+        const MAX_WAIT_MS: u64 = 8000;
+        const POLL_MS: u64 = 100;
+        // Skip the warm-wait entirely when nothing will pin the session
+        // (start_session_on_launch=false) — start already at the cap.
+        let mut waited = if preload { 0u64 } else { MAX_WAIT_MS };
+        let mut warmed = false;
+        while waited < MAX_WAIT_MS {
+            let pinned = window_sessions
+                .lock()
+                .ok()
+                .map(|ws| ws.contains_key(window_labels::FLOATING))
+                .unwrap_or(false);
+            if pinned {
+                warmed = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(POLL_MS)).await;
+            waited += POLL_MS;
+        }
+        info!(
+            "Post-update floating show: session {} after {}ms",
+            if warmed {
+                "warmed"
+            } else {
+                "NOT warmed (timeout)"
+            },
+            waited
         );
-        crate::commands::window::center_floating_on_active_monitor(&floating);
-        let _ = floating.show();
-        let _ = floating.set_focus();
-    }
+
+        if let Some(floating) = app_handle.get_webview_window(window_labels::FLOATING) {
+            // Pre-arm a window-scoped suppression flag the JS blur
+            // handler honours. Eval is queued onto the webview's main
+            // thread; the property assignment runs before the next paint
+            // and before the JS bootstrap has a chance to observe the
+            // first focus event. The matching read in floating/app.js is
+            // a guard at the top of the `tauri://blur` handler. 5s is
+            // generous: chat-window first-paint is ~500ms cold, but
+            // over-suppressing is much less bad than losing the banner.
+            let _ = floating.eval(
+                "window._kagePostUpdateSuppressUntil = Date.now() + 5000; \
+                 console.log('[floating] post-update blur-hide suppression armed by Rust');",
+            );
+            crate::commands::window::center_floating_on_active_monitor(&floating);
+            let _ = floating.show();
+            let _ = floating.set_focus();
+        }
+    });
 }
 
 /// Spawn the start-of-day session bootstrap in the background.
