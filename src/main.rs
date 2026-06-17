@@ -37,6 +37,7 @@ mod permission_audit;
 mod process_manager;
 mod session_titler;
 mod setup;
+mod slash_format;
 mod startup;
 mod state;
 mod steering_io;

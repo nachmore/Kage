@@ -1021,6 +1021,7 @@ pub async fn execute_slash_command(
     command: String,
     args: Option<serde_json::Value>,
     acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
     window: WebviewWindow,
     app: tauri::AppHandle,
 ) -> Result<serde_json::Value, AppError> {
@@ -1110,6 +1111,25 @@ pub async fn execute_slash_command(
                 "model_changed",
                 Some(serde_json::json!({ "model": model_name })),
             );
+        }
+    }
+
+    // Per-agent prettifying. Some agents return rich structured `data` that
+    // their one-line `message` discards (e.g. Kiro's /context breakdown).
+    // The active agent's formatter turns that into markdown, attached as
+    // `displayMessage` so the frontend renders it while `message` stays
+    // intact for callers that parse it (e.g. chat's context-ring %-scrape).
+    // Agents with no formatter (Claude/Codex today) leave the result as-is.
+    let mut result = result;
+    let agent_kind = {
+        let config = features.config.lock().map_err(|_| {
+            AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
+        })?;
+        crate::agent_presets::detect(&config)
+    };
+    if let Some(md) = crate::slash_format::format_slash_result(agent_kind, &cmd_name, &result) {
+        if let Some(obj) = result.as_object_mut() {
+            obj.insert("displayMessage".to_string(), serde_json::Value::String(md));
         }
     }
 

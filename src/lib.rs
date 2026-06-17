@@ -32,6 +32,7 @@ pub mod panic_handler;
 pub mod permission_audit;
 pub mod process_manager;
 pub mod session_titler;
+pub mod slash_format;
 pub mod startup;
 pub mod steering_io;
 pub mod webview_recovery;

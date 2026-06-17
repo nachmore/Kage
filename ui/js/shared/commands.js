@@ -427,14 +427,17 @@ export function matchSlashCommands(input) {
                         command: cmdName,
                         args: null,
                     });
+                    // Prefer the agent-specific prettified markdown
+                    // (`displayMessage`, attached by the Rust slash_format
+                    // layer) over the plain one-line `message`. Falls back to
+                    // the raw data dump only when neither is present.
                     const msg =
+                        result?.displayMessage ||
                         result?.message ||
                         (result?.data
                             ? JSON.stringify(result.data, null, 2)
                             : t('command.slash.executed'));
-                    document.dispatchEvent(
-                        new CustomEvent('kage-show-response', { detail: result?.message || msg })
-                    );
+                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: msg }));
                 } catch (e) {
                     document.dispatchEvent(
                         new CustomEvent('kage-show-response', {

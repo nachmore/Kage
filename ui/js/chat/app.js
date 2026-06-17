@@ -1922,7 +1922,12 @@ export class ChatApp {
                 // Show the command and result in the chat (suppress compact — handled by compaction_status)
                 this.addUserMessage(message);
                 if (cmdName !== 'compact') {
-                    const resultText = result?.message || JSON.stringify(result, null, 2);
+                    // Prefer agent-prettified markdown (displayMessage) from
+                    // the Rust slash_format layer; fall back to plain message.
+                    const resultText =
+                        result?.displayMessage ||
+                        result?.message ||
+                        JSON.stringify(result, null, 2);
                     this.addMessageFromHistory('assistant', resultText);
                 }
                 this.scrollToBottom();
