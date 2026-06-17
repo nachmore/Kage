@@ -1154,7 +1154,8 @@ export class FloatingApp {
                             results,
                             this.elements.appSuggestions,
                             this.currentMatches,
-                            () => this.windowManager.resizeWindow()
+                            () => this.windowManager.resizeWindow(),
+                            (r) => this._onResultClick(r)
                         );
                     }
                 } else {
@@ -2557,7 +2558,8 @@ export class FloatingApp {
                             partial,
                             this.elements.appSuggestions,
                             this.currentMatches,
-                            () => this.windowManager.resizeWindow()
+                            () => this.windowManager.resizeWindow(),
+                            (r) => this._onResultClick(r)
                         );
                     }
                     // Show/hide loading indicator with provider names.
@@ -2588,7 +2590,8 @@ export class FloatingApp {
                     results,
                     this.elements.appSuggestions,
                     this.currentMatches,
-                    () => this.windowManager.resizeWindow()
+                    () => this.windowManager.resizeWindow(),
+                    (r) => this._onResultClick(r)
                 );
                 // Show send hint for non-instant results
                 if (!['color', 'math', 'devtool'].includes(results[0].type)) {
@@ -2946,23 +2949,72 @@ export class FloatingApp {
             onSelection: (command, value) => this.executeSelection(command, value),
         });
 
-        if (result.handled) {
-            if (result.action === 'replace_input') {
-                /* input already replaced by onReplaceInput callback */
-            } else if (result.action === 'hide') {
-                this.resetUI();
-                await this.appWindow.hide();
-            } else if (result.action === 'keep_suggestions') {
-                // A selection picker was just rendered into the suggestions
-                // dropdown (e.g. /agent, /model). Clear the input text but
-                // DON'T touch the suggestions — clearSuggestions() would wipe
-                // the picker we just painted, which was the silent-failure bug.
-                this.elements.input.value = '';
-                this.elements.input.style.height = 'auto';
-            } else {
-                this._clearInput();
-            }
+        await this._applyEnterActionResult(result);
+    }
+
+    /**
+     * Apply the {handled, action} verdict from handleEnterAction. Shared by
+     * the Enter key (handleEnterKey) and click-to-execute (_onResultClick) so
+     * both paths treat hide / replace_input / keep_suggestions identically.
+     */
+    async _applyEnterActionResult(result) {
+        if (!result?.handled) return;
+        if (result.action === 'replace_input') {
+            /* input already replaced by onReplaceInput callback */
+        } else if (result.action === 'hide') {
+            this.resetUI();
+            await this.appWindow.hide();
+        } else if (result.action === 'keep_suggestions') {
+            // A selection picker was just rendered into the suggestions
+            // dropdown (e.g. /agent, /model). Clear the input text but
+            // DON'T touch the suggestions — clearSuggestions() would wipe
+            // the picker we just painted, which was the silent-failure bug.
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+        } else {
+            this._clearInput();
         }
+    }
+
+    /**
+     * Click-to-execute for a unified-search result row. Mirrors pressing
+     * Enter on that row: runs it through the same handleEnterAction machinery
+     * (so slash commands, system commands, shortcuts, apps, URLs all behave
+     * identically whether clicked or keyed) and applies the same verdict.
+     */
+    async _onResultClick(result) {
+        if (!result) return;
+        // Point the selection at the clicked row so handleEnterAction executes
+        // exactly it, regardless of what was keyboard-highlighted.
+        const idx = this.currentMatches.indexOf(result);
+        if (idx < 0) return;
+        this.selectedIndex = idx;
+
+        // Clipboard mode is paste-on-select — handle it the same way Enter does.
+        if (this._clipboardMode && result.type === 'clipboard' && result.data?.text) {
+            this._clearInput();
+            await this.appWindow.hide();
+            await new Promise((r) => setTimeout(r, 150));
+            try {
+                await this.invoke('paste_clipboard_item', { text: result.data.text });
+            } catch (e) {
+                console.warn('[Clipboard] Failed to paste:', e);
+            }
+            return;
+        }
+
+        const actionResult = await handleEnterAction({
+            message: this.elements.input.value.trim(),
+            suggestions: this.currentMatches,
+            selectedIndex: this.selectedIndex,
+            shortcuts: this.shortcuts,
+            ctx: this._getExecCtx(),
+            onSend: (msg) => this.sendChatMessage(msg),
+            onSystemCommand: (cmdId, needsConfirm, elevated) =>
+                this._executeSystemCommand(cmdId, needsConfirm, elevated),
+            onSelection: (command, value) => this.executeSelection(command, value),
+        });
+        await this._applyEnterActionResult(actionResult);
     }
 
     _clearInput() {

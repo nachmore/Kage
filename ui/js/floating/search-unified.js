@@ -79,7 +79,13 @@ function _renderItem(r, _index, extMgr) {
  * prefetch from the sandbox before building DOM so `renderResult()` can
  * stay synchronous.
  */
-export async function renderUnifiedResults(results, container, currentMatches, resizeWindow) {
+export async function renderUnifiedResults(
+    results,
+    container,
+    currentMatches,
+    resizeWindow,
+    onItemClick
+) {
     currentMatches.length = 0;
 
     // Flex-collapse guard: when the suggestions dropdown becomes visible
@@ -174,6 +180,14 @@ export async function renderUnifiedResults(results, container, currentMatches, r
         }
 
         item.classList.toggle('selected', i === 0);
+        // Wire click-to-execute. Use direct .onclick assignment (not
+        // addEventListener) so reused DOM nodes don't stack duplicate
+        // handlers across re-renders. Capture the result by value; the
+        // handler mirrors what Enter on this row would do.
+        if (onItemClick) {
+            const captured = r;
+            item.onclick = () => onItemClick(captured);
+        }
         newItems.push(item);
     }
 
