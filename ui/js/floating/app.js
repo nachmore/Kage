@@ -1003,6 +1003,16 @@ export class FloatingApp {
             this.windowManager.resizeWindow();
         });
 
+        // Prompt-dispatch slash commands (standard ACP, e.g. Claude): send the
+        // slash text as a normal message so the agent interprets it and streams
+        // the answer back through the usual pipeline.
+        document.addEventListener('kage-send-prompt', (e) => {
+            const text = e.detail?.text;
+            if (!text) return;
+            this.clearSuggestions();
+            this.sendChatMessage(text, { forceChat: true });
+        });
+
         document.addEventListener('kage-show-selection', (e) => {
             const { command, options } = e.detail;
             this.elements.input.value = '';

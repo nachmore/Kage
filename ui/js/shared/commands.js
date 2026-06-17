@@ -374,8 +374,23 @@ export function matchSlashCommands(input) {
             description: cmd.description + (cmd.meta?.hint ? ` (${cmd.meta.hint})` : ''),
             icon: getSlashIcon(cmd.name),
             meta: cmd.meta,
+            dispatch: cmd.dispatch || 'vendor',
             execute: async (invoke, _appWindow) => {
                 const cmdName = cmd.name.startsWith('/') ? cmd.name.substring(1) : cmd.name;
+
+                // Prompt-dispatch commands (standard ACP, e.g. Claude): the
+                // agent interprets the slash text itself when sent as a normal
+                // prompt, and the answer streams back as an assistant message.
+                // Don't intercept — hand the slash text to the window's normal
+                // streaming send via `kage-send-prompt`. See chat/floating
+                // handlers.
+                if ((cmd.dispatch || 'vendor') === 'prompt') {
+                    document.dispatchEvent(
+                        new CustomEvent('kage-send-prompt', { detail: { text: cmd.name } })
+                    );
+                    return;
+                }
+
                 // Slash commands need a session id; the calling window
                 // tells us its label so we can look up its pinned session.
                 const winLabel = _appWindow?.label || WINDOW.FLOATING;
@@ -463,6 +478,19 @@ export function getSlashCommandMeta(name) {
         (c) => (c.name.startsWith('/') ? c.name.substring(1) : c.name) === bare
     );
     return cmd?.meta || null;
+}
+
+/**
+ * Dispatch mode for a bare slash command name: "prompt" (standard ACP — send
+ * as a normal message) or "vendor" (Kiro — vendor commands/execute RPC).
+ * Defaults to "vendor" for unknown commands so callers keep the existing path.
+ */
+export function getSlashCommandDispatch(name) {
+    const bare = name.startsWith('/') ? name.substring(1) : name;
+    const cmd = acpSlashCommands.find(
+        (c) => (c.name.startsWith('/') ? c.name.substring(1) : c.name) === bare
+    );
+    return cmd?.dispatch || 'vendor';
 }
 
 /**

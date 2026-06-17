@@ -13,7 +13,12 @@ import {
     attachmentPreviewHtml,
     sessionImageToDataUrl,
 } from '../shared/attachments.js';
-import { loadSlashCommands, executeCommand, getSlashCommandMeta } from '../shared/commands.js';
+import {
+    loadSlashCommands,
+    executeCommand,
+    getSlashCommandMeta,
+    getSlashCommandDispatch,
+} from '../shared/commands.js';
 import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.js';
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
@@ -941,6 +946,16 @@ export class ChatApp {
                 this.addMessageFromHistory('assistant', e.detail);
                 this.scrollToBottom();
             }
+        });
+
+        // Prompt-dispatch slash commands (standard ACP, e.g. Claude): send the
+        // slash text as a normal message so the agent interprets it and streams
+        // the answer back through the usual pipeline.
+        document.addEventListener('kage-send-prompt', (e) => {
+            const text = e.detail?.text;
+            if (!text) return;
+            this.elements.chatInput.value = text;
+            this.sendMessage();
         });
 
         document.addEventListener('kage-show-selection', (e) => {
@@ -1880,8 +1895,15 @@ export class ChatApp {
             }
         }
 
-        // Handle / slash commands (only if no attachments)
-        if (!hasAttachments && message.startsWith('/')) {
+        // Handle / slash commands (only if no attachments). Prompt-dispatch
+        // commands (standard ACP, e.g. Claude) are NOT intercepted — the agent
+        // interprets the slash text itself, so they fall through to the normal
+        // streaming send below.
+        if (
+            !hasAttachments &&
+            message.startsWith('/') &&
+            getSlashCommandDispatch(message.split(' ')[0]) !== 'prompt'
+        ) {
             try {
                 const parts = message.split(' ');
                 const cmdName = parts[0].substring(1); // strip leading /

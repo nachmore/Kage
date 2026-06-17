@@ -124,6 +124,20 @@ pub struct SlashCommand {
     pub description: String,
     #[serde(default)]
     pub meta: Option<SlashCommandMeta>,
+    /// How this command is executed, set by the agent layer at discovery
+    /// time. `"vendor"` (default) → call the `commands/execute` vendor RPC
+    /// and render the structured reply (Kiro). `"prompt"` → send the slash
+    /// text as a normal `session/prompt` and let the answer stream back as
+    /// an assistant message (Claude / standard ACP). The frontend routes on
+    /// this so it sets up streaming UI for `prompt` commands. Defaults to
+    /// `"vendor"` so existing Kiro configs and any caller that omits it keep
+    /// working.
+    #[serde(default = "default_dispatch")]
+    pub dispatch: String,
+}
+
+fn default_dispatch() -> String {
+    "vendor".to_string()
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
