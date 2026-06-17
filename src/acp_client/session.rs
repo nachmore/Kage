@@ -42,6 +42,31 @@ static LAST_TIMESTAMP_DATE: std::sync::LazyLock<Mutex<String>> =
 
 const TIMESTAMP_REFRESH_SECS: u64 = 15 * 60; // 15 minutes
 
+/// Resolve an optional caller-supplied cwd, falling back to the process
+/// working directory and finally to `/`. Used by `session/new` and
+/// `session/load`, which must always send a concrete `cwd`.
+fn resolve_cwd(cwd: Option<String>) -> String {
+    cwd.unwrap_or_else(|| {
+        std::env::current_dir()
+            .ok()
+            .and_then(|p| p.to_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| "/".to_string())
+    })
+}
+
+/// Bail with `"<context>: <message>"`, appending ` — <detail>` when the
+/// error carries a string `data` field. Used by the prompt/sub-agent paths
+/// where we want the raw detail string rather than `format_acp_error`'s
+/// `(code: N)` rendering.
+fn bail_acp_error(context: &str, error: &super::types::AcpError) -> anyhow::Error {
+    let detail = error.data.as_ref().and_then(|d| d.as_str()).unwrap_or("");
+    if detail.is_empty() {
+        anyhow::anyhow!("{}: {}", context, error.message)
+    } else {
+        anyhow::anyhow!("{}: {} — {}", context, error.message, detail)
+    }
+}
+
 impl AcpClient {
     // --- Protocol handshake ---
 
@@ -85,12 +110,7 @@ impl AcpClient {
             }
         }
 
-        let cwd = cwd.unwrap_or_else(|| {
-            std::env::current_dir()
-                .ok()
-                .and_then(|p| p.to_str().map(|s| s.to_string()))
-                .unwrap_or_else(|| "/".to_string())
-        });
+        let cwd = resolve_cwd(cwd);
 
         let response = self.send_request(
             "session/new",
@@ -146,12 +166,7 @@ impl AcpClient {
             }
         }
 
-        let cwd = cwd.unwrap_or_else(|| {
-            std::env::current_dir()
-                .ok()
-                .and_then(|p| p.to_str().map(|s| s.to_string()))
-                .unwrap_or_else(|| "/".to_string())
-        });
+        let cwd = resolve_cwd(cwd);
 
         // Gate the conversation-history replay. kiro-cli answers
         // `session/load` by re-emitting every prior turn as a burst of
@@ -295,12 +310,7 @@ impl AcpClient {
         )?;
 
         if let Some(error) = response.error {
-            let detail = error.data.as_ref().and_then(|d| d.as_str()).unwrap_or("");
-            if detail.is_empty() {
-                anyhow::bail!("ACP error: {}", error.message);
-            } else {
-                anyhow::bail!("ACP error: {} — {}", error.message, detail);
-            }
+            return Err(bail_acp_error("ACP error", &error));
         }
 
         info!("Prompt completed");
@@ -464,12 +474,7 @@ impl AcpClient {
         )?;
 
         if let Some(error) = response.error {
-            let detail = error.data.as_ref().and_then(|d| d.as_str()).unwrap_or("");
-            if detail.is_empty() {
-                anyhow::bail!("Sub-agent error: {}", error.message);
-            } else {
-                anyhow::bail!("Sub-agent error: {} — {}", error.message, detail);
-            }
+            return Err(bail_acp_error("Sub-agent error", &error));
         }
 
         // Get the accumulated response from the sub-agent and clear its

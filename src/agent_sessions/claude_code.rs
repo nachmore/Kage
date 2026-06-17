@@ -26,8 +26,8 @@
 //! fingerprint, evicted on next-scan retain.
 
 use super::{
-    clip_title, file_mtime_ms, rfc3339_from_system_time, AgentMessage, AgentSession,
-    AgentSessionProvider, SessionLocator,
+    clip_title, file_mtime_ms, fingerprint, rfc3339_from_system_time, AgentMessage, AgentSession,
+    AgentSessionProvider, CachedSession, FileFingerprint, SessionLocator,
 };
 use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
@@ -37,30 +37,9 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::SystemTime;
 
 const PROVIDER_ID: &str = "claude-code";
 const PROVIDER_LABEL: &str = "Claude Code";
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-struct FileFingerprint {
-    mtime: SystemTime,
-    size: u64,
-}
-
-fn fingerprint(md: &std::fs::Metadata) -> Option<FileFingerprint> {
-    let mtime = md.modified().ok()?;
-    Some(FileFingerprint {
-        mtime,
-        size: md.len(),
-    })
-}
-
-#[derive(Clone)]
-struct CachedSession {
-    fp: FileFingerprint,
-    session: AgentSession,
-}
 
 #[derive(Default)]
 pub struct ClaudeCodeProvider {

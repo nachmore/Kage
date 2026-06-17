@@ -82,6 +82,30 @@ fn find_monitor_at_position(window: &WebviewWindow, x: i32, y: i32) -> Option<ta
     None
 }
 
+/// Clamp a window's top-left `(x, y)` so a `w`×`h` window stays inside
+/// `monitor`: if it would overflow the right/bottom edge, shift it back, but
+/// never past the monitor's top-left origin. Unit-agnostic — pass x/y/w/h in
+/// the same coordinate space (physical for inline-assist, logical for the
+/// context menu); the monitor bounds are read in physical pixels, matching the
+/// existing call sites.
+fn clamp_into_monitor(monitor: &tauri::Monitor, x: i32, y: i32, w: i32, h: i32) -> (i32, i32) {
+    let mon_pos = monitor.position();
+    let mon_size = monitor.size();
+    let mon_right = mon_pos.x + mon_size.width as i32;
+    let mon_bottom = mon_pos.y + mon_size.height as i32;
+    let cx = if x + w > mon_right {
+        (mon_right - w).max(mon_pos.x)
+    } else {
+        x
+    };
+    let cy = if y + h > mon_bottom {
+        (mon_bottom - h).max(mon_pos.y)
+    } else {
+        y
+    };
+    (cx, cy)
+}
+
 /// Get the active monitor (where cursor is) or fall back to primary
 pub fn get_active_monitor(window: &WebviewWindow) -> Option<tauri::Monitor> {
     if let Some((cursor_x, cursor_y)) = get_cursor_position() {
@@ -1086,12 +1110,8 @@ pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<
 
     // Find which monitor the click is on and clamp to its bounds
     if let Some(monitor) = find_monitor_at_position(&window, x, y) {
-        let mon_pos = monitor.position();
-        let mon_size = monitor.size();
         let scale = monitor.scale_factor();
 
-        let mon_right = mon_pos.x + mon_size.width as i32;
-        let mon_bottom = mon_pos.y + mon_size.height as i32;
         // outer_size() can be 0×0 on a freshly-built window that hasn't
         // rendered yet. Fall back to the configured logical size in that
         // case so first-show clamping still works.
@@ -1110,14 +1130,8 @@ pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<
             CONTEXT_MENU_LOGICAL_H as i32
         };
 
-        // If menu would overflow right edge, flip to left of cursor
-        if final_x + menu_w > mon_right {
-            final_x = (mon_right - menu_w).max(mon_pos.x);
-        }
-        // If menu would overflow bottom edge, flip upward
-        if final_y + menu_h > mon_bottom {
-            final_y = (mon_bottom - menu_h).max(mon_pos.y);
-        }
+        // Flip the menu left/up if it would overflow the right/bottom edge.
+        (final_x, final_y) = clamp_into_monitor(&monitor, final_x, final_y, menu_w, menu_h);
     }
 
     window
@@ -1367,20 +1381,10 @@ pub async fn show_inline_assist_with_context(
         let mut y = cursor_pos.1;
 
         if let Some(monitor) = find_monitor_at_position(&window, x, y) {
-            let mon_pos = monitor.position();
-            let mon_size = monitor.size();
             let scale = monitor.scale_factor();
             let win_w = (300.0 * scale) as i32;
             let win_h = (320.0 * scale) as i32;
-            let mon_right = mon_pos.x + mon_size.width as i32;
-            let mon_bottom = mon_pos.y + mon_size.height as i32;
-
-            if x + win_w > mon_right {
-                x = (mon_right - win_w).max(mon_pos.x);
-            }
-            if y + win_h > mon_bottom {
-                y = (mon_bottom - win_h).max(mon_pos.y);
-            }
+            (x, y) = clamp_into_monitor(&monitor, x, y, win_w, win_h);
         }
 
         let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));

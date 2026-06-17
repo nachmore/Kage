@@ -185,6 +185,33 @@ pub fn file_mtime_ms(path: &std::path::Path) -> Option<i64> {
     Some((dur.as_secs() as i64) * 1000)
 }
 
+/// Per-file `(mtime, size)` fingerprint used by the file-backed providers
+/// (claude_code, kiro_desktop) to detect when a cached parse is stale.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct FileFingerprint {
+    pub mtime: std::time::SystemTime,
+    pub size: u64,
+}
+
+/// Build a fingerprint from filesystem metadata. `None` if the platform
+/// can't report mtime.
+pub fn fingerprint(md: &std::fs::Metadata) -> Option<FileFingerprint> {
+    let mtime = md.modified().ok()?;
+    Some(FileFingerprint {
+        mtime,
+        size: md.len(),
+    })
+}
+
+/// A parsed session cached alongside the fingerprint it was parsed from.
+/// File-backed providers keep a `HashMap<PathBuf, CachedSession>` and
+/// reuse the parse when the on-disk fingerprint is unchanged.
+#[derive(Clone)]
+pub struct CachedSession {
+    pub fp: FileFingerprint,
+    pub session: AgentSession,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
