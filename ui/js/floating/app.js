@@ -37,6 +37,7 @@ import {
     renderUnifiedResults,
     loadFrecency,
     setExtensionManager,
+    searchDebounceMs,
 } from './search-unified.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { SpeechController } from '../shared/speech.js';
@@ -54,18 +55,20 @@ import {
     renderClipboardHistory,
 } from './clipboard-history.js';
 import { mountPromptForm } from '../shared/prompt-form.js';
-import { formatError } from '../shared/session-render.js';
 import { executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { escapeHtml, formatBytes } from '../shared/tool-utils.js';
 import { checkOnline, markOnline, onNetworkChange, offlineMessage } from '../shared/network.js';
 import { getConfig, onConfigChange } from '../shared/config-cache.js';
+import { parseContextPercent, drawContextRing } from '../shared/context-usage.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 import { MessageStreamController } from '../shared/message-stream-controller.js';
 import { trackEvent, messageLengthBucket } from '../shared/telemetry.js';
 import { hideExtensionBar, showExtensionBar, updateExtensionBar } from '../shared/extension-bar.js';
 import { sanitizeExtensionHtml } from '../shared/extension-html-sanitizer.js';
+import { renderToolbarButtons } from '../shared/extension-toolbar.js';
+import { BannerController } from './banner.js';
 import { t } from '../shared/i18n.js';
 
 /**
@@ -411,6 +414,13 @@ export class FloatingApp {
                 }
             },
         });
+        this.banner = new BannerController({
+            invoke: this.invoke,
+            resizeWindow: () => this.windowManager.resizeWindow(),
+            resetUI: () => this.resetUI(),
+            isWaitingForResponse: () => this.isWaitingForResponse,
+            windowManager: this.windowManager,
+        });
         this.lastSelection = null;
         this._compacting = false;
         this._messageHistory = []; // shell-style input history
@@ -556,7 +566,7 @@ export class FloatingApp {
             this.elements.expandBtn.classList.remove('visible');
             this.elements.floatingStopBtn.style.display = 'none';
             this.currentResponse = '';
-            this.dismissBanner();
+            this.banner.dismiss();
             // Enter clipboard mode
             this.elements.input.value = '>cb ';
             this._enterClipboardMode();
@@ -570,7 +580,7 @@ export class FloatingApp {
             this.elements.expandBtn.classList.remove('visible');
             this.elements.floatingStopBtn.style.display = 'none';
             this.currentResponse = '';
-            this.dismissBanner();
+            this.banner.dismiss();
             this.elements.input.value = '';
             this.clearSuggestions();
             if (this.speech) {
@@ -583,12 +593,12 @@ export class FloatingApp {
 
         this.listen(EVT.SHOW_FLOATING_BANNER, (event) => {
             const { icon, text, action_label, action_type, action_data } = event.payload;
-            this.showBanner(icon, text, action_label, action_type, action_data);
+            this.banner.show(icon, text, action_label, action_type, action_data);
         });
 
         this.listen(EVT.UPDATE_AVAILABLE, (event) => {
             const version = event.payload;
-            this.showBanner(
+            this.banner.show(
                 '⬆️',
                 t('floating.banner.update_available', { version }),
                 t('floating.banner.action.install_now'),
@@ -606,7 +616,7 @@ export class FloatingApp {
      * to show up when the user is actually looking at the window.
      */
     _runPostInitChecks() {
-        this.checkForCrashBanner();
+        this.banner.checkForCrashBanner();
         this._checkTerminatorMode();
         this._refreshOllamaStatusWidget();
 
@@ -1105,7 +1115,15 @@ export class FloatingApp {
             // actually sees it.
             if (!this._updateBannerChecked) {
                 this._updateBannerChecked = true;
-                this.checkForUpdateBanner();
+                // The post-install auto-show races against other windows'
+                // webviews painting for the first time (notably the
+                // preloaded chat window's main.js init). Whichever paints
+                // later steals focus and the blur handler would hide us —
+                // taking the banner with it. Suppress the next ~2s of
+                // blur-hides so the user actually sees the celebration.
+                this.banner.checkForUpdateBanner().then((shown) => {
+                    if (shown) this._suppressBlurHideUntil = Date.now() + 2000;
+                });
             }
             // Resume work that was paused on hide. Mascot animation
             // intervals were ticking against an invisible window — a
@@ -1269,7 +1287,7 @@ export class FloatingApp {
                 return;
             }
             await this.appWindow.hide();
-            this.dismissBanner();
+            this.banner.dismiss();
             // Pause work that doesn't need to run while hidden.
             // - Mascot animation: ticks every ~120-150ms; over a long
             //   idle session that's real CPU we can give back to the
@@ -1633,32 +1651,17 @@ export class FloatingApp {
         if (!container || !this.extensionManager) return;
         const buttons = this.extensionManager.getToolbarButtons();
         console.log('[Floating] Rendering extension toolbar buttons:', buttons.length);
-        container.innerHTML = '';
-        for (const btn of buttons) {
-            const el = document.createElement('button');
-            el.className = 'floating-toolbar-btn ext-toolbar-btn';
-            el.title = btn.tooltip || btn.id;
-            // Icons are sanitized through the `icon` mode of the extension
-            // sanitizer: SVG markup renders as SVG; emoji / plain text
-            // passes through as a text node; everything else is stripped
-            // (anchors, images, scripts, on* handlers). Mirrors the chat
-            // window's approach.
-            const iconStr = typeof btn.icon === 'string' && btn.icon ? btn.icon : '🔧';
-            el.appendChild(sanitizeExtensionHtml(iconStr, 'icon'));
-            el.addEventListener('click', async () => {
-                try {
-                    const ctx = {
-                        input: this.elements.input?.value || '',
-                        messages: [],
-                    };
-                    const out = await btn.onClick(ctx);
-                    if (out?.host) this._runToolbarHostEffect(out.host);
-                } catch (e) {
-                    console.warn(`Extension toolbar button error (${btn.extensionId}):`, e);
-                }
-            });
-            container.appendChild(el);
-        }
+        renderToolbarButtons({
+            container,
+            buttons,
+            buttonClass: 'floating-toolbar-btn',
+            sanitizeIcon: (iconStr) => sanitizeExtensionHtml(iconStr, 'icon'),
+            buildContext: () => ({
+                input: this.elements.input?.value || '',
+                messages: [],
+            }),
+            onHostEffect: (host) => this._runToolbarHostEffect(host),
+        });
     }
 
     /**
@@ -1711,46 +1714,15 @@ export class FloatingApp {
                 command: 'context',
                 args: {},
             });
-            const msg = result?.message || JSON.stringify(result);
-            const match = msg.match(/(\d+)%/);
-            if (match) {
-                const pct = parseInt(match[1], 10);
+            const pct = parseContextPercent(result);
+            if (pct !== null) {
                 if (this.elements.floatingContextPercent)
                     this.elements.floatingContextPercent.textContent = pct + '%';
                 if (this.elements.floatingContextIndicator)
                     this.elements.floatingContextIndicator.title = pct + '% context used';
-                this._drawContextRing(pct);
+                drawContextRing(this.elements.floatingContextRing, pct);
             }
         } catch {}
-    }
-
-    _drawContextRing(percent) {
-        const canvas = this.elements.floatingContextRing;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const size = 16,
-            cx = size / 2,
-            cy = size / 2,
-            r = 6,
-            lw = 2;
-        ctx.clearRect(0, 0, size, size);
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = lw;
-        ctx.stroke();
-        if (percent > 0) {
-            let color = '#22c55e';
-            if (percent >= 90) color = '#ef4444';
-            else if (percent >= 75) color = '#eab308';
-            const start = -Math.PI / 2;
-            ctx.beginPath();
-            ctx.arc(cx, cy, r, start, start + (Math.PI * 2 * Math.min(percent, 100)) / 100);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lw;
-            ctx.lineCap = 'round';
-            ctx.stroke();
-        }
     }
 
     async _loadModels() {
@@ -2060,192 +2032,6 @@ export class FloatingApp {
         }, 5000);
     }
 
-    async checkForUpdateBanner() {
-        try {
-            const wasUpdated = await this.invoke('was_just_updated');
-            if (wasUpdated) {
-                this.showBanner(
-                    '🎉',
-                    t('floating.banner.update_installed'),
-                    t('floating.banner.action.view_changelog'),
-                    'settings',
-                    // `<section>:<subsection>` — handleBannerClick
-                    // splits on the colon and forwards both to
-                    // open_settings_window so the user lands on the
-                    // changelog block, not just the Updates page.
-                    'updates:changelog'
-                );
-                // The post-install auto-show races against other
-                // windows' webviews painting for the first time
-                // (notably the preloaded chat window's main.js init).
-                // Whichever paints later steals focus and the blur
-                // handler below would hide us — taking the banner
-                // with it. Suppress the next ~2s of blur-hides so
-                // the user actually sees the celebration banner.
-                this._suppressBlurHideUntil = Date.now() + 2000;
-                // Clear the flag so it only shows once
-                this.invoke('clear_update_flag').catch(() => {});
-            }
-        } catch (e) {
-            console.log('Update check failed:', e);
-        }
-    }
-
-    /**
-     * Show a "Kage crashed last session" banner if the previous run
-     * left a crash report and the user hasn't acknowledged it yet.
-     * Only fires once per crash — `dismiss_recent_crash` stamps the
-     * timestamp so subsequent launches stay quiet.
-     *
-     * Held off until after `checkForUpdateBanner` so the celebration
-     * banner from a clean post-update relaunch wins the priority
-     * fight; in steady state only one of the two ever has anything
-     * to say.
-     */
-    async checkForCrashBanner() {
-        try {
-            const crash = await this.invoke('get_recent_crash');
-            if (!crash) return;
-            // Don't stomp on a banner that's already visible (e.g.
-            // "Kage has been updated!"). The next launch will check
-            // again, and this crash has already been recorded — the
-            // user will see the banner the next time they're actually
-            // free to read it.
-            if (this._bannerVisible) return;
-
-            const msg = crash.panic_message
-                ? t('floating.banner.crash_with_message', { message: crash.panic_message })
-                : t('floating.banner.crash_generic');
-            this.showBanner(
-                '💥',
-                msg,
-                t('floating.banner.action.view_log'),
-                'crash_log',
-                crash.log_path
-            );
-            // Mark seen now — we've shown the user once. If they
-            // ignore the banner we don't re-show; "View log" / any
-            // dismiss completes the lifecycle either way. Failure to
-            // persist is non-fatal (worst case the dialog reappears
-            // next launch).
-            this.invoke('dismiss_recent_crash', { timestamp: crash.timestamp }).catch(() => {});
-        } catch (e) {
-            console.log('Crash banner check failed:', e);
-        }
-    }
-
-    /**
-     * Show a banner at the top of the content area.
-     * @param {string} icon - Emoji or text icon
-     * @param {string} html - Banner message (supports HTML for keycaps etc.)
-     * @param {string} actionLabel - Text for the action hint
-     * @param {string} actionType - 'settings', 'url', 'crash_log', or 'dismiss'
-     * @param {string} actionData - Section name, URL, file path, or ignored
-     */
-    showBanner(icon, html, actionLabel, actionType, actionData) {
-        this._bannerVisible = true;
-        this._bannerAction = { type: actionType, data: actionData };
-        const banner = document.getElementById('floatingBanner');
-        const iconEl = document.getElementById('bannerIcon');
-        const textEl = document.getElementById('bannerText');
-        const actionEl = document.getElementById('bannerAction');
-        const contentArea = document.getElementById('contentArea');
-        if (!banner) return;
-        if (iconEl) iconEl.textContent = icon || '';
-        if (textEl) textEl.innerHTML = html || '';
-        if (actionEl) actionEl.textContent = actionLabel || '';
-        banner.onclick = () => this.handleBannerClick();
-        banner.style.display = 'flex';
-        // Ensure the content area is visible so the banner shows
-        if (contentArea) {
-            contentArea.classList.add('visible');
-            // Banner-only mode toggles content-area to overflow:visible
-            // so the scrollbar doesn't show for a tiny banner. But that
-            // also flips the flex item's min-height from 0 to auto —
-            // i.e. it can no longer shrink below its content. If there
-            // IS substantial content in here (a streamed response, an
-            // image, etc.), enabling banner-only means the content area
-            // refuses to shrink, the bubble can't fit within the OS
-            // window's max height, and the input gets pushed past the
-            // bottom edge. So only switch to banner-only when banner is
-            // truly the sole occupant.
-            const responseText = document.getElementById('responseText');
-            const isEmpty = !responseText?.textContent.trim();
-            if (isEmpty) {
-                contentArea.classList.add('banner-only');
-            } else {
-                contentArea.classList.remove('banner-only');
-            }
-        }
-        // Resize the window to fit the banner after DOM updates
-        requestAnimationFrame(() => this.windowManager.resizeWindow());
-    }
-
-    handleBannerClick() {
-        const action = this._bannerAction;
-        this.dismissBanner();
-        if (!action) return;
-        if (action.type === 'settings') {
-            // action.data is either a bare section id (e.g. 'updates')
-            // or `<section>:<subsection>` (e.g. 'updates:changelog').
-            // The subsection is forwarded so the settings window can
-            // scroll to a specific element after switching sections.
-            const [section, subSection] = (action.data || 'updates').split(':');
-            const args = { section: section || 'updates' };
-            if (subSection) args.subSection = subSection;
-            this.invoke('open_settings_window', args).catch(() => {});
-        } else if (action.type === 'url') {
-            this.invoke('open_url', { url: action.data }).catch(() => {});
-        } else if (action.type === 'crash_log') {
-            // Open the crash report file in the OS default editor —
-            // text editors handle .log fine on every platform we
-            // ship to. Fall back to opening the logs folder if the
-            // path is missing for any reason.
-            const path = action.data || '';
-            this.invoke('open_path', { path }).catch(() => {});
-        } else if (action.type === 'update_install') {
-            // Same flow as the "Install Now" button in settings.
-            // Backend produces a classified, user-readable string;
-            // formatError unwraps the AppError shape so we don't show
-            // "[object Object]" when the rejection is a serialised
-            // struct (which it is over the Tauri invoke boundary).
-            this.showBanner('⬇️', t('floating.banner.installing_update'), '', 'dismiss', '');
-            this.invoke('download_and_install_update').catch((e) => {
-                this.showBanner(
-                    '❌',
-                    formatError(e),
-                    t('floating.banner.action.dismiss'),
-                    'dismiss',
-                    ''
-                );
-            });
-        } else {
-            // 'dismiss' — reset the UI and refocus input
-            this.resetUI();
-            this.windowManager.userSetHeight = null;
-            this.windowManager.resizeWindow();
-        }
-    }
-
-    dismissBanner() {
-        if (!this._bannerVisible) return;
-        this._bannerVisible = false;
-        const banner = document.getElementById('floatingBanner');
-        if (banner) banner.style.display = 'none';
-        // Drop banner-only mode whether we're collapsing or about to
-        // receive a real response; subsequent content needs its
-        // scrollbar back.
-        document.getElementById('contentArea')?.classList.remove('banner-only');
-        // If the banner was the only content, collapse the content area
-        const responseText = document.getElementById('responseText');
-        if (!this.isWaitingForResponse && !responseText?.textContent.trim()) {
-            document.getElementById('contentArea')?.classList.remove('visible');
-            this.elements.expandBtn?.classList.remove('visible');
-            this.windowManager.userSetHeight = null;
-            this.windowManager.resizeWindow();
-        }
-    }
-
     async _checkTerminatorMode() {
         try {
             const isTerminator = await this.invoke('is_terminator_mode');
@@ -2509,7 +2295,7 @@ export class FloatingApp {
         }
 
         // Dismiss banner as soon as user starts typing — it's served its purpose
-        if (query.length > 0) this.dismissBanner();
+        if (query.length > 0) this.banner.dismiss();
 
         // Update datetime visibility based on input state
         this.updateDatetimeVisibility();
@@ -2531,14 +2317,10 @@ export class FloatingApp {
         // Resize window to fit the growing input
         await this.windowManager.resizeWindow();
 
-        // Debounced unified search — queries all sources in parallel
-        // Use a longer debounce for file search patterns to avoid unnecessary disk queries
-        const looksLikeFileSearch =
-            /\.\w{0,6}$/.test(query) ||
-            query.includes('*') ||
-            query.includes('?') ||
-            query.toLowerCase().startsWith('>find ');
-        const debounceMs = looksLikeFileSearch ? 250 : 100;
+        // Debounced unified search — queries all sources in parallel.
+        // File-shaped queries hit the disk, so they debounce harder; the
+        // heuristic + timing live in the shared search engine.
+        const debounceMs = searchDebounceMs(query);
         this._searchGeneration++;
         const gen = this._searchGeneration;
         this.searchTimeout = setTimeout(async () => {
@@ -3201,7 +2983,7 @@ export class FloatingApp {
                 this._promptGeneration++;
                 const _gen = this._promptGeneration;
                 await this.windowManager.resizeWindow();
-                this.dismissBanner();
+                this.banner.dismiss();
 
                 // Prepend screen context (source window info) and any
                 // App Mode steering. Both ride at the head of the

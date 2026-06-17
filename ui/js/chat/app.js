@@ -57,7 +57,9 @@ import {
 import { getActionsForText } from '../shared/quick-actions.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { sanitizeExtensionHtml as sanitizeExtensionHtmlStatic } from '../shared/extension-html-sanitizer.js';
+import { renderToolbarButtons } from '../shared/extension-toolbar.js';
 import { getConfig } from '../shared/config-cache.js';
+import { parseContextPercent, drawContextRing } from '../shared/context-usage.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 import { MessageStreamController } from '../shared/message-stream-controller.js';
@@ -67,6 +69,7 @@ import {
     formatDuration,
     formatRelativeDate,
     formatError as formatErrorShared,
+    orderSessionsForSidebar,
 } from '../shared/session-render.js';
 
 /**
@@ -1261,30 +1264,13 @@ export class ChatApp {
         // selection already gets the `.active` highlight, so it doesn't
         // need to also masquerade as the default.
         const defaultId = this.floatingSessionId;
-        const sorted = [...this.sessions].sort((a, b) => {
-            const aIsDefault = a.session_id === defaultId;
-            const bIsDefault = b.session_id === defaultId;
-            if (aIsDefault && !bIsDefault) return -1;
-            if (!aIsDefault && bIsDefault) return 1;
-            return (b.updated_at || '').localeCompare(a.updated_at || '');
+        // Sort (default-pinned, newest-first) + filter (search, or hide
+        // steering-only "New Chat" peers) — pure logic in session-render.js.
+        const filtered = orderSessionsForSidebar(this.sessions, {
+            defaultId,
+            searchQuery,
+            keepIds: [this.currentAcpSessionId, this.activeSessionId],
         });
-
-        // Filter by search query
-        const filtered = searchQuery
-            ? sorted.filter((s) => (s.title || 'New Chat').toLowerCase().includes(searchQuery))
-            : sorted.filter((s) => {
-                  // Hide steering-only sessions ("New Chat") unless it's the
-                  // default session OR the user's current selection. Without
-                  // the second case, switching to a freshly-created "New
-                  // Chat" peer would make it vanish from the sidebar mid-click.
-                  const title = s.title || 'New Chat';
-                  if (title !== 'New Chat') return true;
-                  return (
-                      s.session_id === defaultId ||
-                      s.session_id === this.currentAcpSessionId ||
-                      s.session_id === this.activeSessionId
-                  );
-              });
 
         if (filtered.length === 0) {
             if (this._loadingMore || !this._sessionsFullyLoaded) {
@@ -2860,10 +2846,8 @@ export class ChatApp {
                 command: 'context',
                 args: {},
             });
-            const msg = result?.message || JSON.stringify(result);
-            const match = msg.match(/(\d+)%/);
-            if (match) {
-                const pct = parseInt(match[1], 10);
+            const pct = parseContextPercent(result);
+            if (pct !== null) {
                 this.elements.contextPercent.textContent = pct + '%';
                 document.getElementById('contextIndicator').title = pct + '% context used';
                 this.drawContextRing(pct);
@@ -2874,39 +2858,7 @@ export class ChatApp {
     }
 
     drawContextRing(percent) {
-        const canvas = document.getElementById('contextRing');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const size = 16;
-        const cx = size / 2,
-            cy = size / 2,
-            r = 6;
-        const lineWidth = 2;
-        ctx.clearRect(0, 0, size, size);
-
-        // Background ring (gray track)
-        const isDark = document.body.classList.contains('dark-theme');
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
-        ctx.lineWidth = lineWidth;
-        ctx.stroke();
-
-        // Filled arc
-        if (percent > 0) {
-            let color = '#22c55e'; // green
-            if (percent >= 90)
-                color = '#ef4444'; // red
-            else if (percent >= 75) color = '#eab308'; // yellow
-            const startAngle = -Math.PI / 2;
-            const endAngle = startAngle + (Math.PI * 2 * Math.min(percent, 100)) / 100;
-            ctx.beginPath();
-            ctx.arc(cx, cy, r, startAngle, endAngle);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lineWidth;
-            ctx.lineCap = 'round';
-            ctx.stroke();
-        }
+        drawContextRing(document.getElementById('contextRing'), percent);
     }
 
     // --- Auto-Compact ---
@@ -3062,46 +3014,25 @@ export class ChatApp {
         const toolbarLeft = document.querySelector('.chat-toolbar-left');
         if (!toolbarLeft) return;
 
-        // Remove any previously rendered extension buttons
-        toolbarLeft.querySelectorAll('.ext-toolbar-btn').forEach((el) => el.remove());
-
-        if (buttons.length === 0) return;
-
-        for (const btn of buttons) {
-            const el = document.createElement('button');
-            el.className = 'chat-toolbar-btn ext-toolbar-btn';
-            el.title = btn.tooltip || btn.id;
-            // Icons are sanitized through the `icon` mode of the extension
-            // sanitizer: SVG markup renders as SVG; emoji / plain text
-            // passes through as a text node; anything else (script, anchor,
-            // img, scripts inside SVG, on* handlers, javascript: URLs) is
-            // stripped. Lets extensions ship sharp icons while keeping the
-            // sandbox boundary intact.
-            const iconStr = typeof btn.icon === 'string' && btn.icon ? btn.icon : '🔧';
-            el.appendChild(sanitizeExtensionHtmlStatic(iconStr, 'icon'));
-            el.addEventListener('click', async () => {
-                try {
-                    const ctx = {
-                        input: this.elements.chatInput?.value || '',
-                        messages: (this.messages || []).map((m) => ({
-                            role: m?.role || '',
-                            content: typeof m?.content === 'string' ? m.content : '',
-                        })),
-                    };
-                    const out = await btn.onClick(ctx);
-                    if (out?.host) {
-                        // Stamp the origin so the host effect handler can
-                        // scope ephemeral bubbles / side effects to the
-                        // right extension.
-                        out.host.extensionId = btn.extensionId;
-                        this._runToolbarHostEffect(out.host);
-                    }
-                } catch (e) {
-                    console.warn(`Extension toolbar button error (${btn.extensionId}):`, e);
-                }
-            });
-            toolbarLeft.appendChild(el);
-        }
+        renderToolbarButtons({
+            container: toolbarLeft,
+            buttons,
+            buttonClass: 'chat-toolbar-btn',
+            sanitizeIcon: (iconStr) => sanitizeExtensionHtmlStatic(iconStr, 'icon'),
+            buildContext: () => ({
+                input: this.elements.chatInput?.value || '',
+                messages: (this.messages || []).map((m) => ({
+                    role: m?.role || '',
+                    content: typeof m?.content === 'string' ? m.content : '',
+                })),
+            }),
+            onHostEffect: (host, btn) => {
+                // Stamp the origin so the host effect handler can scope
+                // ephemeral bubbles / side effects to the right extension.
+                host.extensionId = btn.extensionId;
+                this._runToolbarHostEffect(host);
+            },
+        });
     }
 
     /**

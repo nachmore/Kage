@@ -153,6 +153,49 @@ export function formatDuration(totalSecs) {
 }
 
 /**
+ * Order + filter sessions for the chat sidebar. Pure — separated from the
+ * DOM-diffing in `ChatApp.renderSessionList` so the ranking rules are
+ * unit-testable. Rules:
+ *   - The floating window's pinned session (`defaultId`) sorts to the top;
+ *     everything else is newest-first by `updated_at`.
+ *   - With a search query, match case-insensitively against the title
+ *     (defaulting an absent title to "New Chat").
+ *   - Without a query, hide steering-only "New Chat" sessions UNLESS the row
+ *     is the default session or one of the active/selected ids — otherwise a
+ *     freshly-created peer would vanish from the sidebar mid-click.
+ *
+ * @param {Array<{session_id: string, title?: string, updated_at?: string, created_at?: string}>} sessions
+ * @param {object} opts
+ * @param {string} [opts.defaultId]  floating window's pinned session id
+ * @param {string} [opts.searchQuery]  raw search box value
+ * @param {string[]} [opts.keepIds]  ids to keep even if they're "New Chat"
+ *   (e.g. the active selection + current ACP session)
+ * @returns {Array} the filtered, ordered sessions
+ */
+export function orderSessionsForSidebar(sessions, opts = {}) {
+    const { defaultId, searchQuery = '', keepIds = [] } = opts;
+    const query = searchQuery.toLowerCase().trim();
+
+    const sorted = [...sessions].sort((a, b) => {
+        const aIsDefault = a.session_id === defaultId;
+        const bIsDefault = b.session_id === defaultId;
+        if (aIsDefault && !bIsDefault) return -1;
+        if (!aIsDefault && bIsDefault) return 1;
+        return (b.updated_at || '').localeCompare(a.updated_at || '');
+    });
+
+    if (query) {
+        return sorted.filter((s) => (s.title || 'New Chat').toLowerCase().includes(query));
+    }
+    const keep = new Set(keepIds);
+    return sorted.filter((s) => {
+        const title = s.title || 'New Chat';
+        if (title !== 'New Chat') return true;
+        return s.session_id === defaultId || keep.has(s.session_id);
+    });
+}
+
+/**
  * Format a relative date for the session list — "HH:mm" today, "Yesterday",
  * weekday name within a week, or "Mon DD" beyond. Pure given a `now`
  * reference (defaults to `new Date()`).

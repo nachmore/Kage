@@ -8,6 +8,8 @@ export {
     loadFrecency,
     setExtensionManager,
     getExtensionManager,
+    looksLikeFileSearch,
+    searchDebounceMs,
 } from '../shared/search-engine.js';
 
 // --- Floating-specific suggestion renderer ---

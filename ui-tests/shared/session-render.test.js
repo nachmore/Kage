@@ -18,6 +18,7 @@ import {
     formatDuration,
     formatRelativeDate,
     formatError,
+    orderSessionsForSidebar,
 } from '../../ui/js/shared/session-render.js';
 
 // Stub image converter — production code uses btoa+Uint8Array, the tests
@@ -286,5 +287,77 @@ describe('formatError', () => {
         const cyc = {};
         cyc.self = cyc;
         expect(formatError(cyc)).toBe('Unknown error');
+    });
+});
+
+describe('orderSessionsForSidebar', () => {
+    const mk = (id, title, updated) => ({
+        session_id: id,
+        title,
+        updated_at: updated,
+    });
+
+    it('pins the default (floating) session to the top', () => {
+        const sessions = [
+            mk('a', 'Alpha', '2026-01-03'),
+            mk('b', 'Bravo', '2026-01-02'),
+            mk('def', 'Default thread', '2026-01-01'),
+        ];
+        const out = orderSessionsForSidebar(sessions, { defaultId: 'def' });
+        expect(out[0].session_id).toBe('def');
+    });
+
+    it('sorts the rest newest-first by updated_at', () => {
+        const sessions = [
+            mk('a', 'Alpha', '2026-01-01'),
+            mk('b', 'Bravo', '2026-01-03'),
+            mk('c', 'Charlie', '2026-01-02'),
+        ];
+        const out = orderSessionsForSidebar(sessions, {});
+        expect(out.map((s) => s.session_id)).toEqual(['b', 'c', 'a']);
+    });
+
+    it('hides steering-only "New Chat" peers without a query', () => {
+        const sessions = [
+            mk('a', 'Real chat', '2026-01-02'),
+            mk('b', 'New Chat', '2026-01-01'),
+            mk('c', undefined, '2026-01-03'), // absent title defaults to New Chat
+        ];
+        const out = orderSessionsForSidebar(sessions, {});
+        expect(out.map((s) => s.session_id)).toEqual(['a']);
+    });
+
+    it('keeps a "New Chat" row when it is the default session', () => {
+        const sessions = [mk('a', 'Real', '2026-01-02'), mk('def', 'New Chat', '2026-01-01')];
+        const out = orderSessionsForSidebar(sessions, { defaultId: 'def' });
+        expect(out.map((s) => s.session_id).sort()).toEqual(['a', 'def']);
+    });
+
+    it('keeps a "New Chat" row when it is in keepIds (active/selected)', () => {
+        const sessions = [mk('a', 'Real', '2026-01-02'), mk('sel', 'New Chat', '2026-01-01')];
+        const out = orderSessionsForSidebar(sessions, { keepIds: ['sel'] });
+        expect(out.map((s) => s.session_id).sort()).toEqual(['a', 'sel']);
+    });
+
+    it('filters by case-insensitive title match when a query is present', () => {
+        const sessions = [
+            mk('a', 'Budget planning', '2026-01-02'),
+            mk('b', 'Dinner ideas', '2026-01-01'),
+        ];
+        const out = orderSessionsForSidebar(sessions, { searchQuery: 'BUDGET' });
+        expect(out.map((s) => s.session_id)).toEqual(['a']);
+    });
+
+    it('a query overrides the New-Chat hiding rule', () => {
+        const sessions = [mk('a', 'New Chat', '2026-01-01')];
+        const out = orderSessionsForSidebar(sessions, { searchQuery: 'new' });
+        expect(out.map((s) => s.session_id)).toEqual(['a']);
+    });
+
+    it('does not mutate the input array', () => {
+        const sessions = [mk('a', 'A', '2026-01-01'), mk('b', 'B', '2026-01-02')];
+        const copy = [...sessions];
+        orderSessionsForSidebar(sessions, {});
+        expect(sessions).toEqual(copy);
     });
 });

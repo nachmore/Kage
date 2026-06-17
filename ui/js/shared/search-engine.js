@@ -158,6 +158,38 @@ export function getExtensionManager() {
     return _extensionManager;
 }
 
+// --- Query-shape heuristics ---
+
+/**
+ * Does this query look like a file search? File-shaped queries (a trailing
+ * extension, a glob `*`/`?`, or an explicit `>find ` prefix) hit the disk,
+ * so callers debounce them harder to avoid hammering the filesystem on
+ * every keystroke. Pure predicate — exported for direct unit testing.
+ *
+ * @param {string} query
+ * @returns {boolean}
+ */
+export function looksLikeFileSearch(query) {
+    if (!query) return false;
+    return (
+        /\.\w{0,6}$/.test(query) ||
+        query.includes('*') ||
+        query.includes('?') ||
+        query.toLowerCase().startsWith('>find ')
+    );
+}
+
+/**
+ * Debounce (ms) to apply before dispatching a search for `query`:
+ * file-shaped queries wait longer (disk I/O), everything else is snappy.
+ *
+ * @param {string} query
+ * @returns {number}
+ */
+export function searchDebounceMs(query) {
+    return looksLikeFileSearch(query) ? 250 : 100;
+}
+
 // --- Unified search ---
 
 export async function unifiedSearch(query, invoke, shortcuts, onPartial) {

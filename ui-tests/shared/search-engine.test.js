@@ -9,6 +9,7 @@ vi.mock('../../ui/js/shared/commands.js', () => ({
 }));
 
 let recordSelection, loadFrecency, unifiedSearch, setExtensionManager;
+let looksLikeFileSearch, searchDebounceMs;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -25,6 +26,8 @@ beforeEach(async () => {
   loadFrecency = mod.loadFrecency;
   unifiedSearch = mod.unifiedSearch;
   setExtensionManager = mod.setExtensionManager;
+  looksLikeFileSearch = mod.looksLikeFileSearch;
+  searchDebounceMs = mod.searchDebounceMs;
 });
 
 // Rust-side search returns nothing for these queries so we can assert
@@ -42,6 +45,47 @@ describe('search-engine module', () => {
 
   it('exports unifiedSearch as a function', () => {
     expect(typeof unifiedSearch).toBe('function');
+  });
+});
+
+describe('looksLikeFileSearch', () => {
+  it('is true for a trailing file extension', () => {
+    expect(looksLikeFileSearch('report.pdf')).toBe(true);
+    expect(looksLikeFileSearch('notes.md')).toBe(true);
+    expect(looksLikeFileSearch('archive.')).toBe(true); // dot with no ext yet
+  });
+
+  it('is true for glob characters', () => {
+    expect(looksLikeFileSearch('src/*.js')).toBe(true);
+    expect(looksLikeFileSearch('foo?.txt')).toBe(true);
+  });
+
+  it('is true for the explicit >find prefix, case-insensitively', () => {
+    expect(looksLikeFileSearch('>find budget')).toBe(true);
+    expect(looksLikeFileSearch('>FIND budget')).toBe(true);
+  });
+
+  it('is false for plain text queries', () => {
+    expect(looksLikeFileSearch('how do I cook rice')).toBe(false);
+    expect(looksLikeFileSearch('calculator')).toBe(false);
+  });
+
+  it('is false for empty / nullish input', () => {
+    expect(looksLikeFileSearch('')).toBe(false);
+    expect(looksLikeFileSearch(undefined)).toBe(false);
+    expect(looksLikeFileSearch(null)).toBe(false);
+  });
+});
+
+describe('searchDebounceMs', () => {
+  it('debounces file-shaped queries harder', () => {
+    expect(searchDebounceMs('report.pdf')).toBe(250);
+    expect(searchDebounceMs('>find x')).toBe(250);
+  });
+
+  it('is snappy for plain queries', () => {
+    expect(searchDebounceMs('weather')).toBe(100);
+    expect(searchDebounceMs('')).toBe(100);
   });
 });
 

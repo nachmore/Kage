@@ -37,7 +37,7 @@
  * spotify install hat-trick at PR time.
  */
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -83,7 +83,18 @@ function parseRustStrSliceConst(rustPath, name) {
  * uses the param names Tauri actually expects on the wire.
  */
 function parseTauriCommands(rustPath) {
-    const text = readFileSync(rustPath, 'utf8');
+    // Accept either a single .rs file or a module directory; when given a
+    // directory, concatenate every .rs file under it. The extensions
+    // commands were split from a single `extensions.rs` into an
+    // `extensions/` module (discovery/files/install/store/welcome), so
+    // scanning the directory keeps this test working across that split
+    // and any future re-split.
+    const text = rustPath.endsWith('.rs')
+        ? readFileSync(rustPath, 'utf8')
+        : readdirSync(rustPath)
+              .filter((f) => f.endsWith('.rs'))
+              .map((f) => readFileSync(path.join(rustPath, f), 'utf8'))
+              .join('\n');
     const out = new Map();
     // Match `#[tauri::command]` followed by an optional `pub` and an
     // `async fn` / `fn`, then capture the name + arg list.
@@ -208,10 +219,10 @@ describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
         // If anyone ever renames the Rust param (e.g. to `id`) without
         // updating the JS injection target, this test reminds them
         // that the wire-name has changed.
-        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions.rs'));
+        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions'));
         for (const name of STORAGE_COMMANDS) {
             const args = cmds.get(name);
-            expect(args, `${name}: not found as a #[tauri::command] in src/commands/extensions.rs`).toBeDefined();
+            expect(args, `${name}: not found as a #[tauri::command] in src/commands/extensions/`).toBeDefined();
             expect(
                 args.includes('extension_id'),
                 `${name}(${args.join(', ')}) — expected param 'extension_id'; if you renamed it, update STORAGE_COMMANDS in extension-sandbox-host.js too`
@@ -247,7 +258,7 @@ describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
         // Compose the assertion: for each storage command, the Rust
         // arg `extension_id` becomes `extensionId` over the wire,
         // and that's what the host must inject.
-        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions.rs'));
+        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions'));
         for (const name of STORAGE_COMMANDS) {
             const args = cmds.get(name) ?? [];
             const wireNames = args.map(snakeToCamel);
