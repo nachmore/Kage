@@ -7708,5 +7708,11 @@
     "description": "Creating a new session against the agent backend failed",
     "_machine_translated": true,
     "_source_hash": "5981e92883bbdd2c"
+  },
+  "command.selection.heading": {
+    "message": "Selecteer voor {command}:",
+    "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)",
+    "_machine_translated": true,
+    "_source_hash": "0ed9533c05aec682"
   }
 }

@@ -3621,6 +3621,10 @@
     "message": "No options available",
     "description": "Response when a selection-type slash command returns nothing"
   },
+  "command.selection.heading": {
+    "message": "Select for {command}:",
+    "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)"
+  },
   "command.slash.executed": {
     "message": "Command executed",
     "description": "Default response when a slash command succeeds with no message"

@@ -68,7 +68,13 @@ export async function executeResult(result, query, ctx) {
     if (result.type === 'command' || result.type === 'slash') {
         const cmd = result.data || result;
         if (cmd.execute) {
-            await cmd.execute(invoke, appWindow);
+            // A selection-type slash command renders a picker into the
+            // suggestions dropdown and returns { action: 'keep_suggestions' }
+            // so the caller doesn't wipe it during post-execute cleanup.
+            const out = await cmd.execute(invoke, appWindow);
+            if (out?.action === 'keep_suggestions') {
+                return { handled: true, action: 'keep_suggestions' };
+            }
         } else if (cmd.name) {
             await executeCommand(cmd.name, invoke, appWindow);
         }
@@ -243,7 +249,10 @@ export async function handleEnterAction(opts) {
         const { matchSlashCommands: matchSlash } = await import('./commands.js');
         const slashCmds = matchSlash(message);
         if (slashCmds?.length === 1) {
-            await slashCmds[0].execute(ctx.invoke, ctx.appWindow);
+            const out = await slashCmds[0].execute(ctx.invoke, ctx.appWindow);
+            if (out?.action === 'keep_suggestions') {
+                return { handled: true, action: 'keep_suggestions' };
+            }
             return { handled: true };
         }
     }

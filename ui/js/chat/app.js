@@ -13,7 +13,7 @@ import {
     attachmentPreviewHtml,
     sessionImageToDataUrl,
 } from '../shared/attachments.js';
-import { loadSlashCommands, executeCommand } from '../shared/commands.js';
+import { loadSlashCommands, executeCommand, getSlashCommandMeta } from '../shared/commands.js';
 import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.js';
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
@@ -21,6 +21,7 @@ import { WINDOW, isChatLabel } from '../shared/window-labels.js';
 import { getWindowSessionOrNull } from '../shared/session-resolve.js';
 import { errLabel } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
+import { submitSelection, loadSelection } from '../shared/slash-selection.js';
 import { mascotHTML } from '../shared/mascot.js';
 import {
     isOnline,
@@ -945,33 +946,54 @@ export class ChatApp {
         document.addEventListener('kage-show-selection', (e) => {
             const { command, options } = e.detail;
             if (!options || options.length === 0) return;
-            // Show selection as a system message with clickable options
+            // Render an inline picker in the transcript. Uses the shared
+            // `.slash-selection` component (see shared-components.css), NOT the
+            // old red reconnect-error buttons. Submit goes through the shared
+            // `submitSelection` so the arg-shape ({<cmd>Name: value}) matches
+            // what the agent actually accepts — `{input: value}` silently
+            // no-ops on the agent side.
             const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
             if (placeholder) placeholder.remove();
 
             const container = document.createElement('div');
-            container.className = 'session-reset-notice';
+            container.className = 'slash-selection';
+
+            const heading = document.createElement('div');
+            heading.className = 'slash-selection-heading';
+            heading.textContent = t('command.selection.heading', { command: '/' + command });
+            container.appendChild(heading);
+
             options.forEach((opt) => {
-                const btn = document.createElement('button');
-                btn.className = 'chat-error-btn reconnect';
-                btn.style.margin = '4px';
-                btn.textContent = opt.label + (opt.current ? ' ●' : '');
-                btn.addEventListener('click', async () => {
+                const item = document.createElement('button');
+                item.className = 'slash-selection-item' + (opt.current ? ' current' : '');
+                item.innerHTML = `
+                    <span class="slash-selection-marker">${opt.current ? '●' : '○'}</span>
+                    <span class="slash-selection-label"></span>
+                    ${opt.description ? '<span class="slash-selection-desc"></span>' : ''}
+                `;
+                item.querySelector('.slash-selection-label').textContent = opt.label;
+                if (opt.description) {
+                    item.querySelector('.slash-selection-desc').textContent = opt.description;
+                }
+                item.addEventListener('click', async () => {
                     try {
-                        const result = await this.invoke('execute_slash_command', {
-                            sessionId: this.activeSessionId,
+                        const msg = await submitSelection(
+                            this.invoke,
+                            this.activeSessionId,
                             command,
-                            args: { input: opt.value },
-                        });
+                            opt.value
+                        );
                         container.remove();
-                        const msg = result?.message || t('chat.command.result_done');
-                        this.addMessageFromHistory('assistant', msg);
+                        this.addMessageFromHistory(
+                            'assistant',
+                            msg || t('chat.command.result_done')
+                        );
                         this.scrollToBottom();
                     } catch (err) {
                         this.showError(errLabel(t('chat.error.command_failed'), err));
                     }
                 });
-                container.appendChild(btn);
+                container.appendChild(item);
             });
             this.elements.messagesArea.appendChild(container);
             this.scrollToBottom();
@@ -1863,7 +1885,35 @@ export class ChatApp {
             try {
                 const parts = message.split(' ');
                 const cmdName = parts[0].substring(1); // strip leading /
-                const cmdArgs = parts.length > 1 ? { input: parts.slice(1).join(' ') } : {};
+                const rest = parts.slice(1).join(' ').trim();
+
+                // Bare selection-type command (e.g. just "/agent"): render the
+                // inline picker instead of dumping the agent's pre-formatted
+                // list text. The kage-show-selection handler paints the picker
+                // and routes the submit through the correct arg-shape.
+                if (!rest && getSlashCommandMeta(cmdName)?.inputType === 'selection') {
+                    this.addUserMessage(message);
+                    const res = await loadSelection(this.invoke, this.activeSessionId, cmdName);
+                    if (res.kind === 'options') {
+                        document.dispatchEvent(
+                            new CustomEvent('kage-show-selection', {
+                                detail: { command: cmdName, options: res.options },
+                            })
+                        );
+                    } else {
+                        this.addMessageFromHistory(
+                            'assistant',
+                            res.text || t('command.slash.no_options')
+                        );
+                    }
+                    this.scrollToBottom();
+                    return;
+                }
+
+                // Everything else: execute with any trailing args as `input`
+                // (panel commands and selection subcommands like
+                // "/agent swap foo" accept this) and show the reply.
+                const cmdArgs = rest ? { input: rest } : {};
                 const result = await this.invoke('execute_slash_command', {
                     sessionId: this.activeSessionId,
                     command: cmdName,

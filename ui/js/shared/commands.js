@@ -7,6 +7,7 @@ import { WINDOW } from './window-labels.js';
 import { getWindowSessionOrNull } from './session-resolve.js';
 import { errLabel } from './error-message.js';
 import { t } from './i18n.js';
+import { loadSelection } from './slash-selection.js';
 
 // Each entry's `description` is a getter so it resolves through the active
 // i18n catalog at the moment the launcher renders, not at module-import time
@@ -380,45 +381,35 @@ export function matchSlashCommands(input) {
                 const winLabel = _appWindow?.label || WINDOW.FLOATING;
                 const sessionId = await getWindowSessionOrNull(invoke, winLabel);
 
-                // Selection-type commands: show options as a selectable list
+                // Selection-type commands: load options from the structured
+                // reply and show them as a selectable list. The shared
+                // `loadSelection` classifies the reply — a real option list
+                // ('options') vs a plain message ('message', e.g. /feedback
+                // opening a browser or /effort erroring on an unsupported
+                // model). See ui/js/shared/slash-selection.js.
                 if (cmd.meta?.inputType === 'selection') {
                     try {
-                        const result = await invoke('execute_slash_command', {
-                            sessionId,
-                            command: cmdName,
-                            args: null,
-                        });
-                        // Parse the message to extract options
-                        const msg = result?.message || '';
-                        const lines = msg.split('\n').filter((l) => l.trim());
-                        if (lines.length > 0) {
+                        const res = await loadSelection(invoke, sessionId, cmdName);
+                        if (res.kind === 'options') {
                             document.dispatchEvent(
                                 new CustomEvent('kage-show-selection', {
                                     detail: {
                                         command: cmdName,
-                                        options: lines.map((line) => {
-                                            const isCurrent =
-                                                line.trim().startsWith('→') ||
-                                                line.trim().startsWith('*');
-                                            const clean = line.replace(/^[\s→*]+/, '').trim();
-                                            // Extract name and id: "name (id)" or just "name"
-                                            const match = clean.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-                                            return {
-                                                label: match ? match[1].trim() : clean,
-                                                value: match ? match[2].trim() : clean,
-                                                current: isCurrent,
-                                            };
-                                        }),
+                                        options: res.options,
                                     },
                                 })
                             );
-                        } else {
-                            document.dispatchEvent(
-                                new CustomEvent('kage-show-response', {
-                                    detail: msg || t('command.slash.no_options'),
-                                })
-                            );
+                            // The picker was just rendered into the suggestions
+                            // dropdown (floating) — tell the Enter handler NOT to
+                            // wipe it as part of its post-execute input cleanup.
+                            // See handleEnterAction / floating handleEnterKey.
+                            return { action: 'keep_suggestions' };
                         }
+                        document.dispatchEvent(
+                            new CustomEvent('kage-show-response', {
+                                detail: res.text || t('command.slash.no_options'),
+                            })
+                        );
                     } catch (e) {
                         document.dispatchEvent(
                             new CustomEvent('kage-show-response', {
@@ -455,6 +446,20 @@ export function matchSlashCommands(input) {
         }));
 
     return mapped.length > 0 ? mapped : null;
+}
+
+/**
+ * Look up the advertised meta for a bare slash command name (no leading `/`).
+ * Returns null if the agent never advertised it. Used by callers that need to
+ * branch on `inputType` (selection vs panel vs plain) before executing — e.g.
+ * the chat window's direct "type /agent and press Enter" path.
+ */
+export function getSlashCommandMeta(name) {
+    const bare = name.startsWith('/') ? name.substring(1) : name;
+    const cmd = acpSlashCommands.find(
+        (c) => (c.name.startsWith('/') ? c.name.substring(1) : c.name) === bare
+    );
+    return cmd?.meta || null;
 }
 
 /**

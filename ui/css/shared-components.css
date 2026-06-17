@@ -2303,3 +2303,63 @@ body.light-theme .conn-edit-actions {
     background: var(--kage-accent-hover);
     border-color: var(--kage-accent-hover);
 }
+
+/* --- Slash-command selection picker (inline, chat transcript) ---
+ * Shared visual component for ACP "selection"-type commands (/agent, /model,
+ * …) rendered inside the chat message flow. The floating window renders its
+ * own dropdown-flavoured variant; only chat uses this block. Replaces the old
+ * reuse of the red `.chat-error-btn reconnect` buttons. */
+.slash-selection {
+    margin: 8px 0;
+    padding: 8px;
+    background: var(--kage-bg-elevated);
+    border: 1px solid var(--kage-border-subtle);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: slideIn 0.2s ease-out;
+}
+.slash-selection-heading {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+    padding: 2px 8px 6px;
+}
+.slash-selection-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 7px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--kage-text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+.slash-selection-item:hover {
+    background: var(--kage-accent-glow);
+}
+.slash-selection-item.current {
+    color: var(--kage-accent);
+}
+.slash-selection-marker {
+    flex-shrink: 0;
+    width: 12px;
+    color: var(--kage-accent);
+    font-size: 10px;
+}
+.slash-selection-label {
+    font-weight: 500;
+    flex-shrink: 0;
+}
+.slash-selection-desc {
+    color: var(--kage-text-muted);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

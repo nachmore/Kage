@@ -3,6 +3,7 @@ import { updateSelection, appendSendHint } from './suggestions.js';
 import { WindowManager } from './window.js';
 import { renderMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { loadSlashCommands } from '../shared/commands.js';
+import { submitSelection } from '../shared/slash-selection.js';
 import {
     AttachmentManager,
     handlePasteEvent,
@@ -1028,11 +1029,14 @@ export class FloatingApp {
                 item.className =
                     'app-suggestion-item' + (index === this.selectedIndex ? ' selected' : '');
                 const currentBadge = opt.current ? '<span class="selection-current">●</span>' : '';
+                // Prefer the human description (e.g. an agent's blurb); fall
+                // back to the raw value when the agent gave no description.
+                const subtitle = opt.description || opt.value;
                 item.innerHTML = `
                     <div class="app-icon">${opt.current ? '✓' : '○'}</div>
                     <div class="app-info">
                         <div class="app-name">${opt.label}${currentBadge}</div>
-                        <div class="app-description">${opt.value}</div>
+                        <div class="app-description">${subtitle}</div>
                     </div>
                 `;
                 item.addEventListener('click', () => this.executeSelection(command, opt.value));
@@ -2735,16 +2739,14 @@ export class FloatingApp {
     async executeSelection(command, value) {
         this.clearSuggestions();
         try {
-            // For selection commands, use the convention: arg key is commandName + "Name"
-            // e.g. "model" command → { modelName: value }
-            const argKey = command + 'Name';
-            const result = await this.invoke('execute_slash_command', {
-                sessionId: this.floatingSessionId,
-                command: command,
-                args: { [argKey]: value },
-            });
-            const msg = result?.message || t('floating.suggestions.selection_fallback', { value });
-            document.dispatchEvent(new CustomEvent('kage-show-response', { detail: msg }));
+            // Shared submit — sends { <command>Name: value }, the arg-shape the
+            // agent actually accepts (verified via scripts/probe_slash.py).
+            const msg = await submitSelection(this.invoke, this.floatingSessionId, command, value);
+            document.dispatchEvent(
+                new CustomEvent('kage-show-response', {
+                    detail: msg || t('floating.suggestions.selection_fallback', { value }),
+                })
+            );
         } catch (e) {
             document.dispatchEvent(
                 new CustomEvent('kage-show-response', {
@@ -2950,6 +2952,13 @@ export class FloatingApp {
             } else if (result.action === 'hide') {
                 this.resetUI();
                 await this.appWindow.hide();
+            } else if (result.action === 'keep_suggestions') {
+                // A selection picker was just rendered into the suggestions
+                // dropdown (e.g. /agent, /model). Clear the input text but
+                // DON'T touch the suggestions — clearSuggestions() would wipe
+                // the picker we just painted, which was the silent-failure bug.
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
             } else {
                 this._clearInput();
             }
