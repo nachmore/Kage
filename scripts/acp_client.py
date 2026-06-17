@@ -43,7 +43,7 @@ def _default_cli_command() -> str:
     and the chat hangs on "thinking…". The bare name lets the shim do its own
     lookup. Same quirk handled in scripts/probe_slash.py.
     """
-    env = os.environ.get("KAGE_CLI_PATH") or os.environ.get("KIRO_CLI_PATH")
+    env = os.environ.get("ACP_AGENT_COMMAND") or os.environ.get("KIRO_CLI_PATH")
     if env:
         return env
     return "kiro-cli"
@@ -172,7 +172,40 @@ class InteractiveClient(Client):
         pass
 
 
+def print_help() -> None:
+    agents = " | ".join(AGENT_PRESETS)
+    print(
+        f"""ACP interactive client — dual-window JSON-RPC trace + chat UI.
+
+Spawns an ACP agent, opens a chat window in a second console, and traces every
+JSON-RPC frame in this window.
+
+Usage:
+  python acp_client.py                      Default agent (kiro-cli acp)
+  python acp_client.py --agent <name>       Use a known agent preset
+  python acp_client.py -- <command> [args]  Spawn a custom command
+  python acp_client.py --help               Show this help
+
+Agent presets ({agents}):
+  kiro     kiro-cli acp
+  claude   claude-code-acp   (Claude Code ACP adapter)
+  codex    codex-acp         (OpenAI Codex ACP adapter)
+
+Environment:
+  ACP_AGENT_COMMAND   Override the default agent command (full command string).
+  KIRO_CLI_PATH       Legacy fallback for the same.
+
+Notes:
+  - Use a bare command name (e.g. 'kiro-cli'), not a resolved '.EXE' path:
+    the Toolbox shim rejects explicit paths and the agent will fail to start.
+  - In the chat window, prefix a message with ':' to send raw JSON-RPC."""
+    )
+
+
 def parse_command(argv: list[str]) -> tuple[str, list[str]]:
+    if "--help" in argv or "-h" in argv:
+        print_help()
+        sys.exit(0)
     # Explicit command after `--` wins over everything.
     if "--" in argv:
         idx = argv.index("--")

@@ -27,7 +27,7 @@ VENDOR_PREFIXES = ["_kage.dev/", "_kiro.dev/"]
 
 
 def _default_command() -> str:
-    env = os.environ.get("KAGE_CLI_PATH") or os.environ.get("KIRO_CLI_PATH")
+    env = os.environ.get("ACP_AGENT_COMMAND") or os.environ.get("KIRO_CLI_PATH")
     if env:
         return env
     # Use the bare name, not shutil.which's resolved path: the toolbox shim
@@ -36,10 +36,35 @@ def _default_command() -> str:
     return "kiro-cli"
 
 
+def _print_help():
+    print(
+        """Headless ACP slash-command probe.
+
+Spawns an ACP agent, captures its commands/available meta, and dumps the full
+commands/execute reply for the given commands. No app build required.
+
+Usage:
+  python probe_slash.py                       Probe agent, model, context
+  python probe_slash.py <cmd> [<cmd> ...]     Probe specific commands
+  python probe_slash.py -- <command> [args]   Use a custom agent command
+  python probe_slash.py --help                Show this help
+
+Environment:
+  ACP_AGENT_COMMAND   Override the default agent command (defaults to kiro-cli).
+  KIRO_CLI_PATH       Legacy fallback for the same.
+
+Note: pass bare command names ('context', not '/context') to avoid Git-Bash
+rewriting a leading-slash arg into a fake path."""
+    )
+
+
 def _split_args(argv):
     """Returns (command, agent_args, commands_to_probe)."""
     command, agent_args = _default_command(), ["acp"]
     probe = []
+    if "--help" in argv or "-h" in argv:
+        _print_help()
+        sys.exit(0)
     if "--" in argv:
         idx = argv.index("--")
         rest = argv[idx + 1:]
