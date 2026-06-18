@@ -80,15 +80,20 @@ function _renderItem(r, _index, extMgr) {
  * Now async: extensions can contribute custom render HTML, which we
  * prefetch from the sandbox before building DOM so `renderResult()` can
  * stay synchronous.
+ *
+ * Returns `{ selectedIndex, matches }` so the caller can commit both the
+ * highlighted-row index AND the result list it corresponds to in a single
+ * assignment. This is load-bearing: progressive search fires several
+ * overlapping `renderUnifiedResults` calls (sync flush + one per async
+ * batch), each of which `await`s a sandbox round-trip mid-render. If the
+ * matches list were mutated by-reference, a late-resolving stale render
+ * could clobber the list after a newer render had already painted fresher
+ * DOM — leaving `selectedIndex` pointing at a row the user can't see (e.g.
+ * Enter launching the wrong result). Returning a self-consistent snapshot
+ * lets the caller drop stale commits via the search-generation guard.
  */
-export async function renderUnifiedResults(
-    results,
-    container,
-    currentMatches,
-    resizeWindow,
-    onItemClick
-) {
-    currentMatches.length = 0;
+export async function renderUnifiedResults(results, container, resizeWindow, onItemClick) {
+    const matches = [];
 
     // Flex-collapse guard: when the suggestions dropdown becomes visible
     // inside the speech-bubble's flex column, `.content-area` (the only
@@ -115,7 +120,7 @@ export async function renderUnifiedResults(
         container.classList.remove('visible');
         _releaseContentLock();
         resizeWindow();
-        return -1;
+        return { selectedIndex: -1, matches };
     }
 
     const extMgr = getExtensionManager();
@@ -140,7 +145,7 @@ export async function renderUnifiedResults(
     for (let i = 0; i < results.length; i++) {
         const r = results[i];
         const key = newKeys[i];
-        currentMatches.push(r);
+        matches.push(r);
 
         let item = existingByKey.get(key);
         if (item) {
@@ -217,7 +222,7 @@ export async function renderUnifiedResults(
     // Release the content-area min-height lock after the OS window has had
     // time to resize (debounce ~50ms + animation up to ~120ms + slack).
     _scheduleContentLockRelease();
-    return 0;
+    return { selectedIndex: 0, matches };
 }
 
 // --- Content-area min-height lock helpers (flex-collapse guard) ---

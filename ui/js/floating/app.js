@@ -1178,13 +1178,14 @@ export class FloatingApp {
                     this.clearSuggestions();
                     const results = await unifiedSearch(query, this.invoke, this.shortcuts);
                     if (results.length > 0) {
-                        this.selectedIndex = await renderUnifiedResults(
+                        const { selectedIndex, matches } = await renderUnifiedResults(
                             results,
                             this.elements.appSuggestions,
-                            this.currentMatches,
                             () => this.windowManager.resizeWindow(),
                             (r) => this._onResultClick(r)
                         );
+                        this.currentMatches = matches;
+                        this.selectedIndex = selectedIndex;
                     }
                 } else {
                     this.clearSuggestions();
@@ -2346,13 +2347,21 @@ export class FloatingApp {
                     // Progressive rendering: show results as they arrive
                     if (gen !== this._searchGeneration) return; // stale
                     if (partial.length > 0) {
-                        this.selectedIndex = await renderUnifiedResults(
+                        const { selectedIndex, matches } = await renderUnifiedResults(
                             partial,
                             this.elements.appSuggestions,
-                            this.currentMatches,
                             () => this.windowManager.resizeWindow(),
                             (r) => this._onResultClick(r)
                         );
+                        // renderUnifiedResults awaits a sandbox round-trip; a
+                        // newer flush may have superseded us while we were in
+                        // it. Commit matches + selection together only if we're
+                        // still current, so the two never disagree (which would
+                        // make Enter fire the wrong row — see the function's
+                        // doc comment).
+                        if (gen !== this._searchGeneration) return;
+                        this.currentMatches = matches;
+                        this.selectedIndex = selectedIndex;
                     }
                     // Show/hide loading indicator with provider names.
                     // _requestSearchLoading delay-gates the hint so fast
@@ -2378,13 +2387,15 @@ export class FloatingApp {
             // outright if the delay gate never fired, fades it out if it did).
             this._hideSearchLoading();
             if (results.length > 0) {
-                this.selectedIndex = await renderUnifiedResults(
+                const { selectedIndex, matches } = await renderUnifiedResults(
                     results,
                     this.elements.appSuggestions,
-                    this.currentMatches,
                     () => this.windowManager.resizeWindow(),
                     (r) => this._onResultClick(r)
                 );
+                if (gen !== this._searchGeneration) return;
+                this.currentMatches = matches;
+                this.selectedIndex = selectedIndex;
                 // Show send hint for non-instant results
                 if (!['color', 'math', 'devtool'].includes(results[0].type)) {
                     appendSendHint(this.elements.appSuggestions);

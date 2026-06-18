@@ -25,7 +25,7 @@ describe('renderUnifiedResults click wiring', () => {
     it('invokes onItemClick with the clicked result', async () => {
         const container = makeContainer();
         const onItemClick = vi.fn();
-        await renderUnifiedResults(RESULTS, container, [], () => {}, onItemClick);
+        await renderUnifiedResults(RESULTS, container, () => {}, onItemClick);
 
         const items = container.querySelectorAll('.app-suggestion-item');
         expect(items).toHaveLength(2);
@@ -42,15 +42,14 @@ describe('renderUnifiedResults click wiring', () => {
     it('passes the correct result even after a re-render reuses DOM nodes', async () => {
         const container = makeContainer();
         const onItemClick = vi.fn();
-        const matches = [];
 
-        await renderUnifiedResults(RESULTS, container, matches, () => {}, onItemClick);
+        await renderUnifiedResults(RESULTS, container, () => {}, onItemClick);
         // Re-render with the same keys (node reuse path) but updated objects.
         const updated = [
             { id: 'slash:/agent', type: 'slash', label: '/agent', description: 'changed' },
             { id: 'app:Calc', type: 'app', label: 'Calculator', description: 'app' },
         ];
-        await renderUnifiedResults(updated, container, matches, () => {}, onItemClick);
+        await renderUnifiedResults(updated, container, () => {}, onItemClick);
 
         container.querySelector('.app-suggestion-item').click();
         // Must fire exactly once (no stacked handler from the first render) and
@@ -61,10 +60,37 @@ describe('renderUnifiedResults click wiring', () => {
 
     it('is a no-op when no onItemClick is provided (keyboard-only mode)', async () => {
         const container = makeContainer();
-        await renderUnifiedResults(RESULTS, container, [], () => {});
+        await renderUnifiedResults(RESULTS, container, () => {});
         const item = container.querySelector('.app-suggestion-item');
         // No handler wired — clicking must not throw.
         expect(() => item.click()).not.toThrow();
         expect(item.onclick).toBeNull();
+    });
+
+    it('returns a self-consistent { selectedIndex, matches } snapshot', async () => {
+        // The caller commits these two together under a generation guard so a
+        // stale render can't leave selectedIndex pointing at a row the matches
+        // list no longer holds (which made Enter fire the wrong result).
+        const container = makeContainer();
+        const { selectedIndex, matches } = await renderUnifiedResults(
+            RESULTS,
+            container,
+            () => {}
+        );
+        expect(selectedIndex).toBe(0);
+        expect(matches).toEqual(RESULTS);
+        // The returned array is the render's own snapshot, not the input ref.
+        expect(matches).not.toBe(RESULTS);
+    });
+
+    it('returns selectedIndex -1 and empty matches for no results', async () => {
+        const container = makeContainer();
+        const { selectedIndex, matches } = await renderUnifiedResults(
+            [],
+            container,
+            () => {}
+        );
+        expect(selectedIndex).toBe(-1);
+        expect(matches).toEqual([]);
     });
 });
