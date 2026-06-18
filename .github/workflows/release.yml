@@ -485,7 +485,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Download artefacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: artefacts
 
@@ -804,7 +804,7 @@ jobs:
           fi
 
       - name: Upsert GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.plan.outputs.release_tag }}
           name: ${{ steps.name.outputs.release_name }}
