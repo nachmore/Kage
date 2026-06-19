@@ -9,8 +9,19 @@ use crate::lock_ext::LockExt;
 use crate::os;
 use crate::state::FeatureServices;
 use crate::window_labels;
-use log::info;
+use log::{info, warn};
 use tauri::{Manager, State};
+
+/// Wall-clock cap on the OS-backed query commands below (file search,
+/// calendar). These run on the blocking pool and can be triggered by
+/// extensions; without a cap a pathological query — or an extension firing
+/// them faster than they complete — could pile up blocking work. On timeout
+/// the command returns an error promptly so the caller isn't wedged. NOTE:
+/// `spawn_blocking` work can't be cancelled mid-flight, so the underlying
+/// query finishes in the background; the timeout bounds the *caller*, which
+/// is what stops the pile-up. The calendar's PowerShell side has its own ~9s
+/// internal kill, so this is a belt-and-suspenders ceiling above that.
+const QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12);
 
 #[tauri::command]
 pub async fn get_app_info() -> Result<serde_json::Value, AppError> {
@@ -101,11 +112,21 @@ pub async fn search_files(
 ) -> Result<Vec<crate::os::file_search::FileSearchResult>, AppError> {
     let max = max_results.unwrap_or(10);
     let q = query.clone();
-    Ok(
-        tauri::async_runtime::spawn_blocking(move || crate::os::search_files(&q, max))
-            .await
-            .map_err(|e| format!("Search task failed: {}", e))?,
-    )
+    let task = tauri::async_runtime::spawn_blocking(move || crate::os::search_files(&q, max));
+    match tokio::time::timeout(QUERY_TIMEOUT, task).await {
+        Ok(joined) => Ok(joined.map_err(|e| format!("Search task failed: {}", e))?),
+        Err(_) => {
+            warn!(
+                "[search_files] query timed out after {}s: {:?}",
+                QUERY_TIMEOUT.as_secs(),
+                query
+            );
+            Err(AppError::from(format!(
+                "File search timed out after {}s",
+                QUERY_TIMEOUT.as_secs()
+            )))
+        }
+    }
 }
 
 /// Get upcoming calendar events.
@@ -114,10 +135,22 @@ pub async fn get_calendar_events(
     hours: Option<u32>,
 ) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
     let h = hours.unwrap_or(24).min(72);
-    tauri::async_runtime::spawn_blocking(move || crate::os::get_upcoming_events(h))
-        .await
-        .map_err(|e| AppError::from(format!("Calendar task failed: {}", e)))?
-        .map_err(AppError::from)
+    let task = tauri::async_runtime::spawn_blocking(move || crate::os::get_upcoming_events(h));
+    match tokio::time::timeout(QUERY_TIMEOUT, task).await {
+        Ok(joined) => joined
+            .map_err(|e| AppError::from(format!("Calendar task failed: {}", e)))?
+            .map_err(AppError::from),
+        Err(_) => {
+            warn!(
+                "[get_calendar_events] timed out after {}s",
+                QUERY_TIMEOUT.as_secs()
+            );
+            Err(AppError::from(format!(
+                "Calendar query timed out after {}s",
+                QUERY_TIMEOUT.as_secs()
+            )))
+        }
+    }
 }
 
 /// Get calendar events for a specific date (YYYY-MM-DD).
@@ -128,10 +161,22 @@ pub async fn get_calendar_events_for_date(
     if !is_valid_iso_date(&date) {
         return Err("Invalid date format. Use YYYY-MM-DD.".into());
     }
-    tauri::async_runtime::spawn_blocking(move || crate::os::get_events_for_date(&date))
-        .await
-        .map_err(|e| AppError::from(format!("Calendar date query failed: {}", e)))?
-        .map_err(AppError::from)
+    let task = tauri::async_runtime::spawn_blocking(move || crate::os::get_events_for_date(&date));
+    match tokio::time::timeout(QUERY_TIMEOUT, task).await {
+        Ok(joined) => joined
+            .map_err(|e| AppError::from(format!("Calendar date query failed: {}", e)))?
+            .map_err(AppError::from),
+        Err(_) => {
+            warn!(
+                "[get_calendar_events_for_date] timed out after {}s",
+                QUERY_TIMEOUT.as_secs()
+            );
+            Err(AppError::from(format!(
+                "Calendar query timed out after {}s",
+                QUERY_TIMEOUT.as_secs()
+            )))
+        }
+    }
 }
 
 /// Strict YYYY-MM-DD validator. The date is interpolated into a PowerShell

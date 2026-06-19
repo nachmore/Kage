@@ -275,3 +275,59 @@ describe('ExtensionSandbox._handleInvoke', () => {
         expect(sent[0].error).toMatch(/no 'url' argument/);
     });
 });
+
+describe('ExtensionSandbox invoke rate limiting', () => {
+    // read_clipboard needs only the 'clipboard' capability and has no arg
+    // validation, so it's the cleanest command to fire in a loop.
+    async function fireN(sb, n) {
+        for (let i = 0; i < n; i++) {
+            await sb._handleInvoke({ id: i, command: 'read_clipboard', args: {} });
+        }
+    }
+
+    it('allows a normal burst under the cap', async () => {
+        const rawInvoke = vi.fn().mockResolvedValue('clip');
+        const { sb } = makeSandbox({ capabilities: ['clipboard'], rawInvoke });
+        await fireN(sb, 50);
+        expect(rawInvoke).toHaveBeenCalledTimes(50);
+    });
+
+    it('rejects invokes beyond the per-window cap and stops dispatching them', async () => {
+        const rawInvoke = vi.fn().mockResolvedValue('clip');
+        const { sb, sent } = makeSandbox({ capabilities: ['clipboard'], rawInvoke });
+        await fireN(sb, 250);
+        // Only the first 100 reach the host; the rest are rejected.
+        expect(rawInvoke).toHaveBeenCalledTimes(100);
+        const rejected = sent.filter((m) => /rate limit exceeded/.test(m.error || ''));
+        expect(rejected.length).toBe(150);
+    });
+
+    it('recovers once the sliding window drains', async () => {
+        vi.useFakeTimers();
+        try {
+            const rawInvoke = vi.fn().mockResolvedValue('clip');
+            const { sb } = makeSandbox({ capabilities: ['clipboard'], rawInvoke });
+            await fireN(sb, 150); // 100 allowed, 50 rejected
+            expect(rawInvoke).toHaveBeenCalledTimes(100);
+            // Advance past the window so old timestamps age out.
+            vi.advanceTimersByTime(1_100);
+            await fireN(sb, 100);
+            expect(rawInvoke).toHaveBeenCalledTimes(200); // full budget again
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not count capability-denied calls against the budget', async () => {
+        const rawInvoke = vi.fn().mockResolvedValue('clip');
+        // No 'clipboard' cap → every read_clipboard is denied at the gate.
+        const { sb } = makeSandbox({ capabilities: [], rawInvoke });
+        await fireN(sb, 300);
+        expect(rawInvoke).not.toHaveBeenCalled();
+        // Now grant nothing changed, but a different *allowed* command must
+        // still have its full budget — denied calls never consumed it.
+        const ok = makeSandbox({ capabilities: ['clipboard'], rawInvoke });
+        await fireN(ok.sb, 100);
+        expect(rawInvoke).toHaveBeenCalledTimes(100);
+    });
+});

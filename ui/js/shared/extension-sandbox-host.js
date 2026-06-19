@@ -27,6 +27,17 @@ import { decideInvoke } from './extension-permissions.js';
 const BOOT_TIMEOUT_MS = 10_000;
 const RPC_TIMEOUT_MS = 10_000;
 
+// Per-extension invoke rate limit. A misbehaving extension calling invoke()
+// in a tight loop (open_url, search_files, get_calendar_events — several of
+// which spawn OS work host-side) could otherwise pile up unbounded host work
+// and tank the machine. We allow a generous burst — real extensions fire a
+// handful of invokes per user action, never sustained hundreds/sec — and
+// reject the excess so the extension gets immediate backpressure instead of
+// the host melting down. Sliding 1s window, counted per ExtensionSandbox
+// instance (i.e. per extension).
+const INVOKE_RATE_WINDOW_MS = 1_000;
+const INVOKE_RATE_MAX_PER_WINDOW = 100;
+
 /**
  * Cached sandbox runtime source. Fetched once on first pool load and
  * reused for all subsequent sandbox iframes via srcdoc. This avoids
@@ -119,6 +130,13 @@ export class ExtensionSandbox {
         this._pendingRpcs = new Map();
         this._nextRpcId = 1;
         this._destroyed = false;
+
+        // Sliding-window invoke rate limiter (see INVOKE_RATE_* constants).
+        // Timestamps of invokes within the current window; pruned on each
+        // call. _rateLimitedLogged throttles the warning so a runaway loop
+        // doesn't itself flood the log.
+        this._invokeTimes = [];
+        this._rateLimitedLogged = false;
 
         // Capabilities surfaced by the extension after init-ack.
         this.hasSearch = false;
@@ -379,6 +397,31 @@ export class ExtensionSandbox {
         }
     }
 
+    /**
+     * Sliding-window rate check. Returns true if this invoke would exceed
+     * the per-extension budget (and should be rejected). On an allowed call
+     * it records the timestamp; rejected calls are NOT recorded, so an
+     * extension that backs off recovers immediately once the window drains.
+     */
+    _overInvokeRateLimit() {
+        const now = Date.now();
+        const cutoff = now - INVOKE_RATE_WINDOW_MS;
+        // Drop timestamps older than the window. The array stays small
+        // (bounded by the cap) because we reject once full.
+        while (this._invokeTimes.length && this._invokeTimes[0] <= cutoff) {
+            this._invokeTimes.shift();
+        }
+        if (this._invokeTimes.length >= INVOKE_RATE_MAX_PER_WINDOW) {
+            return true;
+        }
+        this._invokeTimes.push(now);
+        // Reset the log-throttle once the extension is behaving again.
+        if (this._rateLimitedLogged && this._invokeTimes.length < INVOKE_RATE_MAX_PER_WINDOW / 2) {
+            this._rateLimitedLogged = false;
+        }
+        return false;
+    }
+
     async _handleInvoke(msg) {
         const { id, command, args } = msg;
         const decision = decideInvoke(command, this.capabilities);
@@ -408,6 +451,25 @@ export class ExtensionSandbox {
                 error: `Extension '${this.extensionId}': ${argError}`,
             });
             console.warn(`[sandbox ${this.extensionId}] BLOCKED invoke('${command}'): ${argError}`);
+            return;
+        }
+
+        // Rate limit AFTER the capability/arg gates (a denied call shouldn't
+        // count against the budget) but BEFORE dispatch (so a runaway loop
+        // never reaches the host command). Reject excess with an error the
+        // extension sees on its invoke() promise.
+        if (this._overInvokeRateLimit()) {
+            this._port.postMessage({
+                type: 'invoke-response',
+                id,
+                error: `Extension '${this.extensionId}': invoke rate limit exceeded (max ${INVOKE_RATE_MAX_PER_WINDOW}/s)`,
+            });
+            if (!this._rateLimitedLogged) {
+                this._rateLimitedLogged = true;
+                console.warn(
+                    `[sandbox ${this.extensionId}] invoke rate limit exceeded (>${INVOKE_RATE_MAX_PER_WINDOW}/s) — throttling further warnings`
+                );
+            }
             return;
         }
 
