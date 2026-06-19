@@ -158,6 +158,54 @@ export function getExtensionManager() {
     return _extensionManager;
 }
 
+/**
+ * Build keyword completion-hint rows for a query.
+ *
+ * A hint fires when the query is a *strict, incomplete* prefix of a
+ * registered keyword (the keyword starts with the query but isn't equal to
+ * it) and the query carries no space — once the user has typed a space the
+ * keyword is committed and its own match() owns the row. An exact, complete
+ * keyword match produces no hint, since the extension's match() already
+ * surfaces the live result for it (a `cal` that's also a prefix of
+ * `calendar` still hints `calendar`, just not `cal` itself).
+ *
+ * The hint row is `type: 'ext_keyword'`; selecting it fills the input with
+ * the full keyword (+ a trailing space when the keyword takes arguments) via
+ * the replace_input path, re-triggering search so the real rows appear.
+ */
+async function _keywordHints(query) {
+    if (!_extensionManager?.getKeywordDefinitions) return [];
+    const q = query.trim().toLowerCase();
+    if (!q || q.includes(' ') || q.startsWith('>') || q.startsWith('/')) return [];
+
+    const defs = await _extensionManager.getKeywordDefinitions();
+    const hints = [];
+    for (const d of defs) {
+        if (d.keyword === q) continue; // complete — match() owns it
+        if (!d.keyword.startsWith(q)) continue;
+        hints.push({
+            id: 'ext-keyword:' + d.extensionId + ':' + d.keyword,
+            type: 'ext_keyword',
+            label: d.label,
+            description: d.description,
+            icon: d.icon,
+            // Slightly below a typical live extension row (85) so a real
+            // result for an already-complete keyword outranks a hint for a
+            // longer sibling, but above generic app/command rows.
+            score: 78,
+            data: {
+                extensionId: d.extensionId,
+                keyword: d.keyword,
+                acceptsArgs: d.acceptsArgs,
+                // What to put in the input on select. Trailing space when the
+                // keyword takes args so the user can type them immediately.
+                fill: d.acceptsArgs ? d.keyword + ' ' : d.keyword,
+            },
+        });
+    }
+    return hints;
+}
+
 // --- Query-shape heuristics ---
 
 /**
@@ -216,6 +264,18 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
             results.push(...extResults);
         } catch (e) {
             console.warn('extension matchAll failed:', e);
+        }
+
+        // Keyword completion hints: when the query is an incomplete prefix
+        // of a registered keyword (e.g. "cal-ref" → "cal-refresh"), surface a
+        // hint row so the user sees the command exists before fully typing
+        // it. Selecting it fills the input to the full keyword, at which
+        // point the extension's own match() produces the real rows.
+        try {
+            const hints = await _keywordHints(query);
+            results.push(...hints);
+        } catch (e) {
+            console.warn('extension keyword hints failed:', e);
         }
     }
 

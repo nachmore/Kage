@@ -774,6 +774,17 @@ async function dispatchMethod(method, params) {
             if (!p || typeof p.execute !== 'function') return null;
             return p.execute(params?.result) ?? null;
         }
+        case 'getKeywords': {
+            // Optional. Lets a search provider register its trigger words
+            // with the host so partial input (e.g. "cal-ref") can surface a
+            // completion hint before the full keyword is typed. Runs in the
+            // sandbox so the list can reflect this.config (a user-customised
+            // trigger). Labels are i18n KEYS, resolved host-side against the
+            // extension's catalog — never raw text.
+            const p = providers.searchProvider;
+            if (!p || typeof p.getKeywords !== 'function') return [];
+            return p.getKeywords() || [];
+        }
         case 'getTools': {
             const p = providers.toolProvider;
             if (!p || typeof p.getTools !== 'function') return [];

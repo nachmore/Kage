@@ -2720,6 +2720,12 @@ export class ChatApp {
                     await navigator.clipboard.writeText(text);
                 } catch {}
             },
+            // Used by keyword completion hints (type: 'ext_keyword') to fill
+            // the input with the full trigger and re-run search.
+            onReplaceInput: (text) => {
+                this.elements.chatInput.value = text;
+                this.elements.chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+            },
         };
     }
 

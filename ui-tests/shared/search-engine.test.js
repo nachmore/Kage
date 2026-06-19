@@ -142,3 +142,100 @@ describe('unifiedSearch', () => {
     expect(ids).toContain('b-loading'); // ext-b untouched
   });
 });
+
+describe('unifiedSearch — keyword completion hints', () => {
+  const mgr = (defs) => ({
+    matchAll: async () => [],
+    matchAllAsync: async () => [],
+    getKeywordDefinitions: async () => defs,
+  });
+
+  const KW = [
+    {
+      extensionId: 'calendar',
+      keyword: 'cal-refresh',
+      label: 'Refresh calendar',
+      description: 'Re-fetch events',
+      icon: '🔄',
+      acceptsArgs: false,
+    },
+    {
+      extensionId: 'calendar',
+      keyword: 'calendar',
+      label: 'Calendar',
+      description: 'Upcoming meetings',
+      icon: '📅',
+      acceptsArgs: true,
+    },
+  ];
+
+  it('surfaces a hint for an incomplete prefix of a keyword', async () => {
+    setExtensionManager(mgr(KW));
+    const results = await unifiedSearch('cal-ref', emptyInvoke(), []);
+    const hint = results.find((r) => r.type === 'ext_keyword');
+    expect(hint).toBeTruthy();
+    expect(hint.id).toBe('ext-keyword:calendar:cal-refresh');
+    expect(hint.label).toBe('Refresh calendar');
+    expect(hint.data.keyword).toBe('cal-refresh');
+  });
+
+  it('fills with no trailing space when the keyword takes no args', async () => {
+    setExtensionManager(mgr(KW));
+    const results = await unifiedSearch('cal-ref', emptyInvoke(), []);
+    const hint = results.find((r) => r.id === 'ext-keyword:calendar:cal-refresh');
+    expect(hint.data.fill).toBe('cal-refresh');
+  });
+
+  it('fills with a trailing space when the keyword takes args', async () => {
+    setExtensionManager(mgr(KW));
+    // "ca" is an incomplete prefix of both "calendar" and "cal-refresh".
+    const results = await unifiedSearch('ca', emptyInvoke(), []);
+    const cal = results.find((r) => r.id === 'ext-keyword:calendar:calendar');
+    expect(cal.data.fill).toBe('calendar '); // acceptsArgs → trailing space
+  });
+
+  it('hints every keyword the query is a prefix of', async () => {
+    setExtensionManager(mgr(KW));
+    const results = await unifiedSearch('ca', emptyInvoke(), []);
+    const ids = results.filter((r) => r.type === 'ext_keyword').map((r) => r.id);
+    expect(ids).toContain('ext-keyword:calendar:cal-refresh');
+    expect(ids).toContain('ext-keyword:calendar:calendar');
+  });
+
+  it('does not hint a keyword that exactly equals the query (match() owns it)', async () => {
+    setExtensionManager(mgr(KW));
+    const results = await unifiedSearch('calendar', emptyInvoke(), []);
+    const selfHint = results.find((r) => r.id === 'ext-keyword:calendar:calendar');
+    expect(selfHint).toBeUndefined();
+  });
+
+  it('still hints both keywords for a prefix that equals neither', async () => {
+    setExtensionManager(mgr(KW));
+    // "cal" isn't in the set, but it's a prefix of both keywords and
+    // equals neither — both should hint.
+    const results = await unifiedSearch('cal', emptyInvoke(), []);
+    const ids = results.filter((r) => r.type === 'ext_keyword').map((r) => r.id);
+    expect(ids).toContain('ext-keyword:calendar:cal-refresh');
+    expect(ids).toContain('ext-keyword:calendar:calendar');
+  });
+
+  it('suppresses hints once the query contains a space (keyword committed)', async () => {
+    setExtensionManager(mgr(KW));
+    const results = await unifiedSearch('calendar tomorrow', emptyInvoke(), []);
+    expect(results.some((r) => r.type === 'ext_keyword')).toBe(false);
+  });
+
+  it('emits no hints for > or / prefixed queries', async () => {
+    setExtensionManager(mgr(KW));
+    const gt = await unifiedSearch('>cal', emptyInvoke(), []);
+    const slash = await unifiedSearch('/cal', emptyInvoke(), []);
+    expect(gt.some((r) => r.type === 'ext_keyword')).toBe(false);
+    expect(slash.some((r) => r.type === 'ext_keyword')).toBe(false);
+  });
+
+  it('tolerates a manager without getKeywordDefinitions', async () => {
+    setExtensionManager({ matchAll: async () => [], matchAllAsync: async () => [] });
+    const results = await unifiedSearch('cal', emptyInvoke(), []);
+    expect(results.some((r) => r.type === 'ext_keyword')).toBe(false);
+  });
+});

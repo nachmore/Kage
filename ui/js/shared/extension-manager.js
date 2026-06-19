@@ -123,6 +123,23 @@ export function applyManifestI18n(manifest, catalog, fallback) {
 }
 
 /**
+ * Resolve a single extension i18n key against a catalog (with EN fallback),
+ * returning the localised message or `fallbackText` if the key is unknown.
+ *
+ * Unlike `applyManifestI18n` this takes a bare key (not a `__MSG_…__` token)
+ * because the values come from a provider's getKeywords() — the extension
+ * supplies keys directly, never raw user-facing text, so localisation isn't
+ * something the author can forget. No ICU vars: keyword labels are static
+ * noun phrases. Returns '' for a missing key with no fallback so callers can
+ * skip empty descriptions.
+ */
+export function resolveExtensionMessage(key, catalog, fallback, fallbackText = '') {
+    if (typeof key !== 'string' || !key) return fallbackText;
+    const entry = catalog?.[key] || fallback?.[key];
+    return entry?.message ?? fallbackText;
+}
+
+/**
  * Fetch an extension's `_locales/<lang>/messages.json` payload and pick
  * the right catalog for the host language (with EN fallback). Shared
  * between the manager's runtime sandbox boot and any caller outside the
@@ -357,6 +374,11 @@ export class ExtensionManager {
         // labels. Mutates a copy so the original manifest stays the wire
         // form (used elsewhere for hashes / etc.).
         ext.localizedManifest = applyManifestI18n(manifest, i18n.catalog, i18n.fallback);
+        // Keep the resolved catalog around so host-side machinery that needs
+        // to localise extension-supplied i18n keys (e.g. search-keyword hint
+        // labels — see getKeywordDefinitions) can reuse it without another
+        // locale read.
+        ext.i18n = i18n;
         if (this._hasSandboxedProvider(sources)) {
             try {
                 ext.sandbox = await this._pool.load({
@@ -695,6 +717,54 @@ export class ExtensionManager {
         return results.flat();
     }
 
+    /**
+     * Collect search keywords registered by every enabled search provider,
+     * with their hint labels already localised host-side.
+     *
+     * Each entry: { extensionId, keyword, label, description, icon, acceptsArgs }
+     * where `keyword` is lowercased for matching and `label`/`description` are
+     * resolved from the extension's i18n catalog (the provider returns KEYS).
+     *
+     * Result is cached because getKeywords() is config-derived but stable
+     * between config changes — the cache is cleared by reload() and
+     * onConfigUpdate(). Returns [] before any extension has loaded.
+     */
+    async getKeywordDefinitions() {
+        if (this._keywordDefsCache) return this._keywordDefsCache;
+        const defs = [];
+        for (const [id, ext] of this.extensions) {
+            if (!ext.sandbox?.hasSearch) continue;
+            if (!this._isEnabled(id)) continue;
+            let keywords;
+            try {
+                keywords = await ext.sandbox.call('getKeywords', {});
+            } catch (e) {
+                console.warn(`getKeywords() in '${id}' failed:`, e);
+                continue;
+            }
+            if (!Array.isArray(keywords)) continue;
+            const catalog = ext.i18n?.catalog;
+            const fallback = ext.i18n?.fallback;
+            const icon = ext.localizedManifest?.icon || ext.manifest?.icon || '🔌';
+            for (const k of keywords) {
+                const keyword = typeof k?.keyword === 'string' ? k.keyword.trim() : '';
+                if (!keyword) continue;
+                defs.push({
+                    extensionId: id,
+                    keyword: keyword.toLowerCase(),
+                    // Fall back to the bare keyword if the label key is
+                    // missing — a hint with no text is worse than the raw word.
+                    label: resolveExtensionMessage(k.labelKey, catalog, fallback, keyword),
+                    description: resolveExtensionMessage(k.descriptionKey, catalog, fallback, ''),
+                    icon: typeof k.icon === 'string' && k.icon ? k.icon : icon,
+                    acceptsArgs: k.acceptsArgs !== false, // default true
+                });
+            }
+        }
+        this._keywordDefsCache = defs;
+        return defs;
+    }
+
     async executeResult(result) {
         const id = result?._extensionId;
         if (!id) return null;
@@ -800,6 +870,9 @@ export class ExtensionManager {
         // Invalidate caches whose contents depend on extension config.
         this._customRenderCache?.clear();
         this._toolbarButtonsCache = null;
+        // Keyword hints can key off a user-configured trigger, so a config
+        // change may change the registered words — drop the cache.
+        this._keywordDefsCache = null;
         for (const [id, ext] of this.extensions) {
             const config = this._getExtensionConfig(id, ext.manifest);
             if (ext.sandbox) {
@@ -1036,6 +1109,10 @@ export class ExtensionManager {
         } catch {
             return;
         }
+
+        // The set of loaded extensions may change below; drop the keyword
+        // hint cache so it's rebuilt from the new roster on next query.
+        this._keywordDefsCache = null;
 
         try {
             const userExts = await this.invoke('list_extensions');

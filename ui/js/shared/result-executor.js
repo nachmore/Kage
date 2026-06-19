@@ -33,6 +33,20 @@ export async function executeResult(result, query, ctx) {
     // Record frecency
     if (result.id) recordSelection(query, result.id, invoke);
 
+    // Keyword completion hint — not a real action. Fill the input with the
+    // full keyword (the search engine put the fill text in data.fill) and let
+    // the re-triggered search surface the extension's real rows. This row
+    // carries no _extensionId, so it must be handled before the delegation
+    // branch below.
+    if (result.type === 'ext_keyword') {
+        const fill = result.data?.fill ?? result.data?.keyword ?? '';
+        if (fill && ctx.onReplaceInput) {
+            ctx.onReplaceInput(fill);
+            return { handled: true, action: 'replace_input' };
+        }
+        return { handled: true };
+    }
+
     // Extension-provided results — delegate to extension
     if (result._extensionId && extensionManager) {
         const action = await extensionManager.executeResult(result);

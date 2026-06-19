@@ -378,6 +378,21 @@ export default class MySearchProvider {
     }
 
     /**
+     * Optional: register trigger words with the host so partial input
+     * surfaces a completion hint before the full keyword is typed (e.g.
+     * "cal-ref" hints "cal-refresh"). Runs in the sandbox, so the list can
+     * reflect this.config (a user-renamed trigger). Labels are i18n KEYS —
+     * the host resolves them against this extension's _locales catalog, so
+     * you can't ship a keyword hint that isn't localised.
+     * @returns {KeywordDef[]}  See "Keyword Completion Hints" below.
+     */
+    getKeywords() {
+        return [
+            { keyword: 'foo', labelKey: 'keyword.foo.label', descriptionKey: 'keyword.foo.desc', icon: '🦊', acceptsArgs: true },
+        ];
+    }
+
+    /**
      * Called when the user selects (Enter) a result from this provider.
      * Return an action descriptor.
      * @param {SearchResult} result
@@ -438,6 +453,50 @@ Returned by `execute()`:
 | 70-79 | Good matches (app names, command names) |
 | 60-69 | Partial matches |
 | < 60 | Weak/fuzzy matches |
+
+### Keyword Completion Hints
+
+`match()`/`matchAsync()` run on every keystroke, but most providers only
+return rows once their trigger word is fully typed — so a user typing
+`cal-ref` sees nothing until they complete `cal-refresh`. Implementing the
+optional `getKeywords()` lets the host surface a **completion hint** for an
+incomplete prefix, so the command is discoverable before it's fully typed.
+
+```js
+getKeywords() {
+    return [
+        { keyword: 'cal-refresh', labelKey: 'keyword.refresh.label', descriptionKey: 'keyword.refresh.desc', icon: '🔄', acceptsArgs: false },
+        { keyword: 'calendar',    labelKey: 'keyword.cal.label',     descriptionKey: 'keyword.cal.desc',     icon: '📅', acceptsArgs: true  },
+    ];
+}
+```
+
+**KeywordDef shape:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `keyword` | string | The trigger word. Lowercased by the host for matching. |
+| `labelKey` | string | i18n key for the hint's primary text. Resolved host-side against `_locales`; falls back to the bare keyword if missing. |
+| `descriptionKey` | string | i18n key for the secondary text. Optional. |
+| `icon` | string | Emoji/icon. Defaults to the extension's manifest icon. |
+| `acceptsArgs` | boolean | `true` (default) → selecting the hint fills the input with `keyword + ' '` so the user can type arguments. `false` → fills exactly `keyword` (terminal commands like a refresh). |
+
+**Behaviour:**
+
+- A hint fires only when the query is a **strict, incomplete prefix** of a
+  keyword (`keyword.startsWith(query)` and `keyword !== query`) and contains
+  no space. Once the keyword is complete or a space is typed, the keyword is
+  "committed" and your `match()`/`matchAsync()` own the rows.
+- A query that's a prefix of several keywords hints all of them. A keyword
+  that's itself a prefix of a longer sibling (`cal` vs `calendar`) needn't be
+  listed twice — list the longer ones; the shorter prefix still hints them.
+- Selecting a hint never calls your `execute()` — it just refills the input
+  (the `replace_input` path) and re-runs search.
+- **Labels are keys, never raw strings.** Add the keys to
+  `_locales/en/messages.json` and seed the other locales (the host's
+  `scripts/translate.py` walks extension catalogs). If a key is dynamic or
+  resolved host-side rather than via `t()`, add an `// i18n-keys: foo.*`
+  comment so the i18n drift check doesn't flag it as missing.
 
 ## Settings Provider API
 
