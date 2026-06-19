@@ -1132,8 +1132,38 @@ export class ExtensionManager {
      * Hot-reload: discover newly installed extensions and tear down
      * ones that were uninstalled/disabled. Bundled ones are never
      * unloaded since they ship with the app.
+     *
+     * Serialized + coalesced. reload() is async with awaits throughout, and
+     * several signals can fire it near-simultaneously (extensions_changed,
+     * config_updated, settings hot-reload). Without a guard, two reloads enter
+     * concurrently, both observe the pre-reload `extensions` map, and both try
+     * to load the same id — producing "sandbox already loaded" errors and
+     * duplicate installs. We run at most one reload at a time; any requests
+     * arriving while one is in flight collapse into a single trailing rerun
+     * (the roster is read fresh at the start of each run, so one rerun
+     * captures everything that changed during the previous one).
      */
     async reload() {
+        if (this._reloadInFlight) {
+            // A reload is running; remember that state changed again and
+            // return the in-flight promise. One trailing rerun suffices.
+            this._reloadPending = true;
+            return this._reloadInFlight;
+        }
+        this._reloadInFlight = (async () => {
+            try {
+                do {
+                    this._reloadPending = false;
+                    await this._reloadOnce();
+                } while (this._reloadPending);
+            } finally {
+                this._reloadInFlight = null;
+            }
+        })();
+        return this._reloadInFlight;
+    }
+
+    async _reloadOnce() {
         try {
             this._configCache = await this.invoke('get_config');
         } catch {

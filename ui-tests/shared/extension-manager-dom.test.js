@@ -115,6 +115,60 @@ describe('ExtensionManager toolbar', () => {
     });
 });
 
+describe('ExtensionManager.reload serialization', () => {
+    // Build a manager whose invoke('list_extensions') we can stall, so we can
+    // overlap reload() calls deterministically.
+    function makeReloadHarness() {
+        let releaseList;
+        const listGate = new Promise((r) => { releaseList = r; });
+        const counts = { get_config: 0, list_extensions: 0 };
+        const invoke = async (cmd) => {
+            counts[cmd] = (counts[cmd] || 0) + 1;
+            if (cmd === 'get_config') return { extension_states: {}, extensions: {} };
+            if (cmd === 'list_extensions') {
+                await listGate; // block until the test releases it
+                return [];
+            }
+            return undefined;
+        };
+        const mgr = new ExtensionManager(invoke);
+        return { mgr, counts, releaseList };
+    }
+
+    it('does not run two reloads concurrently; coalesces a burst into one rerun', async () => {
+        const { mgr, counts, releaseList } = makeReloadHarness();
+
+        // Fire three reloads while the first is stalled on list_extensions.
+        const p1 = mgr.reload();
+        const p2 = mgr.reload();
+        const p3 = mgr.reload();
+
+        // Let the first reload advance past its get_config await to the
+        // stalled list_extensions call.
+        await new Promise((r) => setTimeout(r, 0));
+
+        // Only the first has entered the body (one list_extensions call so far);
+        // p2/p3 collapsed into a single pending rerun.
+        expect(counts.list_extensions).toBe(1);
+
+        releaseList();
+        await Promise.all([p1, p2, p3]);
+
+        // The in-flight run plus exactly ONE trailing rerun for the burst.
+        expect(counts.list_extensions).toBe(2);
+        expect(mgr._reloadInFlight).toBeNull();
+    });
+
+    it('a fresh reload after settling runs normally', async () => {
+        const { mgr, releaseList } = makeReloadHarness();
+        releaseList(); // don't stall this time
+        await mgr.reload();
+        expect(mgr._reloadInFlight).toBeNull();
+        await mgr.reload(); // second, independent reload
+        expect(mgr._reloadInFlight).toBeNull();
+    });
+});
+
 describe('ExtensionManager keyword gate (matchAll / matchAllAsync)', () => {
     // Build a manager holding several search extensions at once. Each spec
     // entry: { id, keywords?: [{keyword,...}], matchRows?: [...] }.

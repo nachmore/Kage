@@ -542,9 +542,17 @@ pub async fn check_extension_updates(
                     // Install the update in place. The existing capability
                     // grant is preserved; if the updated manifest requests
                     // more capabilities, the runtime drops them until the
-                    // user re-approves. We do emit here because auto-update
-                    // is an in-place refresh of already-approved software.
-                    match store_install_inner(&base_url, id, &features, &app, true).await {
+                    // user re-approves.
+                    //
+                    // Crucially we pass emit_changed=false here and fire a
+                    // SINGLE extensions_changed AFTER the whole loop. Emitting
+                    // per-extension means N updates trigger N reloads in every
+                    // window; those reloads are async and reenter
+                    // (`sandbox already loaded`, duplicate installs), and each
+                    // one re-mounts widgets that spawn OS processes (calendar's
+                    // PowerShell, app-scan). A batch of 9 updates melted down a
+                    // user's machine into process-exhaustion this way.
+                    match store_install_inner(&base_url, id, &features, &app, false).await {
                         Ok(_) => {
                             updated += 1;
                             info!("Updated extension '{}' to {}", id, remote_version);
@@ -563,6 +571,15 @@ pub async fn check_extension_updates(
     config.last_extension_update_check = Some(chrono::Utc::now().to_rfc3339());
     let _ = config.save();
     drop(config);
+
+    // Emit a SINGLE refresh after all updates land (see the emit_changed=false
+    // note in the loop). One reload per window picks up every updated
+    // extension at once instead of a reload storm.
+    if updated > 0 {
+        if let Err(e) = app.emit(events::EXTENSIONS_CHANGED, ()) {
+            error!("Failed to emit extensions_changed: {}", e);
+        }
+    }
 
     Ok(serde_json::json!({ "updated": updated, "checked": checked }))
 }
