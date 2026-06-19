@@ -378,13 +378,13 @@ export default class MySearchProvider {
     }
 
     /**
-     * Optional: register trigger words with the host so partial input
-     * surfaces a completion hint before the full keyword is typed (e.g.
-     * "cal-ref" hints "cal-refresh"). Runs in the sandbox, so the list can
-     * reflect this.config (a user-renamed trigger). Labels are i18n KEYS —
-     * the host resolves them against this extension's _locales catalog, so
-     * you can't ship a keyword hint that isn't localised.
-     * @returns {KeywordDef[]}  See "Keyword Completion Hints" below.
+     * Optional: declare this extension's complete trigger set. The host uses
+     * it to (1) gate match()/matchAsync() — only calling you when a keyword is
+     * committed — and (2) show completion hints for partial prefixes. Runs in
+     * the sandbox, so the list can reflect this.config (a user-renamed
+     * trigger). Labels are i18n KEYS, resolved host-side against _locales.
+     * Omit this method entirely if you're a content matcher that needs every
+     * keystroke. @returns {KeywordDef[]}  See "Search keywords" below.
      */
     getKeywords() {
         return [
@@ -454,19 +454,28 @@ Returned by `execute()`:
 | 60-69 | Partial matches |
 | < 60 | Weak/fuzzy matches |
 
-### Keyword Completion Hints
+### Search keywords (`getKeywords`)
 
-`match()`/`matchAsync()` run on every keystroke, but most providers only
-return rows once their trigger word is fully typed — so a user typing
-`cal-ref` sees nothing until they complete `cal-refresh`. Implementing the
-optional `getKeywords()` lets the host surface a **completion hint** for an
-incomplete prefix, so the command is discoverable before it's fully typed.
+Implementing the optional `getKeywords()` declares your extension's complete
+trigger set to the host. It serves **two** purposes:
+
+1. **Gating (performance).** The host calls your `match()`/`matchAsync()` only
+   when the query *commits* one of your keywords — an exact match (`cal`) or
+   keyword-plus-space (`cal tomorrow`). For every other keystroke your
+   provider isn't invoked at all, so it costs nothing. An extension that does
+   *not* implement `getKeywords()` is treated as a **content matcher** (math,
+   currency, color) and receives every keystroke as before.
+2. **Discoverability (hints).** While the query is still an *incomplete
+   prefix* of a keyword (`cal-ref`), the host shows a **completion hint** row
+   built from the keyword's metadata. Selecting it fills the input with the
+   full keyword so your real rows appear.
 
 ```js
 getKeywords() {
+    const trigger = (this.config.trigger || 'cal').toLowerCase(); // config-aware
     return [
-        { keyword: 'cal-refresh', labelKey: 'keyword.refresh.label', descriptionKey: 'keyword.refresh.desc', icon: '🔄', acceptsArgs: false },
-        { keyword: 'calendar',    labelKey: 'keyword.cal.label',     descriptionKey: 'keyword.cal.desc',     icon: '📅', acceptsArgs: true  },
+        { keyword: trigger,        labelKey: 'keyword.cal.label',     descriptionKey: 'keyword.cal.desc',     icon: '📅', acceptsArgs: true  },
+        { keyword: 'cal-refresh',  labelKey: 'keyword.refresh.label', descriptionKey: 'keyword.refresh.desc', icon: '🔄', acceptsArgs: false },
     ];
 }
 ```
@@ -475,28 +484,39 @@ getKeywords() {
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `keyword` | string | The trigger word. Lowercased by the host for matching. |
+| `keyword` | string | A trigger word. Lowercased by the host for matching. |
 | `labelKey` | string | i18n key for the hint's primary text. Resolved host-side against `_locales`; falls back to the bare keyword if missing. |
 | `descriptionKey` | string | i18n key for the secondary text. Optional. |
 | `icon` | string | Emoji/icon. Defaults to the extension's manifest icon. |
-| `acceptsArgs` | boolean | `true` (default) → selecting the hint fills the input with `keyword + ' '` so the user can type arguments. `false` → fills exactly `keyword` (terminal commands like a refresh). |
+| `acceptsArgs` | boolean | `true` (default) → keyword takes arguments; a committed `keyword ` (with space) still invokes you, and selecting a hint fills `keyword + ' '`. `false` → exact-only terminal command (e.g. a refresh); the hint fills exactly `keyword`. |
 
-**Behaviour:**
+**Rules — read these, they're load-bearing:**
 
-- A hint fires only when the query is a **strict, incomplete prefix** of a
-  keyword (`keyword.startsWith(query)` and `keyword !== query`) and contains
-  no space. Once the keyword is complete or a space is typed, the keyword is
-  "committed" and your `match()`/`matchAsync()` own the rows.
-- A query that's a prefix of several keywords hints all of them. A keyword
-  that's itself a prefix of a longer sibling (`cal` vs `calendar`) needn't be
-  listed twice — list the longer ones; the shorter prefix still hints them.
-- Selecting a hint never calls your `execute()` — it just refills the input
-  (the `replace_input` path) and re-runs search.
+- **Register your COMPLETE trigger set.** Because the host gates on it, any
+  keyword your `match()`/`matchAsync()` answers but you *don't* register
+  becomes **unreachable**. If you accept a bare `cal` *and* a longer
+  `calendar`, register **both** (this differs from a pure-hint model — the
+  shorter one is a real trigger, not just a prefix). Sub-commands like `bm+` /
+  `todo-` are distinct whole-word keywords and must each be listed.
+- **Be config-aware.** If your trigger is user-configurable, read
+  `this.config` and return keywords based on it — the host re-fetches when
+  config changes. If a config makes you a content matcher (e.g. an empty
+  trigger that matches any word), return `[]`.
+- **Hybrids stay content matchers.** If you need both fixed keywords *and*
+  arbitrary content (e.g. emoji's `:shortcode:`, dev-tools' raw JSON), do
+  **not** implement `getKeywords()` — you need every keystroke. You lose hints
+  but keep correctness.
+- **Hints fire only for an incomplete, space-free prefix.** Synonyms that
+  share a `labelKey` collapse to one hint (the shortest keyword); typing a
+  keyword exactly commits its whole synonym group, so no redundant hint shows.
+- Selecting a hint never calls your `execute()` — it refills the input (the
+  `replace_input` path) and re-runs search.
 - **Labels are keys, never raw strings.** Add the keys to
   `_locales/en/messages.json` and seed the other locales (the host's
-  `scripts/translate.py` walks extension catalogs). If a key is dynamic or
-  resolved host-side rather than via `t()`, add an `// i18n-keys: foo.*`
-  comment so the i18n drift check doesn't flag it as missing.
+  `scripts/translate.py` walks extension catalogs). Because these keys are
+  resolved host-side, not via `t()`, add an `// i18n-keys: foo.label, ...`
+  comment next to `getKeywords()` so the i18n drift check doesn't flag them as
+  unused.
 
 ## Settings Provider API
 

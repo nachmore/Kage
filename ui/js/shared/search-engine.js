@@ -166,8 +166,13 @@ export function getExtensionManager() {
  * it) and the query carries no space — once the user has typed a space the
  * keyword is committed and its own match() owns the row. An exact, complete
  * keyword match produces no hint, since the extension's match() already
- * surfaces the live result for it (a `cal` that's also a prefix of
- * `calendar` still hints `calendar`, just not `cal` itself).
+ * surfaces the live result for it.
+ *
+ * Synonym collapse: an extension may register several keywords that are the
+ * same command under different spellings (calendar registers `cal` AND
+ * `calendar`, sharing one label). We don't want two identical hint rows, so
+ * hints are deduped per (extension, label) keeping the SHORTEST matching
+ * keyword — it commits the soonest and is the canonical trigger to fill.
  *
  * The hint row is `type: 'ext_keyword'`; selecting it fills the input with
  * the full keyword (+ a trailing space when the keyword takes arguments) via
@@ -179,10 +184,29 @@ async function _keywordHints(query) {
     if (!q || q.includes(' ') || q.startsWith('>') || q.startsWith('/')) return [];
 
     const defs = await _extensionManager.getKeywordDefinitions();
-    const hints = [];
+    // Group synonyms by (extension, label). Calendar registers both `cal`
+    // and `calendar` under one label; we want one hint. For each group keep
+    // the SHORTEST prefix-matching keyword (commits soonest, canonical to
+    // fill) and note whether any synonym EXACTLY equals the query: if so the
+    // group is committed (match() owns the live row) so we emit no hint,
+    // else a bare keyword would show its rows AND a redundant hint.
+    const groups = new Map();
     for (const d of defs) {
-        if (d.keyword === q) continue; // complete — match() owns it
         if (!d.keyword.startsWith(q)) continue;
+        const key = d.extensionId + ' ' + d.label;
+        let g = groups.get(key);
+        if (!g) {
+            g = { committed: false, shortest: null };
+            groups.set(key, g);
+        }
+        if (d.keyword === q) g.committed = true;
+        else if (!g.shortest || d.keyword.length < g.shortest.keyword.length) g.shortest = d;
+    }
+
+    const hints = [];
+    for (const g of groups.values()) {
+        if (g.committed || !g.shortest) continue;
+        const d = g.shortest;
         hints.push({
             id: 'ext-keyword:' + d.extensionId + ':' + d.keyword,
             type: 'ext_keyword',

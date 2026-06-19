@@ -648,20 +648,50 @@ export class ExtensionManager {
         return states[id] !== false;
     }
 
-    /**
-     * Get the trigger keyword for an extension (if any).
-     * Returns the lowercase trigger string, or null if no trigger (extension sees all queries).
-     */
-    _getExtensionTrigger(id, manifest) {
-        const config = this._getExtensionConfig(id, manifest);
-        const trigger = config?.trigger;
-        if (typeof trigger === 'string' && trigger.trim()) {
-            return trigger.trim().toLowerCase();
-        }
-        return null;
-    }
-
     // --- Search dispatch ---------------------------------------------------
+
+    /**
+     * Build the per-keystroke gate that decides whether an extension's
+     * match()/matchAsync() is worth a sandbox round-trip for this query.
+     *
+     * The authority is getKeywords() (see getKeywordDefinitions):
+     *   - An extension that registered keywords is a pure keyword matcher.
+     *     Call it ONLY when the query commits one of its keywords — an exact
+     *     match (`cal`) or keyword-plus-space (`cal tomorrow`). An incomplete
+     *     prefix (`ca`, `cal-ref`) gets a completion hint instead (built
+     *     separately in the search engine), NOT a match() call. This is the
+     *     whole point of the gate: calendar/todos/etc. stop running on every
+     *     unrelated keystroke. It also means a keyword extension MUST register
+     *     its COMPLETE trigger set — a missing keyword is a missing feature.
+     *   - An extension that registered NO keywords is a content matcher
+     *     (math, currency, color, and hybrids like emoji/dev-tools that need
+     *     to inspect arbitrary input). It's always called.
+     *
+     * Replaces the old `config.trigger` convention — a single loose
+     * `startsWith` string the host and extension each re-derived. Keyword
+     * matching is whole-word and multi-keyword, sourced from the same cached
+     * registry the hint rows use.
+     *
+     * @returns {Promise<(id: string) => boolean>}
+     */
+    async _buildKeywordGate(lowerQuery) {
+        let defs = [];
+        try {
+            defs = await this.getKeywordDefinitions();
+        } catch (e) {
+            console.warn('keyword gate: getKeywordDefinitions failed:', e);
+        }
+        const byExt = new Map();
+        for (const d of defs) {
+            if (!byExt.has(d.extensionId)) byExt.set(d.extensionId, []);
+            byExt.get(d.extensionId).push(d.keyword);
+        }
+        return (id) => {
+            const keywords = byExt.get(id);
+            if (!keywords || keywords.length === 0) return true; // content matcher
+            return keywords.some((kw) => lowerQuery === kw || lowerQuery.startsWith(kw + ' '));
+        };
+    }
 
     /**
      * Synchronous match, fan out to all extensions. The sandbox RPC is
@@ -674,12 +704,12 @@ export class ExtensionManager {
     async matchAll(query) {
         if (query.trim().startsWith('>')) return []; // > prefix reserved for built-ins
         const lowerQuery = query.trim().toLowerCase();
+        const shouldCall = await this._buildKeywordGate(lowerQuery);
         const promises = [];
         for (const [id, ext] of this.extensions) {
             if (!ext.sandbox?.hasSearch) continue;
             if (!this._isEnabled(id)) continue;
-            const trigger = this._getExtensionTrigger(id, ext.manifest);
-            if (trigger && !lowerQuery.startsWith(trigger)) continue;
+            if (!shouldCall(id)) continue;
             promises.push(
                 ext.sandbox
                     .call('match', { query })
@@ -697,12 +727,12 @@ export class ExtensionManager {
     async matchAllAsync(query) {
         if (query.trim().startsWith('>')) return [];
         const lowerQuery = query.trim().toLowerCase();
+        const shouldCall = await this._buildKeywordGate(lowerQuery);
         const promises = [];
         for (const [id, ext] of this.extensions) {
             if (!ext.sandbox?.hasSearch) continue;
             if (!this._isEnabled(id)) continue;
-            const trigger = this._getExtensionTrigger(id, ext.manifest);
-            if (trigger && !lowerQuery.startsWith(trigger)) continue;
+            if (!shouldCall(id)) continue;
             promises.push(
                 ext.sandbox
                     .call('matchAsync', { query })

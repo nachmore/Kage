@@ -238,4 +238,41 @@ describe('unifiedSearch — keyword completion hints', () => {
     const results = await unifiedSearch('cal', emptyInvoke(), []);
     expect(results.some((r) => r.type === 'ext_keyword')).toBe(false);
   });
+
+  it('collapses synonym keywords (same ext + label) into one hint, shortest wins', async () => {
+    // Calendar registers both 'cal' and 'calendar' for the same command,
+    // sharing one label. A partial 'ca' must yield ONE hint, filling the
+    // shortest keyword ('cal') rather than two identical rows.
+    setExtensionManager(mgr([
+      { extensionId: 'calendar', keyword: 'cal', label: 'Calendar', description: 'Meetings', icon: '📅', acceptsArgs: true },
+      { extensionId: 'calendar', keyword: 'calendar', label: 'Calendar', description: 'Meetings', icon: '📅', acceptsArgs: true },
+    ]));
+    const hints = (await unifiedSearch('ca', emptyInvoke(), [])).filter((r) => r.type === 'ext_keyword');
+    expect(hints).toHaveLength(1);
+    expect(hints[0].data.keyword).toBe('cal');
+    expect(hints[0].data.fill).toBe('cal ');
+  });
+
+  it('suppresses a synonym group hint once any synonym is exactly typed', async () => {
+    // cal + calendar share a label. Typing exactly 'cal' commits the group
+    // (match() shows live events), so NO "Calendar" hint should appear — even
+    // though 'calendar' still starts with 'cal'.
+    setExtensionManager(mgr([
+      { extensionId: 'calendar', keyword: 'cal', label: 'Calendar', description: 'Meetings', icon: '📅', acceptsArgs: true },
+      { extensionId: 'calendar', keyword: 'calendar', label: 'Calendar', description: 'Meetings', icon: '📅', acceptsArgs: true },
+    ]));
+    const hints = (await unifiedSearch('cal', emptyInvoke(), [])).filter((r) => r.type === 'ext_keyword');
+    expect(hints).toHaveLength(0);
+  });
+
+  it('keeps distinct-label keywords as separate hints', async () => {
+    // Different commands (different labels) under the same extension are NOT
+    // collapsed, even when one keyword is a prefix of another.
+    setExtensionManager(mgr(KW)); // cal-refresh vs calendar — distinct labels
+    const ids = (await unifiedSearch('cal', emptyInvoke(), []))
+      .filter((r) => r.type === 'ext_keyword')
+      .map((r) => r.id);
+    expect(ids).toContain('ext-keyword:calendar:cal-refresh');
+    expect(ids).toContain('ext-keyword:calendar:calendar');
+  });
 });

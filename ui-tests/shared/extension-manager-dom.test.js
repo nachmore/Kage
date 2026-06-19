@@ -115,6 +115,112 @@ describe('ExtensionManager toolbar', () => {
     });
 });
 
+describe('ExtensionManager keyword gate (matchAll / matchAllAsync)', () => {
+    // Build a manager holding several search extensions at once. Each spec
+    // entry: { id, keywords?: [{keyword,...}], matchRows?: [...] }.
+    function makeManagerWithSearchExtensions(specs) {
+        const mgr = new ExtensionManager(async () => undefined);
+        mgr._configCache = { extension_states: {}, extension_grants: {}, extensions: {} };
+        for (const spec of specs) {
+            mgr._configCache.extension_states[spec.id] = true;
+            const sandbox = stubSandbox({
+                getKeywords: () => spec.keywords ?? [],
+                match: () => spec.matchRows ?? [{ id: spec.id + ':row', label: spec.id }],
+                matchAsync: () => spec.matchRows ?? [{ id: spec.id + ':row', label: spec.id }],
+            });
+            sandbox.hasSearch = true;
+            // Track how often the per-keystroke methods are invoked.
+            const realCall = sandbox.call.bind(sandbox);
+            sandbox.callCounts = { match: 0, matchAsync: 0, getKeywords: 0 };
+            sandbox.call = (method, params) => {
+                if (method in sandbox.callCounts) sandbox.callCounts[method]++;
+                return realCall(method, params);
+            };
+            mgr.extensions.set(spec.id, {
+                manifest: { id: spec.id, name: spec.id, icon: '🔌', permissions: [] },
+                i18n: { catalog: {}, fallback: {} },
+                capabilities: [],
+                sandbox,
+            });
+        }
+        return mgr;
+    }
+
+    const KW = (keyword, acceptsArgs = true) => ({
+        keyword,
+        labelKey: 'k.label',
+        descriptionKey: 'k.desc',
+        acceptsArgs,
+    });
+
+    it('calls a keyword extension only when its keyword is committed', async () => {
+        const mgr = makeManagerWithSearchExtensions([
+            { id: 'calendar', keywords: [KW('cal'), KW('cal-refresh', false)] },
+        ]);
+        const cal = mgr.extensions.get('calendar').sandbox;
+
+        // Incomplete prefix → no match() call (hint handles it elsewhere).
+        await mgr.matchAll('ca');
+        expect(cal.callCounts.match).toBe(0);
+
+        // Exact keyword → called.
+        await mgr.matchAll('cal');
+        expect(cal.callCounts.match).toBe(1);
+
+        // Keyword + space (args) → called.
+        await mgr.matchAll('cal tomorrow');
+        expect(cal.callCounts.match).toBe(2);
+
+        // Unrelated query → not called.
+        await mgr.matchAll('weather');
+        expect(cal.callCounts.match).toBe(2);
+    });
+
+    it('does not fire on a bare prefix of an args keyword (whole-word gate)', async () => {
+        const mgr = makeManagerWithSearchExtensions([{ id: 'bookmarks', keywords: [KW('bm')] }]);
+        const bm = mgr.extensions.get('bookmarks').sandbox;
+        // "bmfoo" begins with "bm" but is NOT the whole word — must not fire.
+        await mgr.matchAll('bmfoo');
+        expect(bm.callCounts.match).toBe(0);
+        await mgr.matchAll('bm foo');
+        expect(bm.callCounts.match).toBe(1);
+    });
+
+    it('always calls a content matcher (no registered keywords)', async () => {
+        const mgr = makeManagerWithSearchExtensions([{ id: 'math', keywords: [] }]);
+        const math = mgr.extensions.get('math').sandbox;
+        await mgr.matchAll('2+2');
+        await mgr.matchAll('anything at all');
+        expect(math.callCounts.match).toBe(2);
+    });
+
+    it('gates each extension independently in a mixed roster', async () => {
+        const mgr = makeManagerWithSearchExtensions([
+            { id: 'calendar', keywords: [KW('cal')] },
+            { id: 'math', keywords: [] }, // content matcher
+            { id: 'spotify', keywords: [KW('sp')] },
+        ]);
+        const results = await mgr.matchAll('cal');
+        // calendar matched (keyword), math always runs, spotify gated out.
+        const ids = results.map((r) => r._extensionId);
+        expect(ids).toContain('calendar');
+        expect(ids).toContain('math');
+        expect(ids).not.toContain('spotify');
+        expect(mgr.extensions.get('spotify').sandbox.callCounts.match).toBe(0);
+    });
+
+    it('matchAllAsync applies the same gate', async () => {
+        const mgr = makeManagerWithSearchExtensions([
+            { id: 'calendar', keywords: [KW('cal')] },
+        ]);
+        const cal = mgr.extensions.get('calendar').sandbox;
+        await mgr.matchAllAsync('ca');
+        expect(cal.callCounts.matchAsync).toBe(0);
+        await mgr.matchAllAsync('cal');
+        expect(cal.callCounts.matchAsync).toBe(1);
+    });
+});
+
 describe('ExtensionManager renderResult (custom renderer)', () => {
     it('injects sanitized HTML into the provided element', async () => {
         const sandbox = stubSandbox({
