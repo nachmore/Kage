@@ -47,6 +47,20 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
 
+    # APTABASE_KEY is a COMPILE-TIME fingerprint input: build.rs declares
+    # `cargo:rerun-if-env-changed=APTABASE_KEY` and bakes it via
+    # option_env!. If only the `cargo tauri build` step sees the key, then
+    # `cargo test` (and clippy) run with a *different* env and cargo
+    # invalidates the build-script — and everything downstream of it —
+    # forcing a full recompile of the Tauri stack between steps even on a
+    # warm cache. Set it once at job scope so every cargo invocation shares
+    # the same fingerprint and the build artifacts are reused across steps.
+    # (RUST_LOG / TAURI_SIGNING_* stay on the build step: RUST_LOG is
+    # runtime-only and the signing keys are only used by the bundler, so
+    # neither affects the compile fingerprint.)
+    env:
+      APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -159,8 +173,11 @@ jobs:
       # We've seen intermittent dmg failures with no error context;
       # this turns the next failure into something diagnosable.
       - name: cargo tauri build --debug
+        # APTABASE_KEY comes from job-level env (see the note there — it's a
+        # compile fingerprint input shared with clippy/test). These three are
+        # build-only: signing keys for the bundler, RUST_LOG for bundler
+        # diagnostics — none affect the compile fingerprint.
         env:
-          APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           RUST_LOG: tauri_bundler=debug
