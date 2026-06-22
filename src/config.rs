@@ -465,7 +465,7 @@ pub struct AgentConfig {
     pub auto_compact_threshold: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum AcpMode {
     Local {

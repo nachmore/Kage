@@ -54,6 +54,7 @@ pub fn format_acp_error(error: &AcpError) -> String {
 }
 
 /// Connection mode for the ACP client
+#[derive(Clone)]
 pub enum AcpConnectionMode {
     Local { spawn_command: String },
     Remote { host: String, port: u16 },

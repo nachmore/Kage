@@ -249,6 +249,15 @@ impl AcpClient {
         self.clear_compaction_gate();
     }
 
+    /// Switch the transport to a new connection mode. Disconnects any
+    /// active connection first and resets initialization state so the
+    /// next `connect()` re-handshakes with the fresh backend.
+    pub fn set_mode(&self, mode: AcpConnectionMode) {
+        self.transport.set_mode(mode);
+        *self.initialized.lock_or_recover() = false;
+        self.clear_compaction_gate();
+    }
+
     /// Reset the compaction-in-flight flag and wake any thread currently
     /// inside `wait_for_compaction`. If the agent died mid-compaction the
     /// "completed" notification was lost; without this every subsequent

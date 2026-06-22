@@ -30,7 +30,7 @@ enum ReaderSource {
 /// Manages the low-level connection to the ACP server (pipe or TCP),
 /// the background reader thread, and raw line-based I/O.
 pub struct AcpTransport {
-    mode: AcpConnectionMode,
+    mode: Arc<Mutex<AcpConnectionMode>>,
     /// Write handle for pipe stdin.
     pipe_stdin: Arc<Mutex<Option<Arc<Mutex<ChildStdin>>>>>,
     /// Write handle for TCP.
@@ -67,7 +67,7 @@ pub struct AcpTransport {
 impl AcpTransport {
     pub fn new(mode: AcpConnectionMode) -> Self {
         Self {
-            mode,
+            mode: Arc::new(Mutex::new(mode)),
             pipe_stdin: Arc::new(Mutex::new(None)),
             tcp_writer: Arc::new(Mutex::new(None)),
             // Start at 1 — id=0 used to be the initialize handshake's hardcoded
@@ -100,7 +100,8 @@ impl AcpTransport {
     // --- Connection ---
 
     pub fn connect(&self) -> Result<()> {
-        match &self.mode {
+        let mode = self.mode.lock_or_recover().clone();
+        match mode {
             AcpConnectionMode::Local { ref spawn_command } => {
                 if self.is_connected() {
                     info!("Already connected via pipes");
@@ -121,8 +122,14 @@ impl AcpTransport {
         }
     }
 
+    /// Replace the connection mode. Disconnects the current transport first.
+    pub fn set_mode(&self, mode: AcpConnectionMode) {
+        self.disconnect();
+        *self.mode.lock_or_recover() = mode;
+    }
+
     fn connect_with_retry(&self, attempt: u32) -> Result<()> {
-        let (host, port) = match &self.mode {
+        let (host, port) = match &*self.mode.lock_or_recover() {
             AcpConnectionMode::Remote { host, port } => (host.clone(), *port),
             _ => anyhow::bail!("Cannot use TCP in local mode"),
         };

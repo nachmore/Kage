@@ -10,7 +10,7 @@
 use crate::config::Config;
 use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
-use crate::state::{FeatureServices, UiState};
+use crate::state::{AcpHandles, FeatureServices, UiState};
 use log::{error, info};
 use std::fs;
 use tauri::{Emitter, State};
@@ -25,6 +25,7 @@ pub async fn get_config(features: State<'_, FeatureServices>) -> Result<Config, 
 pub async fn save_config(
     config: Config,
     features: State<'_, FeatureServices>,
+    acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     info!("Saving configuration");
@@ -38,9 +39,11 @@ pub async fn save_config(
     let new_terminator = config.tool_permissions.terminator_mode;
     let new_log_buffer_size = config.system.log_buffer_size;
     let new_language = config.ui.language.clone();
-    let prior_terminator = {
+    let new_acp_mode = config.acp.active_mode();
+    let (prior_terminator, prior_acp_mode) = {
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
+        let prior_acp = state_config.acp.active_mode();
         *state_config = config;
         // The update channel is a typed enum with `#[serde(other)]` →
         // Stable, so an unknown wire value (stale config, hand-edit,
@@ -50,8 +53,19 @@ pub async fn save_config(
             error!("Failed to save config: {}", e);
             format!("Failed to save configuration: {}", e)
         })?;
-        prior
+        (prior, prior_acp)
     };
+
+    // If the active agent connection changed, hot-swap the transport mode
+    // and reconnect so the user doesn't have to restart the app.
+    if new_acp_mode != prior_acp_mode {
+        info!("Active ACP connection changed, reconnecting");
+        let (new_connection_mode, _) = crate::startup::acp_mode_for(&new_acp_mode);
+        acp.client.set_mode(new_connection_mode);
+        if let Err(e) = acp.client.connect() {
+            log::warn!("ACP reconnect after config save failed: {}", e);
+        }
+    }
 
     // Update app log buffer size if changed
     crate::app_log::set_max_size(new_log_buffer_size);
