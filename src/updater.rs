@@ -255,13 +255,13 @@ fn is_manifest_not_found(e: &tauri_plugin_updater::Error) -> bool {
 ///     internally — this function never returns on Windows.
 ///   - macOS: extracts the new `.app.tar.gz`, swaps it on disk via
 ///     `fs::rename` (escalates to AppleScript admin if needed), then
-///     RETURNS. The caller is responsible for exiting so the user
-///     relaunches into the freshly-installed binary.
+///     RETURNS. The caller should call `relaunch_and_exit` to spawn
+///     the new binary and exit cleanly.
 ///   - Linux: not built for Kage (we don't ship Linux today).
 ///
 /// Treat success as "process is about to exit" — even when this returns
-/// on macOS, the right move is to call `app.exit(0)` immediately. The
-/// running binary's executable was just replaced on disk; continuing
+/// on macOS, the right move is to call `relaunch_and_exit` immediately.
+/// The running binary's executable was just replaced on disk; continuing
 /// to run it produces undefined behaviour the moment any file inside
 /// the bundle is referenced.
 pub async fn plugin_download_and_install(app: &tauri::AppHandle, update: Update) -> Result<()> {
@@ -430,6 +430,48 @@ fn format_install_error(e: &tauri_plugin_updater::Error, reason: &'static str) -
         _ => format!("Update install failed. ({})", detail),
     };
     anyhow::anyhow!(msg)
+}
+
+/// Spawn the new app binary and exit. On macOS the executable lives
+/// inside `Kage.app/Contents/MacOS/kage`; we use `open -a <bundle>`
+/// which is the standard macOS mechanism for launching an .app and
+/// handles Gatekeeper / quarantine correctly. Passes `--restart` so
+/// the new process knows it was relaunched (not a cold boot).
+#[cfg(target_os = "macos")]
+pub fn relaunch_and_exit(app: &tauri::AppHandle) {
+    let exe = match std::env::current_exe() {
+        Ok(e) => e,
+        Err(e) => {
+            error!("Cannot resolve exe path for relaunch: {}", e);
+            app.exit(0);
+            return;
+        }
+    };
+    // exe = .../Kage.app/Contents/MacOS/kage → walk up to the .app bundle
+    let bundle = exe
+        .parent() // Contents/MacOS
+        .and_then(|p| p.parent()) // Contents
+        .and_then(|p| p.parent()); // Kage.app
+
+    if let Some(bundle_path) = bundle {
+        info!("Relaunching from bundle: {:?}", bundle_path);
+        let _ = std::process::Command::new("open")
+            .arg("-a")
+            .arg(bundle_path)
+            .arg("--args")
+            .arg("--restart")
+            .spawn();
+    } else {
+        warn!("Could not resolve .app bundle path; spawning exe directly");
+        let _ = std::process::Command::new(&exe).arg("--restart").spawn();
+    }
+    app.exit(0);
+}
+
+/// On non-macOS (Windows handled by NSIS, Linux not shipped), just exit.
+#[cfg(not(target_os = "macos"))]
+pub fn relaunch_and_exit(app: &tauri::AppHandle) {
+    app.exit(0);
 }
 
 /// Maximum bytes of rendered markdown returned to the UI. Caps the
@@ -959,12 +1001,10 @@ pub fn start_update_loop(
                 Ok(()) => {
                     // On Windows the plugin kills us before this
                     // returns. If we get here it's macOS: the plugin
-                    // downloaded + installed into Applications and
-                    // we're expected to quit or relaunch. Quit cleanly
-                    // so launchd / the user restarts us with the new
-                    // binary.
-                    info!("Update installed; exiting to pick up new version");
-                    app_for_idle.exit(0);
+                    // swapped the .app on disk and we relaunch into
+                    // the new binary seamlessly.
+                    info!("Update installed; relaunching");
+                    relaunch_and_exit(&app_for_idle);
                 }
                 Err(e) => {
                     error!("Failed to install update: {}", e);

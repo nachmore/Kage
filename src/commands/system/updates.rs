@@ -145,11 +145,9 @@ pub async fn download_and_install_update(
 
     // On Windows the plugin called process::exit(0) inside
     // download_and_install and we never reached this line. On macOS
-    // it returned cleanly after swapping the .app on disk; we exit
-    // ourselves so launchd / the user relaunches into the new binary.
-    // See plugin_download_and_install's doc-comment for the full
-    // per-platform breakdown verified against the plugin source.
-    app.exit(0);
+    // it returned cleanly after swapping the .app on disk; relaunch
+    // into the new binary seamlessly.
+    crate::updater::relaunch_and_exit(&app);
     Ok(())
 }
 
