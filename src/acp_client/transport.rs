@@ -88,6 +88,26 @@ impl AcpTransport {
         *self.connected.lock_or_recover()
     }
 
+    /// Stronger liveness check than `is_connected()`.
+    ///
+    /// `is_connected()` only reflects the `connected` flag, which flips false
+    /// when the reader thread observes EOF — there's a window where the agent
+    /// process has died but that flag is still true. In Local mode we
+    /// cross-check the managed child's liveness so a zombie/exited agent reads
+    /// as unhealthy immediately. In Remote (TCP) mode there's no child to
+    /// probe, so this is equivalent to `is_connected()`.
+    pub fn is_healthy(&self) -> bool {
+        if !self.is_connected() {
+            return false;
+        }
+        match self.process_manager.lock_or_recover().child_liveness() {
+            // Child managed and confirmed dead — not healthy despite the flag.
+            Some(false) => false,
+            // Alive, or no managed child (TCP mode): trust `connected`.
+            _ => true,
+        }
+    }
+
     /// Set the notification handler. Called by the background reader for all notifications.
     pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(
         &self,

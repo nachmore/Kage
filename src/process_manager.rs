@@ -125,6 +125,32 @@ impl ProcessManager {
         os::kill_process(pid)
     }
 
+    /// Liveness of the managed child process.
+    ///
+    /// - `None` — no child is managed (TCP/remote mode, or nothing spawned yet).
+    /// - `Some(true)` — the child is still running.
+    /// - `Some(false)` — the child has exited (and is reaped here via `try_wait`).
+    ///
+    /// The transport's `is_connected()` only flips to false once the reader
+    /// thread observes EOF; there's a brief window where the agent process has
+    /// died but that flag hasn't flipped yet. This lets callers (notably the
+    /// restart coalesce guard) detect a dead agent within that window instead
+    /// of trusting a stale `connected=true`.
+    pub fn child_liveness(&self) -> Option<bool> {
+        let mut guard = self.child.lock_or_recover();
+        match guard.as_mut() {
+            Some(child) => match child.try_wait() {
+                Ok(None) => Some(true),
+                Ok(Some(_status)) => Some(false),
+                Err(e) => {
+                    warn!("try_wait on managed child failed: {}", e);
+                    Some(false)
+                }
+            },
+            None => None,
+        }
+    }
+
     /// Terminate the managed process
     pub fn terminate(&mut self) {
         if let Some(mut child) = self.child.lock_or_recover().take() {

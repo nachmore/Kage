@@ -18,7 +18,7 @@ pub use types::{
 };
 
 use anyhow::Result;
-use log::info;
+use log::{info, warn};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -74,6 +74,42 @@ pub struct AcpClient {
     /// follow-ups all fire from the message-complete epilogue), so we
     /// gate each on a per-session lock. See `send_prompt`.
     prompt_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
+    /// Coalesce guard for `restart_connection`. Holds the instant the last
+    /// restart *succeeded*. The mutex is held for the full duration of a
+    /// restart, so concurrent callers serialise: the first respawns the
+    /// agent, and any caller that arrives within `RESTART_COOLDOWN` of a
+    /// successful restart (and finds the transport already healthy) skips
+    /// the respawn entirely. This is what stops a burst of failing sends —
+    /// or several windows reacting to the same dead agent — from stacking
+    /// into a respawn storm. See `restart_connection`.
+    restart_guard: Arc<Mutex<Option<std::time::Instant>>>,
+}
+
+/// How many spawn+initialize attempts a restart makes before giving up.
+const RESTART_MAX_ATTEMPTS: u32 = 3;
+/// Base backoff between restart attempts; doubles each retry.
+const RESTART_BASE_DELAY_MS: u64 = 300;
+/// A restart that succeeded this recently is treated as "good enough" for a
+/// concurrent/rapid caller — it coalesces onto the fresh connection instead
+/// of respawning again.
+const RESTART_COOLDOWN_MS: u64 = 2000;
+
+/// Decide whether a `restart_connection` caller should coalesce onto a recent
+/// restart instead of respawning. Coalesce only when BOTH: a prior restart
+/// succeeded within the cooldown window, AND the transport is currently
+/// healthy. If the connection died again after the last restart (not healthy),
+/// we must respawn even inside the cooldown — otherwise a rapidly-flapping
+/// agent would be masked by the debounce and never actually recover.
+fn should_coalesce_restart(
+    since_last_ok: Option<std::time::Duration>,
+    transport_healthy: bool,
+) -> bool {
+    match since_last_ok {
+        Some(elapsed) => {
+            elapsed < std::time::Duration::from_millis(RESTART_COOLDOWN_MS) && transport_healthy
+        }
+        None => false,
+    }
 }
 
 /// Recognised JSON-RPC vendor extension prefixes. Both projects ship
@@ -107,6 +143,7 @@ impl AcpClient {
             loading_session: Arc::new(AtomicBool::new(false)),
             vendor_prefix: Arc::new(Mutex::new(None)),
             prompt_locks: Arc::new(Mutex::new(HashMap::new())),
+            restart_guard: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -219,6 +256,14 @@ impl AcpClient {
 
     pub fn is_connected(&self) -> bool {
         self.transport.is_connected()
+    }
+
+    /// Liveness-aware health check. Unlike `is_connected()`, this also
+    /// confirms the managed agent process is still running (Local mode), so a
+    /// zombie agent whose EOF hasn't propagated yet reads as unhealthy. See
+    /// `AcpTransport::is_healthy`.
+    pub fn is_healthy(&self) -> bool {
+        self.transport.is_healthy()
     }
 
     pub fn connect(&self) -> Result<()> {
@@ -422,10 +467,75 @@ impl AcpClient {
         self.clear_compaction_gate();
     }
 
+    /// Tear down and rebuild the agent connection, with coalescing and retry.
+    ///
+    /// Two failure modes this guards against:
+    ///
+    /// 1. **Respawn storms.** A burst of failing sends, or several windows all
+    ///    reacting to the same dead agent, would each call `restart_connection`
+    ///    and each kill+respawn kiro-cli. The `restart_guard` mutex serialises
+    ///    callers; a caller that arrives within `RESTART_COOLDOWN_MS` of a
+    ///    successful restart and finds the transport already healthy returns
+    ///    immediately without respawning.
+    ///
+    /// 2. **Transient cold-start EOF.** kiro-cli occasionally EOFs on the first
+    ///    `initialize` right after spawn (this is exactly what stranded the app
+    ///    for a week — a single unlucky launch with no retry). We now retry the
+    ///    spawn+initialize up to `RESTART_MAX_ATTEMPTS` with exponential
+    ///    backoff before surfacing the failure.
     pub(crate) fn restart_connection(&self) -> Result<()> {
+        // Serialise restarts. Whoever holds this mutex owns the respawn; late
+        // arrivals block here and then hit the cooldown check below.
+        let mut last_ok = self.restart_guard.lock_or_recover();
+
+        // Coalesce: if another caller just rebuilt the connection and it's
+        // still healthy, don't tear a working agent down again.
+        if should_coalesce_restart(
+            last_ok.map(|when| when.elapsed()),
+            self.transport.is_healthy(),
+        ) {
+            info!("restart_connection: coalescing onto recent healthy restart");
+            return Ok(());
+        }
+
         info!("Restarting ACP connection");
         self.force_disconnect();
-        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for attempt in 0..RESTART_MAX_ATTEMPTS {
+            // Backoff before the first attempt too: gives the just-killed
+            // child a moment to release its stdio handles before we respawn.
+            let delay = RESTART_BASE_DELAY_MS * 2u64.pow(attempt);
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+
+            match self.try_connect_and_initialize() {
+                Ok(()) => {
+                    *last_ok = Some(std::time::Instant::now());
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!(
+                        "restart_connection attempt {}/{} failed: {}",
+                        attempt + 1,
+                        RESTART_MAX_ATTEMPTS,
+                        e
+                    );
+                    // Tear the half-open connection down before retrying so
+                    // the next spawn starts from a clean slate.
+                    self.force_disconnect();
+                    last_err = Some(e);
+                }
+            }
+        }
+
+        Err(last_err
+            .unwrap_or_else(|| anyhow::anyhow!("restart_connection failed with no recorded error")))
+    }
+
+    /// One spawn+initialize round. Split out so `restart_connection` can retry
+    /// it. `connect()` resets `initialized` when it spawns a fresh process, so
+    /// the subsequent `initialize()` always runs against the new agent.
+    fn try_connect_and_initialize(&self) -> Result<()> {
         self.transport.connect()?;
         self.initialize()?;
         Ok(())
@@ -550,6 +660,46 @@ mod tests {
         client.observe_vendor_prefix("session/update");
         // Still default since no vendor prefix was observed.
         assert_eq!(client.vendor_prefix_for_send(), "_kage.dev/");
+    }
+
+    #[test]
+    fn coalesce_restart_skips_when_recent_and_healthy() {
+        // The common debounce case: a second caller arrives right after a
+        // successful restart and the connection is still up → skip the
+        // respawn.
+        assert!(should_coalesce_restart(
+            Some(std::time::Duration::from_millis(100)),
+            true
+        ));
+    }
+
+    #[test]
+    fn coalesce_restart_respawns_when_unhealthy_even_if_recent() {
+        // A flapping agent that died again inside the cooldown must NOT be
+        // masked by the debounce — if the transport isn't healthy we respawn
+        // regardless of how recent the last restart was.
+        assert!(!should_coalesce_restart(
+            Some(std::time::Duration::from_millis(100)),
+            false
+        ));
+    }
+
+    #[test]
+    fn coalesce_restart_respawns_after_cooldown() {
+        // Past the cooldown window, every caller is allowed to drive a real
+        // restart again.
+        assert!(!should_coalesce_restart(
+            Some(std::time::Duration::from_millis(RESTART_COOLDOWN_MS + 1)),
+            true
+        ));
+    }
+
+    #[test]
+    fn coalesce_restart_never_skips_on_first_restart() {
+        // No prior successful restart recorded → the first caller always does
+        // the real work.
+        assert!(!should_coalesce_restart(None, true));
+        assert!(!should_coalesce_restart(None, false));
     }
 
     #[test]

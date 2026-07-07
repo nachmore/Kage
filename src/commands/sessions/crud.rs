@@ -597,11 +597,17 @@ pub async fn switch_acp_session(
     let client_guard = acp.client.clone();
     let window_label = window.label().to_string();
 
-    // Ensure connected
-    if !client_guard.is_connected() {
-        info!("Not connected, attempting to connect for session switch...");
-        if let Err(e) = client_guard.connect() {
-            error!("Connection failed: {}", e);
+    // Ensure a *healthy* connection. `is_healthy()` (not just `is_connected()`)
+    // catches the case where the agent process has died but the reader thread
+    // hasn't observed EOF yet — a plain `connect()` would early-return on the
+    // stale `connected=true` flag and leave us talking to a zombie. When
+    // unhealthy we go through `restart_connection`, which force-disconnects
+    // first and has its own coalesce+retry guard, so concurrent callers don't
+    // stack respawns.
+    if !client_guard.is_healthy() {
+        info!("Connection not healthy, restarting for session switch...");
+        if let Err(e) = client_guard.restart_connection() {
+            error!("Connection restart failed: {}", e);
             return Err(AppError::keyed(
                 ErrorKind::ConnectionLost,
                 "errors.session.connect_failed",
