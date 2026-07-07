@@ -212,7 +212,10 @@ describe('renderSchema', () => {
         expect(btn.disabled).toBe(true);
     });
 
-    it('runs settings actions with no RPC timeout (user-gated flows)', async () => {
+    it('runs settings actions with a generous (but bounded) RPC timeout', async () => {
+        // User-gated flows (OAuth consent) exceed the default 10s cap, so the
+        // action RPC gets a much larger timeout — but still finite, so a
+        // runaway action can't wedge the button disabled forever.
         const sandbox = stubSandbox({ runSettingsAction: () => ({ status: 'ok' }) });
         const inst = renderSchema({
             extensionId: 'to',
@@ -227,7 +230,9 @@ describe('renderSchema', () => {
         await new Promise((r) => setTimeout(r, 0));
 
         const call = sandbox.calls.find((c) => c.method === 'runSettingsAction');
-        expect(call.opts).toEqual({ timeoutMs: 0 });
+        // Well past the 300s OAuth loopback, but bounded (not 0/Infinity).
+        expect(call.opts.timeoutMs).toBeGreaterThan(300_000);
+        expect(Number.isFinite(call.opts.timeoutMs)).toBe(true);
     });
 
     it('refresh host effect re-fetches getSettings and re-renders in place', async () => {

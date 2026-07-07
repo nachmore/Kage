@@ -20,6 +20,17 @@ import {
 import { escapeAttr, escapeHtml, formatBytes } from './tool-utils.js';
 
 /**
+ * Timeout for a settings action RPC. Far longer than the default 10s
+ * sandbox RPC cap because settings actions legitimately block on the
+ * *user* — the longest is Spotify's OAuth flow, whose loopback listener
+ * waits up to 300s for the browser redirect. 10 minutes clears that with
+ * margin while still bounding a runaway (an action stuck in an infinite
+ * loop or a promise that never resolves) so the button can't be wedged
+ * disabled forever.
+ */
+const ACTION_RPC_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
  * Rendered settings instance. Produced by renderSchema().
  * Callers interact with it via `load(config)`, `save(config)`, and `validate()`
  * to plug into the existing SettingsModule interface.
@@ -441,16 +452,17 @@ export class RenderedSettings {
             // are handed along so the action can use up-to-date settings
             // without reading from DOM.
             //
-            // No RPC timeout: settings actions routinely block on the *user*,
-            // not on work — e.g. an OAuth "Connect" flow waits for the user to
-            // consent in a browser tab, which reliably exceeds the default 10s
-            // RPC cap. The button is disabled for the duration, so there's no
-            // re-entrancy risk, and a genuinely wedged extension is bounded by
-            // the sandbox teardown on window close.
+            // Generous RPC timeout: settings actions routinely block on the
+            // *user*, not on work — e.g. an OAuth "Connect" flow waits for the
+            // user to consent in a browser tab, which reliably exceeds the
+            // default 10s RPC cap. We give it ACTION_RPC_TIMEOUT_MS (10 min,
+            // comfortably past the 300s OAuth loopback) rather than disabling
+            // the timeout entirely, so a runaway action still can't wedge the
+            // button disabled forever.
             const result = await this.sandbox.call(
                 'runSettingsAction',
                 { action, values: this.save() },
-                { timeoutMs: 0 }
+                { timeoutMs: ACTION_RPC_TIMEOUT_MS }
             );
 
             if (result && typeof result === 'object') {
