@@ -72,6 +72,17 @@ import { BannerController } from './banner.js';
 import { t } from '../shared/i18n.js';
 
 /**
+ * Minimum gap between floating-session re-bootstrap attempts. A send while
+ * bootstrap has failed triggers a retry, but the backend restart it drives
+ * is expensive (spawns/reinitialises the agent), so we debounce: retries
+ * closer together than this just re-show the existing error instead of
+ * kicking off another attempt. Comfortably longer than the backend's own
+ * restart retry ladder so a genuine cold-start failure fully plays out
+ * before the user's next send can trigger a fresh attempt.
+ */
+const BOOTSTRAP_RETRY_DEBOUNCE_MS = 5000;
+
+/**
  * Measure the natural (no-overflow) content height of a textarea without
  * disturbing its current rendered height. Setting `height='auto'` on the
  * live element collapses it to single-line for one paint, which the user
@@ -128,7 +139,16 @@ export class FloatingApp {
         // Set when bootstrap *fails* (both setup and our recovery
         // session/new failed). Surfaces an error notice in the UI so
         // the user understands floating won't work this session.
+        // NOT a permanent latch: a send while this is set triggers a
+        // debounced re-bootstrap (see `_retryBootstrap`), so a session
+        // that failed to connect (e.g. the agent backend was briefly
+        // unavailable at launch) heals itself once the backend recovers,
+        // without requiring an app restart.
         this.sessionBootstrapError = null;
+        // Epoch-ms of the last re-bootstrap attempt, used to debounce
+        // retries so a burst of sends can't cascade into a respawn storm
+        // against the agent backend. See `_retryBootstrap`.
+        this._lastBootstrapRetryAt = 0;
         this.isWaitingForResponse = false;
         this.shortcuts = [];
         // Track the length at which pattern matching last failed (returned "chat").
@@ -1883,6 +1903,66 @@ export class FloatingApp {
     }
 
     /**
+     * Re-attempt session bootstrap after a prior failure, then flush the
+     * queued send. Triggered from `sendChatMessage` when the user sends
+     * while `sessionBootstrapError` is set — a transient backend outage at
+     * launch shouldn't strand the floating window until the app restarts.
+     *
+     * Debounced via `_lastBootstrapRetryAt`: retries closer together than
+     * `BOOTSTRAP_RETRY_DEBOUNCE_MS` skip the (expensive) backend reconnect
+     * and just re-show the existing error, so a burst of sends can't cascade
+     * into a respawn storm against the agent backend. The backend
+     * `restart_connection` has its own coalesce+retry guard too; this is the
+     * front line of the same defence.
+     *
+     * Reuses the existing queue/poll/flush machinery: we set
+     * `bootstrappingSession` so `_waitForBootstrapAndSend` waits for the
+     * retry to settle, then `_flushPendingSend` either replays the send (on
+     * success) or re-shows the error (on repeat failure).
+     */
+    _retryBootstrapAndSend(message, options) {
+        const now = Date.now();
+        if (now - this._lastBootstrapRetryAt < BOOTSTRAP_RETRY_DEBOUNCE_MS) {
+            // Too soon since the last attempt — a retry is likely still in
+            // flight or only just failed. Surface the error rather than
+            // kicking off another reconnect.
+            this.showError(
+                t('floating.error.agent_unavailable', { reason: this.sessionBootstrapError })
+            );
+            return;
+        }
+        this._lastBootstrapRetryAt = now;
+        this._pendingSend = { message, options };
+        this._showBootstrapSpinner();
+        // Gate BEFORE starting the async retry so the poller waits on it.
+        this.bootstrappingSession = true;
+        this._retryBootstrap();
+        this._waitForBootstrapAndSend();
+    }
+
+    /**
+     * Single re-bootstrap attempt: ask the backend for a session (which
+     * lazily reconnects/respawns the agent if the connection died), and
+     * clear or refresh `sessionBootstrapError` based on the outcome. Always
+     * clears `bootstrappingSession` on the way out so the poller unblocks.
+     */
+    async _retryBootstrap() {
+        console.log('[floating] retrying session bootstrap after prior failure');
+        try {
+            const id = await this.invoke('switch_acp_session', { sessionId: null });
+            this.floatingSessionId = id;
+            this.sessionBootstrapError = null;
+            console.log(`[floating] re-bootstrap succeeded: ${id}`);
+        } catch (e) {
+            console.error('[floating] re-bootstrap failed:', e);
+            this.floatingSessionId = null;
+            this.sessionBootstrapError = errMessage(e);
+        } finally {
+            this.bootstrappingSession = false;
+        }
+    }
+
+    /**
      * Show a "Spinning up agent…" placeholder in floating's response
      * area while we're waiting for the launch session to be pinned.
      * Removed once `_flushPendingSend()` runs OR the bootstrap fails
@@ -2836,12 +2916,12 @@ export class FloatingApp {
             this._waitForBootstrapAndSend();
             return;
         }
-        // Bootstrap explicitly failed — surface the error rather than
-        // letting the user wonder why nothing happens.
+        // Bootstrap previously failed. Rather than latching that error until
+        // the app restarts (the old behaviour — a transient backend outage at
+        // launch left floating permanently dead), retry the bootstrap. It's
+        // debounced so rapid sends can't cascade into repeated reconnects.
         if (this.sessionBootstrapError) {
-            this.showError(
-                t('floating.error.agent_unavailable', { reason: this.sessionBootstrapError })
-            );
+            this._retryBootstrapAndSend(message, options);
             return;
         }
 
