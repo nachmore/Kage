@@ -236,22 +236,33 @@ export class ExtensionSandbox {
 
     /**
      * Send an RPC to the sandbox and wait for its response.
-     * Times out after RPC_TIMEOUT_MS so a hung extension cannot wedge us.
+     *
+     * Times out after RPC_TIMEOUT_MS by default so a hung extension cannot
+     * wedge us. Callers can pass `opts.timeoutMs` to override — necessary for
+     * RPCs that legitimately block on the *user* rather than on work, e.g. a
+     * settings action that runs an OAuth flow (the user has to consent in a
+     * browser tab, which routinely takes longer than 10s). Pass `0` to
+     * disable the timeout entirely.
      */
-    async call(method, params) {
+    async call(method, params, opts = {}) {
         if (this._destroyed) throw new Error(`sandbox '${this.extensionId}' is destroyed`);
         if (!this._ready) throw new Error(`sandbox '${this.extensionId}' not ready`);
+        const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : RPC_TIMEOUT_MS;
         const rpcId = this._nextRpcId++;
         return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
-                this._pendingRpcs.delete(rpcId);
-                reject(new Error(`RPC '${method}' timed out after ${RPC_TIMEOUT_MS}ms`));
-            }, RPC_TIMEOUT_MS);
+            // timeoutMs <= 0 means "no timeout" — used for user-gated RPCs.
+            const timer =
+                timeoutMs > 0
+                    ? setTimeout(() => {
+                          this._pendingRpcs.delete(rpcId);
+                          reject(new Error(`RPC '${method}' timed out after ${timeoutMs}ms`));
+                      }, timeoutMs)
+                    : null;
             this._pendingRpcs.set(rpcId, { resolve, reject, timer });
             try {
                 this._port.postMessage({ type: 'rpc', rpcId, method, params });
             } catch (e) {
-                clearTimeout(timer);
+                if (timer) clearTimeout(timer);
                 this._pendingRpcs.delete(rpcId);
                 reject(e);
             }

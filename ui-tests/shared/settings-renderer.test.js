@@ -12,8 +12,8 @@ function stubSandbox(responses = {}) {
     const calls = [];
     return {
         calls,
-        async call(method, params) {
-            calls.push({ method, params });
+        async call(method, params, opts) {
+            calls.push({ method, params, opts });
             if (method in responses) {
                 const r = responses[method];
                 return typeof r === 'function' ? r(params) : r;
@@ -191,5 +191,103 @@ describe('renderSchema', () => {
         const r = await inst.validate();
         expect(r.valid).toBe(false);
         expect(r.error).toMatch(/at most 10/);
+    });
+
+    it('renders an action button as disabled when disabled:true', () => {
+        const sandbox = stubSandbox();
+        const inst = renderSchema({
+            extensionId: 'dis',
+            container,
+            sandbox,
+            schema: {
+                sections: [{
+                    controls: [
+                        { type: 'action', id: 'out', label: 'Sign out', action: 'signout', disabled: true },
+                    ],
+                }],
+            },
+        });
+        inst.load({});
+        const btn = container.querySelector('#ext-ctrl-dis-out');
+        expect(btn.disabled).toBe(true);
+    });
+
+    it('runs settings actions with no RPC timeout (user-gated flows)', async () => {
+        const sandbox = stubSandbox({ runSettingsAction: () => ({ status: 'ok' }) });
+        const inst = renderSchema({
+            extensionId: 'to',
+            container,
+            sandbox,
+            schema: {
+                sections: [{ controls: [{ type: 'action', id: 'go', label: 'Go', action: 'do' }] }],
+            },
+        });
+        inst.load({});
+        container.querySelector('#ext-ctrl-to-go').click();
+        await new Promise((r) => setTimeout(r, 0));
+
+        const call = sandbox.calls.find((c) => c.method === 'runSettingsAction');
+        expect(call.opts).toEqual({ timeoutMs: 0 });
+    });
+
+    it('refresh host effect re-fetches getSettings and re-renders in place', async () => {
+        // First getSettings (implicit via renderSchema caller) is the initial
+        // schema; the refresh re-fetch returns an updated one where the
+        // action label and disabled state have flipped — simulating a
+        // connection that just went from signed-in to signed-out.
+        let signedIn = true;
+        const sandbox = stubSandbox({
+            getSettings: () => ({
+                sections: [{
+                    controls: [
+                        { type: 'info', id: 'status', html: signedIn ? 'Signed in.' : 'Not signed in.' },
+                        { type: 'action', id: 'connect', label: signedIn ? 'Reconnect' : 'Connect', action: 'connect' },
+                        { type: 'action', id: 'signout', label: 'Sign out', action: 'signout', disabled: !signedIn },
+                        { type: 'action', id: 'check', label: 'Check', action: 'check' },
+                    ],
+                }],
+            }),
+            runSettingsAction: ({ action }) => {
+                if (action === 'check') {
+                    signedIn = false; // the check discovered we're disconnected
+                    return { status: '❌ revoked', host: { type: 'refresh' } };
+                }
+                return {};
+            },
+        });
+
+        // Seed the initial render with the signed-in schema.
+        const inst = renderSchema({
+            extensionId: 'sp',
+            container,
+            sandbox,
+            schema: {
+                sections: [{
+                    controls: [
+                        { type: 'info', id: 'status', html: 'Signed in.' },
+                        { type: 'action', id: 'connect', label: 'Reconnect', action: 'connect' },
+                        { type: 'action', id: 'signout', label: 'Sign out', action: 'signout', disabled: false },
+                        { type: 'action', id: 'check', label: 'Check', action: 'check' },
+                    ],
+                }],
+            },
+        });
+        inst.load({});
+
+        // Precondition: signed-in labels/state.
+        expect(container.querySelector('#ext-ctrl-sp-connect').textContent.trim()).toBe('Reconnect');
+        expect(container.querySelector('#ext-ctrl-sp-signout').disabled).toBe(false);
+
+        // Click "Check" → action flips state and requests a refresh.
+        container.querySelector('#ext-ctrl-sp-check').click();
+        await new Promise((r) => setTimeout(r, 0));
+
+        // The panel re-rendered from the fresh schema.
+        expect(sandbox.calls.some((c) => c.method === 'getSettings')).toBe(true);
+        expect(container.querySelector('#ext-ctrl-sp-connect').textContent.trim()).toBe('Connect');
+        expect(container.querySelector('#ext-ctrl-sp-signout').disabled).toBe(true);
+        expect(container.querySelector('#ext-row-sp-status__info').textContent).toMatch(/Not signed in/);
+        // The action's status message survived the re-render.
+        expect(container.querySelector('#ext-ctrl-sp-check__status').textContent).toBe('❌ revoked');
     });
 });

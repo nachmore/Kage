@@ -68,6 +68,51 @@ export class RenderedSettings {
         this._applyVisibility();
     }
 
+    /**
+     * Re-fetch the schema from the sandbox and re-render in place. Used by
+     * the `refresh` host effect so an action that changed derived state
+     * (connection status, whether there's a session to sign out of, the
+     * Connect vs Reconnect label) updates the whole panel, not just the
+     * status line.
+     *
+     * Current value-control values are carried across so an in-progress
+     * edit (e.g. a half-typed trigger word) isn't lost to the re-render.
+     *
+     * @param {object} [opts]
+     * @param {string} [opts.preserveStatusFor] - action id whose status span
+     *        should keep showing `opts.status` after the rebuild.
+     * @param {string} [opts.status] - status text to re-apply.
+     */
+    async refresh(opts = {}) {
+        let schema;
+        try {
+            schema = await this.sandbox.call('getSettings', {});
+        } catch (e) {
+            this.log.warn?.('settings refresh: getSettings failed:', e);
+            return;
+        }
+        if (!schema || typeof schema !== 'object') return;
+
+        // Snapshot live values so the rebuild doesn't reset them to defaults.
+        const carried = this.save();
+
+        // Tear down old listeners before we replace the DOM.
+        this.destroy();
+
+        this.schema = schema;
+        this.values = {};
+        this.render();
+        this.load(carried);
+
+        // Re-apply the status message on the originating action's status
+        // span — the rebuild created a fresh (empty) one.
+        if (opts.preserveStatusFor && opts.status) {
+            const btnId = this._inputId({ id: opts.preserveStatusFor });
+            const statusEl = this.container.querySelector(`#${cssEscapeId(btnId)}__status`);
+            if (statusEl) statusEl.textContent = opts.status;
+        }
+    }
+
     load(stored) {
         // `stored` is the raw extension config object (config.extensions[id]).
         // Controls with a stored value adopt it; others keep their default.
@@ -298,6 +343,7 @@ export class RenderedSettings {
                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
                     <button class="setting-button${variantClass}" id="${btnId}" data-ext-action
                         data-ext-action-name="${escapeAttr(ctrl.action)}"
+                        ${ctrl.disabled ? 'disabled' : ''}
                         ${ctrl.confirm ? `data-ext-action-confirm="${escapeAttr(ctrl.confirm)}"` : ''}>
                         ${escapeHtml(ctrl.label)}
                     </button>
@@ -394,10 +440,18 @@ export class RenderedSettings {
             // Action handlers run inside the sandbox. The current values
             // are handed along so the action can use up-to-date settings
             // without reading from DOM.
-            const result = await this.sandbox.call('runSettingsAction', {
-                action,
-                values: this.save(),
-            });
+            //
+            // No RPC timeout: settings actions routinely block on the *user*,
+            // not on work — e.g. an OAuth "Connect" flow waits for the user to
+            // consent in a browser tab, which reliably exceeds the default 10s
+            // RPC cap. The button is disabled for the duration, so there's no
+            // re-entrancy risk, and a genuinely wedged extension is bounded by
+            // the sandbox teardown on window close.
+            const result = await this.sandbox.call(
+                'runSettingsAction',
+                { action, values: this.save() },
+                { timeoutMs: 0 }
+            );
 
             if (result && typeof result === 'object') {
                 if (result.status) setStatus(String(result.status));
@@ -406,8 +460,13 @@ export class RenderedSettings {
                 if (result.host) {
                     // onFileSelected's return value needs to update the
                     // same button's status. We pass the status setter
-                    // down so the effect can call it.
-                    await this._runHostSideEffect(result.host, { setStatus });
+                    // down so the effect can call it. `refresh` also needs
+                    // the just-set status preserved across the re-render.
+                    await this._runHostSideEffect(result.host, {
+                        setStatus,
+                        status: result.status ? String(result.status) : '',
+                        sourceAction: action,
+                    });
                 }
                 if (result.error) setStatus(`❌ ${result.error}`);
             } else {
@@ -417,8 +476,12 @@ export class RenderedSettings {
             this.log.warn?.(`action '${action}' failed:`, e);
             setStatus(`❌ ${e?.message || e}`);
         } finally {
-            btn.disabled = false;
-            btn.textContent = prevText;
+            // The button may have been replaced by a `refresh` effect; only
+            // restore it if it's still the live node.
+            if (btn.isConnected) {
+                btn.disabled = false;
+                btn.textContent = prevText;
+            }
         }
     }
 
@@ -429,12 +492,24 @@ export class RenderedSettings {
      *   - pick_file: open a native file picker (via browser <input type=file>),
      *       read the file, then send its contents back via a follow-up RPC
      *   - play_timer_sound: preview a built-in timer sound on the host
+     *   - refresh: re-fetch getSettings() and re-render the panel in place,
+     *       so an action that changed connection/auth state (e.g. Spotify's
+     *       "Check connection" discovering a revoked token) is reflected in
+     *       the info text, button labels, and disabled states immediately —
+     *       not just in the transient status line.
      *   - reload: call reload() on the ExtensionManager (rarely needed)
      */
     async _runHostSideEffect(host, ctx = {}) {
         if (!host || typeof host !== 'object') return;
         const setStatus = ctx.setStatus || (() => {});
         switch (host.type) {
+            case 'refresh': {
+                // Preserve the status the action just set — the re-render
+                // rebuilds the DOM (including the status span), so we
+                // re-apply it against the fresh action row afterwards.
+                await this.refresh({ preserveStatusFor: ctx.sourceAction, status: ctx.status });
+                break;
+            }
             case 'download': {
                 const filename = String(host.filename || 'export.txt');
                 const content = String(host.content || '');
