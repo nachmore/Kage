@@ -2186,6 +2186,22 @@ export class FloatingApp {
                 this.elements.input.value = text;
                 this.elements.input.dispatchEvent(new Event('input', { bubbles: true }));
             },
+            // An extension result signalled that it mutated state its widget
+            // renders (e.g. Spotify `sp like`). Repaint mounted widgets so the
+            // floating bar reflects the change immediately rather than after
+            // the widget's next poll. Delayed one beat because APIs like
+            // Spotify's are eventually consistent — an immediate re-render can
+            // still read the pre-change state (the widget's own onAction path
+            // uses the same 250ms settle).
+            onRefreshWidgets: () => {
+                setTimeout(() => {
+                    try {
+                        this.extensionManager?.renderAllWidgets();
+                    } catch (e) {
+                        console.warn('renderAllWidgets on refresh_widgets failed:', e);
+                    }
+                }, 300);
+            },
             onTimerStart: (ms) => this._startTimerUI(ms),
             onStopwatch: () => {
                 const sw = getSlotState('stopwatch');

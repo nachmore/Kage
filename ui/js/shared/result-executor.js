@@ -65,6 +65,14 @@ export async function executeResult(result, query, ctx) {
             } else if (action.type === 'replace_input' && ctx.onReplaceInput) {
                 ctx.onReplaceInput(action.value);
                 return { handled: true, action: 'replace_input' };
+            } else if (action.type === 'refresh_widgets' && ctx.onRefreshWidgets) {
+                // The extension just changed state its own widget reflects
+                // (e.g. Spotify `sp like` toggled the current track). Ask the
+                // host to repaint mounted widgets now instead of waiting for
+                // the widget's next poll. Fire-and-forget: the callback owns
+                // any settle delay. Unknown/absent callback → silently
+                // ignored, so this stays backward-compatible.
+                ctx.onRefreshWidgets();
             }
         }
         // Timer/stopwatch special handling
