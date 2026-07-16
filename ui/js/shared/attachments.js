@@ -4,7 +4,7 @@
  */
 
 import { t } from './i18n.js';
-import { escapeHtml } from './tool-utils.js';
+import { escapeAttr, escapeHtml } from './tool-utils.js';
 
 const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -233,7 +233,7 @@ export function attachmentPreviewHtml(attachments) {
     let html = '<div class="message-attachments">';
     for (const att of attachments) {
         if (att.type === 'image' && att.previewUrl) {
-            html += `<img src="${att.previewUrl}" alt="${t('shared.attachments.image.alt')}" class="message-attachment-img">`;
+            html += `<img src="${escapeAttr(att.previewUrl)}" alt="${escapeAttr(t('shared.attachments.image.alt'))}" class="message-attachment-img">`;
         } else if (att.type === 'resource_link') {
             html += `<span class="message-attachment-file">📄 ${escapeHtml(att.name || 'file')}</span>`;
         }
@@ -265,12 +265,19 @@ function showLimitToast(_nearElement) {
  * @param {object} imageItem - the content item from JSONL
  * @returns {string|null} data URL or null if not convertible
  */
+// Session JSONL comes from the agent backend and is untrusted — only accept
+// formats we'd actually render. A free-form `format` string would otherwise
+// flow verbatim into the data: URL and from there into an <img src> attribute.
+const SESSION_IMAGE_FORMATS = new Set(['png', 'jpeg', 'jpg', 'gif', 'webp']);
+
 export function sessionImageToDataUrl(imageItem) {
     try {
         const imgData = imageItem.data;
         if (!imgData?.source?.data) return null;
         const bytes = imgData.source.data;
-        const format = imgData.format || 'png';
+        let format = String(imgData.format || 'png').toLowerCase();
+        if (!SESSION_IMAGE_FORMATS.has(format)) format = 'png';
+        if (format === 'jpg') format = 'jpeg';
         const mimeType = `image/${format}`;
         // Convert byte array to base64
         let binary = '';
