@@ -211,7 +211,7 @@ export class HotkeySettingsModule extends SettingsModule {
         });
         try {
             const pending = await invoke('get_hotkey_registration_failures');
-            if (pending && pending.length) this._showRegistrationWarning(pending);
+            if (pending?.length) this._showRegistrationWarning(pending);
         } catch {
             /* command optional; ignore if unavailable */
         }

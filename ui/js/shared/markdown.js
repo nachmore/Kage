@@ -873,7 +873,7 @@ function _renderDiagramError(container, label, error) {
     const div = document.createElement('div');
     div.style.color = 'var(--kage-error)';
     div.style.padding = '20px';
-    const detail = error && error.message ? `${label}: ${error.message}` : label;
+    const detail = error?.message ? `${label}: ${error.message}` : label;
     div.textContent = detail;
     container.appendChild(div);
 }

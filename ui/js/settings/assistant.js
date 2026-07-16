@@ -464,7 +464,8 @@ export class AssistantSettingsModule extends SettingsModule {
         const el = document.getElementById('personalization-editor-status');
         if (!el) return;
         el.textContent = text || '';
-        el.style.color = kind === 'error' ? 'var(--kage-error)' : kind === 'success' ? 'var(--kage-accent)' : '';
+        el.style.color =
+            kind === 'error' ? 'var(--kage-error)' : kind === 'success' ? 'var(--kage-accent)' : '';
     }
 
     _formatError(e) {
@@ -801,7 +802,8 @@ export class AssistantSettingsModule extends SettingsModule {
         const el = document.getElementById('appModesStatus');
         if (!el) return;
         el.textContent = text || '';
-        el.style.color = kind === 'error' ? 'var(--kage-error)' : kind === 'success' ? 'var(--kage-accent)' : '';
+        el.style.color =
+            kind === 'error' ? 'var(--kage-error)' : kind === 'success' ? 'var(--kage-accent)' : '';
     }
 
     // --- quick actions (unchanged) --------------------------------------

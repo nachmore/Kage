@@ -1521,10 +1521,7 @@ mod resolve_policy_tests {
         let cfg = ToolPermissionsConfig {
             trust_all: false,
             terminator_mode: false,
-            tools: vec![
-                tool("a", PolicyKind::Allow),
-                tool("d", PolicyKind::Deny),
-            ],
+            tools: vec![tool("a", PolicyKind::Allow), tool("d", PolicyKind::Deny)],
         };
         assert_eq!(cfg.resolve_policy("a"), PolicyKind::Allow);
         assert_eq!(cfg.resolve_policy("d"), PolicyKind::Deny);

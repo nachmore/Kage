@@ -651,7 +651,10 @@ async fn run() {
             // the app is perfectly usable via its hotkey and windows. Degrade
             // (log and continue) instead of aborting the whole app with `?`.
             if let Err(e) = tray::setup_tray(app, dev_mode) {
-                log::error!("Failed to set up system tray (continuing without it): {}", e);
+                log::error!(
+                    "Failed to set up system tray (continuing without it): {}",
+                    e
+                );
             }
 
             // Set up the ACP notification handler. The handler captures an

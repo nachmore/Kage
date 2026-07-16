@@ -981,7 +981,11 @@ export class ConnectionSettingsModule extends SettingsModule {
             if (!status) return;
             status.textContent = text || '';
             status.style.color =
-                kind === 'error' ? 'var(--kage-error)' : kind === 'success' ? 'var(--kage-accent)' : '';
+                kind === 'error'
+                    ? 'var(--kage-error)'
+                    : kind === 'success'
+                      ? 'var(--kage-accent)'
+                      : '';
         };
         const baseUrl = this._currentOllamaBaseUrl();
         const model = document.getElementById('ollEditModel')?.value?.trim();
