@@ -266,10 +266,25 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     }
 
     function wireDismissalListener() {
-        appWindow.listen(EVT.PERMISSION_DISMISSED, () => {
-            console.log('Permission dismissed externally');
-            _permissionQueue = [];
-            hidePermissionModal();
+        appWindow.listen(EVT.PERMISSION_DISMISSED, (event) => {
+            // The payload carries the dismissed request's id (multiple
+            // windows can each have their own pending permission).
+            const dismissedId = event?.payload?.requestId;
+            if (dismissedId === undefined || dismissedId === null) {
+                // Broadcast dismissal (legacy shape) — drop everything.
+                console.log('Permission dismissed externally (broadcast)');
+                _permissionQueue = [];
+                hidePermissionModal();
+                return;
+            }
+            const matches = (id) => JSON.stringify(id) === JSON.stringify(dismissedId);
+            // Remove any queued copy of that request either way.
+            _permissionQueue = _permissionQueue.filter((q) => !matches(q.notification?.id));
+            if (currentPermissionRequest && matches(currentPermissionRequest.id)) {
+                console.log('Permission dismissed externally');
+                // hidePermissionModal advances to the next queued request.
+                hidePermissionModal();
+            }
         });
     }
 

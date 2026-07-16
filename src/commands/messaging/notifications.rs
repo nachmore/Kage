@@ -66,7 +66,9 @@ pub fn setup_notification_handler(
     app: &tauri::AppHandle,
     state_config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     slash_commands: std::sync::Arc<std::sync::Mutex<Vec<crate::state::SlashCommand>>>,
-    pending_permission: std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
+    pending_permission: std::sync::Arc<
+        std::sync::Mutex<std::collections::HashMap<String, crate::state::PendingPermission>>,
+    >,
 ) {
     let app_handle = app.clone();
     let config = state_config;
@@ -465,7 +467,9 @@ fn handle_permission_notification(
     app_handle: &tauri::AppHandle,
     config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     client: &crate::acp_client::AcpClient,
-    pending_perm: &std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
+    pending_perm: &std::sync::Arc<
+        std::sync::Mutex<std::collections::HashMap<String, crate::state::PendingPermission>>,
+    >,
     tool_names: &std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
     last_config_save: &std::sync::Arc<std::sync::Mutex<std::time::Instant>>,
 ) {
@@ -606,13 +610,24 @@ fn handle_permission_notification(
             send_response("reject_once");
         }
         crate::config::PolicyKind::Ask => {
+            let session_id = notification
+                .get("params")
+                .and_then(|p| p.get("sessionId"))
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+
+            let request_id = notification
+                .get("id")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
             if let Ok(mut pending) = pending_perm.lock() {
-                *pending = Some(crate::state::PendingPermission {
-                    request_id: notification
-                        .get("id")
-                        .cloned()
-                        .unwrap_or(serde_json::Value::Null),
-                });
+                pending.insert(
+                    crate::state::permission_key(&request_id),
+                    crate::state::PendingPermission {
+                        request_id,
+                        session_id: session_id.clone(),
+                    },
+                );
             }
 
             // Route the modal back to the window that issued the
@@ -622,11 +637,6 @@ fn handle_permission_notification(
             // Falling back to "floating" preserves the historical
             // default for hotkey-driven prompts that bypass the map
             // (e.g. inline-assist).
-            let session_id = notification
-                .get("params")
-                .and_then(|p| p.get("sessionId"))
-                .and_then(|s| s.as_str())
-                .map(|s| s.to_string());
             let source = app_handle
                 .try_state::<UiState>()
                 .and_then(|state| {

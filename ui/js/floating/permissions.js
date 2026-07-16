@@ -119,7 +119,9 @@ waitForTauri(({ invoke, appWindow }) => {
             // Double-check the request is still pending
             let stillPending = false;
             try {
-                stillPending = await invokeFn('has_pending_permission');
+                stillPending = await invokeFn('has_pending_permission', {
+                    requestId: notification.id ?? null,
+                });
             } catch (_e) {
                 stillPending = true;
             }

@@ -274,7 +274,7 @@ async fn run() {
     let acp_client_arc = Arc::new(acp_client);
     let config_arc = Arc::new(std::sync::Mutex::new(config.clone()));
     let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
+    let pending_permissions_arc = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
     let available_models_arc =
         Arc::new(std::sync::Mutex::new(Vec::<crate::state::AcpModel>::new()));
 
@@ -282,12 +282,12 @@ async fn run() {
     // setup() because it needs app.handle() to emit Tauri events).
     let config_for_handler = config_arc.clone();
     let slash_cmds_for_handler = slash_commands_arc.clone();
-    let pending_perm_for_handler = pending_permission_arc.clone();
+    let pending_perm_for_handler = pending_permissions_arc.clone();
     let acp_for_handler = acp_client_arc.clone();
 
     let acp_handles = state::AcpHandles {
         client: acp_client_arc,
-        pending_permission: pending_permission_arc,
+        pending_permissions: pending_permissions_arc,
         slash_commands: slash_commands_arc,
         available_models: available_models_arc,
         last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),

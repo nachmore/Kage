@@ -3123,10 +3123,13 @@ export class FloatingApp {
         this.currentMatches = [];
         this.selectedIndex = -1;
 
-        // Dismiss any pending permission request from the main chat window
-        // so the session isn't stalled waiting for a response.
+        // Dismiss any pending permission request blocking OUR session so
+        // it isn't stalled waiting for a response. Scoped by session id —
+        // other windows' pending permissions are theirs to answer.
         try {
-            await this.invoke('dismiss_pending_permission');
+            await this.invoke('dismiss_pending_permission', {
+                sessionId: this.floatingSessionId ?? null,
+            });
         } catch (e) {
             console.log('No pending permission to dismiss:', e);
         }

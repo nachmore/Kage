@@ -76,77 +76,112 @@ pub async fn send_permission_response(
     };
     crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(audit_event));
 
-    if let Ok(mut pending) = acp.pending_permission.lock() {
-        *pending = None;
+    if let Ok(mut pending) = acp.pending_permissions.lock() {
+        pending.remove(&crate::state::permission_key(&request_id));
     }
 
     // Tell the permission audience (chat hosts + floating + settings) to
-    // close their permission modals. Same fan-out as the original request.
-    crate::event_targets::emit_permission_audience(&app, events::PERMISSION_DISMISSED, &());
+    // close their modal for THIS request. Windows with a different
+    // pending request keep theirs open — the payload carries the
+    // request id so listeners can match.
+    crate::event_targets::emit_permission_audience(
+        &app,
+        events::PERMISSION_DISMISSED,
+        &serde_json::json!({ "requestId": request_id }),
+    );
 
     Ok(())
 }
 
+/// Dismiss pending permission requests. With `session_id`, only requests
+/// belonging to that session (or carrying no session) are dismissed —
+/// another window's blocked prompt is left alone. Without it, everything
+/// pending is dismissed (legacy behaviour).
 #[tauri::command]
 pub async fn dismiss_pending_permission(
+    session_id: Option<String>,
     acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
 ) -> Result<bool, AppError> {
-    let pending = {
-        let guard = acp.pending_permission.lock().map_err(|_| {
+    let targets: Vec<(String, crate::state::PendingPermission)> = {
+        let guard = acp.pending_permissions.lock().map_err(|_| {
             AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
         })?;
-        guard.clone()
+        guard
+            .iter()
+            .filter(|(_, p)| match (&session_id, &p.session_id) {
+                (Some(want), Some(have)) => want == have,
+                _ => true,
+            })
+            .map(|(k, p)| (k.clone(), p.clone()))
+            .collect()
     };
 
-    if let Some(perm) = pending {
-        // Only clear our local pending slot if the agent actually accepted
-        // the dismissal. If the send fails (broken pipe, transport error)
-        // the agent still believes a prompt is open — clearing locally would
-        // desynchronize state and stall the next user message on the agent's
-        // "prompt already in progress" guard. Surface the error so the UI
-        // can choose to retry or reconnect.
+    if targets.is_empty() {
+        return Ok(false);
+    }
+
+    let mut dismissed_any = false;
+    let mut last_err: Option<String> = None;
+    for (key, perm) in targets {
+        // Only clear the local entry if the agent actually accepted the
+        // dismissal. If the send fails (broken pipe, transport error)
+        // the agent still believes a prompt is open — clearing locally
+        // would desynchronize state and stall the next user message on
+        // the agent's "prompt already in progress" guard.
         match acp
             .client
             .send_permission_response(&perm.request_id, "reject_once")
         {
             Ok(()) => {
-                if let Ok(mut guard) = acp.pending_permission.lock() {
-                    *guard = None;
+                if let Ok(mut guard) = acp.pending_permissions.lock() {
+                    guard.remove(&key);
                 }
                 // PERMISSION_DISMISSED listens in chat hosts + floating +
-                // settings; same audience as the original request.
+                // settings; carries the request id so only the matching
+                // modal closes.
                 crate::event_targets::emit_permission_audience(
                     &app,
                     events::PERMISSION_DISMISSED,
-                    &(),
+                    &serde_json::json!({ "requestId": perm.request_id }),
                 );
-                Ok(true)
+                dismissed_any = true;
             }
             Err(e) => {
                 warn!(
                     "Failed to dismiss pending permission, keeping local state: {}",
                     e
                 );
-                Err(AppError::keyed(
-                    ErrorKind::Internal,
-                    "errors.permission.dismiss_failed",
-                    &[("reason", &e.to_string())],
-                ))
+                last_err = Some(e.to_string());
             }
         }
-    } else {
-        Ok(false)
+    }
+
+    match (dismissed_any, last_err) {
+        (false, Some(e)) => Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.permission.dismiss_failed",
+            &[("reason", &e)],
+        )),
+        _ => Ok(dismissed_any),
     }
 }
 
+/// With `request_id`, checks whether THAT request is still pending;
+/// without, whether anything is.
 #[tauri::command]
-pub async fn has_pending_permission(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
+pub async fn has_pending_permission(
+    request_id: Option<serde_json::Value>,
+    acp: State<'_, AcpHandles>,
+) -> Result<bool, AppError> {
     let guard = acp
-        .pending_permission
+        .pending_permissions
         .lock()
         .map_err(|_| AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[]))?;
-    Ok(guard.is_some())
+    Ok(match request_id {
+        Some(id) => guard.contains_key(&crate::state::permission_key(&id)),
+        None => !guard.is_empty(),
+    })
 }
 
 /// Receive the result of a local extension tool call from the webview,

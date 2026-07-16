@@ -19,9 +19,13 @@ pub struct AcpHandles {
     /// long-running prompt happened to hold the guard, which is what the
     /// pre-2026-05 codebase did.
     pub client: Arc<AcpClient>,
-    /// Pending permission request: set when a permission_request notification
-    /// arrives, cleared when responded to.
-    pub pending_permission: Arc<std::sync::Mutex<Option<PendingPermission>>>,
+    /// Pending permission requests, keyed by the serialized JSON-RPC
+    /// request id. Inserted when a permission_request notification
+    /// arrives, removed when responded to / dismissed. A map (not a
+    /// single slot) because multiple chat windows on different sessions
+    /// can each have a prompt blocked on a permission at the same time —
+    /// a single slot lost every request but the latest.
+    pub pending_permissions: Arc<std::sync::Mutex<HashMap<String, PendingPermission>>>,
     /// Slash commands received from the ACP server via the
     /// `commands/available` vendor extension notification (under either
     /// `_kage.dev/` or `_kiro.dev/` — see acp_client::vendor_method_suffix).
@@ -123,6 +127,15 @@ pub struct FeatureServices {
 #[derive(Debug, Clone)]
 pub struct PendingPermission {
     pub request_id: serde_json::Value,
+    /// Session the permission belongs to, when the notification carried
+    /// one. Lets dismissal target only the caller's session.
+    pub session_id: Option<String>,
+}
+
+/// Canonical map key for a pending permission: the compact JSON encoding
+/// of its JSON-RPC request id (ids can be numbers or strings on the wire).
+pub fn permission_key(request_id: &serde_json::Value) -> String {
+    request_id.to_string()
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
