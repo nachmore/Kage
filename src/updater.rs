@@ -864,18 +864,12 @@ pub fn start_update_loop(
                         &version,
                     );
 
-                    if let Ok(mut cfg) = config.try_lock() {
-                        cfg.updates.last_check_time = Some(chrono::Utc::now().to_rfc3339());
-                        let _ = cfg.save();
-                    }
+                    stamp_last_check_time(&config);
 
                     let _ = silent_update; // silent_update is consumed by the idle loop below
                 }
                 Ok(None) => {
-                    if let Ok(mut cfg) = config.try_lock() {
-                        cfg.updates.last_check_time = Some(chrono::Utc::now().to_rfc3339());
-                        let _ = cfg.save();
-                    }
+                    stamp_last_check_time(&config);
                 }
                 Err(e) => {
                     warn!("Update check failed: {}", e);
@@ -978,7 +972,11 @@ pub fn start_update_loop(
             // long-running config save; if the lock is contended we
             // just skip the stamp — the next launch will still work,
             // we just won't show the "welcome back after update"
-            // banner. Better than blocking the install.
+            // banner. Better than blocking the install. Unlike the
+            // daily-check stamps this save stays inline (blocking):
+            // the installer is about to kill the process, so a
+            // fire-and-forget spawn_blocking save could be reaped
+            // before it hits disk.
             if let Ok(mut cfg) = config_for_idle.try_lock() {
                 if let Ok(v) = updater_for_idle.available_version.lock() {
                     cfg.updates.last_updated_version = v.clone();
@@ -1012,6 +1010,26 @@ pub fn start_update_loop(
                     updater_for_idle.update_ready.store(false, Ordering::SeqCst);
                 }
             }
+        }
+    });
+}
+
+/// Stamp `updates.last_check_time = now` and save. The mutation happens
+/// under a `try_lock` (skipped on contention — a missed stamp just means
+/// one extra check tomorrow), but the save — write + `sync_all` + rename —
+/// runs on the blocking pool with a cloned snapshot so the daily-check
+/// loop never parks a Tokio worker on disk I/O.
+fn stamp_last_check_time(config: &std::sync::Arc<std::sync::Mutex<Config>>) {
+    let snapshot = match config.try_lock() {
+        Ok(mut cfg) => {
+            cfg.updates.last_check_time = Some(chrono::Utc::now().to_rfc3339());
+            cfg.clone()
+        }
+        Err(_) => return,
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Err(e) = snapshot.save() {
+            warn!("Failed to save config (update check stamp): {}", e);
         }
     });
 }

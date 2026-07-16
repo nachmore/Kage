@@ -71,7 +71,8 @@ const FLUSH_INTERVAL_MS: u64 = 500;
 
 /// Bound on the writer's mailbox. Enough to absorb bursts of several
 /// hundred log entries without dropping. If exceeded, the disk copy of the
-/// overflow entry is dropped silently (in-memory ring still has it).
+/// overflow entry is dropped (in-memory ring still has it) and
+/// `DROPPED_COUNT` is incremented.
 const CHANNEL_CAPACITY: usize = 4096;
 
 /// Messages sent to the writer thread.
@@ -94,6 +95,18 @@ static APP_LOG: std::sync::OnceLock<Mutex<AppLog>> = std::sync::OnceLock::new();
 
 /// Sender handle for the writer thread. Initialized alongside `APP_LOG`.
 static WRITER_TX: std::sync::OnceLock<SyncSender<WriterMsg>> = std::sync::OnceLock::new();
+
+/// Count of entries whose DISK copy was dropped because the writer's
+/// mailbox was full (the in-memory ring always keeps them). Read by
+/// `dropped_count()` so backpressure drops are observable instead of
+/// silent.
+static DROPPED_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Number of log entries dropped from disk persistence due to writer
+/// backpressure since startup.
+pub fn dropped_count() -> u64 {
+    DROPPED_COUNT.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 /// Pre-init buffer for entries that arrive before `init()` has run.
 /// Frontend webviews start loading their JS as soon as the Tauri builder
@@ -219,7 +232,9 @@ fn drain_preinit_buffer() {
             }
         }
         if let Some(tx) = WRITER_TX.get() {
-            let _ = tx.try_send(WriterMsg::Entry(entry));
+            if tx.try_send(WriterMsg::Entry(entry)).is_err() {
+                DROPPED_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
         }
     }
 }
@@ -458,9 +473,11 @@ pub fn log_with_ts(ts: &str, level: &str, source: &str, msg: &str) {
         match tx.try_send(WriterMsg::Entry(entry)) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {
-                // Full: writer is backed up — drop silently.
+                // Full: writer is backed up — drop the disk copy.
                 // Disconnected: writer is gone; shouldn't happen while the
-                // app is running.
+                // app is running. Either way, count it so backpressure is
+                // observable via dropped_count().
+                DROPPED_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }
@@ -471,6 +488,20 @@ pub fn log_with_ts(ts: &str, level: &str, source: &str, msg: &str) {
 /// shutdown.
 pub fn flush() {
     let Some(tx) = WRITER_TX.get() else { return };
+
+    // Surface accumulated backpressure drops before the final flush so
+    // the count lands in the on-disk log at least once per run.
+    let dropped = dropped_count();
+    if dropped > 0 {
+        log(
+            "warn",
+            "app_log",
+            &format!(
+                "{} entries dropped from disk log (writer backpressure)",
+                dropped
+            ),
+        );
+    }
 
     let (ack_tx, ack_rx) = mpsc::sync_channel::<()>(1);
     // Use blocking send — we're about to block anyway waiting for the ack,

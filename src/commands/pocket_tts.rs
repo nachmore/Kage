@@ -416,7 +416,11 @@ pub async fn pocket_tts_start(
                 Ok("Server started successfully".to_string())
             }
             Ok(false) => {
+                // kill() alone leaves a zombie on macOS/Linux — std Child
+                // neither kills nor reaps on drop; wait() collects the exit
+                // status and lets the stdout/stderr reader threads see EOF.
                 let _ = child.kill();
+                let _ = child.wait();
                 Err("Server failed to start — check that pocket-tts is installed correctly".into())
             }
             Err(_) => {

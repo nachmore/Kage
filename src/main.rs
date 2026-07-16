@@ -105,6 +105,25 @@ fn main() {
         }
     }
 
+    // Backtrace env vars must be set HERE — before the multi-thread
+    // runtime below spawns its workers. `run()` executes inside
+    // `block_on`, by which point worker threads already exist;
+    // concurrent getenv/setenv is UB on Unix, and RUST_BACKTRACE is read
+    // by the panic machinery on any thread. Dev-mode detection is
+    // re-done properly by CliFlags::parse inside run(); this early pass
+    // only mirrors its /dev detection for the env-var write.
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if startup::CliFlags::parse(&args).dev_mode {
+            if std::env::var_os("RUST_BACKTRACE").is_none() {
+                std::env::set_var("RUST_BACKTRACE", "1");
+            }
+            if std::env::var_os("RUST_LIB_BACKTRACE").is_none() {
+                std::env::set_var("RUST_LIB_BACKTRACE", "1");
+            }
+        }
+    }
+
     // Everything else runs inside a Tokio runtime because:
     //   1. `tauri-plugin-aptabase` calls `tokio::spawn` from its setup
     //      hook (client.rs `start_polling`). Without an ambient runtime
@@ -178,20 +197,10 @@ async fn run() {
     let dev_mode = flags.dev_mode;
     let debug_mode = flags.debug_mode;
 
-    // In dev mode, enable Rust backtraces on panic unless the user has
-    // already set RUST_BACKTRACE explicitly (e.g. to "full"). This means
-    // `cargo tauri dev -- /dev` always produces useful panic traces.
-    // RUST_LIB_BACKTRACE controls backtraces captured by std::backtrace
-    // on Error types (e.g. anyhow), as opposed to panics.
-    if dev_mode {
-        // SAFETY: called before any threads are spawned that read these vars.
-        if std::env::var_os("RUST_BACKTRACE").is_none() {
-            std::env::set_var("RUST_BACKTRACE", "1");
-        }
-        if std::env::var_os("RUST_LIB_BACKTRACE").is_none() {
-            std::env::set_var("RUST_LIB_BACKTRACE", "1");
-        }
-    }
+    // Dev-mode backtrace env vars (RUST_BACKTRACE / RUST_LIB_BACKTRACE)
+    // are set in main() before the Tokio runtime exists — see the block
+    // above `Runtime::new()`. Setting them here would race the worker
+    // threads (concurrent getenv/setenv is UB on Unix).
 
     if debug_mode {
         println!("🐛 DEBUG MODE ENABLED - Detailed ACP logs will be printed to console");

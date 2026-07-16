@@ -606,29 +606,37 @@ pub fn install_from_zip(zip_path: &PathBuf) -> Result<InstalledItem> {
     }
     fs::create_dir_all(&temp_dir)?;
 
-    extract_zip(zip_path, &temp_dir)?;
+    // Run the fallible section in a closure so cleanup happens on EVERY
+    // exit path — the early `?` returns (bad zip, no manifest) used to
+    // leak the extracted tree in temp, accumulating across failed
+    // installs.
+    let result = (|| {
+        extract_zip(zip_path, &temp_dir)?;
 
-    // The zip might contain files directly or inside a single subdirectory.
-    // Find the manifest.json — check root first, then one level deep.
-    let manifest_dir = if temp_dir.join("manifest.json").exists() {
-        temp_dir.clone()
-    } else {
-        // Check for a single subdirectory containing manifest.json
-        let mut found = None;
-        if let Ok(entries) = fs::read_dir(&temp_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() && path.join("manifest.json").exists() {
-                    found = Some(path);
-                    break;
+        // The zip might contain files directly or inside a single subdirectory.
+        // Find the manifest.json — check root first, then one level deep.
+        let manifest_dir = if temp_dir.join("manifest.json").exists() {
+            temp_dir.clone()
+        } else {
+            // Check for a single subdirectory containing manifest.json
+            let mut found = None;
+            if let Ok(entries) = fs::read_dir(&temp_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() && path.join("manifest.json").exists() {
+                        found = Some(path);
+                        break;
+                    }
                 }
             }
-        }
-        found.context("No manifest.json found in zip archive (checked root and one level deep)")?
-    };
+            found.context(
+                "No manifest.json found in zip archive (checked root and one level deep)",
+            )?
+        };
 
-    // Install from the extracted directory
-    let result = install_from_directory(&manifest_dir);
+        // Install from the extracted directory
+        install_from_directory(&manifest_dir)
+    })();
 
     // Cleanup temp directory
     let _ = fs::remove_dir_all(&temp_dir);
