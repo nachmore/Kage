@@ -372,7 +372,8 @@ export class FloatingApp {
                 if (!online) this.showError(offlineMessage());
                 else
                     this.showError(
-                        t('floating.error.error_with_payload', { payload: event.payload })
+                        t('floating.error.error_with_payload', { payload: event.payload }),
+                        { reconnect: true }
                     );
             },
             onSessionReset: (_event, msg) => {
@@ -3414,12 +3415,44 @@ export class FloatingApp {
         this.windowManager.resizeWindow();
     }
 
-    showError(message) {
+    showError(message, opts = {}) {
         this.stopThinking();
         this.currentResponse = message;
-        this.elements.responseText.textContent = message;
         this.elements.contentArea.classList.add('visible');
         this.elements.expandBtn.classList.add('visible');
+
+        // For connection errors, offer a Reconnect affordance (parity with the
+        // chat window). Other errors (shortcut failed, no session, etc.) stay
+        // plain text. Build via DOM API so `message` never touches innerHTML.
+        this.elements.responseText.textContent = '';
+        const msgSpan = document.createElement('span');
+        msgSpan.textContent = message;
+        this.elements.responseText.appendChild(msgSpan);
+
+        if (opts.reconnect) {
+            const btn = document.createElement('button');
+            btn.className = 'floating-error-reconnect';
+            btn.textContent = t('chat.error.btn.reconnect');
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                try {
+                    const success = await this.invoke('reconnect_acp');
+                    if (success) {
+                        this.elements.responseText.textContent = '';
+                        this.elements.contentArea.classList.remove('visible');
+                        this.elements.expandBtn.classList.remove('visible');
+                        this.windowManager.resizeWindow();
+                        return;
+                    }
+                } catch (e) {
+                    console.log('Reconnect failed:', e);
+                }
+                btn.disabled = false;
+            });
+            this.elements.responseText.appendChild(document.createElement('br'));
+            this.elements.responseText.appendChild(btn);
+        }
+
         this.windowManager.resizeWindow();
     }
 

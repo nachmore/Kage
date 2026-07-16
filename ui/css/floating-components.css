@@ -568,6 +568,26 @@ body.dark-theme .datetime-date {
     border-radius: 6px;
 }
 
+/* Reconnect button shown in the floating window on a connection error. */
+.floating-error-reconnect {
+    margin-top: 8px;
+    padding: 4px 12px;
+    border: 1px solid var(--kage-accent);
+    background: transparent;
+    color: var(--kage-accent);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.floating-error-reconnect:hover:not(:disabled) {
+    background: var(--kage-accent);
+    color: #fff;
+}
+.floating-error-reconnect:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
 /* Speech button — floating window positioning */
 .speech-btn {
     position: absolute;
