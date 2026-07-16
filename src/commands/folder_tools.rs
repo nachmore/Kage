@@ -660,8 +660,16 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
 
                 match std::fs::rename(&from_abs, &trash_dest) {
                     Ok(_) => {
-                        let trash_rel = format!("_kage_trash/{}", op.from);
-                        rollback.push((trash_rel, op.from.clone()));
+                        // Record the ACTUAL trash destination — basename only,
+                        // possibly with a collision suffix. Recording op.from
+                        // verbatim broke undo for any nested path
+                        // (docs/a.txt → trash holds a.txt, not docs/a.txt)
+                        // and for every collision-renamed file.
+                        let trash_name = trash_dest
+                            .file_name()
+                            .map(|f| f.to_string_lossy().to_string())
+                            .unwrap_or(file_name);
+                        rollback.push((format!("_kage_trash/{}", trash_name), op.from.clone()));
                         completed += 1;
                     }
                     Err(e) => {
