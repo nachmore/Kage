@@ -7720,5 +7720,17 @@
     "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)",
     "_machine_translated": true,
     "_source_hash": "0ed9533c05aec682"
+  },
+  "settings.about.logging.message_content.label": {
+    "message": "Записывать содержимое сообщений в журнал",
+    "description": "Toggle: write full prompt/message text to the log file",
+    "_machine_translated": true,
+    "_source_hash": "6651ec5b272ab921"
+  },
+  "settings.about.logging.message_content.description": {
+    "message": "⚠️ Записывает полный текст ваших запросов в файл журнала. Файл журнала часто прикрепляется к отчётам об ошибках, поэтому оставьте эту опцию выключенной, если вы не занимаетесь разработкой или отладкой самого Kage. По умолчанию выключено; иначе записывается только длина сообщения.",
+    "description": "Helper text warning that enabling message-content logging writes prompt text to disk",
+    "_machine_translated": true,
+    "_source_hash": "066ce55fb7fe5195"
   }
 }

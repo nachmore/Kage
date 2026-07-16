@@ -7720,5 +7720,17 @@
     "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)",
     "_machine_translated": true,
     "_source_hash": "0ed9533c05aec682"
+  },
+  "settings.about.logging.message_content.label": {
+    "message": "记录消息内容",
+    "description": "Toggle: write full prompt/message text to the log file",
+    "_machine_translated": true,
+    "_source_hash": "6651ec5b272ab921"
+  },
+  "settings.about.logging.message_content.description": {
+    "message": "⚠️ 将提示词的完整文本写入日志文件。日志文件经常会附加到错误报告中，因此除非您正在开发或调试 Kage 本身，否则请保持关闭。默认关闭；否则仅记录消息长度。",
+    "description": "Helper text warning that enabling message-content logging writes prompt text to disk",
+    "_machine_translated": true,
+    "_source_hash": "066ce55fb7fe5195"
   }
 }

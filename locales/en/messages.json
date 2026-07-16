@@ -2609,6 +2609,14 @@
     "message": "Include informational messages, not just warnings and errors. Note: this can make Kage run slower if you have extensions that log a lot of messages.",
     "description": "Helper text for the verbose-logging toggle"
   },
+  "settings.about.logging.message_content.label": {
+    "message": "Log message content",
+    "description": "Toggle: write full prompt/message text to the log file"
+  },
+  "settings.about.logging.message_content.description": {
+    "message": "⚠️ Writes the full text of your prompts to the log file. The log file is often attached to bug reports, so leave this off unless you're developing or debugging Kage itself. Off by default; only message length is logged otherwise.",
+    "description": "Helper text warning that enabling message-content logging writes prompt text to disk"
+  },
   "settings.about.logging.filter.all_levels": {
     "message": "All levels",
     "description": "Log filter — all levels"

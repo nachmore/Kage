@@ -110,6 +110,15 @@ export class AboutSettingsModule extends SettingsModule {
                                 <div class="setting-description">${t('settings.about.logging.verbose.description')}</div>
                             </div>
                         </div>
+                        <div class="setting-row">
+                            <div class="setting-label">${t('settings.about.logging.message_content.label')}</div>
+                            <div class="setting-checkbox-row">
+                                <label class="kage-checkbox">
+                                    <input type="checkbox" id="logMessageContent">
+                                </label>
+                                <div class="setting-description">${t('settings.about.logging.message_content.description')}</div>
+                            </div>
+                        </div>
                         <div class="about-log-toolbar">
                             <select id="logFilterLevel" class="setting-input" style="width:auto;min-width:90px;">
                                 <option value="all">${t('settings.about.logging.filter.all_levels')}</option>
@@ -497,6 +506,8 @@ export class AboutSettingsModule extends SettingsModule {
         if (input) input.value = config?.system?.log_buffer_size || 1000;
         const verbose = document.getElementById('verboseFrontendLogging');
         if (verbose) verbose.checked = !!config?.system?.verbose_frontend_logging;
+        const msgContent = document.getElementById('logMessageContent');
+        if (msgContent) msgContent.checked = !!config?.system?.log_message_content;
     }
 
     save(config) {
@@ -511,6 +522,10 @@ export class AboutSettingsModule extends SettingsModule {
         const verbose = document.getElementById('verboseFrontendLogging');
         if (verbose) {
             config.system.verbose_frontend_logging = !!verbose.checked;
+        }
+        const msgContent = document.getElementById('logMessageContent');
+        if (msgContent) {
+            config.system.log_message_content = !!msgContent.checked;
         }
     }
 

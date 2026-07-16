@@ -636,6 +636,13 @@ pub struct SystemConfig {
     /// disk I/O so it's not suitable for steady-state use.
     #[serde(default)]
     pub verbose_frontend_logging: bool,
+    /// Log the full text of chat prompts (and other message content) to
+    /// app.jsonl. OFF by default: app.jsonl is routinely attached to bug
+    /// reports, so message content must never land there unless the user
+    /// explicitly opts in. Only useful when developing/debugging Kage
+    /// itself; the default path logs message length only.
+    #[serde(default)]
+    pub log_message_content: bool,
     /// Header timestamp of the most recent crash the user has been
     /// shown the recovery dialog for. Used by `crash_recovery` to
     /// suppress repeated dialogs for the same crash across launches.
@@ -1041,6 +1048,7 @@ impl Default for Config {
                 screen_context: true,
                 log_buffer_size: 1000,
                 verbose_frontend_logging: false,
+                log_message_content: false,
                 last_seen_crash_timestamp: None,
             },
             shortcuts: vec![],

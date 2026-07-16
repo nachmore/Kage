@@ -15,7 +15,24 @@ pub async fn send_message_streaming(
     window: WebviewWindow,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    info!("Sending message on {}: {}", session_id, message);
+    // Never log message *content* by default — app.jsonl is routinely shared
+    // in bug reports. Full-content logging is a developer aid for working on
+    // Kage itself, gated behind the log_message_content opt-in
+    // (Settings → Developer, off by default). Default path logs length only.
+    if features.config.lock_or_recover().system.log_message_content {
+        info!(
+            "Sending message on {} ({} chars): {}",
+            session_id,
+            message.chars().count(),
+            message
+        );
+    } else {
+        info!(
+            "Sending message on {} ({} chars)",
+            session_id,
+            message.chars().count()
+        );
+    }
     let client = acp.client.clone();
     let config = features.config.clone();
     let config_for_title = features.config.clone();

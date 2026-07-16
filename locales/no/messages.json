@@ -7720,5 +7720,17 @@
     "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)",
     "_machine_translated": true,
     "_source_hash": "0ed9533c05aec682"
+  },
+  "settings.about.logging.message_content.label": {
+    "message": "Logg meldingsinnhold",
+    "description": "Toggle: write full prompt/message text to the log file",
+    "_machine_translated": true,
+    "_source_hash": "6651ec5b272ab921"
+  },
+  "settings.about.logging.message_content.description": {
+    "message": "⚠️ Skriver hele teksten i ledetekstene dine til loggfilen. Loggfilen legges ofte ved feilrapporter, så la dette være av med mindre du utvikler eller feilsøker Kage selv. Av som standard; ellers logges bare meldingslengden.",
+    "description": "Helper text warning that enabling message-content logging writes prompt text to disk",
+    "_machine_translated": true,
+    "_source_hash": "066ce55fb7fe5195"
   }
 }

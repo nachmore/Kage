@@ -7720,5 +7720,17 @@
     "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)",
     "_machine_translated": true,
     "_source_hash": "0ed9533c05aec682"
+  },
+  "settings.about.logging.message_content.label": {
+    "message": "ثبت محتوای پیام‌ها در لاگ",
+    "description": "Toggle: write full prompt/message text to the log file",
+    "_machine_translated": true,
+    "_source_hash": "6651ec5b272ab921"
+  },
+  "settings.about.logging.message_content.description": {
+    "message": "⚠️ متن کامل درخواست‌های شما را در فایل لاگ می‌نویسد. فایل لاگ اغلب به گزارش‌های اشکال پیوست می‌شود، پس این گزینه را خاموش نگه دارید مگر اینکه در حال توسعه یا اشکال‌زدایی خود Kage باشید. به‌طور پیش‌فرض خاموش است؛ در غیر این صورت فقط طول پیام ثبت می‌شود.",
+    "description": "Helper text warning that enabling message-content logging writes prompt text to disk",
+    "_machine_translated": true,
+    "_source_hash": "066ce55fb7fe5195"
   }
 }

@@ -7720,5 +7720,17 @@
     "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)",
     "_machine_translated": true,
     "_source_hash": "0ed9533c05aec682"
+  },
+  "settings.about.logging.message_content.label": {
+    "message": "संदेश सामग्री लॉग करें",
+    "description": "Toggle: write full prompt/message text to the log file",
+    "_machine_translated": true,
+    "_source_hash": "6651ec5b272ab921"
+  },
+  "settings.about.logging.message_content.description": {
+    "message": "⚠️ आपके प्रॉम्प्ट का पूरा टेक्स्ट लॉग फ़ाइल में लिखा जाता है। लॉग फ़ाइल अक्सर बग रिपोर्ट के साथ संलग्न की जाती है, इसलिए इसे बंद रखें जब तक कि आप स्वयं Kage का विकास या डिबगिंग न कर रहे हों। डिफ़ॉल्ट रूप से बंद; अन्यथा केवल संदेश की लंबाई लॉग की जाती है।",
+    "description": "Helper text warning that enabling message-content logging writes prompt text to disk",
+    "_machine_translated": true,
+    "_source_hash": "066ce55fb7fe5195"
   }
 }

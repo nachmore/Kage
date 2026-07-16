@@ -7720,5 +7720,17 @@
     "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)",
     "_machine_translated": true,
     "_source_hash": "0ed9533c05aec682"
+  },
+  "settings.about.logging.message_content.label": {
+    "message": "메시지 내용 로그 기록",
+    "description": "Toggle: write full prompt/message text to the log file",
+    "_machine_translated": true,
+    "_source_hash": "6651ec5b272ab921"
+  },
+  "settings.about.logging.message_content.description": {
+    "message": "⚠️ 프롬프트의 전체 텍스트를 로그 파일에 기록합니다. 로그 파일은 버그 리포트에 첨부되는 경우가 많으므로 Kage 자체를 개발하거나 디버깅하는 경우가 아니라면 꺼 두십시오. 기본적으로 꺼져 있으며, 그 외에는 메시지 길이만 기록됩니다.",
+    "description": "Helper text warning that enabling message-content logging writes prompt text to disk",
+    "_machine_translated": true,
+    "_source_hash": "066ce55fb7fe5195"
   }
 }

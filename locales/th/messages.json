@@ -7720,5 +7720,17 @@
     "description": "Heading above the inline option picker for a selection-type slash command ({command} = e.g. /agent)",
     "_machine_translated": true,
     "_source_hash": "0ed9533c05aec682"
+  },
+  "settings.about.logging.message_content.label": {
+    "message": "บันทึกเนื้อหาข้อความลงล็อก",
+    "description": "Toggle: write full prompt/message text to the log file",
+    "_machine_translated": true,
+    "_source_hash": "6651ec5b272ab921"
+  },
+  "settings.about.logging.message_content.description": {
+    "message": "⚠️ เขียนข้อความพรอมต์ของคุณทั้งหมดลงในไฟล์ล็อก ไฟล์ล็อกมักถูกแนบไปกับรายงานข้อบกพร่อง ดังนั้นควรปิดตัวเลือกนี้ไว้ เว้นแต่คุณกำลังพัฒนาหรือดีบัก Kage เอง ค่าเริ่มต้นคือปิด หากปิดไว้จะบันทึกเฉพาะความยาวของข้อความเท่านั้น",
+    "description": "Helper text warning that enabling message-content logging writes prompt text to disk",
+    "_machine_translated": true,
+    "_source_hash": "066ce55fb7fe5195"
   }
 }
