@@ -381,6 +381,15 @@ pub fn setup_notification_handler(
 /// feel laggy.
 const CHUNK_FLUSH_INTERVAL_MS: u64 = 16;
 
+/// How many consecutive failing flush cycles we tolerate before treating
+/// the failure as app shutdown and exiting the thread. `emit_filter` can
+/// `Err` transiently (a `chat-<uuid>` webview torn down mid-dispatch);
+/// exiting on the first error permanently killed streaming for the rest
+/// of the process lifetime while `pending_chunks` grew unbounded. At the
+/// 16ms cadence 64 cycles ≈ 1s of solid failure — real shutdown never
+/// recovers, a torn-down webview clears in a cycle or two.
+const CHUNK_FLUSH_MAX_CONSECUTIVE_FAILURES: u32 = 64;
+
 /// Background thread that drains `pending_chunks` every
 /// CHUNK_FLUSH_INTERVAL_MS and emits one `message_chunk` event per non-
 /// empty session bucket. Replaces the pre-fix one-emit-per-token path,
@@ -389,7 +398,9 @@ const CHUNK_FLUSH_INTERVAL_MS: u64 = 16;
 /// The thread runs for the AcpClient's lifetime — it's a single OS thread
 /// (`acp-chunk-flush`) doing a HashMap drain + 0..N emits per cycle, so
 /// the always-on cost is negligible. Exit is by `app_handle.emit` returning
-/// an error after the app shuts down; we log and break.
+/// errors for CHUNK_FLUSH_MAX_CONSECUTIVE_FAILURES consecutive cycles
+/// (app shutdown); isolated failures are retried — the batcher re-queues
+/// undelivered text, bounded by `chunk_batcher::MAX_PENDING_BYTES`.
 fn spawn_chunk_flush_thread(
     app_handle: tauri::AppHandle,
     pending: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
@@ -398,6 +409,7 @@ fn spawn_chunk_flush_thread(
         .name("acp-chunk-flush".into())
         .spawn(move || {
             let interval = std::time::Duration::from_millis(CHUNK_FLUSH_INTERVAL_MS);
+            let mut consecutive_failures: u32 = 0;
             loop {
                 std::thread::sleep(interval);
                 let alive =
@@ -411,9 +423,8 @@ fn spawn_chunk_flush_thread(
                         // to every webview that happens to subscribe to
                         // anything else. We call `emit_filter` directly here
                         // (rather than the helper) because the chunk-flush
-                        // thread relies on the emit returning Err at app
-                        // shutdown to break the loop; the helper swallows
-                        // errors at debug-log level.
+                        // thread relies on the emit's Err to detect shutdown;
+                        // the helper swallows errors at debug-log level.
                         app_handle
                             .emit_filter(events::MESSAGE_CHUNK, &payload, |t| match t {
                                 tauri::EventTarget::Window { label }
@@ -428,7 +439,20 @@ fn spawn_chunk_flush_thread(
                             })
                             .map_err(|e| format!("{}", e))
                     });
-                if !alive {
+                if alive {
+                    consecutive_failures = 0;
+                    continue;
+                }
+                consecutive_failures += 1;
+                if consecutive_failures == 1 {
+                    // English-only log (see I18N contract).
+                    log::warn!("chunk-flush emit failed; retrying (transient webview teardown?)");
+                }
+                if consecutive_failures >= CHUNK_FLUSH_MAX_CONSECUTIVE_FAILURES {
+                    log::warn!(
+                        "chunk-flush emit failed {} consecutive cycles — assuming shutdown, exiting",
+                        consecutive_failures
+                    );
                     return;
                 }
             }

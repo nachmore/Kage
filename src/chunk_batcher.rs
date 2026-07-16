@@ -22,10 +22,25 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+/// Ceiling on the total bytes parked in `pending` while emission is
+/// failing. Under sustained emit failure the map is fed by every
+/// `agent_message_chunk` and drained by nobody; without a cap it grows
+/// for as long as the agent keeps streaming. 8 MiB is far beyond any
+/// real response, so hitting it means emission has been broken for a
+/// long time and the text is undeliverable anyway.
+pub const MAX_PENDING_BYTES: usize = 8 * 1024 * 1024;
+
 /// Drain the pending-chunks map under a brief critical section and call
 /// `emit` once per non-empty session bucket. Returns `false` if any
-/// `emit` call fails — the flush thread treats that as a shutdown signal
-/// and exits its loop.
+/// `emit` call fails.
+///
+/// On emit failure the failed bucket and all not-yet-attempted buckets
+/// are re-queued (prepended, so chunk order within a session is
+/// preserved against deltas that arrived meanwhile) rather than dropped —
+/// an emit `Err` can be transient (e.g. a `chat-<uuid>` webview torn
+/// down mid-dispatch), and the flush thread retries next cycle. If the
+/// re-queued total exceeds [`MAX_PENDING_BYTES`], the map is cleared to
+/// bound memory; the text was undeliverable for that long anyway.
 ///
 /// The drain uses `std::mem::take` so the lock is held only long enough
 /// to swap the HashMap; emits happen outside the lock, meaning the
@@ -45,11 +60,30 @@ where
         std::mem::take(&mut *guard)
     };
 
-    for (session_id, text) in snapshot {
+    let mut iter = snapshot.into_iter();
+    for (session_id, text) in iter.by_ref() {
         if text.is_empty() {
             continue;
         }
         if emit(&session_id, &text).is_err() {
+            // Re-queue this bucket and the rest so a transient emit
+            // failure doesn't lose streamed text.
+            let mut guard = match pending.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            let mut requeued = text.len();
+            let cur = guard.entry(session_id).or_default();
+            cur.insert_str(0, &text);
+            for (sid, t) in iter {
+                requeued += t.len();
+                let cur = guard.entry(sid).or_default();
+                cur.insert_str(0, &t);
+            }
+            let total: usize = guard.values().map(|v| v.len()).sum();
+            if total.max(requeued) > MAX_PENDING_BYTES {
+                guard.clear();
+            }
             return false;
         }
     }
@@ -113,12 +147,47 @@ mod tests {
 
     #[test]
     fn drain_returns_false_when_emit_fails() {
-        // Simulates app shutdown: AppHandle::emit returns Err. The flush
-        // thread reads that as "stop looping" so we don't spin forever
-        // emitting into a torn-down IPC bus.
         let pending = make_pending(&[("s", "data")]);
-        let alive = drain_and_emit_pending(&pending, |_, _| Err("shutdown".to_string()));
+        let alive = drain_and_emit_pending(&pending, |_, _| Err("boom".to_string()));
         assert!(!alive);
+    }
+
+    #[test]
+    fn failed_emit_requeues_text_for_retry() {
+        // A transient emit failure (webview torn down mid-dispatch) must
+        // not lose streamed text — the bucket goes back into the map so
+        // the next cycle retries it.
+        let pending = make_pending(&[("s", "data")]);
+        let alive = drain_and_emit_pending(&pending, |_, _| Err("transient".to_string()));
+        assert!(!alive);
+        assert_eq!(pending.lock().unwrap().get("s").unwrap(), "data");
+    }
+
+    #[test]
+    fn failed_emit_prepends_before_newly_arrived_chunks() {
+        // Chunks appended between the drain and the re-queue must come
+        // AFTER the failed text so per-session ordering is preserved.
+        let pending = make_pending(&[("s", "first ")]);
+        let alive = drain_and_emit_pending(&pending, |_, _| {
+            // Simulate the notification handler racing in a new delta
+            // while the emit is failing.
+            pending.lock().unwrap().insert("s".into(), "second".into());
+            Err("transient".to_string())
+        });
+        assert!(!alive);
+        assert_eq!(pending.lock().unwrap().get("s").unwrap(), "first second");
+    }
+
+    #[test]
+    fn requeue_clears_map_beyond_byte_cap() {
+        let big = "x".repeat(MAX_PENDING_BYTES + 1);
+        let pending = make_pending(&[("s", &big)]);
+        let alive = drain_and_emit_pending(&pending, |_, _| Err("down".to_string()));
+        assert!(!alive);
+        assert!(
+            pending.lock().unwrap().is_empty(),
+            "oversized undeliverable backlog must be dropped"
+        );
     }
 
     #[test]
