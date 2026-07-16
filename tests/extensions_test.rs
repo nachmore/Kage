@@ -245,6 +245,55 @@ fn extract_zip_handles_directory_entries() {
     assert!(target.join("nested/deeply/file.txt").is_file());
 }
 
+#[test]
+fn extract_zip_rejects_zip_bomb_entry() {
+    let tmp = tmpdir();
+    // A deflate-compressed entry of zeros: tiny on disk, expands past the
+    // 50 MB per-entry budget when decompressed.
+    let zip_path = tmp.path().join("bomb.zip");
+    let file = std::fs::File::create(&zip_path).unwrap();
+    let mut zip = zip::ZipWriter::new(file);
+    let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    zip.start_file("bomb.bin", opts).unwrap();
+    let chunk = vec![0u8; 1024 * 1024];
+    for _ in 0..60 {
+        zip.write_all(&chunk).unwrap();
+    }
+    zip.finish().unwrap();
+
+    let target = tmp.path().join("out");
+    let err = extensions::extract_zip(&zip_path, &target).unwrap_err();
+    let msg = format!("{}", err);
+    assert!(
+        msg.contains("decompression budget"),
+        "expected budget rejection, got: {}",
+        msg
+    );
+    // The partial file must not be left behind.
+    assert!(!target.join("bomb.bin").exists());
+}
+
+#[test]
+fn extract_zip_rejects_excessive_entry_count() {
+    let tmp = tmpdir();
+    let zip_path = tmp.path().join("many.zip");
+    let file = std::fs::File::create(&zip_path).unwrap();
+    let mut zip = zip::ZipWriter::new(file);
+    let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for i in 0..10_001 {
+        zip.start_file(format!("f{}", i), opts).unwrap();
+    }
+    zip.finish().unwrap();
+
+    let target = tmp.path().join("out");
+    let err = extensions::extract_zip(&zip_path, &target).unwrap_err();
+    assert!(
+        format!("{}", err).contains("entries"),
+        "expected entry-count rejection, got: {}",
+        err
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Manifest validation
 // ---------------------------------------------------------------------------

@@ -481,14 +481,36 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<()> {
 // Zip extraction (for store installs)
 // ---------------------------------------------------------------------------
 
-/// Extract a .zip archive to a target directory with Zip Slip protection.
+/// Per-entry decompressed size cap for store/sideloaded extension zips.
+const ZIP_MAX_ENTRY_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
+/// Cumulative decompressed size cap across the whole archive. Zips come from
+/// user-configurable store sources and sideloading, so a small malicious
+/// archive must not be able to expand until the disk fills (zip bomb).
+const ZIP_MAX_TOTAL_BYTES: u64 = 100 * 1024 * 1024; // 100 MB
+
+/// Extract a .zip archive to a target directory with Zip Slip protection and
+/// a decompression budget (per-entry and cumulative).
 /// Returns the path to the extracted directory.
 pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
     use std::io;
+    use std::io::Read;
     use std::path::Component;
 
     let file = fs::File::open(zip_path).context("Failed to open zip file")?;
     let mut archive = zip::ZipArchive::new(file).context("Failed to read zip archive")?;
+
+    // Entry-count cap: the byte budget doesn't stop an archive full of
+    // thousands of empty files/directories from exhausting inodes.
+    const ZIP_MAX_ENTRIES: usize = 10_000;
+    if archive.len() > ZIP_MAX_ENTRIES {
+        anyhow::bail!(
+            "Zip archive has {} entries (max {}) — refusing to extract",
+            archive.len(),
+            ZIP_MAX_ENTRIES
+        );
+    }
+
+    let mut total_bytes: u64 = 0;
 
     // Make sure the target exists so we can canonicalize it once up-front.
     fs::create_dir_all(target_dir).ok();
@@ -576,8 +598,24 @@ pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
             }
             let mut outfile = fs::File::create(&resolved)
                 .with_context(|| format!("Failed to create file: {}", resolved.display()))?;
-            io::copy(&mut entry, &mut outfile)
+            // Cap what we actually decompress rather than trusting the entry's
+            // declared size — a zip bomb can lie in its headers. Reading one
+            // byte past the cap distinguishes "exactly at the limit" from
+            // "over it".
+            let entry_budget = ZIP_MAX_ENTRY_BYTES.min(ZIP_MAX_TOTAL_BYTES - total_bytes);
+            let written = io::copy(&mut (&mut entry).take(entry_budget + 1), &mut outfile)
                 .with_context(|| format!("Failed to write file: {}", resolved.display()))?;
+            if written > entry_budget {
+                drop(outfile);
+                fs::remove_file(&resolved).ok();
+                anyhow::bail!(
+                    "Zip entry '{}' exceeds the decompression budget ({} MB per entry, {} MB total) — aborting extraction",
+                    entry_path.display(),
+                    ZIP_MAX_ENTRY_BYTES / (1024 * 1024),
+                    ZIP_MAX_TOTAL_BYTES / (1024 * 1024)
+                );
+            }
+            total_bytes += written;
         }
     }
 
