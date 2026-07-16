@@ -187,21 +187,46 @@ impl ProcessManager {
             let pid = child.id();
             info!("Terminating spawned process (PID: {})", pid);
 
-            // Try graceful shutdown first
+            // Ask the process to exit.
             let _ = child.kill();
 
-            // Wait for process to exit (with timeout)
-            let wait_result = std::thread::spawn(move || child.wait()).join();
+            // Poll for exit with a real deadline. The old implementation did
+            // `thread::spawn(move || child.wait()).join()`, which blocks
+            // indefinitely (join only errors on a *panic* in the wait thread),
+            // so the force-kill fallback was dead code and terminate() could
+            // hang forever if child.kill() didn't take — and terminate() runs
+            // from Drop and the signal handlers.
+            const DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+            const POLL: std::time::Duration = std::time::Duration::from_millis(50);
+            let start = std::time::Instant::now();
+            let mut exited = false;
+            loop {
+                match child.try_wait() {
+                    Ok(Some(_)) => {
+                        exited = true;
+                        break;
+                    }
+                    Ok(None) => {
+                        if start.elapsed() >= DEADLINE {
+                            break;
+                        }
+                        std::thread::sleep(POLL);
+                    }
+                    Err(e) => {
+                        warn!("Error waiting for process {} to exit: {}", pid, e);
+                        break;
+                    }
+                }
+            }
 
-            if wait_result.is_ok() {
+            if exited {
                 info!("✅ Process terminated gracefully");
             } else {
-                warn!("Process may not have terminated cleanly");
-
-                // Force kill if still running
-                if let Some(pid) = self.pid {
-                    Self::kill_process(pid);
-                }
+                warn!("Process {} did not exit within {:?}; force-killing by PID", pid, DEADLINE);
+                Self::kill_process(pid);
+                // Reap so we don't leave a zombie on Unix (kill_process signals
+                // but doesn't wait).
+                let _ = child.wait();
             }
         }
 
