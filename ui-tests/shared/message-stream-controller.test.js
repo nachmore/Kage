@@ -240,6 +240,87 @@ describe('MessageStreamController.handleToolCallUpdate', () => {
     });
 });
 
+describe('MessageStreamController tool tracking with production-shaped host', () => {
+    // Regression: the real host adapters keep toolUsages/toolSources on the
+    // app instance, not on the adapter literal. processToolCallUpdate writes
+    // to the host, so the adapters expose forwarding getters. This host
+    // mirrors that shape — a controller writing to a host without the
+    // forwarding getters would throw `undefined.push` here.
+    function makeAppShapedHost() {
+        const app = {
+            toolUsages: [],
+            toolSources: [],
+            _toolCallIds: new Set(),
+            _sourceDomains: new Set(),
+        };
+        const host = makeHost();
+        delete host.toolUsages; // replace makeHost's own-array defaults with getters
+        delete host.toolSources;
+        // Object.defineProperties (not object-literal spread in makeHost,
+        // which would flatten getters to snapshot values).
+        Object.defineProperties(host, {
+            toolUsages: { get: () => app.toolUsages },
+            toolSources: { get: () => app.toolSources },
+            _toolCallIds: {
+                get: () => app._toolCallIds,
+                set: (v) => {
+                    app._toolCallIds = v;
+                },
+            },
+            _sourceDomains: {
+                get: () => app._sourceDomains,
+                set: (v) => {
+                    app._sourceDomains = v;
+                },
+            },
+        });
+        return { app, host };
+    }
+
+    it('tracks tool usage onto the app arrays through forwarding getters', () => {
+        const { app, host } = makeAppShapedHost();
+        const c = new MessageStreamController(host);
+        c.handleToolCallUpdate({
+            payload: { params: { update: { title: 'read_file', toolCallId: 'tc1', kind: 'read' } } },
+        });
+        expect(app.toolUsages).toEqual([{ toolCallId: 'tc1', title: 'read_file', kind: 'read' }]);
+        expect(host.onToolCallTracked).toHaveBeenCalledWith(
+            expect.objectContaining({ toolCallId: 'tc1' }),
+            true
+        );
+    });
+
+    it('deduplicates repeated updates for the same toolCallId', () => {
+        const { app, host } = makeAppShapedHost();
+        const c = new MessageStreamController(host);
+        const evt = {
+            payload: { params: { update: { title: 'shell', toolCallId: 'tc2', kind: 'execute' } } },
+        };
+        c.handleToolCallUpdate(evt);
+        c.handleToolCallUpdate(evt);
+        expect(app.toolUsages).toHaveLength(1);
+    });
+
+    it('extracts search sources onto the app toolSources array', () => {
+        const { app, host } = makeAppShapedHost();
+        const c = new MessageStreamController(host);
+        c.handleToolCallUpdate({
+            payload: {
+                params: {
+                    update: {
+                        title: 'web_search',
+                        toolCallId: 'tc3',
+                        kind: 'search',
+                        rawOutput: { results: [{ url: 'https://example.com/a', title: 'A' }] },
+                    },
+                },
+            },
+        });
+        expect(app.toolSources).toHaveLength(1);
+        expect(app.toolSources[0].domain).toBe('example.com');
+    });
+});
+
 describe('MessageStreamController.flushStreamingRender', () => {
     it('delegates to the host adapter so the window can paint immediately', () => {
         const host = makeHost();

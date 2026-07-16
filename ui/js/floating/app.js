@@ -155,7 +155,9 @@ export class FloatingApp {
         // While the input only grows beyond this length, skip redundant backend calls.
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
+        this.toolSources = [];
         this._toolCallIds = new Set();
+        this._sourceDomains = new Set();
         this.computerControlActive = false;
         this._noBlurTools = new Set(); // MCP tools that should prevent window hide on blur
         this._promptGeneration = 0; // incremented each time we send a user message
@@ -243,7 +245,29 @@ export class FloatingApp {
                 this.isWaitingForResponse = false;
             },
         });
+        const app = this;
         this.messageStreamController = new MessageStreamController({
+            // processToolCallUpdate() writes tool/source tracking straight
+            // onto the host adapter — forward to the app-instance arrays the
+            // render paths (renderSources / onToolCallTracked) read.
+            get toolUsages() {
+                return app.toolUsages;
+            },
+            get toolSources() {
+                return app.toolSources;
+            },
+            get _toolCallIds() {
+                return app._toolCallIds;
+            },
+            set _toolCallIds(v) {
+                app._toolCallIds = v;
+            },
+            get _sourceDomains() {
+                return app._sourceDomains;
+            },
+            set _sourceDomains(v) {
+                app._sourceDomains = v;
+            },
             isWaiting: () => this.isWaitingForResponse,
             // Filter chunks by our pinned session id. Pre-multi-session
             // this returned `true` because there was only one session
@@ -1413,6 +1437,7 @@ export class FloatingApp {
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
         this._toolCallIds = new Set();
+        this._sourceDomains = new Set();
         this.attachmentManager.clear();
         this.elements.contentArea.classList.remove('visible');
         this.elements.contentArea.classList.remove('banner-only');
@@ -3136,6 +3161,7 @@ export class FloatingApp {
                 this.toolSources = [];
                 this.toolUsages = [];
                 this._toolCallIds = new Set();
+                this._sourceDomains = new Set();
                 const sourcesEl2 = document.getElementById('toolSources');
                 if (sourcesEl2) sourcesEl2.remove();
                 const compactEl2 = document.getElementById('toolSourcesCompact');

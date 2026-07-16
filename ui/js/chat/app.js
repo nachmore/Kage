@@ -123,6 +123,7 @@ export class ChatApp {
         this.toolSources = [];
         this.toolUsages = [];
         this._toolCallIds = new Set();
+        this._sourceDomains = new Set();
         this.userInfo = null;
         this.attachmentManager = new AttachmentManager();
         this.currentSuggestions = [];
@@ -215,6 +216,27 @@ export class ChatApp {
         });
 
         this.messageStreamController = new MessageStreamController({
+            // processToolCallUpdate() writes tool/source tracking straight
+            // onto the host adapter — forward to the app-instance arrays the
+            // render paths (renderSourcesInMessage) read.
+            get toolUsages() {
+                return app.toolUsages;
+            },
+            get toolSources() {
+                return app.toolSources;
+            },
+            get _toolCallIds() {
+                return app._toolCallIds;
+            },
+            set _toolCallIds(v) {
+                app._toolCallIds = v;
+            },
+            get _sourceDomains() {
+                return app._sourceDomains;
+            },
+            set _sourceDomains(v) {
+                app._sourceDomains = v;
+            },
             isWaiting: () => app.isWaitingForResponse && !!app.currentStreamingMessage,
             // Belt-and-suspenders session filter: see comment in chunk handler
             // for why this is needed in addition to the backend filter.
@@ -1563,6 +1585,7 @@ export class ChatApp {
         this.toolSources = [];
         this.toolUsages = [];
         this._toolCallIds = new Set();
+        this._sourceDomains = new Set();
         const timestamps = sessionData.message_timestamps || {};
         const durations = sessionData.message_durations || {};
 
@@ -1725,6 +1748,7 @@ export class ChatApp {
         this.toolSources = [];
         this.toolUsages = [];
         this._toolCallIds = new Set();
+        this._sourceDomains = new Set();
         this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.start_conversation')}</div>`;
         this.elements.chatHeaderTitle.textContent = t('chat.header.default_title');
         this.elements.chatInput.focus();
@@ -1853,6 +1877,7 @@ export class ChatApp {
             this.toolSources = [];
             this.toolUsages = [];
             this._toolCallIds = new Set();
+            this._sourceDomains = new Set();
             this.isWaitingForResponse = true;
             this._streamStartTime = Date.now();
             this.updateInputState();
@@ -2055,6 +2080,7 @@ export class ChatApp {
         this.toolSources = [];
         this.toolUsages = [];
         this._toolCallIds = new Set();
+        this._sourceDomains = new Set();
         this.isWaitingForResponse = true;
         this.extensionToolController.reset();
         this.automationPlanController.reset();
