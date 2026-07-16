@@ -154,6 +154,19 @@ pub async fn send_message_streaming(
             }),
         );
 
+        // Evict this session's server-side streaming accumulator now that the
+        // turn is done. The interactive frontend built its own copy from the
+        // streamed chunk events and never reads this bucket back, so once
+        // MESSAGE_COMPLETE is out it's dead weight. Without this, the final
+        // response of every session the user touches stays resident (up to the
+        // per-session cap) until the *next* prompt on that session — which for
+        // a backgrounded session may be never. Auto-steering below re-resets
+        // the bucket before its own send, so clearing here is safe.
+        client_arc.reset_session_accumulator(&active_session_id);
+        if active_session_id != session_id {
+            client_arc.reset_session_accumulator(&session_id);
+        }
+
         // Refresh the window title now that there's a user message
         // available — fresh sessions get their first real title here.
         // Invalidate the session cache first so the JSONL re-extract

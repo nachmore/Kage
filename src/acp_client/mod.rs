@@ -205,7 +205,14 @@ impl AcpClient {
             acc.push_str(text);
             Some(text)
         } else {
-            let slice = &text[..remaining];
+            // Truncate at a char boundary at or below `remaining` — slicing at
+            // a raw byte index panics if it lands mid-codepoint (any non-ASCII
+            // response near the cap).
+            let mut end = remaining;
+            while end > 0 && !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            let slice = &text[..end];
             acc.push_str(slice);
             log::warn!(
                 "Streaming accumulator for session {} hit {}MB cap — truncating",
