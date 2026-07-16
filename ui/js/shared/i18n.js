@@ -371,6 +371,19 @@ function _parseArms(body) {
     return arms;
 }
 
+// Per-locale Intl.PluralRules cache. Constructing an Intl formatter is
+// comparatively expensive and t() runs hot during streaming renders.
+const _pluralRulesCache = new Map();
+
+function _pluralRulesFor(locale) {
+    let pr = _pluralRulesCache.get(locale);
+    if (!pr) {
+        pr = new Intl.PluralRules(locale);
+        _pluralRulesCache.set(locale, pr);
+    }
+    return pr;
+}
+
 function _expandPlural(varName, body, vars, locale, escape) {
     const count = vars[varName];
     const arms = _parseArms(body);
@@ -380,8 +393,7 @@ function _expandPlural(varName, body, vars, locale, escape) {
     if (arm === undefined) {
         let category = 'other';
         try {
-            const pr = new Intl.PluralRules(locale);
-            category = pr.select(Number(count));
+            category = _pluralRulesFor(locale).select(Number(count));
         } catch {
             // Bad locale or non-numeric count — fall through to `other`.
         }

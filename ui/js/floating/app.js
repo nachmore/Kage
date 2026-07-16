@@ -1435,6 +1435,7 @@ export class FloatingApp {
                     window._kageMascot.destroy();
                     window._kageMascot = null;
                 }
+                this._stopOllamaStatusPoll();
                 this.extensionManager?.destroy?.();
             } catch (e) {
                 console.warn('floating close-requested cleanup failed:', e);
@@ -1714,6 +1715,10 @@ export class FloatingApp {
     async _pollOllamaStatusOnce() {
         const s = this._ollamaStatus;
         if (!s) return;
+        // Don't hit the network (possibly LAN) while the launcher is
+        // hidden — same gate the mascot animation uses. The interval
+        // keeps ticking; the first poll after re-show refreshes.
+        if (window._kageFloatingHidden) return;
         let probe = null;
         try {
             probe = await this.invoke('ollama_probe', { baseUrl: s.baseUrl });

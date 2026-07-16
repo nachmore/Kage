@@ -891,7 +891,33 @@ export class ExtensionManager {
 
     // --- Config updates ----------------------------------------------------
 
+    /**
+     * Single-flight + trailing rerun, same shape as reload(): rapid
+     * config saves (slider drags, multi-field settings apply) fire one
+     * config_updated per save, and each onConfigUpdate pass costs a
+     * get_config IPC plus a per-extension updateConfig postMessage
+     * fan-out. Coalescing keeps exactly one pass in flight and one
+     * trailing pass to pick up the final state.
+     */
     async onConfigUpdate() {
+        if (this._configUpdateInFlight) {
+            this._configUpdatePending = true;
+            return this._configUpdateInFlight;
+        }
+        this._configUpdateInFlight = (async () => {
+            try {
+                do {
+                    this._configUpdatePending = false;
+                    await this._onConfigUpdateOnce();
+                } while (this._configUpdatePending);
+            } finally {
+                this._configUpdateInFlight = null;
+            }
+        })();
+        return this._configUpdateInFlight;
+    }
+
+    async _onConfigUpdateOnce() {
         try {
             this._configCache = await this.invoke('get_config');
         } catch {

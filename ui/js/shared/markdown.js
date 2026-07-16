@@ -2210,6 +2210,10 @@ export function _keepLastTaskPlan(markdown) {
     if (markdown.startsWith('ack')) {
         markdown = markdown.slice(3);
     }
+    // Cheap short-circuit: this runs on EVERY streaming render over the
+    // full accumulated text, and the regex matchAll passes below are the
+    // expensive part. No taskplan fence → nothing to do.
+    if (!markdown.includes('```taskplan')) return markdown;
     // Find all complete taskplan blocks (handle cases where block isn't at line start,
     // e.g. "ack```taskplan" when steering response leaks into the stream)
     const blockPattern = /```taskplan\r?\n[\s\S]*?\n```/g;

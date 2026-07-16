@@ -1595,11 +1595,24 @@ export class ChatApp {
         }
 
         // Phase 1: parse messages into lightweight render instructions (no DOM work)
-        const renderQueue = this._buildRenderQueue(sessionData.messages, timestamps, durations);
+        const fullQueue = this._buildRenderQueue(sessionData.messages, timestamps, durations);
 
-        if (renderQueue.length === 0) {
+        if (fullQueue.length === 0) {
             this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.empty_session')}</div>`;
             return;
+        }
+
+        // Cap the initial render: a long session (hundreds–thousands of
+        // turns) would otherwise materialize the whole transcript in the
+        // DOM — unbounded memory/layout cost, each assistant message
+        // paying markdown/Prism/mermaid parsing. Older items render on
+        // demand via the "load earlier" affordance.
+        const INITIAL_RENDER_CAP = 100;
+        let renderQueue = fullQueue;
+        if (fullQueue.length > INITIAL_RENDER_CAP) {
+            const hiddenItems = fullQueue.slice(0, fullQueue.length - INITIAL_RENDER_CAP);
+            renderQueue = fullQueue.slice(fullQueue.length - INITIAL_RENDER_CAP);
+            this._appendLoadEarlierButton(hiddenItems);
         }
 
         // Phase 2: render in batches to avoid blocking the main thread
@@ -1641,6 +1654,42 @@ export class ChatApp {
         }
 
         renderBatch();
+    }
+
+    /**
+     * Prepend a "load earlier messages" button holding the un-rendered
+     * head of the transcript. Clicking renders those items above the
+     * existing ones, preserving the scroll position.
+     */
+    _appendLoadEarlierButton(hiddenItems) {
+        const area = this.elements.messagesArea;
+        const btn = document.createElement('button');
+        btn.className = 'load-earlier-btn';
+        btn.textContent = t('chat.transcript.load_earlier', { count: hiddenItems.length });
+        btn.addEventListener('click', () => {
+            btn.remove();
+            // Render into a detached holder (the render helpers append to
+            // this.elements.messagesArea, so point it at the holder for
+            // the duration), then prepend the results in order.
+            const holder = document.createElement('div');
+            const prevMessages = this.messages;
+            this.messages = [];
+            this.elements.messagesArea = holder;
+            try {
+                for (const item of hiddenItems) {
+                    this._renderQueueItem(item);
+                }
+            } finally {
+                this.elements.messagesArea = area;
+            }
+            // Keep this.messages in transcript order.
+            this.messages = [...this.messages, ...prevMessages];
+            const prevScrollHeight = area.scrollHeight;
+            area.prepend(...holder.childNodes);
+            // Hold the viewport on the message the user was looking at.
+            area.scrollTop += area.scrollHeight - prevScrollHeight;
+        });
+        area.appendChild(btn);
     }
 
     /**
@@ -2855,8 +2904,13 @@ export class ChatApp {
 
     scrollToBottom() {
         const area = this.elements.messagesArea;
+        // 'auto' during streaming: renderStreaming re-issues this every
+        // ~150ms, and overlapping smooth animations toward a growing
+        // scrollHeight fight each other — visible jank on long responses.
+        // Smooth is reserved for discrete jumps (send, final render).
+        const behavior = this.isWaitingForResponse ? 'auto' : 'smooth';
         requestAnimationFrame(() => {
-            area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' });
+            area.scrollTo({ top: area.scrollHeight, behavior });
         });
     }
 

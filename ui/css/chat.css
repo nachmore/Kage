@@ -358,6 +358,22 @@ body {
     font-size: 14px;
 }
 
+.load-earlier-btn {
+    display: block;
+    margin: 8px auto;
+    padding: 6px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-secondary, #6b7280);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.load-earlier-btn:hover {
+    background: #f3f4f6;
+}
+
 /* Typing indicator */
 .typing-indicator {
     display: flex;

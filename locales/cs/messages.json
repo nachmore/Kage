@@ -7762,5 +7762,11 @@
     "description": "Clipboard write failed so a paste was skipped to avoid pasting stale content",
     "_machine_translated": true,
     "_source_hash": "22697e24e61d06ac"
+  },
+  "chat.transcript.load_earlier": {
+    "message": "{count, plural, one {Načíst 1 starší zprávu} few {Načíst # starší zprávy} many {Načíst # starší zprávy} other {Načíst # starších zpráv}}",
+    "description": "Button atop a long transcript that renders the older messages hidden by the initial render cap",
+    "_machine_translated": true,
+    "_source_hash": "c4991d74d78ef1e4"
   }
 }

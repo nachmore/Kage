@@ -1125,6 +1125,10 @@
     "message": "Start a conversation with Kage…",
     "description": "Placeholder shown in an empty messages area"
   },
+  "chat.transcript.load_earlier": {
+    "message": "{count, plural, one {Load 1 earlier message} other {Load # earlier messages}}",
+    "description": "Button atop a long transcript that renders the older messages hidden by the initial render cap"
+  },
   "chat.input.placeholder": {
     "message": "Type your message…",
     "description": "Placeholder for the chat input textarea"
