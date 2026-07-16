@@ -512,12 +512,19 @@ export class SettingsManager {
         const statusEl = document.getElementById('statusMessage');
         if (!statusEl) return;
 
+        // Cancel any prior auto-hide so a stale timer can't fire mid-read —
+        // showStatus and showRestartPrompt share this element, and an
+        // uncancelled timer from an earlier "Saved" could hide the persistent
+        // restart prompt out from under the user.
+        if (this._statusHideTimer) clearTimeout(this._statusHideTimer);
+
         statusEl.textContent = message;
         statusEl.className = 'status-message ' + type;
         statusEl.style.display = 'block';
 
-        setTimeout(() => {
+        this._statusHideTimer = setTimeout(() => {
             statusEl.style.display = 'none';
+            this._statusHideTimer = null;
         }, 5000);
     }
 
@@ -529,6 +536,12 @@ export class SettingsManager {
     showRestartPrompt() {
         const statusEl = document.getElementById('statusMessage');
         if (!statusEl) return;
+        // Cancel any pending showStatus auto-hide — this banner is persistent
+        // and must not be dismissed by a timer armed for an earlier message.
+        if (this._statusHideTimer) {
+            clearTimeout(this._statusHideTimer);
+            this._statusHideTimer = null;
+        }
         // Build inline. Don't use innerHTML interpolation for the user-
         // facing text — t() returns trusted catalog strings, but going
         // through DOM API keeps the buttons properly wired.
