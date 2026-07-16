@@ -284,6 +284,12 @@ fn handle_tools_list(id: &serde_json::Value) -> String {
         tool_def("launch_app", "Launch an application by name.", serde_json::json!({
             "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"]
         })),
+        tool_def("list_installed_apps", "List applications installed on this system (name + launch path). Use this to discover what software is available — e.g. to answer \"which app can I use for video editing\" — instead of guessing app names or shelling out to query the OS. Pass this to launch_app by name.", serde_json::json!({
+            "type": "object",
+            "properties": {
+                "filter": { "type": "string", "description": "Optional case-insensitive substring; only apps whose name contains it are returned. Omit to list everything." }
+            }
+        })),
         tool_def("list_all_windows", "List all windows including minimized ones.", serde_json::json!({
             "type": "object", "properties": { "title_filter": { "type": "string" } }
         })),
@@ -691,6 +697,39 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 Err(e) => {
                     log::info!("[launch_app] Failed: {}", e);
                     tool_result_text(id, &format!("Failed to launch '{}': {}", name, e), true)
+                }
+            }
+        }
+        "list_installed_apps" => {
+            let filter = args
+                .get("filter")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_lowercase());
+            match kage::os::launcher::scan_applications() {
+                Ok(apps) => {
+                    let list: Vec<serde_json::Value> = apps
+                        .into_iter()
+                        .filter(|app| match filter.as_deref() {
+                            Some(f) => app.name.to_lowercase().contains(f),
+                            None => true,
+                        })
+                        .map(|app| {
+                            serde_json::json!({
+                                "name": app.name,
+                                "path": app.path.to_string_lossy(),
+                            })
+                        })
+                        .collect();
+                    log::info!("[list_installed_apps] returning {} apps", list.len());
+                    let text = serde_json::to_string_pretty(&serde_json::json!({
+                        "count": list.len(),
+                        "apps": list,
+                    }))
+                    .unwrap_or_default();
+                    tool_result_text(id, &text, false)
+                }
+                Err(e) => {
+                    tool_result_text(id, &format!("Failed to scan installed apps: {}", e), true)
                 }
             }
         }
