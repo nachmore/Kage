@@ -288,8 +288,12 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
     }
 
     let mut sessions: Vec<SessionSummary> = Vec::new();
-    let mut title_cache = load_title_cache();
-    let mut cache_dirty = false;
+    let title_cache = load_title_cache();
+    // Entries extracted this scan. Kept separate from the snapshot and
+    // merged under TITLE_CACHE_LOCK at the end — writing the whole
+    // snapshot back would revert any entry a concurrent writer (rename,
+    // AI summariser) persisted while we were scanning JSONLs.
+    let mut new_entries: HashMap<String, TitleEntry> = HashMap::new();
 
     let entries = fs::read_dir(sessions_dir.as_path()).map_err(|e| {
         error!("Failed to read sessions directory: {}", e);
@@ -360,26 +364,24 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
         } else {
             let jsonl_path = path.with_extension("jsonl");
             if let Some(recovered) = extract_ai_title_from_jsonl(&jsonl_path) {
-                title_cache.insert(
+                new_entries.insert(
                     session_id.clone(),
                     TitleEntry {
                         title: recovered.clone(),
                         source: TitleSource::Ai,
                     },
                 );
-                cache_dirty = true;
                 recovered
             } else {
                 let extracted = extract_title_from_jsonl(&jsonl_path);
                 if extracted != "New Chat" {
-                    title_cache.insert(
+                    new_entries.insert(
                         session_id.clone(),
                         TitleEntry {
                             title: extracted.clone(),
                             source: TitleSource::Extracted,
                         },
                     );
-                    cache_dirty = true;
                 }
                 extracted
             }
@@ -393,9 +395,17 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
         });
     }
 
-    // Persist cache if we added new entries
-    if cache_dirty {
-        save_title_cache(&title_cache);
+    // Persist newly extracted entries. Re-load under the lock and merge
+    // (entry API — an entry that appeared while we were scanning, e.g. a
+    // user rename, wins over our extract) rather than writing back the
+    // pre-scan snapshot.
+    if !new_entries.is_empty() {
+        let _guard = TITLE_CACHE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let mut cache = load_title_cache();
+        for (id, entry) in new_entries {
+            cache.entry(id).or_insert(entry);
+        }
+        save_title_cache(&cache);
     }
 
     // Sort by updated_at descending (most recent first)
@@ -541,20 +551,13 @@ pub async fn delete_session(
         }
     }
 
-    // Remove from title cache
-    if let Ok(cache_path) = get_title_cache_path() {
-        if cache_path.exists() {
-            if let Ok(content) = fs::read_to_string(&cache_path) {
-                if let Ok(mut cache) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(obj) = cache.as_object_mut() {
-                        obj.remove(&session_id);
-                        let _ = fs::write(
-                            &cache_path,
-                            serde_json::to_string_pretty(&cache).unwrap_or_default(),
-                        );
-                    }
-                }
-            }
+    // Remove from title cache (load→modify→save, so serialize with the
+    // other title-cache writers).
+    {
+        let _guard = TITLE_CACHE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let mut cache = load_title_cache();
+        if cache.remove(&session_id).is_some() {
+            save_title_cache(&cache);
         }
     }
 

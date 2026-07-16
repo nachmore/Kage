@@ -62,6 +62,14 @@ enum TitleEntryWire {
     Tagged(TitleEntry),
 }
 
+/// Serializes every load→modify→save sequence on `.title-cache.json`.
+/// Writers that snapshot the cache, mutate, and write it back whole
+/// (rename, scan-extract, the AI summariser) must hold this across the
+/// entire sequence, or a slow writer's stale snapshot silently reverts
+/// a concurrent writer's entry — e.g. the AI title clobbering a rename
+/// that landed during the LLM round trip.
+pub(super) static TITLE_CACHE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub(super) fn load_title_cache() -> HashMap<String, TitleEntry> {
     let raw: HashMap<String, TitleEntryWire> = get_title_cache_path()
         .ok()
@@ -83,10 +91,30 @@ pub(super) fn load_title_cache() -> HashMap<String, TitleEntry> {
 }
 
 pub(super) fn save_title_cache(cache: &HashMap<String, TitleEntry>) {
-    if let Ok(path) = get_title_cache_path() {
-        if let Ok(content) = serde_json::to_string(cache) {
-            let _ = fs::write(&path, content);
+    let Ok(path) = get_title_cache_path() else {
+        return;
+    };
+    let Ok(content) = serde_json::to_string(cache) else {
+        return;
+    };
+    // Temp-file + rename (same pattern as Config::save_to) so a writer
+    // that dies mid-write can't leave a truncated cache, and concurrent
+    // writers can't interleave bytes. Sibling path keeps the rename
+    // same-volume; PID suffix avoids cross-process temp collisions.
+    let tmp_path = path.with_extension(format!("json.tmp.{}", std::process::id()));
+    {
+        use std::io::Write;
+        let Ok(mut f) = fs::File::create(&tmp_path) else {
+            return;
+        };
+        if f.write_all(content.as_bytes()).is_err() {
+            drop(f);
+            let _ = fs::remove_file(&tmp_path);
+            return;
         }
+    }
+    if fs::rename(&tmp_path, &path).is_err() {
+        let _ = fs::remove_file(&tmp_path);
     }
 }
 
@@ -346,15 +374,18 @@ pub async fn rename_session(
 
     // User-driven rename — flagged Manual so the AI summarizer in
     // session_titler never overwrites it.
-    let mut title_cache = load_title_cache();
-    title_cache.insert(
-        session_id.clone(),
-        TitleEntry {
-            title: title.clone(),
-            source: TitleSource::Manual,
-        },
-    );
-    save_title_cache(&title_cache);
+    {
+        let _guard = TITLE_CACHE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let mut title_cache = load_title_cache();
+        title_cache.insert(
+            session_id.clone(),
+            TitleEntry {
+                title: title.clone(),
+                source: TitleSource::Manual,
+            },
+        );
+        save_title_cache(&title_cache);
+    }
 
     // Invalidate session list cache
     {
@@ -429,14 +460,12 @@ pub fn maybe_generate_ai_title(
     session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     session_id: String,
 ) {
-    // Single disk read up front: snapshot the cache once and decide
-    // both the gate (skip / first-pass / prelim-upgrade) and what to
-    // write at the end. The previous pass loaded the title cache up to
-    // three times per call (gate check + lock-prelim branch + final
-    // persist), each one a fresh `read_to_string + serde_json::from_str`
-    // round-trip on `~/.kiro/sessions/.title-cache.json`.
-    let mut cache = load_title_cache();
-    let is_prelim_upgrade = match cache.get(&session_id).map(|e| e.source) {
+    // Cheap gate read up front so we can skip the spawn entirely for
+    // settled sessions. This snapshot is NOT what gets written back —
+    // the LLM round trip below takes seconds, and a concurrent rename
+    // (or scan_sessions_in_dir extract) could land meanwhile. The write
+    // path re-loads and re-checks under TITLE_CACHE_LOCK.
+    let is_prelim_upgrade = match load_title_cache().get(&session_id).map(|e| e.source) {
         Some(TitleSource::Manual) | Some(TitleSource::Ai) => return,
         Some(TitleSource::AiPrelim) => true,
         Some(TitleSource::Extracted) | None => false,
@@ -471,9 +500,14 @@ pub fn maybe_generate_ai_title(
                     "AI title regeneration produced no usable title for {} — locking prelim as final",
                     &session_id[..session_id.len().min(12)]
                 );
+                let _guard = TITLE_CACHE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+                let mut cache = load_title_cache();
                 if let Some(entry) = cache.get_mut(&session_id) {
-                    entry.source = TitleSource::Ai;
-                    save_title_cache(&cache);
+                    // A concurrent rename wins — Manual stays sacred.
+                    if entry.source == TitleSource::AiPrelim {
+                        entry.source = TitleSource::Ai;
+                        save_title_cache(&cache);
+                    }
                 }
                 return;
             }
@@ -488,15 +522,34 @@ pub fn maybe_generate_ai_title(
             }
         };
 
-        // Persist + broadcast.
-        cache.insert(
-            session_id.clone(),
-            TitleEntry {
-                title: title_to_write.clone(),
-                source: new_source,
-            },
-        );
-        save_title_cache(&cache);
+        // Persist + broadcast. Re-load under the lock: the gate snapshot
+        // above is seconds stale by now, and writing it back whole would
+        // silently revert any entry a concurrent writer added meanwhile.
+        // Re-check the source too — a rename that landed during the LLM
+        // round trip must not be clobbered ("Manual is sacred"), and a
+        // faster duplicate summariser pass may already have finalised.
+        {
+            let _guard = TITLE_CACHE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+            let mut cache = load_title_cache();
+            match cache.get(&session_id).map(|e| e.source) {
+                Some(TitleSource::Manual) | Some(TitleSource::Ai) => {
+                    info!(
+                        "Title for {} was set concurrently — dropping AI title",
+                        &session_id[..session_id.len().min(12)]
+                    );
+                    return;
+                }
+                _ => {}
+            }
+            cache.insert(
+                session_id.clone(),
+                TitleEntry {
+                    title: title_to_write.clone(),
+                    source: new_source,
+                },
+            );
+            save_title_cache(&cache);
+        }
 
         // Invalidate the in-memory session list cache so the next
         // list_sessions reads the new title.
