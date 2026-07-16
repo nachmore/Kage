@@ -107,8 +107,7 @@ The operational costs are:
 
 - One extra process in Task Manager / Activity Monitor per session.
 - A build step that has to rebuild a second binary when the shared
-  code changes (documented in `.kiro/steering/kiro-assistant.md` and
-  `tech.md`).
+  code changes (documented in `CLAUDE.md` → "Two binaries").
 - Registration logic in `mcp_registration.rs` to install/upgrade the
   entry in `mcp.json`.
 
@@ -141,7 +140,7 @@ and the current computer-control split is the canonical example.
 - MCP registration: `src/mcp_registration.rs`
 - Windows worker: `src/os/windows/uia_worker.rs`
 - macOS worker: `src/os/macos/ax_worker.rs`
-- Extension-tool pathway: `src/commands/messaging.rs`
+- Extension-tool pathway: `src/commands/messaging/permissions.rs`
   (`extension_tool_response`, `send_extension_tool_steering`) and
   `ui/js/shared/extension-tool-controller.js`
 - ACP transport: `src/acp_client/transport.rs`

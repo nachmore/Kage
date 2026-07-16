@@ -59,7 +59,7 @@ my-extension/
 
   "contributes": {
     "searchProvider": "./search.js",
-    "settingsModule": "./settings.js",
+    "settingsProvider": "./settings.js",
     "css": ["./styles.css"],
     "widgets": [
       {
