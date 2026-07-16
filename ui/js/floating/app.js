@@ -673,6 +673,7 @@ export class FloatingApp {
             contentArea: document.getElementById('contentArea'),
             responseText: document.getElementById('responseText'),
             loadingDots: document.getElementById('loadingDots'),
+            loadingElapsed: document.getElementById('loadingElapsed'),
             expandBtn: document.getElementById('expandBtn'),
             floatingStopBtn: document.getElementById('floatingStopBtn'),
             mascotContainer: document.querySelector('.mascot-container'),
@@ -1437,6 +1438,7 @@ export class FloatingApp {
     startThinking() {
         this.elements.mascotContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
+        this._startElapsedTimer();
         // A response is about to arrive — drop banner-only mode so the
         // content-area's overflow:auto comes back for scrollable replies.
         // Cheap no-op if the class wasn't set.
@@ -1455,8 +1457,48 @@ export class FloatingApp {
     stopThinking() {
         this.elements.mascotContainer.classList.remove('thinking');
         this.elements.loadingDots.classList.remove('visible');
+        this._stopElapsedTimer();
         // Return mascot to idle with a wave transition
         if (window._kageMascot) window._kageMascot.setIdle(true);
+    }
+
+    /**
+     * Show a running elapsed timer beside the loading dots while the agent
+     * works. There is no wall-clock cap on a request any more (the backend
+     * waits as long as the agent keeps streaming), so the timer is the user's
+     * signal that a long request is still alive — and the Stop button remains
+     * the escape hatch. Ticks once a second; the label stays hidden for the
+     * first few seconds so quick replies don't flash a "0s".
+     */
+    _startElapsedTimer() {
+        this._stopElapsedTimer();
+        const el = this.elements.loadingElapsed;
+        if (!el) return;
+        const started = performance.now();
+        el.textContent = '';
+        const tick = () => {
+            const secs = Math.floor((performance.now() - started) / 1000);
+            // Don't distract on fast turns; only surface once it's notably slow.
+            if (secs < 3) {
+                el.textContent = '';
+                return;
+            }
+            const time =
+                secs < 60
+                    ? `${secs}s`
+                    : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+            el.textContent = t('floating.elapsed', { time });
+        };
+        tick();
+        this._elapsedTimer = setInterval(tick, 1000);
+    }
+
+    _stopElapsedTimer() {
+        if (this._elapsedTimer) {
+            clearInterval(this._elapsedTimer);
+            this._elapsedTimer = null;
+        }
+        if (this.elements.loadingElapsed) this.elements.loadingElapsed.textContent = '';
     }
 
     stopGenerating() {

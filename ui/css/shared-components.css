@@ -107,6 +107,19 @@ body.dark-theme .message-content th:hover {
     animation-delay: 0.4s;
 }
 
+/* Elapsed-time label beside the loading dots. Empty until a request has been
+   running a few seconds, so it never flashes on quick replies. */
+.loading-elapsed {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--kage-text-muted);
+    opacity: 0.75;
+    min-width: 0;
+}
+.loading-elapsed:empty {
+    display: none;
+}
+
 @keyframes dot-bounce {
     0%,
     60%,

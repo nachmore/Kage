@@ -1643,6 +1643,12 @@
     "_machine_translated": true,
     "_source_hash": "04aa8185c8664348"
   },
+  "floating.elapsed": {
+    "message": "{time}",
+    "description": "Elapsed time shown beside the loading dots while the agent is working; {time} is like '5s' or '1:23'",
+    "_machine_translated": true,
+    "_source_hash": "5c781a593aa5f445"
+  },
   "floating.speech_btn_title": {
     "message": "קלט קולי",
     "description": "Tooltip on the speech-to-text button",

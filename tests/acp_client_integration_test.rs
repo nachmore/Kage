@@ -710,6 +710,42 @@ fn force_disconnect_wakes_blocked_send_request() {
 }
 
 #[test]
+fn prompt_idle_watchdog_wakes_on_disconnect_not_after_idle_timeout() {
+    // session/prompt uses the idle watchdog (no wall-clock cap — a healthy
+    // turn can run for minutes as long as the backend keeps streaming). But
+    // a genuinely dead connection must still wake the caller promptly via the
+    // Disconnected path, NOT sit until PROMPT_IDLE_TIMEOUT elapses.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![("session/prompt", Reply::Drop)],
+    });
+    let client = Arc::new(client_for(server.port));
+    client.connect().expect("connect");
+
+    let waiter = client.clone();
+    let handle = std::thread::spawn(move || {
+        let start = std::time::Instant::now();
+        let result = waiter.send_prompt("sess-1", json!({ "sessionId": "sess-1" }));
+        (result, start.elapsed())
+    });
+
+    std::thread::sleep(Duration::from_millis(100));
+    client.disconnect();
+
+    let (result, elapsed) = handle.join().expect("waiter thread");
+    assert!(
+        result.is_err(),
+        "send_prompt must surface an error after disconnect()"
+    );
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "prompt watchdog should wake within seconds of disconnect, got {:?}",
+        elapsed
+    );
+
+    drop(server);
+}
+
+#[test]
 fn write_failure_removes_pending_entry() {
     // If write_line fails (broken pipe, full buffer, no write handle),
     // send_request must remove its pending-inbox entry on the way

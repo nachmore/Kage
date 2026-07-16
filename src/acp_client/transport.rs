@@ -405,6 +405,21 @@ impl AcpTransport {
 
     // --- I/O ---
 
+    /// Flat per-request deadline for ordinary RPCs (handshake, session load,
+    /// commands/* — anything that should reply promptly). A `session/prompt`
+    /// uses the idle watchdog instead (see [`send_prompt_request`]) because a
+    /// healthy turn can legitimately run for minutes.
+    const RPC_TIMEOUT: Duration = Duration::from_secs(60);
+
+    /// How long the connection may go *completely silent* during a
+    /// `session/prompt` before we treat it as wedged. A working agent streams
+    /// `session/update` notifications continuously (token deltas, tool calls),
+    /// so any real progress resets the clock. Only a genuinely dead/hung
+    /// backend — no response AND no notifications for this long — trips it,
+    /// at which point the recovery ladder respawns. Generous by design: the
+    /// user-facing escape hatch is the Stop button, not a wall-clock cap.
+    const PROMPT_IDLE_TIMEOUT: Duration = Duration::from_secs(120);
+
     /// Send a JSON-RPC request and wait for its matching response.
     ///
     /// The transport owns the request id — callers don't pass one. This makes
@@ -413,6 +428,30 @@ impl AcpTransport {
     /// shared channel. A response that arrives after this method has timed
     /// out is dropped (logged) instead of corrupting the next caller.
     pub fn send_request(&self, method: &str, params: serde_json::Value) -> Result<AcpResponse> {
+        self.send_request_inner(method, params, false)
+    }
+
+    /// Send a `session/prompt` request and wait for the turn to end.
+    ///
+    /// Unlike [`send_request`], this does not impose a wall-clock deadline on
+    /// the whole turn — a chat request may run as long as the agent keeps
+    /// working. It watches inbound activity instead: as long as the backend is
+    /// streaming updates it waits; only total silence for `PROMPT_IDLE_TIMEOUT`
+    /// is treated as a wedged connection.
+    pub fn send_prompt_request(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<AcpResponse> {
+        self.send_request_inner(method, params, true)
+    }
+
+    fn send_request_inner(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+        idle_watchdog: bool,
+    ) -> Result<AcpResponse> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 
         let request = AcpRequest {
@@ -443,25 +482,85 @@ impl AcpTransport {
             return Err(e);
         }
 
-        // Per-request timeout, not a global idle timer: an unrelated chatty
-        // session/update stream on another id no longer extends this caller's
-        // deadline.
-        let request_timeout = Duration::from_secs(60);
-        match rx.recv_timeout(request_timeout) {
-            Ok(response) => {
-                if debug {
-                    info!("[RECV] Response id={}", id);
+        if idle_watchdog {
+            self.recv_with_idle_watchdog(id, method, &rx, debug)
+        } else {
+            // Per-request timeout, not a global idle timer: an unrelated chatty
+            // session/update stream on another id no longer extends this
+            // caller's deadline.
+            match rx.recv_timeout(Self::RPC_TIMEOUT) {
+                Ok(response) => {
+                    if debug {
+                        info!("[RECV] Response id={}", id);
+                    }
+                    Ok(response)
                 }
-                Ok(response)
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    self.pending.lock_or_recover().remove(&id);
+                    anyhow::bail!("Timeout waiting for response to {}", method)
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    self.pending.lock_or_recover().remove(&id);
+                    *self.connected.lock_or_recover() = false;
+                    anyhow::bail!("Connection lost while waiting for response")
+                }
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                self.pending.lock_or_recover().remove(&id);
-                anyhow::bail!("Timeout waiting for response to {}", method)
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                self.pending.lock_or_recover().remove(&id);
-                *self.connected.lock_or_recover() = false;
-                anyhow::bail!("Connection lost while waiting for response")
+        }
+    }
+
+    /// Wait for a prompt response, extending the deadline for as long as the
+    /// backend shows *any* inbound activity. We poll the response inbox in
+    /// short slices; on each timeout slice we check whether `last_activity`
+    /// (bumped by the reader thread on every inbound line, for any id) has
+    /// advanced. If it has, the turn is progressing and we keep waiting. Only
+    /// `PROMPT_IDLE_TIMEOUT` of total silence bails — the connection is wedged
+    /// and the recovery ladder should respawn.
+    fn recv_with_idle_watchdog(
+        &self,
+        id: u64,
+        method: &str,
+        rx: &mpsc::Receiver<AcpResponse>,
+        debug: bool,
+    ) -> Result<AcpResponse> {
+        // Poll cadence: short enough that a wedged connection is detected
+        // promptly after the idle window elapses, long enough not to spin.
+        const POLL_SLICE: Duration = Duration::from_secs(1);
+
+        let mut last_seen_activity = *self.last_activity.lock_or_recover();
+        let mut idle = Duration::ZERO;
+
+        loop {
+            match rx.recv_timeout(POLL_SLICE) {
+                Ok(response) => {
+                    if debug {
+                        info!("[RECV] Response id={}", id);
+                    }
+                    return Ok(response);
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    let now = *self.last_activity.lock_or_recover();
+                    if now != last_seen_activity {
+                        // The backend emitted something (a streaming update on
+                        // this or any session) — the turn is alive. Reset.
+                        last_seen_activity = now;
+                        idle = Duration::ZERO;
+                        continue;
+                    }
+                    idle += POLL_SLICE;
+                    if idle >= Self::PROMPT_IDLE_TIMEOUT {
+                        self.pending.lock_or_recover().remove(&id);
+                        anyhow::bail!(
+                            "Timeout waiting for response to {} (no activity for {}s)",
+                            method,
+                            Self::PROMPT_IDLE_TIMEOUT.as_secs()
+                        )
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    self.pending.lock_or_recover().remove(&id);
+                    *self.connected.lock_or_recover() = false;
+                    anyhow::bail!("Connection lost while waiting for response")
+                }
             }
         }
     }

@@ -366,7 +366,7 @@ impl AcpClient {
         let lock = self.prompt_lock_for(session_id);
         let _guard = lock.lock_or_recover();
         self.reset_session_accumulator(session_id);
-        self.transport.send_request("session/prompt", params)
+        self.transport.send_prompt_request("session/prompt", params)
     }
 
     /// Like `send_prompt`, but for *background* prompts that must never
@@ -400,7 +400,7 @@ impl AcpClient {
         // own the slot is it safe to clear the bucket.
         self.reset_session_accumulator(session_id);
         self.transport
-            .send_request("session/prompt", params)
+            .send_prompt_request("session/prompt", params)
             .map(Some)
     }
 
