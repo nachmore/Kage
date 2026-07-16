@@ -133,10 +133,7 @@ impl ProcessManager {
         // on macOS/Linux can still be a Windows-style path (and std::path::Path
         // only treats `\` as a separator on Windows, which broke this on the
         // macOS CI runner). Then strip a trailing ".exe".
-        let file = name_lower
-            .rsplit(['/', '\\'])
-            .next()
-            .unwrap_or(&name_lower);
+        let file = name_lower.rsplit(['/', '\\']).next().unwrap_or(&name_lower);
         let stem = file.strip_suffix(".exe").unwrap_or(file);
 
         // The JS runtimes that run npx-vended ACP wrappers (e.g.
