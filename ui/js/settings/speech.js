@@ -418,7 +418,7 @@ export class SpeechSettingsModule extends SettingsModule {
             if (serverStatus) serverStatus.textContent = t('settings.speech.pocket.server.running');
             if (startBtn) {
                 startBtn.textContent = t('settings.speech.pocket.server.stop');
-                startBtn.style.background = '#c44';
+                startBtn.style.background = 'var(--kage-error)';
             }
             if (statusText) statusText.textContent = t('settings.speech.pocket.banner.ready');
             this._setStatusColor('success');
@@ -499,7 +499,7 @@ async function pocketTtsInstall() {
 
     if (btn) {
         btn.textContent = t('settings.speech.pocket.install.cancel');
-        btn.style.background = '#c44';
+        btn.style.background = 'var(--kage-error)';
         btn.style.color = 'white';
         btn.dataset.action = 'speech.pocketTtsCancelInstall';
     }

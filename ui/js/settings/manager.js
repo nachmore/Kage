@@ -633,7 +633,7 @@ function _updateExtToggleUI(extId, enabled) {
     const content = document.getElementById('ext-content-' + extId);
     if (btn) {
         btn.textContent = enabled ? 'Disable' : 'Enable';
-        btn.style.background = enabled ? '#c44' : 'var(--kage-accent)';
+        btn.style.background = enabled ? 'var(--kage-error)' : 'var(--kage-accent)';
         btn.style.color = 'white';
         btn.style.border = 'none';
     }

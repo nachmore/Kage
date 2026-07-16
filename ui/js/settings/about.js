@@ -583,7 +583,7 @@ export class AboutSettingsModule extends SettingsModule {
         const el = document.getElementById('backupStatus');
         if (!el) return;
         el.textContent = text || '';
-        el.style.color = kind === 'error' ? '#c44' : kind === 'success' ? 'var(--kage-accent)' : '';
+        el.style.color = kind === 'error' ? 'var(--kage-error)' : kind === 'success' ? 'var(--kage-accent)' : '';
     }
 
     async _runBackupExport() {

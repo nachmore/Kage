@@ -62,7 +62,7 @@ export class AutomationsSettingsModule extends SettingsModule {
         const css = `
             .auto-list { }
             .auto-card { background: var(--kage-bg-input); border: 1px solid var(--kage-border-subtle); border-radius: 10px; margin-bottom: 8px; overflow: hidden; transition: box-shadow 0.2s; }
-            .auto-card.expanded { box-shadow: 0 0 0 1px var(--kage-accent, #C09CFF); }
+            .auto-card.expanded { box-shadow: 0 0 0 1px var(--kage-accent); }
             .auto-card.disabled { opacity: 0.45; }
             .auto-collapsed { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; user-select: none; }
             .auto-collapsed:hover { background: rgba(255,255,255,0.03); }
@@ -98,7 +98,7 @@ export class AutomationsSettingsModule extends SettingsModule {
             .auto-actions .auto-cancel-btn { background: none; border: 1px solid var(--kage-border-subtle); border-radius: 6px; padding: 6px 16px; font-size: 12px; color: var(--kage-text); cursor: pointer; }
             .auto-actions .auto-cancel-btn:hover { background: var(--kage-bg-surface); }
             .auto-actions .auto-delete-btn { background: none; border: none; color: var(--kage-text-muted); cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 4px; margin-left: auto; }
-            .auto-actions .auto-delete-btn:hover { color: #e55; background: rgba(238,85,85,0.1); }
+            .auto-actions .auto-delete-btn:hover { color: var(--kage-error); background: rgba(238,85,85,0.1); }
             .auto-validation-banner { background: rgba(217,119,6,0.15); border: 1px solid rgba(217,119,6,0.3); color: #fcd34d; border-radius: 6px; padding: 6px 12px; font-size: 12px; margin-bottom: 8px; }
             .auto-card select { background: var(--kage-bg-input); border: 1px solid var(--kage-border); border-radius: 4px; color: var(--kage-text); font-size: 13px; font-family: var(--kage-font); cursor: pointer; padding: 6px 10px; }
             .auto-card select:focus { outline: none; border-color: var(--kage-accent); }

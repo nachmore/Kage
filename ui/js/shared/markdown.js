@@ -871,7 +871,7 @@ function _resetDiagramFailures() {
 function _renderDiagramError(container, label, error) {
     container.textContent = '';
     const div = document.createElement('div');
-    div.style.color = 'var(--kage-error, #dc2626)';
+    div.style.color = 'var(--kage-error)';
     div.style.padding = '20px';
     const detail = error && error.message ? `${label}: ${error.message}` : label;
     div.textContent = detail;

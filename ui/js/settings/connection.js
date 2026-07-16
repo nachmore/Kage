@@ -908,7 +908,7 @@ export class ConnectionSettingsModule extends SettingsModule {
                         this._ollamaProbe.reason ||
                         t('settings.connection.ollama.probe.unreachable_default'),
                 });
-                status.style.color = '#c44';
+                status.style.color = 'var(--kage-error)';
             }
         }
         // After a successful probe, freshen the model list. On a
@@ -937,7 +937,7 @@ export class ConnectionSettingsModule extends SettingsModule {
                 hint.textContent = t('settings.connection.ollama.models.list_failed', {
                     message: this._formatError(e),
                 });
-                hint.style.color = '#c44';
+                hint.style.color = 'var(--kage-error)';
             }
             return;
         }
@@ -981,7 +981,7 @@ export class ConnectionSettingsModule extends SettingsModule {
             if (!status) return;
             status.textContent = text || '';
             status.style.color =
-                kind === 'error' ? '#c44' : kind === 'success' ? 'var(--kage-accent)' : '';
+                kind === 'error' ? 'var(--kage-error)' : kind === 'success' ? 'var(--kage-accent)' : '';
         };
         const baseUrl = this._currentOllamaBaseUrl();
         const model = document.getElementById('ollEditModel')?.value?.trim();

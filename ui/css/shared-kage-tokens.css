@@ -25,6 +25,15 @@
 
     /* Semantic */
     --kage-section-accent: #81e6d9;
+    /* Status colors — error/danger/warning/success. Use these instead of
+       hand-picking hexes (#c44, #dc2626, #ef4444 were scattered across
+       modules and didn't adapt to the light theme). --kage-error and
+       --kage-danger are intentionally the same red; keep both names so call
+       sites can read intent (a failed operation vs. a destructive action). */
+    --kage-error: #f56565;
+    --kage-danger: #f56565;
+    --kage-warning: #ed8936;
+    --kage-success: #48bb78;
 
     /* Links */
     --kage-link: #81e6d9;
@@ -56,4 +65,9 @@ body.light-theme {
     --kage-link-visited: #2c7a7b;
     --kage-link-hover: #319795;
     --kage-mascot-outline: #319795; /* matches --kage-accent */
+    /* Darker status hues for contrast on the light background. */
+    --kage-error: #e53e3e;
+    --kage-danger: #e53e3e;
+    --kage-warning: #dd6b20;
+    --kage-success: #2f855a;
 }

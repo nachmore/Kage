@@ -282,8 +282,8 @@ const STYLE_ID = 'kage-ext-perm-style';
 }
 .kage-ext-perm-btn:hover { background: var(--kage-surface, #2A2530); }
 .kage-ext-perm-btn-primary {
-    background: var(--kage-accent, #8B5CF6);
-    border-color: var(--kage-accent, #8B5CF6);
+    background: var(--kage-accent);
+    border-color: var(--kage-accent);
     color: #fff;
 }
 .kage-ext-perm-btn-primary:hover { filter: brightness(1.1); }

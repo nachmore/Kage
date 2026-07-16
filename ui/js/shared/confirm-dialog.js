@@ -267,12 +267,12 @@ function ensureStyles() {
 }
 .kage-confirm-btn:hover { background: var(--kage-surface, #2A2530); }
 .kage-confirm-btn:focus-visible {
-    outline: 2px solid var(--kage-accent, #8B5CF6);
+    outline: 2px solid var(--kage-accent);
     outline-offset: 1px;
 }
 .kage-confirm-btn-primary {
-    background: var(--kage-accent, #8B5CF6);
-    border-color: var(--kage-accent, #8B5CF6);
+    background: var(--kage-accent);
+    border-color: var(--kage-accent);
     color: #fff;
 }
 .kage-confirm-btn-primary:hover { filter: brightness(1.1); }

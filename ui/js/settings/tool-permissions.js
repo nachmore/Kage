@@ -53,7 +53,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 </div>
             </div>
 
-            <div class="setting-section-label" style="color: #ef4444; margin-top: 32px;">${t('settings.tool_permissions.danger.section')}</div>
+            <div class="setting-section-label" style="color: var(--kage-error); margin-top: 32px;">${t('settings.tool_permissions.danger.section')}</div>
             <div class="setting-row terminator-row">
                 <div class="terminator-header">
                     <div class="terminator-mascot" id="terminatorMascot"></div>
@@ -569,7 +569,7 @@ toolPermStyle.textContent = `
         background: rgba(239, 68, 68, 0.05);
     }
     .terminator-row .setting-label {
-        color: #ef4444;
+        color: var(--kage-error);
     }
     .terminator-header {
         display: flex;
