@@ -248,13 +248,16 @@ export function applyStaticTranslations(root) {
                     vars = {};
                 }
             }
-            const value = t(key, vars);
             if (mode === 'attribute') {
-                el.setAttribute(attr, value);
+                el.setAttribute(attr, t(key, vars));
             } else if (mode === 'innerHTML') {
-                el.innerHTML = value;
+                // tHtml escapes interpolated vars (the catalog template
+                // itself is trusted and may carry intentional markup) —
+                // plain t() here would make the first dynamic
+                // data-i18n-args value on an _html key injectable.
+                el.innerHTML = tHtml(key, vars);
             } else {
-                el.textContent = value;
+                el.textContent = t(key, vars);
             }
         }
     }
