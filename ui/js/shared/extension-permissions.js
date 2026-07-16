@@ -21,7 +21,15 @@
  */
 export const COMMAND_CAPABILITIES = Object.freeze({
     // --- storage: the extension's own sandboxed data + config ---------------
-    get_config: 'storage', // read-only access; scrubbed in host
+    // NOTE: `get_config` is deliberately NOT here. It returns the entire app
+    // Config — telemetry install-id, every other extension's stored config and
+    // grants, ACP connection commands/URLs, context rules, hotkeys, and the
+    // tool-permission policy. There is no per-extension scrubbing, so exposing
+    // it under `storage` (the safest-sounding, default-for-permissionless
+    // capability) would make that capability the broadest read primitive in
+    // the whole surface. Extensions read their own scoped data via
+    // `get_extension_config` (identity-injected below) instead.
+    get_config: null,
     get_extension_config: 'storage',
     save_extension_config: 'storage',
     save_extension_data: 'storage',

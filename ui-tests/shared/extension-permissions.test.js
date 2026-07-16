@@ -18,6 +18,7 @@ describe('COMMAND_CAPABILITIES table', () => {
 
     it('explicitly blocks dangerous commands', () => {
         const mustBeBlocked = [
+            'get_config', // leaks the entire app config; extensions use get_extension_config
             'save_config',
             'quit_app',
             'restart_app',
