@@ -512,19 +512,9 @@ fn handle_permission_notification(
             *last_config_save.lock_or_recover() = std::time::Instant::now();
         }
 
-        let p = if config_guard.tool_permissions.terminator_mode
-            || config_guard.tool_permissions.trust_all
-        {
-            crate::config::PolicyKind::Allow
-        } else {
-            config_guard
-                .tool_permissions
-                .tools
-                .iter()
-                .find(|t| t.title == tool_title)
-                .map(|t| t.effective_policy())
-                .unwrap_or(crate::config::PolicyKind::Ask)
-        };
+        // An explicit per-tool Deny wins even under trust_all / terminator_mode
+        // — see ToolPermissionsConfig::resolve_policy.
+        let p = config_guard.tool_permissions.resolve_policy(&tool_title);
         // Snapshot the config for an off-thread save if one is due.
         // The clone happens inside the lock so the snapshot is
         // consistent — but the Mutex is released as the guard drops

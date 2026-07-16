@@ -106,6 +106,32 @@ pub struct ToolPermissionsConfig {
     pub terminator_mode: bool,
 }
 
+impl ToolPermissionsConfig {
+    /// Resolve the effective policy for a tool by title.
+    ///
+    /// An explicit per-tool policy is consulted FIRST and always wins — in
+    /// particular an explicit `Deny` is honoured even under `trust_all` /
+    /// `terminator_mode`. The blanket-allow modes only upgrade a tool that
+    /// would otherwise be `Ask` (or has no recorded policy). This matches the
+    /// contract in docs/TOOL_PERMISSIONS.md: "allow everything except explicit
+    /// deny" — not "allow everything, period".
+    pub fn resolve_policy(&self, tool_title: &str) -> PolicyKind {
+        let explicit = self
+            .tools
+            .iter()
+            .find(|t| t.title == tool_title)
+            .map(|t| t.effective_policy());
+        let blanket_allow = self.terminator_mode || self.trust_all;
+        match explicit {
+            Some(PolicyKind::Deny) => PolicyKind::Deny,
+            Some(PolicyKind::Allow) => PolicyKind::Allow,
+            _ if blanket_allow => PolicyKind::Allow,
+            Some(p) => p,
+            None => PolicyKind::Ask,
+        }
+    }
+}
+
 /// Per-tool permission policy. The frontend's UI exposes three states —
 /// Always Ask, Allow, Deny — combined with a separate `grant_type` for
 /// the duration of an Allow grant.
@@ -1438,6 +1464,72 @@ mod enum_tests {
         let p: ToolPolicy = serde_json::from_str(json).unwrap();
         assert_eq!(p.policy, PolicyKind::Ask);
         assert_eq!(p.grant_type, GrantType::Once);
+    }
+}
+
+#[cfg(test)]
+mod resolve_policy_tests {
+    use super::*;
+
+    fn tool(title: &str, policy: PolicyKind) -> ToolPolicy {
+        ToolPolicy {
+            title: title.to_string(),
+            policy,
+            // Fresh timestamp + Always so an Allow resolves to Allow (a Once
+            // grant is "already consumed" → Ask, which would muddy these tests).
+            last_seen: chrono::Utc::now().to_rfc3339(),
+            granted_at: chrono::Utc::now().to_rfc3339(),
+            grant_type: GrantType::Always,
+        }
+    }
+
+    #[test]
+    fn explicit_deny_wins_over_trust_all() {
+        // The whole point of the fix: a user who trusts everything but
+        // explicitly denied one dangerous tool must still have it denied.
+        let cfg = ToolPermissionsConfig {
+            trust_all: true,
+            terminator_mode: false,
+            tools: vec![tool("rm_rf", PolicyKind::Deny)],
+        };
+        assert_eq!(cfg.resolve_policy("rm_rf"), PolicyKind::Deny);
+    }
+
+    #[test]
+    fn explicit_deny_wins_over_terminator_mode() {
+        let cfg = ToolPermissionsConfig {
+            trust_all: false,
+            terminator_mode: true,
+            tools: vec![tool("rm_rf", PolicyKind::Deny)],
+        };
+        assert_eq!(cfg.resolve_policy("rm_rf"), PolicyKind::Deny);
+    }
+
+    #[test]
+    fn trust_all_upgrades_ask_and_unknown_tools() {
+        let cfg = ToolPermissionsConfig {
+            trust_all: true,
+            terminator_mode: false,
+            tools: vec![tool("known", PolicyKind::Ask)],
+        };
+        assert_eq!(cfg.resolve_policy("known"), PolicyKind::Allow);
+        assert_eq!(cfg.resolve_policy("never_seen"), PolicyKind::Allow);
+    }
+
+    #[test]
+    fn without_blanket_modes_policy_is_per_tool() {
+        let cfg = ToolPermissionsConfig {
+            trust_all: false,
+            terminator_mode: false,
+            tools: vec![
+                tool("a", PolicyKind::Allow),
+                tool("d", PolicyKind::Deny),
+            ],
+        };
+        assert_eq!(cfg.resolve_policy("a"), PolicyKind::Allow);
+        assert_eq!(cfg.resolve_policy("d"), PolicyKind::Deny);
+        // Unknown tool with no blanket mode → Ask.
+        assert_eq!(cfg.resolve_policy("unknown"), PolicyKind::Ask);
     }
 }
 
