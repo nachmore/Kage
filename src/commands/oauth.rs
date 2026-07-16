@@ -300,7 +300,10 @@ async fn handle_one_request(
     } else {
         "Authorization failed"
     };
-    let label = success_label.unwrap_or("Kage");
+    // Both the query params and the label (extension-supplied via
+    // oauth_loopback_start args) are untrusted — escape anything
+    // interpolated into the HTML response.
+    let label = html_escape(success_label.unwrap_or("Kage"));
     let body = if success {
         format!(
             "<!doctype html><html><head><meta charset=utf-8><title>{label} - Authorized</title>\
@@ -311,10 +314,12 @@ async fn handle_one_request(
             <h1>You're authorized</h1><p>{label} is now connected.</p><p>You can close this tab and return to Kage.</p></div></body></html>"
         )
     } else {
-        let err = params
-            .get("error")
-            .cloned()
-            .unwrap_or_else(|| "unknown_error".to_string());
+        let err = html_escape(
+            params
+                .get("error")
+                .map(String::as_str)
+                .unwrap_or("unknown_error"),
+        );
         format!(
             "<!doctype html><html><head><meta charset=utf-8><title>{label} - Failed</title>\
             <style>body{{font-family:-apple-system,Segoe UI,sans-serif;background:#0e0f17;color:#e6e6f0;\
@@ -334,6 +339,23 @@ async fn handle_one_request(
     )
     .await;
     Some(params)
+}
+
+/// Minimal HTML escaper for the loopback response pages. Covers body text
+/// and quoted attribute contexts.
+fn html_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 async fn write_response(
