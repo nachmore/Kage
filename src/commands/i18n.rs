@@ -104,8 +104,7 @@ pub fn set_language(
     // `None` (or an empty string) means "follow system locale". We persist
     // it as `None` so the next launch re-runs system detection rather than
     // pinning to whatever happened to be active when the user clicked.
-    let normalised: Option<String> =
-        language.and_then(|s| if s.trim().is_empty() { None } else { Some(s) });
+    let normalised: Option<String> = language.filter(|s| !s.trim().is_empty());
 
     {
         let mut cfg = config.lock().map_err(|_| {
