@@ -74,15 +74,21 @@ impl AppLauncher {
         self.app_registry = registry;
     }
 
-    /// Find applications matching the query using fuzzy matching
+    /// Find applications matching the query using fuzzy matching.
+    ///
+    /// Scores by reference and clones only the final top 5.
+    /// `Application.icon_base64` holds a full base64 PNG (KBs–tens of KBs
+    /// per app), and this runs per keystroke while holding the launcher
+    /// mutex — cloning every match just to discard all but 5 moved
+    /// megabytes per keystroke on short queries.
     pub fn find_app(&self, query: &str) -> Vec<Application> {
         let query_lower = query.to_lowercase();
-        let mut matches = Vec::new();
+        let mut matches: Vec<(&Application, u32)> = Vec::new();
 
         for app in self.app_registry.values() {
             // Exact match
             if app.aliases.iter().any(|alias| alias == &query_lower) {
-                matches.push((app.clone(), 100));
+                matches.push((app, 100));
                 continue;
             }
 
@@ -92,13 +98,13 @@ impl AppLauncher {
                 .iter()
                 .any(|alias| alias.starts_with(&query_lower))
             {
-                matches.push((app.clone(), 90));
+                matches.push((app, 90));
                 continue;
             }
 
             // Contains match
             if app.aliases.iter().any(|alias| alias.contains(&query_lower)) {
-                matches.push((app.clone(), 70));
+                matches.push((app, 70));
                 continue;
             }
 
@@ -106,7 +112,7 @@ impl AppLauncher {
             for alias in &app.aliases {
                 let similarity = self.calculate_similarity(&query_lower, alias);
                 if similarity > 60 {
-                    matches.push((app.clone(), similarity));
+                    matches.push((app, similarity));
                     break;
                 }
             }
@@ -115,8 +121,12 @@ impl AppLauncher {
         // Sort by score (highest first)
         matches.sort_by_key(|m| std::cmp::Reverse(m.1));
 
-        // Return top matches
-        matches.into_iter().take(5).map(|(app, _)| app).collect()
+        // Clone only the top matches
+        matches
+            .into_iter()
+            .take(5)
+            .map(|(app, _)| app.clone())
+            .collect()
     }
 
     /// Simple similarity calculation (0-100)

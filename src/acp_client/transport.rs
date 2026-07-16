@@ -300,7 +300,15 @@ impl AcpTransport {
         // only reaches here when disconnected, so the old process is always
         // either already dead (EOF/error) or already terminated (an explicit
         // disconnect) — killing it here is a cheap no-op in both cases.
-        self.process_manager.lock_or_recover().terminate();
+        // Two-step take-then-kill so the manager mutex isn't held across
+        // the (worst-case 3s) kill poll — health probes need it.
+        let old_child = self
+            .process_manager
+            .lock_or_recover()
+            .take_child_for_termination();
+        if let Some(child) = old_child {
+            ProcessManager::terminate_child(child);
+        }
 
         let parts = tokenize_spawn_command(command_str);
         if parts.is_empty() {
@@ -685,8 +693,16 @@ impl AcpTransport {
         // than timing out 60s later. Same semantics as the reader
         // thread's EOF cleanup.
         self.pending.lock_or_recover().clear();
-        let mut pm = self.process_manager.lock_or_recover();
-        pm.terminate();
+        // Take the child out under the lock, kill/poll (up to 3s) after
+        // releasing it — is_healthy()'s child_liveness() probe takes the
+        // same mutex and must not queue behind a stuck child's teardown.
+        let child = self
+            .process_manager
+            .lock_or_recover()
+            .take_child_for_termination();
+        if let Some(child) = child {
+            ProcessManager::terminate_child(child);
+        }
     }
 
     /// Full teardown: disconnect, kill process, drop pending request inboxes.
@@ -698,8 +714,14 @@ impl AcpTransport {
         self.pending.lock_or_recover().clear();
         *self.pipe_stdin.lock_or_recover() = None;
         *self.tcp_writer.lock_or_recover() = None;
-        let mut pm = self.process_manager.lock_or_recover();
-        pm.terminate();
+        // Same take-then-kill pattern as disconnect() — see comment there.
+        let child = self
+            .process_manager
+            .lock_or_recover()
+            .take_child_for_termination();
+        if let Some(child) = child {
+            ProcessManager::terminate_child(child);
+        }
     }
 }
 

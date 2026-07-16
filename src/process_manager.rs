@@ -183,65 +183,88 @@ impl ProcessManager {
         }
     }
 
-    /// Terminate the managed process
-    pub fn terminate(&mut self) {
-        if let Some(mut child) = self.child.lock_or_recover().take() {
-            let pid = child.id();
-            info!("Terminating spawned process (PID: {})", pid);
-
-            // Ask the process to exit.
-            let _ = child.kill();
-
-            // Poll for exit with a real deadline. The old implementation did
-            // `thread::spawn(move || child.wait()).join()`, which blocks
-            // indefinitely (join only errors on a *panic* in the wait thread),
-            // so the force-kill fallback was dead code and terminate() could
-            // hang forever if child.kill() didn't take — and terminate() runs
-            // from Drop and the signal handlers.
-            const DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
-            const POLL: std::time::Duration = std::time::Duration::from_millis(50);
-            let start = std::time::Instant::now();
-            let mut exited = false;
-            loop {
-                match child.try_wait() {
-                    Ok(Some(_)) => {
-                        exited = true;
-                        break;
-                    }
-                    Ok(None) => {
-                        if start.elapsed() >= DEADLINE {
-                            break;
-                        }
-                        std::thread::sleep(POLL);
-                    }
-                    Err(e) => {
-                        warn!("Error waiting for process {} to exit: {}", pid, e);
-                        break;
-                    }
-                }
-            }
-
-            if exited {
-                info!("✅ Process terminated gracefully");
-            } else {
-                warn!(
-                    "Process {} did not exit within {:?}; force-killing by PID",
-                    pid, DEADLINE
-                );
-                Self::kill_process(pid);
-                // Reap so we don't leave a zombie on Unix (kill_process signals
-                // but doesn't wait).
-                let _ = child.wait();
-            }
-        }
+    /// Take the managed child out of the manager (also clearing the PID
+    /// file and bookkeeping) so the caller can run the potentially-slow
+    /// kill/poll on the OWNED `Child` via [`Self::terminate_child`]
+    /// without holding any ProcessManager lock. Callers that guard this
+    /// manager behind an outer `Mutex` (the ACP transport) must use this
+    /// two-step form: `terminate()` polls `try_wait` for up to 3s, and
+    /// holding the outer mutex across that stalls `child_liveness()`
+    /// health probes and restart coalescing behind any teardown of a
+    /// stuck child.
+    pub fn take_child_for_termination(&mut self) -> Option<Child> {
+        let child = self.child.lock_or_recover().take();
 
         // Clean up PID file
         if self.pid_file.exists() {
             let _ = fs::remove_file(&self.pid_file);
             info!("✅ PID file removed");
         }
-
         self.pid = None;
+
+        child
+    }
+
+    /// Kill an owned child and wait (bounded) for it to exit. Associated
+    /// fn — no `&self` — so it can run after every ProcessManager lock is
+    /// released.
+    pub fn terminate_child(mut child: Child) {
+        let pid = child.id();
+        info!("Terminating spawned process (PID: {})", pid);
+
+        // Ask the process to exit.
+        let _ = child.kill();
+
+        // Poll for exit with a real deadline. The old implementation did
+        // `thread::spawn(move || child.wait()).join()`, which blocks
+        // indefinitely (join only errors on a *panic* in the wait thread),
+        // so the force-kill fallback was dead code and terminate() could
+        // hang forever if child.kill() didn't take — and terminate() runs
+        // from Drop and the signal handlers.
+        const DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+        const POLL: std::time::Duration = std::time::Duration::from_millis(50);
+        let start = std::time::Instant::now();
+        let mut exited = false;
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    exited = true;
+                    break;
+                }
+                Ok(None) => {
+                    if start.elapsed() >= DEADLINE {
+                        break;
+                    }
+                    std::thread::sleep(POLL);
+                }
+                Err(e) => {
+                    warn!("Error waiting for process {} to exit: {}", pid, e);
+                    break;
+                }
+            }
+        }
+
+        if exited {
+            info!("✅ Process terminated gracefully");
+        } else {
+            warn!(
+                "Process {} did not exit within {:?}; force-killing by PID",
+                pid, DEADLINE
+            );
+            Self::kill_process(pid);
+            // Reap so we don't leave a zombie on Unix (kill_process signals
+            // but doesn't wait).
+            let _ = child.wait();
+        }
+    }
+
+    /// Terminate the managed process. Convenience one-step form for
+    /// callers that don't wrap the manager in a contended outer mutex
+    /// (Drop, signal handlers).
+    pub fn terminate(&mut self) {
+        if let Some(child) = self.take_child_for_termination() {
+            Self::terminate_child(child);
+        }
     }
 }
 

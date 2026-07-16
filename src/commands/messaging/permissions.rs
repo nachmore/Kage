@@ -25,18 +25,26 @@ pub async fn send_permission_response(
         })?;
 
     if option_id == "allow_always" {
-        let mut config = features.config.lock().map_err(|_| {
-            AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
-        })?;
-        if let Some(tool) = config
-            .tool_permissions
-            .tools
-            .iter_mut()
-            .find(|t| t.title == tool_title)
-        {
-            tool.policy = crate::config::PolicyKind::Allow;
-        }
-        config.save().map_err(|e| {
+        // Mutate under the lock, clone a snapshot, save OUTSIDE the lock.
+        // The ACP reader thread's handle_permission_notification takes the
+        // same mutex per notification — holding it across write+fsync+rename
+        // stalls ACP parsing (streaming chunks, responses) for the fsync
+        // duration. Same pattern as notifications.rs.
+        let snapshot = {
+            let mut config = features.config.lock().map_err(|_| {
+                AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
+            })?;
+            if let Some(tool) = config
+                .tool_permissions
+                .tools
+                .iter_mut()
+                .find(|t| t.title == tool_title)
+            {
+                tool.policy = crate::config::PolicyKind::Allow;
+            }
+            config.clone()
+        };
+        snapshot.save().map_err(|e| {
             AppError::keyed(
                 ErrorKind::Internal,
                 "errors.config.save_failed",
@@ -316,65 +324,74 @@ pub async fn check_extension_tool_permission(
     features: State<'_, FeatureServices>,
 ) -> Result<String, AppError> {
     let tool_title = format!("ext:{}/{}", extension_id, tool_name);
-    let mut config = features
-        .config
-        .lock()
-        .map_err(|_| AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[]))?;
 
-    // Check trust_all first
-    if config.tool_permissions.trust_all {
-        // Still register the tool so it shows up in settings
+    // Mutate in-memory state under the lock, clone a snapshot, then save
+    // outside — the ACP reader thread contends on this mutex per
+    // notification and must never wait behind a write+fsync+rename.
+    let (policy_str, save_snapshot) = {
+        let mut config = features.config.lock().map_err(|_| {
+            AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
+        })?;
+
         let timestamp = chrono::Utc::now().to_rfc3339();
-        if !config
+
+        // Check trust_all first
+        if config.tool_permissions.trust_all {
+            // Still register the tool so it shows up in settings
+            let snap = if !config
+                .tool_permissions
+                .tools
+                .iter()
+                .any(|t| t.title == tool_title)
+            {
+                config
+                    .tool_permissions
+                    .tools
+                    .push(crate::config::ToolPolicy {
+                        title: tool_title,
+                        policy: crate::config::PolicyKind::Allow,
+                        last_seen: timestamp.clone(),
+                        granted_at: timestamp,
+                        grant_type: crate::config::GrantType::Always,
+                    });
+                Some(config.clone())
+            } else {
+                None
+            };
+            (crate::config::PolicyKind::Allow.as_str().to_string(), snap)
+        } else if let Some(tool) = config
             .tool_permissions
             .tools
-            .iter()
-            .any(|t| t.title == tool_title)
+            .iter_mut()
+            .find(|t| t.title == tool_title)
         {
+            tool.last_seen = timestamp;
+            let policy = tool.policy;
+            (policy.as_str().to_string(), Some(config.clone()))
+        } else {
+            // First time seeing this tool — register with "ask" policy
             config
                 .tool_permissions
                 .tools
                 .push(crate::config::ToolPolicy {
                     title: tool_title,
-                    policy: crate::config::PolicyKind::Allow,
-                    last_seen: timestamp.clone(),
-                    granted_at: timestamp.clone(),
-                    grant_type: crate::config::GrantType::Always,
+                    policy: crate::config::PolicyKind::Ask,
+                    last_seen: timestamp,
+                    granted_at: String::new(),
+                    grant_type: crate::config::GrantType::Once,
                 });
-            let _ = config.save();
+            (
+                crate::config::PolicyKind::Ask.as_str().to_string(),
+                Some(config.clone()),
+            )
         }
-        return Ok(crate::config::PolicyKind::Allow.as_str().to_string());
+    };
+
+    if let Some(snap) = save_snapshot {
+        if let Err(e) = snap.save() {
+            warn!("Failed to save config (extension tool permission): {}", e);
+        }
     }
 
-    let timestamp = chrono::Utc::now().to_rfc3339();
-    let existing = config
-        .tool_permissions
-        .tools
-        .iter_mut()
-        .find(|t| t.title == tool_title);
-
-    if let Some(tool) = existing {
-        tool.last_seen = timestamp;
-        let policy = tool.policy;
-        if let Err(e) = config.save() {
-            warn!("Failed to save config (tool policy lookup): {}", e);
-        }
-        Ok(policy.as_str().to_string())
-    } else {
-        // First time seeing this tool — register with "ask" policy
-        config
-            .tool_permissions
-            .tools
-            .push(crate::config::ToolPolicy {
-                title: tool_title,
-                policy: crate::config::PolicyKind::Ask,
-                last_seen: timestamp,
-                granted_at: String::new(),
-                grant_type: crate::config::GrantType::Once,
-            });
-        if let Err(e) = config.save() {
-            warn!("Failed to save config (new tool registration): {}", e);
-        }
-        Ok(crate::config::PolicyKind::Ask.as_str().to_string())
-    }
+    Ok(policy_str)
 }
