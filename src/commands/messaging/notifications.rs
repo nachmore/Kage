@@ -549,9 +549,38 @@ fn handle_permission_notification(
         }
     };
 
+    // Auto-decisions (policy Allow/Deny, or a blanket-allow mode) bypass the
+    // interactive send_permission_response command, which is where the audit
+    // entry is normally written. Record them here too so the audit log
+    // reflects EVERY tool decision, not just the ones that prompted — the log
+    // is a security feature and a silent auto-approve is exactly what a user
+    // reviewing it would want to see.
+    let audit_session_id = notification
+        .get("params")
+        .and_then(|p| p.get("sessionId"))
+        .and_then(|s| s.as_str())
+        .map(|s| s.to_string());
     match policy {
-        crate::config::PolicyKind::Allow => send_response("allow_once"),
-        crate::config::PolicyKind::Deny => send_response("reject_once"),
+        crate::config::PolicyKind::Allow => {
+            crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
+                crate::permission_audit::AuditEvent::Granted {
+                    tool: tool_title.to_string(),
+                    grant_type: crate::config::GrantType::Once,
+                    session_id: audit_session_id.clone(),
+                    args_preview: None,
+                },
+            ));
+            send_response("allow_once");
+        }
+        crate::config::PolicyKind::Deny => {
+            crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
+                crate::permission_audit::AuditEvent::Denied {
+                    tool: tool_title.to_string(),
+                    session_id: audit_session_id.clone(),
+                },
+            ));
+            send_response("reject_once");
+        }
         crate::config::PolicyKind::Ask => {
             if let Ok(mut pending) = pending_perm.lock() {
                 *pending = Some(crate::state::PendingPermission {
