@@ -60,14 +60,12 @@ impl ProcessManager {
                 if let Ok(pid) = content.trim().parse::<u32>() {
                     info!("Found PID file with PID: {}", pid);
 
-                    // Verify the PID still belongs to a kage-related process
-                    // to avoid killing a recycled PID that now belongs to something else
+                    // Verify the PID still belongs to a process we could have
+                    // spawned before killing it — the PID may have been
+                    // recycled by the OS and now belong to something else.
                     match os::process::get_process_name(pid) {
                         Some(name) => {
-                            let name_lower = name.to_lowercase();
-                            let is_ours = name_lower.contains("Kage")
-                                || name_lower.contains("node")
-                                || name_lower.contains("npx");
+                            let is_ours = Self::is_spawnable_agent_process(&name);
 
                             if is_ours {
                                 info!("PID {} is '{}' — killing orphaned process", pid, name);
@@ -118,6 +116,38 @@ impl ProcessManager {
 
         info!("✅ Process registered for cleanup (PID: {})", pid);
         Ok(())
+    }
+
+    /// Does `name` look like a process Kage could have spawned as an ACP
+    /// backend? Used to gate orphan cleanup so a recycled PID that now belongs
+    /// to an unrelated process is never killed.
+    ///
+    /// Matches the known agent binary names (from the preset detection hints,
+    /// so this stays in sync as agents are added) plus the JS runtimes that
+    /// host the npx-vended wrappers. Comparison is case-insensitive and
+    /// tolerates a platform `.exe` suffix and a full path.
+    fn is_spawnable_agent_process(name: &str) -> bool {
+        let name_lower = name.to_lowercase();
+        // Reduce "C:\path\to\kiro-cli.exe" to "kiro-cli".
+        let stem = std::path::Path::new(&name_lower)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&name_lower);
+
+        // The JS runtimes that run npx-vended ACP wrappers (e.g.
+        // claude-code-acp launched via `npx`). The spawned process often
+        // reports as `node`/`npx` rather than the wrapper binary.
+        const JS_RUNTIMES: &[&str] = &["node", "npx"];
+        if JS_RUNTIMES.contains(&stem) {
+            return true;
+        }
+
+        // Known agent binaries, sourced from the preset detection hints so
+        // adding an agent doesn't silently break orphan cleanup.
+        crate::agent_presets::detection_hints()
+            .iter()
+            .flat_map(|h| h.binary_names.iter())
+            .any(|bin| stem == bin.to_lowercase())
     }
 
     /// Kill a process by PID
@@ -247,6 +277,54 @@ fn run_all_killers() {
 fn _drain_killers_for_tests() {
     if let Ok(mut killers) = CHILD_KILLERS.lock() {
         killers.clear();
+    }
+}
+
+#[cfg(test)]
+mod orphan_match_tests {
+    use super::ProcessManager;
+
+    #[test]
+    fn matches_known_agent_binaries_case_and_extension_insensitive() {
+        // The old check used `name.to_lowercase().contains("Kage")`, which
+        // can never be true (a lowercased string has no uppercase 'K'), and
+        // never listed the actual agent binaries — so only node/npx wrappers
+        // were ever reaped and native kiro-cli orphans survived every restart.
+        for name in [
+            "kiro-cli",
+            "kiro-cli.exe",
+            "KIRO-CLI.EXE",
+            "C:\\Program Files\\kiro\\kiro-cli.exe",
+            "/usr/local/bin/kiro-cli",
+            "claude-code-acp",
+            "claude-agent-acp",
+            "codex-acp",
+            "node",
+            "npx",
+            "node.exe",
+        ] {
+            assert!(
+                ProcessManager::is_spawnable_agent_process(name),
+                "expected '{name}' to be recognised as a spawnable agent process"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_unrelated_processes() {
+        for name in [
+            "explorer.exe",
+            "chrome",
+            "systemd",
+            "notepad.exe",
+            "kiro-cli-helper", // not an exact stem match
+            "",
+        ] {
+            assert!(
+                !ProcessManager::is_spawnable_agent_process(name),
+                "expected '{name}' NOT to be recognised as a spawnable agent process"
+            );
+        }
     }
 }
 
