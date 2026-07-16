@@ -2679,24 +2679,33 @@ export class ChatApp {
                 }
             }
 
-            // Default rendering for non-extension results
-            let iconHtml;
+            // Default rendering for non-extension results. Build the icon as
+            // a real element so the fallback glyph goes through textContent —
+            // the old inline onerror interpolated cmd.label into a JS string
+            // inside an HTML attribute, so a label starting with `'` broke out.
+            const fallbackGlyph = cmd.icon || cmd.label?.charAt(0) || '?';
+            let iconEl;
             if (cmd.type === 'app' && cmd.data?.icon_base64) {
                 const src = cmd.data.icon_base64.startsWith('data:')
                     ? cmd.data.icon_base64
                     : 'data:image/png;base64,' + cmd.data.icon_base64;
-                iconHtml = `<img src="${src}" style="width:20px;height:20px;border-radius:4px;" onerror="this.replaceWith(document.createTextNode('${cmd.icon || cmd.label.charAt(0)}'))">`;
+                iconEl = document.createElement('img');
+                iconEl.src = src;
+                iconEl.style.cssText = 'width:20px;height:20px;border-radius:4px;';
+                iconEl.onerror = () => iconEl.replaceWith(document.createTextNode(fallbackGlyph));
             } else {
-                iconHtml = `<span class="chat-suggestion-icon">${cmd.icon || cmd.label?.charAt(0) || '?'}</span>`;
+                iconEl = document.createElement('span');
+                iconEl.className = 'chat-suggestion-icon';
+                iconEl.textContent = fallbackGlyph;
             }
 
             item.innerHTML = `
-                ${iconHtml}
                 <div class="chat-suggestion-info">
                     <div class="chat-suggestion-name">${escapeHtml(cmd.label || cmd.name || '')}</div>
                     ${cmd.description ? `<div class="chat-suggestion-desc">${escapeHtml(cmd.description)}</div>` : ''}
                 </div>
             `;
+            item.insertBefore(iconEl, item.firstChild);
             item.addEventListener('click', () => this.executeSuggestion(cmd));
             container.appendChild(item);
         });

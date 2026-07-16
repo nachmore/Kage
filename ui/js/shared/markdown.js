@@ -96,8 +96,12 @@ async function ensureMermaid() {
                 mermaid.initialize({
                     startOnLoad: false,
                     theme: 'default',
-                    securityLevel: 'loose',
-                    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+                    // Diagrams come from the (untrusted) agent response, so use
+                    // strict mode: mermaid sanitizes its own output, disables
+                    // click callbacks, and ignores HTML in labels. htmlLabels is
+                    // forced off under strict, so we don't set it.
+                    securityLevel: 'strict',
+                    flowchart: { useMaxWidth: true, curve: 'basis' },
                 });
                 mermaidReady = true;
                 resolve(true);
