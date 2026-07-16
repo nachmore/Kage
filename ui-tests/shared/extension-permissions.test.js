@@ -30,6 +30,11 @@ describe('COMMAND_CAPABILITIES table', () => {
             'send_permission_response',
             'read_extension_file',
             'open_devtools',
+            // Launcher frecency is a shared global file, not identity-scoped —
+            // exposing it would leak usage patterns and let one extension
+            // clobber the launcher ranking for everyone.
+            'save_frecency',
+            'load_frecency',
         ];
         for (const cmd of mustBeBlocked) {
             expect(COMMAND_CAPABILITIES[cmd]).toBeNull();

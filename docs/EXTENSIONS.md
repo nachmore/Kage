@@ -157,7 +157,7 @@ for users.
 
 | Capability      | Icon | Grants access to… |
 |-----------------|------|-------------------|
-| `storage`       | 💾  | The extension's own sandboxed data and config: `save_extension_data`, `load_extension_data`, `delete_extension_data`, `get_extension_config`, `save_extension_config`, read-only `get_config`, `save_frecency`, `load_frecency`. |
+| `storage`       | 💾  | The extension's own sandboxed data and config: `save_extension_data`, `load_extension_data`, `delete_extension_data`, `get_extension_config`, `save_extension_config`. |
 | `clipboard`     | 📋  | `read_clipboard`, `get_clipboard_history`, `paste_clipboard_item`. |
 | `urls`          | 🔗  | `open_url` for web links and a small allowlist of safe schemes (http, https, mailto, tel, sms, facetime, x-apple.systempreferences, ms-settings, prefs). Custom app URI schemes (`spotify://`, `vscode://`, etc.) are explicitly rejected — they need `launch`. |
 | `launch`        | 🚀  | `open_path` (open arbitrary files in their default OS handler) and `launch_app_by_name`. Distinct from `urls` because the blast radius is "execute external code on the user's behalf." Only request this when an extension genuinely needs to start programs. |

@@ -35,8 +35,12 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     save_extension_data: 'storage',
     load_extension_data: 'storage',
     delete_extension_data: 'storage',
-    save_frecency: 'storage',
-    load_frecency: 'storage',
+    // Launcher frecency is Kage-internal, host-window-only state. It is a
+    // single shared global file (not identity-scoped), so exposing it under
+    // `storage` would let any extension read the user's launch-usage
+    // patterns and overwrite the global launcher ranking.
+    save_frecency: null,
+    load_frecency: null,
 
     // --- clipboard ---------------------------------------------------------
     read_clipboard: 'clipboard',
