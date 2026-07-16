@@ -217,13 +217,25 @@ pub async fn check_connection(acp: State<'_, AcpHandles>) -> Result<bool, AppErr
 
 #[tauri::command]
 pub async fn reconnect_acp(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
-    acp.client.connect().map_err(|e| {
-        AppError::keyed(
-            ErrorKind::ConnectionLost,
-            "errors.connection.reconnect_failed",
-            &[("reason", &e.to_string())],
-        )
-    })?;
+    // connect() is a synchronous handshake (Remote mode: up to 6 attempts
+    // × 5s plus sleeps) — keep it off the Tokio workers.
+    let client = acp.client.clone();
+    async_runtime::spawn_blocking(move || client.connect())
+        .await
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::ConnectionLost,
+                "errors.connection.reconnect_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::ConnectionLost,
+                "errors.connection.reconnect_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
     Ok(true)
 }
 

@@ -598,8 +598,53 @@ pub async fn switch_acp_session(
     app: tauri::AppHandle,
 ) -> Result<String, AppError> {
     let client_guard = acp.client.clone();
+    let available_models = acp.available_models.clone();
+    let config = features.config.clone();
+    let session_cache = features.session_cache.clone();
+    let window_sessions = ui.window_sessions.clone();
     let window_label = window.label().to_string();
 
+    // restart_connection / load_existing_session / create_session are
+    // synchronous ACP round trips that can block for many seconds (kiro-cli
+    // history replay, initialize retries with 60s recv_timeout). Run them on
+    // the blocking pool so a session switch can't pin a Tokio worker and
+    // starve every other async command (same pattern as
+    // send_message_streaming).
+    tauri::async_runtime::spawn_blocking(move || -> Result<String, AppError> {
+        switch_acp_session_blocking(
+            session_id,
+            client_guard,
+            available_models,
+            config,
+            session_cache,
+            window_sessions,
+            window_label,
+            app,
+        )
+    })
+    .await
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.session.load_failed",
+            &[("reason", &e.to_string())],
+        )
+    })?
+}
+
+#[allow(clippy::too_many_arguments)] // mirrors the Tauri command's state params
+fn switch_acp_session_blocking(
+    session_id: Option<String>,
+    client_guard: std::sync::Arc<crate::acp_client::AcpClient>,
+    available_models: std::sync::Arc<std::sync::Mutex<Vec<crate::state::AcpModel>>>,
+    config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+    session_cache: std::sync::Arc<
+        std::sync::Mutex<Option<crate::commands::sessions::SessionCache>>,
+    >,
+    window_sessions: std::sync::Arc<std::sync::Mutex<HashMap<String, String>>>,
+    window_label: String,
+    app: tauri::AppHandle,
+) -> Result<String, AppError> {
     // Ensure a *healthy* connection. `is_healthy()` (not just `is_connected()`)
     // catches the case where the agent process has died but the reader thread
     // hasn't observed EOF yet — a plain `connect()` would early-return on the
@@ -625,7 +670,7 @@ pub async fn switch_acp_session(
 
             // Read the cwd from the session's .json metadata file
             let cwd = {
-                let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
+                let sessions_dir = resolve_sessions_dir_locked(&config)?;
                 let json_path = sessions_dir.join(format!("{}.json", id));
                 if json_path.exists() {
                     fs::read_to_string(&json_path)
@@ -666,27 +711,21 @@ pub async fn switch_acp_session(
                 if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::AcpModel>>(
                     serde_json::Value::Array(models_json),
                 ) {
-                    if let Ok(mut m) = acp.available_models.lock() {
+                    if let Ok(mut m) = available_models.lock() {
                         *m = parsed;
                     }
                 }
             }
-            if let Ok(mut ws) = ui.window_sessions.lock() {
+            if let Ok(mut ws) = window_sessions.lock() {
                 ws.insert(window_label.clone(), loaded_id.clone());
             }
-            update_window_title(
-                &app,
-                &features.config,
-                &features.session_cache,
-                &window_label,
-                &loaded_id,
-            );
+            update_window_title(&app, &config, &session_cache, &window_label, &loaded_id);
             Ok(loaded_id)
         }
         None => {
             info!("Creating new session");
             let cwd = {
-                let cfg = features.config.lock_or_recover();
+                let cfg = config.lock_or_recover();
                 cfg.acp.agent.working_directory.clone()
             };
             let (new_session_id, models_json) = client_guard
@@ -703,7 +742,7 @@ pub async fn switch_acp_session(
             if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::AcpModel>>(
                 serde_json::Value::Array(models_json),
             ) {
-                if let Ok(mut m) = acp.available_models.lock() {
+                if let Ok(mut m) = available_models.lock() {
                     *m = parsed;
                 }
             }
@@ -712,7 +751,7 @@ pub async fn switch_acp_session(
             // fields under one lock and drop before the agent calls and
             // the steering disk reads.
             let (default_model, steering_inputs) = {
-                let cfg = features.config.lock_or_recover();
+                let cfg = config.lock_or_recover();
                 (
                     cfg.acp.agent.default_model.clone(),
                     crate::commands::system::SteeringInputs::from_config(&cfg),
@@ -748,17 +787,17 @@ pub async fn switch_acp_session(
 
             // Invalidate session list cache (new session was created)
             {
-                let mut cache = features.session_cache.lock_or_recover();
+                let mut cache = session_cache.lock_or_recover();
                 *cache = None;
             }
 
-            if let Ok(mut ws) = ui.window_sessions.lock() {
+            if let Ok(mut ws) = window_sessions.lock() {
                 ws.insert(window_label.clone(), new_session_id.clone());
             }
             update_window_title(
                 &app,
-                &features.config,
-                &features.session_cache,
+                &config,
+                &session_cache,
                 &window_label,
                 &new_session_id,
             );
