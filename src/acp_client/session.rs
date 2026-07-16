@@ -461,7 +461,7 @@ impl AcpClient {
         info!(
             "Invoking sub-agent on {} with query: {}",
             session_id,
-            &query[..query.len().min(100)]
+            query.chars().take(100).collect::<String>()
         );
 
         // `send_prompt` resets this session's bucket under the prompt
@@ -554,5 +554,22 @@ mod tests {
     fn unrelated_errors_are_not_recoverable() {
         let err = "ACP error: model declined to respond";
         assert!(!AcpClient::is_recoverable_error(err));
+    }
+
+    #[test]
+    fn query_log_truncation_is_char_boundary_safe() {
+        // invoke_subagent truncates the query for its info! log. The old
+        // `&query[..query.len().min(100)]` byte-slice panicked when a
+        // multibyte char straddled byte 100 (any non-ASCII query — the app
+        // ships 31 locales). The char-based form must never panic.
+        // A 3-byte char (、) repeated so a char boundary does NOT fall on 100.
+        let query = "、".repeat(60); // 180 bytes, boundaries at multiples of 3
+        assert!(!query.is_char_boundary(100), "byte 100 must be mid-char for this test to be meaningful");
+        let truncated: String = query.chars().take(100).collect();
+        // 100 chars of a 60-char string is the whole string; take a longer one.
+        let long = "、".repeat(200);
+        let truncated_long: String = long.chars().take(100).collect();
+        assert_eq!(truncated, query);
+        assert_eq!(truncated_long.chars().count(), 100);
     }
 }

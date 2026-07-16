@@ -131,7 +131,7 @@ pub async fn execute_automation_plan(
                             "Step {}/{} agent reported failure: {}",
                             step_num,
                             total_steps,
-                            &result[..result.len().min(200)]
+                            result.chars().take(200).collect::<String>()
                         );
                     }
 
