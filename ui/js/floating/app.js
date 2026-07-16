@@ -1,7 +1,12 @@
 // Main application logic
 import { updateSelection, appendSendHint } from './suggestions.js';
 import { WindowManager } from './window.js';
-import { renderMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
+import {
+    renderMarkdown,
+    createTaskPlanElement,
+    setAppIconInvoke,
+    _resetDiagramFailures,
+} from '../shared/markdown.js';
 import { loadSlashCommands } from '../shared/commands.js';
 import { submitSelection } from '../shared/slash-selection.js';
 import {
@@ -393,6 +398,7 @@ export class FloatingApp {
                 this._noBlurTools.clear();
                 this.elements.floatingStopBtn.style.display = 'none';
                 this.updateDatetimeVisibility();
+                _resetDiagramFailures();
                 if (!online) this.showError(offlineMessage());
                 else
                     this.showError(
@@ -404,6 +410,7 @@ export class FloatingApp {
                 this.isWaitingForResponse = false;
                 this.elements.floatingStopBtn.style.display = 'none';
                 this.updateDatetimeVisibility();
+                _resetDiagramFailures();
                 this.showError(msg);
             },
             flushPendingMarkdown: () => {

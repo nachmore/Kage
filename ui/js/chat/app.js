@@ -4,6 +4,7 @@ import {
     initMarkdown,
     createTaskPlanElement,
     setAppIconInvoke,
+    _resetDiagramFailures,
 } from '../shared/markdown.js';
 import {
     AttachmentManager,
@@ -376,6 +377,7 @@ export class ChatApp {
                 app.isWaitingForResponse = false;
                 app.updateInputState();
                 app.elements.chatInput.focus();
+                _resetDiagramFailures();
                 if (!online) app.showError(offlineMessage());
                 else app.showError(t('chat.error.error_with_payload', { payload: event.payload }));
                 app.isConnected = online;
@@ -383,6 +385,7 @@ export class ChatApp {
             },
             onSessionReset: (event, msg) => {
                 app.hideTypingIndicator();
+                _resetDiagramFailures();
                 if (app.currentStreamingMessage) {
                     app.currentStreamingMessage.remove();
                     app.currentStreamingMessage = null;

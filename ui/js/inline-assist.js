@@ -345,8 +345,21 @@ console.log(
     document.addEventListener('keydown', (e) => {
         if (isProcessing) {
             if (e.key === 'Escape') {
-                // TODO: cancel generation
-                appWindow.hide();
+                // Cancel the in-flight generation via the same
+                // cancel_generation command the chat/floating windows use.
+                (async () => {
+                    try {
+                        const sessionId = await getWindowSessionOrNull(invoke, WINDOW.FLOATING);
+                        if (sessionId) {
+                            await invoke('cancel_generation', { sessionId });
+                        }
+                    } catch (err) {
+                        console.warn('Inline assist cancel failed:', err);
+                    }
+                    isProcessing = false;
+                    iconBubble.classList.remove('thinking');
+                    await appWindow.hide();
+                })();
             }
             return;
         }

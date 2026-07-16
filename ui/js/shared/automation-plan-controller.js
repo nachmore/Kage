@@ -191,22 +191,24 @@ export class AutomationPlanController {
             }
         );
 
+        // Declare planCompleteUnlisten before referencing it in cleanup()
+        // — the old order hit a TDZ on early cancellation because cleanup
+        // was assigned to this.cleanup before planCompleteUnlisten existed.
+        let planCompleteUnlisten;
+
         const cleanup = () => {
             stepStartUnlisten();
             stepCompleteUnlisten();
-            planCompleteUnlisten();
+            planCompleteUnlisten?.();
             this.cleanup = null;
         };
         this.cleanup = cleanup;
 
-        const planCompleteUnlisten = await this.host.listen(
-            'automation_plan_complete',
-            async () => {
-                cleanup();
-                this.started = false;
-                await this.host.onPlanComplete?.();
-            }
-        );
+        planCompleteUnlisten = await this.host.listen('automation_plan_complete', async () => {
+            cleanup();
+            this.started = false;
+            await this.host.onPlanComplete?.();
+        });
 
         try {
             await this.host.invoke('execute_automation_plan', {

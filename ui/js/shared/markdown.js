@@ -854,8 +854,13 @@ function _codeHash(code) {
     return code.substring(0, 200) + ':' + code.length;
 }
 
-/** Reset failure tracking (call on final render) */
-function _resetDiagramFailures() {
+/**
+ * Reset failure tracking. Called on final render and also exposed for
+ * error/session-reset paths (streams terminated without reaching the
+ * successful final render would otherwise leak per-hash entries until
+ * the next clean render).
+ */
+export function _resetDiagramFailures() {
     _diagramFailures.clear();
     _diagramPending.clear();
 }
