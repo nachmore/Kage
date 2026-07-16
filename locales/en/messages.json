@@ -653,6 +653,10 @@
     "message": "Global Hotkey",
     "description": "Label for the main summon hotkey picker"
   },
+  "settings.hotkey.registration_failed": {
+    "message": "Kage couldn't register these shortcuts — another app may already be using them: {combos}. Pick a different combination.",
+    "description": "Warning shown when the OS rejected one or more global hotkey registrations; {combos} is a comma-separated list"
+  },
   "settings.hotkey.global.description": {
     "message": "The shortcut to summon Kage from anywhere.",
     "description": "Helper text for the global hotkey"

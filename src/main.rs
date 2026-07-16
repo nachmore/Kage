@@ -303,6 +303,7 @@ async fn run() {
         last_selection: Arc::new(std::sync::Mutex::new(None)),
         source_window: Arc::new(std::sync::Mutex::new(None)),
         frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        hotkey_registration_failures: Arc::new(std::sync::Mutex::new(Vec::new())),
     };
     let child_processes = state::ChildProcesses {
         pocket_tts: Arc::new(std::sync::Mutex::new(None)),
@@ -770,6 +771,7 @@ async fn run() {
             commands::capture_hotkey_combo,
             commands::cancel_hotkey_capture,
             commands::try_register_hotkey,
+            commands::get_hotkey_registration_failures,
             commands::get_app_info,
             commands::get_os_dark_mode,
             commands::open_welcome_window,

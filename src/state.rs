@@ -76,6 +76,13 @@ pub struct UiState {
     /// as a gate (see comment on that command). The "Frontend signaled
     /// ready" log line it emits is what we actually rely on.
     pub frontend_ready: Arc<AtomicBool>,
+    /// Last set of global-hotkey registration failures, as `(slot, hotkey)`
+    /// pairs. `register_all_hotkeys` overwrites this each run and emits
+    /// `HOTKEY_REGISTRATION_FAILED`. The Settings → Hotkeys window reads it
+    /// via `get_hotkey_registration_failures` on open, so a failure that
+    /// happened at startup (before any window could listen) is still
+    /// discoverable. Empty means the last registration pass was fully clean.
+    pub hotkey_registration_failures: Arc<std::sync::Mutex<Vec<(String, String)>>>,
 }
 
 /// Child processes we spawn and need to clean up. Held as `Option<Child>`

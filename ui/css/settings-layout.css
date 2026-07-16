@@ -191,6 +191,19 @@ body {
     margin-bottom: 6px;
 }
 
+/* Inline warning banner inside a settings section (e.g. hotkey registration
+   failed). Uses the shared status tokens so it adapts to the theme. */
+.settings-warning {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--kage-warning);
+    background: rgba(237, 137, 54, 0.12);
+    border: 1px solid var(--kage-warning);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
 /* Checkbox row: checkbox + description inline */
 .setting-checkbox-row {
     display: flex;

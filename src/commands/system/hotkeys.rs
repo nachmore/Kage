@@ -12,7 +12,7 @@ use crate::lock_ext::LockExt;
 use crate::state::FeatureServices;
 use crate::window_labels;
 use log::{error, info, warn};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Register all global hotkeys from config. Unregisters everything first.
 /// This is the single source of truth for hotkey registration — called from:
@@ -25,6 +25,11 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
 
     info!("Registering all hotkeys...");
     let _ = app.global_shortcut().unregister_all();
+
+    // Collect (slot, hotkey) pairs the OS refused so we can surface them to
+    // the user once at the end, rather than leaving the failure buried in the
+    // log. The usual cause is another app already owning the combo.
+    let mut failures: Vec<(&str, String)> = Vec::new();
 
     let features: tauri::State<'_, FeatureServices> = app.state();
     let config = features.config.lock_or_recover();
@@ -46,7 +51,10 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                 crate::commands::window::toggle_floating_window(&floating);
             }) {
             Ok(_) => info!("✅ Registered main hotkey: {}", main_hk),
-            Err(e) => error!("❌ Failed to register main hotkey {}: {}", main_hk, e),
+            Err(e) => {
+                error!("❌ Failed to register main hotkey {}: {}", main_hk, e);
+                failures.push(("main", main_hk.clone()));
+            }
         }
     }
 
@@ -99,7 +107,10 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                 });
             }) {
             Ok(_) => info!("✅ Registered inline-assist hotkey: {}", ia),
-            Err(e) => warn!("❌ Failed to register inline-assist hotkey {}: {}", ia, e),
+            Err(e) => {
+                warn!("❌ Failed to register inline-assist hotkey {}: {}", ia, e);
+                failures.push(("inline-assist", ia.clone()));
+            }
         }
     } else {
         info!("ℹ️ No inline-assist hotkey configured");
@@ -140,13 +151,51 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                         },
                     ) {
                         Ok(_) => info!("✅ Registered {} hotkey: {}", name, hk),
-                        Err(e) => warn!("❌ Failed to register {} hotkey {}: {}", name, hk, e),
+                        Err(e) => {
+                            warn!("❌ Failed to register {} hotkey {}: {}", name, hk, e);
+                            failures.push((name, hk.clone()));
+                        }
                     }
                 }
             }
             None => info!("ℹ️ No {} hotkey configured", name),
         }
     }
+
+    // Stash the failures in state so Settings → Hotkeys can read them on open
+    // even if the event below fired before that window existed (startup), then
+    // surface them once. The usual cause is another app owning the combo.
+    {
+        let ui: tauri::State<'_, crate::state::UiState> = app.state();
+        *ui.hotkey_registration_failures.lock_or_recover() = failures
+            .iter()
+            .map(|(slot, hk)| (slot.to_string(), hk.clone()))
+            .collect();
+    }
+    if !failures.is_empty() {
+        let payload: Vec<serde_json::Value> = failures
+            .iter()
+            .map(|(slot, hk)| serde_json::json!({ "slot": slot, "hotkey": hk }))
+            .collect();
+        if let Err(e) = app.emit(events::HOTKEY_REGISTRATION_FAILED, payload) {
+            warn!("Failed to emit hotkey-registration-failed event: {}", e);
+        }
+    }
+}
+
+/// Return the most recent global-hotkey registration failures as
+/// `[{ slot, hotkey }]`. Empty when the last registration pass was clean.
+/// Settings → Hotkeys calls this on open so a startup failure (which fired
+/// its event before any window could listen) is still surfaced.
+#[tauri::command]
+pub async fn get_hotkey_registration_failures(
+    ui: tauri::State<'_, crate::state::UiState>,
+) -> Result<Vec<serde_json::Value>, AppError> {
+    let failures = ui.hotkey_registration_failures.lock_or_recover();
+    Ok(failures
+        .iter()
+        .map(|(slot, hk)| serde_json::json!({ "slot": slot, "hotkey": hk }))
+        .collect())
 }
 
 #[tauri::command]
@@ -175,15 +224,20 @@ pub async fn try_register_hotkey(
         let main_hk = config.get_hotkey_string();
         let cb_hk = config.get_clipboard_hotkey_string();
         let ia_hk = config.get_inline_assist_hotkey_string();
+        let voice_hk = config.get_voice_hotkey_string();
         let slot_name = slot.as_deref().unwrap_or("main");
 
         let new_norm = normalize_hotkey(&hotkey_str);
 
-        // Check all other slots for conflicts
+        // Check all other slots for conflicts. Voice is a real slot too (it's
+        // registered in register_all_hotkeys), so it must participate — else a
+        // user could bind main/clipboard/inline-assist to a combo already used
+        // by voice and one would silently shadow the other at registration.
         let all_hotkeys: Vec<(&str, String)> = [
             ("main", Some(main_hk)),
             ("clipboard", cb_hk),
             ("inline-assist", ia_hk),
+            ("voice", voice_hk),
         ]
         .into_iter()
         .filter(|(name, _)| *name != slot_name)
@@ -241,12 +295,16 @@ pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::V
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let _ = app.global_shortcut().unregister_all();
 
-    let result = tauri::async_runtime::spawn_blocking(|| crate::os::capture_hotkey(10000))
-        .await
-        .map_err(|e| format!("Task error: {}", e))?;
+    // Capture runs on the blocking pool. Whatever happens — success, timeout,
+    // or a panicked capture thread — we MUST re-register the hotkeys we just
+    // unregistered, or every global hotkey stays dead until the next config
+    // change. So don't `?`-return the join error before re-registering.
+    let join = tauri::async_runtime::spawn_blocking(|| crate::os::capture_hotkey(10000)).await;
 
-    // Re-register all global hotkeys from config
+    // Re-register all global hotkeys from config (unconditionally).
     register_all_hotkeys(&app);
+
+    let result = join.map_err(|e| format!("Task error: {}", e))?;
 
     match result {
         Some(captured) => Ok(serde_json::json!({

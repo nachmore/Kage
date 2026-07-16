@@ -42,6 +42,7 @@ export class HotkeySettingsModule extends SettingsModule {
             ' ' +
             this.title +
             '</h2>' +
+            '<div id="hotkeyRegistrationWarning" class="settings-warning" style="display:none;"></div>' +
             this.createControlRow(
                 t('settings.hotkey.global.label'),
                 t('settings.hotkey.global.description'),
@@ -200,6 +201,28 @@ export class HotkeySettingsModule extends SettingsModule {
         document.querySelectorAll('.shortcut-ref-keys[data-keys]').forEach((el) => {
             this.renderKeycaps(el, el.dataset.keys);
         });
+
+        // Surface hotkey-registration failures (another app owns the combo).
+        // The event may have fired at startup before this window existed, so
+        // also ask the backend for the last-known failures on open.
+        const { listen } = window.__TAURI__.event;
+        this._unlistenHotkeyFail = await listen('hotkey_registration_failed', (e) => {
+            this._showRegistrationWarning(e.payload);
+        });
+        try {
+            const pending = await invoke('get_hotkey_registration_failures');
+            if (pending && pending.length) this._showRegistrationWarning(pending);
+        } catch {
+            /* command optional; ignore if unavailable */
+        }
+    }
+
+    _showRegistrationWarning(failures) {
+        const el = document.getElementById('hotkeyRegistrationWarning');
+        if (!el || !Array.isArray(failures) || failures.length === 0) return;
+        const combos = failures.map((f) => f.hotkey).join(', ');
+        el.textContent = t('settings.hotkey.registration_failed', { combos });
+        el.style.display = 'block';
     }
     load(config) {
         if (config.hotkey && this._picker) this._picker.setHotkey(config.hotkey);
@@ -284,5 +307,9 @@ export class HotkeySettingsModule extends SettingsModule {
         this._cbPicker = null;
         this._iaPicker = null;
         this._voicePicker = null;
+        if (this._unlistenHotkeyFail) {
+            this._unlistenHotkeyFail();
+            this._unlistenHotkeyFail = null;
+        }
     }
 }

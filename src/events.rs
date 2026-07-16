@@ -87,6 +87,13 @@ pub const CLIPBOARD_HISTORY_MODE: &str = "clipboard_history_mode";
 /// `CLIPBOARD_HISTORY_MODE`.
 pub const VOICE_MODE: &str = "voice_mode";
 
+/// One or more global hotkeys could not be registered with the OS (another
+/// app already owns the combo, most commonly). Payload is a JSON array of
+/// `{ slot, hotkey }` objects. Broadcast so any open window — but especially
+/// Settings → Hotkeys — can surface a warning instead of the failure being
+/// buried in the log.
+pub const HOTKEY_REGISTRATION_FAILED: &str = "hotkey_registration_failed";
+
 // --- Automation -----------------------------------------------------
 
 /// Each step of an automation plan finished. Multiple emit sites
@@ -118,6 +125,7 @@ mod tests {
             SHOW_SESSIONS,
             CLIPBOARD_HISTORY_MODE,
             VOICE_MODE,
+            HOTKEY_REGISTRATION_FAILED,
             AUTOMATION_STEP_COMPLETE,
         ];
         for name in all {
