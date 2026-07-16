@@ -10,9 +10,13 @@ use crate::config_migrations;
 pub struct Config {
     #[serde(default = "default_config_version")]
     pub version: u32,
+    #[serde(default)]
     pub hotkey: HotkeyConfig,
+    #[serde(default)]
     pub acp: AcpConfig,
+    #[serde(default)]
     pub ui: UiConfig,
+    #[serde(default)]
     pub system: SystemConfig,
     #[serde(default)]
     pub shortcuts: Vec<ShortcutConfig>,
@@ -330,8 +334,20 @@ impl Default for AgentConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HotkeyConfig {
+    #[serde(default)]
     pub modifiers: Vec<String>,
+    #[serde(default)]
     pub key: String,
+}
+
+impl Default for HotkeyConfig {
+    fn default() -> Self {
+        // The primary launcher hotkey: Alt+Space.
+        Self {
+            modifiers: vec!["Alt".to_string()],
+            key: "Space".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -346,6 +362,28 @@ pub struct AcpConfig {
     pub active_connection_id: String,
     #[serde(default)]
     pub agent: AgentConfig,
+}
+
+impl Default for AcpConfig {
+    fn default() -> Self {
+        // Seed one Remote connection (the welcome flow overwrites it).
+        Self {
+            connections: vec![AgentConnection {
+                id: "default".to_string(),
+                name: "Default".to_string(),
+                preset_id: None,
+                mode: AcpMode::Remote {
+                    host: "127.0.0.1".to_string(),
+                    port: 8765,
+                    timeout_ms: 30000,
+                },
+                sessions_directory: None,
+                ollama_settings: None,
+            }],
+            active_connection_id: "default".to_string(),
+            agent: AgentConfig::default(),
+        }
+    }
 }
 
 impl AcpConfig {
@@ -482,6 +520,7 @@ pub enum AcpMode {
 pub struct UiConfig {
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(default = "default_opacity")]
     pub floating_window_opacity: f32,
     #[serde(default = "default_chat_size")]
     pub chat_window_width: u32,
@@ -540,8 +579,44 @@ pub struct UiConfig {
     pub language: Option<String>,
 }
 
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            theme: default_theme(),
+            floating_window_opacity: default_opacity(),
+            chat_window_width: default_chat_size(),
+            chat_window_height: default_chat_size(),
+            chat_window_x: None,
+            chat_window_y: None,
+            preserve_last_response: true,
+            window_start_position: default_window_start_position(),
+            last_window_x: None,
+            last_window_y: None,
+            font_size: default_font_size(),
+            show_time: false,
+            show_date: false,
+            show_speech_button: false,
+            speech_read_back: false,
+            show_response_actions: true,
+            show_floating_toolbar: false,
+            remember_launcher_size: false,
+            launcher_width: None,
+            launcher_height: None,
+            speech_silence_timeout: default_speech_silence_timeout(),
+            speech_voice: None,
+            time_format: default_time_format(),
+            date_format: default_date_format(),
+            language: None,
+        }
+    }
+}
+
 fn default_theme() -> String {
     "system".to_string()
+}
+
+fn default_opacity() -> f32 {
+    1.0
 }
 
 fn default_window_start_position() -> String {
@@ -609,6 +684,7 @@ fn default_capture_selection_blocklist() -> Vec<String> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemConfig {
+    #[serde(default)]
     pub auto_start: bool,
     /// Capture selected text from the active window when the hotkey is pressed.
     #[serde(default = "default_true")]
@@ -650,6 +726,22 @@ pub struct SystemConfig {
     /// string-equality is enough — no time-zone parsing.
     #[serde(default)]
     pub last_seen_crash_timestamp: Option<String>,
+}
+
+impl Default for SystemConfig {
+    fn default() -> Self {
+        Self {
+            auto_start: false,
+            capture_selection: true,
+            capture_selection_blocklist: default_capture_selection_blocklist(),
+            show_notifications: true,
+            screen_context: true,
+            log_buffer_size: default_log_buffer_size(),
+            verbose_frontend_logging: false,
+            log_message_content: false,
+            last_seen_crash_timestamp: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -993,64 +1085,10 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             version: config_migrations::CURRENT_VERSION,
-            hotkey: HotkeyConfig {
-                modifiers: vec!["Alt".to_string()],
-                key: "Space".to_string(),
-            },
-            acp: AcpConfig {
-                connections: vec![AgentConnection {
-                    id: "default".to_string(),
-                    name: "Default".to_string(),
-                    preset_id: None,
-                    mode: AcpMode::Remote {
-                        host: "127.0.0.1".to_string(),
-                        port: 8765,
-                        timeout_ms: 30000,
-                    },
-                    sessions_directory: None,
-                    ollama_settings: None,
-                }],
-                active_connection_id: "default".to_string(),
-                agent: AgentConfig::default(),
-            },
-            ui: UiConfig {
-                theme: "system".to_string(),
-                floating_window_opacity: 1.0,
-                chat_window_width: 0,
-                chat_window_height: 0,
-                chat_window_x: None,
-                chat_window_y: None,
-                preserve_last_response: true,
-                window_start_position: "center".to_string(),
-                last_window_x: None,
-                last_window_y: None,
-                font_size: 14,
-                show_time: false,
-                show_date: false,
-                show_speech_button: false,
-                speech_read_back: false,
-                show_response_actions: true,
-                show_floating_toolbar: false,
-                remember_launcher_size: false,
-                launcher_width: None,
-                launcher_height: None,
-                speech_silence_timeout: 2.0,
-                speech_voice: None,
-                time_format: "HH:mm".to_string(),
-                date_format: "ddd, MMM D".to_string(),
-                language: None,
-            },
-            system: SystemConfig {
-                auto_start: false,
-                capture_selection: true,
-                capture_selection_blocklist: default_capture_selection_blocklist(),
-                show_notifications: true,
-                screen_context: true,
-                log_buffer_size: 1000,
-                verbose_frontend_logging: false,
-                log_message_content: false,
-                last_seen_crash_timestamp: None,
-            },
+            hotkey: HotkeyConfig::default(),
+            acp: AcpConfig::default(),
+            ui: UiConfig::default(),
+            system: SystemConfig::default(),
             shortcuts: vec![],
             debug_mode: false,
             tool_permissions: ToolPermissionsConfig::default(),
@@ -1400,5 +1438,40 @@ mod enum_tests {
         let p: ToolPolicy = serde_json::from_str(json).unwrap();
         assert_eq!(p.policy, PolicyKind::Ask);
         assert_eq!(p.grant_type, GrantType::Once);
+    }
+}
+
+#[cfg(test)]
+mod partial_config_tests {
+    //! A config file missing top-level sections must still deserialize —
+    //! every top-level field carries `#[serde(default)]`. Without it, an
+    //! old or partially-written config that omitted (say) `hotkey` failed
+    //! deserialization and triggered the full backup-and-reset path in
+    //! `Config::load`, wiping tool grants, hotkeys, and extension state for
+    //! want of one section.
+    use super::*;
+
+    #[test]
+    fn config_missing_top_level_sections_uses_defaults() {
+        // Only `version` present — every other section absent.
+        let cfg: Config = serde_json::from_str(r#"{ "version": 1 }"#)
+            .expect("a config missing hotkey/acp/ui/system must still deserialize");
+        // Defaults must match Config::default(), not the zero-value derive.
+        assert_eq!(cfg.hotkey.modifiers, vec!["Alt".to_string()]);
+        assert_eq!(cfg.hotkey.key, "Space");
+        assert_eq!(cfg.ui.theme, "system");
+        assert_eq!(cfg.ui.floating_window_opacity, 1.0);
+        assert!(cfg.system.capture_selection);
+        assert!(!cfg.system.auto_start);
+        assert!(!cfg.acp.connections.is_empty());
+    }
+
+    #[test]
+    fn empty_object_config_deserializes() {
+        // The most degenerate case: `{}`. Should be equivalent to defaults.
+        let cfg: Config =
+            serde_json::from_str("{}").expect("an empty-object config must deserialize");
+        assert_eq!(cfg.hotkey.key, "Space");
+        assert_eq!(cfg.ui.font_size, 14);
     }
 }
