@@ -424,7 +424,9 @@ export class ChatApp {
                     spinner.className = 'folder-plan-spinner-row tool-running-indicator';
                     contentDiv.appendChild(spinner);
                 }
-                spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${friendly}...`;
+                // `friendly` can be the raw agent-supplied tool title when it
+                // isn't in the friendly-name map — must be escaped.
+                spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${escapeHtml(friendly)}...`;
             },
             // Chat doesn't render sources inline during streaming — they're
             // rendered once when the message completes.

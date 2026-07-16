@@ -425,7 +425,9 @@ export class FloatingApp {
                     spinner.className = 'folder-plan-spinner-row tool-running-indicator';
                     this.elements.responseText.appendChild(spinner);
                 }
-                spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${friendly}...`;
+                // `friendly` can be the raw agent-supplied tool title when it
+                // isn't in the friendly-name map — must be escaped.
+                spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${escapeHtml(friendly)}...`;
                 this.elements.contentArea.classList.add('visible');
                 this.windowManager.resizeWindow();
             },
@@ -2687,19 +2689,21 @@ export class FloatingApp {
 
         const canElevate = ['terminal', 'taskmanager', 'filemanager'].includes(cmdId);
 
+        // cmdLabel is a fixed Rust-side string today, but escape anyway so
+        // this render path stays safe if the label ever becomes dynamic.
         if (needsConfirm) {
             item.innerHTML = `
                 <div class="app-icon">⚠️</div>
                 <div class="app-info">
-                    <div class="app-name">${cmdLabel}</div>
+                    <div class="app-name">${escapeHtml(cmdLabel)}</div>
                     <div class="app-description">${t('floating.suggestions.system.confirm_select')}</div>
                 </div>
             `;
         } else {
             item.innerHTML = `
-                <div class="app-icon">${cmdLabel.split(' ')[0]}</div>
+                <div class="app-icon">${escapeHtml(cmdLabel.split(' ')[0])}</div>
                 <div class="app-info">
-                    <div class="app-name">${cmdLabel.substring(cmdLabel.indexOf(' ') + 1)}</div>
+                    <div class="app-name">${escapeHtml(cmdLabel.substring(cmdLabel.indexOf(' ') + 1))}</div>
                     <div class="app-description">${canElevate ? t('floating.suggestions.system.enter_admin_hint', { keys: platformKeyLabel('Ctrl+Shift+Enter') }) : t('floating.suggestions.system.enter_to_execute')}</div>
                 </div>
             `;
@@ -3387,7 +3391,11 @@ export class FloatingApp {
             const chip = document.createElement('button');
             chip.className = 'quick-action-chip';
             chip.title = action.prompt;
-            chip.innerHTML = `<span class="quick-action-label">${action.label}</span>`;
+            // action.label comes from an agent-authored JSON fence — untrusted.
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'quick-action-label';
+            labelSpan.textContent = action.label;
+            chip.appendChild(labelSpan);
             chip.addEventListener('click', () => {
                 container.style.display = 'none';
                 this.sendChatMessage(action.prompt, { skipSelection: true });
