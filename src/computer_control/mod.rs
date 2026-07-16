@@ -6,4 +6,5 @@
 //! Note: This module is primarily consumed by the `kage-computer-control-mcp` binary,
 //! not the main Tauri application.
 
+pub mod script_runner;
 pub mod tree;

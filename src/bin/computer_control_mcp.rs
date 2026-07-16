@@ -352,6 +352,15 @@ fn handle_tools_list(id: &serde_json::Value) -> String {
             },
             "required": ["path"]
         })),
+        tool_def("run_script", "Run a PowerShell (Windows) or bash (macOS/Linux) script to query or control the OS. PREFER THIS over inlining a multi-line script into a single shell command — pass the script as-is in the `script` argument (no escaping needed; it's written to a temp file and executed). Returns exit_code, stdout, stderr. Use this for things like enumerating installed software, reading system info, or file operations that aren't covered by a dedicated tool.", serde_json::json!({
+            "type": "object",
+            "properties": {
+                "lang": { "type": "string", "enum": ["powershell", "bash"], "description": "Script language. Use 'powershell' on Windows, 'bash' on macOS/Linux." },
+                "script": { "type": "string", "description": "The full script source, verbatim. Multi-line is fine; no quoting/escaping required." },
+                "timeout_ms": { "type": "integer", "default": 30000, "description": "Kill the script after this many milliseconds (max 600000)." }
+            },
+            "required": ["lang", "script"]
+        })),
         tool_def("execute_folder_plan", "Execute a folder organization plan: move, rename, or delete files. Deletes are safe — files go to a _kage_trash subfolder. Returns success/failure counts.", serde_json::json!({
             "type": "object",
             "properties": {
@@ -1163,6 +1172,35 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 kage::commands::folder_tools::scan_directory(root, max_depth, compute_hashes);
             let text = serde_json::to_string_pretty(&result).unwrap_or_default();
             tool_result_text(id, &text, false)
+        }
+        "run_script" => {
+            use kage::computer_control::script_runner::{run_script, RunOutcome, ScriptLang};
+            let lang_str = args.get("lang").and_then(|v| v.as_str()).unwrap_or("");
+            let Some(lang) = ScriptLang::parse(lang_str) else {
+                return tool_result_text(
+                    id,
+                    &format!(
+                        "Unsupported lang '{}'. Use 'powershell' or 'bash'.",
+                        lang_str
+                    ),
+                    true,
+                );
+            };
+            let script = args.get("script").and_then(|v| v.as_str()).unwrap_or("");
+            if script.trim().is_empty() {
+                return tool_result_text(id, "Missing required parameter: script", true);
+            }
+            let timeout_ms = args.get("timeout_ms").and_then(|v| v.as_u64());
+            match run_script(lang, script, timeout_ms) {
+                RunOutcome::Ran(result) => {
+                    let text = serde_json::to_string_pretty(&result).unwrap_or_default();
+                    // A non-zero exit or timeout is a tool error the model
+                    // should react to, not a transport failure.
+                    let is_err = result.timed_out || result.exit_code.unwrap_or(1) != 0;
+                    tool_result_text(id, &text, is_err)
+                }
+                RunOutcome::Unsupported(msg) => tool_result_text(id, &msg, true),
+            }
         }
         "execute_folder_plan" => {
             let root_str = args.get("root").and_then(|v| v.as_str()).unwrap_or("");
