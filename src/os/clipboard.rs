@@ -14,9 +14,12 @@ pub fn read_clipboard() -> Option<String> {
     crate::os::platform::clipboard::read_clipboard_impl()
 }
 
-/// Write text to the system clipboard.
-pub fn write_clipboard(text: &str) {
-    crate::os::platform::clipboard::write_clipboard_impl(text);
+/// Write text to the system clipboard. Returns `true` if the write landed.
+/// Callers that paste immediately afterwards MUST check this — a `false`
+/// return means the clipboard still holds its previous contents, so pasting
+/// would insert stale text.
+pub fn write_clipboard(text: &str) -> bool {
+    crate::os::platform::clipboard::write_clipboard_impl(text)
 }
 
 /// Capture the currently selected text from the active window.

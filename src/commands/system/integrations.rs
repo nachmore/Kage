@@ -246,7 +246,15 @@ pub(crate) fn favicon_content_type(bytes: &[u8]) -> &'static str {
 /// Write text to clipboard and simulate Ctrl+V paste to the foreground window.
 #[tauri::command]
 pub async fn paste_clipboard_item(text: String, app: tauri::AppHandle) -> Result<(), AppError> {
-    crate::os::write_clipboard(&text);
+    // If the clipboard write fails (another app holds it), don't paste — the
+    // clipboard still holds its old contents and we'd paste stale text.
+    if !crate::os::write_clipboard(&text) {
+        return Err(AppError::keyed(
+            crate::error::ErrorKind::Internal,
+            "errors.clipboard.write_failed",
+            &[],
+        ));
+    }
     // Small delay to ensure clipboard is updated before paste
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     crate::os::simulate_paste();

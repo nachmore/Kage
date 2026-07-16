@@ -73,33 +73,58 @@ pub fn read_clipboard_impl() -> Option<String> {
     }
 }
 
-pub fn write_clipboard_impl(text: &str) {
+pub fn write_clipboard_impl(text: &str) -> bool {
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let bytes = wide.len() * 2;
     unsafe {
-        if OpenClipboard(ptr::null_mut()) == 0 {
-            return;
+        // OpenClipboard fails if another process currently holds the clipboard
+        // (common — clipboard managers, the source app finishing its own copy).
+        // Retry briefly rather than giving up on the first miss; callers that
+        // paste afterwards rely on the write actually landing.
+        if !open_clipboard_with_retry() {
+            log::warn!("write_clipboard: OpenClipboard failed after retries");
+            return false;
         }
         EmptyClipboard();
         let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes);
         if hmem.is_null() {
             CloseClipboard();
-            return;
+            return false;
         }
         let dest = GlobalLock(hmem) as *mut u16;
         if dest.is_null() {
             GlobalFree(hmem);
             CloseClipboard();
-            return;
+            return false;
         }
         ptr::copy_nonoverlapping(wide.as_ptr(), dest, wide.len());
         GlobalUnlock(hmem);
         // On success, the system owns hmem. On failure we must free it ourselves.
-        if SetClipboardData(CF_UNICODETEXT, hmem).is_null() {
+        let ok = if SetClipboardData(CF_UNICODETEXT, hmem).is_null() {
             GlobalFree(hmem);
-        }
+            false
+        } else {
+            true
+        };
         CloseClipboard();
+        ok
     }
+}
+
+/// Try `OpenClipboard` a few times with a short backoff. Windows fails the
+/// call while another process owns the clipboard; the contention is almost
+/// always transient (tens of ms).
+unsafe fn open_clipboard_with_retry() -> bool {
+    const ATTEMPTS: u32 = 10;
+    for i in 0..ATTEMPTS {
+        if OpenClipboard(ptr::null_mut()) != 0 {
+            return true;
+        }
+        if i + 1 < ATTEMPTS {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    false
 }
 
 /// Build an INPUT for a virtual-key keystroke. `vk` is a Windows VK_*
@@ -211,12 +236,7 @@ pub fn capture_selection_impl() -> Option<String> {
     if changed {
         std::thread::sleep(std::time::Duration::from_millis(50));
         let new_text = read_clipboard_impl();
-        // Restore original clipboard
-        if let Some(ref orig) = original_clipboard {
-            write_clipboard_impl(orig);
-        } else {
-            write_clipboard_impl("");
-        }
+        restore_clipboard_after_capture(&original_clipboard);
         if let Some(ref text) = new_text {
             let trimmed = text.trim();
             if !trimmed.is_empty() {
@@ -227,6 +247,18 @@ pub fn capture_selection_impl() -> Option<String> {
     }
 
     None
+}
+
+/// Restore the clipboard after a selection capture. If the original content
+/// was text, put it back. If it wasn't (`None` — e.g. the user had a copied
+/// image), DON'T write an empty string: that would clobber the clipboard to
+/// nothing. We can't losslessly restore non-text via the text-only clipboard
+/// API anyway (the Ctrl+C already replaced it), so leaving the captured
+/// selection in place is strictly better than emptying it.
+fn restore_clipboard_after_capture(original: &Option<String>) {
+    if let Some(orig) = original {
+        write_clipboard_impl(orig);
+    }
 }
 
 /// Carries state between begin/finish selection capture. The Windows
@@ -261,12 +293,7 @@ pub fn finish_selection_capture_impl(token: SelectionCaptureToken) -> Option<Str
     if changed {
         std::thread::sleep(std::time::Duration::from_millis(50));
         let new_text = read_clipboard_impl();
-        // Restore original clipboard
-        if let Some(ref orig) = &original_clipboard {
-            write_clipboard_impl(orig);
-        } else {
-            write_clipboard_impl("");
-        }
+        restore_clipboard_after_capture(&original_clipboard);
         // The sequence number changed, so a copy happened — return the text
         // even if it matches the previous clipboard content (user may have
         // re-selected the same text).

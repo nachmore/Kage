@@ -7756,5 +7756,11 @@
     "description": "Warning shown when the OS rejected one or more global hotkey registrations; {combos} is a comma-separated list",
     "_machine_translated": true,
     "_source_hash": "99a47d28f162c95d"
+  },
+  "errors.clipboard.write_failed": {
+    "message": "클립보드에 쓸 수 없습니다. 다른 앱이 사용 중일 수 있습니다. 아무것도 붙여넣지 않았으니 다시 시도해 주십시오.",
+    "description": "Clipboard write failed so a paste was skipped to avoid pasting stale content",
+    "_machine_translated": true,
+    "_source_hash": "22697e24e61d06ac"
   }
 }

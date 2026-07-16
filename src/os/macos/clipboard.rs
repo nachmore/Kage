@@ -101,17 +101,23 @@ pub fn read_clipboard_impl() -> Option<String> {
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
 }
 
-pub fn write_clipboard_impl(text: &str) {
+pub fn write_clipboard_impl(text: &str) -> bool {
     use std::io::Write;
-    if let Ok(mut child) = Command::new("pbcopy")
+    let Ok(mut child) = Command::new("pbcopy")
         .stdin(std::process::Stdio::piped())
         .spawn()
-    {
-        if let Some(ref mut stdin) = child.stdin {
-            let _ = stdin.write_all(text.as_bytes());
+    else {
+        return false;
+    };
+    if let Some(ref mut stdin) = child.stdin {
+        if stdin.write_all(text.as_bytes()).is_err() {
+            let _ = child.wait();
+            return false;
         }
-        let _ = child.wait();
     }
+    // pbcopy commits the clipboard on a clean exit; a non-zero status means
+    // the write didn't land.
+    matches!(child.wait(), Ok(status) if status.success())
 }
 
 pub fn capture_selection_impl() -> Option<String> {
@@ -135,7 +141,9 @@ pub fn capture_selection_impl() -> Option<String> {
             Some(new.clone())
         }
         (None, Some(new)) if !new.is_empty() => {
-            write_clipboard_impl("");
+            // Original clipboard held non-text (e.g. an image) so we can't
+            // restore it via the text API. Don't clobber it with an empty
+            // string — leave the captured selection in place instead.
             info!("[selection] Captured {} chars", new.trim().len());
             Some(new.clone())
         }

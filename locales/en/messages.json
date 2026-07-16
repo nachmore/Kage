@@ -57,6 +57,10 @@
     "message": "Could not save settings: {reason}",
     "description": "Settings persistence to disk failed (permission, disk full, etc.)"
   },
+  "errors.clipboard.write_failed": {
+    "message": "Couldn't write to the clipboard — another app may be using it. Nothing was pasted; try again.",
+    "description": "Clipboard write failed so a paste was skipped to avoid pasting stale content"
+  },
   "errors.permission.dismiss_failed": {
     "message": "Could not dismiss permission prompt: {reason}",
     "description": "Pending tool-permission prompt failed to clear"

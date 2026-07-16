@@ -1440,8 +1440,17 @@ pub async fn inline_assist_apply(
         }
     }
 
-    // Write result to clipboard and paste
-    crate::os::clipboard::write_clipboard(&text);
+    // Write result to clipboard and paste. If the clipboard write didn't
+    // land (another app held the clipboard), DON'T paste — the clipboard
+    // still holds its previous contents and we'd paste stale text over the
+    // user's selection. Surface it as an error instead.
+    if !crate::os::clipboard::write_clipboard(&text) {
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.clipboard.write_failed",
+            &[],
+        ));
+    }
     std::thread::sleep(std::time::Duration::from_millis(30));
     crate::os::simulate_paste();
 

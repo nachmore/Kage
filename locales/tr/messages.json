@@ -7756,5 +7756,11 @@
     "description": "Warning shown when the OS rejected one or more global hotkey registrations; {combos} is a comma-separated list",
     "_machine_translated": true,
     "_source_hash": "99a47d28f162c95d"
+  },
+  "errors.clipboard.write_failed": {
+    "message": "Panoya yazılamadı — başka bir uygulama panoyu kullanıyor olabilir. Hiçbir şey yapıştırılmadı; tekrar deneyin.",
+    "description": "Clipboard write failed so a paste was skipped to avoid pasting stale content",
+    "_machine_translated": true,
+    "_source_hash": "22697e24e61d06ac"
   }
 }

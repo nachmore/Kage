@@ -42,18 +42,22 @@ pub fn read_clipboard_impl() -> Option<String> {
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
 }
 
-pub fn write_clipboard_impl(text: &str) {
+pub fn write_clipboard_impl(text: &str) -> bool {
     use std::io::Write;
-    if let Ok(mut child) = Command::new("xclip")
+    let Ok(mut child) = Command::new("xclip")
         .args(["-selection", "clipboard"])
         .stdin(std::process::Stdio::piped())
         .spawn()
-    {
-        if let Some(ref mut stdin) = child.stdin {
-            let _ = stdin.write_all(text.as_bytes());
+    else {
+        return false;
+    };
+    if let Some(ref mut stdin) = child.stdin {
+        if stdin.write_all(text.as_bytes()).is_err() {
+            let _ = child.wait();
+            return false;
         }
-        let _ = child.wait();
     }
+    matches!(child.wait(), Ok(status) if status.success())
 }
 
 pub fn capture_selection_impl() -> Option<String> {
