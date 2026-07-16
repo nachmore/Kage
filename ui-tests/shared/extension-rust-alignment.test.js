@@ -204,68 +204,66 @@ describe('extension permission table — Rust ↔ JS alignment', () => {
 });
 
 describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
-    // The host's STORAGE_COMMANDS list lives in the sandbox-host
-    // module. We re-derive the names here (rather than importing the
-    // private const) to avoid coupling the test to the file's
-    // export shape — and to encode our intent: "for every storage
-    // command we forward, the camelCase arg names must match Rust."
-    const STORAGE_COMMANDS = [
-        'save_extension_data',
-        'load_extension_data',
-        'delete_extension_data',
-    ];
+    // The host's IDENTITY_SCOPED_COMMANDS map lives in the sandbox-host
+    // module. We re-derive it here (rather than importing the private
+    // const) to avoid coupling the test to the file's export shape — and
+    // to encode our intent: "for every identity-scoped command we forward,
+    // the host must inject the calling sandbox's real id under the arg
+    // name Rust expects." A command that touches per-extension state but
+    // is missing from this map is a cross-extension access hole.
+    //
+    // Value = the Rust param name (snake_case). extension_data commands
+    // take `extension_id`; the *_extension_config commands take a bare `id`.
+    const IDENTITY_SCOPED = {
+        save_extension_data: 'extension_id',
+        load_extension_data: 'extension_id',
+        delete_extension_data: 'extension_id',
+        get_extension_config: 'id',
+        save_extension_config: 'id',
+    };
 
-    it('every storage command takes an extension_id arg on the Rust side', () => {
-        // If anyone ever renames the Rust param (e.g. to `id`) without
-        // updating the JS injection target, this test reminds them
-        // that the wire-name has changed.
+    it('every identity-scoped command takes its id arg on the Rust side', () => {
+        // If anyone renames a Rust param without updating the JS injection
+        // target, this reminds them the wire-name has changed.
         const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions'));
-        for (const name of STORAGE_COMMANDS) {
+        for (const [name, rustArg] of Object.entries(IDENTITY_SCOPED)) {
             const args = cmds.get(name);
             expect(args, `${name}: not found as a #[tauri::command] in src/commands/extensions/`).toBeDefined();
             expect(
-                args.includes('extension_id'),
-                `${name}(${args.join(', ')}) — expected param 'extension_id'; if you renamed it, update STORAGE_COMMANDS in extension-sandbox-host.js too`
+                args.includes(rustArg),
+                `${name}(${args.join(', ')}) — expected param '${rustArg}'; if you renamed it, update IDENTITY_SCOPED_COMMANDS in extension-sandbox-host.js too`
             ).toBe(true);
         }
     });
 
-    it('host injects "extensionId" (camelCase), matching the Tauri 2 wire convention', () => {
-        // Read the source verbatim so we catch a regression to
-        // snake_case (the spotify storage bug). The injection happens
-        // in a single place — a regex over the host file is the
-        // simplest test that doesn't require reaching into private
-        // implementation details.
+    it('host injects the calling sandbox id under each command’s wire arg name', () => {
+        // Read the source verbatim so we catch a regression to snake_case
+        // (the spotify storage bug) or a dropped config command. The
+        // injection maps command -> wire arg name and forwards
+        // `{ [idArgName]: this.extensionId }`.
         const text = readFileSync(
             path.join(repoRoot, 'ui/js/shared/extension-sandbox-host.js'),
             'utf8'
         );
-        // Allow either `extensionId: ...` or `'extensionId': ...` —
-        // both are valid shorthand in modern JS.
+        // The map must list every identity-scoped command with its wire
+        // (camelCase) arg name, and the forward must key off that name.
+        for (const [name, rustArg] of Object.entries(IDENTITY_SCOPED)) {
+            const wireArg = snakeToCamel(rustArg);
+            const entry = new RegExp(`${name}\\s*:\\s*['"]${wireArg}['"]`);
+            expect(
+                entry.test(text),
+                `extension-sandbox-host.js should map ${name} -> '${wireArg}' in IDENTITY_SCOPED_COMMANDS`
+            ).toBe(true);
+        }
         expect(
-            /extensionId\s*:\s*this\.extensionId/.test(text),
-            'extension-sandbox-host.js should inject `extensionId: this.extensionId` (camelCase). Snake_case is silently dropped by Tauri 2 IPC and breaks every save/load/delete from a sandbox.'
+            /\[idArgName\]\s*:\s*this\.extensionId/.test(text),
+            'extension-sandbox-host.js should force-inject `[idArgName]: this.extensionId` for identity-scoped commands.'
         ).toBe(true);
-        // Concrete regression guard: snake_case form should NOT appear
-        // anywhere in the file.
+        // Concrete regression guard: the old always-camelCase snake_case
+        // form should NOT appear.
         expect(
             /extension_id\s*:\s*this\.extensionId/.test(text),
             'extension-sandbox-host.js still contains the snake_case form `extension_id: this.extensionId` — Tauri 2 IPC expects camelCase. See the Spotify install bug.'
         ).toBe(false);
-    });
-
-    it('the camelCase JS injection name matches what Rust expects after Tauri rename', () => {
-        // Compose the assertion: for each storage command, the Rust
-        // arg `extension_id` becomes `extensionId` over the wire,
-        // and that's what the host must inject.
-        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions'));
-        for (const name of STORAGE_COMMANDS) {
-            const args = cmds.get(name) ?? [];
-            const wireNames = args.map(snakeToCamel);
-            expect(
-                wireNames,
-                `${name}: Rust args ${JSON.stringify(args)} → wire names ${JSON.stringify(wireNames)} — host injection must use the wire name`
-            ).toContain('extensionId');
-        }
     });
 });

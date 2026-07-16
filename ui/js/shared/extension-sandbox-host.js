@@ -65,17 +65,28 @@ async function getSandboxRuntimeSource() {
 
 /**
  * Commands that read or write per-extension storage and therefore must be
- * scoped to the calling extension's identity. The host force-injects
- * `extension_id` into the args before forwarding; any value the sandbox
- * supplied is overwritten. Backend rejects calls without a valid id, so a
- * missing entry here would surface as a hard error rather than silent
- * cross-extension access.
+ * scoped to the calling extension's identity. The host force-injects the
+ * calling sandbox's real extension id into the arg named by the value; any
+ * value the sandbox supplied is overwritten. The host owns the sandbox ->
+ * extension mapping (it created the iframe), so this is authoritative — a
+ * sandbox can't read or write another extension's data even if it knows the
+ * key. A command reachable under the `storage` capability that touches
+ * per-extension state but is missing here would be a cross-extension access
+ * hole, so keep this in sync with the `storage` entries in
+ * extension-permissions.js.
+ *
+ * The value is the arg name the backend command expects the id under:
+ *   - `extension_data` commands take `extensionId` (Tauri auto-renames the
+ *     Rust `extension_id: String` to camelCase across the IPC boundary).
+ *   - `*_extension_config` commands take a bare `id: String`.
  */
-const STORAGE_COMMANDS = new Set([
-    'save_extension_data',
-    'load_extension_data',
-    'delete_extension_data',
-]);
+const IDENTITY_SCOPED_COMMANDS = Object.freeze({
+    save_extension_data: 'extensionId',
+    load_extension_data: 'extensionId',
+    delete_extension_data: 'extensionId',
+    get_extension_config: 'id',
+    save_extension_config: 'id',
+});
 
 /**
  * @typedef {object} SandboxSpec
@@ -484,22 +495,22 @@ export class ExtensionSandbox {
             return;
         }
 
-        // For storage commands, force-inject the extension's identity. The
-        // host owns the sandbox -> extension mapping (it created the
-        // iframe), so this is authoritative. Any extensionId the sandbox
-        // tried to supply is overwritten — sandboxes can't read or write
-        // another extension's data even if they know the key.
+        // For identity-scoped commands, force-inject the extension's identity
+        // under whichever arg name the backend expects. The host owns the
+        // sandbox -> extension mapping (it created the iframe), so this is
+        // authoritative. Any id the sandbox tried to supply is overwritten —
+        // sandboxes can't read or write another extension's data or config
+        // even if they know the key.
         //
         // Tauri 2 expects camelCase arg names on the IPC boundary
         // (`save_extension_data(extension_id: String)` in Rust ⇄
-        // `{ extensionId }` in JS) — our previous snake_case
-        // injection was silently failing the auto-rename: the
-        // command rejected the call with "missing required key
-        // extensionId" and the spotify widget's now-playing fetch
-        // came up empty, with the install never persisting because
-        // commit_extension_install couldn't write its grant payload.
-        const forwardedArgs = STORAGE_COMMANDS.has(command)
-            ? { ...(args || {}), extensionId: this.extensionId }
+        // `{ extensionId }` in JS) — an earlier snake_case injection silently
+        // failed the auto-rename: the command rejected the call with "missing
+        // required key extensionId". The *_extension_config commands take a
+        // bare `id` instead, so the arg name is looked up per command.
+        const idArgName = IDENTITY_SCOPED_COMMANDS[command];
+        const forwardedArgs = idArgName
+            ? { ...(args || {}), [idArgName]: this.extensionId }
             : args || {};
 
         try {
