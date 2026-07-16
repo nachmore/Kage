@@ -110,6 +110,13 @@ fn db_path() -> PathBuf {
     dir.join("activity.db")
 }
 
+/// How long to keep activity rows. The tracker inserts one row every poll
+/// interval (~5s) while running, so without pruning the table grows without
+/// bound — after a year that's millions of rows, and `build_report` for "All
+/// Time" walks every one. 90 days is plenty for the reports the UI offers and
+/// matches the frecency cutoff elsewhere.
+const RETENTION_DAYS: i64 = 90;
+
 fn init_db(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS activity_log (
@@ -123,7 +130,24 @@ fn init_db(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_activity_process ON activity_log(process_name);
         ",
     )?;
+    prune_old_rows(conn);
     Ok(())
+}
+
+/// Delete rows older than [`RETENTION_DAYS`]. Runs once at DB open (a slow
+/// steady drip of inserts never accumulates unbounded across runs). Best
+/// effort — a failure here just means the table is larger than intended, so
+/// we log and carry on rather than failing DB init.
+fn prune_old_rows(conn: &Connection) {
+    let cutoff = (Local::now() - ChronoDuration::days(RETENTION_DAYS)).to_rfc3339();
+    match conn.execute(
+        "DELETE FROM activity_log WHERE timestamp < ?1",
+        rusqlite::params![cutoff],
+    ) {
+        Ok(n) if n > 0 => info!("[ActivityTracker] pruned {} row(s) older than {} days", n, RETENTION_DAYS),
+        Ok(_) => {}
+        Err(e) => warn!("[ActivityTracker] retention prune failed: {}", e),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -541,5 +565,35 @@ fn prettify_process_name(name: &str) -> String {
                 Some(f) => f.to_uppercase().to_string() + c.as_str(),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod retention_tests {
+    use super::*;
+
+    #[test]
+    fn prune_removes_only_rows_older_than_retention() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+
+        let recent = Local::now().to_rfc3339();
+        let old = (Local::now() - ChronoDuration::days(RETENTION_DAYS + 5)).to_rfc3339();
+        let just_inside = (Local::now() - ChronoDuration::days(RETENTION_DAYS - 5)).to_rfc3339();
+        for ts in [&recent, &old, &just_inside] {
+            conn.execute(
+                "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, 'p', 't', 5)",
+                rusqlite::params![ts],
+            )
+            .unwrap();
+        }
+
+        prune_old_rows(&conn);
+
+        let remaining: i64 = conn
+            .query_row("SELECT COUNT(*) FROM activity_log", [], |r| r.get(0))
+            .unwrap();
+        // The old row is gone; the recent and just-inside rows survive.
+        assert_eq!(remaining, 2);
     }
 }
