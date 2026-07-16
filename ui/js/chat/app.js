@@ -323,7 +323,13 @@ export class ChatApp {
                 app.showSuggestionChips();
 
                 try {
-                    if (app.isWaitingForResponse && !app._windowFocused) {
+                    // Notify when the response lands while the chat window is
+                    // unfocused. Must NOT gate on isWaitingForResponse — it was
+                    // just set false at the top of onAfterFinalRender, so that
+                    // condition was always false and the notification never
+                    // fired. The floating window uses the same `!focused && text`
+                    // test.
+                    if (finalContent && !app._windowFocused) {
                         const preview = finalContent
                             .substring(0, 100)
                             .replace(/[#*`\n]/g, ' ')
