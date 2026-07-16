@@ -70,7 +70,7 @@ All modules compile under `--test`, including Tauri-dependent ones (`automation`
 
 ### Process & lifecycle (`src/main.rs`)
 
-1. `single_instance::try_acquire` — OS-level file lock. Second instance signals the running one over TCP and exits.
+1. `tauri_plugin_single_instance` — the plugin's setup hook runs in the second instance, signals the running one (over the plugin's named-pipe / AF_UNIX IPC), forwards its argv/URL, and exits.
 2. `panic_handler::install` — captures panics into `crash.log` before logger init.
 3. `logger::init_logger` then `app_log::init` (in-memory ring buffer surfaced in the About settings).
 4. On Windows, `os::windows::process::install_kill_on_exit_job` creates a Job Object so children (TTS server, agent backend, MCP servers) die with the parent.
@@ -238,7 +238,7 @@ Adding a new event:
 2. Ensure props are string/number only. Bucket lengths, never send raw text or paths.
 3. Update `docs/PRIVACY.md` if the disclosure list needs to change.
 
-Settings → Privacy (`ui/js/settings/privacy.js`) lets users toggle and reset their install ID. The welcome screen's privacy step is the initial opt-out surface; `complete_first_run` records their decision via `telemetry::set_consent`. The `v2 → v3` migration explicitly disables telemetry for existing users so they aren't auto-opted-in silently.
+Settings → Privacy (`ui/js/settings/privacy.js`) lets users toggle and reset their install ID. The welcome screen's privacy step is the initial opt-out surface; `complete_first_run` records their decision via `telemetry::set_consent`. Telemetry is off until a user consents (no `install_id` → `track()` is a no-op), so there's no silent auto-opt-in to migrate away from. (`config_migrations::CURRENT_VERSION` is still `1` and `migrate_one_step` is empty — no migrations have shipped yet.)
 
 
 ## Auto-updates
@@ -250,10 +250,10 @@ Signed in-app updates via `tauri-plugin-updater`. See `docs/RELEASE.md` for the 
 Key points for engineers touching the updater:
 
 - Three channels: `stable`, `beta`, `dev`. Endpoint URLs per channel live in `Cargo.toml [package.metadata.update]`; build.rs exposes them as compile-time env vars; `src/updater.rs::endpoint_for_channel` routes.
-- The private signing key lives only in CI (GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY`). The matching public key is baked into every binary via `build.rs` (from `.tauri-updater-pubkey` file or `TAURI_UPDATER_PUBKEY` env). Release builds fail loudly if no pubkey is configured.
+- The private signing key lives only in CI (GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY`). The matching public key lives in `tauri.conf.json → plugins.updater.pubkey` (the single source of truth); `build.rs` reads it from there and re-exports it as the `TAURI_UPDATER_PUBKEY` compile-time env var. Release builds fail loudly if that field is empty.
 - The plugin handles: manifest fetch, signature verification, download, and per-platform install + relaunch. `src/updater.rs` wraps it with our scheduling layer (daily check, 5-minute-idle gate for silent installs) and session-resume-after-update (`last-session.txt` handoff via `startup::resolve_resume_session_id`).
 - Never call `run_installer` — the plugin owns that now. Deleted from `src/os/mod.rs` in the migration.
-- `VALID_CHANNELS` in `src/updater.rs` is the authority; the JS dropdown in `ui/js/settings/updates.js` mirrors the list and normalises unknown values to stable. `save_config` also normalises on the way in so a hand-edited config.json can't trap a user on a dead channel.
+- The `Channel` enum in `src/config.rs` is the authority; `#[serde(other)]` on its `Stable` variant means any unknown wire value (a dead channel in a hand-edited config.json) deserializes to `Stable`, so a user can't get trapped on a channel the build doesn't know. `Channel::all()` enumerates them; `get_app_info` exposes the list to the JS dropdown in `ui/js/settings/updates.js`.
 - **Windows install mode must be `quiet`** in `tauri.conf.json` → `plugins.updater.windows.installMode`. The default `BasicUi` mode passes only `/UPDATE /ARGS` to the NSIS installer; on Win11 the spawned installer can die silently before its UI surfaces (race between the parent's `process::exit(0)` and the child's window registration). `quiet` produces `/S /R /UPDATE /ARGS` — silent install + auto-relaunch — which avoids the UI race entirely. Verified by the user at the time it was changed.
 - **Detach the installer from the Job Object before exit.** `os::install_kill_on_exit_job` adds `KILL_ON_JOB_CLOSE` so our orphan children die with us on crash. ShellExecuteW children inherit the job by default, so the plugin's spawned installer would be reaped along with us. `plugin_download_and_install`'s `on_download_finish` callback runs `graceful_shutdown` → `acp.client.disconnect()` → `os::release_kill_on_exit_job()` (clears the kill flag) before the plugin's `process::exit(0)`. Order matters: explicit child cleanup first (while the job is still safety-netting), THEN release the flag.
 - **`fetch_changelog` reads each release's `body` field.** The CI publish action sets `generate_release_notes: true` so GitHub auto-fills the body from commits since the previous release. Without that, dev/beta releases would have empty bodies and the in-app changelog viewer would say "No release notes" even though the GitHub web UI shows commit messages (those come from a separate auto-generated section that isn't in the API's `body`).
@@ -262,9 +262,9 @@ Key points for engineers touching the updater:
 Adding a new channel:
 1. Add entry to `[package.metadata.update]` and `[package.metadata.update.dev]` in `Cargo.toml`.
 2. Add the corresponding `UPDATE_ENDPOINT_<NAME>` handling to `build.rs`.
-3. Add to `VALID_CHANNELS` in `src/updater.rs` and a match arm in `endpoint_for_channel`.
+3. Add a variant to the `Channel` enum in `src/config.rs` (keep `Stable` last so `#[serde(other)]` stays on it), add it to `Channel::all()`, and add a match arm in `endpoint_for_channel` in `src/updater.rs`.
 4. Add a label entry in the `_renderChannelOptions` map in `ui/js/settings/updates.js` (the channel list itself is fetched from Rust via `get_app_info`).
 5. Add the CI workflow trigger in `.github/workflows/release.yml`.
-6. **Decide migration policy**: should existing users move to the new channel, or stay where they are until they opt in? The `v3→v4` migration set the precedent — default existing configs to `stable`. Adding a new channel almost always means "leave existing users alone" (they didn't ask for it), so usually no migration is needed. The exception is if you're *splitting* an existing channel — then you need a migration to redirect users to the appropriate replacement.
+6. **Decide migration policy**: should existing users move to the new channel, or stay where they are until they opt in? Adding a new channel almost always means "leave existing users alone" (they didn't ask for it), so usually no migration is needed — and `#[serde(other)]` → `Stable` already keeps anyone on a now-unknown value safe. The exception is if you're *splitting* an existing channel — then you'd add the first real `migrate_one_step` arm (bumping `CURRENT_VERSION`) to redirect users to the appropriate replacement.
 
 Removing the update plugin: the easiest partial rollback is to `option_env!("TAURI_UPDATER_PUBKEY")` → `None`, which makes `plugin_check` a no-op and quietly disables updates. Full removal requires dropping the plugin registration in `main.rs` and the `updater:default` capability — but don't unless you're sure there's no MITM-safe alternative.

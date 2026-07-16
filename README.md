@@ -46,12 +46,7 @@ CI reads `APTABASE_KEY` from a GitHub Actions secret of the same name. See `.git
 
 Kage ships signed in-app updates. Every release artefact is signed with a private key held only in CI; every binary embeds the matching public key at build time so the updater can verify what it downloads. Release builds **fail** if no public key is configured (we never want to ship a binary that can't verify updates).
 
-For local release builds, copy the example and paste your public key:
-
-```bash
-cp .tauri-updater-pubkey.example .tauri-updater-pubkey
-# edit and paste the contents of .tauri-updater.key.pub
-```
+The public key lives in `tauri.conf.json → plugins.updater.pubkey` (committed). Run `./scripts/generate_signing_keys.sh` to generate a keypair and write the public key there automatically.
 
 Full release + signing documentation lives in [`docs/RELEASE.md`](docs/RELEASE.md).
 

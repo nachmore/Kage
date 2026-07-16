@@ -46,11 +46,12 @@ pub const ENDPOINT_DEV: &str = env!("UPDATE_ENDPOINT_DEV");
 pub const CHANGELOG_URL: &str = env!("UPDATE_CHANGELOG_URL");
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Optional compile-time updater public key. Provisioned by build.rs
-/// from either `TAURI_UPDATER_PUBKEY` env or `.tauri-updater-pubkey`
-/// file. Release builds fail the build if this is absent (we never ship
-/// release binaries that can't verify updates); debug builds tolerate
-/// `None` so the app still runs without update infra configured.
+/// Optional compile-time updater public key. Provisioned by build.rs,
+/// which reads `tauri.conf.json → plugins.updater.pubkey` and re-exports
+/// it as the `TAURI_UPDATER_PUBKEY` compile-time env var. Release builds
+/// fail the build if this is absent (we never ship release binaries that
+/// can't verify updates); debug builds tolerate `None` so the app still
+/// runs without update infra configured.
 pub const PUBKEY: Option<&str> = option_env!("TAURI_UPDATER_PUBKEY");
 
 /// Resolve a channel to its endpoint URL. An empty URL means the channel

@@ -98,8 +98,8 @@ export class UpdatesSettingsModule extends SettingsModule {
 
     async initialize() {
         // Cache current version + valid channel list for display.
-        // The channel list comes from Rust (updater::VALID_CHANNELS)
-        // so the dropdown stays in sync with the backend allow-list
+        // The channel list comes from Rust (config::Channel::all() via
+        // get_app_info) so the dropdown stays in sync with the backend
         // automatically — adding a new channel only requires Rust
         // changes plus the Cargo.toml endpoint, no JS edit.
         try {
@@ -325,7 +325,7 @@ export class UpdatesSettingsModule extends SettingsModule {
         if (autoCheck) autoCheck.checked = u.auto_check || false;
         if (silentUpdate) silentUpdate.checked = u.silent_update || false;
         // Allow-list sourced from get_app_info (mirrors
-        // src/updater.rs::VALID_CHANNELS). Unknown values collapse
+        // config::Channel::all()). Unknown values collapse
         // to stable so a stale config can't orphan the user on a
         // dead channel — the Rust save_config also normalises on the
         // way in for defense in depth.

@@ -22,13 +22,14 @@ Done once per project. Run the helper script:
 ./scripts/generate_signing_keys.sh
 ```
 
-This generates the keypair, writes the public key to `.tauri-updater-pubkey` (gitignored, read by `build.rs`), and prints the private key with instructions for adding GitHub secrets.
+This generates the keypair, writes the public key into `tauri.conf.json → plugins.updater.pubkey` (committed; read by `build.rs`), and prints the private key with instructions for adding GitHub secrets.
 
 If you prefer to do it manually:
 
 ```bash
 cargo tauri signer generate -w .tauri-signing-key
-cp .tauri-signing-key.pub .tauri-updater-pubkey
+# Copy the contents of .tauri-signing-key.pub into
+# tauri.conf.json → plugins.updater.pubkey (a JSON string).
 ```
 
 Then add the secrets listed below to GitHub.
@@ -75,7 +76,10 @@ Use the plain `cargo tauri build` when you actually want to verify a ship-qualit
 > **Before tagging your first stable v1.0.0**: this workflow signs the *update artefacts* (so the in-app updater verifies them) but does NOT add OS-level code signatures. On macOS, Gatekeeper will reject the .app on first open until it's notarized with a Developer ID. On Windows, SmartScreen will warn aggressively until the .exe is signed with an EV certificate. Both are tracked separately and worth resolving before a public 1.0 announcement — they're orthogonal to the cryptographic update verification this workflow already provides.
 
 ```bash
-# Bump Cargo.toml + tauri.conf.json version first (they must match).
+# Bump the version in Cargo.toml ONLY. tauri.conf.json must NOT carry a
+# "version" field — if it does, Tauri uses that instead of CARGO_PKG_VERSION
+# and defeats the CI version stamp, trapping the updater in an "update
+# available" loop. Cargo.toml is the single source of truth.
 git commit -am "Release v1.2.3"
 
 # Push, then tag:
@@ -129,12 +133,13 @@ Set these as GitHub Actions repository secrets:
 |--------------------------------------|---------------------------------------------------------------------------------------------|
 | `TAURI_SIGNING_PRIVATE_KEY`          | Full private key contents — CI uses this to sign release bundles.                            |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Passphrase for the private key. Skip this secret if you used an empty password.              |
-| `TAURI_UPDATER_PUBKEY`               | Public key string — baked into every binary by `build.rs` to verify updates at runtime.      |
 | `APTABASE_KEY`                       | (Unrelated to updates.) Aptabase telemetry key — see `docs/PRIVACY.md`.                     |
+
+The public key is **not** a secret — it lives in `tauri.conf.json → plugins.updater.pubkey`, committed to the repo, and `build.rs` reads it from there. (There is no `TAURI_UPDATER_PUBKEY` secret; build.rs re-exports that name as a compile-time env var *from* the config field.)
 
 ## What if a build ships without a public key?
 
-Release builds (`cargo tauri build`, i.e. `--release` profile) **fail the build** if neither the `TAURI_UPDATER_PUBKEY` env var nor the `.tauri-updater-pubkey` file is set. This is deliberate — a release binary without a public key can't verify updates, so the updater would silently refuse every update forever. The build script panics loudly with a pointer to this doc.
+Release builds (`cargo tauri build`, i.e. `--release` profile) **fail the build** if `tauri.conf.json → plugins.updater.pubkey` is empty. This is deliberate — a release binary without a public key can't verify updates, so the updater would silently refuse every update forever. The build script panics loudly with a pointer to this doc.
 
 Debug builds (`cargo tauri dev`, `cargo build`) tolerate a missing key so local development doesn't require anyone to configure update infrastructure.
 
