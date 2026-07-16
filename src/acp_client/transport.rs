@@ -185,6 +185,26 @@ impl AcpTransport {
         }
     }
 
+    /// Emit an internal `_kage/agent_disconnected` notification from the reader
+    /// thread when the stream closes (EOF) or errors. The notification handler
+    /// turns it into a frontend event so the UI can drop its "connected" state
+    /// immediately instead of looking healthy until the next send fails.
+    /// Takes the handler map directly so it's callable from the reader thread
+    /// (which owns a clone of it, not `&self`).
+    fn notify_disconnected(notification_handler: &NotificationHandler, reason: &str) {
+        let handler_arc = match notification_handler.lock() {
+            Ok(guard) => guard.as_ref().cloned(),
+            Err(poisoned) => poisoned.into_inner().as_ref().cloned(),
+        };
+        if let Some(cb) = handler_arc {
+            cb(serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "_kage/agent_disconnected",
+                "params": { "reason": reason }
+            }));
+        }
+    }
+
     // --- Connection ---
 
     pub fn connect(&self) -> Result<()> {
@@ -351,6 +371,10 @@ impl AcpTransport {
                         // every in-flight request continued blocking
                         // until the timer fired.
                         pending.lock_or_recover().clear();
+                        // Tell the frontend the agent went away. Without this,
+                        // an agent that dies while idle leaves the UI showing
+                        // "connected" until the next send fails.
+                        Self::notify_disconnected(&notification_handler, "eof");
                         break;
                     }
                     Ok(_) => {}
@@ -364,6 +388,7 @@ impl AcpTransport {
                         *connected.lock_or_recover() = false;
                         // Same wakeup as the EOF branch above.
                         pending.lock_or_recover().clear();
+                        Self::notify_disconnected(&notification_handler, "error");
                         break;
                     }
                 }

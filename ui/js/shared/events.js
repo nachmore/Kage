@@ -19,6 +19,7 @@ export const EVT = {
     MESSAGE_ERROR: 'message_error',
     TOOL_CALL_UPDATE: 'tool_call_update',
     COMPACTION_STATUS: 'compaction_status',
+    AGENT_DISCONNECTED: 'agent_disconnected',
 
     // Permissions
     PERMISSION_DISMISSED: 'permission_dismissed',
@@ -36,6 +37,7 @@ export const EVT = {
     // Hotkey-loop event names
     CLIPBOARD_HISTORY_MODE: 'clipboard_history_mode',
     VOICE_MODE: 'voice_mode',
+    HOTKEY_REGISTRATION_FAILED: 'hotkey_registration_failed',
 
     // Automation
     AUTOMATION_STEP_COMPLETE: 'automation_step_complete',

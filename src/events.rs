@@ -94,6 +94,12 @@ pub const VOICE_MODE: &str = "voice_mode";
 /// buried in the log.
 pub const HOTKEY_REGISTRATION_FAILED: &str = "hotkey_registration_failed";
 
+/// The agent backend's stream closed (EOF or error) — the process died or the
+/// remote connection dropped. Emitted from the ACP reader thread's teardown so
+/// windows can drop their "connected" indicator immediately instead of looking
+/// healthy until the next send fails. No payload.
+pub const AGENT_DISCONNECTED: &str = "agent_disconnected";
+
 // --- Automation -----------------------------------------------------
 
 /// Each step of an automation plan finished. Multiple emit sites
@@ -126,6 +132,7 @@ mod tests {
             CLIPBOARD_HISTORY_MODE,
             VOICE_MODE,
             HOTKEY_REGISTRATION_FAILED,
+            AGENT_DISCONNECTED,
             AUTOMATION_STEP_COMPLETE,
         ];
         for name in all {

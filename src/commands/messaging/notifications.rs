@@ -128,6 +128,14 @@ pub fn setup_notification_handler(
             return;
         }
 
+        // Synthetic: the reader thread saw the agent's stream close (EOF or
+        // error). Broadcast so every window can drop its "connected" state
+        // immediately rather than looking healthy until the next send fails.
+        if method == "_kage/agent_disconnected" {
+            let _ = app_handle.emit(events::AGENT_DISCONNECTED, ());
+            return;
+        }
+
         if method == "session/update" {
             // Drop conversation-history replay. A `session/load` makes
             // kiro-cli re-emit every prior turn as a burst of session/update

@@ -850,6 +850,13 @@ export class ChatApp {
         });
         this.listen(EVT.MESSAGE_ERROR, (event) => this.handleMessageError(event));
         this.listen(EVT.TOOL_CALL_UPDATE, (event) => this.handleToolCallUpdate(event));
+        this.listen(EVT.AGENT_DISCONNECTED, () => {
+            // The agent backend's stream closed (process died / connection
+            // dropped) while we may have been idle. Reflect it in the header
+            // immediately instead of showing "connected" until the next send.
+            this.isConnected = false;
+            this.updateConnectionStatus();
+        });
         this.listen('session_migrated', (event) => {
             // Backend died mid-turn; recovery swapped us to a fresh session and
             // the recovered response streams under the new id shortly. Adopt it

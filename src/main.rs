@@ -646,8 +646,13 @@ async fn run() {
             // block at the top of `run`. Setup() picks up where that leaves
             // off: the work below needs `&mut App` / `app.handle()`.
 
-            // Build system tray
-            tray::setup_tray(app, dev_mode)?;
+            // Build system tray. Non-fatal: on a Linux desktop without a
+            // StatusNotifier/AppIndicator host the tray can't be created, but
+            // the app is perfectly usable via its hotkey and windows. Degrade
+            // (log and continue) instead of aborting the whole app with `?`.
+            if let Err(e) = tray::setup_tray(app, dev_mode) {
+                log::error!("Failed to set up system tray (continuing without it): {}", e);
+            }
 
             // Set up the ACP notification handler. The handler captures an
             // Arc<AcpClient> so it can issue protocol replies (permission
