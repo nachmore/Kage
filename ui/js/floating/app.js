@@ -929,9 +929,23 @@ export class FloatingApp {
     setupStreamingListeners() {
         this.listen(EVT.MESSAGE_CHUNK, (event) => this.handleMessageChunk(event));
         this.listen(EVT.MESSAGE_COMPLETE, (event) => {
+            // Broadcast event — every streaming-audience window hears
+            // every session's completes. Only treat it as ours when the
+            // active session (post any in-flight recovery) or the
+            // pre-recovery session matches our pin; a payload with no
+            // session id at all (automation-plan completion) also counts.
+            // Without this filter, a turn finishing in a chat window
+            // re-pinned floating to that window's session.
+            const newId = event?.payload?.sessionId;
+            const oldId = event?.payload?.oldSessionId;
+            const ours =
+                (!newId && !oldId) ||
+                newId === this.floatingSessionId ||
+                (oldId && oldId === this.floatingSessionId);
+            if (!ours) return;
+
             // Recovery may have moved us to a fresh session; pick up
             // the new id so subsequent sends/cancels target it.
-            const newId = event?.payload?.sessionId;
             if (newId && newId !== this.floatingSessionId) {
                 console.log('[floating] adopting recovery session id:', newId);
                 this.floatingSessionId = newId;
