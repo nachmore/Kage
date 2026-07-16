@@ -5,15 +5,16 @@
  * tab/search state, and orchestrates install/update/uninstall flows
  * (including the install-time permission prompt).
  *
- * Exposes a small `window.__kageStore` facade so the inline `onclick`
- * attributes on store cards can route through it. The cleaner path
- * would be a `data-action` dispatcher like the settings window, but
- * the store is a single page with simple actions and direct calls
- * are easier to follow.
+ * Exposes a small `window.__kageStore` facade so the static inline
+ * `onclick` attributes in store.html (tabs, refresh, filters) can route
+ * through it. Store-card buttons — whose contents derive from untrusted
+ * catalog JSON — use a `data-action` dispatcher instead; never interpolate
+ * catalog fields into inline JS.
  */
 
 import { alertDialog, confirmDialog } from './shared/confirm-dialog.js';
 import { errMessage } from './shared/error-message.js';
+import { escapeAttr } from './shared/tool-utils.js';
 import { localizeManifestForPrompt } from './shared/extension-manager.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { showPermissionPrompt } from './shared/permission-prompt.js';
@@ -384,7 +385,10 @@ function renderCard(item, kind) {
     const localInfo = installedMap.get(item.id);
     const itemSource = item._source || '';
 
-    // Build action buttons
+    // Build action buttons. Catalog fields are untrusted (remote JSON from
+    // user-addable store sources), so the item id is never interpolated into
+    // inline JS — buttons carry a data-action and the delegated click
+    // handler on #storeContent reads the id from the card's data-item-id.
     let actionHtml = '';
     if (isInstalled) {
         const buttons = [];
@@ -392,7 +396,7 @@ function renderCard(item, kind) {
         // Settings deep link (if extension has a settings module)
         if (localInfo?.hasSettings) {
             buttons.push(
-                `<button class="store-card-btn settings-link" onclick="event.stopPropagation();window.__kageStore.openSettings('${esc(item.id)}')" title="Open settings">⚙️</button>`
+                `<button class="store-card-btn settings-link" data-action="settings" title="Open settings">⚙️</button>`
             );
         }
 
@@ -400,25 +404,25 @@ function renderCard(item, kind) {
         if (updateAvailable) {
             const localVer = localInfo?.version || '';
             buttons.push(
-                `<button class="store-card-btn update" onclick="event.stopPropagation();window.__kageStore.updateItem('${esc(item.id)}')" title="${esc(localVer)} → ${esc(item.version)}">Update</button>`
+                `<button class="store-card-btn update" data-action="update" title="${esc(localVer)} → ${esc(item.version)}">Update</button>`
             );
         }
 
         // Reinstall button (dev mode only)
         if (_isDevMode) {
             buttons.push(
-                `<button class="store-card-btn reinstall" onclick="event.stopPropagation();window.__kageStore.reinstallItem('${esc(item.id)}')" title="Re-download and reinstall">🔄</button>`
+                `<button class="store-card-btn reinstall" data-action="reinstall" title="Re-download and reinstall">🔄</button>`
             );
         }
 
         // Uninstall button
         buttons.push(
-            `<button class="store-card-btn uninstall" onclick="event.stopPropagation();window.__kageStore.uninstallItem('${esc(item.id)}','${kind}')">Uninstall</button>`
+            `<button class="store-card-btn uninstall" data-action="uninstall" data-kind="${esc(kind)}">Uninstall</button>`
         );
 
         actionHtml = `<div class="store-card-actions">${buttons.join('')}</div>`;
     } else {
-        actionHtml = `<button class="store-card-btn install" onclick="event.stopPropagation();window.__kageStore.installFromStore('${esc(item.id)}')">Install</button>`;
+        actionHtml = `<button class="store-card-btn install" data-action="install">Install</button>`;
     }
 
     // Source badge (only show when multiple sources exist)
@@ -472,7 +476,7 @@ function updateSourceFilter(sources) {
 // --- Actions ---
 
 function setCardBusy(id, label) {
-    const card = document.querySelector(`.store-card[data-item-id="${id}"]`);
+    const card = document.querySelector(`.store-card[data-item-id="${CSS.escape(id)}"]`);
     if (!card) return;
     const footer = card.querySelector('.store-card-footer');
     if (footer)
@@ -682,13 +686,44 @@ function onSearch() {
     searchTimeout = setTimeout(() => renderTab(), 300);
 }
 
+// Attribute-safe escaper: escapes `& < > " '` so untrusted catalog fields
+// can't break out of quoted attributes. The old textContent/innerHTML trick
+// left quotes intact, which was an XSS when interpolated into attributes.
 function esc(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
+    return escapeAttr(s);
 }
 
 // --- Wire up DOM event handlers --------------------------------------------
+
+// Delegated click handler for store-card action buttons. Cards are rendered
+// from untrusted catalog JSON, so the buttons carry data-action/data-kind and
+// the item id lives only in the card's data-item-id attribute — never inside
+// inline onclick JS (see renderCard).
+document.getElementById('storeContent')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.store-card-btn[data-action]');
+    if (!btn) return;
+    e.stopPropagation();
+    const card = btn.closest('.store-card');
+    const id = card?.dataset.itemId;
+    if (!id) return;
+    switch (btn.dataset.action) {
+        case 'settings':
+            openSettings(id);
+            break;
+        case 'update':
+            updateItem(id);
+            break;
+        case 'reinstall':
+            reinstallItem(id);
+            break;
+        case 'uninstall':
+            uninstallItem(id, btn.dataset.kind);
+            break;
+        case 'install':
+            installFromStore(id);
+            break;
+    }
+});
 
 document.addEventListener('keydown', (e) => {
     // Ctrl+W / ⌘+W — close window (triggers CloseRequested for activation policy update)
