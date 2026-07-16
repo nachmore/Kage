@@ -363,6 +363,11 @@ impl AcpClient {
                     if Self::is_corrupted_session(&err_str) {
                         warn!("Session corrupted — skipping reload, creating fresh session");
                         let new_id = self.restart_with_fresh_session()?;
+                        // The fresh session's steering reply accumulated under
+                        // new_id; drop it so the resend renders clean, then tell
+                        // live windows to adopt new_id before the resend streams.
+                        self.reset_session_accumulator(&new_id);
+                        self.notify_session_migrated(&session_id, &new_id);
                         self.send_chat_streaming(&new_id, &content, att_ref)?;
                         return Ok(new_id);
                     }
@@ -375,6 +380,7 @@ impl AcpClient {
         // --- Attempt 2: restart + reload session + resend ---
         self.restart_connection()?;
 
+        let original_id = session_id.clone();
         let session_id = match self.load_existing_session(&session_id, None) {
             Ok(_) => {
                 info!("Session {} reloaded successfully", session_id);
@@ -385,6 +391,11 @@ impl AcpClient {
                 info!("Creating fresh session for retry");
                 let (new_id, _) = self.create_session(None)?;
                 self.send_builtin_steering(&new_id);
+                // Drop the steering reply and tell live windows to adopt the
+                // fresh id before the resend streams under it. Reloading onto
+                // the same id needs neither (the id didn't change).
+                self.reset_session_accumulator(&new_id);
+                self.notify_session_migrated(&original_id, &new_id);
                 new_id
             }
         };
@@ -406,6 +417,8 @@ impl AcpClient {
 
         // --- Attempt 3: restart + brand-new session + resend (last chance) ---
         let new_id = self.restart_with_fresh_session()?;
+        self.reset_session_accumulator(&new_id);
+        self.notify_session_migrated(&session_id, &new_id);
         self.send_chat_streaming(&new_id, &content, att_ref)?;
         Ok(new_id)
     }

@@ -112,6 +112,22 @@ pub fn setup_notification_handler(
             return;
         }
 
+        // Synthetic, internally-dispatched (not off the wire): the recovery
+        // ladder swapped session ids mid-turn. Fan out to every streaming-aware
+        // window so any pinned to the old id adopts the new one and keeps
+        // waiting — the recovered response streams under the new id moments
+        // later. See AcpClient::notify_session_migrated.
+        if method == "_kage/session_migrated" {
+            if let Some(params) = notification.get("params") {
+                crate::event_targets::emit_streaming_audience(
+                    &app_handle,
+                    "session_migrated",
+                    params,
+                );
+            }
+            return;
+        }
+
         if method == "session/update" {
             // Drop conversation-history replay. A `session/load` makes
             // kiro-cli re-emit every prior turn as a burst of session/update

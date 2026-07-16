@@ -117,6 +117,25 @@ impl AcpTransport {
         *h = Some(Arc::new(handler));
     }
 
+    /// Feed a synthetic notification through the registered handler, exactly
+    /// as if the reader thread had received it off the wire. Lets internal
+    /// code (e.g. the recovery ladder) reach the frontend via the same
+    /// `method`-switch dispatch without threading an `AppHandle` down into the
+    /// transport-agnostic session layer. No-op if no handler is set.
+    ///
+    /// Clones the handler `Arc` out and drops the guard before invoking, for
+    /// the same deadlock-avoidance reason as the reader-thread call site.
+    pub fn dispatch_synthetic_notification(&self, notification: serde_json::Value) {
+        let handler_arc = self
+            .notification_handler
+            .lock_or_recover()
+            .as_ref()
+            .cloned();
+        if let Some(cb) = handler_arc {
+            cb(notification);
+        }
+    }
+
     // --- Connection ---
 
     pub fn connect(&self) -> Result<()> {

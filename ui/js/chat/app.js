@@ -844,6 +844,28 @@ export class ChatApp {
         });
         this.listen(EVT.MESSAGE_ERROR, (event) => this.handleMessageError(event));
         this.listen(EVT.TOOL_CALL_UPDATE, (event) => this.handleToolCallUpdate(event));
+        this.listen('session_migrated', (event) => {
+            // Backend died mid-turn; recovery swapped us to a fresh session and
+            // the recovered response streams under the new id shortly. Adopt it
+            // without tearing down the waiting UI (unlike session_reset), and
+            // drop the accumulated steering-reply text so the resend renders
+            // clean. Match either pinned id, mirroring message_complete.
+            const oldId = event?.payload?.oldSessionId;
+            const newId = event?.payload?.newSessionId;
+            const ours =
+                oldId && (oldId === this.currentAcpSessionId || oldId === this.activeSessionId);
+            if (!ours || !newId) return;
+            console.log('[chat] session migrated mid-turn:', oldId, '→', newId);
+            this.activeSessionId = newId;
+            this.currentAcpSessionId = newId;
+            // Drop the fresh session's steering-reply text so the resend
+            // renders clean. Matches the stream controller's accumulator field.
+            this.currentStreamingContent = '';
+            this.invoke('set_window_session', {
+                label: this.windowLabel,
+                sessionId: newId,
+            }).catch(() => {});
+        });
         this.listen('session_reset', (event) => {
             // session_reset is broadcast to all windows; only adopt the
             // new id if our pinned session was the one that died.

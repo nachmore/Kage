@@ -918,6 +918,24 @@ export class FloatingApp {
         });
         this.listen(EVT.MESSAGE_ERROR, (event) => this.handleMessageError(event));
         this.listen(EVT.TOOL_CALL_UPDATE, (event) => this.handleToolCallUpdate(event));
+        this.listen('session_migrated', (event) => {
+            // The backend died mid-turn and recovery swapped us to a fresh
+            // session; the recovered response is about to stream under the
+            // new id. Adopt it *without* tearing down the waiting UI (unlike
+            // session_reset) and drop the accumulated steering-reply text so
+            // the resend renders clean rather than after a stray greeting.
+            const oldId = event?.payload?.oldSessionId;
+            const newId = event?.payload?.newSessionId;
+            const ours = oldId && oldId === this.floatingSessionId;
+            if (!ours || !newId) return;
+            console.log('[floating] session migrated mid-turn:', oldId, '→', newId);
+            this.floatingSessionId = newId;
+            this.currentResponse = '';
+            this.invoke('set_window_session', {
+                label: WINDOW.FLOATING,
+                sessionId: newId,
+            }).catch(() => {});
+        });
         this.listen('session_reset', (event) => {
             // session_reset is broadcast to all windows; only adopt the
             // new id if our pinned session was the one that died.

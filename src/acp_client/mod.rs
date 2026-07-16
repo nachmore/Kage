@@ -418,6 +418,31 @@ impl AcpClient {
         self.transport.write_line(&line)
     }
 
+    /// Announce that a live turn's session id changed underneath the caller
+    /// — the recovery ladder minted (or reloaded onto) a fresh session after
+    /// the backend died mid-turn, and the resend will stream under `new_id`.
+    ///
+    /// Emitted as a synthetic `_kage/session_migrated` notification so it
+    /// rides the existing notification-handler dispatch (which owns the
+    /// `AppHandle` and the streaming-audience fan-out) without the session
+    /// layer needing a Tauri handle. Distinct from the `session_reset` event:
+    /// that one is *terminal* (aborts the wait, shows an error), whereas a
+    /// migration means "keep waiting — same turn, new id". Windows pinned to
+    /// `old_id` adopt `new_id` and clear the accumulated steering-reply text
+    /// so the resend renders clean.
+    pub fn notify_session_migrated(&self, old_id: &str, new_id: &str) {
+        if old_id == new_id {
+            return;
+        }
+        log::info!("Session migrated mid-turn: {} → {}", old_id, new_id);
+        self.transport
+            .dispatch_synthetic_notification(serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "_kage/session_migrated",
+                "params": { "oldSessionId": old_id, "newSessionId": new_id },
+            }));
+    }
+
     /// Cancel any in-flight prompt for the given session. The agent
     /// (kiro-cli) treats session/prompt as exclusive per session, so
     /// shutdown paths and the user-facing Cancel button must clear that
@@ -660,6 +685,61 @@ mod tests {
         client.observe_vendor_prefix("session/update");
         // Still default since no vendor prefix was observed.
         assert_eq!(client.vendor_prefix_for_send(), "_kage.dev/");
+    }
+
+    #[test]
+    fn notify_session_migrated_dispatches_synthetic_notification() {
+        // The migration signal must reach the notification handler as a
+        // `_kage/session_migrated` method carrying old/new ids, so the handler
+        // can fan it out to streaming windows.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let seen: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen_for_handler = seen.clone();
+        client.set_notification_handler(move |n| {
+            seen_for_handler.lock_or_recover().push(n);
+        });
+
+        client.notify_session_migrated("old-abc", "new-xyz");
+
+        let captured = seen.lock_or_recover();
+        assert_eq!(captured.len(), 1, "exactly one notification dispatched");
+        let n = &captured[0];
+        assert_eq!(
+            n.get("method").and_then(|m| m.as_str()),
+            Some("_kage/session_migrated")
+        );
+        let params = n.get("params").expect("params present");
+        assert_eq!(
+            params.get("oldSessionId").and_then(|v| v.as_str()),
+            Some("old-abc")
+        );
+        assert_eq!(
+            params.get("newSessionId").and_then(|v| v.as_str()),
+            Some("new-xyz")
+        );
+    }
+
+    #[test]
+    fn notify_session_migrated_is_noop_when_id_unchanged() {
+        // Reloading onto the same id (attempt-2 success path) must NOT emit a
+        // migration — the id didn't change, so no window needs to re-pin.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let seen: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen_for_handler = seen.clone();
+        client.set_notification_handler(move |n| {
+            seen_for_handler.lock_or_recover().push(n);
+        });
+
+        client.notify_session_migrated("same-id", "same-id");
+
+        assert!(
+            seen.lock_or_recover().is_empty(),
+            "no notification when id is unchanged"
+        );
     }
 
     #[test]
