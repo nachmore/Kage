@@ -194,6 +194,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     capture_hotkey_combo: null,
     cancel_hotkey_capture: null,
     try_register_hotkey: null,
+    get_hotkey_registration_failures: null,
     reconnect_acp: null,
     switch_acp_session: null,
     rename_session: null,
