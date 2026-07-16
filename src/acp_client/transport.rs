@@ -686,7 +686,10 @@ mod tokenize_tests {
     fn unquoted_matches_split_whitespace() {
         // The common case must behave exactly like the old split_whitespace,
         // including the Ollama env-prefixed forms.
-        assert_eq!(tokenize_spawn_command("kiro-cli acp"), vec!["kiro-cli", "acp"]);
+        assert_eq!(
+            tokenize_spawn_command("kiro-cli acp"),
+            vec!["kiro-cli", "acp"]
+        );
         assert_eq!(
             tokenize_spawn_command("env OPENAI_MODEL=llama3:8b codex-acp"),
             vec!["env", "OPENAI_MODEL=llama3:8b", "codex-acp"]
@@ -715,6 +718,9 @@ mod tokenize_tests {
 
     #[test]
     fn empty_quoted_string_is_a_token() {
-        assert_eq!(tokenize_spawn_command(r#"prog "" x"#), vec!["prog", "", "x"]);
+        assert_eq!(
+            tokenize_spawn_command(r#"prog "" x"#),
+            vec!["prog", "", "x"]
+        );
     }
 }

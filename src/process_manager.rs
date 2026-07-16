@@ -222,7 +222,10 @@ impl ProcessManager {
             if exited {
                 info!("✅ Process terminated gracefully");
             } else {
-                warn!("Process {} did not exit within {:?}; force-killing by PID", pid, DEADLINE);
+                warn!(
+                    "Process {} did not exit within {:?}; force-killing by PID",
+                    pid, DEADLINE
+                );
                 Self::kill_process(pid);
                 // Reap so we don't leave a zombie on Unix (kill_process signals
                 // but doesn't wait).

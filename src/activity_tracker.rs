@@ -144,7 +144,10 @@ fn prune_old_rows(conn: &Connection) {
         "DELETE FROM activity_log WHERE timestamp < ?1",
         rusqlite::params![cutoff],
     ) {
-        Ok(n) if n > 0 => info!("[ActivityTracker] pruned {} row(s) older than {} days", n, RETENTION_DAYS),
+        Ok(n) if n > 0 => info!(
+            "[ActivityTracker] pruned {} row(s) older than {} days",
+            n, RETENTION_DAYS
+        ),
         Ok(_) => {}
         Err(e) => warn!("[ActivityTracker] retention prune failed: {}", e),
     }

@@ -564,7 +564,10 @@ mod tests {
         // ships 31 locales). The char-based form must never panic.
         // A 3-byte char (、) repeated so a char boundary does NOT fall on 100.
         let query = "、".repeat(60); // 180 bytes, boundaries at multiples of 3
-        assert!(!query.is_char_boundary(100), "byte 100 must be mid-char for this test to be meaningful");
+        assert!(
+            !query.is_char_boundary(100),
+            "byte 100 must be mid-char for this test to be meaningful"
+        );
         let truncated: String = query.chars().take(100).collect();
         // 100 chars of a 60-char string is the whole string; take a longer one.
         let long = "、".repeat(200);
