@@ -128,11 +128,16 @@ impl ProcessManager {
     /// tolerates a platform `.exe` suffix and a full path.
     fn is_spawnable_agent_process(name: &str) -> bool {
         let name_lower = name.to_lowercase();
-        // Reduce "C:\path\to\kiro-cli.exe" to "kiro-cli".
-        let stem = std::path::Path::new(&name_lower)
-            .file_stem()
-            .and_then(|s| s.to_str())
+        // Reduce "C:\path\to\kiro-cli.exe" or "/usr/bin/kiro-cli" to "kiro-cli".
+        // Split on BOTH separators regardless of host OS: a process name read
+        // on macOS/Linux can still be a Windows-style path (and std::path::Path
+        // only treats `\` as a separator on Windows, which broke this on the
+        // macOS CI runner). Then strip a trailing ".exe".
+        let file = name_lower
+            .rsplit(['/', '\\'])
+            .next()
             .unwrap_or(&name_lower);
+        let stem = file.strip_suffix(".exe").unwrap_or(file);
 
         // The JS runtimes that run npx-vended ACP wrappers (e.g.
         // claude-code-acp launched via `npx`). The spawned process often
