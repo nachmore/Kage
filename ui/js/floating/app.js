@@ -1087,17 +1087,22 @@ export class FloatingApp {
                 const item = document.createElement('div');
                 item.className =
                     'app-suggestion-item' + (index === this.selectedIndex ? ' selected' : '');
-                const currentBadge = opt.current ? '<span class="selection-current">●</span>' : '';
                 // Prefer the human description (e.g. an agent's blurb); fall
                 // back to the raw value when the agent gave no description.
-                const subtitle = opt.description || opt.value;
+                // label/description/value come from the agent's commands/execute
+                // response — untrusted content in a privileged webview, so build
+                // the structure statically and set the text via textContent
+                // (mirrors the chat window's slash-selection renderer).
+                const subtitle = opt.description || opt.value || '';
                 item.innerHTML = `
                     <div class="app-icon">${opt.current ? '✓' : '○'}</div>
                     <div class="app-info">
-                        <div class="app-name">${opt.label}${currentBadge}</div>
-                        <div class="app-description">${subtitle}</div>
+                        <div class="app-name"><span class="app-name-label"></span>${opt.current ? '<span class="selection-current">●</span>' : ''}</div>
+                        <div class="app-description"></div>
                     </div>
                 `;
+                item.querySelector('.app-name-label').textContent = opt.label || '';
+                item.querySelector('.app-description').textContent = subtitle;
                 item.addEventListener('click', () => this.executeSelection(command, opt.value));
                 container.appendChild(item);
             });

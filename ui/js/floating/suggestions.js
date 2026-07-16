@@ -2,12 +2,16 @@
 
 import { platformKeyLabel } from '../shared/shortcuts.js';
 import { t, tHtml } from '../shared/i18n.js';
+import { escapeHtml, escapeAttr } from '../shared/tool-utils.js';
 
 function shortcutIconHtml(shortcut) {
+    // shortcut.icon / .name / .shortcut are user-defined (Settings → Shortcuts)
+    // and app names come from the OS — untrusted content in a privileged
+    // webview, so escape before interpolating into innerHTML.
     if (shortcut.icon?.startsWith('data:')) {
-        return `<img src="${shortcut.icon}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">`;
+        return `<img src="${escapeAttr(shortcut.icon)}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">`;
     }
-    return `<div class="app-icon">${shortcut.icon || '⚡'}</div>`;
+    return `<div class="app-icon">${escapeHtml(shortcut.icon) || '⚡'}</div>`;
 }
 
 export function renderShortcutSuggestion(
@@ -28,7 +32,7 @@ export function renderShortcutSuggestion(
 
     item.innerHTML = `
         ${shortcutIconHtml(shortcut)}
-        <div class="app-name">${shortcut.name}</div>
+        <div class="app-name">${escapeHtml(shortcut.name)}</div>
     `;
     item.addEventListener('click', async () => await executeShortcut());
 
@@ -63,8 +67,8 @@ export function renderShortcutSuggestions(
         item.innerHTML = `
             ${shortcutIconHtml(match.shortcut)}
             <div class="app-info">
-                <div class="app-name">${match.shortcut.name}</div>
-                <div class="app-description">${actionIcon} ${match.shortcut.shortcut}</div>
+                <div class="app-name">${escapeHtml(match.shortcut.name)}</div>
+                <div class="app-description">${actionIcon} ${escapeHtml(match.shortcut.shortcut)}</div>
             </div>
         `;
 
@@ -114,10 +118,12 @@ export function renderPathSuggestion(
     item.className = 'app-suggestion-item selected';
 
     const icon = type === 'file' ? '📄' : '📁';
+    // path is a filesystem path (can contain `<`); use tHtml so the {path}
+    // interpolation is escaped before it lands in innerHTML.
     const label =
         type === 'file'
-            ? t('floating.suggestions.path.open_file', { path })
-            : t('floating.suggestions.path.open_folder', { path });
+            ? tHtml('floating.suggestions.path.open_file', { path })
+            : tHtml('floating.suggestions.path.open_folder', { path });
 
     item.innerHTML = `
         <div class="app-icon">${icon}</div>
@@ -150,18 +156,18 @@ export function renderSuggestions(apps, appSuggestions, selectedIndex, launchApp
             const src = app.icon_base64.startsWith('data:')
                 ? app.icon_base64
                 : `data:image/png;base64,${app.icon_base64}`;
-            iconHtml = `<img src="${src}" class="app-icon-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                        <div class="app-icon" style="display:none;">${app.emoji_icon || app.name.charAt(0).toUpperCase()}</div>`;
+            iconHtml = `<img src="${escapeAttr(src)}" class="app-icon-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                        <div class="app-icon" style="display:none;">${escapeHtml(app.emoji_icon || app.name.charAt(0).toUpperCase())}</div>`;
         } else if (app.emoji_icon) {
-            iconHtml = `<div class="app-icon">${app.emoji_icon}</div>`;
+            iconHtml = `<div class="app-icon">${escapeHtml(app.emoji_icon)}</div>`;
         } else {
             const firstLetter = app.name.charAt(0).toUpperCase();
-            iconHtml = `<div class="app-icon">${firstLetter}</div>`;
+            iconHtml = `<div class="app-icon">${escapeHtml(firstLetter)}</div>`;
         }
 
         item.innerHTML = `
             ${iconHtml}
-            <div class="app-name">${app.name}</div>
+            <div class="app-name">${escapeHtml(app.name)}</div>
         `;
 
         item.addEventListener('click', async () => await launchApp(app.name));

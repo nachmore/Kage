@@ -857,6 +857,23 @@ function _resetDiagramFailures() {
 }
 
 /** Mark a diagram wrapper as successfully rendered and show its save button */
+/**
+ * Render a diagram render-failure message safely. The error text frequently
+ * echoes the diagram *source* (agent-controlled content) verbatim, so it must
+ * never reach innerHTML — a malformed fence with `<img onerror=…>` in the
+ * failing line would otherwise execute in this privileged webview. Everything
+ * here goes through textContent.
+ */
+function _renderDiagramError(container, label, error) {
+    container.textContent = '';
+    const div = document.createElement('div');
+    div.style.color = 'var(--kage-error, #dc2626)';
+    div.style.padding = '20px';
+    const detail = error && error.message ? `${label}: ${error.message}` : label;
+    div.textContent = detail;
+    container.appendChild(div);
+}
+
 function _markDiagramRendered(container) {
     const wrapper = container.closest('.diagram-wrapper');
     if (wrapper) {
@@ -1018,8 +1035,7 @@ async function renderMermaidInto(container, code, streaming = false) {
             // Leave the placeholder (formatted source) intact
         } else {
             console.error('Mermaid rendering error:', error);
-            container.innerHTML =
-                '<div style="color:#dc2626;padding:20px;">Error: ' + error.message + '</div>';
+            _renderDiagramError(container, t('shared.markdown.diagram.render_error'), error);
         }
     }
 }
@@ -1034,8 +1050,7 @@ async function renderGraphvizInto(container, code, language, streaming = false) 
             if (streaming) {
                 _diagramFailures.set(hash, MAX_STREAMING_FAILURES);
             } else {
-                container.innerHTML =
-                    '<div style="color:#dc2626;padding:20px;">Graphviz WASM failed to load</div>';
+                _renderDiagramError(container, t('shared.markdown.diagram.graphviz_wasm_failed'));
             }
             return;
         }
@@ -1057,10 +1072,7 @@ async function renderGraphvizInto(container, code, language, streaming = false) 
             // Leave the placeholder (formatted source) intact
         } else {
             console.error('Graphviz rendering error:', error);
-            container.innerHTML =
-                '<div style="color:#dc2626;padding:20px;">Graphviz error: ' +
-                error.message +
-                '</div>';
+            _renderDiagramError(container, t('shared.markdown.diagram.graphviz_error'), error);
         }
     }
 }

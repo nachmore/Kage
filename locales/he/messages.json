@@ -7732,5 +7732,23 @@
     "description": "Helper text warning that enabling message-content logging writes prompt text to disk",
     "_machine_translated": true,
     "_source_hash": "066ce55fb7fe5195"
+  },
+  "shared.markdown.diagram.render_error": {
+    "message": "שגיאה",
+    "description": "Prefix shown when a Mermaid diagram fails to render; followed by the error detail",
+    "_machine_translated": true,
+    "_source_hash": "3ad76e12ccf9af3b"
+  },
+  "shared.markdown.diagram.graphviz_error": {
+    "message": "שגיאת Graphviz",
+    "description": "Prefix shown when a Graphviz diagram fails to render; followed by the error detail",
+    "_machine_translated": true,
+    "_source_hash": "b5aec8ee17d29cf2"
+  },
+  "shared.markdown.diagram.graphviz_wasm_failed": {
+    "message": "טעינת Graphviz WASM נכשלה",
+    "description": "Shown when the Graphviz rendering engine could not be loaded",
+    "_machine_translated": true,
+    "_source_hash": "6838c130dee82aeb"
   }
 }
