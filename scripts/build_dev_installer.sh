@@ -127,6 +127,15 @@ if [[ "$status" -eq 0 && "$replace" -eq 1 ]]; then
 
     echo "[build_dev_installer] --replace: $source_exe -> $target_exe"
     cp -f "$source_exe" "$target_exe"
+
+    # Also copy the MCP binary so it stays in sync with the main binary.
+    mcp_source="$repo_root/target/$profile_dir/kage-computer-control-mcp"
+    if [[ -x "$mcp_source" ]]; then
+        mcp_target="$(dirname "$target_exe")/kage-computer-control-mcp"
+        echo "[build_dev_installer] --replace: $mcp_source -> $mcp_target"
+        cp -f "$mcp_source" "$mcp_target"
+    fi
+
     echo "[build_dev_installer] --replace: done. Launch via Spotlight / Dock to test."
 fi
 

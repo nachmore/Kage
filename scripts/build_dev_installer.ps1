@@ -175,6 +175,15 @@ try {
 
         Write-Host "[build_dev_installer] -Replace: $source -> $target" -ForegroundColor Cyan
         Copy-Item -LiteralPath $source -Destination $target -Force
+
+        # Also copy the MCP binary so it stays in sync with kage.exe.
+        $mcpSource = Join-Path $repoRoot ('target\' + $profileDir + '\kage-computer-control-mcp.exe')
+        if (Test-Path -LiteralPath $mcpSource) {
+            $mcpTarget = Join-Path $installDir 'kage-computer-control-mcp.exe'
+            Write-Host "[build_dev_installer] -Replace: $mcpSource -> $mcpTarget" -ForegroundColor Cyan
+            Copy-Item -LiteralPath $mcpSource -Destination $mcpTarget -Force
+        }
+
         Write-Host "[build_dev_installer] -Replace: done. Launch via Start Menu / tray to test." -ForegroundColor Green
     }
 
