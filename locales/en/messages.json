@@ -121,6 +121,10 @@
     "message": "Could not connect to the agent: {reason}",
     "description": "Failed to establish an ACP connection while loading or resuming a session"
   },
+  "errors.session.no_session": {
+    "message": "No active session",
+    "description": "A command was invoked before a session was created or pinned to the window"
+  },
   "errors.window.create_failed": {
     "message": "Could not create window: {reason}",
     "description": "Tauri window construction failed"

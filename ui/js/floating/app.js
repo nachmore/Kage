@@ -1848,6 +1848,7 @@ export class FloatingApp {
     // --- Context % and Model Selector ---
 
     async _refreshContextUsage() {
+        if (!this.floatingSessionId) return;
         try {
             const result = await this.invoke('execute_slash_command', {
                 sessionId: this.floatingSessionId,

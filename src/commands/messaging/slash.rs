@@ -37,9 +37,20 @@ pub async fn execute_slash_command(
                 &[],
             ));
         }
-        // Resolve a real session: the calling window may not have pinned
-        // one yet. We're past the connected guard, so create is safe.
-        let session_id = resolve_or_create_session(&client, session_id)?;
+        // Require a pinned session — slash commands are informational
+        // (context, model, compact, …) and should never create a new
+        // session as a side effect. The calling window is responsible
+        // for obtaining a session before invoking.
+        let session_id = match session_id {
+            Some(id) if !id.trim().is_empty() => id,
+            _ => {
+                return Err(AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.session.no_session",
+                    &[],
+                ));
+            }
+        };
         let cmd_name = command.strip_prefix('/').unwrap_or(&command);
 
         let response = client

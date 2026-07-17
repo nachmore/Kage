@@ -317,6 +317,12 @@
     "_machine_translated": true,
     "_source_hash": "43f81ad6529ae8e7"
   },
+  "errors.session.no_session": {
+    "message": "No active session",
+    "description": "A command was invoked before a session was created or pinned to the window",
+    "_machine_translated": true,
+    "_source_hash": "32f7ce2cae77d8e7"
+  },
   "errors.window.create_failed": {
     "message": "Fereastra nu a putut fi creată: {reason}",
     "description": "Tauri window construction failed",

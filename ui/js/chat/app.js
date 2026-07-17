@@ -239,9 +239,14 @@ export class ChatApp {
                 app._sourceDomains = v;
             },
             isWaiting: () => app.isWaitingForResponse && !!app.currentStreamingMessage,
-            // Belt-and-suspenders session filter: see comment in chunk handler
-            // for why this is needed in addition to the backend filter.
-            acceptSessionId: (sid) => !sid || !app.activeSessionId || sid === app.activeSessionId,
+            // Session filter: accept only chunks that belong to OUR session.
+            // Reject when we have no pinned session (null activeSessionId) to
+            // prevent vacuuming up chunks from other windows' sessions.
+            acceptSessionId: (sid) => {
+                if (!sid) return !!app.activeSessionId;
+                if (!app.activeSessionId) return false;
+                return sid === app.activeSessionId;
+            },
             getAccumulator: () => app.currentStreamingContent,
             appendToAccumulator: (delta) => {
                 app.currentStreamingContent = (app.currentStreamingContent || '') + delta;
@@ -956,7 +961,9 @@ export class ChatApp {
         this.listen('floating_message_sent', (event) => {
             const { message } = event.payload || {};
             if (!message) return;
-            // Only show if we're viewing the default/floating session
+            // Only mirror if we're actually viewing the floating/default
+            // session. Require a real id — null === null must NOT match.
+            if (!this.activeSessionId || !this.floatingSessionId) return;
             const isDefaultSession =
                 this.activeSessionId === this.floatingSessionId ||
                 this.activeSessionId === this.currentAcpSessionId;
@@ -2975,6 +2982,7 @@ export class ChatApp {
     // --- Toolbar: Context Indicator ---
 
     async refreshContextUsage() {
+        if (!this.activeSessionId) return;
         try {
             const result = await this.invoke('execute_slash_command', {
                 sessionId: this.activeSessionId,
