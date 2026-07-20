@@ -844,6 +844,7 @@ async fn run() {
             commands::get_window_session,
             commands::set_window_session,
             commands::clear_window_session,
+            commands::get_session_stream_snapshot,
             commands::get_steering_content,
             commands::open_auto_steering_file,
             commands::get_auto_steering_path,

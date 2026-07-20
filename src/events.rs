@@ -55,6 +55,13 @@ pub const TOOL_CALL_UPDATE: &str = "tool_call_update";
 /// Conversation compaction progress (kage/kiro vendor extension).
 pub const COMPACTION_STATUS: &str = "compaction_status";
 
+/// A user-initiated prompt started on a session. Payload:
+/// `{ sessionId, source }` where source is the originating window
+/// label. Lets chat hosts show live activity (spinner/unread badges)
+/// for sessions they are NOT currently viewing. Steering, titling,
+/// and other hidden prompts do not emit this.
+pub const SESSION_ACTIVITY: &str = "session_activity";
+
 // --- Permissions ----------------------------------------------------
 
 /// User dismissed a pending permission prompt — refresh the UI's
@@ -125,6 +132,7 @@ mod tests {
             MESSAGE_ERROR,
             TOOL_CALL_UPDATE,
             COMPACTION_STATUS,
+            SESSION_ACTIVITY,
             PERMISSION_DISMISSED,
             INLINE_ASSIST_SHOW,
             INLINE_ASSIST_ERROR,

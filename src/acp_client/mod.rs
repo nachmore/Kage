@@ -235,6 +235,19 @@ impl AcpClient {
             .unwrap_or_default()
     }
 
+    /// Read the bucket for `session_id` WITHOUT consuming it. Used by the
+    /// chat window's mid-stream switch-in: the viewer needs the text
+    /// streamed so far, but the turn is still in flight and other readers
+    /// (auto_steering's take at completion) still need the full bucket.
+    /// Returns an empty string if no bucket exists.
+    pub fn peek_session_accumulator(&self, session_id: &str) -> String {
+        self.streaming_accumulators
+            .lock_or_recover()
+            .get(session_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     /// Reset the bucket for `session_id` to empty. Called before send when
     /// a caller wants to read the response back via take_session_accumulator
     /// without contamination from a prior incomplete response.

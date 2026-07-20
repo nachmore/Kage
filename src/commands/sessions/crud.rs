@@ -807,6 +807,22 @@ fn switch_acp_session_blocking(
     }
 }
 
+/// Peek the text streamed so far for an in-flight turn on `session_id`.
+/// Non-consuming — the backend accumulator keeps filling and its usual
+/// take-at-completion readers are unaffected. Used by the chat window
+/// when the user switches INTO a session that is mid-stream: disk only
+/// has completed turns, so the partial response comes from here and the
+/// live chunk stream continues from that point. Returns an empty string
+/// when nothing is in flight (or the turn just completed and the bucket
+/// was evicted).
+#[tauri::command]
+pub async fn get_session_stream_snapshot(
+    session_id: String,
+    acp: State<'_, AcpHandles>,
+) -> Result<String, AppError> {
+    Ok(acp.client.peek_session_accumulator(&session_id))
+}
+
 /// Read the session id pinned to a window. Frontends call this on
 /// boot to discover their own pinned session, and call it for other
 /// windows when implementing handoff (e.g. floating "expand to chat"

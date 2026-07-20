@@ -120,6 +120,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     list_sessions: 'session',
     load_session: 'session',
     get_window_session: 'session',
+    get_session_stream_snapshot: 'session',
     get_sessions_directory: 'session',
 
     // --- agent (LLM communication) -----------------------------------------

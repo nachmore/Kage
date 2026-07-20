@@ -19,6 +19,7 @@ export const EVT = {
     MESSAGE_ERROR: 'message_error',
     TOOL_CALL_UPDATE: 'tool_call_update',
     COMPACTION_STATUS: 'compaction_status',
+    SESSION_ACTIVITY: 'session_activity',
     AGENT_DISCONNECTED: 'agent_disconnected',
 
     // Permissions

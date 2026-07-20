@@ -48,6 +48,25 @@ pub async fn send_message_streaming(
         m.insert(session_id.clone(), window_label.clone());
     }
 
+    // Tell chat hosts a user turn just started on this session so they
+    // can badge it in the sidebar even when they're viewing another
+    // session. Fired only for real user prompts — steering/titling
+    // prompts go through other paths and stay invisible. The matching
+    // terminal signals are MESSAGE_COMPLETE (broadcast) on success and
+    // SESSION_ACTIVITY kind="failed" on send failure — the latter exists
+    // because MESSAGE_ERROR is emitted only to the originating window
+    // and carries no session id, which would leave other windows'
+    // activity badges spinning forever.
+    crate::event_targets::emit_streaming_audience(
+        &app,
+        events::SESSION_ACTIVITY,
+        &serde_json::json!({
+            "sessionId": &session_id,
+            "source": &window_label,
+            "kind": "started",
+        }),
+    );
+
     async_runtime::spawn_blocking(move || {
         let client_arc = client.clone();
         let config_arc = config.clone();
@@ -127,6 +146,16 @@ pub async fn send_message_streaming(
                     &format!("Failed to send: {}", error_str),
                 );
             }
+            // Clear activity badges in windows that aren't the originator
+            // (they only hear the broadcast events, not MESSAGE_ERROR).
+            crate::event_targets::emit_streaming_audience(
+                &app_for_send,
+                events::SESSION_ACTIVITY,
+                &serde_json::json!({
+                    "sessionId": &session_id,
+                    "kind": "failed",
+                }),
+            );
             if let Ok(mut m) = originators.lock() {
                 m.remove(&session_id);
             }
