@@ -57,3 +57,33 @@ describe('WindowManager._resizeFloor', () => {
         expect(floor).toBe(DEFAULT_HEIGHT * 2);
     });
 });
+
+describe('WindowManager._suggestionCap', () => {
+    // Regression: the suggestions cap used to be derived from the list's
+    // ALREADY-CAPPED offsetHeight and cleared whenever the (now shorter)
+    // layout fit under the ceiling. With a tall response + suggestions
+    // open (type `focus` right after a focus AI summary), the observer
+    // loop alternated cap → fits → clear → overflows → cap …, visibly
+    // jittering the window height forever. The cap must be a pure
+    // function of the UN-capped layout so identical inputs re-derive an
+    // identical cap and the loop settles.
+
+    it('subtracts the overflow from the uncapped height', () => {
+        expect(mgr()._suggestionCap(300, 100)).toBe(200);
+    });
+
+    it('is idempotent for the same uncapped inputs (no oscillation)', () => {
+        const m = mgr();
+        const first = m._suggestionCap(300, 120);
+        const second = m._suggestionCap(300, 120);
+        expect(second).toBe(first);
+    });
+
+    it('returns null when the capped list would be unusably small', () => {
+        expect(mgr()._suggestionCap(120, 90)).toBe(null); // 30px < 40px floor
+    });
+
+    it('returns null at exactly the 40px threshold', () => {
+        expect(mgr()._suggestionCap(140, 100)).toBe(null); // 40 is not > 40
+    });
+});

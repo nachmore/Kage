@@ -92,6 +92,25 @@ export class WindowManager {
         return Math.min(Math.floor(maxPhys), contentFloor);
     }
 
+    /**
+     * How tall the suggestions list may be when the bubble's natural
+     * height overflows the screen ceiling. `uncappedH` is the list's
+     * un-capped rendered height, `overflowLogical` the logical pixels by
+     * which the whole bubble exceeds the ceiling. Returns the capped
+     * height, or null when the list would become too small to be usable
+     * (< 40px) — in that case we leave it uncapped and let the window
+     * hit the ceiling (the list scrolls inside the bubble instead).
+     *
+     * MUST be a pure function of the un-capped layout: deriving it from
+     * an already-capped `offsetHeight` made the cap ratchet down (or
+     * oscillate against the clear-cap branch) on every observer pass.
+     * Pure arithmetic, extracted for unit testing.
+     */
+    _suggestionCap(uncappedH, overflowLogical) {
+        const capped = Math.floor(uncappedH - overflowLogical);
+        return capped > 40 ? capped : null;
+    }
+
     _measureFlow(el) {
         const cs = getComputedStyle(el);
         if (cs.display === 'none') return 0;
@@ -141,10 +160,26 @@ export class WindowManager {
         if (permModal && permModal.style.display !== 'none') return;
 
         const scale = window.devicePixelRatio || 1;
+        const minPhys = Math.round(DEFAULT_HEIGHT * scale);
+        // Resolve the ceiling BEFORE touching the DOM: the block below must
+        // run without an intervening await, or a frame can paint mid-flip.
+        const maxPhys = await this.getMaxHeight();
+
+        // Measure with our own inline suggestions cap removed. The cap set
+        // below shrinks the list; if the next pass measured that shrunken
+        // layout it would decide "no overflow", CLEAR the cap, grow the
+        // list back, re-trigger the observer, re-cap — an endless visible
+        // jitter whenever a tall response + suggestions together exceed
+        // the screen ceiling (e.g. typing `focus` right after a focus AI
+        // summary). Measuring uncapped makes the overflow decision
+        // deterministic: the same inputs re-derive the same cap, and
+        // re-applying an identical cap is a layout no-op, so the observer
+        // settles after one pass. Clear + measure + re-cap all happen
+        // synchronously within this task — no frame paints uncapped.
+        const appSuggestions = document.getElementById('appSuggestions');
+        if (appSuggestions) appSuggestions.style.maxHeight = '';
         const naturalLogical = this._measureNaturalHeight();
         const naturalPhys = Math.round(naturalLogical * scale);
-        const minPhys = Math.round(DEFAULT_HEIGHT * scale);
-        const maxPhys = await this.getMaxHeight();
 
         let target;
         if (this.userSetHeight) {
@@ -155,18 +190,20 @@ export class WindowManager {
         }
 
         // If suggestions list would push us past the cap, let it scroll.
-        const appSuggestions = document.getElementById('appSuggestions');
         if (
             appSuggestions?.classList.contains('visible') &&
             naturalPhys > maxPhys &&
             !this.userSetHeight
         ) {
             const overflowLogical = naturalLogical - maxPhys / scale;
-            const currentH = appSuggestions.offsetHeight;
-            const cappedH = Math.floor(currentH - overflowLogical);
-            if (cappedH > 40) appSuggestions.style.maxHeight = cappedH + 'px';
-        } else if (appSuggestions) {
-            appSuggestions.style.maxHeight = '';
+            const uncappedH = appSuggestions.offsetHeight;
+            const cappedH = this._suggestionCap(uncappedH, overflowLogical);
+            if (cappedH !== null) {
+                appSuggestions.style.maxHeight = cappedH + 'px';
+                // The window target must account for the list we just
+                // shrank — naturalPhys measured the uncapped layout.
+                target = Math.min(target, maxPhys);
+            }
         }
 
         if (Math.abs(target - this._lastTarget) < 2) return;
