@@ -1507,8 +1507,11 @@ export class ChatApp {
                 // Badge + "default session" suffix represent floating's
                 // pinned thread only — the row this window happens to
                 // have selected gets `.active` styling instead.
-                const badges = isFloating ? '<span class="session-current-badge">●</span>' : '';
-                const newTitleHtml = `${newDot}${escapeHtml(title)}${badges}`;
+                const newTitleHtml = this._sessionTitleHtml(session.session_id, {
+                    isNew,
+                    isFloating,
+                    title,
+                });
                 if (titleEl && titleEl.innerHTML !== newTitleHtml) titleEl.innerHTML = newTitleHtml;
 
                 const dateEl = item.querySelector('.session-item-date');
@@ -1563,24 +1566,15 @@ export class ChatApp {
             'session-item' + (isActive ? ' active' : '') + (isNew ? ' session-new' : '');
         item.dataset.sessionId = session.session_id;
 
-        const newDot = isNew
-            ? `<span class="session-new-dot" title="${t('chat.session.new_dot_title')}">●</span>`
-            : '';
-        // Live-activity badge: spinner while a turn is in flight on this
-        // session, unread dot when a background turn finished unviewed.
-        // Kept in a dedicated slot so _refreshSessionBadges can update it
-        // without re-rendering the whole list.
-        const activity = this._sessionActivityBadgeHtml(session.session_id);
         // See note in renderSessionList — only floating's pinned row
         // gets the default-session badge + suffix.
-        const badges = isFloating ? '<span class="session-current-badge">●</span>' : '';
         const dateSuffix = isFloating
             ? ' · <span class="session-default-label">default session</span>'
             : '';
 
         item.innerHTML = `
                 <div class="session-item-content">
-                    <div class="session-item-title">${newDot}${escapeHtml(title)}${badges}<span class="session-activity-slot">${activity}</span></div>
+                    <div class="session-item-title">${this._sessionTitleHtml(session.session_id, { isNew, isFloating, title })}</div>
                     <div class="session-item-date">${dateStr}${dateSuffix}</div>
                 </div>
                 <div class="session-item-actions">
@@ -1611,6 +1605,25 @@ export class ChatApp {
 
         item.addEventListener('click', () => this.selectSession(session.session_id));
         return item;
+    }
+
+    /**
+     * The full innerHTML of a sidebar row's `.session-item-title`. The
+     * SINGLE builder for both the create path (_createSessionItem) and
+     * the diff-update path (renderSessionList's reuse branch) — the two
+     * previously built it independently, and the diff path forgot the
+     * activity slot: any list re-render (loadSessions after a complete,
+     * sessions_changed, a rename) rewrote the title without the span,
+     * after which _refreshSessionBadges had nothing to update and the
+     * spinner/unread badges silently died. One builder, one shape.
+     */
+    _sessionTitleHtml(sessionId, { isNew, isFloating, title }) {
+        const newDot = isNew
+            ? `<span class="session-new-dot" title="${t('chat.session.new_dot_title')}">●</span>`
+            : '';
+        const badges = isFloating ? '<span class="session-current-badge">●</span>' : '';
+        const activity = this._sessionActivityBadgeHtml(sessionId);
+        return `${newDot}${escapeHtml(title)}${badges}<span class="session-activity-slot">${activity}</span>`;
     }
 
     /**
