@@ -261,6 +261,64 @@ the remaining gaps.
   but it's the sandbox's own empty document — writes have no
   visible effect.
 
+### Your extension runs as MULTIPLE instances — design for it
+
+**This is a hard requirement, not a tip.** There is no single
+"the extension process". Every Kage window that uses one of your
+contribution points (floating, chat, settings, peer chat windows)
+hosts its **own sandbox iframe with its own copy of your
+modules**. Consequences:
+
+- **Module-level variables are per-window.** A `let cachedToken`
+  in one window is invisible to every other window. An in-flight
+  promise used as a single-flight guard dedupes work inside ONE
+  window only.
+- **Instances race each other.** Two windows polling the same
+  API will both notice an expired token within one poll cycle of
+  each other and both try to refresh it concurrently. With
+  providers that rotate credentials on refresh (OAuth refresh
+  tokens — Spotify, Google, Microsoft all do this), the loser
+  presents an already-rotated token, which the provider's reuse
+  detection may answer by **revoking the whole grant**. The
+  user experiences this as "the extension keeps logging me out".
+- **The only shared state is `extension-data`**
+  (`save_extension_data` / `load_extension_data` /
+  `delete_extension_data`). It is host-side storage keyed per
+  extension and visible to every instance. `localStorage` is
+  unavailable in the sandbox, and module state doesn't cross
+  windows — if two instances must agree on something, it goes
+  through extension-data.
+
+Rules for anything with side effects (auth flows, credential
+refresh, write-behind caches, migrations):
+
+1. **Re-read before declaring failure.** If a credential
+   operation fails, reload the stored state first — another
+   instance may have already rotated/renewed it. Retry with
+   what's on disk before telling the user they're signed out.
+2. **Serialize cross-instance side effects.** Elect a leader
+   (e.g. only the floating window's widget instance refreshes
+   tokens; other instances wait and re-read), or take a coarse
+   mutex via extension-data (write `{holder, expires_at}`,
+   others back off while it's fresh). A TTL on the lock is
+   mandatory — an instance can die holding it.
+3. **Never cache "am I authenticated?" in module state.**
+   Another instance can sign out, sign in, or rotate at any
+   moment. Read through to extension-data for anything another
+   instance can change; per-instance caching is only safe for
+   state that instance alone owns.
+4. **Idempotency over coordination where possible.** If a side
+   effect is safe to repeat (PUT-like), letting both instances
+   do it beats locking. Locks are for the genuinely
+   non-repeatable (token rotation, one-shot migrations).
+
+The Spotify extension's auth module
+(`Kage-Extensions/extensions/spotify/auth.js`) is the reference
+implementation of these rules: single-flight within an instance
+via an in-flight promise, cross-instance healing via
+re-read-on-`invalid_grant`, and a persisted status marker so all
+windows agree on connection state.
+
 ## Terminable compute with `runSandboxed`
 
 JavaScript in the sandbox iframe is single-threaded. If your
