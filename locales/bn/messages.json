@@ -1991,6 +1991,18 @@
     "_machine_translated": true,
     "_source_hash": "bd6eadb6e1ac8c72"
   },
+  "chat.session.activity.streaming": {
+    "message": "Agent is responding…",
+    "description": "Tooltip on the sidebar spinner shown while a background session has a turn in flight",
+    "_machine_translated": true,
+    "_source_hash": "eaefe320837d7e4f"
+  },
+  "chat.session.activity.unread": {
+    "message": "New response",
+    "description": "Tooltip on the sidebar dot shown when a background session finished a turn the user hasn't viewed yet",
+    "_machine_translated": true,
+    "_source_hash": "69b1662c791ff3e7"
+  },
   "chat.session.action.rename_title": {
     "message": "নাম পরিবর্তন করুন",
     "description": "Tooltip on the per-session rename button",

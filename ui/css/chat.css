@@ -700,6 +700,27 @@ body {
     font-weight: 600;
 }
 
+/* Live-activity badges (see session-streams.js) */
+.session-activity-slot {
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.session-activity-spinner {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border: 1.5px solid var(--kage-accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+}
+.session-unread-dot {
+    font-size: 9px;
+    color: var(--kage-accent);
+    vertical-align: middle;
+}
+
 /* Permission modal scoped to chat-main (not full window) */
 .permission-modal-overlay.chat-scoped {
     position: absolute;

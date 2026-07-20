@@ -25,6 +25,7 @@ import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW, isChatLabel } from '../shared/window-labels.js';
 import { getWindowSessionOrNull } from '../shared/session-resolve.js';
+import { SessionStreamRegistry, STREAM } from '../shared/session-streams.js';
 import { errLabel } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { submitSelection, loadSelection } from '../shared/slash-selection.js';
@@ -40,6 +41,7 @@ import {
     renderToolChipsHtml,
     renderSourceChipsHtml,
     attachSourceClickHandler,
+    processToolCallUpdate,
 } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
@@ -114,6 +116,11 @@ export class ChatApp {
         this.currentStreamingContent = '';
         this.isWaitingForResponse = false;
         this.isConnected = false;
+        // Per-session stream tracking: which sessions have a turn in
+        // flight / completed-unviewed. The window is a viewport; streams
+        // belong to sessions, not to the window. See session-streams.js.
+        this.streamRegistry = new SessionStreamRegistry();
+        this.streamRegistry.onChange(() => this._refreshSessionBadges());
         this.sessions = [];
         this._sessionsFullyLoaded = false;
         this._loadingMore = false;
@@ -851,21 +858,77 @@ export class ChatApp {
             this._windowFocused = false;
         });
 
-        this.listen(EVT.MESSAGE_CHUNK, (event) => this.handleMessageChunk(event));
+        this.listen(EVT.MESSAGE_CHUNK, (event) => {
+            // Chunks are broadcast for EVERY session. Ours renders live
+            // through the stream controller; other sessions (or all of
+            // them, when this window isn't viewing any) just tick the
+            // registry so the sidebar shows a live-activity badge.
+            const sid = event?.payload?.sessionId || null;
+            if (sid && sid !== this.activeSessionId) {
+                this.streamRegistry.noteChunk(sid);
+                return;
+            }
+            // First chunk after a mid-stream attach: the snapshot we
+            // seeded from the backend accumulator runs AHEAD of the UI
+            // chunk stream by up to one batcher flush (~16ms of text) —
+            // accumulate happens before the flush emit. Trim the
+            // duplicated prefix. Bounded search: the overlap can't
+            // exceed one flush of text; 4KB is generous.
+            if (this._trimNextChunkOverlap && event?.payload?.text) {
+                this._trimNextChunkOverlap = false;
+                const snap = this.currentStreamingContent || '';
+                const text = event.payload.text;
+                const maxK = Math.min(snap.length, text.length, 4096);
+                for (let k = maxK; k > 0; k--) {
+                    if (snap.endsWith(text.slice(0, k))) {
+                        event = {
+                            ...event,
+                            payload: { ...event.payload, text: text.slice(k) },
+                        };
+                        break;
+                    }
+                }
+            }
+            this.handleMessageChunk(event);
+        });
+        this.listen(EVT.SESSION_ACTIVITY, (event) => {
+            // A user turn started (or failed to start) somewhere — maybe
+            // this window, maybe floating, maybe a peer. Track it so the
+            // sidebar can badge sessions we're not viewing.
+            const { sessionId, kind } = event?.payload || {};
+            if (!sessionId) return;
+            if (kind === 'failed') {
+                this.streamRegistry.fail(sessionId);
+            } else {
+                this.streamRegistry.begin(sessionId);
+            }
+        });
         this.listen(EVT.MESSAGE_COMPLETE, (event) => {
             // Broadcast event — any chat window pinned to ANY session
             // hears it. Filter by sessionId (the active session, post
             // any in-flight recovery) OR oldSessionId (the session id
             // we issued the send against). Either match means this
-            // complete belongs to us; otherwise drop it so two
-            // windows on different sessions don't see each other's
-            // completes.
+            // complete belongs to us; otherwise it's a background
+            // session finishing — flip its badge to unread.
             const newId = event?.payload?.sessionId;
             const oldId = event?.payload?.oldSessionId;
             const ours =
                 (newId && (newId === this.activeSessionId || newId === this.currentAcpSessionId)) ||
                 (oldId && (oldId === this.activeSessionId || oldId === this.currentAcpSessionId));
-            if (!ours) return;
+            if (!ours) {
+                for (const sid of [newId, oldId]) {
+                    if (sid) this.streamRegistry.complete(sid, { viewing: false });
+                }
+                // Refresh the sidebar so the completed session's new
+                // title/timestamp (and unread badge) appear.
+                this.loadSessions();
+                return;
+            }
+
+            // Our turn completed — consume the registry entry (no badge).
+            for (const sid of [newId, oldId]) {
+                if (sid) this.streamRegistry.complete(sid, { viewing: true });
+            }
 
             // Recovery may have moved us to a fresh session id; pick
             // it up so subsequent sends/cancels target it.
@@ -880,8 +943,23 @@ export class ChatApp {
             }
             this.handleMessageComplete();
         });
-        this.listen(EVT.MESSAGE_ERROR, (event) => this.handleMessageError(event));
-        this.listen(EVT.TOOL_CALL_UPDATE, (event) => this.handleToolCallUpdate(event));
+        this.listen(EVT.MESSAGE_ERROR, (event) => {
+            // MESSAGE_ERROR is emitted only to the originating window and
+            // carries no session id — it refers to the turn this window
+            // last sent. Terminal for the active session's stream.
+            if (this.activeSessionId) this.streamRegistry.fail(this.activeSessionId);
+            this.handleMessageError(event);
+        });
+        this.listen(EVT.TOOL_CALL_UPDATE, (event) => {
+            // Tool updates for background sessions feed the registry
+            // (chips shown on switch-in); ours go through the controller.
+            const sid = event?.payload?.params?.sessionId;
+            if (sid && sid !== this.activeSessionId) {
+                this.streamRegistry.trackTool(sid, event, processToolCallUpdate);
+                return;
+            }
+            this.handleToolCallUpdate(event);
+        });
         this.listen(EVT.AGENT_DISCONNECTED, () => {
             // The agent backend's stream closed (process died / connection
             // dropped) while we may have been idle. Reflect it in the header
@@ -897,6 +975,11 @@ export class ChatApp {
             // clean. Match either pinned id, mirroring message_complete.
             const oldId = event?.payload?.oldSessionId;
             const newId = event?.payload?.newSessionId;
+            // Move the stream's registry entry to the new id — the turn
+            // continues there (chunks under newId auto-begin it anyway;
+            // this just avoids a stale badge on the dead id).
+            if (oldId) this.streamRegistry.fail(oldId);
+            if (newId) this.streamRegistry.begin(newId);
             const ours =
                 oldId && (oldId === this.currentAcpSessionId || oldId === this.activeSessionId);
             if (!ours || !newId) return;
@@ -916,6 +999,8 @@ export class ChatApp {
             // new id if our pinned session was the one that died.
             const oldId = event?.payload?.oldSessionId;
             const newId = event?.payload?.newSessionId;
+            // The dead session's stream is over regardless of whose it was.
+            if (oldId) this.streamRegistry.fail(oldId);
             const ours = oldId && oldId === this.currentAcpSessionId;
             if (!ours) return;
             if (newId) {
@@ -1481,6 +1566,11 @@ export class ChatApp {
         const newDot = isNew
             ? `<span class="session-new-dot" title="${t('chat.session.new_dot_title')}">●</span>`
             : '';
+        // Live-activity badge: spinner while a turn is in flight on this
+        // session, unread dot when a background turn finished unviewed.
+        // Kept in a dedicated slot so _refreshSessionBadges can update it
+        // without re-rendering the whole list.
+        const activity = this._sessionActivityBadgeHtml(session.session_id);
         // See note in renderSessionList — only floating's pinned row
         // gets the default-session badge + suffix.
         const badges = isFloating ? '<span class="session-current-badge">●</span>' : '';
@@ -1490,7 +1580,7 @@ export class ChatApp {
 
         item.innerHTML = `
                 <div class="session-item-content">
-                    <div class="session-item-title">${newDot}${escapeHtml(title)}${badges}</div>
+                    <div class="session-item-title">${newDot}${escapeHtml(title)}${badges}<span class="session-activity-slot">${activity}</span></div>
                     <div class="session-item-date">${dateStr}${dateSuffix}</div>
                 </div>
                 <div class="session-item-actions">
@@ -1523,6 +1613,39 @@ export class ChatApp {
         return item;
     }
 
+    /**
+     * Badge HTML for a session's live-activity state. Empty string when
+     * the session is idle. The active session never shows a badge — its
+     * activity is visible in the transcript itself.
+     */
+    _sessionActivityBadgeHtml(sessionId) {
+        if (sessionId === this.activeSessionId) return '';
+        const state = this.streamRegistry.states().get(sessionId);
+        if (state === STREAM.STREAMING) {
+            return `<span class="session-activity-spinner" title="${t('chat.session.activity.streaming')}"></span>`;
+        }
+        if (state === STREAM.UNREAD) {
+            return `<span class="session-unread-dot" title="${t('chat.session.activity.unread')}">●</span>`;
+        }
+        return '';
+    }
+
+    /**
+     * Update just the activity slots in the rendered sidebar — called
+     * from the registry's onChange so badges track stream state without
+     * a full list re-render (which would fight inline rename, scroll
+     * position, etc.).
+     */
+    _refreshSessionBadges() {
+        const list = this.elements.sessionList;
+        if (!list) return;
+        for (const item of list.querySelectorAll('.session-item')) {
+            const sid = item.dataset.sessionId;
+            const slot = item.querySelector('.session-activity-slot');
+            if (sid && slot) slot.innerHTML = this._sessionActivityBadgeHtml(sid);
+        }
+    }
+
     formatDate(date) {
         return formatRelativeDate(date);
     }
@@ -1530,10 +1653,24 @@ export class ChatApp {
     async selectSession(sessionId) {
         if (sessionId === this.activeSessionId) return;
 
+        // Switching AWAY from a mid-stream session: detach the viewport
+        // without touching the turn. The agent keeps working; the
+        // registry keeps its 'streaming' badge; the backend accumulator
+        // keeps the text for switch-back. Only the window-local render
+        // state is dropped.
+        if (this.isWaitingForResponse) {
+            this.hideTypingIndicator();
+            this.currentStreamingMessage = null;
+            this.currentStreamingContent = '';
+            this.isWaitingForResponse = false;
+        }
+
         // Mark as seen (removes the "new" indicator)
         this._seenSessionIds.add(sessionId);
 
         this.activeSessionId = sessionId;
+        // Entering the session consumes its unread badge (if any).
+        this.streamRegistry.markRead(sessionId);
         this.renderSessionList();
 
         // Clear any previous error
@@ -1551,6 +1688,26 @@ export class ChatApp {
         } catch (error) {
             console.error('Failed to load session files:', error);
             this.showError(errLabel(t('chat.error.failed_load_session'), error));
+        }
+
+        // Mid-stream switch-in: the session is already live in the agent
+        // process — do NOT `switch_acp_session` (its session/load would
+        // both be redundant and drop live chunks while the replay guard
+        // is up). Pin the window, re-attach to the stream, and render
+        // the text streamed so far from the backend accumulator.
+        if (this.streamRegistry.isStreaming(sessionId)) {
+            this.currentAcpSessionId = sessionId;
+            this.invoke('set_window_session', {
+                label: this.windowLabel,
+                sessionId,
+            }).catch(() => {});
+            await this._attachToLiveStream(sessionId);
+            this.isConnected = true;
+            this.updateConnectionStatus();
+            this.elements.chatInput.disabled = false;
+            this.elements.chatInput.placeholder = t('chat.placeholder.type_message');
+            this.elements.sendBtn.disabled = false;
+            return;
         }
 
         // Show connecting state in the input
@@ -1589,6 +1746,57 @@ export class ChatApp {
                 : t('chat.placeholder.session_unavailable');
             this.elements.sendBtn.disabled = true;
         }
+    }
+
+    /**
+     * Re-attach the viewport to a turn that's already in flight on
+     * `sessionId`. Seeds the streaming message with the text streamed so
+     * far (peeked from the backend's per-session accumulator — disk only
+     * has completed turns) plus any tool chips the registry tracked
+     * while the session was backgrounded, then lets the normal chunk
+     * stream continue rendering from that point.
+     */
+    async _attachToLiveStream(sessionId) {
+        // Restore tool chips tracked while backgrounded.
+        const entry = this.streamRegistry.get(sessionId);
+        if (entry) {
+            this.toolUsages = entry.toolUsages;
+            this.toolSources = entry.toolSources;
+            this._toolCallIds = entry._toolCallIds;
+            this._sourceDomains = entry._sourceDomains;
+        }
+
+        let snapshot = '';
+        try {
+            snapshot = await this.invoke('get_session_stream_snapshot', { sessionId });
+        } catch (e) {
+            console.warn('[chat] stream snapshot failed, attaching empty:', e);
+        }
+
+        // The stream may have completed while we awaited the snapshot —
+        // the accumulator is evicted on MESSAGE_COMPLETE, and our
+        // complete listener consumed the registry entry. displaySession
+        // already painted the final text from disk in that case.
+        if (!this.streamRegistry.isStreaming(sessionId)) return;
+
+        // The backend accumulator runs AHEAD of the emitted chunk stream
+        // (accumulate happens before the batcher flush), so the first
+        // chunk after attach can duplicate the snapshot's tail. The
+        // chunk listener trims that overlap once.
+        this._trimNextChunkOverlap = true;
+        this.currentStreamingContent = snapshot;
+        this.isWaitingForResponse = true;
+        this._streamStartTime = entry?.startedAt || Date.now();
+        this.updateInputState();
+        this.currentStreamingMessage = this.createMessageElement('assistant', '');
+        this.elements.messagesArea.appendChild(this.currentStreamingMessage);
+        if (snapshot) {
+            const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+            renderMarkdown(snapshot, contentDiv, true);
+        } else {
+            this.showTypingIndicator();
+        }
+        this.scrollToBottom();
     }
 
     displaySession(sessionData) {
@@ -2181,6 +2389,9 @@ export class ChatApp {
         this.updateInputState();
         this.elements.chatInput.focus();
         this.scrollToBottom();
+        // Cancellation is terminal for this session's stream — clear the
+        // registry entry (cancel_generation emits no completion event).
+        if (this.activeSessionId) this.streamRegistry.fail(this.activeSessionId);
         this.invoke('cancel_generation', { sessionId: this.activeSessionId }).catch((e) =>
             console.log('Cancel:', e)
         );
