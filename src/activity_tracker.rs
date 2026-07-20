@@ -298,6 +298,10 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
                 NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap_or(now.date_naive());
             (start, "This Month".to_string())
         }
+        "year" => {
+            let start = NaiveDate::from_ymd_opt(now.year(), 1, 1).unwrap_or(now.date_naive());
+            (start, "This Year".to_string())
+        }
         _ => {
             let start = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
             (start, "All Time".to_string())
