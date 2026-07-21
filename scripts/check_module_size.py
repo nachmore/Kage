@@ -51,7 +51,6 @@ EXCEPTIONS = {
     "ui/js/settings/automations.js": "Split schedule, editor, and persistence.",
     "ui/js/settings/about.js": "Split diagnostics and backup flows.",
     "ui/js/shared/settings-renderer.js": "Split schema rendering and action effects.",
-    "ui/js/settings/speech.js": "Split settings form and Pocket TTS operations.",
     "ui/js/store.js": "Split catalog rendering and install operations.",
     "ui/js/shared/speech.js": "Split speech recognition, synthesis, and UI controls.",
 }
