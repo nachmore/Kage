@@ -39,7 +39,6 @@ EXCEPTIONS = {
     "src/commands/sessions/crud.rs": "Split watcher, scan, and session commands.",
     "src/commands/system/agents.rs": "Split detection, probing, and installation.",
     "src/commands/input.rs": "Split text input, clipboard, and keyboard commands.",
-    "src/commands/messaging/notifications.rs": "Split notification parsing and event routing.",
     "src/acp_client/transport.rs": "Split framing, process launch, and transport state.",
     "ui/js/floating/app.js": "Split lifecycle, input, search, and message UI.",
     "ui/js/chat/app.js": "Split sessions, composer, and stream rendering.",
