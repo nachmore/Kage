@@ -276,7 +276,7 @@ fn stage_placeholder(path: &std::path::Path, content: &[u8], executable: bool) {
     {
         use std::os::unix::fs::PermissionsExt;
         if executable {
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
+            let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
         }
     }
     println!(
