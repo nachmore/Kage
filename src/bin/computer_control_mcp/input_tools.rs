@@ -3,6 +3,7 @@ use super::handlers::convert_key_combo;
 #[cfg(target_os = "macos")]
 use super::macos_input;
 use super::tool_result_text;
+#[cfg(target_os = "windows")]
 use super::win32_mouse_event;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Input::KeyboardAndMouse::{
