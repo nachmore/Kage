@@ -41,7 +41,6 @@ EXCEPTIONS = {
     "ui/js/chat/app.js": "Split sessions, composer, and stream rendering.",
     "ui/js/shared/markdown.js": "Split core parsing and specialized renderers.",
     "ui/js/shared/extension-manager.js": "Split discovery, widgets, and commands.",
-    "ui/js/settings/connection.js": "Split list, editor, and probing.",
     "ui/js/extension-sandbox/runtime.js": "Split RPC, worker pool, and module loading.",
 }
 
