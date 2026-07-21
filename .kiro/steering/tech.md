@@ -60,7 +60,7 @@ cargo tauri build          # Release build + NSIS installer (output: target/rele
 # the installer. Always use `cargo tauri build` for release distribution.
 # The kage-computer-control-mcp binary is built automatically alongside the main binary.
 
-# IMPORTANT: The kage-computer-control-mcp is a SEPARATE binary (src/bin/computer_control_mcp.rs).
+# IMPORTANT: The kage-computer-control-mcp is a SEPARATE workspace package (computer_control_mcp/src/main.rs).
 # `cargo tauri dev` only rebuilds the main kage binary.
 # After changing kage-computer-control-mcp, you MUST rebuild it explicitly:
 cargo build --bin kage-computer-control-mcp

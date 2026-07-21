@@ -54,11 +54,6 @@ issues     = "https://github.com/nachmore/Kage/issues"
 privacy    = "https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md"
 
 [features]
-# Built separately and embedded through Tauri's `externalBin` mechanism.
-# Keeping this target out of the main `--bins` build avoids Tauri treating it
-# as a second application executable.
-mcp-sidecar = []
-
 [dependencies]
 tauri = { version = "2.10", features = ["macos-private-api", "tray-icon", "image-png"] }
 # Pulled in directly (it's already a transitive dep of `tauri`) so the
@@ -221,15 +216,12 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
-# Keep binary targets explicit. The sidecar source lives outside `src/bin/`
-# so Tauri does not mistake it for a second application executable.
 [[bin]]
 name = "kage"
 path = "src/main.rs"
 test = false
 
-[[bin]]
-name = "kage-computer-control-mcp"
-path = "src/mcp_sidecar.rs"
-test = false
-required-features = ["mcp-sidecar"]
+[workspace]
+members = ["computer_control_mcp"]
+default-members = ["."]
+resolver = "2"

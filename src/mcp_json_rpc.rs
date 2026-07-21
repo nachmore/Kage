@@ -1,6 +1,6 @@
 //! Typed JSON-RPC 2.0 framing for the MCP server binary.
 //!
-//! `src/bin/computer_control_mcp.rs` previously hand-rolled JSON-RPC
+//! `computer_control_mcp/src/main.rs` previously hand-rolled JSON-RPC
 //! parsing and response construction inline:
 //!
 //! ```ignore

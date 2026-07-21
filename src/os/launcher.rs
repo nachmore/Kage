@@ -41,7 +41,7 @@ pub fn launch_application(path: &PathBuf) -> Result<()> {
 /// scanned app list for the floating-window launcher UI). This one is used
 /// by the MCP `launch_app` and `launch_and_get_tree` tools, which receive
 /// a free-form name from the agent.
-#[allow(dead_code)] // consumed by src/bin/computer_control_mcp.rs, not by the main kage binary
+#[allow(dead_code)] // consumed by computer_control_mcp/src/main.rs, not by the main kage binary
 pub fn shell_launch(name: &str) -> Result<()> {
     crate::os::platform::launcher::shell_launch_impl(name)
 }

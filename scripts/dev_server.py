@@ -85,7 +85,7 @@ def build_mcp_binary():
     """Rebuild the standalone kage-computer-control-mcp binary.
 
     `cargo tauri dev` only rebuilds the main `kage` binary — edits to
-    `src/bin/computer_control_mcp.rs` (or to any module it pulls in,
+    `computer_control_mcp/src/main.rs` (or to any module it pulls in,
     notably `src/os/accessibility.rs`) silently produce a stale MCP
     binary unless the developer remembers to run this command by hand.
     Running it here on every dev start makes the dev loop honest:
@@ -102,7 +102,7 @@ def build_mcp_binary():
     print("Building kage-computer-control-mcp...")
     sys.stdout.flush()
     result = subprocess.run(
-        ["cargo", "build", "--bin", "kage-computer-control-mcp", "--features", "mcp-sidecar"],
+        ["cargo", "build", "--package", "kage-computer-control-mcp"],
         cwd=repo_root,
         # Pipe through so build progress and any compile errors show up
         # in the same terminal as the dev server.

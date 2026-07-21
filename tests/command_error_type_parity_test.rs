@@ -167,10 +167,10 @@ fn scan_file(path: &Path, content: &str) -> Vec<Offense> {
 fn every_tauri_command_returns_app_error() {
     // Files we don't scan:
     //   - the test files themselves (false positives via included literal).
-    //   - the standalone MCP binary (`src/bin/computer_control_mcp.rs`)
+    //   - the standalone MCP binary (`computer_control_mcp/src/main.rs`)
     //     doesn't talk to the frontend; it speaks JSON-RPC over stdio
     //     and has no Tauri commands.
-    let skip: HashSet<&str> = ["src/bin/computer_control_mcp.rs"].into_iter().collect();
+    let skip: HashSet<&str> = ["computer_control_mcp/src/main.rs"].into_iter().collect();
 
     let mut all_offenses = Vec::new();
     for path in rust_source_files() {

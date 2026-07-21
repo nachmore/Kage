@@ -1,7 +1,7 @@
 # Computer Control: Why It's a Separate MCP Binary
 
 `kage-computer-control-mcp` is a standalone executable built from
-`src/mcp_sidecar.rs`. It ships alongside the main `kage`
+`computer_control_mcp/src/main.rs`. It ships alongside the main `kage`
 binary, is registered in `mcp.json` by `src/mcp_registration.rs`, and is
 spawned over stdio by the agent backend (e.g. `kiro-cli`) as a child
 process — not by Kage itself.
@@ -101,7 +101,7 @@ Very little in terms of code: both binaries link the same `kage`
 library, so `computer_control`, `os::accessibility`, `mcp_json_rpc`,
 `mcp_registration`, and `commands::folder_tools` are all shared. The
 MCP binary's unique surface is ~1000 lines of JSON-RPC dispatch in
-`src/mcp_sidecar.rs` and nothing more.
+`computer_control_mcp/src/main.rs` and nothing more.
 
 The operational costs are:
 
@@ -136,7 +136,7 @@ and the current computer-control split is the canonical example.
 
 ## Pointers
 
-- Entry point: `src/mcp_sidecar.rs`
+- Entry point: `computer_control_mcp/src/main.rs`
 - MCP registration: `src/mcp_registration.rs`
 - Windows worker: `src/os/windows/uia_worker.rs`
 - macOS worker: `src/os/macos/ax_worker.rs`

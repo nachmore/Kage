@@ -1,7 +1,7 @@
 """Build the kage-computer-control-mcp sidecar, matching the main build's profile.
 
 Invoked from `tauri.conf.json` → `beforeBuildCommand`. The sidecar is a
-separate binary (see src/bin/computer_control_mcp.rs) that kage spawns
+separate workspace package (see computer_control_mcp/src/main.rs) that kage spawns
 at runtime; shipping a release sidecar next to a debug kage.exe works
 but wastes a minute or two of compile time and produces mismatched
 symbols, so we mirror whatever profile the top-level Tauri build is in.
@@ -42,10 +42,8 @@ def main() -> int:
     cmd = [
         "cargo",
         "build",
-        "--bin",
+        "--package",
         "kage-computer-control-mcp",
-        "--features",
-        "mcp-sidecar",
     ]
     if os.environ.get("TAURI_ENV_TARGET_TRIPLE"):
         cmd.extend(["--target", target])
