@@ -12,59 +12,10 @@ import {
 import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
 import { renderSchema } from '../shared/settings-renderer.js';
-import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 import { t } from '../shared/i18n.js';
 import { SettingsModule } from './base.js';
+import { renderCapabilityBadges } from './extension-capabilities.js';
 import { registerSettingsActions, setSettingsManager } from './module-registry.js';
-
-// Capability → icon. Labels and descriptions resolve through i18n at
-// render time so language switches reflect immediately. Keep in sync with
-// ui/js/shared/extension-permissions.js.
-const CAPABILITY_ICONS = Object.freeze({
-    storage: '💾',
-    clipboard: '📋',
-    urls: '🔗',
-    launch: '🚀',
-    network: '📡',
-    oauth: '🔐',
-    filesystem: '📂',
-    window: '🪟',
-    windows: '🧿',
-    notifications: '🔔',
-    calendar: '📅',
-    session: '💬',
-    agent: '🤖',
-    activity: '📊',
-    automation: '⚡',
-    tts: '🔈',
-});
-
-function capabilityLabel(cap) {
-    return CAPABILITY_ICONS[cap] ? t(`settings.manager.cap.${cap}.label`) : cap;
-}
-function capabilityDesc(cap) {
-    return CAPABILITY_ICONS[cap]
-        ? t(`settings.manager.cap.${cap}.desc`)
-        : t('settings.manager.cap.unknown.desc');
-}
-
-function renderCapabilityBadges(capabilities, legacy) {
-    if (!Array.isArray(capabilities) || capabilities.length === 0) {
-        return `<div class="ext-capabilities ext-capabilities-none" title="${escapeAttr(t('settings.manager.cap.none.title'))}">${t('settings.manager.cap.none')}</div>`;
-    }
-    const pills = capabilities
-        .map((cap) => {
-            const icon = CAPABILITY_ICONS[cap] || '❓';
-            const label = capabilityLabel(cap);
-            const desc = capabilityDesc(cap);
-            return `<span class="ext-capability-pill" title="${escapeAttr(desc)}">${icon} ${escapeHtml(label)}</span>`;
-        })
-        .join('');
-    const legacyBanner = legacy
-        ? `<div class="ext-capabilities-legacy">${t('settings.manager.cap.legacy_warning')}</div>`
-        : '';
-    return `<div class="ext-capabilities">${pills}</div>${legacyBanner}`;
-}
 
 // --- Sandboxed extension settings ------------------------------------------
 //
