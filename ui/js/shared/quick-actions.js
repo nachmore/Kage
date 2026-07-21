@@ -4,6 +4,7 @@
  */
 
 import { detectScript, detectLanguageAll } from './language-detect.js';
+import { BUILTIN_ACTIONS } from './quick-action-definitions.js';
 import { COMMON_WORDS } from './quick-actions-language-data.js';
 
 // --- Text classification ---
@@ -259,129 +260,9 @@ async function _isTextInTargetLanguage(text, targetLangCode) {
 
 // Minimum word count for the "Summarize" action to be useful — short snippets
 // don't benefit from summarization.
-const SUMMARIZE_MIN_WORDS = 40;
-
 function countWords(text) {
     return (text.trim().match(/\S+/g) || []).length;
 }
-
-const BUILTIN_ACTIONS = [
-    // Universal — only shown when text is long enough to benefit from summarization
-    {
-        label: 'Summarize',
-        icon: '📝',
-        prompt: 'Summarize the following text concisely:\n\n{text}',
-        contentTypes: [],
-        mode: 'inform',
-        minWords: SUMMARIZE_MIN_WORDS,
-    },
-    // Prose
-    {
-        label: 'Translate',
-        icon: '🌐',
-        prompt: null,
-        contentTypes: ['prose'],
-        _dynamic: 'translate',
-        mode: 'replace',
-    },
-    // Code
-    {
-        label: 'Explain',
-        icon: '💡',
-        prompt: 'Explain what this code does in plain language:\n\n```\n{text}\n```',
-        contentTypes: ['code'],
-        mode: 'inform',
-    },
-    {
-        label: 'Add comments',
-        icon: '💬',
-        prompt: 'Add clear, helpful comments to this code. Return only the commented code, no explanations:\n\n```\n{text}\n```',
-        contentTypes: ['code'],
-        mode: 'replace',
-    },
-    {
-        label: 'Find bugs',
-        icon: '🐛',
-        prompt: 'Review this code for bugs, issues, or improvements:\n\n```\n{text}\n```',
-        contentTypes: ['code'],
-        mode: 'inform',
-    },
-    // Errors
-    {
-        label: 'Explain error',
-        icon: '🔍',
-        prompt: 'Explain this error and suggest how to fix it:\n\n```\n{text}\n```',
-        contentTypes: ['error'],
-        mode: 'inform',
-    },
-    {
-        label: 'Suggest fix',
-        icon: '🔧',
-        prompt: 'Suggest a fix for this error. Return only the corrected code:\n\n```\n{text}\n```',
-        contentTypes: ['error'],
-        mode: 'replace',
-    },
-    // JSON/data
-    {
-        label: 'Format',
-        icon: '📐',
-        prompt: 'Format and pretty-print this data. Return only the formatted data:\n\n```\n{text}\n```',
-        contentTypes: ['json'],
-        mode: 'replace',
-    },
-    {
-        label: 'Validate',
-        icon: '✅',
-        prompt: 'Validate this data structure and point out any issues:\n\n```\n{text}\n```',
-        contentTypes: ['json'],
-        mode: 'inform',
-    },
-    // URL
-    {
-        label: 'Summarize page',
-        icon: '🌐',
-        prompt: 'Summarize the content at this URL:\n\n{text}',
-        contentTypes: ['url'],
-        mode: 'inform',
-    },
-    // Number
-    {
-        label: 'Convert units',
-        icon: '📏',
-        prompt: 'What are common unit conversions for this number? Show conversions for likely units (currency, distance, weight, temperature, etc.):\n\n{text}',
-        contentTypes: ['number'],
-        mode: 'inform',
-    },
-    {
-        label: 'Explain number',
-        icon: '🔢',
-        prompt: 'What is significant about this number? Provide context (is it a port number, HTTP status, error code, mathematical constant, etc.):\n\n{text}',
-        contentTypes: ['number'],
-        mode: 'inform',
-    },
-    // Folder organization
-    {
-        label: 'Looks good, do it',
-        icon: '▶️',
-        prompt: 'Go ahead and execute the plan as proposed.',
-        contentTypes: ['folder_plan'],
-        mode: 'inform',
-    },
-    {
-        label: 'More details',
-        icon: '🔍',
-        prompt: 'Can you give me more details about what each operation will do and why?',
-        contentTypes: ['folder_plan'],
-        mode: 'inform',
-    },
-    {
-        label: 'Undo changes',
-        icon: '↩️',
-        prompt: 'Please undo/rollback the folder changes that were just made.',
-        contentTypes: ['folder_plan'],
-        mode: 'inform',
-    },
-];
 
 // --- Chip rendering ---
 
