@@ -36,8 +36,6 @@ EXCEPTIONS = {
     "src/app_log.rs": "Split in-memory log state and file writer.",
     "src/commands/sessions/crud.rs": "Split watcher, scan, and session commands.",
     "ui/js/floating/app.js": "Split lifecycle, input, search, and message UI.",
-    "ui/js/chat/app.js": "Split sessions, composer, and stream rendering.",
-    "ui/js/extension-sandbox/runtime.js": "Split RPC, worker pool, and module loading.",
 }
 
 
