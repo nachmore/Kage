@@ -221,9 +221,8 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
-# Keep binary targets explicit. Without `autobins = false`, Cargo also
-# discovers `src/bin/computer_control_mcp.rs` as `computer_control_mcp`;
-# Tauri then tries to bundle that inferred name instead of the sidecar.
+# Keep binary targets explicit. The sidecar source lives outside `src/bin/`
+# so Tauri does not mistake it for a second application executable.
 [[bin]]
 name = "kage"
 path = "src/main.rs"
@@ -231,6 +230,6 @@ test = false
 
 [[bin]]
 name = "kage-computer-control-mcp"
-path = "src/bin/computer_control_mcp.rs"
+path = "src/mcp_sidecar.rs"
 test = false
 required-features = ["mcp-sidecar"]

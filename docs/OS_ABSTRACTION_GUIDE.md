@@ -97,7 +97,7 @@ stay independently testable and easy to grep.
   `commands/` and `setup/`. When pure logic gets entangled there, lift it
   into a sibling module (the `chunk_batcher.rs` precedent) so it can be
   tested without standing up a Tauri AppHandle.
-- **The MCP binary** (`src/bin/computer_control_mcp.rs`) reaches into
+- **The MCP binary** (`src/mcp_sidecar.rs`) reaches into
   `os/` directly because it's a separate binary, not "application code"
   in the kage sense. The same dispatch contract applies — it consumes
   the cross-platform API, never the platform submodules.
