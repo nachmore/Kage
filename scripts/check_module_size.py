@@ -21,9 +21,7 @@ EXTENSIONS = {".rs", ".js", ".jsx", ".ts", ".tsx"}
 # Existing high-cohesion refactor targets. New files must not be added without
 # an accompanying explanation and a concrete removal plan.
 EXCEPTIONS = {
-    "src/os/macos/accessibility.rs": "Split native registry, traversal, and actions.",
     "src/main.rs": "Extract builder setup and run-event lifecycle.",
-    "src/webview_recovery.rs": "Split detection, snapshots, and restart policy.",
     "src/os/windows/accessibility.rs": "Split native registry, traversal, and actions.",
     "src/activity_tracker.rs": "Split persistence, polling, and reporting.",
     "src/extensions.rs": "Split discovery, installation, and archive handling.",
