@@ -5,6 +5,7 @@
 //! - `transport`: Connection management, pipe/TCP I/O, background reader thread
 //! - This module: `AcpClient` facade composing the above with session/protocol logic
 
+mod client;
 mod session;
 pub mod transport;
 pub mod types;
@@ -18,7 +19,6 @@ pub use types::{
 };
 
 use anyhow::Result;
-use log::{info, warn};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -96,32 +96,8 @@ pub struct AcpClient {
     restart_guard: Arc<Mutex<Option<std::time::Instant>>>,
 }
 
-/// How many spawn+initialize attempts a restart makes before giving up.
-const RESTART_MAX_ATTEMPTS: u32 = 3;
-/// Base backoff between restart attempts; doubles each retry.
-const RESTART_BASE_DELAY_MS: u64 = 300;
-/// A restart that succeeded this recently is treated as "good enough" for a
-/// concurrent/rapid caller — it coalesces onto the fresh connection instead
-/// of respawning again.
-const RESTART_COOLDOWN_MS: u64 = 2000;
-
-/// Decide whether a `restart_connection` caller should coalesce onto a recent
-/// restart instead of respawning. Coalesce only when BOTH: a prior restart
-/// succeeded within the cooldown window, AND the transport is currently
-/// healthy. If the connection died again after the last restart (not healthy),
-/// we must respawn even inside the cooldown — otherwise a rapidly-flapping
-/// agent would be masked by the debounce and never actually recover.
-fn should_coalesce_restart(
-    since_last_ok: Option<std::time::Duration>,
-    transport_healthy: bool,
-) -> bool {
-    match since_last_ok {
-        Some(elapsed) => {
-            elapsed < std::time::Duration::from_millis(RESTART_COOLDOWN_MS) && transport_healthy
-        }
-        None => false,
-    }
-}
+#[cfg(test)]
+use client::recovery::{should_coalesce_restart, RESTART_COOLDOWN_MS};
 
 /// Recognised JSON-RPC vendor extension prefixes. Both projects ship
 /// the same protocol shape under different prefixes — see the comment
@@ -462,220 +438,6 @@ impl AcpClient {
         self.transport
             .send_prompt_request("session/prompt", params)
             .map(Some)
-    }
-
-    /// Send a JSON-RPC notification (no id, fire-and-forget). Used for
-    /// protocol messages that don't expect a response, like session/cancel.
-    /// The transport handles serialization and write framing; callers
-    /// supply the method name and params.
-    pub fn send_notification(&self, method: &str, params: serde_json::Value) -> Result<()> {
-        let notif = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-        });
-        let line = serde_json::to_string(&notif)?;
-        self.transport.write_line(&line)
-    }
-
-    /// Announce that a live turn's session id changed underneath the caller
-    /// — the recovery ladder minted (or reloaded onto) a fresh session after
-    /// the backend died mid-turn, and the resend will stream under `new_id`.
-    ///
-    /// Emitted as a synthetic `_kage/session_migrated` notification so it
-    /// rides the existing notification-handler dispatch (which owns the
-    /// `AppHandle` and the streaming-audience fan-out) without the session
-    /// layer needing a Tauri handle. Distinct from the `session_reset` event:
-    /// that one is *terminal* (aborts the wait, shows an error), whereas a
-    /// migration means "keep waiting — same turn, new id". Windows pinned to
-    /// `old_id` adopt `new_id` and clear the accumulated steering-reply text
-    /// so the resend renders clean.
-    pub fn notify_session_migrated(&self, old_id: &str, new_id: &str) {
-        if old_id == new_id {
-            return;
-        }
-        log::info!("Session migrated mid-turn: {} → {}", old_id, new_id);
-        self.transport
-            .dispatch_synthetic_notification(serde_json::json!({
-                "jsonrpc": "2.0",
-                "method": "_kage/session_migrated",
-                "params": { "oldSessionId": old_id, "newSessionId": new_id },
-            }));
-    }
-
-    /// Cancel any in-flight prompt for the given session. The agent
-    /// (kiro-cli) treats session/prompt as exclusive per session, so
-    /// shutdown paths and the user-facing Cancel button must clear that
-    /// lock before issuing a new prompt or letting the connection drop.
-    /// No-op if there's no current session.
-    pub fn cancel_session(&self, session_id: &str) -> Result<()> {
-        info!("Sending session/cancel for session {}", session_id);
-        self.send_notification(
-            "session/cancel",
-            serde_json::json!({ "sessionId": session_id }),
-        )
-    }
-
-    /// Reply to a session/request_permission notification. The agent waits
-    /// for a JSON-RPC *response* keyed to the original request id; this is
-    /// not a notification — but it doesn't go through send_request because
-    /// we're answering, not asking. We write the wire-formatted response
-    /// directly through the transport, bypassing the pending-request map.
-    ///
-    /// `option_id` is one of the protocol-defined choices: "allow_once",
-    /// "allow_24h", "allow_always", "reject_once". The agent rejects
-    /// anything else. We pass the string through rather than enforcing
-    /// here because the set may grow over the protocol's lifetime.
-    pub fn send_permission_response(
-        &self,
-        request_id: &serde_json::Value,
-        option_id: &str,
-    ) -> Result<()> {
-        let response = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
-        });
-        let line = serde_json::to_string(&response)?;
-        self.transport.write_line(&line)
-    }
-
-    // --- Connection lifecycle (used by session.rs recovery) ---
-
-    pub(crate) fn force_disconnect(&self) {
-        self.transport.force_disconnect();
-        *self.initialized.lock_or_recover() = false;
-        // Match `disconnect`'s teardown: clear the compaction gate so a
-        // recovery `restart_connection` (which goes through here) can't
-        // inherit a stale "is_compacting=true" from the dead connection and
-        // stall the next prompt for 60s.
-        self.clear_compaction_gate();
-    }
-
-    /// Tear down and rebuild the agent connection, with coalescing and retry.
-    ///
-    /// Two failure modes this guards against:
-    ///
-    /// 1. **Respawn storms.** A burst of failing sends, or several windows all
-    ///    reacting to the same dead agent, would each call `restart_connection`
-    ///    and each kill+respawn kiro-cli. The `restart_guard` mutex serialises
-    ///    callers; a caller that arrives within `RESTART_COOLDOWN_MS` of a
-    ///    successful restart and finds the transport already healthy returns
-    ///    immediately without respawning.
-    ///
-    /// 2. **Transient cold-start EOF.** kiro-cli occasionally EOFs on the first
-    ///    `initialize` right after spawn (this is exactly what stranded the app
-    ///    for a week — a single unlucky launch with no retry). We now retry the
-    ///    spawn+initialize up to `RESTART_MAX_ATTEMPTS` with exponential
-    ///    backoff before surfacing the failure.
-    pub(crate) fn restart_connection(&self) -> Result<()> {
-        // Serialise restarts. Whoever holds this mutex owns the respawn; late
-        // arrivals block here and then hit the cooldown check below.
-        let mut last_ok = self.restart_guard.lock_or_recover();
-
-        // Coalesce: if another caller just rebuilt the connection and it's
-        // still healthy, don't tear a working agent down again.
-        if should_coalesce_restart(
-            last_ok.map(|when| when.elapsed()),
-            self.transport.is_healthy(),
-        ) {
-            info!("restart_connection: coalescing onto recent healthy restart");
-            return Ok(());
-        }
-
-        info!("Restarting ACP connection");
-        self.force_disconnect();
-
-        let mut last_err: Option<anyhow::Error> = None;
-        for attempt in 0..RESTART_MAX_ATTEMPTS {
-            // Backoff before the first attempt too: gives the just-killed
-            // child a moment to release its stdio handles before we respawn.
-            let delay = RESTART_BASE_DELAY_MS * 2u64.pow(attempt);
-            std::thread::sleep(std::time::Duration::from_millis(delay));
-
-            match self.try_connect_and_initialize() {
-                Ok(()) => {
-                    *last_ok = Some(std::time::Instant::now());
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!(
-                        "restart_connection attempt {}/{} failed: {}",
-                        attempt + 1,
-                        RESTART_MAX_ATTEMPTS,
-                        e
-                    );
-                    // Tear the half-open connection down before retrying so
-                    // the next spawn starts from a clean slate.
-                    self.force_disconnect();
-                    last_err = Some(e);
-                }
-            }
-        }
-
-        Err(last_err
-            .unwrap_or_else(|| anyhow::anyhow!("restart_connection failed with no recorded error")))
-    }
-
-    /// One spawn+initialize round. Split out so `restart_connection` can retry
-    /// it. `connect()` resets `initialized` when it spawns a fresh process, so
-    /// the subsequent `initialize()` always runs against the new agent.
-    fn try_connect_and_initialize(&self) -> Result<()> {
-        self.transport.connect()?;
-        self.initialize()?;
-        Ok(())
-    }
-
-    // Session and protocol methods are in session.rs
-
-    /// Block the current thread until compaction is finished (with a timeout).
-    /// Returns true if we waited, false if compaction wasn't active.
-    ///
-    /// Wakes early if the transport disconnects mid-wait. The reader
-    /// thread doesn't know about the compaction Condvar, so we
-    /// poll-with-timeout in 500ms slices and re-check `is_connected()`
-    /// each time. Without this, an agent that died mid-compaction
-    /// would gate every subsequent send for the full 60s before the
-    /// timeout fired (the "completed" notification was lost with the
-    /// reader thread). Disconnect-then-reconnect sessions used to feel
-    /// permanently broken.
-    pub fn wait_for_compaction(&self) -> bool {
-        let (lock, cvar) = &*self.compacting;
-        let mut compacting = lock.lock_or_recover();
-        if !*compacting {
-            return false;
-        }
-        info!("Waiting for compaction to finish before sending prompt...");
-        let total_timeout = std::time::Duration::from_secs(60);
-        let slice = std::time::Duration::from_millis(500);
-        let start = std::time::Instant::now();
-        loop {
-            if !*compacting {
-                info!("Compaction finished, proceeding with prompt");
-                return true;
-            }
-            if !self.transport.is_connected() {
-                log::warn!("Compaction wait aborted — transport disconnected");
-                // Clear the gate so a future reconnect doesn't inherit
-                // a stale "is_compacting=true" if the disconnect path
-                // didn't already clear it.
-                *compacting = false;
-                cvar.notify_all();
-                return true;
-            }
-            let elapsed = start.elapsed();
-            if elapsed >= total_timeout {
-                log::warn!("Compaction wait timed out after 60s — sending anyway");
-                return true;
-            }
-            let remaining = total_timeout - elapsed;
-            let this_slice = remaining.min(slice);
-            let (g, _) = match cvar.wait_timeout(compacting, this_slice) {
-                Ok(r) => r,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            compacting = g;
-        }
     }
 }
 

@@ -23,9 +23,7 @@ EXTENSIONS = {".rs", ".js", ".jsx", ".ts", ".tsx"}
 EXCEPTIONS = {
     "src/main.rs": "Extract builder setup and run-event lifecycle.",
     "src/os/windows/accessibility.rs": "Split native registry, traversal, and actions.",
-    "src/activity_tracker.rs": "Split persistence, polling, and reporting.",
     "src/extensions.rs": "Split discovery, installation, and archive handling.",
-    "src/acp_client/mod.rs": "Split client lifecycle from request operations.",
     "src/permission_audit.rs": "Split append/write and reverse-read operations.",
     "src/app_log.rs": "Split in-memory log state and file writer.",
     "src/commands/sessions/crud.rs": "Split watcher, scan, and session commands.",
