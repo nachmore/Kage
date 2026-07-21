@@ -20,7 +20,6 @@ pub use types::{
 use anyhow::Result;
 use log::{info, warn};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::lock_ext::LockExt;
@@ -43,19 +42,31 @@ pub struct AcpClient {
     initialized: Arc<Mutex<bool>>,
     /// Per-session accumulated streaming text. See SessionAccumulators.
     pub streaming_accumulators: SessionAccumulators,
+    /// Per-session user prompt for the turn currently in flight. Set by the
+    /// user-prompt send paths (send_message_streaming / open_chat_with_message)
+    /// and cleared in their completion/failure epilogues. Complements the
+    /// streaming accumulator for mid-stream switch-in: disk only has
+    /// completed turns, so without this the user's own message would vanish
+    /// from the transcript until the turn finishes. Steering/title prompts
+    /// never set it — they're invisible to the viewport by design.
+    pub in_flight_prompts: Arc<Mutex<HashMap<String, String>>>,
     /// True while the server is compacting context — outgoing prompts should wait
     pub compacting: Arc<(Mutex<bool>, std::sync::Condvar)>,
-    /// True while a `session/load` is in flight. When kiro-cli loads an
+    /// Session ids whose `session/load` is in flight. When kiro-cli loads an
     /// existing session it replays the entire conversation history as a
     /// burst of `session/update` notifications (agent_message_chunk +
     /// tool_call) on the reader thread *before* the load response returns.
     /// Those are history, not live output — without gating, they'd dump the
     /// prior conversation into the floating window and poison the streaming
-    /// accumulators. The notification handler checks this flag and drops
-    /// session/update replay while it's set. Atomic because it's written by
-    /// the loading thread and read by the reader thread with no other shared
-    /// state.
-    pub loading_session: Arc<AtomicBool>,
+    /// accumulators. The notification handler drops a session/update whose
+    /// session id is in this set.
+    ///
+    /// Per-session (not a single global flag) because loads overlap in the
+    /// multi-session world: window A loading session X must not unmask
+    /// window B's still-replaying load of session Y when X finishes first —
+    /// and conversely, a load of X must not swallow *live* chunks streaming
+    /// on an unrelated session Z.
+    pub loading_sessions: Arc<Mutex<std::collections::HashSet<String>>>,
     /// Vendor extension namespace observed from incoming notifications.
     /// Two ACP vendor namespaces are recognised: `_kage.dev/` and
     /// `_kiro.dev/`. The extension surface (commands/available,
@@ -139,18 +150,21 @@ impl AcpClient {
             transport: AcpTransport::new(mode),
             initialized: Arc::new(Mutex::new(false)),
             streaming_accumulators: Arc::new(Mutex::new(HashMap::new())),
+            in_flight_prompts: Arc::new(Mutex::new(HashMap::new())),
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
-            loading_session: Arc::new(AtomicBool::new(false)),
+            loading_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
             vendor_prefix: Arc::new(Mutex::new(None)),
             prompt_locks: Arc::new(Mutex::new(HashMap::new())),
             restart_guard: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Whether a `session/load` replay is currently in flight. The
-    /// notification handler consults this to drop replayed history updates.
-    pub fn is_loading_session(&self) -> bool {
-        self.loading_session.load(Ordering::Acquire)
+    /// Whether a `session/load` replay is currently in flight for
+    /// `session_id`. The notification handler consults this to drop that
+    /// session's replayed history updates while letting live updates from
+    /// other sessions through.
+    pub fn is_loading_session(&self, session_id: &str) -> bool {
+        self.loading_sessions.lock_or_recover().contains(session_id)
     }
 
     /// Record the vendor prefix observed in an inbound method name. Idempotent
@@ -255,6 +269,32 @@ impl AcpClient {
         self.streaming_accumulators
             .lock_or_recover()
             .remove(session_id);
+    }
+
+    // --- In-flight user prompt tracking (mid-stream switch-in) ---
+
+    /// Record the user prompt text for the turn starting on `session_id`.
+    /// Only real user prompts call this — steering/title prompts stay
+    /// invisible to viewports.
+    pub fn set_in_flight_prompt(&self, session_id: &str, text: &str) {
+        self.in_flight_prompts
+            .lock_or_recover()
+            .insert(session_id.to_string(), text.to_string());
+    }
+
+    /// The user prompt text for the turn in flight on `session_id`, if any.
+    pub fn peek_in_flight_prompt(&self, session_id: &str) -> Option<String> {
+        self.in_flight_prompts
+            .lock_or_recover()
+            .get(session_id)
+            .cloned()
+    }
+
+    /// Drop the in-flight prompt record for `session_id`. Called from the
+    /// send epilogues (complete or failed) — after that the turn is on disk
+    /// (or dead) and the viewport reads it from there.
+    pub fn clear_in_flight_prompt(&self, session_id: &str) {
+        self.in_flight_prompts.lock_or_recover().remove(session_id);
     }
 
     // --- Delegated transport accessors ---

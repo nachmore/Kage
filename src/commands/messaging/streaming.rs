@@ -48,6 +48,12 @@ pub async fn send_message_streaming(
         m.insert(session_id.clone(), window_label.clone());
     }
 
+    // Record the prompt text for mid-stream switch-in: the turn isn't on
+    // disk until it completes, so a viewport attaching to this session
+    // mid-turn reads the user's message from here. Cleared in the same
+    // epilogues that clear the originator entry.
+    acp.client.set_in_flight_prompt(&session_id, &message);
+
     // Tell chat hosts a user turn just started on this session so they
     // can badge it in the sidebar even when they're viewing another
     // session. Fired only for real user prompts — steering/titling
@@ -81,6 +87,7 @@ pub async fn send_message_streaming(
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
                 }
+                client.clear_in_flight_prompt(&session_id);
                 return;
             }
         }
@@ -159,6 +166,7 @@ pub async fn send_message_streaming(
             if let Ok(mut m) = originators.lock() {
                 m.remove(&session_id);
             }
+            client.clear_in_flight_prompt(&session_id);
             return;
         }
 
@@ -192,8 +200,10 @@ pub async fn send_message_streaming(
         // a backgrounded session may be never. Auto-steering below re-resets
         // the bucket before its own send, so clearing here is safe.
         client_arc.reset_session_accumulator(&active_session_id);
+        client_arc.clear_in_flight_prompt(&active_session_id);
         if active_session_id != session_id {
             client_arc.reset_session_accumulator(&session_id);
+            client_arc.clear_in_flight_prompt(&session_id);
         }
 
         // Refresh the window title now that there's a user message
@@ -351,6 +361,8 @@ pub async fn open_chat_with_message(
             if let Ok(mut m) = originators.lock() {
                 m.insert(session_id.clone(), window_labels::MAIN.to_string());
             }
+            // Same mid-stream switch-in support as send_message_streaming.
+            client.set_in_flight_prompt(&session_id, &message);
             let result =
                 client.send_chat_streaming_with_recovery(session_id.clone(), message, None);
             let active_session_id = match &result {
@@ -366,6 +378,7 @@ pub async fn open_chat_with_message(
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
                 }
+                client.clear_in_flight_prompt(&session_id);
                 return;
             }
             // Streaming-audience emit — peer windows pinned to the same
@@ -384,6 +397,10 @@ pub async fn open_chat_with_message(
                 if active_session_id != session_id {
                     m.remove(&session_id);
                 }
+            }
+            client.clear_in_flight_prompt(&active_session_id);
+            if active_session_id != session_id {
+                client.clear_in_flight_prompt(&session_id);
             }
         });
     }

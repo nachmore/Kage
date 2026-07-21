@@ -1580,6 +1580,14 @@ export class FloatingApp {
         if (!this._automationPlan) {
             if (this.currentResponse) {
                 renderMarkdown(this.currentResponse, this.elements.responseText);
+                // The text above is whatever streamed before the cancel —
+                // it can read as a complete answer (the agent may even have
+                // finished generating but not yet ended the turn). Flag it
+                // so a cancelled response is never mistaken for the full one.
+                const note = document.createElement('div');
+                note.className = 'response-partial-note';
+                note.textContent = t('floating.response.partial_note');
+                this.elements.responseText.appendChild(note);
             } else {
                 this.elements.contentArea.classList.remove('visible');
                 this.elements.expandBtn.classList.remove('visible');

@@ -1763,11 +1763,12 @@ export class ChatApp {
 
     /**
      * Re-attach the viewport to a turn that's already in flight on
-     * `sessionId`. Seeds the streaming message with the text streamed so
-     * far (peeked from the backend's per-session accumulator — disk only
-     * has completed turns) plus any tool chips the registry tracked
-     * while the session was backgrounded, then lets the normal chunk
-     * stream continue rendering from that point.
+     * `sessionId`. Seeds the transcript with the user prompt that started
+     * the turn and the streaming message with the text streamed so far
+     * (both peeked from the backend — disk only has completed turns) plus
+     * any tool chips the registry tracked while the session was
+     * backgrounded, then lets the normal chunk stream continue rendering
+     * from that point.
      */
     async _attachToLiveStream(sessionId) {
         // Restore tool chips tracked while backgrounded.
@@ -1780,8 +1781,11 @@ export class ChatApp {
         }
 
         let snapshot = '';
+        let prompt = null;
         try {
-            snapshot = await this.invoke('get_session_stream_snapshot', { sessionId });
+            const peek = await this.invoke('get_session_stream_snapshot', { sessionId });
+            snapshot = peek?.text || '';
+            prompt = peek?.prompt || null;
         } catch (e) {
             console.warn('[chat] stream snapshot failed, attaching empty:', e);
         }
@@ -1791,6 +1795,14 @@ export class ChatApp {
         // complete listener consumed the registry entry. displaySession
         // already painted the final text from disk in that case.
         if (!this.streamRegistry.isStreaming(sessionId)) return;
+
+        // The user's own message isn't on disk until the turn completes —
+        // paint it from the in-flight record so switching away and back
+        // mid-turn doesn't make the prompt vanish.
+        const promptText = prompt ? stripKageTags(prompt) : '';
+        if (promptText) {
+            this.elements.messagesArea.appendChild(this.createMessageElement('user', promptText));
+        }
 
         // The backend accumulator runs AHEAD of the emitted chunk stream
         // (accumulate happens before the batcher flush), so the first

@@ -318,10 +318,10 @@
     "_source_hash": "43f81ad6529ae8e7"
   },
   "errors.session.no_session": {
-    "message": "No active session",
+    "message": "Không có phiên nào đang hoạt động",
     "description": "A command was invoked before a session was created or pinned to the window",
     "_machine_translated": true,
-    "_source_hash": "32f7ce2cae77d8e7"
+    "_source_hash": "46f6ddab949a310c"
   },
   "errors.window.create_failed": {
     "message": "Không thể tạo cửa sổ: {reason}",
@@ -1992,16 +1992,16 @@
     "_source_hash": "bd6eadb6e1ac8c72"
   },
   "chat.session.activity.streaming": {
-    "message": "Agent is responding…",
+    "message": "Agent đang trả lời…",
     "description": "Tooltip on the sidebar spinner shown while a background session has a turn in flight",
     "_machine_translated": true,
-    "_source_hash": "eaefe320837d7e4f"
+    "_source_hash": "378b5524c7d9775b"
   },
   "chat.session.activity.unread": {
-    "message": "New response",
+    "message": "Phản hồi mới",
     "description": "Tooltip on the sidebar dot shown when a background session finished a turn the user hasn't viewed yet",
     "_machine_translated": true,
-    "_source_hash": "69b1662c791ff3e7"
+    "_source_hash": "a75c6350ad817e2c"
   },
   "chat.session.action.rename_title": {
     "message": "Đổi tên",
@@ -7786,5 +7786,11 @@
     "description": "Button atop a long transcript that renders the older messages hidden by the initial render cap",
     "_machine_translated": true,
     "_source_hash": "c4991d74d78ef1e4"
+  },
+  "floating.response.partial_note": {
+    "message": "Bạn đã dừng — phản hồi này chưa hoàn chỉnh.",
+    "description": "Note appended under a floating-window response after the user cancels generation mid-stream; warns the shown text is partial",
+    "_machine_translated": true,
+    "_source_hash": "c0ad415c13c09e01"
   }
 }

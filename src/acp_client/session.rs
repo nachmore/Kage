@@ -3,7 +3,7 @@
 
 use anyhow::{Context, Result};
 use log::{info, warn};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -11,25 +11,31 @@ use super::types::format_acp_error;
 use super::AcpClient;
 use crate::lock_ext::LockExt;
 
-/// RAII guard that marks a `session/load` replay window open for its
-/// lifetime and clears it on drop — including the `?` early-return paths in
-/// `load_existing_session`. While set, the notification handler drops the
-/// conversation-history `session/update`s that kiro-cli replays in answer to
-/// `session/load`. See `AcpClient::loading_session`.
+/// RAII guard that marks a `session/load` replay window open for one
+/// session id for its lifetime and clears it on drop — including the `?`
+/// early-return paths in `load_existing_session`. While a session id is in
+/// the set, the notification handler drops the conversation-history
+/// `session/update`s that kiro-cli replays in answer to `session/load` for
+/// that session, without touching live updates for other sessions (loads
+/// overlap in the multi-session world). See `AcpClient::loading_sessions`.
 struct LoadReplayGuard {
-    flag: Arc<AtomicBool>,
+    set: Arc<Mutex<HashSet<String>>>,
+    session_id: String,
 }
 
 impl LoadReplayGuard {
-    fn new(flag: &Arc<AtomicBool>) -> Self {
-        flag.store(true, Ordering::Release);
-        Self { flag: flag.clone() }
+    fn new(set: &Arc<Mutex<HashSet<String>>>, session_id: &str) -> Self {
+        set.lock_or_recover().insert(session_id.to_string());
+        Self {
+            set: set.clone(),
+            session_id: session_id.to_string(),
+        }
     }
 }
 
 impl Drop for LoadReplayGuard {
     fn drop(&mut self) {
-        self.flag.store(false, Ordering::Release);
+        self.set.lock_or_recover().remove(&self.session_id);
     }
 }
 
@@ -172,13 +178,15 @@ impl AcpClient {
         // `session/load` by re-emitting every prior turn as a burst of
         // `session/update` notifications (on the reader thread) *before*
         // the load response returns. The notification handler drops
-        // session/update while this flag is set, so the prior conversation
-        // doesn't dump into the floating window or poison the streaming
-        // accumulators. The reader processes lines in order, so by the time
-        // `send_request` returns the response, every replay notification
-        // ahead of it has already been handled — clearing here (via the
-        // guard's Drop) can't race with a still-pending replay chunk.
-        let _replay_guard = LoadReplayGuard::new(&self.loading_session);
+        // session/update for THIS session while it's in the loading set, so
+        // the prior conversation doesn't dump into the floating window or
+        // poison the streaming accumulators — while live chunks from other
+        // sessions (and other windows' overlapping loads) stay unaffected.
+        // The reader processes lines in order, so by the time `send_request`
+        // returns the response, every replay notification ahead of it has
+        // already been handled — clearing here (via the guard's Drop) can't
+        // race with a still-pending replay chunk.
+        let _replay_guard = LoadReplayGuard::new(&self.loading_sessions, session_id);
 
         let response = self.send_request(
             "session/load",
@@ -501,20 +509,45 @@ impl AcpClient {
 #[cfg(test)]
 mod tests {
     use super::{AcpClient, LoadReplayGuard};
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
+    use std::collections::HashSet;
+    use std::sync::{Arc, Mutex};
 
     #[test]
-    fn load_replay_guard_sets_and_clears_flag() {
-        let flag = Arc::new(AtomicBool::new(false));
+    fn load_replay_guard_sets_and_clears_own_session() {
+        let set: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
         {
-            let _g = LoadReplayGuard::new(&flag);
-            assert!(flag.load(Ordering::Acquire), "flag set for guard lifetime");
+            let _g = LoadReplayGuard::new(&set, "session-a");
+            assert!(
+                set.lock().unwrap().contains("session-a"),
+                "session marked loading for guard lifetime"
+            );
         }
         assert!(
-            !flag.load(Ordering::Acquire),
-            "flag cleared when guard drops"
+            !set.lock().unwrap().contains("session-a"),
+            "session cleared when guard drops"
         );
+    }
+
+    #[test]
+    fn overlapping_load_guards_are_independent() {
+        // The regression this design fixes: two loads overlap, the first
+        // finishing must NOT unmask the second's still-running replay, and
+        // each gate only masks its own session.
+        let set: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+        let g_a = LoadReplayGuard::new(&set, "session-a");
+        let g_b = LoadReplayGuard::new(&set, "session-b");
+        assert!(
+            !set.lock().unwrap().contains("session-c"),
+            "unrelated session unmasked"
+        );
+        drop(g_a);
+        assert!(
+            set.lock().unwrap().contains("session-b"),
+            "finishing load A must not unmask load B's replay"
+        );
+        assert!(!set.lock().unwrap().contains("session-a"));
+        drop(g_b);
+        assert!(set.lock().unwrap().is_empty());
     }
 
     #[test]
