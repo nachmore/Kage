@@ -15,9 +15,8 @@
 import { alertDialog, confirmDialog } from './shared/confirm-dialog.js';
 import { errMessage } from './shared/error-message.js';
 import { escapeAttr } from './shared/tool-utils.js';
-import { localizeManifestForPrompt } from './shared/extension-manager.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
-import { showPermissionPrompt } from './shared/permission-prompt.js';
+import { runStagedExtensionInstall } from './shared/staged-extension-install.js';
 import { cmdOrCtrlPressed } from './shared/shortcuts.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
 
@@ -497,86 +496,19 @@ function setCardBusy(id, label) {
  * skip the prompt and commit directly — no user friction for
  * routine updates that don't expand the capability surface.
  */
-async function runStagedInstall(stager, { onSuccess } = {}) {
-    const invoke = window.__TAURI__.core.invoke;
-
-    // Pre-fetch current config so we can detect upgrades.
-    let priorGrant = null;
-    try {
-        const cfg = await invoke('get_config');
-        priorGrant = cfg?.extension_grants || {};
-    } catch {
-        priorGrant = {};
-    }
-
-    const item = await stager();
-    const manifest = item?.manifest;
-    if (!manifest?.id) {
-        throw new Error('install returned no manifest');
-    }
-
-    const existing = priorGrant[manifest.id] || null;
-    const previouslyGranted = Array.isArray(existing?.granted) ? existing.granted : [];
-    const isUpgrade = !!existing;
-
-    // Requested capabilities per manifest (normalized). If the update
-    // asks for exactly the same set (or a subset of) what was
-    // previously approved, skip the re-prompt — this is a no-change
-    // update.
-    const requested = Array.isArray(manifest.permissions) ? manifest.permissions : [];
-    const grantedSet = new Set(previouslyGranted);
-    const expandsCaps = requested.some((cap) => !grantedSet.has(cap));
-
-    let decision;
-    if (isUpgrade && !expandsCaps) {
-        // Auto-approve: no capability expansion, user already said yes.
-        decision = { approved: true, granted: requested };
-    } else {
-        // Resolve `__MSG_*__` tokens in name/description against the
-        // freshly-staged extension's `_locales/<lang>/messages.json`.
-        // Without this the prompt shows raw tokens like
-        // `__MSG_manifest.name__` because store_install returns the
-        // wire-form manifest.
-        const localized = await localizeManifestForPrompt(invoke, manifest);
-        decision = await showPermissionPrompt(localized, {
-            isUpgrade,
-            previouslyGranted,
-        });
-    }
-
-    if (!decision.approved) {
-        // Roll back: the staged files are on disk but nothing has
-        // loaded the extension yet (commit was never called, so no
-        // extensions_changed fired). Uninstall to remove them.
-        try {
-            await invoke('uninstall_extension', {
-                id: manifest.id,
-                kind: manifest.type || 'extension',
-            });
-        } catch (e) {
-            console.warn('Rollback uninstall failed:', e);
-        }
-        return { cancelled: true };
-    }
-
-    await invoke('commit_extension_install', {
-        extensionId: manifest.id,
-        granted: decision.granted,
-        approvedVersion: manifest.version || '',
-    });
-    if (onSuccess) await onSuccess();
-    return { cancelled: false, item };
-}
-
 async function installFromStore(id) {
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Installing…');
     try {
-        const result = await runStagedInstall(() => invoke('store_install', { id }), {
-            onSuccess: async () => {
-                await refreshInstalled();
-            },
-        });
+        const result = await runStagedExtensionInstall(
+            invoke,
+            () => invoke('store_install', { id }),
+            {
+                onSuccess: async () => {
+                    await refreshInstalled();
+                },
+            }
+        );
         if (result.cancelled) {
             renderTab();
         } else {
@@ -596,7 +528,7 @@ async function updateItem(id) {
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Updating…');
     try {
-        await runStagedInstall(() => invoke('store_install', { id }), {
+        await runStagedExtensionInstall(invoke, () => invoke('store_install', { id }), {
             onSuccess: async () => {
                 await refreshInstalled();
             },
@@ -616,7 +548,7 @@ async function reinstallItem(id) {
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Reinstalling…');
     try {
-        await runStagedInstall(() => invoke('store_install', { id }), {
+        await runStagedExtensionInstall(invoke, () => invoke('store_install', { id }), {
             onSuccess: async () => {
                 await refreshInstalled();
             },
