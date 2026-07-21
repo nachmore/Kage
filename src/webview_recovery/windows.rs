@@ -1,6 +1,11 @@
+#[cfg(target_os = "windows")]
 use super::trigger_recovery;
-use log::{error, info, warn};
-use std::sync::{LazyLock, Mutex, OnceLock};
+#[cfg(target_os = "windows")]
+use log::error;
+use log::{info, warn};
+#[cfg(target_os = "windows")]
+use std::sync::LazyLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();

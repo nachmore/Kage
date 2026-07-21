@@ -61,7 +61,7 @@ fn detect_electron_hint(pname: &str, count: usize) -> Option<String> {
 /// Accessibility permission is granted, Err(msg) otherwise. Using a
 /// once-per-process check rather than per-call so we don't spam the
 /// trust check (which is a syscall).
-pub(super) fn ensure_trusted() -> Result<(), String> {
+pub(crate) fn ensure_trusted() -> Result<(), String> {
     use std::sync::OnceLock;
     static TRUSTED: OnceLock<bool> = OnceLock::new();
     let ok = *TRUSTED.get_or_init(|| {
@@ -253,7 +253,7 @@ fn find_window(title: Option<&str>) -> Result<AxElem, String> {
 // AX work.
 // ---------------------------------------------------------------------------
 
-pub(super) fn get_ui_tree_inner(
+pub(crate) fn get_ui_tree_inner(
     window_title: Option<&str>,
     max_depth: usize,
     include_invisible: bool,
@@ -285,7 +285,7 @@ pub(super) fn get_ui_tree_inner(
     Ok(elem)
 }
 
-pub(super) fn list_accessible_windows_inner(
+pub(crate) fn list_accessible_windows_inner(
     title_filter: Option<&str>,
 ) -> Result<Vec<AccessibleWindowInfo>, String> {
     ensure_trusted()?;
@@ -303,7 +303,7 @@ pub(super) fn list_accessible_windows_inner(
     Ok(out)
 }
 
-pub(super) fn get_focused_element_inner() -> Result<Option<UIElement>, String> {
+pub(crate) fn get_focused_element_inner() -> Result<Option<UIElement>, String> {
     ensure_trusted()?;
     let system = unsafe { ax::AXUIElementCreateSystemWide() };
     if system.is_null() {
@@ -325,7 +325,7 @@ pub(super) fn get_focused_element_inner() -> Result<Option<UIElement>, String> {
     Ok(Some(ui))
 }
 
-pub(super) fn get_element_children_inner(
+pub(crate) fn get_element_children_inner(
     element_id: &str,
     max_depth: usize,
 ) -> Result<UIElement, String> {
@@ -411,7 +411,7 @@ fn search_recursive(
     }
 }
 
-pub(super) fn find_elements_inner(p: &FindElementsParams) -> Result<Vec<UIElement>, String> {
+pub(crate) fn find_elements_inner(p: &FindElementsParams) -> Result<Vec<UIElement>, String> {
     ensure_trusted()?;
     let win = find_window(p.window_title.as_deref())?;
     let mut results = Vec::new();
@@ -429,7 +429,7 @@ pub(super) fn find_elements_inner(p: &FindElementsParams) -> Result<Vec<UIElemen
     Ok(results)
 }
 
-pub(super) fn get_element_text_inner(element_id: &str) -> Result<String, String> {
+pub(crate) fn get_element_text_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
     let elem = resolve_native(element_id)?;
     // Primary source: the AXValue attribute (text field contents, static

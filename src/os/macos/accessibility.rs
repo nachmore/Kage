@@ -16,11 +16,11 @@ use crate::os::accessibility::{AccessibleWindowInfo, FindElementsParams};
 
 use super::ax_worker::{self, Job};
 
-pub(super) use actions::{
+pub(crate) use actions::{
     click_element_inner, collapse_element_inner, expand_element_inner, focus_element_inner,
     scroll_element_inner, select_element_inner, set_element_value_inner, toggle_element_inner,
 };
-pub(super) use tree::{
+pub(crate) use tree::{
     find_elements_inner, get_element_children_inner, get_element_text_inner,
     get_focused_element_inner, get_ui_tree_inner, list_accessible_windows_inner,
 };

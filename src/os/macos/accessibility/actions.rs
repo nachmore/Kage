@@ -56,13 +56,13 @@ fn set_attribute(elem: ax::AXUIElementRef, attr: &str, value: CFTypeRef) -> Resu
     }
 }
 
-pub(super) fn click_element_inner(element_id: &str) -> Result<String, String> {
+pub(crate) fn click_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
     let elem = resolve_native(element_id)?;
     perform_action(elem.as_ref(), ax::kAXPressAction)
 }
 
-pub(super) fn focus_element_inner(element_id: &str) -> Result<String, String> {
+pub(crate) fn focus_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
     let elem = resolve_native(element_id)?;
     let value = CFBoolean::true_value();
@@ -73,7 +73,7 @@ pub(super) fn focus_element_inner(element_id: &str) -> Result<String, String> {
     )
 }
 
-pub(super) fn set_element_value_inner(element_id: &str, val: &str) -> Result<String, String> {
+pub(crate) fn set_element_value_inner(element_id: &str, val: &str) -> Result<String, String> {
     ensure_trusted()?;
     let elem = resolve_native(element_id)?;
     let cf_val = CFString::new(val);
@@ -84,7 +84,7 @@ pub(super) fn set_element_value_inner(element_id: &str, val: &str) -> Result<Str
     )
 }
 
-pub(super) fn toggle_element_inner(element_id: &str) -> Result<String, String> {
+pub(crate) fn toggle_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
     let elem = resolve_native(element_id)?;
     // AX checkboxes expose `AXPress` — a press toggles. For non-checkbox
@@ -113,7 +113,7 @@ pub(super) fn toggle_element_inner(element_id: &str) -> Result<String, String> {
     )
 }
 
-pub(super) fn select_element_inner(element_id: &str) -> Result<String, String> {
+pub(crate) fn select_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
     let elem = resolve_native(element_id)?;
     let role = copy_string_attr(elem.as_ref(), ax::kAXRoleAttribute);
@@ -130,7 +130,7 @@ pub(super) fn select_element_inner(element_id: &str) -> Result<String, String> {
     )
 }
 
-pub(super) fn expand_element_inner(element_id: &str) -> Result<String, String> {
+pub(crate) fn expand_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
     let elem = resolve_native(element_id)?;
     let value = CFBoolean::true_value();
@@ -150,7 +150,7 @@ pub(super) fn expand_element_inner(element_id: &str) -> Result<String, String> {
     }
 }
 
-pub(super) fn collapse_element_inner(element_id: &str) -> Result<String, String> {
+pub(crate) fn collapse_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
     let elem = resolve_native(element_id)?;
     let value = CFBoolean::false_value();
@@ -168,7 +168,7 @@ pub(super) fn collapse_element_inner(element_id: &str) -> Result<String, String>
     }
 }
 
-pub(super) fn scroll_element_inner(
+pub(crate) fn scroll_element_inner(
     element_id: &str,
     direction: &str,
     _amount: f64,
