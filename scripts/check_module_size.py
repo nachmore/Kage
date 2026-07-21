@@ -44,7 +44,6 @@ EXCEPTIONS = {
     "ui/js/settings/connection.js": "Split list, editor, and probing.",
     "ui/js/extension-sandbox/runtime.js": "Split RPC, worker pool, and module loading.",
     "ui/js/settings/shortcuts.js": "Split list, editor, and script UI.",
-    "ui/js/settings/automations.js": "Split schedule, editor, and persistence.",
 }
 
 
