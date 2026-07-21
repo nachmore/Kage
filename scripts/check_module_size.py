@@ -21,9 +21,7 @@ EXTENSIONS = {".rs", ".js", ".jsx", ".ts", ".tsx"}
 # Existing high-cohesion refactor targets. New files must not be added without
 # an accompanying explanation and a concrete removal plan.
 EXCEPTIONS = {
-    "src/bin/computer_control_mcp.rs": "Split MCP schemas and command handlers.",
     "src/os/macos/accessibility.rs": "Split native registry, traversal, and actions.",
-    "src/updater.rs": "Split update checking, installation, and changelog fetch.",
     "src/setup.rs": "Split startup concerns by subsystem.",
     "src/main.rs": "Extract builder setup and run-event lifecycle.",
     "src/webview_recovery.rs": "Split detection, snapshots, and restart policy.",
