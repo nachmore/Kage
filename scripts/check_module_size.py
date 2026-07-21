@@ -49,7 +49,6 @@ EXCEPTIONS = {
     "ui/js/extension-sandbox/runtime.js": "Split RPC, worker pool, and module loading.",
     "ui/js/settings/shortcuts.js": "Split list, editor, and script UI.",
     "ui/js/settings/automations.js": "Split schedule, editor, and persistence.",
-    "ui/js/settings/assistant.js": "Split rules, editor, and custom actions.",
     "ui/js/settings/about.js": "Split diagnostics and backup flows.",
     "ui/js/shared/settings-renderer.js": "Split schema rendering and action effects.",
     "ui/js/settings/speech.js": "Split settings form and Pocket TTS operations.",
