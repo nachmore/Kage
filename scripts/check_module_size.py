@@ -38,7 +38,6 @@ EXCEPTIONS = {
     "src/app_log.rs": "Split in-memory log state and file writer.",
     "src/commands/sessions/crud.rs": "Split watcher, scan, and session commands.",
     "src/commands/system/agents.rs": "Split detection, probing, and installation.",
-    "src/commands/folder_tools.rs": "Split scan, planning, and execution commands.",
     "src/commands/input.rs": "Split text input, clipboard, and keyboard commands.",
     "src/commands/messaging/notifications.rs": "Split notification parsing and event routing.",
     "src/acp_client/transport.rs": "Split framing, process launch, and transport state.",
