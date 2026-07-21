@@ -22,7 +22,6 @@ EXTENSIONS = {".rs", ".js", ".jsx", ".ts", ".tsx"}
 # an accompanying explanation and a concrete removal plan.
 EXCEPTIONS = {
     "src/bin/computer_control_mcp.rs": "Split MCP schemas and command handlers.",
-    "src/commands/window.rs": "Split by floating, chat, and auxiliary windows.",
     "src/os/macos/accessibility.rs": "Split native registry, traversal, and actions.",
     "src/updater.rs": "Split update checking, installation, and changelog fetch.",
     "src/setup.rs": "Split startup concerns by subsystem.",
