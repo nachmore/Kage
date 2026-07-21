@@ -11,11 +11,8 @@ mod schedule;
 mod state;
 
 pub use changelog::fetch_changelog;
-pub use checks::{
-    endpoint_for_channel, plugin_check, CHANGELOG_URL, CURRENT_VERSION, ENDPOINT_BETA,
-    ENDPOINT_DEV, ENDPOINT_STABLE, PUBKEY,
-};
-pub use install::{classify_install_error, plugin_download_and_install, relaunch_and_exit};
+pub use checks::{endpoint_for_channel, plugin_check, CHANGELOG_URL, CURRENT_VERSION};
+pub use install::{plugin_download_and_install, relaunch_and_exit};
 pub use markers::{
     consume_install_source, persist_install_source, persist_resume_marker, InstallSource,
 };
