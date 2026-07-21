@@ -50,9 +50,6 @@ pub(super) fn parse_standard_acp_commands(
         .collect()
 }
 
-/// Set up the notification handler on the ACP client.
-/// This should be called once after the client is created.
-
 #[cfg(test)]
 mod slash_discovery_tests {
     use super::parse_standard_acp_commands;
