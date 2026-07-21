@@ -1,5 +1,6 @@
 import { SettingsModule } from './base.js';
 import { escapeHtml } from '../shared/tool-utils.js';
+import { errMessage } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
 
@@ -16,18 +17,7 @@ import { registerSettingsActions } from './module-registry.js';
  * `ui-tests/shared/updates-format-err.test.js`).
  */
 export function formatErr(e) {
-    if (e == null) return 'Unknown error';
-    if (typeof e === 'string') return e;
-    if (e instanceof Error) return e.message || String(e);
-    if (typeof e === 'object') {
-        if (typeof e.message === 'string' && e.message) return e.message;
-        try {
-            return JSON.stringify(e);
-        } catch {
-            return String(e);
-        }
-    }
-    return String(e);
+    return errMessage(e);
 }
 
 /**

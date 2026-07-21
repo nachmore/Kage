@@ -3,6 +3,7 @@ import { t } from '../shared/i18n.js';
 import { escapeAttr } from '../shared/tool-utils.js';
 import { registerSettingsActions } from './module-registry.js';
 import { SettingsModule } from './base.js';
+import { errMessage } from '../shared/error-message.js';
 
 /**
  * Personalization settings module.
@@ -469,18 +470,7 @@ export class AssistantSettingsModule extends SettingsModule {
     }
 
     _formatError(e) {
-        if (!e) return t('settings.assistant.editor.unknown_error');
-        if (typeof e === 'string') return e;
-        if (e instanceof Error) return e.message || String(e);
-        if (typeof e === 'object') {
-            if (typeof e.message === 'string' && e.message) return e.message;
-            try {
-                return JSON.stringify(e);
-            } catch {
-                return String(e);
-            }
-        }
-        return String(e);
+        return e ? errMessage(e) : t('settings.assistant.editor.unknown_error');
     }
 
     // --- app modes ------------------------------------------------------

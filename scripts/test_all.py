@@ -39,6 +39,7 @@ run("JS Tests", ["npx", "vitest", "run"], cwd=js_dir)
 # See docs/I18N.md for what each failure mode means and how to fix it.
 run("i18n drift check", [sys.executable, "scripts/check_i18n.py"])
 run("i18n drift-check self-tests", [sys.executable, "scripts/test_check_i18n.py"])
+run("module size check", [sys.executable, "scripts/check_module_size.py"])
 
 # Summary
 print()

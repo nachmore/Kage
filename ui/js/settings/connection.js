@@ -1,4 +1,5 @@
 import { SettingsModule } from './base.js';
+import { errMessage } from '../shared/error-message.js';
 import * as agentConnectionsApi from '../shared/agent-connections.js';
 import { escapeAttr, formatBytes } from '../shared/tool-utils.js';
 import { t, tHtml } from '../shared/i18n.js';
@@ -1060,18 +1061,7 @@ export class ConnectionSettingsModule extends SettingsModule {
     }
 
     _formatError(e) {
-        if (!e) return t('settings.connection.error.unknown');
-        if (typeof e === 'string') return e;
-        if (e instanceof Error) return e.message || String(e);
-        if (typeof e === 'object') {
-            if (typeof e.message === 'string' && e.message) return e.message;
-            try {
-                return JSON.stringify(e);
-            } catch {
-                return String(e);
-            }
-        }
-        return String(e);
+        return e ? errMessage(e) : t('settings.connection.error.unknown');
     }
 
     // ---------------- async background work --------------------------
