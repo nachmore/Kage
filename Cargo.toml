@@ -2,6 +2,7 @@
 name = "kage"
 version = "0.9.0"
 edition = "2021"
+autobins = false
 default-run = "kage"
 authors = ["Oren Nachman (nachmano@)"]
 description = "Your AI-powered desktop companion!"
@@ -220,6 +221,9 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
+# Keep binary targets explicit. Without `autobins = false`, Cargo also
+# discovers `src/bin/computer_control_mcp.rs` as `computer_control_mcp`;
+# Tauri then tries to bundle that inferred name instead of the sidecar.
 [[bin]]
 name = "kage"
 path = "src/main.rs"
