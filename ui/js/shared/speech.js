@@ -8,8 +8,9 @@
  *   this.speech.setup();
  */
 
-import { TtsStreamer, TtsPlaybackBar, cleanForTts, preloadEmojiNames } from './tts-streamer.js';
+import { TtsStreamer, cleanForTts, preloadEmojiNames } from './tts-streamer.js';
 import { EchoCancelledVAD } from './echo-canceller.js';
+import { speakWithBrowser } from './browser-speech.js';
 
 export class SpeechController {
     /**
@@ -645,53 +646,7 @@ export class SpeechController {
 
     /** Fallback: speak with browser speechSynthesis, with playback bar. */
     _speakWithBrowser(text) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        utterance.lang = navigator.language || 'en-US';
-
-        if (this.voiceName) {
-            const voice = speechSynthesis.getVoices().find((v) => v.name === this.voiceName);
-            if (voice) utterance.voice = voice;
-        }
-
-        // Show playback bar
-        if (this.barContainer) {
-            this._browserBar = new TtsPlaybackBar(this.barContainer, this.onVisibilityUpdate, {
-                onPause: () => {
-                    if (speechSynthesis.paused) {
-                        speechSynthesis.resume();
-                        this._browserBar.setPauseIcon(false);
-                        this._browserBar.setStatus('Speaking...');
-                    } else {
-                        speechSynthesis.pause();
-                        this._browserBar.setPauseIcon(true);
-                        this._browserBar.setStatus('Paused');
-                    }
-                },
-                onStop: () => {
-                    speechSynthesis.cancel();
-                },
-            });
-            this._browserBar.show();
-            this._browserBar.setStatus('Speaking...');
-        }
-
-        utterance.onend = () => {
-            if (this._browserBar) {
-                this._browserBar.hideAfterDelay();
-                this._browserBar = null;
-            }
-        };
-        utterance.onerror = () => {
-            if (this._browserBar) {
-                this._browserBar.hide();
-                this._browserBar = null;
-            }
-        };
-
-        speechSynthesis.speak(utterance);
+        speakWithBrowser(this, text);
     }
 
     /** Cancel any ongoing TTS playback. */
