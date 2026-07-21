@@ -56,7 +56,6 @@ EXCEPTIONS = {
     "ui/js/settings/speech.js": "Split settings form and Pocket TTS operations.",
     "ui/js/settings/manager.js": "Split navigation, persistence, and module lifecycle.",
     "ui/js/store.js": "Split catalog rendering and install operations.",
-    "ui/js/shared/extension-sandbox-host.js": "Split iframe lifecycle and RPC enforcement.",
     "ui/js/shared/speech.js": "Split speech recognition, synthesis, and UI controls.",
 }
 
