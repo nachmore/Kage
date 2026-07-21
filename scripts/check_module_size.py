@@ -43,7 +43,6 @@ EXCEPTIONS = {
     "ui/js/shared/extension-manager.js": "Split discovery, widgets, and commands.",
     "ui/js/settings/connection.js": "Split list, editor, and probing.",
     "ui/js/extension-sandbox/runtime.js": "Split RPC, worker pool, and module loading.",
-    "ui/js/settings/shortcuts.js": "Split list, editor, and script UI.",
 }
 
 
