@@ -39,56 +39,36 @@
 //! fresh one. We only keep one rotated file — this is a developer log, not
 //! an audit log.
 
+mod state;
+mod writer;
+
 use anyhow::{Context, Result};
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use state::{truncate_msg, AppLog};
+use std::fs;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+use writer::{writer_loop, WriterMsg};
 
-/// A single structured log entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LogEntry {
-    pub ts: String,
-    pub level: String,
-    pub source: String,
-    pub msg: String,
-}
+pub use state::LogEntry;
 
-/// Rotate the file when it exceeds this size. We only keep the current file
-/// plus one `.old` sibling, so peak disk usage is 2× this value.
-const ROTATE_SIZE_BYTES: u64 = 2 * 1024 * 1024;
-
-/// Writer batch flush cadence. The writer thread wakes up at least this often
-/// to flush any pending entries. Batches arriving faster than this are
-/// written in a single syscall.
-const FLUSH_INTERVAL_MS: u64 = 500;
+#[cfg(test)]
+use state::MAX_MSG_LEN;
+#[cfg(test)]
+use std::fs::File;
+#[cfg(test)]
+use std::io::Write;
+#[cfg(test)]
+use writer::{rotate, sibling_old_path, ROTATE_SIZE_BYTES};
 
 /// Bound on the writer's mailbox. Enough to absorb bursts of several
 /// hundred log entries without dropping. If exceeded, the disk copy of the
 /// overflow entry is dropped (in-memory ring still has it) and
 /// `DROPPED_COUNT` is incremented.
 const CHANNEL_CAPACITY: usize = 4096;
-
-/// Messages sent to the writer thread.
-enum WriterMsg {
-    Entry(LogEntry),
-    /// Flush pending entries immediately (drain + write + fsync).
-    /// The provided ack-sender receives `()` once the flush is done, giving
-    /// the caller a way to block until the data is on disk.
-    Flush(mpsc::SyncSender<()>),
-    /// Truncate on-disk file as part of a user-initiated clear.
-    Clear,
-    // NOTE: there's no explicit Shutdown message. The writer loop exits
-    // naturally when all senders are dropped (Disconnected from recv_timeout).
-    // At process shutdown we call `flush()` which sends a Flush+ack through
-    // the existing channel; the OS tears the thread down on exit.
-}
 
 /// Global app log instance.
 static APP_LOG: std::sync::OnceLock<Mutex<AppLog>> = std::sync::OnceLock::new();
@@ -119,56 +99,6 @@ pub fn dropped_count() -> u64 {
 /// `Some(Vec)` means "pre-init, still buffering"; `None` means "drained,
 /// don't buffer anymore — `init()` is up".
 static PREINIT_BUFFER: Mutex<Option<Vec<LogEntry>>> = Mutex::new(Some(Vec::new()));
-
-struct AppLog {
-    buffer: VecDeque<LogEntry>,
-    max_size: usize,
-}
-
-impl AppLog {
-    fn new(max_size: usize, log_path: &std::path::Path) -> Result<Self> {
-        // Load existing entries from disk so the UI viewer still shows recent
-        // history on restart. Best-effort — corruption shouldn't fail init.
-        let mut buffer = VecDeque::with_capacity(max_size.min(8192));
-        if log_path.exists() {
-            if let Ok(file) = File::open(log_path) {
-                let reader = BufReader::new(file);
-                for line in reader.lines().map_while(Result::ok) {
-                    if let Ok(entry) = serde_json::from_str::<LogEntry>(&line) {
-                        buffer.push_back(entry);
-                    }
-                }
-                while buffer.len() > max_size {
-                    buffer.pop_front();
-                }
-            }
-        }
-
-        Ok(Self { buffer, max_size })
-    }
-
-    fn push(&mut self, entry: LogEntry) {
-        self.buffer.push_back(entry);
-        while self.buffer.len() > self.max_size {
-            self.buffer.pop_front();
-        }
-    }
-
-    fn entries(&self) -> Vec<LogEntry> {
-        self.buffer.iter().cloned().collect()
-    }
-
-    fn clear_buffer(&mut self) {
-        self.buffer.clear();
-    }
-
-    fn set_max_size(&mut self, new_max: usize) {
-        self.max_size = new_max;
-        while self.buffer.len() > self.max_size {
-            self.buffer.pop_front();
-        }
-    }
-}
 
 /// Get the log directory path.
 pub fn get_log_dir() -> Result<PathBuf> {
@@ -236,189 +166,6 @@ fn drain_preinit_buffer() {
                 DROPPED_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
-    }
-}
-
-/// Background writer loop. Owns the file handle; no other code touches it.
-///
-/// Drains the channel in batches, appending JSONL entries. Rotates the file
-/// when it gets too big by renaming to `.old.jsonl`, overwriting any prior
-/// rotated copy (we only keep one).
-fn writer_loop(rx: mpsc::Receiver<WriterMsg>, log_path: PathBuf) {
-    // Open file in append mode. If the open fails, we still drain the channel
-    // so senders don't block — they just lose their disk persistence.
-    let mut file: Option<BufWriter<File>> = open_append(&log_path);
-    let mut current_size: u64 = file_size(&log_path);
-
-    loop {
-        // Wait up to FLUSH_INTERVAL_MS for a message. On timeout we just
-        // loop back and check if we should flush.
-        let first = match rx.recv_timeout(Duration::from_millis(FLUSH_INTERVAL_MS)) {
-            Ok(msg) => msg,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                // Periodic flush of any buffered bytes. BufWriter::flush is
-                // cheap when the inner buffer is empty.
-                if let Some(ref mut f) = file {
-                    let _ = f.flush();
-                }
-                continue;
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                // All senders dropped — we're done.
-                if let Some(mut f) = file.take() {
-                    let _ = f.flush();
-                }
-                return;
-            }
-        };
-
-        // Collect a batch: the first message plus everything else already
-        // pending. This is the single-syscall win.
-        let mut batch: Vec<LogEntry> = Vec::new();
-        let mut flush_acks: Vec<mpsc::SyncSender<()>> = Vec::new();
-        let mut clear = false;
-
-        handle_msg(first, &mut batch, &mut flush_acks, &mut clear);
-        while let Ok(msg) = rx.try_recv() {
-            handle_msg(msg, &mut batch, &mut flush_acks, &mut clear);
-        }
-
-        // Honour clear before the batch write — a clear means the user wants
-        // a clean slate. Anything we just buffered from this cycle still gets
-        // written (the entries they're clearing are the old ones on disk).
-        if clear {
-            // Drop current handle, truncate, reopen.
-            if let Some(f) = file.take() {
-                drop(f);
-            }
-            if log_path.exists() {
-                let _ = fs::remove_file(&log_path);
-            }
-            let _ = fs::remove_file(sibling_old_path(&log_path));
-            file = open_append(&log_path);
-            current_size = 0;
-        }
-
-        if !batch.is_empty() {
-            // Rotate BEFORE appending if the current file is already over
-            // threshold. This way the oversized file gets rotated cleanly
-            // and the fresh entries land in the new (small) current file.
-            if current_size >= ROTATE_SIZE_BYTES {
-                if let Some(mut f) = file.take() {
-                    let _ = f.flush();
-                    drop(f);
-                }
-                let old_path = sibling_old_path(&log_path);
-                if let Err(e) = rotate(&log_path, &old_path) {
-                    log::warn!("app_log: rotation failed: {e}");
-                }
-                file = open_append(&log_path);
-                current_size = file_size(&log_path);
-            }
-
-            if let Some(ref mut f) = file {
-                let written = write_batch(f, &batch);
-                current_size = current_size.saturating_add(written);
-            }
-        }
-
-        // Ack any flush requests after the batch is on disk.
-        if !flush_acks.is_empty() {
-            if let Some(ref mut f) = file {
-                let _ = f.flush();
-            }
-            for ack in flush_acks {
-                // Receiver may have gone away — not our problem.
-                let _ = ack.try_send(());
-            }
-        }
-    }
-}
-
-fn handle_msg(
-    msg: WriterMsg,
-    batch: &mut Vec<LogEntry>,
-    flush_acks: &mut Vec<mpsc::SyncSender<()>>,
-    clear: &mut bool,
-) {
-    match msg {
-        WriterMsg::Entry(e) => batch.push(e),
-        WriterMsg::Flush(ack) => flush_acks.push(ack),
-        WriterMsg::Clear => *clear = true,
-    }
-}
-
-fn write_batch(file: &mut BufWriter<File>, batch: &[LogEntry]) -> u64 {
-    let mut bytes: u64 = 0;
-    for entry in batch {
-        let line = match serde_json::to_string(entry) {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        // Single writeln per entry goes to the BufWriter's buffer; one
-        // underlying syscall per buffer-full (or on flush).
-        if writeln!(file, "{line}").is_ok() {
-            bytes = bytes.saturating_add(line.len() as u64 + 1); // +1 for '\n'
-        }
-    }
-    bytes
-}
-
-fn open_append(path: &std::path::Path) -> Option<BufWriter<File>> {
-    match OpenOptions::new().create(true).append(true).open(path) {
-        Ok(f) => Some(BufWriter::with_capacity(16 * 1024, f)),
-        Err(e) => {
-            log::warn!("app_log: failed to open {path:?} for append: {e}");
-            None
-        }
-    }
-}
-
-fn file_size(path: &std::path::Path) -> u64 {
-    fs::metadata(path).map(|m| m.len()).unwrap_or(0)
-}
-
-fn rotate(log_path: &std::path::Path, old_path: &std::path::Path) -> Result<()> {
-    // Overwrite any existing .old file — we only keep one rotation.
-    if old_path.exists() {
-        fs::remove_file(old_path).context("remove existing .old log")?;
-    }
-    if log_path.exists() {
-        fs::rename(log_path, old_path).context("rotate current log to .old")?;
-    }
-    Ok(())
-}
-
-/// Compute the `.old.jsonl` sibling path for a given current log path.
-/// `app.jsonl` → `app.old.jsonl`, `foo.log` → `foo.old.log`, etc.
-fn sibling_old_path(log_path: &std::path::Path) -> PathBuf {
-    let ext = log_path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let stem = log_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("app");
-    let new_name = if ext.is_empty() {
-        format!("{stem}.old")
-    } else {
-        format!("{stem}.old.{ext}")
-    };
-    match log_path.parent() {
-        Some(dir) => dir.join(new_name),
-        None => PathBuf::from(new_name),
-    }
-}
-
-/// Maximum message length before truncation.
-const MAX_MSG_LEN: usize = 500;
-
-/// Truncate a message if it exceeds MAX_MSG_LEN, appending an indicator.
-fn truncate_msg(msg: &str) -> String {
-    if msg.len() <= MAX_MSG_LEN {
-        msg.to_string()
-    } else {
-        let mut truncated = msg[..MAX_MSG_LEN].to_string();
-        truncated.push_str(&format!("... [truncated, {} total chars]", msg.len()));
-        truncated
     }
 }
 

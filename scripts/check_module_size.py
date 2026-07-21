@@ -18,17 +18,8 @@ HARD_LINES = 700
 SOURCE_ROOTS = (ROOT / "src", ROOT / "ui" / "js")
 EXTENSIONS = {".rs", ".js", ".jsx", ".ts", ".tsx"}
 
-# Existing high-cohesion refactor targets. New files must not be added without
-# an accompanying explanation and a concrete removal plan.
-EXCEPTIONS = {
-    "src/main.rs": "Extract builder setup and run-event lifecycle.",
-    "src/os/windows/accessibility.rs": "Split native registry, traversal, and actions.",
-    "src/extensions.rs": "Split discovery, installation, and archive handling.",
-    "src/permission_audit.rs": "Split append/write and reverse-read operations.",
-    "src/app_log.rs": "Split in-memory log state and file writer.",
-    "src/commands/sessions/crud.rs": "Split watcher, scan, and session commands.",
-    "ui/js/floating/app.js": "Split lifecycle, input, search, and message UI.",
-}
+# All production modules must remain within the hard limit.
+EXCEPTIONS = {}
 
 
 def line_count(path: Path) -> int:

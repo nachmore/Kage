@@ -8,6 +8,10 @@ mod agent_presets;
 mod agent_sessions;
 mod app_launcher;
 mod app_log;
+#[path = "main/app_setup.rs"]
+mod app_setup;
+#[path = "main/app_startup.rs"]
+mod app_startup;
 mod auto_steering;
 mod automation;
 mod chunk_batcher;
@@ -36,6 +40,8 @@ mod os;
 mod panic_handler;
 mod permission_audit;
 mod process_manager;
+#[path = "main/run_events.rs"]
+mod run_events;
 mod session_titler;
 mod setup;
 mod slash_format;
@@ -52,7 +58,6 @@ use acp_client::AcpClient;
 use app_launcher::AppLauncher;
 use config::Config;
 use log::{info, warn};
-use process_manager::ProcessManager;
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex;
@@ -151,93 +156,19 @@ async fn run() {
     #[cfg(windows)]
     attach_parent_console();
 
-    // Install the panic hook as early as possible so any panic during startup
-    // still gets captured into crash.log.
-    panic_handler::install();
-
-    // Initialize logger first
-    if let Err(e) = logger::init_logger() {
-        eprintln!("Failed to initialize logger: {}", e);
-        eprintln!("Continuing without file logging...");
-    }
-
-    // Read the WebView2 recovery marker BEFORE any tauri / wry code can
-    // emit a wedge error. The marker tells us whether this run is a
-    // restart from a previous wedge — so a second wedge in the new
-    // process knows to escalate (delay-then-restart) instead of
-    // restarting again immediately.
-    webview_recovery::init_at_startup();
-
-    info!("=== Kage Starting ===");
-    let startup_t0 = std::time::Instant::now();
-
-    let args: Vec<String> = std::env::args().collect();
-    let flags = startup::CliFlags::parse(&args);
-
-    // Single-instance enforcement is wired in further below as a Tauri
-    // plugin (tauri-plugin-single-instance). The plugin's setup hook
-    // detects an existing primary, forwards argv/cwd over a platform-
-    // appropriate IPC (named pipe on Windows, AF_UNIX socket on Unix —
-    // both have OS-enforced user-bound access control, unlike the prior
-    // loopback-TCP IPC), and exits the second process before window
-    // creation.
-    //
-    // On restart, wait for the old process to fully release WebView2/Tauri
-    // resources before we proceed.
-    startup::wait_for_previous_instance_if_restart(flags.is_restart);
-
-    // Independently of the restart flow, every launch verifies the
-    // WebView2 user data folder is writable. If a previous kage was
-    // force-killed, its msedgewebview2 children may still be holding
-    // the directory lock — that surfaces as the "Frontend did not
-    // become ready" timeout 15 seconds into startup. This call kills
-    // those orphans before Tauri tries to attach. No-op on macOS/Linux.
-    startup::ensure_webview_directory_writable();
-
-    let dev_mode = flags.dev_mode;
-    let debug_mode = flags.debug_mode;
-
-    // Dev-mode backtrace env vars (RUST_BACKTRACE / RUST_LIB_BACKTRACE)
-    // are set in main() before the Tokio runtime exists — see the block
-    // above `Runtime::new()`. Setting them here would race the worker
-    // threads (concurrent getenv/setenv is UB on Unix).
-
-    if debug_mode {
-        println!("🐛 DEBUG MODE ENABLED - Detailed ACP logs will be printed to console");
-        info!("🐛 DEBUG MODE ENABLED via command line argument");
-        logger::enable_console_logging();
-    }
-
-    if dev_mode {
-        info!(
-            "⏱ Tauri builder starting at +{}ms",
-            startup_t0.elapsed().as_millis()
-        );
-    }
+    let app_startup::Context {
+        args,
+        dev_mode,
+        debug_mode,
+        started_at: startup_t0,
+    } = app_startup::initialize();
 
     // Capture the parsed args once — `main` references `flags` and the
     // setup closure needs the raw argv to resolve the resume marker.
     let main_args = args.clone();
 
-    // Construct shared state BEFORE Tauri's builder so we can `.manage()`
-    // it on the builder itself. The motivation is correctness, not speed:
-    // Tauri loads each window's HTML/JS as soon as the builder constructs
-    // it, and the webview's `main.js` starts firing `invoke('get_config')`
-    // / `invoke('get_user_info')` / etc. several seconds before our
-    // `.setup()` block runs. If state is registered inside `setup()`, those
-    // early invokes return "state not managed for field 'features' on
-    // command 'get_config'. You must call `.manage()` before using this
-    // command" — and the chat window initialises against an empty backend.
-    //
-    // What stays in setup(): work that needs `&mut App` / `app.handle()`
-    // (notification handler wiring, tray construction, hotkey registration,
-    // window decoration, background tasks). Cheap object construction
-    // moves out here. A second instance now pays for these allocations
-    // before the single-instance plugin's setup hook exits the process,
-    // but the cost is bounded — `Config::load` is one small file read,
-    // `AcpClient::new` and `AppLauncher::new` are pure allocations
-    // (subprocess spawn / registry scan are deferred). The 50ms-ish
-    // single-instance IPC dance still dominates a second-instance launch.
+    // Register state on the builder before windows can issue Tauri invokes.
+    // Setup retains only work requiring `&mut App` or `app.handle()`.
     let config = startup::load_config_with_overrides(debug_mode, Config::load);
     info!("Configuration loaded");
 
@@ -470,7 +401,7 @@ async fn run() {
         log::info!("Telemetry: aptabase plugin NOT registered (no compile-time APTABASE_KEY)");
     }
 
-    let app = builder
+    let builder = builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
@@ -532,223 +463,20 @@ async fn run() {
             webview_recovery::install_process_failed_for(webview);
         })
         .setup(move |app| {
-            info!("Setting up application");
-            info!("=== Kage Setup ===");
-
-            // macOS: override the default app menu so Cmd+Q hides windows
-            // instead of quitting. Users quit via the tray menu's "Quit".
-            #[cfg(target_os = "macos")]
-            {
-                use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-                use tauri::Manager;
-
-                let hide_item = MenuItemBuilder::with_id("macos-hide", "Hide Kage")
-                    .accelerator("CmdOrCtrl+Q")
-                    .build(app)?;
-                let hide_others = MenuItemBuilder::with_id("macos-hide-others", "Hide Others")
-                    .accelerator("CmdOrCtrl+Alt+H")
-                    .build(app)?;
-                let show_all = MenuItemBuilder::with_id("macos-show-all", "Show All").build(app)?;
-                let quit_item = MenuItemBuilder::with_id("macos-quit", "Quit Kage")
-                    .accelerator("CmdOrCtrl+Shift+Q")
-                    .build(app)?;
-
-                let app_submenu = SubmenuBuilder::new(app, "Kage")
-                    .items(&[&hide_item, &hide_others, &show_all])
-                    .separator()
-                    .item(&quit_item)
-                    .build()?;
-
-                let menu = MenuBuilder::new(app).item(&app_submenu).build()?;
-                app.set_menu(menu)?;
-
-                let app_handle = app.handle().clone();
-                app.on_menu_event(move |_app, event| match event.id().as_ref() {
-                    "macos-hide" => {
-                        info!("Cmd+Q: hiding all windows (use tray Quit to exit)");
-                        for (_, window) in _app.webview_windows() {
-                            let _ = window.hide();
-                        }
-                        setup::hide_macos_app();
-                        setup::update_activation_policy(_app);
-                    }
-                    "macos-hide-others" => {
-                        // NSApp hideOtherApplications — not directly available,
-                        // but hiding our windows achieves the user intent.
-                        for (_, window) in _app.webview_windows() {
-                            let _ = window.hide();
-                        }
-                        setup::hide_macos_app();
-                        setup::update_activation_policy(_app);
-                    }
-                    "macos-show-all" => {
-                        if let Some(w) = _app.get_webview_window(window_labels::FLOATING) {
-                            let _ = w.show();
-                        }
-                    }
-                    "macos-quit" => {
-                        info!("Cmd+Shift+Q: quitting application");
-                        crate::commands::system::graceful_shutdown(&app_handle);
-                        let app_for_exit = app_handle.clone();
-                        tauri::async_runtime::spawn(async move {
-                            crate::commands::system::shutdown_and_exit(&app_for_exit).await;
-                        });
-                    }
-                    _ => {}
-                });
-            }
-
-            // macOS: start as Accessory (no Cmd+Tab / Dock) since only the
-            // floating window is visible at launch. LSUIElement in Info.plist
-            // handles this for release builds, but during `cargo tauri dev`
-            // the plist isn't bundled — so we set it programmatically too.
-            #[cfg(target_os = "macos")]
-            {
-                use tauri::ActivationPolicy;
-                if let Err(e) = app
-                    .handle()
-                    .set_activation_policy(ActivationPolicy::Accessory)
-                {
-                    warn!("Failed to set initial activation policy: {}", e);
-                } else {
-                    info!("Set initial activation policy to Accessory");
-                }
-            }
-
-            // Check for session resume after update. The marker file (or
-            // /resume-session CLI arg) is *always* consumed here so a stale
-            // marker doesn't ghost-trigger on the next normal launch.
-            let resume_session_id: Option<String> = dirs::config_dir()
-                .map(|d| d.join("kage"))
-                .and_then(|cfg_dir| startup::resolve_resume_session_id(&main_args, &cfg_dir));
-            if let Some(ref id) = resume_session_id {
-                info!("Resume marker present: will attempt to load session {}", id);
-            }
-
-            // Background orphan cleanup. Runs in the primary only — a second
-            // instance must never trigger this because it could read the
-            // primary's PID and try to kill it (the recycled-PID guard helps
-            // but isn't proof). Scoped to the primary by living in setup().
-            info!("Checking for orphaned processes...");
-            std::thread::spawn(|| {
-                if let Err(e) = ProcessManager::cleanup_orphaned_processes() {
-                    warn!("Failed to cleanup orphaned processes: {}", e);
-                }
-            });
-
-            // Create a Job Object that auto-kills all child processes when this
-            // process exits, even on crash — prevents orphaned TTS servers, ACP
-            // CLI processes, MCP children, etc. No-op on non-Windows where
-            // orphan reaping happens via init/launchd.
-            os::install_kill_on_exit_job();
-
-            // Wire the AppHandle into webview-recovery so the wedge
-            // detector can interrogate manager state when a wedge fires.
-            // Has to happen after the manager is up (we're inside setup())
-            // but before any wedge could conceivably trigger — the log
-            // shim is already live, so the sooner the better.
-            webview_recovery::set_app_handle(app.handle().clone());
-
-            // Config, app_log, AcpClient, AppLauncher, and all Tauri-managed
-            // state were constructed before `tauri::Builder::default()` so the
-            // state is registered on the Builder itself — see the comment
-            // block at the top of `run`. Setup() picks up where that leaves
-            // off: the work below needs `&mut App` / `app.handle()`.
-
-            // Build system tray. Non-fatal: on a Linux desktop without a
-            // StatusNotifier/AppIndicator host the tray can't be created, but
-            // the app is perfectly usable via its hotkey and windows. Degrade
-            // (log and continue) instead of aborting the whole app with `?`.
-            if let Err(e) = tray::setup_tray(app, dev_mode) {
-                log::error!(
-                    "Failed to set up system tray (continuing without it): {}",
-                    e
-                );
-            }
-
-            // Set up the ACP notification handler. The handler captures an
-            // Arc<AcpClient> so it can issue protocol replies (permission
-            // responses, etc.) through the typed client API instead of
-            // hand-building JSON-RPC out-of-band.
-            commands::messaging::setup_notification_handler(
+            app_setup::configure(
+                app,
+                dev_mode,
+                &main_args,
+                &config_for_setup,
                 acp_for_handler,
-                app.handle(),
                 config_for_handler,
                 slash_cmds_for_handler,
                 pending_perm_for_handler,
-            );
+                &session_watcher_handle_for_setup,
+            )
+        });
 
-            // Configure floating / context-menu / inline-assist windows for transparency.
-            setup::configure_transparent_windows(app);
-
-            // Register all global hotkeys from config
-            commands::system::register_all_hotkeys(app.handle());
-
-            // Hot-reload hotkeys when config changes
-            setup::install_hotkey_hot_reload(app, &config_for_setup);
-
-            info!("=== Setup Complete ===");
-
-            // Listen for show-sessions event. Emitted by the
-            // single-instance plugin's callback when a second process
-            // launches; routed to the most-recently focused chat window.
-            setup::install_show_sessions_listener(app);
-
-            // Self-register the kage:// URL scheme with the OS and
-            // listen for incoming kage://install/<id> deep links. Both
-            // the cold-launch case (`get_current()`) and the warm-launch
-            // case (`on_open_url`) route through the same handler.
-            setup::install_deep_link_handler(app);
-
-            // Track focus on main so single-instance / show-sessions
-            // routing has an accurate "most recent" target. Peer chat
-            // windows install their own listener at construction.
-            setup::install_main_focus_tracker(app);
-
-            // Start automation scheduler
-            setup::spawn_automation_scheduler(app);
-
-            // Auto-start Pocket TTS server if configured
-            setup::maybe_autostart_pocket_tts(app, &config_for_setup);
-
-            // Watch the sessions directory for external changes (e.g., the agent backend creating sessions).
-            // The returned handle owns the shutdown signal — stash it in the
-            // process-wide holder so RunEvent::Exit can drop it cleanly.
-            if let Some(h) = setup::start_session_watcher(app) {
-                if let Ok(mut slot) = session_watcher_handle_for_setup.lock() {
-                    *slot = Some(h);
-                }
-            }
-
-            // Self-heal computer-control MCP registration: keep the
-            // path in mcp.json in sync with the current install, and
-            // log loudly if the sidecar binary is missing entirely.
-            setup::refresh_mcp_registration_if_enabled();
-
-            // Background app registry scan (deferred from startup for speed)
-            // and periodic refresh every hour so the list stays current.
-            setup::spawn_app_registry_scan(app);
-
-            // Start default session on launch if configured. Pass through
-            // the resume id consumed at startup so the post-update launch
-            // restores the user's session instead of silently dropping it.
-            setup::maybe_spawn_default_session(app, &config_for_setup, resume_session_id);
-
-            // Start the auto-update background loop
-            setup::start_updater(app);
-
-            // Show welcome window on first run
-            setup::maybe_show_welcome_window(app.handle(), config_for_setup.first_run_completed);
-
-            // If the previous run was a user-initiated install, show the
-            // floating window now so the user gets immediate visual
-            // feedback that their click completed. Idle installs leave
-            // the window hidden — banner shows next time the user
-            // summons it manually.
-            setup::maybe_show_floating_after_interactive_install(app);
-
-            Ok(())
-        })
+    let app = builder
         .invoke_handler(tauri::generate_handler![
             commands::get_i18n_catalog,
             commands::get_available_languages,
@@ -964,14 +692,7 @@ async fn run() {
     // process dies. Drop the session-watcher handle on Exit so the
     // background thread sees its shutdown channel disconnect, drops
     // the platform FS subscription, and exits cleanly.
-    app.run(move |handler, event| {
-        if let tauri::RunEvent::Exit = event {
-            if let Ok(mut slot) = session_watcher_handle.lock() {
-                slot.take();
-            }
-            telemetry::record_shutdown(handler);
-        }
-    });
+    run_events::run(app, session_watcher_handle);
 
     info!("Application shutting down");
 }

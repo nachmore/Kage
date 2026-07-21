@@ -4,6 +4,8 @@
 
 use super::*;
 
+mod acp;
+
 /// Parse the JSONL file into a list of SessionMessages
 fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {
     use std::io::{BufRead, BufReader};
@@ -583,11 +585,10 @@ pub async fn delete_session(
     Ok(())
 }
 
-/// Adopt or create a session for the calling window. If `session_id`
-/// is provided, loads that session via session/load. If absent, creates
-/// a new session via session/new. The returned id is what the frontend
-/// will pass on subsequent send/cancel/slash invokes; the backend also
-/// records it in `UiState.window_sessions[window_label]`.
+/// Adopt or create a session for the calling window.
+///
+/// The command wrapper remains in this facade so Tauri exports its generated
+/// command symbol through the existing `commands::sessions` re-export.
 #[tauri::command]
 pub async fn switch_acp_session(
     session_id: Option<String>,
@@ -597,214 +598,7 @@ pub async fn switch_acp_session(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
 ) -> Result<String, AppError> {
-    let client_guard = acp.client.clone();
-    let available_models = acp.available_models.clone();
-    let config = features.config.clone();
-    let session_cache = features.session_cache.clone();
-    let window_sessions = ui.window_sessions.clone();
-    let window_label = window.label().to_string();
-
-    // restart_connection / load_existing_session / create_session are
-    // synchronous ACP round trips that can block for many seconds (kiro-cli
-    // history replay, initialize retries with 60s recv_timeout). Run them on
-    // the blocking pool so a session switch can't pin a Tokio worker and
-    // starve every other async command (same pattern as
-    // send_message_streaming).
-    tauri::async_runtime::spawn_blocking(move || -> Result<String, AppError> {
-        switch_acp_session_blocking(
-            session_id,
-            client_guard,
-            available_models,
-            config,
-            session_cache,
-            window_sessions,
-            window_label,
-            app,
-        )
-    })
-    .await
-    .map_err(|e| {
-        AppError::keyed(
-            ErrorKind::Internal,
-            "errors.session.load_failed",
-            &[("reason", &e.to_string())],
-        )
-    })?
-}
-
-#[allow(clippy::too_many_arguments)] // mirrors the Tauri command's state params
-fn switch_acp_session_blocking(
-    session_id: Option<String>,
-    client_guard: std::sync::Arc<crate::acp_client::AcpClient>,
-    available_models: std::sync::Arc<std::sync::Mutex<Vec<crate::state::AcpModel>>>,
-    config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
-    session_cache: std::sync::Arc<
-        std::sync::Mutex<Option<crate::commands::sessions::SessionCache>>,
-    >,
-    window_sessions: std::sync::Arc<std::sync::Mutex<HashMap<String, String>>>,
-    window_label: String,
-    app: tauri::AppHandle,
-) -> Result<String, AppError> {
-    // Ensure a *healthy* connection. `is_healthy()` (not just `is_connected()`)
-    // catches the case where the agent process has died but the reader thread
-    // hasn't observed EOF yet — a plain `connect()` would early-return on the
-    // stale `connected=true` flag and leave us talking to a zombie. When
-    // unhealthy we go through `restart_connection`, which force-disconnects
-    // first and has its own coalesce+retry guard, so concurrent callers don't
-    // stack respawns.
-    if !client_guard.is_healthy() {
-        info!("Connection not healthy, restarting for session switch...");
-        if let Err(e) = client_guard.restart_connection() {
-            error!("Connection restart failed: {}", e);
-            return Err(AppError::keyed(
-                ErrorKind::ConnectionLost,
-                "errors.session.connect_failed",
-                &[("reason", &e.to_string())],
-            ));
-        }
-    }
-
-    match session_id {
-        Some(id) => {
-            info!("Switching to existing session: {}", id);
-
-            // Read the cwd from the session's .json metadata file
-            let cwd = {
-                let sessions_dir = resolve_sessions_dir_locked(&config)?;
-                let json_path = sessions_dir.join(format!("{}.json", id));
-                if json_path.exists() {
-                    fs::read_to_string(&json_path)
-                        .ok()
-                        .and_then(|content| {
-                            serde_json::from_str::<serde_json::Value>(&content).ok()
-                        })
-                        .and_then(|data| {
-                            data.get("cwd")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string())
-                        })
-                } else {
-                    None
-                }
-            };
-
-            let (loaded_id, models_json) =
-                client_guard.load_existing_session(&id, cwd).map_err(|e| {
-                    AppError::keyed(
-                        ErrorKind::Internal,
-                        "errors.session.load_failed",
-                        &[("reason", &e.to_string())],
-                    )
-                })?;
-            crate::telemetry::track(
-                &app,
-                "session_resumed",
-                Some(serde_json::json!({ "source": "manual" })),
-            );
-            // Refresh the model dropdown if the agent included
-            // availableModels in the load response. Empty list is
-            // tolerated — the dropdown just keeps whatever was there
-            // (typically populated when the previous session was
-            // created), so the user-visible behaviour is "no
-            // regression" rather than "models reset to empty".
-            if !models_json.is_empty() {
-                if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::AcpModel>>(
-                    serde_json::Value::Array(models_json),
-                ) {
-                    if let Ok(mut m) = available_models.lock() {
-                        *m = parsed;
-                    }
-                }
-            }
-            if let Ok(mut ws) = window_sessions.lock() {
-                ws.insert(window_label.clone(), loaded_id.clone());
-            }
-            update_window_title(&app, &config, &session_cache, &window_label, &loaded_id);
-            Ok(loaded_id)
-        }
-        None => {
-            info!("Creating new session");
-            let cwd = {
-                let cfg = config.lock_or_recover();
-                cfg.acp.agent.working_directory.clone()
-            };
-            let (new_session_id, models_json) = client_guard
-                .create_session(cwd)
-                .map_err(|e| format!("Failed to create session: {}", e))?;
-
-            crate::telemetry::track(
-                &app,
-                "session_created",
-                Some(serde_json::json!({ "source": "manual" })),
-            );
-
-            // Store available models
-            if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::AcpModel>>(
-                serde_json::Value::Array(models_json),
-            ) {
-                if let Ok(mut m) = available_models.lock() {
-                    *m = parsed;
-                }
-            }
-
-            // Apply default model if configured. Snapshot the relevant
-            // fields under one lock and drop before the agent calls and
-            // the steering disk reads.
-            let (default_model, steering_inputs) = {
-                let cfg = config.lock_or_recover();
-                (
-                    cfg.acp.agent.default_model.clone(),
-                    crate::commands::system::SteeringInputs::from_config(&cfg),
-                )
-            };
-            if let Some(ref default_model) = default_model {
-                if !default_model.is_empty() {
-                    info!("Applying default model to new session: {}", default_model);
-                    let result = client_guard.send_request(
-                        &client_guard.vendor_method("commands/execute"),
-                        serde_json::json!({
-                            "sessionId": new_session_id,
-                            "command": { "command": "model", "args": { "modelName": default_model } }
-                        }),
-                    );
-                    match result {
-                        Ok(_) => info!("Default model applied: {}", default_model),
-                        Err(e) => error!("Failed to apply default model: {}", e),
-                    }
-                }
-            }
-
-            // Send steering documents to the new session.
-            {
-                let parts = crate::commands::system::assemble_steering_parts(&steering_inputs);
-                let steering_msg = format!(
-                    "{} {}",
-                    crate::commands::system::STEERING_MSG_PREFIX,
-                    parts.join("\n\n---\n\n")
-                );
-                let _ = client_guard.send_chat_streaming(&new_session_id, &steering_msg, None);
-            }
-
-            // Invalidate session list cache (new session was created)
-            {
-                let mut cache = session_cache.lock_or_recover();
-                *cache = None;
-            }
-
-            if let Ok(mut ws) = window_sessions.lock() {
-                ws.insert(window_label.clone(), new_session_id.clone());
-            }
-            update_window_title(
-                &app,
-                &config,
-                &session_cache,
-                &window_label,
-                &new_session_id,
-            );
-
-            Ok(new_session_id)
-        }
-    }
+    acp::switch_acp_session(session_id, acp, features, ui, window, app).await
 }
 
 /// Peek the in-flight turn on `session_id`: the user prompt that started
