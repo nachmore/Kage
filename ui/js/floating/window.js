@@ -17,9 +17,7 @@
 // preserved so the many explicit call sites in app.js / suggestions / timers
 // keep working as nudges — they coalesce with observer-driven reflows.
 
-const DEFAULT_HEIGHT = 76; // logical px — collapsed launcher
-const MAX_HEIGHT_PERCENT = 0.65; // % of monitor height, auto-grow ceiling
-const BODY_PADDING = 16; // 8px top + 8px bottom in floating-base.css
+import { BODY_PADDING, DEFAULT_HEIGHT, MAX_HEIGHT_PERCENT } from './window-sizing-config.js';
 
 export class WindowManager {
     constructor(invoke) {

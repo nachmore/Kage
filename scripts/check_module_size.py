@@ -42,7 +42,6 @@ EXCEPTIONS = {
     "src/commands/messaging/notifications.rs": "Split notification parsing and event routing.",
     "src/acp_client/transport.rs": "Split framing, process launch, and transport state.",
     "ui/js/floating/app.js": "Split lifecycle, input, search, and message UI.",
-    "ui/js/floating/window.js": "Split window geometry and drag/resize behavior.",
     "ui/js/chat/app.js": "Split sessions, composer, and stream rendering.",
     "ui/js/shared/markdown.js": "Split core parsing and specialized renderers.",
     "ui/js/shared/extension-manager.js": "Split discovery, widgets, and commands.",
