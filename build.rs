@@ -238,16 +238,31 @@ fn stage_externalbin_placeholder_if_missing() {
         format!("kage-calendar-helper-{}", triple)
     };
     let path = bin_dir.join(&filename);
-    if path.exists() {
-        return;
-    }
-
     let content: &[u8] = if target_os == "windows" {
         b"@echo off\r\necho kage-calendar-helper is macOS-only\r\nexit /b 1\r\n"
     } else {
         b"#!/bin/sh\necho \"kage-calendar-helper is macOS-only\" >&2\nexit 1\n"
     };
-    if let Err(e) = std::fs::write(&path, content) {
+    stage_placeholder(&path, content, target_os != "windows");
+
+    let mcp_dir = std::path::PathBuf::from("src-tauri/binaries");
+    let mcp_filename = if target_os == "windows" {
+        format!("kage-computer-control-mcp-{}.exe", triple)
+    } else {
+        format!("kage-computer-control-mcp-{}", triple)
+    };
+    let mcp_path = mcp_dir.join(mcp_filename);
+    stage_placeholder(&mcp_path, b"placeholder sidecar\n", target_os != "windows");
+}
+
+fn stage_placeholder(path: &std::path::Path, content: &[u8], executable: bool) {
+    if path.exists() {
+        return;
+    }
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Err(e) = std::fs::write(path, content) {
         println!(
             "cargo:warning=failed to stage externalBin placeholder at {}: {}",
             path.display(),
@@ -255,16 +270,17 @@ fn stage_externalbin_placeholder_if_missing() {
         );
         return;
     }
+    #[cfg(not(unix))]
+    let _ = executable;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if target_os != "windows" {
+        if executable {
             let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
         }
     }
     println!(
-        "cargo:warning=staged externalBin placeholder at {} \
-         (real helper not built; runtime falls back to icalBuddy)",
+        "cargo:warning=staged externalBin placeholder at {}",
         path.display()
     );
 }

@@ -18,6 +18,7 @@ Exit code is forwarded so a compile failure here fails the Tauri build.
 """
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -37,7 +38,17 @@ def main() -> int:
         return 0
 
     debug = os.environ.get("TAURI_ENV_DEBUG", "").lower() == "true"
-    cmd = ["cargo", "build", "--bin", "kage-computer-control-mcp"]
+    target = os.environ.get("TAURI_ENV_TARGET_TRIPLE") or host_target()
+    cmd = [
+        "cargo",
+        "build",
+        "--bin",
+        "kage-computer-control-mcp",
+        "--features",
+        "mcp-sidecar",
+    ]
+    if os.environ.get("TAURI_ENV_TARGET_TRIPLE"):
+        cmd.extend(["--target", target])
     if not debug:
         cmd.append("--release")
     # scripts/ sits at the repo root, so parent.parent lands there
@@ -77,7 +88,37 @@ def main() -> int:
     # See build.rs for the consumer side.
     env = os.environ.copy()
     env["KAGE_BUILD_REASON"] = "mcp-sidecar"
-    return subprocess.call(cmd, cwd=repo_root, env=env)
+    result = subprocess.call(cmd, cwd=repo_root, env=env)
+    if result != 0:
+        return result
+
+    stage_sidecar(repo_root, target, debug)
+    return 0
+
+
+def host_target() -> str:
+    version = subprocess.check_output(["rustc", "-vV"], text=True)
+    for line in version.splitlines():
+        if line.startswith("host: "):
+            return line.removeprefix("host: ").strip()
+    raise RuntimeError("Could not determine Rust host target")
+
+
+def stage_sidecar(repo_root: Path, target: str, debug: bool) -> None:
+    profile = "debug" if debug else "release"
+    target_root = repo_root / "target"
+    if os.environ.get("TAURI_ENV_TARGET_TRIPLE"):
+        target_root /= target
+    suffix = ".exe" if "windows" in target else ""
+    source = target_root / profile / f"kage-computer-control-mcp{suffix}"
+    if not source.is_file():
+        raise FileNotFoundError(f"Built MCP sidecar not found: {source}")
+
+    stage_dir = repo_root / "src-tauri" / "binaries"
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    destination = stage_dir / f"kage-computer-control-mcp-{target}{suffix}"
+    shutil.copy2(source, destination)
+    print(f"[build_mcp] staged sidecar: {destination}", flush=True)
 
 
 if __name__ == "__main__":

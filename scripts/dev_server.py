@@ -102,7 +102,7 @@ def build_mcp_binary():
     print("Building kage-computer-control-mcp...")
     sys.stdout.flush()
     result = subprocess.run(
-        ["cargo", "build", "--bin", "kage-computer-control-mcp"],
+        ["cargo", "build", "--bin", "kage-computer-control-mcp", "--features", "mcp-sidecar"],
         cwd=repo_root,
         # Pipe through so build progress and any compile errors show up
         # in the same terminal as the dev server.
