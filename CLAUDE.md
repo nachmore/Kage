@@ -39,7 +39,7 @@ cargo build                      # debug binaries only — no installer, no bund
 `cargo tauri dev` rebuilds the MCP binary first (chained through `scripts/dev_server.py` → `build_mcp_binary()`), then builds and runs `kage`. Plain `cargo check` and `cargo build` only touch `kage`, so if you're iterating with those without `cargo tauri dev`, after editing `computer_control_mcp/src/main.rs` or any module it pulls in (notably `src/os/accessibility.rs`, `src/computer_control/`) run:
 
 ```bash
-cargo build --bin kage-computer-control-mcp
+cargo build --package kage-computer-control-mcp
 ```
 
 If the binary is locked because it's running, kill it first (Windows: `Get-Process -Name kage-computer-control-mcp | Stop-Process -Force`; macOS/Linux: `pkill -f kage-computer-control-mcp`), then rebuild and restart the app so the agent backend picks up the new binary.

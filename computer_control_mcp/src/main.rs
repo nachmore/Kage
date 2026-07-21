@@ -6,14 +6,10 @@
 
 use std::io::{self, BufRead, Read, Write};
 
-#[path = "../../src/bin/computer_control_mcp/handlers.rs"]
 mod handlers;
-#[path = "../../src/bin/computer_control_mcp/input_tools.rs"]
 mod input_tools;
 #[cfg(target_os = "macos")]
-#[path = "../../src/bin/computer_control_mcp/macos_input.rs"]
 mod macos_input;
-#[path = "../../src/bin/computer_control_mcp/tool_definitions.rs"]
 mod tool_definitions;
 
 // ---------------------------------------------------------------------------

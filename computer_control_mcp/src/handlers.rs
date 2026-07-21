@@ -286,15 +286,15 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
             const STEERING: &[(&str, &str)] = &[
                 (
                     "calculator",
-                    include_str!("../../computer_control/app_steering/calculator.md"),
+                    include_str!("../../src/computer_control/app_steering/calculator.md"),
                 ),
                 (
                     "microsoft_office",
-                    include_str!("../../computer_control/app_steering/microsoft_office.md"),
+                    include_str!("../../src/computer_control/app_steering/microsoft_office.md"),
                 ),
                 (
                     "notepad",
-                    include_str!("../../computer_control/app_steering/notepad.md"),
+                    include_str!("../../src/computer_control/app_steering/notepad.md"),
                 ),
             ];
             const APP_PATTERNS: &[(&str, &[&str])] = &[
