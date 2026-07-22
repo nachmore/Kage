@@ -607,19 +607,23 @@ jobs:
 
           # Rotate strategy: delete historical -N RELEASE objects but
           # leave their underlying git tags in place. The default
-          # GITHUB_TOKEN can't push refs that introduce
-          # `.github/workflows/*` changes (no `workflows` scope),
-          # which means we can't recreate a tag once we've deleted
-          # it if the SHA contains workflow changes. So we keep the
-          # tags around forever and just retag the release object
-          # via the Releases API.
+          # GITHUB_TOKEN can't CREATE refs whose SHA introduces
+          # `.github/workflows/*` changes (no `workflows` scope) —
+          # but it CAN force-UPDATE a ref that already exists (that's
+          # what "Move rolling tag" below relies on). So we keep the
+          # tags around forever and force-move the existing
+          # `<channel>-1` tag to the previous build's SHA BEFORE
+          # editing the release object; with the tag already in
+          # place, `gh release edit --tag` is a pure release-object
+          # update and never triggers server-side ref creation.
           #
-          # Releases API behaviour: `gh release edit --tag <new>
-          # --target <sha>` retargets the release object AND, when
-          # the new tag doesn't exist yet, creates it server-side
-          # at <sha>. Server-side ref creation through the Releases
-          # API is empirically not blocked by the workflow-scope
-          # check (unlike POST /git/refs and `git push -f`).
+          # History: this used to lean on `gh release edit --tag
+          # <new> --target <sha>` creating the tag server-side —
+          # Releases-API ref creation was empirically not subject to
+          # the workflow-scope check. That loophole closed (observed
+          # 2026-07-22: HTTP 403 "Resource not accessible by
+          # integration" whenever the previous build's SHA contained
+          # workflow-file changes), so we no longer rely on it.
           for n in 2 3 4 5 6 7 8 9 10; do
             tag="${CH}-${n}"
             if gh release view "$tag" >/dev/null 2>&1; then
@@ -647,10 +651,32 @@ jobs:
               exit 1
             fi
             echo "Rotating ${CH}-latest (at $PREV_SHA) → ${CH}-1"
-            gh release edit "${CH}-latest" \
-              --tag "${CH}-1" \
-              --target "$PREV_SHA" \
-              --title "Kage ${LABEL} (previous)"
+            # Pin the <channel>-1 git tag to PREV_SHA first. Force-
+            # updating an EXISTING ref is allowed for GITHUB_TOKEN
+            # even when the SHA touches workflow files; only ref
+            # CREATION is scope-checked. The checkout step's
+            # persist-credentials gives git the token.
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -f "${CH}-1" "$PREV_SHA"
+            if git push -f origin "${CH}-1"; then
+              # Tag exists at the right SHA — retagging the release
+              # object is now a pure metadata update (no server-side
+              # ref creation), which the token can always do.
+              gh release edit "${CH}-latest" \
+                --tag "${CH}-1" \
+                --title "Kage ${LABEL} (previous)"
+            else
+              # First rotation on a fresh channel (tag doesn't exist
+              # remotely yet → this was a CREATE, which the token may
+              # not be allowed to do when PREV_SHA touches workflow
+              # files). Degrade gracefully: drop the "previous"
+              # release instead of failing the whole publish — the
+              # new <channel>-latest release below is what users and
+              # the updater actually consume.
+              echo "Could not pin ${CH}-1 tag (ref creation blocked?); deleting previous release instead of rotating"
+              gh release delete "${CH}-latest" --yes
+            fi
           fi
 
       # For rolling channels (beta / dev) we force-move the alias tag
