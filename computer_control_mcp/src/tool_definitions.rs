@@ -1,7 +1,18 @@
 use kage_core::mcp_json_rpc;
+use std::sync::LazyLock;
+
+/// The tool list is static — only the echoed request `id` varies per
+/// response. Agent backends re-issue tools/list on every reconnect /
+/// session refresh, so build the ~20-tool schema tree once and splice
+/// the id per request instead of re-allocating the whole tree.
+static TOOLS: LazyLock<serde_json::Value> = LazyLock::new(build_tools);
 
 pub(crate) fn handle_tools_list(id: &serde_json::Value) -> String {
-    let tools = serde_json::json!({ "tools": [
+    mcp_json_rpc::success(id, TOOLS.clone())
+}
+
+fn build_tools() -> serde_json::Value {
+    serde_json::json!({ "tools": [
         tool_def("get_ui_tree", "Get the accessibility tree for a window.", serde_json::json!({
             "type": "object",
             "properties": {
@@ -185,10 +196,29 @@ pub(crate) fn handle_tools_list(id: &serde_json::Value) -> String {
             },
             "required": ["root", "operations"]
         })),
-    ]});
-    mcp_json_rpc::success(id, tools)
+    ]})
 }
 
 fn tool_def(name: &str, description: &str, input_schema: serde_json::Value) -> serde_json::Value {
     serde_json::json!({ "name": name, "description": description, "inputSchema": input_schema })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consecutive_tools_list_responses_are_identical_and_echo_id() {
+        let a = handle_tools_list(&serde_json::json!(1));
+        let b = handle_tools_list(&serde_json::json!(1));
+        assert_eq!(a, b);
+
+        let c = handle_tools_list(&serde_json::json!("other-id"));
+        let parsed: serde_json::Value = serde_json::from_str(&c).unwrap();
+        assert_eq!(parsed["id"], serde_json::json!("other-id"));
+        // Same tool list regardless of id.
+        let parsed_a: serde_json::Value = serde_json::from_str(&a).unwrap();
+        assert_eq!(parsed["result"], parsed_a["result"]);
+        assert!(parsed["result"]["tools"].as_array().unwrap().len() > 10);
+    }
 }
