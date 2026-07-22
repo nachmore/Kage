@@ -6,3 +6,15 @@
 # laptops. CI machines with more memory can override via `CARGO_BUILD_JOBS`.
 [build]
 jobs = 2
+
+# Pin the macOS deployment target for ALL cargo invocations so plain
+# `cargo check/test/clippy` share compile fingerprints with `cargo tauri
+# build/dev` (the Tauri CLI sets this from tauri.conf.json's
+# minimumSystemVersion — keep the two in sync). Without the pin, every
+# framework-linking crate (objc2-*, wry, tao, tauri...) recompiles when
+# alternating between tauri and bare-cargo commands on macOS. Cargo's
+# [env] does not override a value already present in the real
+# environment, so Tauri's own setting still wins if they ever diverge.
+# No effect on Windows/Linux.
+[env]
+MACOSX_DEPLOYMENT_TARGET = "11.0"

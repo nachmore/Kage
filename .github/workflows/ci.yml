@@ -60,6 +60,15 @@ jobs:
     # neither affects the compile fingerprint.)
     env:
       APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
+      # Same fingerprint logic as APTABASE_KEY, macOS flavour: `cargo tauri
+      # build` sets MACOSX_DEPLOYMENT_TARGET from tauri.conf.json's
+      # minimumSystemVersion, but bare `cargo clippy` / `cargo test` run
+      # without it — two different compile fingerprints for every crate
+      # that touches system frameworks (objc2-*, wry, tao, tauri, ring...),
+      # so macOS recompiled ~56 crates TWICE per run. Pin it at job scope
+      # (must match tauri.conf.json → bundle.macOS.minimumSystemVersion).
+      # Harmless on Windows. Mirrored for local builds in .cargo/config.toml.
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
 
     steps:
       - name: Checkout
