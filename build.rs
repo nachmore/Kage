@@ -1,32 +1,15 @@
 fn main() {
-    // Announce who's invoking this build.rs run. Cargo runs build.rs
-    // exactly once per `cargo build` invocation, so this gives us a
-    // tag in CI logs that lines up 1:1 with each compile pass.
-    //
-    // We can't reliably tell from cargo's own env vars which `--bin`
-    // a given build is producing (CARGO_BIN_NAME is set during BIN
-    // compilation, not during build.rs). So `scripts/build_mcp.py`
-    // sets `KAGE_BUILD_REASON=mcp-sidecar` before invoking cargo for
-    // the MCP build; the absence of the var means the invocation
-    // came from `cargo tauri build` directly (the main `kage`
-    // binary). The two-line CI sequence becomes:
-    //
-    //   [build.rs] reason=mcp-sidecar profile=release ...
-    //   ... build of kage-computer-control-mcp ...
-    //   [build.rs] reason=main-app profile=release ...
-    //   ... build of kage ...
-    //
-    // Tracking re-runs against KAGE_BUILD_REASON keeps the message
-    // correct: change the var (e.g. local cargo build vs. tauri
-    // build) and build.rs reruns to print the new tag.
-    println!("cargo:rerun-if-env-changed=KAGE_BUILD_REASON");
+    // Announce this build.rs run. Cargo runs build.rs exactly once per
+    // invocation that needs it, so this gives us a tag in CI logs that
+    // lines up 1:1 with each compile pass. (Scripts that invoke cargo
+    // for a specific purpose — dev_server.py, CI steps — print their
+    // own tags; we deliberately don't track a reason env var here
+    // because `rerun-if-env-changed` on it forced a build.rs re-run on
+    // every sidecar/main alternation.)
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "?".into());
     let target = std::env::var("TARGET").unwrap_or_else(|_| "?".into());
     let pkg_version = std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "?".into());
-    let reason = std::env::var("KAGE_BUILD_REASON").unwrap_or_else(|_| "main-app".into());
-    println!(
-        "cargo:warning=[build.rs] reason={reason} kage {pkg_version} profile={profile} target={target}"
-    );
+    println!("cargo:warning=[build.rs] kage {pkg_version} profile={profile} target={target}");
 
     // Only re-run this build script when these inputs change.
     println!("cargo:rerun-if-changed=tauri.conf.json");
@@ -40,6 +23,16 @@ fn main() {
     println!("cargo:rerun-if-changed=.aptabase-key");
     println!("cargo:rerun-if-env-changed=APTABASE_KEY");
     println!("cargo:rerun-if-env-changed=KAGE_LOCAL_DEV_BUILD");
+    // The MCP sidecar is provisioned by this script (see
+    // provision_mcp_sidecar), so its sources — and those of kage-core,
+    // its only path dependency — are inputs of ours. Without these, an
+    // edit to the sidecar would leave a stale staged binary in
+    // src-tauri/binaries/ that tauri-build happily bundles.
+    println!("cargo:rerun-if-changed=computer_control_mcp/src");
+    println!("cargo:rerun-if-changed=computer_control_mcp/Cargo.toml");
+    println!("cargo:rerun-if-changed=kage-core/src");
+    println!("cargo:rerun-if-changed=kage-core/Cargo.toml");
+    println!("cargo:rerun-if-changed=Cargo.lock");
 
     // Surface the local-dev-build marker to the binary as a compile-time
     // env. `option_env!("KAGE_LOCAL_DEV_BUILD")` returns Some(_) only when
@@ -204,12 +197,19 @@ fn main() {
     // the icalBuddy backend in that case.
     build_macos_calendar_helper();
 
-    // Ensure the path Tauri's `bundle.externalBin` expects exists for every
-    // target, so bundling succeeds even when we don't have a real helper
-    // (non-macOS targets, macOS without swiftc, or a swiftc compile error).
-    // The stub is never invoked — the consumer is `#[cfg(target_os = "macos")]`
-    // and will already have fallen back to icalBuddy for the real macOS case.
-    stage_externalbin_placeholder_if_missing();
+    // Ensure the path Tauri's `bundle.externalBin` expects for the calendar
+    // helper exists for every target, so bundling succeeds even when we
+    // don't have a real helper (non-macOS targets, macOS without swiftc, or
+    // a swiftc compile error). The stub is never invoked — the consumer is
+    // `#[cfg(target_os = "macos")]` and will already have fallen back to
+    // icalBuddy for the real macOS case.
+    stage_calendar_helper_placeholder_if_missing();
+
+    // Build + stage the real MCP sidecar. Unlike the calendar helper this
+    // is never a placeholder: every build path (bare `cargo build`,
+    // `cargo tauri dev`, CI, run_bundled_dev.sh) self-provisions a genuine
+    // binary, so nothing fake can be bundled or clobber a real sidecar.
+    provision_mcp_sidecar();
 
     tauri_build::build()
 }
@@ -221,7 +221,7 @@ fn main() {
 /// binary fails to bundle. The placeholder prints a message and exits 1
 /// if it ever runs, but it shouldn't — the macOS call site only invokes
 /// the compiled Swift helper, and other platforms don't touch it.
-fn stage_externalbin_placeholder_if_missing() {
+fn stage_calendar_helper_placeholder_if_missing() {
     let triple = match std::env::var("TARGET") {
         Ok(t) if !t.is_empty() => t,
         _ => return,
@@ -244,15 +244,117 @@ fn stage_externalbin_placeholder_if_missing() {
         b"#!/bin/sh\necho \"kage-calendar-helper is macOS-only\" >&2\nexit 1\n"
     };
     stage_placeholder(&path, content, target_os != "windows");
+}
 
-    let mcp_dir = std::path::PathBuf::from("src-tauri/binaries");
-    let mcp_filename = if target_os == "windows" {
-        format!("kage-computer-control-mcp-{}.exe", triple)
-    } else {
-        format!("kage-computer-control-mcp-{}", triple)
+/// Build the `kage-computer-control-mcp` workspace package and stage the
+/// binary at `src-tauri/binaries/kage-computer-control-mcp-<triple>[.exe]`
+/// — the path `tauri_build::build()` validates and copies into
+/// `target/<profile>/` on EVERY cargo build of this crate (including plain
+/// `cargo build` / `cargo check` / `cargo test`, which never run the Tauri
+/// CLI's `beforeBuildCommand` hook).
+///
+/// The nested cargo invocation MUST use a separate `--target-dir`: cargo
+/// holds a lock on the parent's target dir for the duration of this build
+/// script, so a nested build into the same tree deadlocks. The sidecar's
+/// dep graph is tiny (kage-core, no Tauri), so the separate tree costs
+/// seconds and megabytes. Cargo itself is the freshness checker — a warm
+/// no-op rebuild is sub-second, and this function only runs when one of
+/// the `rerun-if-changed` inputs above changed.
+///
+/// A failed sidecar build fails the main build. That's deliberate: the
+/// alternative is silently bundling a stale or missing binary.
+fn provision_mcp_sidecar() {
+    let triple = match std::env::var("TARGET") {
+        Ok(t) if !t.is_empty() => t,
+        _ => return,
     };
-    let mcp_path = mcp_dir.join(mcp_filename);
-    stage_placeholder(&mcp_path, b"placeholder sidecar\n", target_os != "windows");
+    let host = std::env::var("HOST").unwrap_or_default();
+    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".into());
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    // CARGO points at the exact cargo binary driving this build — using it
+    // (instead of whatever `cargo` is on PATH) keeps toolchain selection
+    // consistent between the parent and nested builds.
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+
+    let base_target_dir = std::env::var("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("target"));
+    let sidecar_target_dir = base_target_dir.join("sidecar-build");
+
+    // Only pass --target when actually cross-compiling — mirrors the rule
+    // the old build_mcp.py used (d57f6c2): for host builds the plain
+    // layout (`<dir>/<profile>/`) is where the binary lands; with --target
+    // it moves under `<dir>/<triple>/<profile>/`.
+    let cross = triple != host;
+    let mut cmd = std::process::Command::new(&cargo);
+    cmd.args(["build", "--package", "kage-computer-control-mcp"])
+        .arg("--target-dir")
+        .arg(&sidecar_target_dir)
+        // Nested cargo's stdout is muted so its output can't be parsed as
+        // `cargo:` directives from THIS build script. Diagnostics (compile
+        // errors, progress) go to stderr, which cargo surfaces whenever
+        // the build script fails.
+        .stdout(std::process::Stdio::null());
+    if cross {
+        cmd.args(["--target", &triple]);
+    }
+    if profile == "release" {
+        cmd.arg("--release");
+    }
+
+    let status = cmd.status().unwrap_or_else(|e| {
+        panic!("failed to spawn `{cargo} build --package kage-computer-control-mcp`: {e}")
+    });
+    if !status.success() {
+        panic!(
+            "kage-computer-control-mcp failed to build ({status}). The main build \
+             cannot continue without a real sidecar — fix the sidecar compile \
+             error above (its sources live in computer_control_mcp/ and kage-core/)."
+        );
+    }
+
+    let suffix = if target_os == "windows" { ".exe" } else { "" };
+    let mut built = sidecar_target_dir.clone();
+    if cross {
+        built.push(&triple);
+    }
+    let built = built
+        .join(&profile)
+        .join(format!("kage-computer-control-mcp{suffix}"));
+
+    let staged_dir = std::path::PathBuf::from("src-tauri/binaries");
+    let staged = staged_dir.join(format!("kage-computer-control-mcp-{triple}{suffix}"));
+
+    // Only copy when the built binary is fresher than the staged one —
+    // rewriting the staged file bumps its mtime, which re-triggers both
+    // tauri-build's rerun-if-changed on it and the `cargo tauri dev`
+    // watcher (see the calendar-helper comment above for the loop this
+    // avoids). The size check guards against a stale non-binary at the
+    // staged path (e.g. a placeholder written by an older checkout of
+    // this script): mtime alone would call it "fresh" forever, because
+    // a warm no-op sidecar build never touches the built binary's mtime.
+    let same_size = match (std::fs::metadata(&staged), std::fs::metadata(&built)) {
+        (Ok(s), Ok(b)) => s.len() == b.len(),
+        _ => false,
+    };
+    if same_size && is_newer_than(&staged, &built) {
+        return;
+    }
+    let _ = std::fs::create_dir_all(&staged_dir);
+    if let Err(e) = std::fs::copy(&built, &staged) {
+        panic!(
+            "failed to stage MCP sidecar at {}: {e}. If the file is locked by a \
+             running instance, kill it first (Windows: `Get-Process -Name \
+             kage-computer-control-mcp | Stop-Process -Force`; macOS/Linux: \
+             `pkill -f kage-computer-control-mcp`).",
+            staged.display()
+        );
+    }
+    println!(
+        "cargo:warning=staged MCP sidecar at {} (from {})",
+        staged.display(),
+        built.display()
+    );
 }
 
 fn stage_placeholder(path: &std::path::Path, content: &[u8], executable: bool) {

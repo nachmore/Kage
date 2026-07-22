@@ -36,17 +36,11 @@ cargo build                      # debug binaries only — no installer, no bund
 
 `src/main.rs` → `kage` (the app). `computer_control_mcp/src/main.rs` → `kage-computer-control-mcp` (standalone MCP server spawned by the agent backend over stdio).
 
-`cargo tauri dev` rebuilds the MCP binary first (chained through `scripts/dev_server.py` → `build_mcp_binary()`), then builds and runs `kage`. Plain `cargo check` and `cargo build` only touch `kage`, so if you're iterating with those without `cargo tauri dev`, after editing `computer_control_mcp/src/main.rs` or any module it pulls in (notably anything under `kage-core/src/`) run:
+**The MCP sidecar is self-provisioned by `build.rs`.** Every cargo build of the main crate (`cargo build`, `cargo tauri dev/build` — anything that runs `build.rs`) rebuilds the sidecar into `target/sidecar-build/` (separate target dir — a nested cargo build into the parent's tree would deadlock on cargo's lock) and stages it at `src-tauri/binaries/kage-computer-control-mcp-<triple>[.exe]`, where `tauri_build::build()` validates it and copies it next to the main binary in `target/<profile>/`. `rerun-if-changed` on `computer_control_mcp/` and `kage-core/` means an edit there re-runs the provisioning on the next build; a warm no-op costs under a second. There is no separate build step, no placeholder file, and no way to bundle a stale sidecar.
 
-```bash
-cargo build --package kage-computer-control-mcp
-```
+If the staging copy fails because the binary is locked by a running instance, kill it first (Windows: `Get-Process -Name kage-computer-control-mcp | Stop-Process -Force`; macOS/Linux: `pkill -f kage-computer-control-mcp`), rebuild, and restart the app so the agent backend picks up the new binary.
 
-If the binary is locked because it's running, kill it first (Windows: `Get-Process -Name kage-computer-control-mcp | Stop-Process -Force`; macOS/Linux: `pkill -f kage-computer-control-mcp`), then rebuild and restart the app so the agent backend picks up the new binary.
-
-`cargo tauri build` rebuilds it automatically too (see `tauri.conf.json` → `beforeBuildCommand`).
-
-To skip the MCP rebuild during dev (purely UI/main-binary iteration), pass `--no-mcp-build` to the dev server, e.g. by editing the `beforeDevCommand` line in `tauri.conf.json` for that session.
+Note: `cargo check` / `cargo clippy` / `cargo test` of the main crate also run `build.rs`, so they provision the sidecar too — that's expected and cheap on a warm tree.
 
 ## Test & Lint
 

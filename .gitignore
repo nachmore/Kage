@@ -48,10 +48,12 @@ www/
 
 # Agent scratch — todos, migration notes, anything not ready for commit
 .agent/
+# Temporary work plans — safe space for in-progress planning docs
+docs/plans/
 # Staging dir for build.rs-compiled sidecar binaries (e.g. the macOS
 # EventKit calendar helper) — rebuilt on every `cargo build` on macOS.
 src-tauri/macos/bin/
-# Target-specific Tauri sidecars staged by scripts/build_mcp.py.
+# Target-specific Tauri sidecars staged by build.rs (provision_mcp_sidecar).
 src-tauri/binaries/
 
 # Husky's internal runner scaffolding. The actual hooks (.husky/pre-push

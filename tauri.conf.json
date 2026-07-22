@@ -3,7 +3,7 @@
   "identifier": "com.kage.launcher",
   "build": {
     "beforeDevCommand": "python scripts/dev_server.py",
-    "beforeBuildCommand": "python scripts/build_mcp.py",
+    "beforeBuildCommand": "python scripts/ensure_vendor.py",
     "devUrl": "http://localhost:1420",
     "frontendDist": "./ui"
   },

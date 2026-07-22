@@ -81,39 +81,8 @@ if port_in_use(PORT):
     time.sleep(0.3)
 
 
-def build_mcp_binary():
-    """Rebuild the standalone kage-computer-control-mcp binary.
-
-    `cargo tauri dev` only rebuilds the main `kage` binary — edits to
-    `computer_control_mcp/src/main.rs` (or to any module it pulls in,
-    notably `kage-core/src/os/accessibility.rs`) silently produce a stale MCP
-    binary unless the developer remembers to run this command by hand.
-    Running it here on every dev start makes the dev loop honest:
-    the binary the agent spawns is always up-to-date with the source.
-
-    Cargo's incremental cache makes this a no-op when nothing changed
-    (sub-second on a warm tree); when it isn't, the dev server start
-    is delayed by the rebuild, which is the correct trade-off — we'd
-    rather wait than ship a stale binary into a debugging session.
-
-    A failure here is fatal: continuing would launch the app against
-    an old (or missing) binary and produce confusing runtime errors.
-    """
-    print("Building kage-computer-control-mcp...")
-    sys.stdout.flush()
-    result = subprocess.run(
-        ["cargo", "build", "--package", "kage-computer-control-mcp"],
-        cwd=repo_root,
-        # Pipe through so build progress and any compile errors show up
-        # in the same terminal as the dev server.
-    )
-    if result.returncode != 0:
-        print(f"\n❌ kage-computer-control-mcp build failed (exit {result.returncode}); aborting dev start")
-        sys.exit(result.returncode)
-
-
-if "--no-mcp-build" not in sys.argv:
-    build_mcp_binary()
+# Note: the MCP sidecar (kage-computer-control-mcp) is provisioned by the
+# main crate's build.rs on every cargo build — no separate build step here.
 
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):

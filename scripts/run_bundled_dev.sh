@@ -38,12 +38,10 @@ done
 # --- Build if requested or binary missing ---
 if [ "$BUILD" = true ] || [ ! -f "$APP_PATH" ]; then
   echo "🔨 Building debug bundle..."
-  # Skip the separate MCP build in beforeBuildCommand. It causes a
-  # double-compile: build_mcp.py runs `cargo build` without Tauri's
-  # feature flags, then Tauri runs its own `cargo build` with different
-  # features — invalidating the entire cache. The MCP binary gets built
-  # and bundled by Tauri anyway (it's in externalBin / same target dir).
-  KAGE_SKIP_MCP_BUILD=1 cargo tauri build --debug
+  # build.rs self-provisions the MCP sidecar (builds it into
+  # target/sidecar-build/ and stages it for externalBin), so a single
+  # tauri build produces everything.
+  cargo tauri build --debug
 fi
 
 # --- Kill any existing Kage instance ---
@@ -56,7 +54,7 @@ fi
 # --- Start dev server if not already running ---
 if ! lsof -ti tcp:$PORT > /dev/null 2>&1; then
   echo "🌐 Starting dev server on port $PORT..."
-  python3 "$DEV_SERVER" --no-mcp-build &
+  python3 "$DEV_SERVER" &
   DEV_SERVER_PID=$!
 
   # Wait for it to be ready

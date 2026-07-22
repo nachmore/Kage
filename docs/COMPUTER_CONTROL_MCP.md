@@ -89,11 +89,11 @@ These wouldn't justify the split on their own, but they reinforce it:
   grants attach per-executable. A dedicated automation binary can
   request those permissions narrowly without escalating the main app's
   permission footprint.
-- **Iteration loop.** `cargo build --bin kage-computer-control-mcp`,
+- **Iteration loop.** `cargo build --package kage-computer-control-mcp`,
   kill the old child, the agent respawns the new one — no GUI restart,
-  no chat state loss. The dev-only papercut is that `cargo tauri dev`
-  and `cargo check` don't rebuild the MCP binary. That's a build
-  ergonomics issue, not an architectural one.
+  no chat state loss. The main crate's `build.rs` also self-provisions
+  the sidecar on every build (`cargo build`, `cargo tauri dev/build`),
+  so there's no stale-binary papercut.
 
 ## What the separation costs
 

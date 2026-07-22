@@ -1,8 +1,8 @@
 """Ensure ui/vendor/lib/ is populated with browser bundles.
 
-Called from tauri.conf.json's beforeDevCommand and beforeBuildCommand
-(via dev_server.py and build_mcp.py respectively). This is the single
-place that checks whether vendor libs need installing.
+Called from tauri.conf.json's beforeDevCommand (via dev_server.py) and
+directly as its beforeBuildCommand. This is the single place that checks
+whether vendor libs need installing.
 
 The vendor libs (marked, mermaid, prismjs, etc.) are not checked into
 git. Running `npm install` in ui-vendor/ downloads them and a
