@@ -98,6 +98,9 @@ impl GrantType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolPolicy {
+    /// Display title; the map key is the tool id, so an empty title
+    /// only affects the settings list label.
+    #[serde(default)]
     pub title: String,
     #[serde(default)]
     pub policy: PolicyKind,

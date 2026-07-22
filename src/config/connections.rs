@@ -116,14 +116,20 @@ impl AcpConfig {
 pub struct AgentConnection {
     /// Stable id (uuid). Persisted across renames so the active pointer
     /// doesn't need to chase the display name.
+    /// An empty id is an inert entry: `active_connection()` matches by
+    /// exact id and falls back to the list head, so it can still be
+    /// selected, renamed, or deleted from the settings UI.
+    #[serde(default)]
     pub id: String,
     /// User-facing name (defaults to the preset display name).
+    #[serde(default)]
     pub name: String,
     /// Optional preset id (e.g. "kiro", "claude-code", "codex").
     /// `None` means the connection was hand-rolled by the user.
     #[serde(default)]
     pub preset_id: Option<String>,
     /// Connection mode (Local spawn vs. Remote TCP).
+    #[serde(default)]
     pub mode: AcpMode,
     /// Custom sessions directory for this agent. If unset, uses the
     /// preset's well-known path (e.g. `~/.kiro/sessions/cli` for Kiro).
@@ -152,9 +158,12 @@ pub struct OllamaConnectionSettings {
     /// HTTP base URL of the Ollama daemon — scheme, host, and port.
     /// The wizard appends `/v1` when building the `OPENAI_BASE_URL`
     /// env var. Defaults to the local install.
+    #[serde(default = "default_ollama_base_url")]
     pub base_url: String,
     /// Tag-form model name (e.g. `llama3:8b`). Plumbed into the
-    /// codex-acp adapter via `OPENAI_MODEL`.
+    /// codex-acp adapter via `OPENAI_MODEL`. Empty means "not chosen
+    /// yet" — the wizard treats it as unset and shows the picker.
+    #[serde(default)]
     pub model: String,
     /// Show a small "🦙 <model> · <size>" status widget in the
     /// floating window. Off by default — the widget polls
@@ -195,6 +204,25 @@ pub enum AcpMode {
         port: u16,
         timeout_ms: u64,
     },
+}
+
+/// Default for `AcpMode` when an old/hand-edited config entry omits
+/// `mode` entirely: an empty Local spawn command. It is deliberately
+/// NOT a runnable default — `spawn_backend_process` rejects an empty
+/// command with a clear "Empty spawn command" error, which surfaces in
+/// the connection UI where the user can fix the entry. That beats both
+/// alternatives: failing the whole Config::load (silently resets every
+/// setting) or guessing a Remote endpoint that may not exist.
+impl Default for AcpMode {
+    fn default() -> Self {
+        AcpMode::Local {
+            spawn_command: String::new(),
+        }
+    }
+}
+
+fn default_ollama_base_url() -> String {
+    crate::ollama::DEFAULT_BASE_URL.to_string()
 }
 
 fn default_true() -> bool {

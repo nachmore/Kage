@@ -2,7 +2,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoreSource {
+    /// Empty name/url are inert entries — the store UI renders them
+    /// as-is and fetching an empty URL fails per-source without
+    /// affecting the others.
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub url: String,
     #[serde(default = "default_true")]
     pub enabled: bool,

@@ -15,12 +15,15 @@ pub struct QuickActionsConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuickAction {
-    /// Display label on the chip
+    /// Display label on the chip. Empty label/prompt render an inert
+    /// chip that does nothing when clicked — harmless.
+    #[serde(default)]
     pub label: String,
     /// Emoji icon for the chip
     #[serde(default)]
     pub icon: String,
     /// Prompt template — {text} is replaced with the selected text
+    #[serde(default)]
     pub prompt: String,
     /// Optional: only show for specific content types (code, prose, error, url, json, math)
     /// Empty means show for all types.
@@ -42,12 +45,15 @@ impl Default for QuickActionsConfig {
 /// Each step's output feeds into the next step's {input} placeholder.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MacroConfig {
-    /// Display name
+    /// Display name. An unnamed macro with no steps is inert — it
+    /// shows in the list and can be edited or deleted.
+    #[serde(default)]
     pub name: String,
     /// Emoji icon
     #[serde(default = "default_macro_icon")]
     pub icon: String,
     /// Ordered list of transformation steps
+    #[serde(default)]
     pub steps: Vec<MacroStep>,
     /// What to do with the final output: "clipboard" or "replace" or "inform"
     #[serde(default = "default_macro_output")]
@@ -200,7 +206,12 @@ pub enum ShortcutActionKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
+    /// Empty name/shortcut entries are inert: no hotkey gets
+    /// registered (the registrar skips unparseable accelerators) and
+    /// the settings list renders them for the user to fix or delete.
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub shortcut: String,
     #[serde(default)]
     pub action_type: ShortcutActionKind,

@@ -576,4 +576,57 @@ mod partial_config_tests {
         assert_eq!(cfg.hotkey.key, "Space");
         assert_eq!(cfg.ui.font_size, 14);
     }
+
+    #[test]
+    fn nested_config_entries_missing_fields_use_defaults() {
+        // List-entry structs must ALSO tolerate `{}`: one hand-edited or
+        // old-shape entry inside connections[] / store sources used to
+        // fail the entire Config::load and reset the user to defaults.
+        let conn: AgentConnection =
+            serde_json::from_str("{}").expect("empty AgentConnection must deserialize");
+        assert!(conn.id.is_empty());
+        assert!(conn.name.is_empty());
+        assert!(
+            matches!(conn.mode, AcpMode::Local { ref spawn_command } if spawn_command.is_empty())
+        );
+
+        let ollama: OllamaConnectionSettings =
+            serde_json::from_str("{}").expect("empty OllamaConnectionSettings must deserialize");
+        assert_eq!(ollama.base_url, crate::ollama::DEFAULT_BASE_URL);
+        assert!(ollama.model.is_empty());
+        assert!(!ollama.show_status_widget);
+
+        let source: StoreSource =
+            serde_json::from_str("{}").expect("empty StoreSource must deserialize");
+        assert!(source.name.is_empty());
+        assert!(source.url.is_empty());
+        assert!(source.enabled);
+    }
+
+    #[test]
+    fn old_shape_connection_round_trips() {
+        // A pre-ollama_settings, pre-sessions_directory connection entry
+        // (the shape shipped before the connections split) must load and
+        // re-serialize without losing the fields it does carry.
+        let old = r#"{
+            "id": "abc-123",
+            "name": "Kiro",
+            "mode": { "type": "local", "spawn_command": "kiro-cli acp" }
+        }"#;
+        let conn: AgentConnection =
+            serde_json::from_str(old).expect("old-shape connection must deserialize");
+        assert_eq!(conn.id, "abc-123");
+        assert_eq!(conn.name, "Kiro");
+        assert!(
+            matches!(conn.mode, AcpMode::Local { ref spawn_command } if spawn_command == "kiro-cli acp")
+        );
+        assert!(conn.preset_id.is_none());
+        assert!(conn.ollama_settings.is_none());
+
+        let json = serde_json::to_string(&conn).expect("serialize");
+        let back: AgentConnection = serde_json::from_str(&json).expect("round-trip");
+        assert_eq!(back.id, conn.id);
+        assert_eq!(back.name, conn.name);
+        assert_eq!(back.mode, conn.mode);
+    }
 }
