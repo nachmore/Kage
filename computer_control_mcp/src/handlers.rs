@@ -323,6 +323,31 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
             }
             tool_result_text(id, &result, false)
         }
+        "get_kage_changelog" => {
+            // The app refreshes this cache at startup (post-upgrade is
+            // exactly when it's freshest). This binary's own version is
+            // the authoritative "installed version" — it's stamped from
+            // the same workspace version as the app.
+            let response =
+                match kage_core::changelog_cache::read() {
+                    Some(cache) => format!(
+                    "Installed Kage version: {} ({} channel)\nRelease notes cached at: {}\n\n{}",
+                    env!("CARGO_PKG_VERSION"),
+                    if cache.channel.is_empty() { "unknown" } else { &cache.channel },
+                    cache.fetched_at,
+                    cache.markdown
+                ),
+                    None => format!(
+                        "Installed Kage version: {}\n\nNo cached release notes found. \
+                     The cache is written by the Kage app on startup — it may not \
+                     have run since this feature shipped, or the fetch failed \
+                     (offline?). Release notes are also available at \
+                     https://github.com/nachmore/Kage/releases.",
+                        env!("CARGO_PKG_VERSION")
+                    ),
+                };
+            tool_result_text(id, &response, false)
+        }
         // Utility tools
         "launch_app" => {
             let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");

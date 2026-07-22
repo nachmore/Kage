@@ -92,6 +92,7 @@ pub fn configure(
 
     setup::refresh_mcp_registration_if_enabled();
     setup::spawn_app_registry_scan(app);
+    setup::spawn_changelog_cache_refresh(app);
     setup::maybe_spawn_default_session(app, config, resume_session_id);
     setup::start_updater(app);
     setup::maybe_show_welcome_window(app.handle(), config.first_run_completed);

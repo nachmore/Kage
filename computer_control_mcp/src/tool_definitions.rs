@@ -103,6 +103,10 @@ fn build_tools() -> serde_json::Value {
             "properties": { "task": { "type": "string" }, "details": { "type": "string" } },
             "required": ["task"]
         })),
+        // Kage self-knowledge
+        tool_def("get_kage_changelog", "Get Kage's release notes (changelog) and current version. Use when the user asks what changed in the last Kage update, what's new in Kage, or which Kage version is installed. Reads a locally cached copy refreshed by the app — works offline.", serde_json::json!({
+            "type": "object", "properties": {}
+        })),
         // Fallback tools
         tool_def("launch_app", "Launch an application by name.", serde_json::json!({
             "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"]

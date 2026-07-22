@@ -8,6 +8,7 @@
 //! dependencies to this crate — command wrappers belong in `kage`.
 
 pub mod calendar;
+pub mod changelog_cache;
 pub mod computer_control;
 pub mod folder_tools;
 pub mod lock_ext;

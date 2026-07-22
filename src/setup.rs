@@ -439,6 +439,51 @@ pub fn refresh_mcp_registration_if_enabled() {
     }
 }
 
+/// Refresh the on-disk changelog cache in the background so the MCP
+/// sidecar's `get_kage_changelog` tool can answer "what changed in the
+/// last update?" from local disk — offline, and without giving the
+/// sidecar an HTTP client.
+///
+/// Refresh policy: fetch when the cached version differs from the
+/// running version (i.e. first launch after an upgrade — exactly when
+/// the user is most likely to ask), when the cached channel differs
+/// (user switched channels), or when the cache is missing/unreadable.
+/// Steady-state launches with a fresh cache are a no-op. Fetch failure
+/// is logged and the stale cache (if any) is kept — worst case the
+/// agent reports slightly-old notes.
+pub fn spawn_changelog_cache_refresh(app: &App) {
+    let config: tauri::State<'_, std::sync::Arc<std::sync::Mutex<crate::config::Config>>> =
+        app.state();
+    let channel = config.lock_or_recover().updates.channel;
+    tauri::async_runtime::spawn(async move {
+        let current_version = env!("CARGO_PKG_VERSION");
+        if let Some(cache) = kage_core::changelog_cache::read() {
+            if cache.version == current_version && cache.channel == channel.as_str() {
+                return;
+            }
+        }
+        let fetched =
+            tauri::async_runtime::spawn_blocking(move || crate::updater::fetch_changelog(channel))
+                .await;
+        match fetched {
+            Ok(Ok(markdown)) => {
+                let cache = kage_core::changelog_cache::ChangelogCache {
+                    version: current_version.to_string(),
+                    channel: channel.as_str().to_string(),
+                    fetched_at: chrono::Utc::now().to_rfc3339(),
+                    markdown,
+                };
+                match kage_core::changelog_cache::write(&cache) {
+                    Ok(()) => info!("Changelog cache refreshed for {current_version}"),
+                    Err(e) => warn!("Failed to write changelog cache: {e}"),
+                }
+            }
+            Ok(Err(e)) => warn!("Changelog cache refresh fetch failed: {e}"),
+            Err(e) => warn!("Changelog cache refresh task failed: {e}"),
+        }
+    });
+}
+
 /// Window close-requested handler: hide rather than close, so the app
 /// persists in the tray. Logs (rather than panics) if hide fails.
 /// On macOS, also hides the app to return focus to the previous application.
