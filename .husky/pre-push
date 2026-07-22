@@ -2,8 +2,8 @@
 #
 # Mirrors the four checks ci.yml enforces:
 #   1. cargo fmt --all -- --check       (Rust formatting)
-#   2. cargo clippy --all-targets -- -D warnings  (Rust lints)
-#   3. cargo test --lib                 (Rust unit tests)
+#   2. cargo clippy --workspace --all-targets -- -D warnings  (Rust lints)
+#   3. cargo test --workspace --lib                 (Rust unit tests)
 #   4. npm run ci                       (biome ci on ui/)
 #
 # Total wall time on this repo is ~30-60s after the first run (Cargo
@@ -26,11 +26,11 @@ set -e
 echo "[pre-push] cargo fmt --all -- --check"
 cargo fmt --all -- --check
 
-echo "[pre-push] cargo clippy --all-targets -- -D warnings"
-cargo clippy --all-targets -- -D warnings
+echo "[pre-push] cargo clippy --workspace --all-targets -- -D warnings"
+cargo clippy --workspace --all-targets -- -D warnings
 
-echo "[pre-push] cargo test --lib"
-cargo test --lib
+echo "[pre-push] cargo test --workspace --lib"
+cargo test --workspace --lib
 
 echo "[pre-push] npm run ci"
 npm run ci

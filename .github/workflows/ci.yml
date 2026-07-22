@@ -119,9 +119,14 @@ jobs:
         run: npm run ci
 
       - name: cargo clippy
-        # --all-targets covers lib, bins, tests, examples. -D warnings
-        # promotes any warning into a failure so we stay at zero warnings.
-        run: cargo clippy --all-targets -- -D warnings
+        # --workspace lints every member (kage, kage-core, the MCP
+        # sidecar) — without it only the root crate is linted and the
+        # non-default members are merely type-checked. --all-targets
+        # covers lib, bins, tests, examples. -D warnings promotes any
+        # warning into a failure so we stay at zero warnings. (Deps from
+        # crates.io are never linted: cargo passes --cap-lints allow to
+        # non-workspace crates, so third-party warnings can't fail us.)
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       # ----- Build + test gates --------------------------------------
       #
@@ -217,9 +222,11 @@ jobs:
           fi
 
       - name: cargo test
+        # --workspace runs every member's tests (the sidecar is a
+        # non-default member, so bare `cargo test` would skip it).
         # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
         # exhaustion on Windows; CI inherits that.
-        run: cargo test
+        run: cargo test --workspace
 
       - name: vitest
         working-directory: ui-tests
