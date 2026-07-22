@@ -553,7 +553,10 @@ pub fn update_activation_policy<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
 /// from the visibility check (used when a window is being hidden but
 /// `is_visible()` hasn't caught up yet).
 #[cfg(target_os = "macos")]
-pub fn update_activation_policy_excluding(app_handle: &AppHandle, exclude: Option<&str>) {
+pub fn update_activation_policy_excluding<R: tauri::Runtime>(
+    app_handle: &AppHandle<R>,
+    exclude: Option<&str>,
+) {
     use tauri::ActivationPolicy;
 
     // Windows that count as "real" for Cmd+Tab purposes

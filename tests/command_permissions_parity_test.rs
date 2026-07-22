@@ -26,11 +26,13 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Pull every `commands::name,` (and `crate::automation::name,`) out of the
-/// `tauri::generate_handler![...]` call in `src/main.rs`.
+/// Pull every `crate::commands::name,` (and `crate::automation::name,`) out
+/// of the `tauri::generate_handler![...]` call in `src/commands/registry.rs`
+/// (the single registration point shared by production and the mock-app
+/// harness).
 fn registered_commands() -> HashSet<String> {
-    let path = repo_root().join("src").join("main.rs");
-    let src = fs::read_to_string(&path).expect("read src/main.rs");
+    let path = repo_root().join("src").join("commands").join("registry.rs");
+    let src = fs::read_to_string(&path).expect("read src/commands/registry.rs");
 
     let start = src
         .find("tauri::generate_handler![")
