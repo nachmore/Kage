@@ -8,26 +8,8 @@ use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
 use std::process::Command;
 
-pub fn get_process_name_impl(pid: u32) -> Option<String> {
-    // Try /proc/{pid}/comm first (no subprocess needed)
-    if let Ok(name) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
-        let name = name.trim().to_string();
-        if !name.is_empty() {
-            return Some(name);
-        }
-    }
-    // Fallback to ps
-    let output = Command::new("ps")
-        .args(["-p", &pid.to_string(), "-o", "comm="])
-        .output()
-        .ok()?;
-    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if name.is_empty() {
-        None
-    } else {
-        Some(name)
-    }
-}
+// Moved to kage-core; re-exported for `super::process::*` callers.
+pub use kage_core::os::linux::process::{get_process_name_impl, spawn_detached_impl};
 
 pub fn kill_process_impl(pid: u32) -> bool {
     // Try SIGTERM first
@@ -52,13 +34,6 @@ pub fn configure_spawn_impl(cmd: &mut Command) {
         });
     }
     info!("Linux: Setting up process detachment");
-}
-
-/// Spawn a process detached from the parent. On Linux this is a plain
-/// `Command::spawn` since there's no Windows-style Job Object to break
-/// out of. The cross-platform `spawn_detached` calls this.
-pub fn spawn_detached_impl(cmd: &mut Command) -> std::io::Result<std::process::Child> {
-    cmd.spawn()
 }
 
 /// No-op on Linux — there's no Windows-style Job Object that auto-kills

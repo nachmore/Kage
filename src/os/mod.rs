@@ -25,9 +25,13 @@ pub use macos as platform;
 #[cfg(target_os = "linux")]
 pub use linux as platform;
 
+// accessibility + launcher moved to kage-core (shared with the MCP
+// sidecar); re-exported so `crate::os::accessibility::...` paths and the
+// platform-dispatch shape stay unchanged for app code.
+pub use kage_core::os::accessibility;
+pub use kage_core::os::launcher;
+
 // Common types and traits
-#[allow(dead_code)] // Consumed by the kage-computer-control-mcp binary
-pub mod accessibility;
 pub mod calendar;
 pub mod clipboard;
 pub mod clipboard_history;
@@ -36,7 +40,6 @@ pub mod diagnostics;
 pub mod file_search;
 pub mod hotkey;
 pub mod icon;
-pub mod launcher;
 pub mod power;
 pub mod process;
 pub mod shell;
@@ -122,35 +125,9 @@ pub fn is_dark_mode() -> bool {
     }
 }
 
-/// Get the system fonts directory.
-/// Windows: %WINDIR%\Fonts, macOS/Linux: dirs::font_dir()
-pub fn fonts_dir() -> Option<std::path::PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        std::env::var("WINDIR")
-            .ok()
-            .map(|w| std::path::PathBuf::from(w).join("Fonts"))
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        dirs::font_dir()
-    }
-}
-
-/// Configure a Command to hide the console window on Windows (no-op on other platforms).
-pub fn configure_no_window(cmd: &mut std::process::Command) -> &mut std::process::Command {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000) // CREATE_NO_WINDOW
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        cmd
-    }
-}
+// fonts_dir + configure_no_window live in kage-core (folder_tools and
+// script_runner need them); re-exported to keep `crate::os::` callers as-is.
+pub use kage_core::os::{configure_no_window, fonts_dir};
 
 /// Spawn this command outside the parent's Job Object on Windows (no-op
 /// elsewhere). Used for the restart helper and `execute_shortcut` so the

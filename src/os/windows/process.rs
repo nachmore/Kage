@@ -7,36 +7,10 @@ use std::process::Command;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-/// Check if a PID belongs to a kage-related process (agent backend, node, etc.)
-/// Returns the process name if found, None if the process doesn't exist or isn't ours.
-pub fn get_process_name_impl(pid: u32) -> Option<String> {
-    use windows::core::PWSTR;
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-
-    unsafe {
-        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
-        let mut buf = [0u16; 260];
-        let mut size = buf.len() as u32;
-        let result = QueryFullProcessImageNameW(
-            handle,
-            windows::Win32::System::Threading::PROCESS_NAME_FORMAT(0),
-            PWSTR(buf.as_mut_ptr()),
-            &mut size,
-        );
-        let _ = CloseHandle(handle);
-        if result.is_ok() && size > 0 {
-            let path = String::from_utf16_lossy(&buf[..size as usize]);
-            // Extract just the filename from the full path
-            let name = path.rsplit('\\').next().unwrap_or(&path).to_lowercase();
-            Some(name)
-        } else {
-            None
-        }
-    }
-}
+// get_process_name_impl / spawn_detached_impl moved to kage-core (the
+// sidecar's accessibility + launcher stack needs them); re-exported so
+// `super::process::*` callers here keep resolving.
+pub use kage_core::os::windows::process::{get_process_name_impl, spawn_detached_impl};
 
 pub fn kill_process_impl(pid: u32) -> bool {
     match Command::new("taskkill")
@@ -61,17 +35,6 @@ pub fn kill_process_impl(pid: u32) -> bool {
 pub fn configure_spawn_impl(cmd: &mut Command) {
     cmd.creation_flags(CREATE_NO_WINDOW);
     info!("Windows: Setting CREATE_NO_WINDOW flag");
-}
-
-const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
-
-/// Spawn a process that is detached from our Job Object so it survives
-/// when Kage exits. Use this for user-facing launches (apps,
-/// URLs, explorer, system commands) — NOT for internal child processes
-/// like the agent backend or TTS servers that should die with us.
-pub fn spawn_detached_impl(cmd: &mut Command) -> std::io::Result<std::process::Child> {
-    cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB | CREATE_NO_WINDOW);
-    cmd.spawn()
 }
 
 pub fn install_signal_handlers_impl<F>(cleanup_fn: F) -> Result<()>

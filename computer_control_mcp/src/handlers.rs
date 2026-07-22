@@ -1,7 +1,7 @@
 use super::input_tools;
 use super::tool_result_text;
-use kage::mcp_json_rpc;
-use kage::os::accessibility;
+use kage_core::mcp_json_rpc;
+use kage_core::os::accessibility;
 
 pub(crate) fn handle_initialize(id: &serde_json::Value) -> String {
     mcp_json_rpc::success(
@@ -167,7 +167,7 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
                 wait,
                 depth
             );
-            let launch_result = kage::os::launcher::shell_launch(app);
+            let launch_result = kage_core::os::launcher::shell_launch(app);
             match launch_result {
                 Ok(_) => {
                     std::thread::sleep(std::time::Duration::from_millis(wait));
@@ -284,18 +284,12 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
             let combined = format!("{} {}", task, details).to_lowercase();
             // Embedded app steering files
             const STEERING: &[(&str, &str)] = &[
-                (
-                    "calculator",
-                    include_str!("../../src/computer_control/app_steering/calculator.md"),
-                ),
+                ("calculator", include_str!("app_steering/calculator.md")),
                 (
                     "microsoft_office",
-                    include_str!("../../src/computer_control/app_steering/microsoft_office.md"),
+                    include_str!("app_steering/microsoft_office.md"),
                 ),
-                (
-                    "notepad",
-                    include_str!("../../src/computer_control/app_steering/notepad.md"),
-                ),
+                ("notepad", include_str!("app_steering/notepad.md")),
             ];
             const APP_PATTERNS: &[(&str, &[&str])] = &[
                 (
@@ -333,7 +327,7 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
         "launch_app" => {
             let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
             log::info!("[launch_app] Attempting to launch: '{}'", name);
-            match kage::os::launcher::shell_launch(name) {
+            match kage_core::os::launcher::shell_launch(name) {
                 Ok(_) => tool_result_text(id, &format!("Launched '{}'", name), false),
                 Err(e) => {
                     log::info!("[launch_app] Failed: {}", e);
@@ -346,7 +340,7 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
                 .get("filter")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_lowercase());
-            match kage::os::launcher::scan_applications() {
+            match kage_core::os::launcher::scan_applications() {
                 Ok(apps) => {
                     let list: Vec<serde_json::Value> = apps
                         .into_iter()
@@ -401,7 +395,7 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
             }
         }
         "get_common_folders" => {
-            let folders = kage::commands::folder_tools::get_common_folders();
+            let folders = kage_core::folder_tools::get_common_folders();
             let text = serde_json::to_string_pretty(&folders).unwrap_or_default();
             tool_result_text(id, &text, false)
         }
@@ -450,13 +444,12 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
             if !root.is_dir() {
                 return tool_result_text(id, &format!("Not a directory: {}", path), true);
             }
-            let result =
-                kage::commands::folder_tools::scan_directory(root, max_depth, compute_hashes);
+            let result = kage_core::folder_tools::scan_directory(root, max_depth, compute_hashes);
             let text = serde_json::to_string_pretty(&result).unwrap_or_default();
             tool_result_text(id, &text, false)
         }
         "run_script" => {
-            use kage::computer_control::script_runner::{run_script, RunOutcome, ScriptLang};
+            use kage_core::computer_control::script_runner::{run_script, RunOutcome, ScriptLang};
             let lang_str = args.get("lang").and_then(|v| v.as_str()).unwrap_or("");
             let Some(lang) = ScriptLang::parse(lang_str) else {
                 return tool_result_text(
@@ -489,13 +482,12 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
             if root_str.is_empty() {
                 return tool_result_text(id, "Missing required parameter: root", true);
             }
-            let ops: Vec<kage::commands::folder_tools::FolderOperation> =
-                match args.get("operations") {
-                    Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
-                    None => {
-                        return tool_result_text(id, "Missing required parameter: operations", true)
-                    }
-                };
+            let ops: Vec<kage_core::folder_tools::FolderOperation> = match args.get("operations") {
+                Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
+                None => {
+                    return tool_result_text(id, "Missing required parameter: operations", true)
+                }
+            };
             if ops.is_empty() {
                 return tool_result_text(id, "Operations array is empty", true);
             }
@@ -503,7 +495,7 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
             if !root.is_dir() {
                 return tool_result_text(id, &format!("Not a directory: {}", root_str), true);
             }
-            let result = kage::commands::folder_tools::execute_plan(root, &ops);
+            let result = kage_core::folder_tools::execute_plan(root, &ops);
             let text = serde_json::to_string_pretty(&result).unwrap_or_default();
             tool_result_text(id, &text, false)
         }
@@ -527,38 +519,4 @@ fn dispatch_element_action(
         Ok(msg) => tool_result_text(id, &msg, false),
         Err(e) => tool_result_text(id, &e, true),
     }
-}
-/// Convert "ctrl+shift+s" format to uiautomation "{Ctrl}{Shift}s" format.
-#[cfg(target_os = "windows")]
-pub(crate) fn convert_key_combo(keys: &str) -> String {
-    let parts: Vec<&str> = keys.split('+').map(|s| s.trim()).collect();
-    let mut result = String::new();
-    for part in &parts {
-        match part.to_lowercase().as_str() {
-            "ctrl" | "control" => result.push_str("{Ctrl}"),
-            "alt" => result.push_str("{Alt}"),
-            "shift" => result.push_str("{Shift}"),
-            "win" | "windows" | "meta" | "super" => result.push_str("{Win}"),
-            "enter" | "return" => result.push_str("{Enter}"),
-            "tab" => result.push_str("{Tab}"),
-            "escape" | "esc" => result.push_str("{Esc}"),
-            "backspace" | "back" => result.push_str("{Backspace}"),
-            "delete" | "del" => result.push_str("{Delete}"),
-            "space" => result.push_str("{Space}"),
-            "up" => result.push_str("{Up}"),
-            "down" => result.push_str("{Down}"),
-            "left" => result.push_str("{Left}"),
-            "right" => result.push_str("{Right}"),
-            "home" => result.push_str("{Home}"),
-            "end" => result.push_str("{End}"),
-            "pageup" | "pgup" => result.push_str("{PageUp}"),
-            "pagedown" | "pgdn" => result.push_str("{PageDown}"),
-            "insert" | "ins" => result.push_str("{Insert}"),
-            k if k.starts_with('f') && k[1..].parse::<u32>().is_ok() => {
-                result.push_str(&format!("{{{}}}", part));
-            }
-            _ => result.push_str(part),
-        }
-    }
-    result
 }

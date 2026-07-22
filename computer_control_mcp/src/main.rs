@@ -8,43 +8,7 @@ use std::io::{self, BufRead, Read, Write};
 
 mod handlers;
 mod input_tools;
-#[cfg(target_os = "macos")]
-mod macos_input;
 mod tool_definitions;
-
-// ---------------------------------------------------------------------------
-// Mouse SendInput helper. Uses the windows crate's INPUT/MOUSEINPUT — these
-// types have correct layout on every supported architecture, unlike a hand-
-// rolled MouseInput struct which would only work on x64 by accident of
-// padding. The crate version was previously avoided here under a "version
-// conflicts" comment that never quite held — both this binary and the lib
-// link the same windows crate, so we just enable the matching feature
-// (Win32_UI_Input_KeyboardAndMouse) and use what's there.
-// ---------------------------------------------------------------------------
-#[cfg(target_os = "windows")]
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEINPUT, MOUSE_EVENT_FLAGS,
-};
-
-#[cfg(target_os = "windows")]
-fn win32_mouse_event(flags: MOUSE_EVENT_FLAGS, data: i32) {
-    let input = INPUT {
-        r#type: INPUT_MOUSE,
-        Anonymous: INPUT_0 {
-            mi: MOUSEINPUT {
-                dx: 0,
-                dy: 0,
-                mouseData: data as u32,
-                dwFlags: flags,
-                time: 0,
-                dwExtraInfo: 0,
-            },
-        },
-    };
-    unsafe {
-        SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
-    }
-}
 
 fn main() {
     // Log to file only — stdout/stderr are reserved for JSON-RPC
@@ -160,11 +124,11 @@ fn main() {
     log::info!("Computer Control MCP server exiting");
 }
 
-// JSON-RPC framing lives in `kage::mcp_json_rpc` so it's testable without
-// pulling in the whole binary. The thin local aliases below are kept for
-// readability of the existing handler bodies — they desugar to the new
+// JSON-RPC framing lives in `kage_core::mcp_json_rpc` so it's testable
+// without pulling in the whole binary. The thin local alias below is kept
+// for readability of the existing handler bodies — it desugars to the
 // typed builders.
-use kage::mcp_json_rpc;
+use kage_core::mcp_json_rpc;
 
 fn tool_result_text(id: &serde_json::Value, text: &str, is_error: bool) -> String {
     mcp_json_rpc::tool_result_text(id, text, is_error)

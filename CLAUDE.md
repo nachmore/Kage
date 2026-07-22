@@ -36,7 +36,7 @@ cargo build                      # debug binaries only — no installer, no bund
 
 `src/main.rs` → `kage` (the app). `computer_control_mcp/src/main.rs` → `kage-computer-control-mcp` (standalone MCP server spawned by the agent backend over stdio).
 
-`cargo tauri dev` rebuilds the MCP binary first (chained through `scripts/dev_server.py` → `build_mcp_binary()`), then builds and runs `kage`. Plain `cargo check` and `cargo build` only touch `kage`, so if you're iterating with those without `cargo tauri dev`, after editing `computer_control_mcp/src/main.rs` or any module it pulls in (notably `src/os/accessibility.rs`, `src/computer_control/`) run:
+`cargo tauri dev` rebuilds the MCP binary first (chained through `scripts/dev_server.py` → `build_mcp_binary()`), then builds and runs `kage`. Plain `cargo check` and `cargo build` only touch `kage`, so if you're iterating with those without `cargo tauri dev`, after editing `computer_control_mcp/src/main.rs` or any module it pulls in (notably anything under `kage-core/src/`) run:
 
 ```bash
 cargo build --package kage-computer-control-mcp

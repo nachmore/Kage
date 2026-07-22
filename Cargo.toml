@@ -55,6 +55,9 @@ privacy    = "https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md"
 
 [features]
 [dependencies]
+# Tauri-free shared core (accessibility, launcher, folder tools, input
+# synthesis, MCP JSON-RPC framing) — also the sidecar's only kage dep.
+kage-core = { path = "kage-core" }
 tauri = { version = "2.10", features = ["macos-private-api", "tray-icon", "image-png"] }
 # Pulled in directly (it's already a transitive dep of `tauri`) so the
 # webview-wedge detector in `webview_recovery.rs` can pattern-match on
@@ -222,6 +225,6 @@ path = "src/main.rs"
 test = false
 
 [workspace]
-members = ["computer_control_mcp"]
+members = ["computer_control_mcp", "kage-core"]
 default-members = ["."]
 resolver = "2"

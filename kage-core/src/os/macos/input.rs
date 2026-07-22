@@ -430,3 +430,15 @@ fn char_to_keycode(ch: char) -> Option<u16> {
     };
     Some(kc)
 }
+
+// Pattern-A dispatch aliases — the cross-platform `os::input` forwards to
+// `platform::input::<fn>_impl`; the implementations above keep their
+// original names from the sidecar's macos_input module.
+pub use self::click as click_impl;
+pub use self::drag as drag_impl;
+pub use self::get_cursor_position as get_cursor_position_impl;
+pub use self::get_screen_size as get_screen_size_impl;
+pub use self::key_press as key_press_impl;
+pub use self::move_mouse as move_mouse_impl;
+pub use self::scroll as scroll_impl;
+pub use self::type_text as type_text_impl;

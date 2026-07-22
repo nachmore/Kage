@@ -7,20 +7,13 @@ publish = false
 [dependencies]
 dirs = "6.0"
 env_logger = "0.11"
-kage = { path = ".." }
+# Deliberately kage-core, NOT the full kage app crate — keeps this
+# sidecar's dependency graph tiny (no Tauri/webview/i18n catalogs) so a
+# clean build takes seconds, not minutes. Input synthesis, accessibility,
+# launcher, and folder tools all come through kage-core's os/ abstraction.
+kage-core = { path = "../kage-core" }
 log = "0.4"
 serde_json = "1.0"
 # Native folder-picker dialog for the `pick_folder` tool (handlers.rs).
 # Same version as the main crate so the dep graph stays unified.
 rfd = "0.15"
-
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = ["Win32_UI_Input_KeyboardAndMouse"] }
-# UIA-based keyboard/mouse synthesis for input_tools.rs. Feature set
-# mirrors the main crate's declaration.
-uiautomation = { version = "0.24", features = ["process", "control", "input"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-# CGEvent-based input synthesis for macos_input.rs. Same version/features
-# as the main crate.
-core-graphics = { version = "0.25", features = ["highsierra"] }

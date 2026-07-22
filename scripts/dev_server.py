@@ -86,7 +86,7 @@ def build_mcp_binary():
 
     `cargo tauri dev` only rebuilds the main `kage` binary — edits to
     `computer_control_mcp/src/main.rs` (or to any module it pulls in,
-    notably `src/os/accessibility.rs`) silently produce a stale MCP
+    notably `kage-core/src/os/accessibility.rs`) silently produce a stale MCP
     binary unless the developer remembers to run this command by hand.
     Running it here on every dev start makes the dev loop honest:
     the binary the agent spawns is always up-to-date with the source.

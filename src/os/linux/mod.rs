@@ -6,7 +6,6 @@
 // file_search), the submodule is a stub returning empty results plus a
 // once-per-process warn so users understand why nothing comes back.
 
-pub mod accessibility;
 pub mod calendar;
 pub mod clipboard;
 pub mod clipboard_history;
@@ -15,7 +14,6 @@ pub mod diagnostics;
 pub mod file_search;
 pub mod hotkey;
 pub mod icon;
-pub mod launcher;
 pub mod power;
 pub mod process;
 pub mod shell;

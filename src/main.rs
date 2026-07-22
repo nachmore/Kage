@@ -1,6 +1,10 @@
 // Hide console window on Windows
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+// Shared foundation from the kage-core workspace crate; imported at the
+// crate root so existing `crate::lock_ext::...` paths keep resolving.
+use kage_core::lock_ext;
+
 mod acp_client;
 mod activity_tracker;
 mod agent_commands;
@@ -16,8 +20,6 @@ mod auto_steering;
 mod automation;
 mod chunk_batcher;
 mod commands;
-#[allow(dead_code)] // Consumed by the kage-computer-control-mcp binary, not this one
-mod computer_control;
 mod config;
 mod config_export;
 mod config_migrations;
@@ -32,7 +34,6 @@ mod extensions;
 mod hotkey_norm;
 mod i18n;
 mod link_metadata_cache;
-mod lock_ext;
 mod logger;
 mod mcp_registration;
 mod ollama;

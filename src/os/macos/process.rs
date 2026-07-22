@@ -8,18 +8,8 @@ use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
 use std::process::Command;
 
-pub fn get_process_name_impl(pid: u32) -> Option<String> {
-    let output = Command::new("ps")
-        .args(["-p", &pid.to_string(), "-o", "comm="])
-        .output()
-        .ok()?;
-    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if name.is_empty() {
-        None
-    } else {
-        Some(name)
-    }
-}
+// Moved to kage-core; re-exported for `super::process::*` callers.
+pub use kage_core::os::macos::process::{get_process_name_impl, spawn_detached_impl};
 
 pub fn kill_process_impl(pid: u32) -> bool {
     // Try SIGTERM first
@@ -44,14 +34,6 @@ pub fn configure_spawn_impl(cmd: &mut Command) {
         });
     }
     info!("macOS: Setting up process detachment");
-}
-
-/// Spawn a process detached from the parent. On macOS this is a plain
-/// `Command::spawn` since there's no Windows-style Job Object to break
-/// out of. The cross-platform `spawn_detached` calls this; users who
-/// want explicit setsid behaviour can layer that on top.
-pub fn spawn_detached_impl(cmd: &mut Command) -> std::io::Result<std::process::Child> {
-    cmd.spawn()
 }
 
 /// No-op on macOS — there's no Windows-style Job Object that auto-kills

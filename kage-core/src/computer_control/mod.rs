@@ -3,8 +3,8 @@
 //! Provides structured access to UI elements via OS accessibility APIs.
 //! Platform-specific implementations live in `src/os/{platform}/accessibility.rs`.
 //!
-//! Note: This module is primarily consumed by the `kage-computer-control-mcp` binary,
-//! not the main Tauri application.
+//! Primarily consumed by the `kage-computer-control-mcp` sidecar; the app
+//! uses `tree` via `os::accessibility` for window-context capture.
 
 pub mod script_runner;
 pub mod tree;

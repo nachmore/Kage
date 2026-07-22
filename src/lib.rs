@@ -1,5 +1,10 @@
 // Library exports for testing and external use
 
+// Shared foundation now lives in the kage-core workspace crate (also
+// consumed by the MCP sidecar). Re-exported here so existing
+// `crate::lock_ext` / `kage::mcp_json_rpc` paths keep working.
+pub use kage_core::{computer_control, lock_ext, mcp_json_rpc};
+
 // Pure modules — always available, including in test mode
 pub mod acp_client;
 pub mod activity_tracker;
@@ -10,7 +15,6 @@ pub mod app_launcher;
 pub mod app_log;
 pub mod auto_steering;
 pub mod chunk_batcher;
-pub mod computer_control;
 pub mod config;
 pub mod config_export;
 pub mod config_migrations;
@@ -23,9 +27,7 @@ pub mod extensions;
 pub mod hotkey_norm;
 pub mod i18n;
 pub mod link_metadata_cache;
-pub mod lock_ext;
 pub mod logger;
-pub mod mcp_json_rpc;
 pub mod mcp_registration;
 pub mod ollama;
 pub mod os;

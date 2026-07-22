@@ -97,11 +97,13 @@ These wouldn't justify the split on their own, but they reinforce it:
 
 ## What the separation costs
 
-Very little in terms of code: both binaries link the same `kage`
-library, so `computer_control`, `os::accessibility`, `mcp_json_rpc`,
-`mcp_registration`, and `commands::folder_tools` are all shared. The
-MCP binary's unique surface is ~1000 lines of JSON-RPC dispatch in
-`computer_control_mcp/src/main.rs` and nothing more.
+Very little in terms of code: both binaries link the shared `kage-core`
+workspace crate, so `computer_control`, `os::accessibility`,
+`os::launcher`, `os::input`, `mcp_json_rpc`, and `folder_tools` are all
+shared. (`kage-core` is deliberately Tauri-free, so the sidecar's
+dependency graph stays tiny.) The MCP binary's unique surface is ~1000
+lines of JSON-RPC dispatch in `computer_control_mcp/src/` and nothing
+more.
 
 The operational costs are:
 

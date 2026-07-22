@@ -1,4 +1,4 @@
-use kage::mcp_json_rpc;
+use kage_core::mcp_json_rpc;
 
 pub(crate) fn handle_tools_list(id: &serde_json::Value) -> String {
     let tools = serde_json::json!({ "tools": [
