@@ -1,6 +1,7 @@
 export function createChatActionsMixin(dependencies) {
     const {
         buildChatMarkdown,
+        buildExecCtx,
         defaultExportFilename,
         escapeHtml,
         stripKageTags,
@@ -295,47 +296,39 @@ export function createChatActionsMixin(dependencies) {
 
         /** Build execution context for the shared result executor. */
         _getExecCtx() {
-            return {
+            return buildExecCtx({
                 invoke: this.invoke,
                 appWindow: this.appWindow,
                 extensionManager: getExtensionManager(),
-                onPrompt: (text) => {
-                    this.elements.chatInput.value = text;
-                    this.sendMessage();
+                input: this.elements.chatInput,
+                extra: {
+                    onPrompt: (text) => {
+                        this.elements.chatInput.value = text;
+                        this.sendMessage();
+                    },
+                    // Prompt-type Quick Commands with unfilled named placeholders
+                    // surface the form in the floating window, not here. In the
+                    // chat window we don't have the same focused launcher UI;
+                    // typing the trigger with positional args (`tr spanish hi`)
+                    // works exactly the same as before. If a user runs a form-
+                    // requiring command from the chat sidebar, we surface a
+                    // helpful note rather than a silent no-op.
+                    onPromptForm: (formCmd) => {
+                        const slot = formCmd.missing
+                            .map((p) => (p.optional ? `${p.name}?` : p.name))
+                            .join(', ');
+                        this.addMessageFromHistory(
+                            'assistant',
+                            `This Quick Command needs values for: \`${slot}\`. Try \`${formCmd.shortcut.shortcut} <${slot}>\` or run it from the floating window.`
+                        );
+                        this.scrollToBottom();
+                    },
+                    onDisplay: (text) => {
+                        this.addMessageFromHistory('assistant', text);
+                        this.scrollToBottom();
+                    },
                 },
-                // Prompt-type Quick Commands with unfilled named placeholders
-                // surface the form in the floating window, not here. In the
-                // chat window we don't have the same focused launcher UI;
-                // typing the trigger with positional args (`tr spanish hi`)
-                // works exactly the same as before. If a user runs a form-
-                // requiring command from the chat sidebar, we surface a
-                // helpful note rather than a silent no-op.
-                onPromptForm: (formCmd) => {
-                    const slot = formCmd.missing
-                        .map((p) => (p.optional ? `${p.name}?` : p.name))
-                        .join(', ');
-                    this.addMessageFromHistory(
-                        'assistant',
-                        `This Quick Command needs values for: \`${slot}\`. Try \`${formCmd.shortcut.shortcut} <${slot}>\` or run it from the floating window.`
-                    );
-                    this.scrollToBottom();
-                },
-                onDisplay: (text) => {
-                    this.addMessageFromHistory('assistant', text);
-                    this.scrollToBottom();
-                },
-                onCopy: async (text) => {
-                    try {
-                        await navigator.clipboard.writeText(text);
-                    } catch {}
-                },
-                // Used by keyword completion hints (type: 'ext_keyword') to fill
-                // the input with the full trigger and re-run search.
-                onReplaceInput: (text) => {
-                    this.elements.chatInput.value = text;
-                    this.elements.chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-                },
-            };
+            });
         }
 
         async executeSuggestion(cmd) {

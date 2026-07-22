@@ -165,12 +165,20 @@ export async function resolveExtensionCatalog(fetchByCode) {
     let catalog = {};
     let fallback = {};
     // Try to land the active language first; fall through to the
-    // region-stripped form if needed.
+    // region-stripped form if needed. Cache raw fetches by code so EN
+    // isn't fetched twice when it's both the active language and the
+    // fallback (2× IPC round-trips per extension per window, and
+    // extensions boot per-window).
+    const fetched = new Map();
+    const fetchOnce = async (code) => {
+        if (!fetched.has(code)) fetched.set(code, await fetchByCode(code));
+        return fetched.get(code);
+    };
     const tried = new Set();
     for (const code of want) {
         if (tried.has(code)) continue;
         tried.add(code);
-        const c = await fetchByCode(code);
+        const c = await fetchOnce(code);
         if (c && Object.keys(c).length) {
             catalog = _stripCatalogMeta(c);
             break;
@@ -179,7 +187,7 @@ export async function resolveExtensionCatalog(fetchByCode) {
             const stem = code.split('-')[0];
             if (!tried.has(stem)) {
                 tried.add(stem);
-                const c2 = await fetchByCode(stem);
+                const c2 = await fetchOnce(stem);
                 if (c2 && Object.keys(c2).length) {
                     catalog = _stripCatalogMeta(c2);
                     break;
@@ -187,7 +195,7 @@ export async function resolveExtensionCatalog(fetchByCode) {
             }
         }
     }
-    const en = await fetchByCode('en');
+    const en = await fetchOnce('en');
     if (en) fallback = _stripCatalogMeta(en);
     return {
         catalog,

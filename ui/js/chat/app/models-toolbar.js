@@ -5,6 +5,7 @@ export function createModelsToolbarMixin(dependencies) {
         t,
         sanitizeExtensionHtmlStatic,
         renderToolbarButtons,
+        runToolbarHostEffect,
         getConfig,
         parseContextPercent,
         drawContextRing,
@@ -209,44 +210,16 @@ export function createModelsToolbarMixin(dependencies) {
 
         /**
          * Apply a host effect returned from a toolbar-button RPC.
-         * Contract mirrors the settings-page effects, narrowed to things
-         * that make sense from a chat-toolbar click.
+         * Shared applier; the chat window supplies its input element and
+         * an ephemeral-bubble renderer (extensions use those for
+         * summaries/status that don't need to live in session history).
          */
         _runToolbarHostEffect(host) {
-            if (!host || typeof host !== 'object') return;
-            switch (host.type) {
-                case 'set_chat_input': {
-                    const v = String(host.value ?? '');
-                    if (this.elements.chatInput) {
-                        this.elements.chatInput.value = v;
-                        this.elements.chatInput.focus();
-                        // Trigger input event so autogrow + suggestions update.
-                        this.elements.chatInput.dispatchEvent(new Event('input'));
-                    }
-                    break;
-                }
-                case 'append_chat_input': {
-                    const v = String(host.value ?? '');
-                    if (this.elements.chatInput) {
-                        const cur = this.elements.chatInput.value || '';
-                        const sep = cur && !cur.endsWith(' ') ? ' ' : '';
-                        this.elements.chatInput.value = cur + sep + v;
-                        this.elements.chatInput.focus();
-                        this.elements.chatInput.dispatchEvent(new Event('input'));
-                    }
-                    break;
-                }
-                case 'show_ephemeral_message': {
-                    // Render a sanitized ephemeral bubble in the messages area.
-                    // Extensions use this for summaries/status that don't
-                    // need to live in session history.
-                    this._renderEphemeralMessage(host);
-                    break;
-                }
-                default:
-                    console.warn('[Chat] Unknown toolbar host effect:', host.type);
-                    break;
-            }
+            runToolbarHostEffect(host, {
+                input: this.elements.chatInput,
+                onEphemeralMessage: (h) => this._renderEphemeralMessage(h),
+                logTag: 'Chat',
+            });
         }
 
         /**

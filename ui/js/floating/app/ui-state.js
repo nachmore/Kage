@@ -6,6 +6,7 @@ import {
     parseContextPercent,
     renderMarkdown,
     renderToolbarButtons,
+    runToolbarHostEffect,
     sanitizeExtensionHtml,
     showExtensionBar,
     SpeechController,
@@ -376,43 +377,14 @@ export const UiStateMethods = {
 
     /**
      * Apply a host effect returned from an extension toolbar click.
-     * Mirrors the chat window's implementation with the floating input.
+     * Shared applier; the floating window has no messages area, so
+     * ephemeral-message effects are logged and dropped.
      */
     _runToolbarHostEffect(host) {
-        if (!host || typeof host !== 'object') return;
-        switch (host.type) {
-            case 'set_chat_input': {
-                const v = String(host.value ?? '');
-                if (this.elements.input) {
-                    this.elements.input.value = v;
-                    this.elements.input.focus();
-                    this.elements.input.dispatchEvent(new Event('input'));
-                }
-                break;
-            }
-            case 'append_chat_input': {
-                const v = String(host.value ?? '');
-                if (this.elements.input) {
-                    const cur = this.elements.input.value || '';
-                    const sep = cur && !cur.endsWith(' ') ? ' ' : '';
-                    this.elements.input.value = cur + sep + v;
-                    this.elements.input.focus();
-                    this.elements.input.dispatchEvent(new Event('input'));
-                }
-                break;
-            }
-            case 'show_ephemeral_message':
-                // Floating window has no messages area; log and drop so
-                // extensions can tell the difference between unsupported
-                // contexts and silent failure.
-                console.info(
-                    '[Floating] Ignoring show_ephemeral_message host effect — only supported in chat window'
-                );
-                break;
-            default:
-                console.warn('[Floating] Unknown toolbar host effect:', host.type);
-                break;
-        }
+        runToolbarHostEffect(host, {
+            input: this.elements.input,
+            logTag: 'Floating',
+        });
     },
 
     // --- Context % and Model Selector ---

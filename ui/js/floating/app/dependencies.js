@@ -44,6 +44,7 @@ import {
     setExtensionManager,
     searchDebounceMs,
 } from '../search-unified.js';
+import { buildExecCtx } from '../../shared/exec-context.js';
 import { ExtensionManager } from '../../shared/extension-manager.js';
 import { SpeechController } from '../../shared/speech.js';
 import {
@@ -77,6 +78,7 @@ import {
 } from '../../shared/extension-bar.js';
 import { sanitizeExtensionHtml } from '../../shared/extension-html-sanitizer.js';
 import { renderToolbarButtons } from '../../shared/extension-toolbar.js';
+import { runToolbarHostEffect } from '../../shared/toolbar-host-effects.js';
 import { BannerController } from '../banner.js';
 import { t } from '../../shared/i18n.js';
 
@@ -87,6 +89,7 @@ export {
     attachSourceClickHandler,
     AutomationPlanController,
     BannerController,
+    buildExecCtx,
     buildShortcutCommandFn,
     checkOnline,
     cmdOrCtrlPressed,
@@ -135,6 +138,7 @@ export {
     renderToolbarButtons,
     renderToolChipsHtml,
     renderUnifiedResults,
+    runToolbarHostEffect,
     sanitizeExtensionHtml,
     searchDebounceMs,
     sendAppNotification,

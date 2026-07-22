@@ -1,4 +1,5 @@
 import {
+    buildExecCtx,
     buildShortcutCommandFn,
     errLabel,
     executeShortcutCommand,
@@ -158,63 +159,57 @@ export const CommandsMethods = {
 
     /** Build execution context for the shared result executor. */
     _getExecCtx() {
-        return {
+        return buildExecCtx({
             invoke: this.invoke,
             appWindow: this.appWindow,
             extensionManager: this.extensionManager,
-            selectionText: document.getElementById('useSelectionCheckbox')?.checked
-                ? this.lastSelection || ''
-                : '',
-            onPrompt: (text) => this.sendChatMessage(text),
-            onDisplay: (text) => {
-                this.currentResponse = text;
-                renderMarkdown(text, this.elements.responseText);
-                this.elements.contentArea.classList.add('visible');
-                this.windowManager.resizeWindow();
-            },
-            onCopy: async (text) => {
-                try {
-                    await navigator.clipboard.writeText(text);
-                } catch {}
-            },
-            onReplaceInput: (text) => {
-                this.elements.input.value = text;
-                this.elements.input.dispatchEvent(new Event('input', { bubbles: true }));
-            },
-            // An extension result signalled that it mutated state its widget
-            // renders (e.g. Spotify `sp like`). Repaint mounted widgets so the
-            // floating bar reflects the change immediately rather than after
-            // the widget's next poll. Delayed one beat because APIs like
-            // Spotify's are eventually consistent — an immediate re-render can
-            // still read the pre-change state (the widget's own onAction path
-            // uses the same 250ms settle).
-            onRefreshWidgets: () => {
-                setTimeout(() => {
-                    try {
-                        this.extensionManager?.renderAllWidgets();
-                    } catch (e) {
-                        console.warn('renderAllWidgets on refresh_widgets failed:', e);
-                    }
-                }, 300);
-            },
-            onTimerStart: (ms) => this._startTimerUI(ms),
-            onStopwatch: () => {
-                const sw = getSlotState('stopwatch');
-                if (sw.active && sw.running) {
-                    pauseResumeSlot('stopwatch');
-                } else if (sw.active && !sw.running) {
-                    stopSlot('stopwatch');
-                    const bar = document.getElementById('timerBar_stopwatch');
-                    if (bar) {
-                        bar.remove();
-                    }
+            input: this.elements.input,
+            extra: {
+                selectionText: document.getElementById('useSelectionCheckbox')?.checked
+                    ? this.lastSelection || ''
+                    : '',
+                onPrompt: (text) => this.sendChatMessage(text),
+                onDisplay: (text) => {
+                    this.currentResponse = text;
+                    renderMarkdown(text, this.elements.responseText);
+                    this.elements.contentArea.classList.add('visible');
                     this.windowManager.resizeWindow();
-                } else {
-                    this._startStopwatchUI();
-                }
+                },
+                // An extension result signalled that it mutated state its widget
+                // renders (e.g. Spotify `sp like`). Repaint mounted widgets so the
+                // floating bar reflects the change immediately rather than after
+                // the widget's next poll. Delayed one beat because APIs like
+                // Spotify's are eventually consistent — an immediate re-render can
+                // still read the pre-change state (the widget's own onAction path
+                // uses the same 250ms settle).
+                onRefreshWidgets: () => {
+                    setTimeout(() => {
+                        try {
+                            this.extensionManager?.renderAllWidgets();
+                        } catch (e) {
+                            console.warn('renderAllWidgets on refresh_widgets failed:', e);
+                        }
+                    }, 300);
+                },
+                onTimerStart: (ms) => this._startTimerUI(ms),
+                onStopwatch: () => {
+                    const sw = getSlotState('stopwatch');
+                    if (sw.active && sw.running) {
+                        pauseResumeSlot('stopwatch');
+                    } else if (sw.active && !sw.running) {
+                        stopSlot('stopwatch');
+                        const bar = document.getElementById('timerBar_stopwatch');
+                        if (bar) {
+                            bar.remove();
+                        }
+                        this.windowManager.resizeWindow();
+                    } else {
+                        this._startStopwatchUI();
+                    }
+                },
+                onPromptForm: (formCmd) => this._showPromptForm(formCmd),
             },
-            onPromptForm: (formCmd) => this._showPromptForm(formCmd),
-        };
+        });
     },
 
     /**

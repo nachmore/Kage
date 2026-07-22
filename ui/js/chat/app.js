@@ -21,6 +21,7 @@ import {
     getSlashCommandDispatch,
 } from '../shared/commands.js';
 import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.js';
+import { buildExecCtx } from '../shared/exec-context.js';
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW, isChatLabel } from '../shared/window-labels.js';
@@ -62,6 +63,7 @@ import { getActionsForText } from '../shared/quick-actions.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { sanitizeExtensionHtml as sanitizeExtensionHtmlStatic } from '../shared/extension-html-sanitizer.js';
 import { renderToolbarButtons } from '../shared/extension-toolbar.js';
+import { runToolbarHostEffect } from '../shared/toolbar-host-effects.js';
 import { getConfig } from '../shared/config-cache.js';
 import { parseContextPercent, drawContextRing } from '../shared/context-usage.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
@@ -91,6 +93,7 @@ const CHAT_APP_DEPENDENCIES = {
     attachmentPreviewHtml,
     attachSourceClickHandler,
     buildChatMarkdown,
+    buildExecCtx,
     buildRenderQueue,
     checkOnline,
     cmdOrCtrlPressed,
@@ -132,6 +135,7 @@ const CHAT_APP_DEPENDENCIES = {
     renderSourceChipsHtml,
     renderToolbarButtons,
     renderToolChipsHtml,
+    runToolbarHostEffect,
     sanitizeExtensionHtmlStatic,
     sessionImageToDataUrl,
     setAppIconInvoke,

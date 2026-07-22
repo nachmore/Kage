@@ -49,19 +49,45 @@ const INVOKE_RATE_MAX_PER_WINDOW = 100;
 let _runtimeSourceCache = null;
 
 /**
- * Fetch the sandbox runtime source once. Returns the JS text that will
- * be inlined into each sandbox iframe's srcdoc as a classic script.
+ * The runtime is authored as ES modules (so vitest can import the
+ * pieces), but a null-origin srcdoc iframe can only run a classic
+ * script — so the host fetches every part, strips the module syntax,
+ * and concatenates them in dependency order. Parts must be
+ * self-contained (no imports other than each other) and collision-free
+ * at top-level scope.
+ *
+ * `shared/icu-message.js` is the SAME file `shared/i18n.js` uses in the
+ * host windows — one ICU parser for both sides of the sandbox boundary.
+ */
+export const RUNTIME_SOURCE_PATHS = [
+    'js/shared/icu-message.js',
+    'js/extension-sandbox/runtime/sandboxed-worker.js',
+    'js/extension-sandbox/runtime.js',
+];
+
+/** Strip `import`/`export` module syntax so a module source runs as a classic script. */
+export function stripModuleSyntax(source) {
+    return source
+        .replace(/^import\s[^\n]*\n/gm, '')
+        .replace(/^export\s+(async\s+)?function\s/gm, '$1function ')
+        .replace(/^export\s+const\s/gm, 'const ');
+}
+
+/**
+ * Fetch + assemble the sandbox runtime source once. Returns the JS text
+ * that will be inlined into each sandbox iframe's srcdoc.
  */
 async function getSandboxRuntimeSource() {
     if (_runtimeSourceCache !== null) return _runtimeSourceCache;
-    const resp = await fetch('js/extension-sandbox/runtime.js');
-    if (!resp.ok) throw new Error(`Failed to fetch sandbox runtime: HTTP ${resp.status}`);
-    let source = await resp.text();
-    // The runtime has one `export` (for unit tests). Strip it so the
-    // source works as a classic (non-module) script inside srcdoc.
-    source = source.replace(/^export\s+function\s/m, 'function ');
-    _runtimeSourceCache = source;
-    return source;
+    const parts = [];
+    for (const path of RUNTIME_SOURCE_PATHS) {
+        const resp = await fetch(path);
+        if (!resp.ok)
+            throw new Error(`Failed to fetch sandbox runtime part ${path}: HTTP ${resp.status}`);
+        parts.push(stripModuleSyntax(await resp.text()));
+    }
+    _runtimeSourceCache = parts.join('\n;\n');
+    return _runtimeSourceCache;
 }
 
 /**

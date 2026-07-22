@@ -1,4 +1,8 @@
-import { formatIcu } from './runtime/icu-message.js';
+// NOTE for the srcdoc path: the sandbox host strips these imports and
+// concatenates the imported files ahead of this one (see
+// RUNTIME_SOURCE_PATHS in extension-sandbox-host.js) — keep them
+// single-line and pointing at self-contained modules.
+import { formatIcu } from '../shared/icu-message.js';
 import { createSandboxedRunner } from './runtime/sandboxed-worker.js';
 
 /**
