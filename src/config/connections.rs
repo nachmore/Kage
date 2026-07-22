@@ -1,3 +1,4 @@
+use super::default_true;
 use serde::{Deserialize, Serialize};
 
 impl Default for AgentConfig {
@@ -223,10 +224,6 @@ impl Default for AcpMode {
 
 fn default_ollama_base_url() -> String {
     crate::ollama::DEFAULT_BASE_URL.to_string()
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_auto_compact_threshold() -> u32 {

@@ -125,11 +125,5 @@ fn main() {
 }
 
 // JSON-RPC framing lives in `kage_core::mcp_json_rpc` so it's testable
-// without pulling in the whole binary. The thin local alias below is kept
-// for readability of the existing handler bodies — it desugars to the
-// typed builders.
+// without pulling in the whole binary.
 use kage_core::mcp_json_rpc;
-
-fn tool_result_text(id: &serde_json::Value, text: &str, is_error: bool) -> String {
-    mcp_json_rpc::tool_result_text(id, text, is_error)
-}

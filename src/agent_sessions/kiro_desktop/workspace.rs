@@ -1,20 +1,15 @@
-use super::{content, KiroDesktopProvider, PROVIDER_ID};
+use super::{
+    cached_or_missing, content, dir_unavailable, parse_error, read_error, KiroDesktopProvider,
+    PROVIDER_ID,
+};
 use crate::agent_sessions::{
     clip_title, rfc3339_from_system_time, AgentMessage, AgentSession, CachedSession,
-    FileFingerprint,
 };
 use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use log::info;
 use serde_json::json;
 use std::path::{Path, PathBuf};
-
-type SessionFile = (PathBuf, FileFingerprint, String, String);
-
-struct CacheLookup {
-    sessions: Vec<AgentSession>,
-    misses: Vec<SessionFile>,
-}
 
 pub(super) fn scan_sessions(
     provider: &KiroDesktopProvider,
@@ -44,17 +39,15 @@ pub(super) fn scan_sessions(
             let Some(fingerprint) = crate::agent_sessions::fingerprint(&metadata) else {
                 continue;
             };
-            files.push((path, fingerprint, workspace.clone(), encoded.clone()));
+            files.push((path, fingerprint, (workspace.clone(), encoded.clone())));
         }
     }
 
-    let keys = files.iter().map(|(path, ..)| path.clone()).collect();
-    let CacheLookup {
-        mut sessions,
-        misses,
-    } = cached_or_missing(provider, files, keys);
+    let keys: std::collections::HashSet<PathBuf> =
+        files.iter().map(|(path, ..)| path.clone()).collect();
+    let (mut sessions, misses) = cached_or_missing(&provider.workspace_sessions, files, &keys);
     let mut fresh = Vec::with_capacity(misses.len());
-    for (path, fingerprint, workspace, encoded) in misses {
+    for (path, fingerprint, (workspace, encoded)) in misses {
         let Some(session) = parse_session(&path, &workspace, &encoded) else {
             continue;
         };
@@ -94,24 +87,6 @@ fn workspace_directories(
             )
         })
         .collect())
-}
-
-fn cached_or_missing(
-    provider: &KiroDesktopProvider,
-    files: Vec<SessionFile>,
-    keys: std::collections::HashSet<PathBuf>,
-) -> CacheLookup {
-    let mut sessions = Vec::with_capacity(files.len());
-    let mut misses = Vec::new();
-    let mut cache = provider.workspace_sessions.lock_or_recover();
-    cache.retain(|path, _| keys.contains(path));
-    for (path, fingerprint, workspace, encoded) in files {
-        match cache.get(&path) {
-            Some(cached) if cached.fp == fingerprint => sessions.push(cached.session.clone()),
-            _ => misses.push((path, fingerprint, workspace, encoded)),
-        }
-    }
-    CacheLookup { sessions, misses }
 }
 
 fn parse_session(path: &Path, workspace: &str, encoded: &str) -> Option<AgentSession> {
@@ -292,28 +267,4 @@ pub fn list_workspaces() -> Result<Vec<KiroDesktopWorkspace>, AppError> {
         .collect::<Vec<_>>();
     workspaces.sort_by_key(|workspace| std::cmp::Reverse(workspace.session_count));
     Ok(workspaces)
-}
-
-fn read_error(error: std::io::Error) -> AppError {
-    AppError::keyed(
-        ErrorKind::Internal,
-        "errors.session.read_failed",
-        &[("reason", &error.to_string())],
-    )
-}
-
-fn parse_error(error: serde_json::Error) -> AppError {
-    AppError::keyed(
-        ErrorKind::Internal,
-        "errors.session.parse_failed",
-        &[("reason", &error.to_string())],
-    )
-}
-
-fn dir_unavailable() -> AppError {
-    AppError::keyed(
-        ErrorKind::Internal,
-        "errors.session.dir_unavailable",
-        &[("reason", "Kiro Desktop data directory could not be located")],
-    )
 }

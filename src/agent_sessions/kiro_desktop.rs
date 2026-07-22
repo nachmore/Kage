@@ -142,21 +142,60 @@ impl AgentSessionProvider for KiroDesktopProvider {
 }
 
 fn parse_locator(locator: &SessionLocator) -> Result<KiroDesktopLocator, AppError> {
-    serde_json::from_value(locator.clone()).map_err(|error| {
-        AppError::keyed(
-            ErrorKind::Internal,
-            "errors.session.parse_failed",
-            &[("reason", &error.to_string())],
-        )
-    })
+    serde_json::from_value(locator.clone()).map_err(parse_error)
 }
 
-fn dir_unavailable() -> AppError {
+// ---------------------------------------------------------------------------
+// Helpers shared by the chat and workspace submodules (single copies —
+// they used to be duplicated per file).
+// ---------------------------------------------------------------------------
+
+pub(super) fn read_error(error: std::io::Error) -> AppError {
+    AppError::keyed(
+        ErrorKind::Internal,
+        "errors.session.read_failed",
+        &[("reason", &error.to_string())],
+    )
+}
+
+pub(super) fn parse_error(error: serde_json::Error) -> AppError {
+    AppError::keyed(
+        ErrorKind::Internal,
+        "errors.session.parse_failed",
+        &[("reason", &error.to_string())],
+    )
+}
+
+pub(super) fn dir_unavailable() -> AppError {
     AppError::keyed(
         ErrorKind::Internal,
         "errors.session.dir_unavailable",
         &[("reason", "Kiro Desktop data directory could not be located")],
     )
+}
+
+/// Split scanned files into cache hits (already-parsed sessions) and
+/// misses that need a fresh parse, evicting cache entries whose file no
+/// longer exists. Generic over the per-file payload `T` carried through
+/// to the parse step (chat: workspace name; workspace sessions:
+/// (workspace, encoded dir name)).
+pub(super) fn cached_or_missing<T>(
+    cache: &Mutex<HashMap<PathBuf, super::CachedSession>>,
+    files: Vec<(PathBuf, super::FileFingerprint, T)>,
+    keys: &std::collections::HashSet<PathBuf>,
+) -> (Vec<AgentSession>, Vec<(PathBuf, super::FileFingerprint, T)>) {
+    use crate::lock_ext::LockExt;
+    let mut sessions = Vec::with_capacity(files.len());
+    let mut misses = Vec::new();
+    let mut cache = cache.lock_or_recover();
+    cache.retain(|path, _| keys.contains(path));
+    for (path, fingerprint, payload) in files {
+        match cache.get(&path) {
+            Some(cached) if cached.fp == fingerprint => sessions.push(cached.session.clone()),
+            _ => misses.push((path, fingerprint, payload)),
+        }
+    }
+    (sessions, misses)
 }
 
 #[cfg(test)]

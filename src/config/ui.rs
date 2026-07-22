@@ -1,3 +1,4 @@
+use super::default_true;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,10 +122,6 @@ fn default_time_format() -> String {
 
 fn default_date_format() -> String {
     "ddd, MMM D".to_string()
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_log_buffer_size() -> usize {

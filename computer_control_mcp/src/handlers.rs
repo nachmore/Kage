@@ -1,6 +1,6 @@
 use super::input_tools;
-use super::tool_result_text;
 use kage_core::mcp_json_rpc;
+use kage_core::mcp_json_rpc::tool_result_text;
 use kage_core::os::accessibility;
 
 pub(crate) fn handle_initialize(id: &serde_json::Value) -> String {

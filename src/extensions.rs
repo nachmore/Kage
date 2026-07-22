@@ -8,7 +8,7 @@ mod archive;
 mod discovery;
 mod install;
 
-pub use archive::install_from_zip;
+pub use archive::{extract_zip, install_from_zip};
 pub use discovery::discover_items;
 pub use install::{install_from_directory, uninstall};
 
@@ -16,11 +16,6 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-
-/// Extract a package archive through the public extensions API.
-pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
-    archive::extract_zip(zip_path, target_dir)
-}
 
 /// Validate an extension/theme/command-pack identifier before it is used as a
 /// path component.

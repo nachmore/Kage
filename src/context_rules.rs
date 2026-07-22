@@ -60,12 +60,8 @@ pub struct ContextRule {
     /// later doesn't silently eat data.
     pub steering: String,
     /// Lets a user temporarily disable a rule without deleting it.
-    #[serde(default = "default_true")]
+    #[serde(default = "crate::config::default_true")]
     pub enabled: bool,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 /// Lowercase + strip a trailing `.exe`. Pure helper so tests can pin

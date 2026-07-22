@@ -1,3 +1,4 @@
+use super::default_true;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,8 +114,4 @@ impl Default for TelemetryConfig {
             last_seen_version: None,
         }
     }
-}
-
-fn default_true() -> bool {
-    true
 }

@@ -1,4 +1,6 @@
-use super::{content, KiroDesktopProvider, PROVIDER_ID};
+use super::{
+    cached_or_missing, content, parse_error, read_error, KiroDesktopProvider, PROVIDER_ID,
+};
 use crate::agent_sessions::{
     clip_title, fingerprint, rfc3339_from_epoch_ms, rfc3339_from_system_time, AgentMessage,
     AgentSession, CachedSession, FileFingerprint,
@@ -16,8 +18,8 @@ pub(super) fn scan_sessions(
     limit: usize,
 ) -> Result<Vec<AgentSession>, AppError> {
     let files = find_chat_files(base)?;
-    let keys = files.iter().map(|(path, ..)| path.clone()).collect();
-    let (mut sessions, misses) = cached_or_missing(provider, files, keys);
+    let keys: HashSet<PathBuf> = files.iter().map(|(path, ..)| path.clone()).collect();
+    let (mut sessions, misses) = cached_or_missing(&provider.chat_files, files, &keys);
     let mut fresh = Vec::with_capacity(misses.len());
     for (path, fingerprint, workspace) in misses {
         let Some(session) = parse_session(&path, &workspace) else {
@@ -67,24 +69,6 @@ fn find_chat_files(base: &Path) -> Result<Vec<(PathBuf, FileFingerprint, String)
         }
     }
     Ok(files)
-}
-
-fn cached_or_missing(
-    provider: &KiroDesktopProvider,
-    files: Vec<(PathBuf, FileFingerprint, String)>,
-    keys: HashSet<PathBuf>,
-) -> (Vec<AgentSession>, Vec<(PathBuf, FileFingerprint, String)>) {
-    let mut sessions = Vec::with_capacity(files.len());
-    let mut misses = Vec::new();
-    let mut cache = provider.chat_files.lock_or_recover();
-    cache.retain(|path, _| keys.contains(path));
-    for (path, fingerprint, workspace) in files {
-        match cache.get(&path) {
-            Some(cached) if cached.fp == fingerprint => sessions.push(cached.session.clone()),
-            _ => misses.push((path, fingerprint, workspace)),
-        }
-    }
-    (sessions, misses)
 }
 
 fn dedupe_sessions(
@@ -250,20 +234,4 @@ pub(super) fn load_file(file_path: &str) -> Result<Vec<AgentMessage>, AppError> 
     }
     info!("Loaded .chat file {file_path}: {} messages", messages.len());
     Ok(messages)
-}
-
-fn read_error(error: std::io::Error) -> AppError {
-    AppError::keyed(
-        ErrorKind::Internal,
-        "errors.session.read_failed",
-        &[("reason", &error.to_string())],
-    )
-}
-
-fn parse_error(error: serde_json::Error) -> AppError {
-    AppError::keyed(
-        ErrorKind::Internal,
-        "errors.session.parse_failed",
-        &[("reason", &error.to_string())],
-    )
 }

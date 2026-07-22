@@ -1,3 +1,4 @@
+use super::default_true;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,8 +82,4 @@ fn default_update_channel() -> Channel {
     } else {
         Channel::Stable
     }
-}
-
-fn default_true() -> bool {
-    true
 }

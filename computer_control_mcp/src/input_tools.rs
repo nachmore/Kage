@@ -1,4 +1,4 @@
-use super::tool_result_text;
+use kage_core::mcp_json_rpc::tool_result_text;
 use kage_core::os::input;
 
 pub(crate) fn dispatch(

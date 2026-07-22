@@ -1,3 +1,4 @@
+use super::default_true;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -231,8 +232,4 @@ pub struct ShortcutConfig {
     pub script: Option<String>, // For script action type — JS function body
     #[serde(default)]
     pub script_action: Option<String>, // What to do with script result: "run_program", "open_url", "prompt", "text"
-}
-
-fn default_true() -> bool {
-    true
 }

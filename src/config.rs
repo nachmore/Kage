@@ -113,6 +113,14 @@ fn default_config_version() -> u32 {
     config_migrations::CURRENT_VERSION
 }
 
+/// Shared `#[serde(default = "...")]` helper for boolean fields that
+/// default to on. Single copy — submodules import it via `use super::
+/// default_true;` (serde resolves the string as a path in the field's
+/// module scope).
+pub(crate) fn default_true() -> bool {
+    true
+}
+
 fn default_inline_assist_hotkey() -> Option<HotkeyConfig> {
     Some(HotkeyConfig {
         modifiers: vec!["Ctrl".to_string(), "Shift".to_string()],
