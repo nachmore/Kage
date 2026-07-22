@@ -452,9 +452,14 @@ pub fn refresh_mcp_registration_if_enabled() {
 /// is logged and the stale cache (if any) is kept — worst case the
 /// agent reports slightly-old notes.
 pub fn spawn_changelog_cache_refresh(app: &App) {
-    let config: tauri::State<'_, std::sync::Arc<std::sync::Mutex<crate::config::Config>>> =
-        app.state();
-    let channel = config.lock_or_recover().updates.channel;
+    // Config lives inside FeatureServices — it is NOT managed as a
+    // standalone Arc<Mutex<Config>> state, and state() on an unmanaged
+    // type panics (this exact line shipped that panic once).
+    let channel = {
+        let features: tauri::State<'_, FeatureServices> = app.state();
+        let config = features.config.lock_or_recover();
+        config.updates.channel
+    };
     tauri::async_runtime::spawn(async move {
         let current_version = env!("CARGO_PKG_VERSION");
         if let Some(cache) = kage_core::changelog_cache::read() {
