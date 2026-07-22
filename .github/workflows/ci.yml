@@ -69,6 +69,11 @@ jobs:
       # (must match tauri.conf.json → bundle.macOS.minimumSystemVersion).
       # Harmless on Windows. Mirrored for local builds in .cargo/config.toml.
       MACOSX_DEPLOYMENT_TARGET: "11.0"
+      # .cargo/config.toml caps build jobs at 2 to protect 16 GB dev
+      # laptops from pagefile exhaustion mid-link (see the comment there).
+      # Hosted runners have 4 cores and 16 GB with nothing else running,
+      # so let CI use every core. Env var beats the config-file value.
+      CARGO_BUILD_JOBS: "4"
 
     steps:
       - name: Checkout

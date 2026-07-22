@@ -236,6 +236,11 @@ jobs:
     name: Build (${{ matrix.os }})
     needs: plan
     runs-on: ${{ matrix.os }}
+    # .cargo/config.toml caps build jobs at 2 to protect 16 GB dev laptops
+    # from pagefile exhaustion mid-link. Hosted runners are dedicated
+    # 4-core machines — use every core. Same override as ci.yml.
+    env:
+      CARGO_BUILD_JOBS: "4"
     strategy:
       fail-fast: false
       matrix:
