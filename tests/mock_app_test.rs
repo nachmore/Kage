@@ -74,9 +74,48 @@ fn mock_app() -> tauri::App<MockRuntime> {
 }
 
 fn mock_webview(app: &tauri::App<MockRuntime>) -> tauri::WebviewWindow<MockRuntime> {
-    tauri::WebviewWindowBuilder::new(app, "main", Default::default())
+    mock_window(app, "main")
+}
+
+fn mock_window(app: &tauri::App<MockRuntime>, label: &str) -> tauri::WebviewWindow<MockRuntime> {
+    tauri::WebviewWindowBuilder::new(app, label, Default::default())
         .build()
-        .expect("mock webview must build")
+        .unwrap_or_else(|e| panic!("mock webview '{label}' must build: {e}"))
+}
+
+/// Invoke a registered command through real IPC dispatch with a JSON
+/// args payload. Returns Ok(response body) or Err(error payload).
+fn invoke(
+    webview: &tauri::WebviewWindow<MockRuntime>,
+    cmd: &str,
+    args: serde_json::Value,
+) -> Result<tauri::ipc::InvokeResponseBody, serde_json::Value> {
+    tauri::test::get_ipc_response(
+        webview,
+        tauri::webview::InvokeRequest {
+            cmd: cmd.into(),
+            callback: tauri::ipc::CallbackFn(0),
+            error: tauri::ipc::CallbackFn(1),
+            url: "http://tauri.localhost".parse().unwrap(),
+            body: tauri::ipc::InvokeBody::Json(args),
+            headers: Default::default(),
+            invoke_key: tauri::test::INVOKE_KEY.to_string(),
+        },
+    )
+}
+
+/// Poll `predicate` for up to `ms` milliseconds. Listener handlers and
+/// spawned tasks run on the async runtime, so effects are eventually
+/// visible rather than synchronous.
+fn wait_for(ms: u64, predicate: impl Fn() -> bool) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+    while std::time::Instant::now() < deadline {
+        if predicate() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    predicate()
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +150,319 @@ fn update_activation_policy_survives_mock_app() {
     // Runtime-generic setup helper — must not panic without windows.
     let app = mock_app();
     kage::setup::update_activation_policy(app.handle());
+}
+
+#[test]
+fn automation_scheduler_wires_signal_sender_synchronously() {
+    // FeatureServices.automation_signal_tx starts as None and is
+    // populated by spawn_automation_scheduler. If that wiring regresses,
+    // extensions' emit_automation_signal becomes a silent no-op — no
+    // crash, no log, just dead automations. The sender must be stashed
+    // synchronously (not behind the spawned loop) so there's no startup
+    // race window either.
+    let app = mock_app();
+    kage::setup::spawn_automation_scheduler(&app);
+    let features = app.state::<kage::state::FeatureServices>();
+    assert!(
+        features.automation_signal_tx.lock().unwrap().is_some(),
+        "automation signal sender not wired after spawn_automation_scheduler"
+    );
+}
+
+#[test]
+fn hotkey_hot_reload_skips_reregistration_when_unchanged() {
+    // This listener shipped a real bug (a try_lock variant silently
+    // dropped the user's hotkey change). The snapshot-gating half is
+    // testable headless: an unchanged config must early-return without
+    // touching hotkey state. The re-registration half needs the
+    // global-shortcut plugin (real OS hooks — can't init on MockRuntime,
+    // see the plugin note in mock_app()), so a sentinel that survives
+    // proves the gate; the change path stays smoke-test territory.
+    use tauri::Emitter;
+    let app = mock_app();
+    let initial_config = kage::config::Config::default();
+    kage::setup::install_hotkey_hot_reload(&app, &initial_config);
+
+    let ui = app.state::<kage::state::UiState>();
+    let sentinel = ("slot".to_string(), "hotkey".to_string());
+    ui.hotkey_registration_failures
+        .lock()
+        .unwrap()
+        .push(sentinel.clone());
+
+    // Unchanged config → snapshot matches → listener early-returns and
+    // must NOT touch the failures vector (register_all_hotkeys would
+    // overwrite it).
+    app.emit(kage::events::CONFIG_UPDATED, ()).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert!(
+        ui.hotkey_registration_failures
+            .lock()
+            .unwrap()
+            .contains(&sentinel),
+        "listener re-registered hotkeys on an unchanged config (snapshot gating broken)"
+    );
+}
+
+#[test]
+fn show_sessions_listener_reads_state_without_panicking() {
+    // The single-instance "second launch" path: SHOW_SESSIONS must route
+    // to the most recently focused chat window when it still exists.
+    // With a stale label (window gone) the listener falls back to MAIN —
+    // that fallback calls open_chat_window, which needs webview creation
+    // we can't complete headless, so here we assert the live-label path.
+    use tauri::Emitter;
+    let app = mock_app();
+    let _chat = mock_window(&app, "chat-11111111-2222-3333-4444-555555555555");
+    kage::setup::install_show_sessions_listener(&app);
+
+    {
+        let ui = app.state::<kage::state::UiState>();
+        *ui.last_focused_chat.lock().unwrap() =
+            Some("chat-11111111-2222-3333-4444-555555555555".to_string());
+    }
+    app.emit(kage::events::SHOW_SESSIONS, ()).unwrap();
+    // The handler runs on the async runtime; give it time to execute its
+    // state reads + window lookup. Success == no panic (a state-wiring
+    // regression in the handler aborts the test process).
+    std::thread::sleep(std::time::Duration::from_millis(500));
+}
+
+// ---------------------------------------------------------------------------
+// Real-args IPC tests — wire contracts and state mutation through the
+// same dispatch path production uses.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn window_session_ipc_roundtrip() {
+    // Locks the camelCase wire contract (label / sessionId) and the
+    // UiState mutation. A Rust param rename silently breaks every JS
+    // caller — this is the test that turns that into a red build.
+    let app = mock_app();
+    let webview = mock_webview(&app);
+    let chat_label = "chat-11111111-2222-3333-4444-555555555555";
+    let _chat = mock_window(&app, chat_label);
+
+    invoke(
+        &webview,
+        "set_window_session",
+        serde_json::json!({ "label": chat_label, "sessionId": "session-1" }),
+    )
+    .expect("set_window_session must succeed");
+
+    {
+        let ui = app.state::<kage::state::UiState>();
+        assert_eq!(
+            ui.window_sessions.lock().unwrap().get(chat_label),
+            Some(&"session-1".to_string()),
+            "session not recorded under the window label"
+        );
+    }
+
+    let body = invoke(&webview, "list_chat_windows", serde_json::json!({}))
+        .expect("list_chat_windows must succeed");
+    let list: serde_json::Value = match body {
+        tauri::ipc::InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+        other => panic!("unexpected response body: {other:?}"),
+    };
+    let windows = list.as_array().expect("list_chat_windows returns an array");
+    assert_eq!(
+        windows[0]["label"], "main",
+        "main window must sort first for the tray submenu"
+    );
+    let chat_entry = windows
+        .iter()
+        .find(|w| w["label"] == chat_label)
+        .expect("chat window missing from list");
+    assert_eq!(chat_entry["session_id"], "session-1");
+
+    invoke(
+        &webview,
+        "clear_window_session",
+        serde_json::json!({ "label": chat_label }),
+    )
+    .expect("clear_window_session must succeed");
+    let ui = app.state::<kage::state::UiState>();
+    assert!(
+        !ui.window_sessions.lock().unwrap().contains_key(chat_label),
+        "session still pinned after clear_window_session"
+    );
+}
+
+#[test]
+fn close_chat_window_refuses_privileged_and_non_chat_labels() {
+    // Guardrails: closing main/floating would kill the tray-persist
+    // model; closing arbitrary labels (settings, store) is a routing
+    // bug. Both must come back as typed AppError payloads the frontend
+    // can pattern-match, not silent successes.
+    let app = mock_app();
+    let webview = mock_webview(&app);
+
+    for (label, expected_key) in [
+        ("main", "errors.window.privileged_close_refused"),
+        ("floating", "errors.window.privileged_close_refused"),
+        ("settings", "errors.window.non_chat_close_refused"),
+    ] {
+        let err = invoke(
+            &webview,
+            "close_chat_window",
+            serde_json::json!({ "label": label }),
+        )
+        .expect_err(&format!("closing '{label}' must be refused"));
+        // AppError serializes as { kind, key, message }. Assert on the
+        // stable i18n key — the rendered message needs the catalog,
+        // which isn't initialized in the test process.
+        assert_eq!(
+            err.get("kind").and_then(|v| v.as_str()),
+            Some("internal"),
+            "'{label}' refusal is not a typed AppError: {err}"
+        );
+        assert_eq!(
+            err.get("key").and_then(|v| v.as_str()),
+            Some(expected_key),
+            "'{label}' refused with the wrong error key: {err}"
+        );
+    }
+
+    // A real chat window closes cleanly and scrubs its state.
+    let chat_label = "chat-99999999-8888-7777-6666-555555555555";
+    let _chat = mock_window(&app, chat_label);
+    {
+        let ui = app.state::<kage::state::UiState>();
+        ui.window_sessions
+            .lock()
+            .unwrap()
+            .insert(chat_label.to_string(), "sess".into());
+        ui.pending_prompt_originators
+            .lock()
+            .unwrap()
+            .insert("sess".to_string(), chat_label.to_string());
+    }
+    invoke(
+        &webview,
+        "close_chat_window",
+        serde_json::json!({ "label": chat_label }),
+    )
+    .expect("closing a real chat window must succeed");
+    let ui = app.state::<kage::state::UiState>();
+    assert!(!ui.window_sessions.lock().unwrap().contains_key(chat_label));
+    assert!(
+        !ui.pending_prompt_originators
+            .lock()
+            .unwrap()
+            .values()
+            .any(|owner| owner == chat_label),
+        "pending prompt originator not scrubbed on close"
+    );
+}
+
+#[test]
+fn pending_permission_state_survives_failed_dismissal() {
+    // The code documents this exact hazard: clearing local pending state
+    // when the agent didn't ack the dismissal desyncs and stalls the
+    // next prompt on the agent's "prompt already in progress" guard.
+    // The harness's AcpClient is never connected, so the send fails —
+    // precisely the branch that must NOT remove entries.
+    let app = mock_app();
+    let webview = mock_webview(&app);
+
+    {
+        let acp = app.state::<kage::state::AcpHandles>();
+        let mut pending = acp.pending_permissions.lock().unwrap();
+        pending.insert(
+            kage::state::permission_key(&serde_json::json!(42)),
+            kage::state::PendingPermission {
+                request_id: serde_json::json!(42),
+                session_id: Some("s1".into()),
+            },
+        );
+        pending.insert(
+            kage::state::permission_key(&serde_json::json!("req-str")),
+            kage::state::PendingPermission {
+                request_id: serde_json::json!("req-str"),
+                session_id: Some("s2".into()),
+            },
+        );
+    }
+
+    // has_pending_permission: number id found, unknown id not.
+    let body = invoke(
+        &webview,
+        "has_pending_permission",
+        serde_json::json!({ "requestId": 42 }),
+    )
+    .expect("has_pending_permission must succeed");
+    assert!(matches!(body, tauri::ipc::InvokeResponseBody::Json(ref s) if s == "true"));
+    let body = invoke(
+        &webview,
+        "has_pending_permission",
+        serde_json::json!({ "requestId": 999 }),
+    )
+    .expect("has_pending_permission must succeed");
+    assert!(matches!(body, tauri::ipc::InvokeResponseBody::Json(ref s) if s == "false"));
+
+    // Dismissal targets s1, transport send fails (client disconnected) —
+    // the command must error AND both entries must remain.
+    invoke(
+        &webview,
+        "dismiss_pending_permission",
+        serde_json::json!({ "sessionId": "s1" }),
+    )
+    .expect_err("dismissal must fail when the transport send fails");
+    let acp = app.state::<kage::state::AcpHandles>();
+    assert_eq!(
+        acp.pending_permissions.lock().unwrap().len(),
+        2,
+        "local pending state was cleared despite the agent never acking — desync hazard"
+    );
+}
+
+#[test]
+fn emit_audience_filters_respect_window_labels() {
+    // event_targets exists because WebviewWindow::emit LOOKS targeted
+    // but broadcasts (documented past bug: MESSAGE_COMPLETE not reaching
+    // peer windows caused a user-visible hang). Assert each audience
+    // helper reaches exactly its intended labels.
+    use std::sync::Mutex;
+    use tauri::Listener;
+
+    let app = mock_app();
+    let fired: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    for label in [
+        "main",
+        "chat-11111111-2222-3333-4444-555555555555",
+        "floating",
+        "inline-assist",
+    ] {
+        let w = mock_window(&app, label);
+        let fired = fired.clone();
+        let label = label.to_string();
+        w.listen("probe", move |_| fired.lock().unwrap().push(label.clone()));
+    }
+
+    kage::event_targets::emit_streaming_audience(app.handle(), "probe", &serde_json::json!({}));
+    let ok = wait_for(2_000, || fired.lock().unwrap().len() >= 3);
+    let mut got = fired.lock().unwrap().clone();
+    got.sort();
+    assert!(ok, "streaming audience events not delivered: {got:?}");
+    assert_eq!(
+        got,
+        vec![
+            "chat-11111111-2222-3333-4444-555555555555".to_string(),
+            "floating".to_string(),
+            "main".to_string(),
+        ],
+        "streaming audience must reach main + chat hosts + floating and NOT inline-assist"
+    );
+
+    fired.lock().unwrap().clear();
+    kage::event_targets::emit_to_floating(app.handle(), "probe", &serde_json::json!({}));
+    wait_for(1_000, || !fired.lock().unwrap().is_empty());
+    assert_eq!(
+        *fired.lock().unwrap(),
+        vec!["floating".to_string()],
+        "emit_to_floating must reach only the floating window"
+    );
 }
 
 // ---------------------------------------------------------------------------

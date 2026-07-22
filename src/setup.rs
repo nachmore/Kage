@@ -48,7 +48,10 @@ pub fn configure_transparent_windows(app: &App) {
 /// any of the three hotkey fields (main, clipboard, inline-assist)
 /// actually changes. Snapshots the prior values so unrelated config
 /// saves don't churn the registration.
-pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Config) {
+pub fn install_hotkey_hot_reload<R: tauri::Runtime>(
+    app: &App<R>,
+    initial_config: &crate::config::Config,
+) {
     /// Snapshot of the three hotkey strings (main, clipboard, inline-assist).
     /// Aliased so the type doesn't bloat the local declaration.
     type HotkeySnapshot = (String, Option<String>, Option<String>);
@@ -98,7 +101,7 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
 /// focused chat window. Falls back to `main` if no chat window has been
 /// focused this session — a fresh install or one where the user only
 /// ever uses the floating widget.
-pub fn install_show_sessions_listener(app: &App) {
+pub fn install_show_sessions_listener<R: tauri::Runtime>(app: &App<R>) {
     let app_handle = app.handle().clone();
     app.listen(events::SHOW_SESSIONS, move |_| {
         let handle = app_handle.clone();
@@ -271,7 +274,7 @@ fn is_safe_extension_id(id: &str) -> bool {
 /// `UiState.last_focused_chat` tracker stays accurate without each
 /// chat-* peer having to coordinate with main. `chat-<uuid>` peers
 /// install their own listener in `open_new_chat_window`.
-pub fn install_main_focus_tracker(app: &App) {
+pub fn install_main_focus_tracker<R: tauri::Runtime>(app: &App<R>) {
     if let Some(window) = app.get_webview_window(window_labels::MAIN) {
         let app_handle = app.handle().clone();
         window.on_window_event(move |event| {
@@ -284,14 +287,27 @@ pub fn install_main_focus_tracker(app: &App) {
 
 /// Boot the automation scheduler in the background and stash its
 /// signal sender in FeatureServices so emit_automation_signal can find it.
-pub fn spawn_automation_scheduler(app: &App) {
+pub fn spawn_automation_scheduler<R: tauri::Runtime>(app: &App<R>) {
     let features: tauri::State<'_, FeatureServices> = app.state();
     let config_arc = features.config.clone();
     let signal_tx_arc = features.automation_signal_tx.clone();
+    // Construct the scheduler and stash its signal sender SYNCHRONOUSLY —
+    // extensions' emit_automation_signal is a silent no-op until this slot
+    // is populated, so it must not race behind a spawn (and the mock-app
+    // harness asserts it's Some immediately after this returns).
+    let (scheduler, signal_rx) = crate::automation::AutomationScheduler::new(config_arc);
+    *signal_tx_arc.lock_or_recover() = Some(scheduler.signal_sender());
+    // The scheduler loop itself is Wry-typed (it drives real window emits
+    // deep in the macro-execution paths). On MockRuntime the downcast
+    // fails and we skip the loop — the wiring above is what tests need.
     let app_handle = app.handle().clone();
+    let Some(app_handle) = (&app_handle as &dyn std::any::Any)
+        .downcast_ref::<AppHandle>()
+        .cloned()
+    else {
+        return;
+    };
     tauri::async_runtime::spawn(async move {
-        let (scheduler, signal_rx) = crate::automation::AutomationScheduler::new(config_arc);
-        *signal_tx_arc.lock_or_recover() = Some(scheduler.signal_sender());
         scheduler.run(signal_rx, app_handle).await;
     });
 }
@@ -451,7 +467,7 @@ pub fn refresh_mcp_registration_if_enabled() {
 /// Steady-state launches with a fresh cache are a no-op. Fetch failure
 /// is logged and the stale cache (if any) is kept — worst case the
 /// agent reports slightly-old notes.
-pub fn spawn_changelog_cache_refresh(app: &App) {
+pub fn spawn_changelog_cache_refresh<R: tauri::Runtime>(app: &App<R>) {
     // Config lives inside FeatureServices — it is NOT managed as a
     // standalone Arc<Mutex<Config>> state, and state() on an unmanaged
     // type panics (this exact line shipped that panic once).
@@ -623,7 +639,10 @@ pub fn update_activation_policy<R: tauri::Runtime>(_app_handle: &AppHandle<R>) {
 
 /// Show the welcome window on first run. Small delay so the floating
 /// window has finished initializing before the welcome stacks on top.
-pub fn maybe_show_welcome_window(app_handle: &AppHandle, first_run_completed: bool) {
+pub fn maybe_show_welcome_window<R: tauri::Runtime>(
+    app_handle: &AppHandle<R>,
+    first_run_completed: bool,
+) {
     if first_run_completed {
         return;
     }
