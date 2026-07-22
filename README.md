@@ -19,7 +19,7 @@ Windows-specific:
 - [NSIS](https://nsis.sourceforge.io/) only if producing the installer bundle.
 
 macOS-specific:
-- Xcode Command Line Tools: `xcode-select --install`. Provides `swiftc` (used to compile the EventKit calendar helper) and `iconutil` (used by the icon generator).
+- Xcode Command Line Tools: `xcode-select --install`. Provides the platform linker and `iconutil` (used by the icon generator).
 - Optional: [Inkscape](https://inkscape.org/) + Python Pillow if regenerating app icons from `icons/kage-icon-basic.svg`.
 
 ### Analytics key (optional)
@@ -71,7 +71,7 @@ cargo build --release             # Release-optimised binaries
 Debug output:
 - `target/debug/kage` (Windows: `kage.exe`)
 - `target/debug/kage-computer-control-mcp` (Windows: `.exe`)
-- `target/debug/kage-calendar-helper` (macOS only — compiled by `build.rs` via `swiftc`)
+- `target/debug/kage-calendar-helper` (macOS only — a Rust workspace member, provisioned by `build.rs`)
 
 Neither `cargo build` nor `cargo build --release` produces a user-installable bundle; they only produce raw binaries.
 

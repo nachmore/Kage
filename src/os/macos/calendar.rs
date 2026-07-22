@@ -2,11 +2,12 @@
 //
 // Three backends in preference order:
 //
-// 1. **EventKit helper** — `kage-calendar-helper`, a tiny Swift binary
-//    compiled by `build.rs` from `src-tauri/macos/calendar-helper.swift`.
-//    Uses Apple's EventKit API, returns JSON. Requires Calendar TCC
-//    permission (surfaced via `NSCalendarsUsageDescription` in Info.plist
-//    and prompted on first call). This is the canonical path.
+// 1. **EventKit helper** — `kage-calendar-helper`, a tiny Rust sidecar
+//    (workspace member, provisioned by build.rs into src-tauri/binaries/
+//    and copied next to the app binary by tauri-build). Uses Apple's
+//    EventKit API via objc2-event-kit, returns JSON. Requires Calendar
+//    TCC permission (surfaced via `NSCalendarsUsageDescription` in
+//    Info.plist and prompted on first call). This is the canonical path.
 //
 // 2. **icalBuddy** — third-party Homebrew tool (`brew install ical-buddy`).
 //    Zero permission dance but only helps if the user installed it.
@@ -66,8 +67,9 @@ pub fn get_events_for_date_impl(date: &str) -> Result<Vec<CalendarEvent>, String
 // ---------------------------------------------------------------------------
 
 /// Locate the `kage-calendar-helper` binary. Looks next to the current
-/// executable first (where Tauri bundles sibling binaries), then falls
-/// back to the compile-time hint written by build.rs, then PATH.
+/// executable first (tauri-build copies every externalBin there, triple
+/// suffix stripped — covers both bundled apps and target/<profile>/ dev
+/// runs), then PATH.
 fn helper_path() -> Option<PathBuf> {
     static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
     PATH.get_or_init(|| {
@@ -77,14 +79,6 @@ fn helper_path() -> Option<PathBuf> {
                 if sibling.exists() {
                     return Some(sibling);
                 }
-            }
-        }
-        // Compile-time hint from build.rs (only set when swiftc was found
-        // at build time — points at the target/{profile}/ output).
-        if let Some(hint) = option_env!("KAGE_CALENDAR_HELPER") {
-            let p = PathBuf::from(hint);
-            if p.exists() {
-                return Some(p);
             }
         }
         // Last-ditch: someone dropped it on PATH.

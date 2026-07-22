@@ -184,7 +184,7 @@ jobs:
       # This also covers the `cargo build --bins` role; `cargo tauri
       # build` invokes cargo under the hood and will fail loudly on
       # compile errors in either bin. On macOS this also triggers the
-      # build.rs swiftc compile of src-tauri/macos/calendar-helper.swift.
+      # build.rs provisioning of the kage-calendar-helper sidecar.
       #
       # RUST_LOG=tauri_bundler=debug surfaces the bundler's subprocess
       # output (notably bundle_dmg.sh stderr on macOS), which is

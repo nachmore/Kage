@@ -50,10 +50,8 @@ www/
 .agent/
 # Temporary work plans — safe space for in-progress planning docs
 docs/plans/
-# Staging dir for build.rs-compiled sidecar binaries (e.g. the macOS
-# EventKit calendar helper) — rebuilt on every `cargo build` on macOS.
-src-tauri/macos/bin/
-# Target-specific Tauri sidecars staged by build.rs (provision_mcp_sidecar).
+# Target-specific Tauri sidecars staged by build.rs (provision_sidecar):
+# the MCP server on all platforms, the EventKit calendar helper on macOS.
 src-tauri/binaries/
 
 # Husky's internal runner scaffolding. The actual hooks (.husky/pre-push

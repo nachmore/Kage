@@ -105,7 +105,6 @@
       "frameworks": []
     },
     "externalBin": [
-      "src-tauri/macos/bin/kage-calendar-helper",
       "src-tauri/binaries/kage-computer-control-mcp"
     ],
     "windows": {

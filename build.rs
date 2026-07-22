@@ -13,23 +13,25 @@ fn main() {
 
     // Only re-run this build script when these inputs change.
     println!("cargo:rerun-if-changed=tauri.conf.json");
+    println!("cargo:rerun-if-changed=tauri.macos.conf.json");
     println!("cargo:rerun-if-changed=capabilities/");
     println!("cargo:rerun-if-changed=icons/");
     println!("cargo:rerun-if-changed=src/builtin_steering.md");
     println!("cargo:rerun-if-changed=locales/");
     println!("cargo:rerun-if-changed=pocket_tts/");
     println!("cargo:rerun-if-changed=Cargo.toml");
-    println!("cargo:rerun-if-changed=src-tauri/macos/calendar-helper.swift");
     println!("cargo:rerun-if-changed=.aptabase-key");
     println!("cargo:rerun-if-env-changed=APTABASE_KEY");
     println!("cargo:rerun-if-env-changed=KAGE_LOCAL_DEV_BUILD");
-    // The MCP sidecar is provisioned by this script (see
-    // provision_mcp_sidecar), so its sources — and those of kage-core,
-    // its only path dependency — are inputs of ours. Without these, an
-    // edit to the sidecar would leave a stale staged binary in
-    // src-tauri/binaries/ that tauri-build happily bundles.
+    // The sidecars are provisioned by this script (see provision_sidecar),
+    // so their sources — and those of kage-core, their shared path
+    // dependency — are inputs of ours. Without these, an edit to a sidecar
+    // would leave a stale staged binary in src-tauri/binaries/ that
+    // tauri-build happily bundles.
     println!("cargo:rerun-if-changed=computer_control_mcp/src");
     println!("cargo:rerun-if-changed=computer_control_mcp/Cargo.toml");
+    println!("cargo:rerun-if-changed=kage-calendar-helper/src");
+    println!("cargo:rerun-if-changed=kage-calendar-helper/Cargo.toml");
     println!("cargo:rerun-if-changed=kage-core/src");
     println!("cargo:rerun-if-changed=kage-core/Cargo.toml");
     println!("cargo:rerun-if-changed=Cargo.lock");
@@ -192,78 +194,38 @@ fn main() {
         pluck_link("privacy")
     );
 
-    // Compile the macOS EventKit calendar helper. Skipped on other platforms
-    // and skipped quietly if swiftc isn't on PATH — the runtime falls back to
-    // the icalBuddy backend in that case.
-    build_macos_calendar_helper();
-
-    // Ensure the path Tauri's `bundle.externalBin` expects for the calendar
-    // helper exists for every target, so bundling succeeds even when we
-    // don't have a real helper (non-macOS targets, macOS without swiftc, or
-    // a swiftc compile error). The stub is never invoked — the consumer is
-    // `#[cfg(target_os = "macos")]` and will already have fallen back to
-    // icalBuddy for the real macOS case.
-    stage_calendar_helper_placeholder_if_missing();
-
-    // Build + stage the real MCP sidecar. Unlike the calendar helper this
-    // is never a placeholder: every build path (bare `cargo build`,
-    // `cargo tauri dev`, CI, run_bundled_dev.sh) self-provisions a genuine
-    // binary, so nothing fake can be bundled or clobber a real sidecar.
-    provision_mcp_sidecar();
+    // Build + stage the sidecars. Never placeholders: every build path
+    // (bare `cargo build`, `cargo tauri dev`, CI, run_bundled_dev.sh)
+    // self-provisions genuine binaries, so nothing fake can be bundled
+    // or clobber a real sidecar. The MCP sidecar ships on every platform
+    // (tauri.conf.json externalBin); the calendar helper is macOS-only
+    // (tauri.macos.conf.json overlay), so other targets skip it entirely.
+    provision_sidecar("kage-computer-control-mcp");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        provision_sidecar("kage-calendar-helper");
+    }
 
     tauri_build::build()
 }
 
-/// Write a harmless placeholder at
-/// `src-tauri/macos/bin/kage-calendar-helper-<triple>[.exe]` if no file
-/// exists there yet. Tauri's bundler validates every `externalBin` path
-/// at build time; without this, any build environment missing the real
-/// binary fails to bundle. The placeholder prints a message and exits 1
-/// if it ever runs, but it shouldn't — the macOS call site only invokes
-/// the compiled Swift helper, and other platforms don't touch it.
-fn stage_calendar_helper_placeholder_if_missing() {
-    let triple = match std::env::var("TARGET") {
-        Ok(t) if !t.is_empty() => t,
-        _ => return,
-    };
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    let bin_dir = std::path::PathBuf::from("src-tauri/macos/bin");
-    let _ = std::fs::create_dir_all(&bin_dir);
-
-    // Tauri's Windows bundler expects the .exe suffix on disk for
-    // externalBin files; on macOS/Linux the filename has no extension.
-    let filename = if target_os == "windows" {
-        format!("kage-calendar-helper-{}.exe", triple)
-    } else {
-        format!("kage-calendar-helper-{}", triple)
-    };
-    let path = bin_dir.join(&filename);
-    let content: &[u8] = if target_os == "windows" {
-        b"@echo off\r\necho kage-calendar-helper is macOS-only\r\nexit /b 1\r\n"
-    } else {
-        b"#!/bin/sh\necho \"kage-calendar-helper is macOS-only\" >&2\nexit 1\n"
-    };
-    stage_placeholder(&path, content, target_os != "windows");
-}
-
-/// Build the `kage-computer-control-mcp` workspace package and stage the
-/// binary at `src-tauri/binaries/kage-computer-control-mcp-<triple>[.exe]`
-/// — the path `tauri_build::build()` validates and copies into
-/// `target/<profile>/` on EVERY cargo build of this crate (including plain
-/// `cargo build` / `cargo check` / `cargo test`, which never run the Tauri
-/// CLI's `beforeBuildCommand` hook).
+/// Build the named workspace package and stage its binary at
+/// `src-tauri/binaries/<name>-<triple>[.exe]` — the path
+/// `tauri_build::build()` validates and copies into `target/<profile>/`
+/// on EVERY cargo build of this crate (including plain `cargo build` /
+/// `cargo check` / `cargo test`, which never run the Tauri CLI's
+/// `beforeBuildCommand` hook).
 ///
 /// The nested cargo invocation MUST use a separate `--target-dir`: cargo
 /// holds a lock on the parent's target dir for the duration of this build
-/// script, so a nested build into the same tree deadlocks. The sidecar's
-/// dep graph is tiny (kage-core, no Tauri), so the separate tree costs
+/// script, so a nested build into the same tree deadlocks. The sidecars'
+/// dep graphs are tiny (kage-core, no Tauri), so the separate tree costs
 /// seconds and megabytes. Cargo itself is the freshness checker — a warm
 /// no-op rebuild is sub-second, and this function only runs when one of
 /// the `rerun-if-changed` inputs above changed.
 ///
 /// A failed sidecar build fails the main build. That's deliberate: the
 /// alternative is silently bundling a stale or missing binary.
-fn provision_mcp_sidecar() {
+fn provision_sidecar(package: &str) {
     let triple = match std::env::var("TARGET") {
         Ok(t) if !t.is_empty() => t,
         _ => return,
@@ -287,7 +249,7 @@ fn provision_mcp_sidecar() {
     // it moves under `<dir>/<triple>/<profile>/`.
     let cross = triple != host;
     let mut cmd = std::process::Command::new(&cargo);
-    cmd.args(["build", "--package", "kage-computer-control-mcp"])
+    cmd.args(["build", "--package", package])
         .arg("--target-dir")
         .arg(&sidecar_target_dir)
         // Nested cargo's stdout is muted so its output can't be parsed as
@@ -302,14 +264,14 @@ fn provision_mcp_sidecar() {
         cmd.arg("--release");
     }
 
-    let status = cmd.status().unwrap_or_else(|e| {
-        panic!("failed to spawn `{cargo} build --package kage-computer-control-mcp`: {e}")
-    });
+    let status = cmd
+        .status()
+        .unwrap_or_else(|e| panic!("failed to spawn `{cargo} build --package {package}`: {e}"));
     if !status.success() {
         panic!(
-            "kage-computer-control-mcp failed to build ({status}). The main build \
-             cannot continue without a real sidecar — fix the sidecar compile \
-             error above (its sources live in computer_control_mcp/ and kage-core/)."
+            "{package} failed to build ({status}). The main build cannot \
+             continue without a real sidecar — fix the sidecar compile error \
+             above (its sources live in {package}/ and kage-core/)."
         );
     }
 
@@ -318,18 +280,16 @@ fn provision_mcp_sidecar() {
     if cross {
         built.push(&triple);
     }
-    let built = built
-        .join(&profile)
-        .join(format!("kage-computer-control-mcp{suffix}"));
+    let built = built.join(&profile).join(format!("{package}{suffix}"));
 
     let staged_dir = std::path::PathBuf::from("src-tauri/binaries");
-    let staged = staged_dir.join(format!("kage-computer-control-mcp-{triple}{suffix}"));
+    let staged = staged_dir.join(format!("{package}-{triple}{suffix}"));
 
     // Only copy when the built binary is fresher than the staged one —
     // rewriting the staged file bumps its mtime, which re-triggers both
     // tauri-build's rerun-if-changed on it and the `cargo tauri dev`
-    // watcher (see the calendar-helper comment above for the loop this
-    // avoids). The size check guards against a stale non-binary at the
+    // watcher (unconditional copies put the watcher in an endless rebuild
+    // loop). The size check guards against a stale non-binary at the
     // staged path (e.g. a placeholder written by an older checkout of
     // this script): mtime alone would call it "fresh" forever, because
     // a warm no-op sidecar build never touches the built binary's mtime.
@@ -343,176 +303,17 @@ fn provision_mcp_sidecar() {
     let _ = std::fs::create_dir_all(&staged_dir);
     if let Err(e) = std::fs::copy(&built, &staged) {
         panic!(
-            "failed to stage MCP sidecar at {}: {e}. If the file is locked by a \
+            "failed to stage sidecar at {}: {e}. If the file is locked by a \
              running instance, kill it first (Windows: `Get-Process -Name \
-             kage-computer-control-mcp | Stop-Process -Force`; macOS/Linux: \
-             `pkill -f kage-computer-control-mcp`).",
+             {package} | Stop-Process -Force`; macOS/Linux: `pkill -f {package}`).",
             staged.display()
         );
     }
     println!(
-        "cargo:warning=staged MCP sidecar at {} (from {})",
+        "cargo:warning=staged sidecar at {} (from {})",
         staged.display(),
         built.display()
     );
-}
-
-fn stage_placeholder(path: &std::path::Path, content: &[u8], executable: bool) {
-    if path.exists() {
-        return;
-    }
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Err(e) = std::fs::write(path, content) {
-        println!(
-            "cargo:warning=failed to stage externalBin placeholder at {}: {}",
-            path.display(),
-            e
-        );
-        return;
-    }
-    #[cfg(not(unix))]
-    let _ = executable;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if executable {
-            let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
-        }
-    }
-    println!(
-        "cargo:warning=staged externalBin placeholder at {}",
-        path.display()
-    );
-}
-
-/// Compile `src-tauri/macos/calendar-helper.swift` into
-/// `target/{profile}/kage-calendar-helper` (for dev runs) and copy it to
-/// `src-tauri/macos/bin/kage-calendar-helper-<target-triple>` so Tauri's
-/// `bundle.externalBin` can pick it up during `cargo tauri build`.
-///
-/// Best-effort: prints a warning and returns without failing the build if
-/// swiftc isn't available or the compile fails — the runtime gracefully
-/// falls back to icalBuddy.
-///
-/// Both outputs are only rewritten when the Swift source is newer than
-/// them. `cargo tauri dev` watches `src-tauri/` for externalBin-resolved
-/// sidecars, so unconditionally `fs::copy`ing on every build would
-/// trigger an endless rebuild loop.
-fn build_macos_calendar_helper() {
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
-        return;
-    }
-
-    let src = std::path::PathBuf::from("src-tauri/macos/calendar-helper.swift");
-    if !src.exists() {
-        return;
-    }
-
-    // Primary output: target/{profile}/ so it sits next to the kage +
-    // kage-computer-control-mcp binaries at runtime — the Rust side
-    // resolves it relative to current_exe.parent().
-    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".into());
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::path::PathBuf::from("target"));
-    let out_bin = target_dir.join(&profile).join("kage-calendar-helper");
-
-    // Bundle-time output: `src-tauri/macos/bin/kage-calendar-helper-<triple>`.
-    // Tauri's externalBin mechanism appends `-<target>` to the configured
-    // path and expects the file to exist when `tauri_build::build()` runs.
-    let triple = std::env::var("TARGET").unwrap_or_default();
-    let bundle_bin = if !triple.is_empty() {
-        let bin_dir = std::path::PathBuf::from("src-tauri/macos/bin");
-        let _ = std::fs::create_dir_all(&bin_dir);
-        Some(bin_dir.join(format!("kage-calendar-helper-{}", triple)))
-    } else {
-        None
-    };
-
-    // Fast path: both outputs already newer than the source → nothing to do.
-    // This is the hot path during `cargo tauri dev`, where ANY mtime change
-    // on the sidecar tells Tauri to rebuild the app.
-    let out_fresh = is_newer_than(&out_bin, &src);
-    let bundle_fresh = bundle_bin.as_ref().is_none_or(|p| is_newer_than(p, &src));
-    if out_fresh && bundle_fresh {
-        println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
-        if let Some(ref path) = bundle_bin {
-            println!(
-                "cargo:warning=calendar-helper up to date at {} (bundle staging: {})",
-                out_bin.display(),
-                path.display()
-            );
-        } else {
-            println!(
-                "cargo:warning=calendar-helper up to date at {}",
-                out_bin.display()
-            );
-        }
-        return;
-    }
-
-    let swiftc = match which_swiftc() {
-        Some(p) => p,
-        None => {
-            println!(
-                "cargo:warning=swiftc not found — skipping calendar-helper build (icalBuddy \
-                 fallback will still work; install Xcode CLI tools to enable EventKit)"
-            );
-            return;
-        }
-    };
-
-    if !out_fresh {
-        let status = std::process::Command::new(&swiftc)
-            .arg("-O")
-            .arg("-o")
-            .arg(&out_bin)
-            .arg(&src)
-            .status();
-        match status {
-            Ok(s) if s.success() => {
-                println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
-                println!(
-                    "cargo:warning=built calendar-helper at {}",
-                    out_bin.display()
-                );
-            }
-            Ok(s) => {
-                println!(
-                    "cargo:warning=swiftc exited with {} — calendar-helper not built (icalBuddy \
-                     fallback will still work)",
-                    s
-                );
-                return;
-            }
-            Err(e) => {
-                println!("cargo:warning=failed to spawn swiftc ({e}) — calendar-helper not built");
-                return;
-            }
-        }
-    } else {
-        println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
-    }
-
-    // Mirror into the bundle-time path only when necessary.
-    if let Some(ref bundle_path) = bundle_bin {
-        if !bundle_fresh {
-            match std::fs::copy(&out_bin, bundle_path) {
-                Ok(_) => println!(
-                    "cargo:warning=staged calendar-helper for bundling at {}",
-                    bundle_path.display()
-                ),
-                Err(e) => println!(
-                    "cargo:warning=failed to stage helper at {} ({}); \
-                     release bundle will be missing the binary",
-                    bundle_path.display(),
-                    e
-                ),
-            }
-        }
-    }
 }
 
 /// `true` if `a` exists and its mtime is >= `b`'s mtime. Used to skip
@@ -525,32 +326,6 @@ fn is_newer_than(a: &std::path::Path, b: &std::path::Path) -> bool {
     match (am.modified(), bm.modified()) {
         (Ok(at), Ok(bt)) => at >= bt,
         _ => false,
-    }
-}
-
-fn which_swiftc() -> Option<std::path::PathBuf> {
-    // Try PATH via `which`, fall back to the known Xcode CLI tools location.
-    let from_path = std::process::Command::new("which")
-        .arg("swiftc")
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if s.is_empty() {
-                None
-            } else {
-                Some(std::path::PathBuf::from(s))
-            }
-        });
-    if let Some(p) = from_path {
-        return Some(p);
-    }
-    let xcode_default = std::path::PathBuf::from("/usr/bin/swiftc");
-    if xcode_default.exists() {
-        Some(xcode_default)
-    } else {
-        None
     }
 }
 

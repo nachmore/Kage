@@ -225,6 +225,9 @@ path = "src/main.rs"
 test = false
 
 [workspace]
-members = ["computer_control_mcp", "kage-core"]
+# Sidecars are separate members (not [[bin]]s of this crate) to keep them
+# out of Tauri's app discovery; build.rs provisions them into
+# src-tauri/binaries/ for bundle.externalBin.
+members = ["computer_control_mcp", "kage-core", "kage-calendar-helper"]
 default-members = ["."]
 resolver = "2"

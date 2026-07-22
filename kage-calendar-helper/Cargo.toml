@@ -1,0 +1,41 @@
+# macOS EventKit calendar sidecar — Rust replacement for the old
+# calendar-helper.swift, so the build needs no swiftc. On non-macOS
+# targets it compiles to a tiny "unsupported" stub (zero extra deps);
+# build.rs only provisions it for macOS targets, but the stub keeps
+# `cargo build --workspace` green everywhere.
+[package]
+name = "kage-calendar-helper"
+version = "0.9.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+serde_json = "1.0"
+# CalendarEvent wire struct + extract_meeting_url are shared with the
+# app through kage-core so the stdout JSON contract can't drift.
+kage-core = { path = "../kage-core" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+chrono = "0.4"
+# Same objc2 generation as the rest of the workspace (see kage-core).
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+    "NSArray",
+    "NSDate",
+    "NSError",
+    "NSPredicate",
+    "NSString",
+    "NSURL",
+] }
+objc2-event-kit = { version = "0.3", features = [
+    "EKCalendar",
+    "EKCalendarItem",
+    "EKEvent",
+    "EKEventStore",
+    "EKObject",
+    "EKParticipant",
+    "EKTypes",
+    "block2",
+] }
+# Completion-handler blocks for requestFullAccessToEvents / requestAccess.
+block2 = "0.6"

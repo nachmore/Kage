@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "externalBin": [
+      "src-tauri/binaries/kage-computer-control-mcp",
+      "src-tauri/binaries/kage-calendar-helper"
+    ]
+  }
+}

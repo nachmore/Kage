@@ -2,31 +2,16 @@
 //
 // Uses OS-native calendar APIs:
 // - Windows: Windows.ApplicationModel.Appointments
-// - macOS: EventKit via the `kage-calendar-helper` Swift binary (compiled
-//          by build.rs), with icalBuddy as a fallback
+// - macOS: EventKit via the `kage-calendar-helper` sidecar (a Rust
+//          workspace member provisioned by build.rs), with icalBuddy
+//          as a fallback
 // - Linux: stub (no standard API)
+//
+// The pure types live in kage-core so the kage-calendar-helper sidecar
+// shares the exact wire struct + meeting-URL sniffing; re-exported here
+// so app code keeps using `crate::os::calendar::CalendarEvent`.
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CalendarEvent {
-    #[serde(default)]
-    pub id: String,
-    #[serde(default)]
-    pub subject: String,
-    #[serde(default)]
-    pub location: String,
-    #[serde(default)]
-    pub organizer: String,
-    #[serde(default)]
-    pub start_time: String, // ISO 8601
-    #[serde(default)]
-    pub duration_minutes: u32,
-    #[serde(default)]
-    pub all_day: bool,
-    #[serde(default)]
-    pub online_url: Option<String>,
-}
+pub use kage_core::calendar::{extract_meeting_url, CalendarEvent};
 
 /// Get upcoming calendar events within the next `hours` hours.
 ///
@@ -40,53 +25,4 @@ pub fn get_upcoming_events(hours: u32) -> Result<Vec<CalendarEvent>, String> {
 /// Get calendar events for a specific date (YYYY-MM-DD).
 pub fn get_events_for_date(date: &str) -> Result<Vec<CalendarEvent>, String> {
     crate::os::platform::calendar::get_events_for_date_impl(date)
-}
-
-/// Extract a meeting/join URL from event location and body text.
-/// Checks location first (Teams/Zoom often put the URL there), then body.
-/// This is cross-platform — used by all OS calendar implementations.
-pub fn extract_meeting_url(location: &str, body: &str) -> Option<String> {
-    // Known meeting URL domain suffixes (matched against the URL after "https://")
-    let domain_patterns = [
-        "teams.microsoft.com",
-        ".zoom.us",
-        "zoom.us",
-        "meet.google.com",
-        "chime.aws",
-        ".webex.com",
-    ];
-
-    // Check location first, then body
-    for text in [location, body] {
-        for line in text.lines() {
-            let trimmed = line.trim();
-            if let Some(pos) = trimmed.find("https://") {
-                let url = &trimmed[pos..];
-                let end = url
-                    .find(|c: char| {
-                        c.is_whitespace()
-                            || c == '"'
-                            || c == '\''
-                            || c == '<'
-                            || c == '>'
-                            || c == ')'
-                    })
-                    .unwrap_or(url.len());
-                let candidate = &url[..end];
-                let after_scheme = &candidate[8..]; // skip "https://"
-                if domain_patterns.iter().any(|p| {
-                    after_scheme.starts_with(p)
-                        || after_scheme.contains(&format!("{}/", p))
-                        || (p.starts_with('.')
-                            && after_scheme
-                                .find('/')
-                                .is_some_and(|slash| after_scheme[..slash].ends_with(p)))
-                }) && candidate.len() > 15
-                {
-                    return Some(candidate.to_string());
-                }
-            }
-        }
-    }
-    None
 }

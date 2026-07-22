@@ -7,6 +7,7 @@
 //! platform instead of twice. Don't add Tauri, webview, or app-state
 //! dependencies to this crate — command wrappers belong in `kage`.
 
+pub mod calendar;
 pub mod computer_control;
 pub mod folder_tools;
 pub mod lock_ext;
