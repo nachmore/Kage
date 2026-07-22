@@ -242,6 +242,22 @@ jobs:
         # exhaustion on Windows; CI inherits that.
         run: cargo test --workspace
 
+      # End-to-end startup smoke test: launch the freshly built binary
+      # (frontend embedded by the tauri build above; hosted Windows and
+      # macOS runners have real desktop sessions so the webviews can
+      # spawn) against a hermetic temp config dir, and require
+      # "=== Setup Complete ===" in app.jsonl with NO crash.log. This
+      # catches the class of bug unit tests structurally can't — code
+      # that only runs inside a real Tauri App/AppHandle (state
+      # registration, setup wiring, plugin init). A panic in a spawned
+      # task doesn't necessarily kill the process (the panic hook
+      # writes crash.log and the app limps on), which is why the script
+      # checks for the crash report, not just liveness — the shipped
+      # state()-before-manage() panic would have failed exactly here.
+      - name: startup smoke test
+        shell: bash
+        run: python3 scripts/smoke_test.py --timeout 120
+
       - name: vitest
         working-directory: ui-tests
         run: npx vitest run
