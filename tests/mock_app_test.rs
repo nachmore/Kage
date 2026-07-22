@@ -43,12 +43,15 @@ fn mock_app() -> tauri::App<MockRuntime> {
 
     mock_builder()
         // Same plugins production registers in main.rs, minus the ones
-        // that can't run headless (single-instance IPC, aptabase
-        // networking, deep-link OS registration). Commands that reach
-        // for a plugin's managed state would otherwise report a false
-        // "state not managed" — in production these ARE managed.
+        // that can't run headless: single-instance IPC, aptabase
+        // networking, deep-link OS registration, and global-shortcut —
+        // whose plugin INIT registers a real OS event hook and fails on
+        // macOS CI runners ("File exists" / "Operation timed out").
+        // Commands that reach for a skipped plugin's managed state
+        // report "state not managed"; the sweep allowlists exactly
+        // those plugin state types (see is_acceptable_failure) so real
+        // app-state wiring bugs still fail.
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -173,6 +176,13 @@ const SWEEP_DENYLIST: &[(&str, &str)] = &[
 fn is_acceptable_failure(err: &serde_json::Value) -> Option<String> {
     let text = err.to_string();
     if text.contains("state not managed") {
+        // The global-shortcut plugin can't initialize headless (its init
+        // registers a real OS hook — fails on macOS CI), so its managed
+        // state is legitimately absent here but IS managed in production
+        // (plugin registered unconditionally in main.rs). Don't flag it.
+        if text.contains("GlobalShortcut") {
+            return None;
+        }
         return Some(format!("STATE NOT MANAGED: {text}"));
     }
     None
