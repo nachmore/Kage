@@ -40,3 +40,9 @@ windows = { version = "0.62", features = [
 core-graphics = { version = "0.25", features = ["highsierra"] }
 core-foundation = "0.10"
 accessibility-sys = "0.2"
+# NSWorkspace/NSRunningApplication enumeration for the AX window
+# discovery in os/macos/accessibility/tree.rs. Same versions/features as
+# the app crate so the dep graph stays unified.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication"] }
+objc2-foundation = { version = "0.3", features = ["NSString", "NSArray"] }
