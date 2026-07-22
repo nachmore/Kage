@@ -38,14 +38,22 @@ def main() -> int:
         return 0
 
     debug = os.environ.get("TAURI_ENV_DEBUG", "").lower() == "true"
-    target = os.environ.get("TAURI_ENV_TARGET_TRIPLE") or host_target()
+    host = host_target()
+    target = os.environ.get("TAURI_ENV_TARGET_TRIPLE") or host
     cmd = [
         "cargo",
         "build",
         "--package",
         "kage-computer-control-mcp",
     ]
-    if os.environ.get("TAURI_ENV_TARGET_TRIPLE"):
+    # Only pass --target when actually cross-compiling. Tauri v2 sets
+    # TAURI_ENV_TARGET_TRIPLE for every hook invocation (host builds
+    # included), but passing --target to cargo switches output to a
+    # separate target/<triple>/ tree that shares NOTHING with the plain
+    # target/<profile>/ tree the main build and clippy/test use — every
+    # shared dep gets compiled twice and the second tree costs gigabytes.
+    cross = target != host
+    if cross:
         cmd.extend(["--target", target])
     if not debug:
         cmd.append("--release")
@@ -90,7 +98,7 @@ def main() -> int:
     if result != 0:
         return result
 
-    stage_sidecar(repo_root, target, debug)
+    stage_sidecar(repo_root, target, debug, cross)
     return 0
 
 
@@ -102,10 +110,10 @@ def host_target() -> str:
     raise RuntimeError("Could not determine Rust host target")
 
 
-def stage_sidecar(repo_root: Path, target: str, debug: bool) -> None:
+def stage_sidecar(repo_root: Path, target: str, debug: bool, cross: bool) -> None:
     profile = "debug" if debug else "release"
     target_root = repo_root / "target"
-    if os.environ.get("TAURI_ENV_TARGET_TRIPLE"):
+    if cross:
         target_root /= target
     suffix = ".exe" if "windows" in target else ""
     source = target_root / profile / f"kage-computer-control-mcp{suffix}"
