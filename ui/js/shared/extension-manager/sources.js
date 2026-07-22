@@ -1,12 +1,13 @@
 import { normalizePermissions } from '../extension-permissions.js';
 import { resolveExtensionCatalog } from './i18n.js';
+import { applyMixin } from '../mixin.js';
 
 const SANDBOX_VENDOR_ALLOWLIST = {
     math: 'vendor/lib/math.js',
 };
 
 export function installExtensionSourceMethods(ExtensionManager) {
-    Object.assign(ExtensionManager.prototype, {
+    applyMixin(ExtensionManager.prototype, {
         _hasSandboxedProvider(sources) {
             return !!(
                 sources.searchProvider ||

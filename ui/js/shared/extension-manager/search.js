@@ -1,8 +1,9 @@
 import { sanitizeExtensionHtml } from '../extension-html-sanitizer.js';
 import { resolveExtensionMessage } from './i18n.js';
+import { applyMixin } from '../mixin.js';
 
 export function installExtensionSearchMethods(ExtensionManager) {
-    Object.assign(ExtensionManager.prototype, {
+    applyMixin(ExtensionManager.prototype, {
         async _buildKeywordGate(lowerQuery) {
             let defs = [];
             try {

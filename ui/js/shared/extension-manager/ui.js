@@ -1,5 +1,6 @@
 import { sanitizeExtensionHtml, findExtActions } from '../extension-html-sanitizer.js';
 import { t, tHtml } from '../i18n.js';
+import { applyMixin } from '../mixin.js';
 
 const WIDGET_MIN_INTERVAL_MS = 1_000;
 const WIDGET_MAX_INTERVAL_MS = 24 * 3_600 * 1_000;
@@ -9,7 +10,7 @@ const WIDGET_FAILURE_TRIP_THRESHOLD = 3;
 const WIDGET_STALE_CONTENT_FLOOR_MS = 90_000;
 
 export function installExtensionUiMethods(ExtensionManager) {
-    Object.assign(ExtensionManager.prototype, {
+    applyMixin(ExtensionManager.prototype, {
         setWidgetSlot(slotName, element) {
             if (!this._widgetSlots) this._widgetSlots = new Map();
             this._widgetSlots.set(slotName, element);

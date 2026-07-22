@@ -24,6 +24,7 @@ import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW, isChatLabel } from '../shared/window-labels.js';
+import { applyMixin } from '../shared/mixin.js';
 import { getWindowSessionOrNull } from '../shared/session-resolve.js';
 import { SessionStreamRegistry, STREAM } from '../shared/session-streams.js';
 import { errLabel } from '../shared/error-message.js';
@@ -531,12 +532,6 @@ export class ChatApp {
     set _pendingPlanRevision(v) {
         this.automationPlanController.pendingRevision = v;
     }
-}
-
-function applyMixin(target, mixin) {
-    const descriptors = Object.getOwnPropertyDescriptors(mixin.prototype);
-    delete descriptors.constructor;
-    Object.defineProperties(target, descriptors);
 }
 
 applyMixin(ChatApp.prototype, createLifecycleMixin(CHAT_APP_DEPENDENCIES));

@@ -28,6 +28,7 @@ import { CommandsMethods } from './app/commands.js';
 import { SearchMethods } from './app/search.js';
 import { InputMethods } from './app/input.js';
 import { ResponseUiMethods } from './app/response-ui.js';
+import { applyMixin } from '../shared/mixin.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -445,8 +446,9 @@ export class FloatingApp {
     }
 }
 
-Object.assign(
-    FloatingApp.prototype,
+// applyMixin (not Object.assign) so live accessors — e.g. ui-state.js's
+// `get isSpeechListening` — land as accessors, not values frozen at load.
+for (const mixin of [
     LifecycleInitMethods,
     LifecycleEventsMethods,
     LifecycleVisibilityMethods,
@@ -455,5 +457,7 @@ Object.assign(
     CommandsMethods,
     SearchMethods,
     InputMethods,
-    ResponseUiMethods
-);
+    ResponseUiMethods,
+]) {
+    applyMixin(FloatingApp.prototype, mixin);
+}
