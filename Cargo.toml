@@ -1,8 +1,7 @@
 [package]
 name = "kage"
-version = "0.9.0"
+version.workspace = true
 edition = "2021"
-autobins = false
 default-run = "kage"
 authors = ["Oren Nachman (nachmano@)"]
 description = "Your AI-powered desktop companion!"
@@ -53,7 +52,6 @@ repository = "https://github.com/nachmore/Kage"
 issues     = "https://github.com/nachmore/Kage/issues"
 privacy    = "https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md"
 
-[features]
 [dependencies]
 # Tauri-free shared core (accessibility, launcher, folder tools, input
 # synthesis, MCP JSON-RPC framing) — also the sidecar's only kage dep.
@@ -231,3 +229,12 @@ test = false
 members = ["computer_control_mcp", "kage-core", "kage-calendar-helper"]
 default-members = ["."]
 resolver = "2"
+
+# Single version for every workspace member (each declares
+# `version.workspace = true`). CI's release stamping rewrites the
+# version line below (first `^version = "..."` in this file — see
+# release.yml "Stamp rolling channel version"), so the app AND the
+# sidecars all report the same stamped version; the MCP server's
+# serverInfo.version comes from its CARGO_PKG_VERSION.
+[workspace.package]
+version = "0.9.0"

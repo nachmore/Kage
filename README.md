@@ -71,7 +71,12 @@ cargo build --release             # Release-optimised binaries
 Debug output:
 - `target/debug/kage` (Windows: `kage.exe`)
 - `target/debug/kage-computer-control-mcp` (Windows: `.exe`)
-- `target/debug/kage-calendar-helper` (macOS only — a Rust workspace member, provisioned by `build.rs`)
+- `target/debug/kage-calendar-helper` (macOS only)
+
+The sidecars are separate workspace packages, but every build of the main
+crate self-provisions them via `build.rs` (built into `target/sidecar-build/`,
+staged into `src-tauri/binaries/`, copied next to `kage` by tauri-build) — so
+a plain `cargo build` really does produce all the binaries above.
 
 Neither `cargo build` nor `cargo build --release` produces a user-installable bundle; they only produce raw binaries.
 

@@ -5,7 +5,7 @@
 # `cargo build --workspace` green everywhere.
 [package]
 name = "kage-calendar-helper"
-version = "0.9.0"
+version.workspace = true
 edition = "2021"
 publish = false
 

@@ -58,13 +58,12 @@ cargo tauri build          # Release build + NSIS installer (output: target/rele
 
 # Note: `cargo build --release` builds optimized binaries but does NOT create
 # the installer. Always use `cargo tauri build` for release distribution.
-# The kage-computer-control-mcp binary is built automatically alongside the main binary.
 
-# IMPORTANT: The kage-computer-control-mcp is a SEPARATE workspace package (computer_control_mcp/src/main.rs).
-# `cargo tauri dev` only rebuilds the main kage binary.
-# After changing kage-computer-control-mcp, you MUST rebuild it explicitly:
-cargo build --bin kage-computer-control-mcp
-# Then restart the app so the agent backend picks up the new binary.
+# The sidecars (kage-computer-control-mcp, and kage-calendar-helper on macOS)
+# are SEPARATE workspace packages, self-provisioned by the main crate's
+# build.rs on every cargo build — no explicit rebuild step needed. After
+# changing sidecar sources, any `cargo build` / `cargo tauri dev` picks
+# them up; restart the app so the agent backend spawns the new binary.
 # If the old binary is locked (running), kill it first:
 # Windows (PowerShell): Get-Process -Name "kage-computer-control-mcp" | Stop-Process -Force
 # macOS/Linux:          pkill -f kage-computer-control-mcp

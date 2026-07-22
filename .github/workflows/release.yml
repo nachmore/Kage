@@ -216,7 +216,10 @@ jobs:
           if [[ "$CHANNEL" == "stable" ]]; then
             VERSION="${RELEASE_TAG#v}"
           else
-            BASE=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+            # Require the quoted form: `[package]` has `version.workspace
+            # = true` (unquoted) — the real number lives in
+            # [workspace.package] further down.
+            BASE=$(grep -m1 -E '^version\s*=\s*"' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
             # Strip any pre-existing pre-release / build-metadata so
             # we don't double-stamp if a human happened to put one
             # into the base version.
@@ -334,7 +337,10 @@ jobs:
               src = f.read()
           # Match the first `version = "..."` line at start-of-line,
           # not the `version =` entries inside [dependencies] tables
-          # (those are indented or appear inside curly braces).
+          # (those are indented or appear inside curly braces) and not
+          # `version.workspace = true` (no quoted value). The match is
+          # the [workspace.package] version — the single source every
+          # member (app + sidecars) inherits via version.workspace.
           new_src, n = re.subn(
               r'(?m)^version\s*=\s*"[^"]+"',
               f'version = "{new}"',
@@ -348,8 +354,8 @@ jobs:
           with open(path, 'w', encoding='utf-8') as f:
               f.write(new_src)
           PY
-          echo "--- Cargo.toml [package] (head) ---"
-          head -n 15 Cargo.toml
+          echo "--- Cargo.toml stamped version line ---"
+          grep -nE '^version\s*=\s*"' Cargo.toml
           # tauri.conf.json deliberately omits its own "version" field.
           # When the field is absent Tauri reads CARGO_PKG_VERSION (i.e.
           # what we just rewrote above), so the binary's runtime version,

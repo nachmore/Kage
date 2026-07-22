@@ -15,7 +15,13 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 WARN_LINES = 500
 HARD_LINES = 700
-SOURCE_ROOTS = (ROOT / "src", ROOT / "kage-core" / "src", ROOT / "ui" / "js")
+SOURCE_ROOTS = (
+    ROOT / "src",
+    ROOT / "kage-core" / "src",
+    ROOT / "computer_control_mcp" / "src",
+    ROOT / "kage-calendar-helper" / "src",
+    ROOT / "ui" / "js",
+)
 EXTENSIONS = {".rs", ".js", ".jsx", ".ts", ".tsx"}
 
 # All production modules must remain within the hard limit.
