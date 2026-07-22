@@ -11,12 +11,10 @@
 //! `i18n.js` listens for that event and re-applies static translations and
 //! direction without a window reload.
 
-use crate::config::Config;
 use crate::error::AppError;
 use crate::i18n;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, State};
 
 /// Payload returned by `get_i18n_catalog`. Mirrors the shape consumed by
@@ -98,7 +96,7 @@ pub fn get_available_languages() -> Vec<AvailableLanguage> {
 #[tauri::command]
 pub fn set_language(
     app: AppHandle,
-    config: State<'_, std::sync::Arc<Mutex<Config>>>,
+    features: State<'_, crate::state::FeatureServices>,
     language: Option<String>,
 ) -> Result<(), AppError> {
     // `None` (or an empty string) means "follow system locale". We persist
@@ -107,7 +105,7 @@ pub fn set_language(
     let normalised: Option<String> = language.filter(|s| !s.trim().is_empty());
 
     {
-        let mut cfg = config.lock().map_err(|_| {
+        let mut cfg = features.config.lock().map_err(|_| {
             AppError::keyed(
                 crate::error::ErrorKind::LockError,
                 "errors.lock.acquire_failed",
