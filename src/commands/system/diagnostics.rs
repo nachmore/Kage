@@ -111,8 +111,8 @@ pub async fn get_telemetry_info(
 /// Enable or disable anonymous telemetry. Applies immediately — any
 /// subsequent calls to `telemetry::track()` respect the new value.
 #[tauri::command]
-pub async fn set_telemetry_enabled(
-    app: tauri::AppHandle,
+pub async fn set_telemetry_enabled<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     features: State<'_, FeatureServices>,
     enabled: bool,
 ) -> Result<(), AppError> {
@@ -155,8 +155,8 @@ pub async fn reset_telemetry_install_id(
 /// logged so accidental PII leakage through a misnamed event surfaces
 /// during development.
 #[tauri::command]
-pub async fn telemetry_track(
-    app: tauri::AppHandle,
+pub async fn telemetry_track<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     event: String,
     props: Option<serde_json::Value>,
 ) -> Result<(), AppError> {

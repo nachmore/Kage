@@ -124,6 +124,68 @@ pub struct FeatureServices {
     >,
 }
 
+/// The full set of Tauri-managed state, built in one place so
+/// production (`main.rs::run`) and the mock-app harness
+/// (`tests/mock_app_test.rs`) manage EXACTLY the same types. If you add
+/// a `.manage()`-ed type, add it here — the harness then covers it
+/// automatically, and `tests/state_manage_parity_test.rs` enforces that
+/// no code requests state outside this set.
+pub struct ManagedState {
+    pub acp_handles: AcpHandles,
+    pub ui_state: UiState,
+    pub child_processes: ChildProcesses,
+    pub feature_services: FeatureServices,
+}
+
+/// Construct every managed-state value from a loaded `Config` and an
+/// `AcpClient`. Pure construction — no I/O, no spawns, no Tauri types —
+/// so it is callable from integration tests without a runtime.
+///
+/// `main.rs` layers side-effectful wiring (signal handlers, child-killer
+/// hooks) around this after calling it; those belong at the call site,
+/// not here, precisely so tests can build state without them.
+pub fn build_managed_state(
+    config: Arc<std::sync::Mutex<Config>>,
+    acp_client: Arc<AcpClient>,
+    dev_mode: bool,
+) -> ManagedState {
+    ManagedState {
+        acp_handles: AcpHandles {
+            client: acp_client,
+            pending_permissions: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            slash_commands: Arc::new(std::sync::Mutex::new(Vec::new())),
+            available_models: Arc::new(std::sync::Mutex::new(Vec::new())),
+            last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
+        },
+        ui_state: UiState {
+            dev_mode,
+            window_sessions: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            pending_prompt_originators: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            last_focused_chat: Arc::new(std::sync::Mutex::new(None)),
+            chat_shutdown_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            last_selection: Arc::new(std::sync::Mutex::new(None)),
+            source_window: Arc::new(std::sync::Mutex::new(None)),
+            frontend_ready: Arc::new(AtomicBool::new(false)),
+            hotkey_registration_failures: Arc::new(std::sync::Mutex::new(Vec::new())),
+        },
+        child_processes: ChildProcesses {
+            pocket_tts: Arc::new(std::sync::Mutex::new(None)),
+            pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
+        },
+        feature_services: FeatureServices {
+            config,
+            app_launcher: Arc::new(Mutex::new(AppLauncher::new())),
+            updater: Arc::new(crate::updater::UpdaterState::new()),
+            user_info_cache: Arc::new(std::sync::Mutex::new(None)),
+            session_cache: Arc::new(std::sync::Mutex::new(None)),
+            automation_plan_cancelled: Arc::new(AtomicBool::new(false)),
+            activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
+            agent_session_registry: Arc::new(crate::agent_sessions::AgentSessionRegistry::new()),
+            automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
+        },
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PendingPermission {
     pub request_id: serde_json::Value,

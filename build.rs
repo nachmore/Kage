@@ -194,6 +194,26 @@ fn main() {
         pluck_link("privacy")
     );
 
+    // Embed a ComCtl32-v6 manifest into TEST executables (MSVC only).
+    // tauri-build embeds one into kage.exe, but test binaries link the
+    // same tauri/rfd code — which imports TaskDialogIndirect, a
+    // v6-only export — and without a manifest they die at load with
+    // STATUS_ENTRYPOINT_NOT_FOUND before any test runs.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
+        && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc")
+    {
+        let manifest = std::env::current_dir()
+            .expect("cwd")
+            .join("tests")
+            .join("windows-test.manifest");
+        println!("cargo:rerun-if-changed=tests/windows-test.manifest");
+        println!("cargo:rustc-link-arg-tests=/MANIFEST:EMBED");
+        println!(
+            "cargo:rustc-link-arg-tests=/MANIFESTINPUT:{}",
+            manifest.display()
+        );
+    }
+
     // Build + stage the sidecars. Never placeholders: every build path
     // (bare `cargo build`, `cargo tauri dev`, CI, run_bundled_dev.sh)
     // self-provisions genuine binaries, so nothing fake can be bundled

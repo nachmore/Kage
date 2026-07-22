@@ -6,7 +6,10 @@ use tauri::Manager;
 use tauri_plugin_updater::Update;
 
 /// Download, verify, and install a previously checked update.
-pub async fn plugin_download_and_install(app: &tauri::AppHandle, update: Update) -> Result<()> {
+pub async fn plugin_download_and_install<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    update: Update,
+) -> Result<()> {
     info!(
         "Downloading update v{} (body: {:?})",
         update.version, update.body
@@ -88,7 +91,7 @@ fn format_install_error(error: &tauri_plugin_updater::Error, reason: &str) -> an
 }
 
 #[cfg(target_os = "macos")]
-pub fn relaunch_and_exit(app: &tauri::AppHandle) {
+pub fn relaunch_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let executable = match std::env::current_exe() {
         Ok(path) => path,
         Err(error) => {
@@ -119,6 +122,6 @@ pub fn relaunch_and_exit(app: &tauri::AppHandle) {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn relaunch_and_exit(app: &tauri::AppHandle) {
+pub fn relaunch_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     app.exit(0);
 }

@@ -245,7 +245,10 @@ pub(crate) fn favicon_content_type(bytes: &[u8]) -> &'static str {
 
 /// Write text to clipboard and simulate Ctrl+V paste to the foreground window.
 #[tauri::command]
-pub async fn paste_clipboard_item(text: String, app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn paste_clipboard_item<R: tauri::Runtime>(
+    text: String,
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
     // If the clipboard write fails (another app holds it), don't paste — the
     // clipboard still holds its old contents and we'd paste stale text.
     if !crate::os::write_clipboard(&text) {
@@ -494,7 +497,10 @@ pub async fn get_process_name(pid: u32) -> Result<String, AppError> {
 }
 
 #[tauri::command]
-pub async fn focus_open_window(handle: u64, app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn focus_open_window<R: tauri::Runtime>(
+    handle: u64,
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
     // Hide the floating window before focusing the target
     if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating.hide();

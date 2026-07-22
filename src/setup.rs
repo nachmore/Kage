@@ -545,7 +545,7 @@ pub fn hide_macos_app() {
 /// Uses Tauri's built-in `set_activation_policy` which handles main-thread
 /// dispatch internally.
 #[cfg(target_os = "macos")]
-pub fn update_activation_policy(app_handle: &AppHandle) {
+pub fn update_activation_policy<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
     update_activation_policy_excluding(app_handle, None);
 }
 
@@ -612,7 +612,7 @@ pub fn update_activation_policy_excluding(app_handle: &AppHandle, exclude: Optio
 
 /// No-op on non-macOS platforms.
 #[cfg(not(target_os = "macos"))]
-pub fn update_activation_policy(_app_handle: &AppHandle) {}
+pub fn update_activation_policy<R: tauri::Runtime>(_app_handle: &AppHandle<R>) {}
 
 // `update_activation_policy_excluding` has no non-macOS stub on purpose:
 // its only caller is the `#[cfg(target_os = "macos")]` block in

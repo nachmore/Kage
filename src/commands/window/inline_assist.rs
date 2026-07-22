@@ -14,7 +14,9 @@ use tauri::Manager;
 
 /// Show the inline assist popup at the cursor position.
 /// Captures the selected text and foreground window info first.
-pub async fn show_inline_assist(app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn show_inline_assist<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
     // When called as a Tauri command (not from hotkey), capture here
     let source_info = crate::os::window_list::get_foreground_window_info();
     let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
@@ -42,8 +44,8 @@ pub async fn show_inline_assist(app: tauri::AppHandle) -> Result<(), AppError> {
 
 /// Show the inline assist popup with pre-captured context.
 /// Called from the hotkey handler where capture happens synchronously.
-pub async fn show_inline_assist_with_context(
-    app: tauri::AppHandle,
+pub async fn show_inline_assist_with_context<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     source_info: Option<(String, String)>,
     selection: Option<String>,
     cursor_pos: (i32, i32),
@@ -116,9 +118,9 @@ pub async fn show_inline_assist_with_context(
 }
 
 /// Apply inline assist result: hide popup, focus source window, write to clipboard, paste.
-pub async fn inline_assist_apply(
+pub async fn inline_assist_apply<R: tauri::Runtime>(
     text: String,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
     ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<(), AppError> {
     // Hide the inline assist window FIRST so it doesn't receive the paste

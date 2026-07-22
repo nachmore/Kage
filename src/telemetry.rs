@@ -104,13 +104,22 @@ fn is_allowed(config: &Arc<std::sync::Mutex<Config>>) -> bool {
 ///     "extension_id": manifest.id,
 /// })));
 /// ```
-pub fn track(app: &AppHandle, event: &str, props: Option<Value>) {
+pub fn track<R: tauri::Runtime>(app: &AppHandle<R>, event: &str, props: Option<Value>) {
     let Some(features) = app.try_state::<FeatureServices>() else {
         return;
     };
     if !is_allowed(&features.config) {
         return;
     }
+    // The aptabase plugin's `EventTracker` trait is only implemented for
+    // the concrete Wry `AppHandle`, so the generic path downcasts. In
+    // production R == Wry and this always succeeds; on MockRuntime (test
+    // harness) it fails and we skip — correct, since the plugin is never
+    // registered there and calling it would panic on missing state.
+    let Some(app) = (app as &dyn std::any::Any).downcast_ref::<AppHandle>() else {
+        debug!("Telemetry event skipped (non-Wry runtime): {}", event);
+        return;
+    };
     // The Aptabase plugin enqueues asynchronously; this call returns
     // immediately. We intentionally ignore the Result — telemetry
     // errors are never worth surfacing to the user.

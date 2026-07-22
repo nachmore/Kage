@@ -38,7 +38,7 @@ const SHOW_FAILURE_NOTIFY_THROTTLE: Duration = Duration::from_secs(60);
 /// Rate-limited so a user mashing Alt+Space at a stuck window doesn't
 /// queue up a stack of toasts; the throttle is per-process state so
 /// every fresh launch starts unmuted.
-fn notify_show_failed(app: &tauri::AppHandle, err: &tauri::Error) {
+fn notify_show_failed<R: tauri::Runtime>(app: &tauri::AppHandle<R>, err: &tauri::Error) {
     {
         let mut guard = LAST_SHOW_FAILURE_NOTIFY.lock_or_recover();
         if let Some(prev) = *guard {
@@ -65,8 +65,8 @@ fn notify_show_failed(app: &tauri::AppHandle, err: &tauri::Error) {
 }
 
 /// Find which monitor contains the given point
-pub(super) fn find_monitor_at_position(
-    window: &WebviewWindow,
+pub(super) fn find_monitor_at_position<R: tauri::Runtime>(
+    window: &WebviewWindow<R>,
     x: i32,
     y: i32,
 ) -> Option<tauri::Monitor> {
@@ -118,7 +118,7 @@ pub(super) fn clamp_into_monitor(
 }
 
 /// Get the active monitor (where cursor is) or fall back to primary
-pub fn get_active_monitor(window: &WebviewWindow) -> Option<tauri::Monitor> {
+pub fn get_active_monitor<R: tauri::Runtime>(window: &WebviewWindow<R>) -> Option<tauri::Monitor> {
     if let Some((cursor_x, cursor_y)) = get_cursor_position() {
         info!("Cursor position: ({}, {})", cursor_x, cursor_y);
 
@@ -136,7 +136,7 @@ pub fn get_active_monitor(window: &WebviewWindow) -> Option<tauri::Monitor> {
 /// Show the floating window at the mouse cursor without selection capture.
 /// Used by the clipboard hotkey — we don't want to send Ctrl+C when the user
 /// just wants to browse their clipboard history.
-pub fn show_floating_at_mouse(window: &WebviewWindow) {
+pub fn show_floating_at_mouse<R: tauri::Runtime>(window: &WebviewWindow<R>) {
     let app = window.app_handle();
     let ui: tauri::State<'_, crate::state::UiState> = app.state();
     let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
@@ -184,7 +184,7 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
 }
 
 /// Toggle the floating window visibility and position it
-pub fn toggle_floating_window(window: &WebviewWindow) {
+pub fn toggle_floating_window<R: tauri::Runtime>(window: &WebviewWindow<R>) {
     let app = window.app_handle();
     let ui_state: tauri::State<'_, crate::state::UiState> = app.state();
     let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
@@ -337,8 +337,8 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
 }
 
 /// Position the floating window based on the configured strategy
-fn position_floating_window(
-    window: &WebviewWindow,
+fn position_floating_window<R: tauri::Runtime>(
+    window: &WebviewWindow<R>,
     strategy: &str,
     last_x: Option<i32>,
     last_y: Option<i32>,
@@ -346,8 +346,8 @@ fn position_floating_window(
     position_floating_window_with_height(window, strategy, last_x, last_y, None);
 }
 
-fn position_floating_window_with_height(
-    window: &WebviewWindow,
+fn position_floating_window_with_height<R: tauri::Runtime>(
+    window: &WebviewWindow<R>,
     strategy: &str,
     last_x: Option<i32>,
     last_y: Option<i32>,
@@ -417,8 +417,8 @@ fn position_floating_window_with_height(
 /// Center a window on the active monitor.
 /// `vertical_fraction` controls vertical placement (0.33 = 1/3 down, 0.5 = centered).
 /// `default_size` is used if the window's inner size can't be determined.
-pub fn center_on_active_monitor(
-    window: &WebviewWindow,
+pub fn center_on_active_monitor<R: tauri::Runtime>(
+    window: &WebviewWindow<R>,
     vertical_fraction: f64,
     default_size: tauri::PhysicalSize<u32>,
 ) {
@@ -434,7 +434,7 @@ pub fn center_on_active_monitor(
 }
 
 /// Center the floating window horizontally on the active monitor, 1/3 down
-pub fn center_floating_on_active_monitor(window: &WebviewWindow) {
+pub fn center_floating_on_active_monitor<R: tauri::Runtime>(window: &WebviewWindow<R>) {
     center_on_active_monitor(
         window,
         0.33,
@@ -445,7 +445,9 @@ pub fn center_floating_on_active_monitor(window: &WebviewWindow) {
     );
 }
 
-pub async fn test_floating_window(app: tauri::AppHandle) -> Result<String, AppError> {
+pub async fn test_floating_window<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<String, AppError> {
     info!("Testing floating window visibility");
 
     if let Some(window) = app.get_webview_window(window_labels::FLOATING) {
@@ -475,7 +477,9 @@ pub async fn test_floating_window(app: tauri::AppHandle) -> Result<String, AppEr
     }
 }
 
-pub async fn start_drag_window(window: WebviewWindow) -> Result<(), AppError> {
+pub async fn start_drag_window<R: tauri::Runtime>(
+    window: WebviewWindow<R>,
+) -> Result<(), AppError> {
     info!("Starting window drag");
     window.start_dragging().map_err(|e| {
         error!("Failed to start dragging: {}", e);
@@ -488,7 +492,7 @@ pub async fn start_drag_window(window: WebviewWindow) -> Result<(), AppError> {
 }
 
 /// Center a window on the active monitor (where the cursor is)
-pub fn center_window_on_active_monitor(window: &WebviewWindow) {
+pub fn center_window_on_active_monitor<R: tauri::Runtime>(window: &WebviewWindow<R>) {
     center_on_active_monitor(
         window,
         0.5,

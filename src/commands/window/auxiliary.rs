@@ -7,8 +7,8 @@ use crate::window_labels;
 use log::info;
 use tauri::{Manager, WebviewWindow};
 
-pub async fn resize_floating_window(
-    window: WebviewWindow,
+pub async fn resize_floating_window<R: tauri::Runtime>(
+    window: WebviewWindow<R>,
     width: Option<u32>,
     height: Option<u32>,
 ) -> Result<(), AppError> {
@@ -31,8 +31,8 @@ pub async fn resize_floating_window(
         })
 }
 
-pub async fn open_settings_window(
-    app: tauri::AppHandle,
+pub async fn open_settings_window<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     section: Option<String>,
     sub_section: Option<String>,
 ) -> Result<(), AppError> {
@@ -147,7 +147,11 @@ pub async fn open_settings_window(
 const CONTEXT_MENU_LOGICAL_W: f64 = 160.0;
 const CONTEXT_MENU_LOGICAL_H: f64 = 220.0;
 
-pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn show_context_menu<R: tauri::Runtime>(
+    x: i32,
+    y: i32,
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
     use tauri::WebviewWindowBuilder;
     crate::telemetry::track(&app, "context_menu_shown", None);
 
@@ -232,7 +236,10 @@ pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<
     Ok(())
 }
 
-pub async fn set_floating_opacity(app: tauri::AppHandle, opacity: f64) -> Result<(), AppError> {
+pub async fn set_floating_opacity<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    opacity: f64,
+) -> Result<(), AppError> {
     // Opacity is applied via CSS in the frontend (body opacity).
     // This command exists so the frontend can trigger it via config_updated.
     // The actual application happens in floating-theme.js loadAndApplyTheme().
@@ -241,8 +248,8 @@ pub async fn set_floating_opacity(app: tauri::AppHandle, opacity: f64) -> Result
     Ok(())
 }
 
-pub async fn apply_chat_window_size(
-    app: tauri::AppHandle,
+pub async fn apply_chat_window_size<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     width: u32,
     height: u32,
 ) -> Result<(), AppError> {

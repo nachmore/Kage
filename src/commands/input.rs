@@ -313,10 +313,10 @@ pub async fn handle_floating_input(
 }
 
 #[tauri::command]
-pub async fn launch_app_by_name(
+pub async fn launch_app_by_name<R: tauri::Runtime>(
     app_name: String,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     info!("Launching app by name: {}", app_name);
 
@@ -340,7 +340,10 @@ pub async fn launch_app_by_name(
 }
 
 #[tauri::command]
-pub async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn open_url<R: tauri::Runtime>(
+    url: String,
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
     info!("Opening URL: {}", url);
 
     let full_url = if url.starts_with("www.") {
@@ -359,7 +362,10 @@ pub async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), AppError
 }
 
 #[tauri::command]
-pub async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn open_path<R: tauri::Runtime>(
+    path: String,
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
     info!("Opening path: {}", path);
 
     let expanded_path = if path.starts_with('~') {
@@ -387,11 +393,11 @@ pub async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), AppErr
 }
 
 #[tauri::command]
-pub async fn execute_shortcut(
+pub async fn execute_shortcut<R: tauri::Runtime>(
     path: String,
     args: Vec<String>,
     working_directory: Option<String>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     info!("Executing shortcut: {} with args: {:?}", path, args);
 
@@ -443,10 +449,10 @@ pub async fn execute_shortcut(
 }
 
 #[tauri::command]
-pub async fn execute_system_command(
+pub async fn execute_system_command<R: tauri::Runtime>(
     command_id: String,
     elevated: Option<bool>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     let elevated = elevated.unwrap_or(false);
     info!(

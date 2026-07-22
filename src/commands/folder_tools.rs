@@ -27,7 +27,9 @@ pub fn get_common_folders() -> HashMap<String, String> {
 
 /// Open a native folder picker dialog. Returns the selected path or null.
 #[tauri::command]
-pub async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, AppError> {
+pub async fn pick_folder<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<Option<String>, AppError> {
     info!("Opening native folder picker dialog");
 
     // Use blocking_pick_folder on a blocking thread to avoid blocking the async runtime

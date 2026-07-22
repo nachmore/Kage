@@ -59,11 +59,11 @@ pub async fn get_extension_config(
 }
 
 #[tauri::command]
-pub async fn save_extension_config(
+pub async fn save_extension_config<R: tauri::Runtime>(
     id: String,
     value: serde_json::Value,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     let mut config = features.config.lock_or_recover();
     config.extensions.insert(id.clone(), value);
@@ -82,11 +82,11 @@ pub async fn save_extension_config(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn set_extension_enabled(
+pub async fn set_extension_enabled<R: tauri::Runtime>(
     id: String,
     enabled: bool,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     let mut config = features.config.lock_or_recover();
     config.extension_states.insert(id.clone(), enabled);

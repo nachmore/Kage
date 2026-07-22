@@ -3,13 +3,13 @@
 use super::super::*;
 
 /// Adopt or create a session for the calling window.
-pub async fn switch_acp_session(
+pub async fn switch_acp_session<R: tauri::Runtime>(
     session_id: Option<String>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     ui: State<'_, crate::state::UiState>,
-    window: tauri::WebviewWindow,
-    app: tauri::AppHandle,
+    window: tauri::WebviewWindow<R>,
+    app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     let client_guard = acp.client.clone();
     let available_models = acp.available_models.clone();
@@ -41,7 +41,7 @@ pub async fn switch_acp_session(
 }
 
 #[allow(clippy::too_many_arguments)] // Mirrors the Tauri command's state params.
-fn switch_acp_session_blocking(
+fn switch_acp_session_blocking<R: tauri::Runtime>(
     session_id: Option<String>,
     client_guard: std::sync::Arc<crate::acp_client::AcpClient>,
     available_models: std::sync::Arc<std::sync::Mutex<Vec<crate::state::AcpModel>>>,
@@ -49,7 +49,7 @@ fn switch_acp_session_blocking(
     session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     window_sessions: std::sync::Arc<std::sync::Mutex<HashMap<String, String>>>,
     window_label: String,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     if !client_guard.is_healthy() {
         info!("Connection not healthy, restarting for session switch...");
@@ -87,7 +87,7 @@ fn switch_acp_session_blocking(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn load_existing_session(
+fn load_existing_session<R: tauri::Runtime>(
     id: &str,
     client: std::sync::Arc<crate::acp_client::AcpClient>,
     available_models: std::sync::Arc<std::sync::Mutex<Vec<crate::state::AcpModel>>>,
@@ -95,7 +95,7 @@ fn load_existing_session(
     session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     window_sessions: std::sync::Arc<std::sync::Mutex<HashMap<String, String>>>,
     window_label: String,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     info!("Switching to existing session: {}", id);
     let cwd = {
@@ -131,14 +131,14 @@ fn load_existing_session(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn create_session(
+fn create_session<R: tauri::Runtime>(
     client: std::sync::Arc<crate::acp_client::AcpClient>,
     available_models: std::sync::Arc<std::sync::Mutex<Vec<crate::state::AcpModel>>>,
     config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     window_sessions: std::sync::Arc<std::sync::Mutex<HashMap<String, String>>>,
     window_label: String,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     info!("Creating new session");
     let cwd = config.lock_or_recover().acp.agent.working_directory.clone();

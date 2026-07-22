@@ -9,12 +9,12 @@ use super::*;
 /// The plan is a JSON array of steps, each with "step", "task", and "details" fields.
 /// Progress events are emitted to the frontend as each step completes.
 #[tauri::command]
-pub async fn execute_automation_plan(
+pub async fn execute_automation_plan<R: tauri::Runtime>(
     session_id: String,
     plan_json: String,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
-    window: WebviewWindow,
+    window: WebviewWindow<R>,
 ) -> Result<(), AppError> {
     info!("Executing automation plan");
 
@@ -248,11 +248,11 @@ pub async fn execute_automation_plan(
 /// inline-assist window. The frontend passes the session id to use
 /// (typically the floating window's session).
 #[tauri::command]
-pub async fn send_inline_assist(
+pub async fn send_inline_assist<R: tauri::Runtime>(
     session_id: Option<String>,
     message: String,
     acp: State<'_, AcpHandles>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     let client = acp.client.clone();
 
@@ -356,12 +356,12 @@ pub async fn generate_script(
 /// AI-prompt steps should land on (typically the calling window's
 /// pinned session).
 #[tauri::command]
-pub async fn execute_macro(
+pub async fn execute_macro<R: tauri::Runtime>(
     session_id: Option<String>,
     steps: Vec<serde_json::Value>,
     initial_input: String,
     acp: State<'_, AcpHandles>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     let client = acp.client.clone();
     let step_count = steps.len();

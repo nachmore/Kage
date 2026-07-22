@@ -20,7 +20,7 @@ use tauri::{Emitter, Manager};
 /// - Config changes (config_updated listener)
 /// - After hotkey capture (capture_hotkey_combo)
 /// - After hotkey test (try_register_hotkey)
-pub fn register_all_hotkeys(app: &tauri::AppHandle) {
+pub fn register_all_hotkeys<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
     info!("Registering all hotkeys...");
@@ -199,8 +199,8 @@ pub async fn get_hotkey_registration_failures(
 }
 
 #[tauri::command]
-pub async fn try_register_hotkey(
-    app: tauri::AppHandle,
+pub async fn try_register_hotkey<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     modifiers: Vec<String>,
     key: String,
     slot: Option<String>,
@@ -290,7 +290,9 @@ pub async fn try_register_hotkey(
 }
 
 #[tauri::command]
-pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::Value, AppError> {
+pub async fn capture_hotkey_combo<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<serde_json::Value, AppError> {
     // Temporarily unregister global hotkeys so they don't intercept during capture
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let _ = app.global_shortcut().unregister_all();

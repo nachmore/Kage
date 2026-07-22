@@ -7,7 +7,7 @@ use crate::window_labels::{self, is_chat_label, is_session_host_label};
 use log::{info, warn};
 use tauri::Manager;
 
-pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn open_chat_window<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), AppError> {
     info!("Opening chat window");
 
     if let Some(floating_window) = app.get_webview_window(window_labels::FLOATING) {
@@ -86,7 +86,7 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
 /// Record this chat window as the most-recently-focused. Read by the
 /// single-instance handler and "show chat" affordances to decide which
 /// window to surface when the user has multiple open.
-pub fn mark_focused_chat(app: &tauri::AppHandle, label: &str) {
+pub fn mark_focused_chat<R: tauri::Runtime>(app: &tauri::AppHandle<R>, label: &str) {
     if !is_session_host_label(label) {
         return;
     }
@@ -101,7 +101,7 @@ pub fn mark_focused_chat(app: &tauri::AppHandle, label: &str) {
 /// entries. Called from the window's `Destroyed` event listener so a
 /// user closing a chat window (OS chrome or `close_chat_window`) leaves
 /// the backend state clean. Safe to call when the entries don't exist.
-fn cleanup_chat_window_state(app: &tauri::AppHandle, label: &str) {
+fn cleanup_chat_window_state<R: tauri::Runtime>(app: &tauri::AppHandle<R>, label: &str) {
     use tauri::Manager;
     let Some(ui) = app.try_state::<crate::state::UiState>() else {
         return;
@@ -159,7 +159,7 @@ pub fn schedule_chat_shutdown_check_public(app: &tauri::AppHandle) {
 /// counter so any in-flight task from a previous close observes the
 /// change and exits early. The actual decision (and the disconnect)
 /// is in [`run_chat_shutdown_check`].
-fn schedule_chat_shutdown_check(app: &tauri::AppHandle) {
+fn schedule_chat_shutdown_check<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     use std::sync::atomic::Ordering;
     use tauri::Manager;
     let Some(ui) = app.try_state::<crate::state::UiState>() else {
@@ -177,7 +177,7 @@ fn schedule_chat_shutdown_check(app: &tauri::AppHandle) {
 /// Called when a chat window opens (or any path that should keep the
 /// agent alive) — the in-flight sleep wakes up and finds its
 /// generation stale.
-pub fn cancel_chat_shutdown(app: &tauri::AppHandle) {
+pub fn cancel_chat_shutdown<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     use std::sync::atomic::Ordering;
     use tauri::Manager;
     let Some(ui) = app.try_state::<crate::state::UiState>() else {
@@ -186,7 +186,7 @@ pub fn cancel_chat_shutdown(app: &tauri::AppHandle) {
     ui.chat_shutdown_generation.fetch_add(1, Ordering::SeqCst);
 }
 
-fn run_chat_shutdown_check(app: &tauri::AppHandle, my_generation: u64) {
+fn run_chat_shutdown_check<R: tauri::Runtime>(app: &tauri::AppHandle<R>, my_generation: u64) {
     use std::sync::atomic::Ordering;
     use tauri::Manager;
     let Some(ui) = app.try_state::<crate::state::UiState>() else {
@@ -240,9 +240,9 @@ fn run_chat_shutdown_check(app: &tauri::AppHandle, my_generation: u64) {
 ///
 /// Returns the new window's label so the caller can route follow-up
 /// invocations.
-pub async fn open_new_chat_window(
+pub async fn open_new_chat_window<R: tauri::Runtime>(
     resume_session_id: Option<String>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     use tauri::WebviewWindowBuilder;
 
@@ -323,7 +323,7 @@ fn chat_window_count_bucket(n: usize) -> &'static str {
     }
 }
 
-fn count_open_chat_windows(app: &tauri::AppHandle) -> usize {
+fn count_open_chat_windows<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> usize {
     use tauri::Manager;
     app.webview_windows()
         .keys()
@@ -337,7 +337,7 @@ fn count_open_chat_windows(app: &tauri::AppHandle) -> usize {
 /// same as closed. Falls back to "exists" if Tauri can't report
 /// visibility (treat as visible to err on the side of keeping the
 /// agent up).
-fn count_visible_chat_windows(app: &tauri::AppHandle) -> usize {
+fn count_visible_chat_windows<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> usize {
     use tauri::Manager;
     app.webview_windows()
         .iter()
@@ -349,9 +349,9 @@ fn count_visible_chat_windows(app: &tauri::AppHandle) -> usize {
 /// Close a chat window by its label and clear its session bookkeeping.
 /// Refuses to close `main` or `floating` — those persist for the app's
 /// lifetime; the caller should hide them instead.
-pub async fn close_chat_window(
+pub async fn close_chat_window<R: tauri::Runtime>(
     label: String,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
     ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<(), AppError> {
     if label == window_labels::MAIN || label == window_labels::FLOATING {
@@ -399,8 +399,8 @@ pub struct ChatWindowInfo {
 /// Enumerate all chat-* windows and main, with their pinned session
 /// ids (if any). Used by the tray submenu and by the single-instance
 /// handler to decide which window to focus.
-pub async fn list_chat_windows(
-    app: tauri::AppHandle,
+pub async fn list_chat_windows<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<Vec<ChatWindowInfo>, AppError> {
     let sessions = ui

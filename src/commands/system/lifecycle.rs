@@ -15,7 +15,7 @@ use tauri::{Manager, State};
 
 /// Consolidated shutdown: hide UI, kill TTS, generate steering, disconnect ACP.
 /// Called from tray quit, quit_app, and restart_app to avoid duplicated cleanup.
-pub fn graceful_shutdown(app: &tauri::AppHandle) {
+pub fn graceful_shutdown<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     // Hide all windows and tray for instant visual feedback
     for label in &[
         window_labels::FLOATING,
@@ -56,21 +56,21 @@ pub fn graceful_shutdown(app: &tauri::AppHandle) {
 
 /// Run the async portion of shutdown (steering + disconnect) then exit.
 /// Must be called from an async context after `graceful_shutdown`.
-pub async fn shutdown_and_exit(app: &tauri::AppHandle) {
+pub async fn shutdown_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     shutdown_and_exit_inner(app, None).await;
 }
 
 /// Shutdown with optional restart: spawns a new process right before exit.
-pub async fn shutdown_and_exit_with_restart(
-    app: &tauri::AppHandle,
+pub async fn shutdown_and_exit_with_restart<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     exe: std::path::PathBuf,
     args: Vec<String>,
 ) {
     shutdown_and_exit_inner(app, Some((exe, args))).await;
 }
 
-async fn shutdown_and_exit_inner(
-    app: &tauri::AppHandle,
+async fn shutdown_and_exit_inner<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     restart: Option<(std::path::PathBuf, Vec<String>)>,
 ) {
     if let (Some(acp), Some(features)) = (
@@ -155,7 +155,7 @@ async fn shutdown_and_exit_inner(
 }
 
 #[tauri::command]
-pub async fn restart_app(app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn restart_app<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), AppError> {
     info!("Restart requested via > command");
 
     let exe = std::env::current_exe().map_err(|e| format!("Failed to get exe path: {}", e))?;
@@ -200,7 +200,7 @@ pub async fn restart_app(app: tauri::AppHandle) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn quit_app(app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn quit_app<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), AppError> {
     info!("Quit requested via > command");
     graceful_shutdown(&app);
 
@@ -213,10 +213,9 @@ pub async fn quit_app(app: tauri::AppHandle) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn open_devtools<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), AppError> {
     #[cfg(debug_assertions)]
     if let Some(window) = app.get_webview_window(window_labels::FLOATING) {
-        let window: tauri::WebviewWindow = window;
         window.open_devtools();
     }
     #[cfg(not(debug_assertions))]
@@ -227,7 +226,9 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn open_welcome_window<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
     use tauri::WebviewWindowBuilder;
     // If window exists and is valid, just focus it
     if let Some(w) = app.get_webview_window(window_labels::WELCOME) {
@@ -265,8 +266,8 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
 }
 
 #[tauri::command]
-pub async fn complete_first_run(
-    app: tauri::AppHandle,
+pub async fn complete_first_run<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     features: State<'_, FeatureServices>,
     launch_at_startup: bool,
     auto_update: bool,
@@ -324,14 +325,16 @@ pub async fn complete_first_run(
 /// `complete_first_run` — we want precise control over when the
 /// floating UI appears relative to the welcome window's fade-out).
 #[tauri::command]
-pub async fn trigger_welcome_banner(app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn trigger_welcome_banner<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
     show_welcome_banner(&app);
     Ok(())
 }
 
 /// Show the floating window with a welcome banner displaying the configured hotkey.
 /// Called from first-run completion and the dev tray menu.
-pub fn show_welcome_banner(app: &tauri::AppHandle) {
+pub fn show_welcome_banner<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let hotkey_str = app
         .try_state::<FeatureServices>()
         .and_then(|features| {

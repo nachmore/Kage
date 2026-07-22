@@ -94,8 +94,8 @@ pub fn get_available_languages() -> Vec<AvailableLanguage> {
 }
 
 #[tauri::command]
-pub fn set_language(
-    app: AppHandle,
+pub fn set_language<R: tauri::Runtime>(
+    app: AppHandle<R>,
     features: State<'_, crate::state::FeatureServices>,
     language: Option<String>,
 ) -> Result<(), AppError> {

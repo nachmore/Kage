@@ -56,12 +56,10 @@ mod webview_recovery;
 mod window_labels;
 
 use acp_client::AcpClient;
-use app_launcher::AppLauncher;
 use config::Config;
 use log::{info, warn};
 use std::sync::Arc;
 use tauri::Manager;
-use tokio::sync::Mutex;
 
 /// On Windows, attach to the parent console (if any) so that logs
 /// appear when launched from a terminal. If launched from
@@ -203,7 +201,8 @@ async fn run() {
     let process_manager = acp_client.get_process_manager();
     process_manager::install_signal_handlers(process_manager);
 
-    let app_launcher = AppLauncher::new();
+    // AppLauncher::new (pure; registry scan deferred to background) is
+    // constructed inside build_managed_state below.
     info!("App launcher initialized (scan deferred to background)");
     if dev_mode {
         info!(
@@ -214,42 +213,22 @@ async fn run() {
 
     let acp_client_arc = Arc::new(acp_client);
     let config_arc = Arc::new(std::sync::Mutex::new(config.clone()));
-    let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let pending_permissions_arc = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
-    let available_models_arc =
-        Arc::new(std::sync::Mutex::new(Vec::<crate::state::AcpModel>::new()));
+
+    // All Tauri-managed state comes from one constructor shared with the
+    // mock-app test harness, so tests manage exactly what production does.
+    let state::ManagedState {
+        acp_handles,
+        ui_state,
+        child_processes,
+        feature_services,
+    } = state::build_managed_state(config_arc.clone(), acp_client_arc.clone(), dev_mode);
 
     // Clone Arcs for the notification handler setup (wired up inside
     // setup() because it needs app.handle() to emit Tauri events).
     let config_for_handler = config_arc.clone();
-    let slash_cmds_for_handler = slash_commands_arc.clone();
-    let pending_perm_for_handler = pending_permissions_arc.clone();
+    let slash_cmds_for_handler = acp_handles.slash_commands.clone();
+    let pending_perm_for_handler = acp_handles.pending_permissions.clone();
     let acp_for_handler = acp_client_arc.clone();
-
-    let acp_handles = state::AcpHandles {
-        client: acp_client_arc,
-        pending_permissions: pending_permissions_arc,
-        slash_commands: slash_commands_arc,
-        available_models: available_models_arc,
-        last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
-    };
-    let ui_state = state::UiState {
-        dev_mode,
-        window_sessions: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
-        pending_prompt_originators: Arc::new(std::sync::Mutex::new(
-            std::collections::HashMap::new(),
-        )),
-        last_focused_chat: Arc::new(std::sync::Mutex::new(None)),
-        chat_shutdown_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-        last_selection: Arc::new(std::sync::Mutex::new(None)),
-        source_window: Arc::new(std::sync::Mutex::new(None)),
-        frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        hotkey_registration_failures: Arc::new(std::sync::Mutex::new(Vec::new())),
-    };
-    let child_processes = state::ChildProcesses {
-        pocket_tts: Arc::new(std::sync::Mutex::new(None)),
-        pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
-    };
     // Register a signal-handler hook that kills the pocket-tts server
     // and any in-flight pip install. Windows already reaps these via
     // the parent Job Object, but macOS / Linux signal-driven exits
@@ -275,18 +254,6 @@ async fn run() {
             }
         });
     }
-    let feature_services = state::FeatureServices {
-        config: config_arc,
-        app_launcher: Arc::new(Mutex::new(app_launcher)),
-        updater: Arc::new(updater::UpdaterState::new()),
-        user_info_cache: Arc::new(std::sync::Mutex::new(None)),
-        session_cache: Arc::new(std::sync::Mutex::new(None)),
-        automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
-        agent_session_registry: Arc::new(crate::agent_sessions::AgentSessionRegistry::new()),
-        automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
-    };
-
     // Capture a clone of config for the parts of setup() that still
     // need it (hotkey hot-reload installer, autostart pocket TTS, etc.).
     let config_for_setup = config.clone();
@@ -478,206 +445,7 @@ async fn run() {
         });
 
     let app = builder
-        .invoke_handler(tauri::generate_handler![
-            commands::get_i18n_catalog,
-            commands::get_available_languages,
-            commands::set_language,
-            commands::read_extension_locale,
-            commands::send_message_streaming,
-            commands::check_connection,
-            commands::open_chat_with_message,
-            commands::get_config,
-            commands::save_config,
-            commands::open_settings_window,
-            commands::reconnect_acp,
-            commands::handle_floating_input,
-            commands::launch_app_by_name,
-            commands::open_url,
-            commands::input::link_metadata::fetch_link_metadata,
-            commands::input::link_metadata::link_metadata_clear_cache,
-            commands::input::link_metadata::link_metadata_cache_stats,
-            commands::open_path,
-            commands::execute_shortcut,
-            commands::test_floating_window,
-            commands::start_drag_window,
-            commands::open_chat_window,
-            commands::open_new_chat_window,
-            commands::close_chat_window,
-            commands::list_chat_windows,
-            commands::resize_floating_window,
-            commands::send_permission_response,
-            commands::remove_tool_permission,
-            commands::update_tool_policy,
-            commands::get_permission_audit_log,
-            commands::clear_permission_audit_log,
-            commands::get_permission_audit_log_path,
-            commands::is_dev_mode,
-            commands::is_terminator_mode,
-            commands::open_devtools,
-            commands::capture_hotkey_combo,
-            commands::cancel_hotkey_capture,
-            commands::try_register_hotkey,
-            commands::get_hotkey_registration_failures,
-            commands::get_app_info,
-            commands::get_os_dark_mode,
-            commands::open_welcome_window,
-            commands::complete_first_run,
-            commands::trigger_welcome_banner,
-            commands::is_first_run,
-            commands::detect_agents,
-            commands::list_agent_presets,
-            commands::validate_agent_connection,
-            commands::probe_connection_version,
-            commands::check_npm_available,
-            commands::install_acp_wrapper,
-            commands::get_startup_enabled,
-            commands::set_startup_enabled,
-            commands::get_computer_control_enabled,
-            commands::set_computer_control_enabled,
-            commands::get_mcp_json_path,
-            commands::get_mcp_config,
-            commands::save_mcp_config,
-            commands::agent_session_providers,
-            commands::agent_list_sessions,
-            commands::agent_load_session,
-            commands::agent_check_session_updated,
-            commands::kiro_desktop_workspaces,
-            commands::kiro_desktop_delete_session,
-            commands::kiro_desktop_open_folder,
-            commands::quit_app,
-            commands::restart_app,
-            commands::read_clipboard,
-            commands::resolve_directories,
-            commands::get_clipboard_history,
-            commands::paste_clipboard_item,
-            commands::fetch_favicon,
-            commands::record_shortcut_usage,
-            commands::get_shortcut_history,
-            commands::search_files,
-            commands::get_calendar_events,
-            commands::get_calendar_events_for_date,
-            commands::show_context_menu,
-            commands::set_floating_opacity,
-            commands::apply_chat_window_size,
-            commands::save_window_position,
-            commands::save_chat_window_geometry,
-            commands::get_last_selection,
-            commands::get_user_info,
-            commands::list_sessions,
-            commands::load_session,
-            commands::switch_acp_session,
-            commands::rename_session,
-            commands::reveal_session_file,
-            commands::get_sessions_directory,
-            commands::delete_session,
-            commands::get_window_session,
-            commands::set_window_session,
-            commands::clear_window_session,
-            commands::get_session_stream_snapshot,
-            commands::get_steering_content,
-            commands::open_auto_steering_file,
-            commands::get_auto_steering_path,
-            commands::read_steering_lines,
-            commands::write_steering_lines,
-            commands::import_steering_lines,
-            commands::match_context_rule,
-            commands::ollama_probe,
-            commands::ollama_list_models,
-            commands::ollama_codex_spawn_command,
-            commands::export_config_default_filename,
-            commands::export_config_bundle,
-            commands::import_config_bundle,
-            commands::write_text_file,
-            commands::get_recent_crash,
-            commands::dismiss_recent_crash,
-            commands::send_steering_message,
-            commands::dismiss_pending_permission,
-            commands::has_pending_permission,
-            commands::get_slash_commands,
-            commands::execute_slash_command,
-            commands::get_slash_command_options,
-            commands::get_available_models,
-            commands::check_for_update,
-            commands::fetch_changelog,
-            commands::get_update_urls,
-            commands::download_and_install_update,
-            commands::was_just_updated,
-            commands::clear_update_flag,
-            commands::touch_floating_activity,
-            commands::execute_system_command,
-            commands::cancel_generation,
-            commands::save_frecency,
-            commands::load_frecency,
-            commands::list_extensions,
-            commands::list_themes,
-            commands::list_command_packs,
-            commands::get_extension_config,
-            commands::save_extension_config,
-            commands::set_extension_enabled,
-            commands::load_theme_colors,
-            commands::install_extension_from_path,
-            commands::uninstall_extension,
-            commands::remove_extension_grant,
-            commands::commit_extension_install,
-            commands::open_store_window,
-            commands::store_get_catalog,
-            commands::store_get_detail,
-            commands::store_install,
-            commands::welcome_provision_extensions,
-            commands::check_extension_updates,
-            commands::read_extension_file,
-            commands::save_store_url,
-            commands::save_extension_data,
-            commands::load_extension_data,
-            commands::delete_extension_data,
-            commands::oauth_loopback_start,
-            commands::oauth_loopback_await,
-            commands::oauth_loopback_cancel,
-            commands::pocket_tts_check_install,
-            commands::pocket_tts_install,
-            commands::pocket_tts_cancel_install,
-            commands::pocket_tts_start,
-            commands::pocket_tts_stop,
-            commands::pocket_tts_voices,
-            commands::pocket_tts_test,
-            commands::execute_automation_plan,
-            commands::extension_tool_response,
-            commands::send_extension_tool_steering,
-            commands::check_extension_tool_permission,
-            commands::pick_folder,
-            commands::scan_folder,
-            commands::execute_folder_plan,
-            commands::get_common_folders,
-            commands::notify_frontend_ready,
-            commands::list_open_windows,
-            commands::get_window_icons,
-            commands::get_process_name,
-            commands::focus_open_window,
-            crate::automation::emit_automation_signal,
-            crate::automation::get_power_status,
-            crate::automation::list_automation_signals,
-            commands::start_activity_tracker,
-            commands::stop_activity_tracker,
-            commands::get_activity_report,
-            commands::is_activity_tracker_running,
-            commands::get_app_icon,
-            commands::get_source_window,
-            commands::get_screen_context,
-            commands::show_inline_assist,
-            commands::inline_assist_apply,
-            commands::send_inline_assist,
-            commands::execute_macro,
-            commands::generate_script,
-            commands::app_log_write,
-            commands::app_log_get_entries,
-            commands::app_log_clear,
-            commands::app_log_get_dir,
-            commands::dump_thread_info,
-            commands::get_telemetry_info,
-            commands::set_telemetry_enabled,
-            commands::reset_telemetry_install_id,
-            commands::telemetry_track,
-        ])
+        .invoke_handler(commands::registry::invoke_handler())
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 

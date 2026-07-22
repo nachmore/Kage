@@ -22,11 +22,11 @@ pub async fn get_config(features: State<'_, FeatureServices>) -> Result<Config, 
 }
 
 #[tauri::command]
-pub async fn save_config(
+pub async fn save_config<R: tauri::Runtime>(
     config: Config,
     features: State<'_, FeatureServices>,
     acp: State<'_, AcpHandles>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     info!("Saving configuration");
 
@@ -382,11 +382,11 @@ pub async fn export_config_bundle(
 /// written to disk + the in-memory state is replaced; a `config_updated`
 /// Tauri event lets every window reload theme / shortcuts / etc.
 #[tauri::command]
-pub async fn import_config_bundle(
+pub async fn import_config_bundle<R: tauri::Runtime>(
     path: String,
     passphrase: Option<String>,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<crate::config_export::ImportSummary, AppError> {
     let bytes = std::fs::read(&path).map_err(|e| {
         AppError::keyed(

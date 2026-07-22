@@ -5,15 +5,15 @@ use super::*;
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // Tauri commands take state via parameters; can't be condensed.
-pub async fn send_message_streaming(
+pub async fn send_message_streaming<R: tauri::Runtime>(
     session_id: String,
     message: String,
     attachments: Option<Vec<serde_json::Value>>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
-    window: WebviewWindow,
-    app: tauri::AppHandle,
+    window: WebviewWindow<R>,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     // Never log message *content* by default — app.jsonl is routinely shared
     // in bug reports. Full-content logging is a developer aid for working on
@@ -301,12 +301,12 @@ pub async fn cancel_generation(
 }
 
 #[tauri::command]
-pub async fn open_chat_with_message(
+pub async fn open_chat_with_message<R: tauri::Runtime>(
     session_id: Option<String>,
     message: String,
     acp: State<'_, AcpHandles>,
     ui: State<'_, UiState>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating.hide();

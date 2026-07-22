@@ -34,7 +34,10 @@ use super::*;
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Result<(), AppError> {
+pub async fn open_store_window<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    tab: Option<String>,
+) -> Result<(), AppError> {
     open_store_window_with_intent(app, tab, None).await
 }
 
@@ -43,8 +46,8 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
 /// auto-prompts the install on boot. Used by the `kage://install/<id>`
 /// deep-link handler. Frontend callers stick to `open_store_window`
 /// without the third arg.
-pub async fn open_store_window_with_intent(
-    app: tauri::AppHandle,
+pub async fn open_store_window_with_intent<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     tab: Option<String>,
     install_id: Option<String>,
 ) -> Result<(), AppError> {
@@ -429,11 +432,11 @@ pub async fn store_get_detail(
 /// grant and emits the event. On rejection it calls `uninstall_extension`
 /// to roll back.
 #[tauri::command]
-pub async fn store_install(
+pub async fn store_install<R: tauri::Runtime>(
     id: String,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<extensions::InstalledItem, AppError> {
     let base_url = {
         let config = features.config.lock_or_recover();
@@ -458,10 +461,10 @@ pub async fn store_install(
 /// Check for updates to installed extensions and optionally auto-install them.
 /// Returns { updated: N, checked: N }
 #[tauri::command]
-pub async fn check_extension_updates(
+pub async fn check_extension_updates<R: tauri::Runtime>(
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<serde_json::Value, AppError> {
     let base_url = {
         let config = features.config.lock_or_recover();
@@ -590,11 +593,11 @@ pub async fn check_extension_updates(
 /// frontend can show an install-time permission prompt before loading the
 /// extension. If the user approves, the frontend calls
 /// `commit_extension_install`, which saves the grant and emits.
-async fn store_install_inner(
+async fn store_install_inner<R: tauri::Runtime>(
     base_url: &str,
     id: &str,
     features: &State<'_, FeatureServices>,
-    app: &tauri::AppHandle,
+    app: &tauri::AppHandle<R>,
     emit_changed: bool,
 ) -> Result<extensions::InstalledItem, String> {
     // Resolve the download URL by fetching this id's detail page first.

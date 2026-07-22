@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Manifest embedded into TEST executables on Windows (see build.rs,
+  cargo:rustc-link-arg-tests). The production kage.exe gets an
+  equivalent manifest from tauri-build; test binaries don't, and
+  without it any test linking tauri/rfd fails at LOAD time with
+  STATUS_ENTRYPOINT_NOT_FOUND: those crates import TaskDialogIndirect,
+  which only exists in ComCtl32 v6, and v6 is opt-in via exactly this
+  dependency declaration.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"
+      />
+    </dependentAssembly>
+  </dependency>
+</assembly>

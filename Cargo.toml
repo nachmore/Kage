@@ -206,6 +206,10 @@ accessibility-sys = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
+# MockRuntime harness (tests/mock_app_test.rs): a real tauri::App with
+# real .manage()/state()/IPC dispatch but no display, webview process,
+# or event loop — runs headless under plain `cargo test` on CI.
+tauri = { version = "2.10", features = ["test"] }
 
 [build-dependencies]
 tauri-build = { version = "2.5", features = [] }

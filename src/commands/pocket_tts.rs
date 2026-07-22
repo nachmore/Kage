@@ -139,10 +139,10 @@ pub async fn pocket_tts_check_install(
 }
 
 #[tauri::command]
-pub async fn pocket_tts_install(
+pub async fn pocket_tts_install<R: tauri::Runtime>(
     features: State<'_, FeatureServices>,
     procs: State<'_, ChildProcesses>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     let config = features.config.lock_or_recover();
     let python = config

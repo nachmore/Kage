@@ -11,8 +11,8 @@ use crate::window_labels;
 use tauri::State;
 
 #[tauri::command]
-pub async fn check_for_update(
-    app: tauri::AppHandle,
+pub async fn check_for_update<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     features: State<'_, FeatureServices>,
 ) -> Result<serde_json::Value, AppError> {
     let channel = features.config.lock_or_recover().updates.channel;
@@ -79,8 +79,8 @@ pub async fn get_update_urls(
 }
 
 #[tauri::command]
-pub async fn download_and_install_update(
-    app: tauri::AppHandle,
+pub async fn download_and_install_update<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
     _acp: State<'_, AcpHandles>,

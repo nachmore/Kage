@@ -3,14 +3,14 @@
 use super::*;
 
 #[tauri::command]
-pub async fn send_permission_response(
+pub async fn send_permission_response<R: tauri::Runtime>(
     session_id: Option<String>,
     request_id: serde_json::Value,
     option_id: String,
     tool_title: String,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     info!("Permission response: {}={}", tool_title, option_id);
 
@@ -106,10 +106,10 @@ pub async fn send_permission_response(
 /// another window's blocked prompt is left alone. Without it, everything
 /// pending is dismissed (legacy behaviour).
 #[tauri::command]
-pub async fn dismiss_pending_permission(
+pub async fn dismiss_pending_permission<R: tauri::Runtime>(
     session_id: Option<String>,
     acp: State<'_, AcpHandles>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<bool, AppError> {
     let targets: Vec<(String, crate::state::PendingPermission)> = {
         let guard = acp.pending_permissions.lock().map_err(|_| {
@@ -196,14 +196,14 @@ pub async fn has_pending_permission(
 /// and send it back to the ACP agent as a follow-up message so the LLM
 /// can continue its response with the data.
 #[tauri::command]
-pub async fn extension_tool_response(
+pub async fn extension_tool_response<R: tauri::Runtime>(
     session_id: String,
     extension_id: String,
     tool_name: String,
     result_json: String,
     success: bool,
     acp: State<'_, AcpHandles>,
-    window: WebviewWindow,
+    window: WebviewWindow<R>,
 ) -> Result<(), AppError> {
     info!(
         "Extension tool response: ext={}, tool={}, success={}, len={}",

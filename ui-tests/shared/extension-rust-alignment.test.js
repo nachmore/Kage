@@ -97,8 +97,10 @@ function parseTauriCommands(rustPath) {
               .join('\n');
     const out = new Map();
     // Match `#[tauri::command]` followed by an optional `pub` and an
-    // `async fn` / `fn`, then capture the name + arg list.
-    const re = /#\[tauri::command\][\s\S]*?pub\s+(?:async\s+)?fn\s+(\w+)\s*\(([\s\S]*?)\)/g;
+    // `async fn` / `fn`, then capture the name + arg list. Commands may
+    // carry a generic runtime param (`fn foo<R: tauri::Runtime>(...)`)
+    // since the mock-app harness made them runtime-generic.
+    const re = /#\[tauri::command\][\s\S]*?pub\s+(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*\(([\s\S]*?)\)/g;
     let m;
     while ((m = re.exec(text)) !== null) {
         const name = m[1];

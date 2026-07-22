@@ -201,11 +201,11 @@ pub async fn read_steering_lines(
 }
 
 #[tauri::command]
-pub async fn write_steering_lines(
+pub async fn write_steering_lines<R: tauri::Runtime>(
     kind: String,
     lines: Vec<String>,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<serde_json::Value, AppError> {
     let kind = parse_steering_kind(&kind)?;
 

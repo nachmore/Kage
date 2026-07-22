@@ -42,10 +42,10 @@ pub struct WelcomeProvisionReport {
 /// telemetry event; there's no cross-window signal because no caller
 /// needs one today.
 #[tauri::command]
-pub async fn welcome_provision_extensions(
+pub async fn welcome_provision_extensions<R: tauri::Runtime>(
     decisions: Vec<WelcomeExtensionDecision>,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     info!(
         "welcome_provision_extensions: dispatching {} decisions to background task",
@@ -87,10 +87,10 @@ pub async fn welcome_provision_extensions(
 /// Core provisioning loop — pulled into its own function so the
 /// spawn_blocking task in [`welcome_provision_extensions`] can call it
 /// with a plain Arc<Mutex<Config>> rather than needing a Tauri State.
-fn provision_decisions(
+fn provision_decisions<R: tauri::Runtime>(
     decisions: &[WelcomeExtensionDecision],
     config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
-    app: &tauri::AppHandle,
+    app: &tauri::AppHandle<R>,
 ) -> WelcomeProvisionReport {
     // Snapshot what's already installed so we don't re-stage duplicates.
     let already_installed: std::collections::HashSet<String> = {
@@ -138,9 +138,9 @@ fn provision_decisions(
 /// launch, individual installs fail and surface in the
 /// `WelcomeProvisionReport`; the user can install the rest later from
 /// the store window.
-fn install_and_commit_direct(
+fn install_and_commit_direct<R: tauri::Runtime>(
     config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
-    app: &tauri::AppHandle,
+    app: &tauri::AppHandle<R>,
     id: &str,
 ) -> Result<String, String> {
     extensions::validate_extension_id(id).map_err(|e| format!("Invalid extension id: {}", e))?;

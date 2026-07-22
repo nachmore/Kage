@@ -539,10 +539,10 @@ pub async fn reveal_session_file(
 
 /// Delete a session's files (.json, .jsonl, .lock)
 #[tauri::command]
-pub async fn delete_session(
+pub async fn delete_session<R: tauri::Runtime>(
     session_id: String,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
 
@@ -590,13 +590,13 @@ pub async fn delete_session(
 /// The command wrapper remains in this facade so Tauri exports its generated
 /// command symbol through the existing `commands::sessions` re-export.
 #[tauri::command]
-pub async fn switch_acp_session(
+pub async fn switch_acp_session<R: tauri::Runtime>(
     session_id: Option<String>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     ui: State<'_, crate::state::UiState>,
-    window: tauri::WebviewWindow,
-    app: tauri::AppHandle,
+    window: tauri::WebviewWindow<R>,
+    app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     acp::switch_acp_session(session_id, acp, features, ui, window, app).await
 }
@@ -648,12 +648,12 @@ pub async fn get_window_session(
 /// authoritative path for "this window now shows this session" lives
 /// here so frontends never have to coordinate `set_title` manually.
 #[tauri::command]
-pub async fn set_window_session(
+pub async fn set_window_session<R: tauri::Runtime>(
     label: String,
     session_id: String,
     ui: State<'_, crate::state::UiState>,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     {
         let mut map = ui

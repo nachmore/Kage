@@ -298,8 +298,8 @@ pub(super) fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
 /// `"<title> - Kage"`; floating gets `"Kage — <title>"`. Operates on
 /// the `FeatureServices` Arcs directly so callers in spawn-blocking
 /// closures (which can't hold a State) can invoke it too.
-pub fn update_window_title(
-    app: &tauri::AppHandle,
+pub fn update_window_title<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     config_arc: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     session_cache_arc: &std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     label: &str,
@@ -358,12 +358,12 @@ fn lookup_session_title(
 
 /// Rename a session by updating its title in the cache
 #[tauri::command]
-pub async fn rename_session(
+pub async fn rename_session<R: tauri::Runtime>(
     session_id: String,
     title: String,
     features: State<'_, FeatureServices>,
     ui: State<'_, crate::state::UiState>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     let title = title.trim().to_string();
     if title.is_empty() {
@@ -454,8 +454,8 @@ pub async fn rename_session(
 /// loop trying.
 ///
 /// Spawns its own background task — caller doesn't await it.
-pub fn maybe_generate_ai_title(
-    app: tauri::AppHandle,
+pub fn maybe_generate_ai_title<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     client: std::sync::Arc<crate::acp_client::AcpClient>,
     session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     session_id: String,

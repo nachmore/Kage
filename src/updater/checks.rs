@@ -26,8 +26,8 @@ pub fn endpoint_for_channel(channel: crate::config::Channel) -> &'static str {
 }
 
 /// Ask the signed updater plugin for an update on the requested channel.
-pub async fn plugin_check(
-    app: &tauri::AppHandle,
+pub async fn plugin_check<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     channel: crate::config::Channel,
 ) -> Result<Option<Update>> {
     let Some(pubkey) = PUBKEY else {

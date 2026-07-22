@@ -7,6 +7,7 @@ pub mod kiro_desktop;
 pub mod messaging;
 pub mod oauth;
 pub mod pocket_tts;
+pub mod registry;
 pub mod sessions;
 pub mod system;
 pub mod window;

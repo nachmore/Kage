@@ -14,14 +14,14 @@ pub async fn get_slash_commands(
 }
 
 #[tauri::command]
-pub async fn execute_slash_command(
+pub async fn execute_slash_command<R: tauri::Runtime>(
     session_id: Option<String>,
     command: String,
     args: Option<serde_json::Value>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
-    window: WebviewWindow,
-    app: tauri::AppHandle,
+    window: WebviewWindow<R>,
+    app: tauri::AppHandle<R>,
 ) -> Result<serde_json::Value, AppError> {
     let client = acp.client.clone();
     // Snapshot before the move into spawn_blocking — we need both for

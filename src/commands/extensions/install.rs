@@ -9,10 +9,10 @@ use super::*;
 /// caller must show the permission prompt and call
 /// `commit_extension_install` before the extension will load.
 #[tauri::command]
-pub async fn install_extension_from_path(
+pub async fn install_extension_from_path<R: tauri::Runtime>(
     source_path: String,
     features: State<'_, FeatureServices>,
-    _app: tauri::AppHandle,
+    _app: tauri::AppHandle<R>,
 ) -> Result<extensions::InstalledItem, AppError> {
     let source = std::path::PathBuf::from(&source_path);
 
@@ -37,11 +37,11 @@ pub async fn install_extension_from_path(
 }
 
 #[tauri::command]
-pub async fn uninstall_extension(
+pub async fn uninstall_extension<R: tauri::Runtime>(
     id: String,
     kind: String,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     // extensions::uninstall validates internally too — checking here as well
     // keeps this command's error message specific (frontend gets a clean
@@ -77,12 +77,12 @@ pub async fn uninstall_extension(
 /// set via the install-time permission prompt. Granting without user
 /// consent is a direct security violation.
 #[tauri::command]
-pub async fn commit_extension_install(
+pub async fn commit_extension_install<R: tauri::Runtime>(
     extension_id: String,
     granted: Vec<String>,
     approved_version: String,
     features: State<'_, FeatureServices>,
-    app: tauri::AppHandle,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     // Reject hostile ids before they're recorded as a grant. Even though
     // this function only writes to the in-memory config map (no direct
