@@ -62,7 +62,7 @@ pub async fn plugin_check<R: tauri::Runtime>(
         Ok(update) => Ok(update),
         Err(error) if is_manifest_not_found(&error) => {
             info!(
-                "No release published on channel '{}' yet (404 at {}); reporting up-to-date",
+                "No release available in the '{}' channel (nothing published at {}); reporting up-to-date",
                 channel.as_str(),
                 endpoint
             );
@@ -72,7 +72,43 @@ pub async fn plugin_check<R: tauri::Runtime>(
     }
 }
 
+/// True when the check failed because the channel simply has no release.
+///
+/// The plugin signals this with `Error::ReleaseNotFound`: any non-2xx
+/// endpoint response (404 on a channel with no published release, but
+/// also 403/410 from GitHub's CDN) leaves it without a manifest and it
+/// returns that variant. Matching on the variant — not on "404" in the
+/// message text, which the plugin never includes — is what routes this
+/// to the friendly "no release available in this channel" path instead
+/// of a scary "Update check failed" error.
 fn is_manifest_not_found(error: &tauri_plugin_updater::Error) -> bool {
-    let message = error.to_string();
-    message.contains("404") || message.to_lowercase().contains("not found")
+    matches!(error, tauri_plugin_updater::Error::ReleaseNotFound)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_not_found_is_treated_as_up_to_date() {
+        // The friendly "no release available in this channel" path keys
+        // off the enum variant. If this match ever regresses to message
+        // sniffing, a channel with no published release logs a scary
+        // "Update check failed" instead of quietly reporting up-to-date.
+        assert!(is_manifest_not_found(
+            &tauri_plugin_updater::Error::ReleaseNotFound
+        ));
+    }
+
+    #[test]
+    fn other_updater_errors_still_fail_the_check() {
+        // Real failures (bad signature, network) must NOT collapse into
+        // the silent up-to-date path.
+        assert!(!is_manifest_not_found(
+            &tauri_plugin_updater::Error::EmptyEndpoints
+        ));
+        assert!(!is_manifest_not_found(
+            &tauri_plugin_updater::Error::Network("connection refused".into())
+        ));
+    }
 }
