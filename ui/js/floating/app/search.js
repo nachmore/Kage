@@ -12,6 +12,7 @@ import {
     t,
     unifiedSearch,
 } from './dependencies.js';
+import { measureTextareaContentHeight } from './helpers.js';
 
 export const SearchMethods = {
     /**
