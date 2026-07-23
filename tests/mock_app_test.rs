@@ -588,6 +588,10 @@ const SWEEP_DENYLIST: &[(&str, &str)] = &[
         "get_user_info",
         "spawns OS subprocesses for avatar/name lookup",
     ),
+    // No required args → really spawns the pocket-tts Python server
+    // and waits on its startup (hung 20s+ on the macOS runner; would
+    // leave a stray python process behind anywhere it succeeded).
+    ("pocket_tts_start", "spawns a real Python TTS server"),
 ];
 
 /// Commands whose empty-args invoke is expected to be rejected by arg
