@@ -212,7 +212,19 @@ impl ProcessManager {
         let pid = child.id();
         info!("Terminating spawned process (PID: {})", pid);
 
-        // Ask the process to exit.
+        // Kill the TREE, not just the direct child. The agent backend
+        // (kiro-cli) spawns MCP servers via `cmd.exe /C …`; a plain
+        // child.kill() is TerminateProcess on kiro-cli only, so the
+        // grandchildren survived every disconnect. On the update path —
+        // which releases the Job Object's kill-on-close so the installer
+        // child can outlive us — that orphaned kage-computer-control-mcp
+        // then held a lock on its own exe and the next install failed
+        // with "Error opening file for writing".
+        #[cfg(target_os = "windows")]
+        Self::kill_process(pid);
+
+        // Ask the process to exit (Unix path; on Windows the tree kill
+        // above already took it down — this is a no-op reap helper).
         let _ = child.kill();
 
         // Poll for exit with a real deadline. The old implementation did
