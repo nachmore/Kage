@@ -8,10 +8,21 @@
 ; as "Error opening file for writing" with Abort/Retry/Ignore.
 ; Defence in depth: the app-side fix (tree-kill on ACP disconnect) is the
 ; primary line; this catches anything that still slipped through.
+;
+; TWO hard rules learned the hard way (a silent /UPDATE install hung
+; forever with no visible UI when this blocked):
+;   1. NO /T. nsExec::Exec is SYNCHRONOUS — the installer waits for
+;      taskkill to return. `taskkill /T` walks the process tree, which
+;      can wedge indefinitely on a degraded process table; the sidecar
+;      is a leaf process with nothing worth tree-killing anyway.
+;   2. ALWAYS /TIMEOUT. Even without /T, never let a stuck taskkill block
+;      the installer — bound the wait so a hang becomes a skipped kill
+;      (the app-side reap already covers the normal case), not a dead
+;      install. nsExec force-terminates the child when the timeout fires.
 !macro KAGE_KILL_SIDECARS
   DetailPrint "Stopping Kage helper processes..."
-  nsExec::Exec 'taskkill /F /T /IM kage-computer-control-mcp.exe'
-  Pop $0 ; discard exit code — 128 (not found) is the common, fine case
+  nsExec::Exec /TIMEOUT=5000 'taskkill /F /IM kage-computer-control-mcp.exe'
+  Pop $0 ; discard result — "not found" (128) and "timeout" are both fine
 !macroend
 
 !macro NSIS_HOOK_PREINSTALL
