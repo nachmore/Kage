@@ -618,6 +618,29 @@ const SWEEP_DENYLIST: &[(&str, &str)] = &[
     ),
 ];
 
+/// Commands that get a longer watchdog than [`COMMAND_TIMEOUT`], with a
+/// justification. MockRuntime stubs Tauri, not the OS — these handlers
+/// legitimately spawn real subprocesses (`where` lookups, `--version`
+/// probes), and on a cold CI runner those can take well over 5s while
+/// still being healthy: first-touch Defender scans of node.exe plus
+/// npm's own startup blew the default watchdog on the Windows runner.
+/// A longer leash keeps their dispatch coverage instead of punching a
+/// SWEEP_DENYLIST hole. Keep entries rare — every one slows detection
+/// of a REAL hang in that command to its extended timeout.
+const SWEEP_SLOW_COMMANDS: &[(&str, std::time::Duration, &str)] = &[
+    (
+        "check_npm_available",
+        std::time::Duration::from_secs(30),
+        "spawns `where npm.cmd` + `npm --version`; cold-runner AV scan + npm startup exceed 5s",
+    ),
+    (
+        "switch_acp_session",
+        std::time::Duration::from_secs(30),
+        "mock client is never healthy → restart_connection runs 3 spawn attempts \
+         behind 300/600/1200ms backoff sleeps (2.1s floor) before erroring",
+    ),
+];
+
 /// Commands whose empty-args invoke is expected to be rejected by arg
 /// deserialization (they take required args). That's a PASS — the
 /// dispatch worked and the rejection is the correct wire behavior.
@@ -708,14 +731,19 @@ fn command_sweep_no_wiring_failures() {
             }));
             let _ = tx.send(outcome);
         });
-        let outcome = match rx.recv_timeout(COMMAND_TIMEOUT) {
+        let timeout = SWEEP_SLOW_COMMANDS
+            .iter()
+            .find(|(name, _, _)| name == cmd)
+            .map(|(_, t, _)| *t)
+            .unwrap_or(COMMAND_TIMEOUT);
+        let outcome = match rx.recv_timeout(timeout) {
             Ok(outcome) => outcome,
             Err(_) => {
                 hung.push(cmd.clone());
                 offenses.push(format!(
-                    "  {cmd}: HUNG (no response in {COMMAND_TIMEOUT:?}) — \
+                    "  {cmd}: HUNG (no response in {timeout:?}) — \
                      blocks on a real OS service headless? Add to SWEEP_DENYLIST \
-                     with a justification if so."
+                     (or SWEEP_SLOW_COMMANDS if it's just slow) with a justification."
                 ));
                 continue;
             }
