@@ -101,6 +101,7 @@ export function createExtensionLogger(extensionId) {
  */
 export function interceptConsole(source, opts = {}) {
     _verboseConsoleCapture = !!opts.verbose;
+    installGlobalErrorCapture(source);
 
     const orig = {
         log: console.log.bind(console),
@@ -125,6 +126,48 @@ export function interceptConsole(source, opts = {}) {
         orig.debug(...args);
         if (_verboseConsoleCapture) _write('debug', source, args.map(_fmt).join(' '));
     };
+}
+
+let _errorCaptureInstalled = false;
+
+/**
+ * Pipe uncaught exceptions and unhandled promise rejections to the app
+ * log. Console interception alone misses these: a `ReferenceError`
+ * thrown from an event handler (e.g. a missing import surfacing at
+ * call time) never passes through `console.error` — it goes straight
+ * to the WebView's internal console, which nothing reads in a release
+ * build. These are exactly the errors that make a feature silently
+ * dead, so they're the most important ones to land in app.jsonl.
+ *
+ * Installed automatically by `interceptConsole()`; windows with their
+ * own console wiring (settings) can call it directly. Idempotent.
+ *
+ * @param {string} source - source tag (e.g. "floating")
+ */
+export function installGlobalErrorCapture(source) {
+    if (_errorCaptureInstalled) return;
+    _errorCaptureInstalled = true;
+
+    window.addEventListener('error', (e) => {
+        // Resource-load errors (img/script) surface here with no
+        // `error` object; message them by target so they're traceable.
+        if (!e.message && e.target && e.target !== window) {
+            const tag = e.target.tagName?.toLowerCase() || 'resource';
+            const url = e.target.src || e.target.href || '';
+            _write('error', source, `uncaught: failed to load <${tag}> ${url}`);
+            return;
+        }
+        const where = e.filename ? ` (${e.filename}:${e.lineno}:${e.colno})` : '';
+        const stack = e.error?.stack ? `\n${e.error.stack}` : '';
+        _write('error', source, `uncaught: ${e.message}${where}${stack}`);
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+        const reason = e.reason;
+        const msg =
+            reason instanceof Error ? `${reason.message}\n${reason.stack || ''}` : _fmt(reason);
+        _write('error', source, `unhandledrejection: ${msg}`);
+    });
 }
 
 /**

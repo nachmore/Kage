@@ -48,8 +48,13 @@ import { StoreSettingsModule } from './store.js';
 import { PrivacySettingsModule } from './privacy.js';
 import { UpdatesSettingsModule } from './updates.js';
 import { AboutSettingsModule } from './about.js';
+import { installGlobalErrorCapture } from '../shared/kage-log.js';
 
 let settingsManager = null;
+
+// Uncaught exceptions + unhandled rejections → app log. The console
+// intercept below only sees what code explicitly console.*()s.
+installGlobalErrorCapture('settings');
 
 // --- Console interception ---------------------------------------------------
 //

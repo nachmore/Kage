@@ -10,6 +10,12 @@ import { EVT } from './shared/events.js';
 import { WINDOW } from './shared/window-labels.js';
 import { getWindowSessionOrNull } from './shared/session-resolve.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
+import { interceptConsole } from './shared/kage-log.js';
+
+// Mirror console.warn/error + uncaught errors into the app log — this
+// window previously logged only to the WebView console, so failures
+// here were invisible in app.jsonl.
+interceptConsole(WINDOW.INLINE_ASSIST);
 
 console.log(
     '[inline-assist] Module loaded, classifyText:',
