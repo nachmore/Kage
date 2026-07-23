@@ -113,7 +113,7 @@ pub struct ToolPolicy {
 }
 
 /// A user-approved capability grant for an installed extension.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ExtensionGrant {
     /// Capabilities the user approved at install or upgrade time.
     /// See ui/js/shared/extension-permissions.js for the authoritative list.

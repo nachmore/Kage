@@ -44,6 +44,8 @@ pub async fn save_config<R: tauri::Runtime>(
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
         let prior_acp = state_config.acp.active_mode();
+        let mut config = config;
+        preserve_backend_owned_fields(&mut config, &state_config);
         *state_config = config;
         // The update channel is a typed enum with `#[serde(other)]` →
         // Stable, so an unknown wire value (stale config, hand-edit,
@@ -98,6 +100,33 @@ pub async fn save_config<R: tauri::Runtime>(
     }
 
     Ok(())
+}
+
+/// Overwrite backend-owned fields in an incoming JS config snapshot with
+/// the authoritative in-memory values.
+///
+/// Capability grants are only ever written by the install/uninstall
+/// commands (`commit_extension_install`, `remove_extension_grant`,
+/// welcome provisioning) — never by JS. But `save_config` carries a FULL
+/// `Config` snapshot fetched by some window at some earlier time, so a
+/// window holding a snapshot from before a grant was recorded would
+/// silently wipe it on its next unrelated save (the "every extension
+/// runs with zero capabilities" lost-update bug). Keep the backend's map
+/// regardless of what the snapshot says, and log when they diverge so
+/// the offending window is visible in the log.
+///
+/// `extension_states` is deliberately NOT protected: the settings window
+/// legitimately toggles it through `save_config`.
+pub(crate) fn preserve_backend_owned_fields(incoming: &mut Config, authoritative: &Config) {
+    if incoming.extension_grants != authoritative.extension_grants {
+        log::warn!(
+            "save_config: incoming snapshot carries {} extension grant(s) but the backend has {}; \
+             keeping the backend's (grants are backend-owned and JS must never rewrite them)",
+            incoming.extension_grants.len(),
+            authoritative.extension_grants.len()
+        );
+        incoming.extension_grants = authoritative.extension_grants.clone();
+    }
 }
 
 #[tauri::command]
@@ -536,4 +565,64 @@ pub async fn write_text_file(path: String, contents: String) -> Result<u64, AppE
         )
     })?;
     Ok(len)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn grant(caps: &[&str]) -> crate::config::ExtensionGrant {
+        crate::config::ExtensionGrant {
+            granted: caps.iter().map(|s| s.to_string()).collect(),
+            approved_version: "1.0.0".into(),
+            approved_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn stale_snapshot_cannot_wipe_extension_grants() {
+        // The lost-update bug: a window fetched config before grants were
+        // written, then saved an unrelated change — its empty grants map
+        // must not clobber the backend's.
+        let mut authoritative = Config::default();
+        authoritative
+            .extension_grants
+            .insert("spotify".into(), grant(&["storage", "oauth"]));
+
+        let mut incoming = Config::default(); // stale: no grants
+        preserve_backend_owned_fields(&mut incoming, &authoritative);
+
+        assert_eq!(incoming.extension_grants.len(), 1);
+        assert_eq!(
+            incoming.extension_grants.get("spotify").unwrap().granted,
+            vec!["storage", "oauth"]
+        );
+    }
+
+    #[test]
+    fn snapshot_cannot_expand_grants_either() {
+        // Symmetric direction: JS must not be able to GRANT capabilities
+        // by round-tripping an inflated map through save_config — grants
+        // only ever change through the dedicated install commands.
+        let authoritative = Config::default(); // no grants
+        let mut incoming = Config::default();
+        incoming
+            .extension_grants
+            .insert("evil".into(), grant(&["storage", "urls", "oauth"]));
+
+        preserve_backend_owned_fields(&mut incoming, &authoritative);
+        assert!(incoming.extension_grants.is_empty());
+    }
+
+    #[test]
+    fn matching_grants_pass_through_untouched() {
+        let mut authoritative = Config::default();
+        authoritative
+            .extension_grants
+            .insert("todos".into(), grant(&["storage"]));
+        let mut incoming = authoritative.clone();
+
+        preserve_backend_owned_fields(&mut incoming, &authoritative);
+        assert_eq!(incoming.extension_grants, authoritative.extension_grants);
+    }
 }

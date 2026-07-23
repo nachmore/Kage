@@ -110,23 +110,117 @@ fn provision_decisions<R: tauri::Runtime>(
     let mut report = WelcomeProvisionReport::default();
 
     for decision in decisions {
-        if decision.checked && !already_installed.contains(&decision.id) {
-            match install_and_commit_direct(config, app, &decision.id) {
-                Ok(installed_id) => {
-                    report.installed += 1;
-                    info!("welcome_provision: installed '{}'", installed_id);
-                }
-                Err(e) => {
-                    report.failed += 1;
-                    warn!("welcome_provision: install '{}' failed: {}", decision.id, e);
-                }
-            }
-        } else {
+        if !decision.checked {
             report.skipped += 1;
+            continue;
+        }
+        // One path for every checked extension: ensure the files are on
+        // disk (network install only when missing), then ensure the
+        // enable flag + capability grant are committed. "Already on
+        // disk" must NOT short-circuit the grant step — a config reset
+        // leaves the install dir intact while wiping extension_states /
+        // extension_grants, and skipping here loaded those extensions
+        // with zero capabilities ("no user grant recorded" on every
+        // invoke).
+        match provision_one(config, app, &decision.id, &already_installed) {
+            Ok(ProvisionOutcome::Installed) => {
+                report.installed += 1;
+                info!("welcome_provision: installed '{}'", decision.id);
+            }
+            Ok(ProvisionOutcome::Granted) => {
+                report.enabled += 1;
+                info!(
+                    "welcome_provision: committed grant for already-installed '{}'",
+                    decision.id
+                );
+            }
+            Ok(ProvisionOutcome::AlreadyProvisioned) => report.skipped += 1,
+            Err(e) => {
+                report.failed += 1;
+                warn!("welcome_provision: '{}' failed: {}", decision.id, e);
+            }
         }
     }
 
     report
+}
+
+enum ProvisionOutcome {
+    /// Files were fetched from the store and the grant committed.
+    Installed,
+    /// Files were already on disk; the missing state/grant was committed.
+    Granted,
+    /// Files, enable flag, and grant were all already in place.
+    AlreadyProvisioned,
+}
+
+/// Ensure one welcome-screen extension is installed, enabled, and granted.
+fn provision_one<R: tauri::Runtime>(
+    config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+    app: &tauri::AppHandle<R>,
+    id: &str,
+    already_installed: &std::collections::HashSet<String>,
+) -> Result<ProvisionOutcome, String> {
+    if !already_installed.contains(id) {
+        install_and_commit_direct(config, app, id)?;
+        return Ok(ProvisionOutcome::Installed);
+    }
+
+    extensions::validate_extension_id(id).map_err(|e| format!("Invalid extension id: {}", e))?;
+
+    // Find the installed manifest to read its requested permissions.
+    let states = {
+        let cfg = config.lock_or_recover();
+        cfg.extension_states.clone()
+    };
+    let item = ["extension", "theme"]
+        .iter()
+        .flat_map(|kind| extensions::discover_items(kind, &states))
+        .find(|item| item.manifest.id == id)
+        .ok_or_else(|| format!("'{}' not found on disk", id))?;
+
+    {
+        let mut cfg = config.lock_or_recover();
+        let had_state = cfg.extension_states.get(id).copied() == Some(true);
+        let had_grant = cfg.extension_grants.contains_key(id);
+        if had_state && had_grant {
+            return Ok(ProvisionOutcome::AlreadyProvisioned);
+        }
+        commit_grant_locked(&mut cfg, &item.manifest)?;
+    }
+
+    if let Err(e) = app.emit(events::EXTENSIONS_CHANGED, ()) {
+        error!("Failed to emit extensions_changed: {}", e);
+    }
+    Ok(ProvisionOutcome::Granted)
+}
+
+/// Enable + record the capability grant for `manifest`, then persist.
+/// The single grant-writing step both welcome paths (fresh install,
+/// already-on-disk) share. Caller holds the config lock.
+fn commit_grant_locked(
+    cfg: &mut crate::config::Config,
+    manifest: &extensions::ExtensionManifest,
+) -> Result<(), String> {
+    seed_grant(cfg, manifest);
+    cfg.save()
+        .map_err(|e| format!("Failed to save config: {}", e))
+}
+
+/// Pure mutation half of [`commit_grant_locked`]: flip the enable flag
+/// and record the grant from the manifest's requested permissions.
+fn seed_grant(cfg: &mut crate::config::Config, manifest: &extensions::ExtensionManifest) {
+    let raw_perms: Vec<String> = manifest.permissions.clone().unwrap_or_default();
+    let granted = extensions::normalize_permissions(&raw_perms, &manifest.id);
+    cfg.extension_states.insert(manifest.id.clone(), true);
+    cfg.extension_grants.insert(
+        manifest.id.clone(),
+        crate::config::ExtensionGrant {
+            granted,
+            approved_version: manifest.version.clone(),
+            approved_at: chrono::Utc::now().to_rfc3339(),
+        },
+    );
 }
 
 /// Install + commit in one go for the welcome flow.
@@ -167,25 +261,11 @@ fn install_and_commit_direct<R: tauri::Runtime>(
 
     // Fetch detail + zip + verify hash + extract.
     let item = runtime.block_on(welcome_store_install(&base_url, id))?;
-
-    let raw_perms: Vec<String> = item.manifest.permissions.clone().unwrap_or_default();
-    let granted = extensions::normalize_permissions(&raw_perms, &item.manifest.id);
-    let approved_version = item.manifest.version.clone();
     let installed_id = item.manifest.id.clone();
 
     {
         let mut cfg = config.lock_or_recover();
-        cfg.extension_states.insert(installed_id.clone(), true);
-        cfg.extension_grants.insert(
-            installed_id.clone(),
-            crate::config::ExtensionGrant {
-                granted: granted.clone(),
-                approved_version,
-                approved_at: chrono::Utc::now().to_rfc3339(),
-            },
-        );
-        cfg.save()
-            .map_err(|e| format!("Failed to save config: {}", e))?;
+        commit_grant_locked(&mut cfg, &item.manifest)?;
     }
 
     crate::telemetry::track(
@@ -267,4 +347,62 @@ async fn welcome_store_install(
         .map_err(|e| format!("Installation failed: {}", e))?;
     let _ = std::fs::remove_file(&zip_path);
     Ok(item)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manifest(id: &str, perms: &[&str]) -> extensions::ExtensionManifest {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "name": "__MSG_manifest.name__",
+            "version": "1.2.3",
+            "type": "extension",
+            "permissions": perms,
+        }))
+        .expect("test manifest must deserialize")
+    }
+
+    #[test]
+    fn seed_grant_enables_and_records_normalized_permissions() {
+        let mut cfg = crate::config::Config::default();
+        seed_grant(
+            &mut cfg,
+            &manifest("spotify", &["storage", "urls", "oauth"]),
+        );
+
+        assert_eq!(cfg.extension_states.get("spotify"), Some(&true));
+        let grant = cfg
+            .extension_grants
+            .get("spotify")
+            .expect("grant must be recorded");
+        assert_eq!(grant.granted, vec!["storage", "urls", "oauth"]);
+        assert_eq!(grant.approved_version, "1.2.3");
+        assert!(!grant.approved_at.is_empty());
+    }
+
+    #[test]
+    fn seed_grant_drops_unknown_capabilities() {
+        // normalize_permissions is authoritative: a typo'd or hostile
+        // capability in a manifest must not be stored as granted.
+        let mut cfg = crate::config::Config::default();
+        seed_grant(&mut cfg, &manifest("x", &["storage", "root_of_all_evil"]));
+        assert_eq!(
+            cfg.extension_grants.get("x").unwrap().granted,
+            vec!["storage"]
+        );
+    }
+
+    #[test]
+    fn seed_grant_records_empty_grant_for_permissionless_extensions() {
+        // A no-permissions extension still needs a grant RECORD — a
+        // missing record means "no user grant recorded" warnings and
+        // zero capabilities forever (the wiped-config bug).
+        let mut cfg = crate::config::Config::default();
+        seed_grant(&mut cfg, &manifest("math", &[]));
+        assert!(cfg.extension_grants.contains_key("math"));
+        assert!(cfg.extension_grants.get("math").unwrap().granted.is_empty());
+        assert_eq!(cfg.extension_states.get("math"), Some(&true));
+    }
 }
