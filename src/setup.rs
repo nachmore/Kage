@@ -184,10 +184,21 @@ pub fn install_deep_link_handler(app: &App) {
 /// Parse a `kage://...` URL and dispatch it. Today the only verb is
 /// `install`, so unknown shapes log + drop. Adding a new verb is a
 /// match arm here plus a frontend listener.
-fn handle_deep_link_url(app: &AppHandle, url: &url::Url) {
+/// Parsed intent of a `kage://` deep link. Extracted as pure data so
+/// the URL-shape and id-safety rules are unit-testable without an app.
+#[derive(Debug, PartialEq, Eq)]
+pub enum DeepLinkIntent {
+    /// `kage://install/<id>` (or `kage:install/<id>`) with a valid id.
+    Install(String),
+}
+
+/// Parse a deep link into an intent, or `None` for anything unexpected
+/// (wrong scheme, unknown verb, unsafe/empty id). Pure — the routing
+/// side effects live in `handle_deep_link_url`.
+pub fn parse_deep_link(url: &url::Url) -> Option<DeepLinkIntent> {
     if url.scheme() != "kage" {
         warn!("deep-link: ignoring unexpected scheme '{}'", url.scheme());
-        return;
+        return None;
     }
 
     // We accept both `kage://install/<id>` (host=install, path=/<id>)
@@ -224,8 +235,20 @@ fn handle_deep_link_url(app: &AppHandle, url: &url::Url) {
             let id = rest;
             if id.is_empty() || !is_safe_extension_id(&id) {
                 warn!("deep-link: install URL has invalid id '{}', ignoring", id);
-                return;
+                return None;
             }
+            Some(DeepLinkIntent::Install(id))
+        }
+        other => {
+            warn!("deep-link: unknown verb '{}' in URL '{}'", other, url);
+            None
+        }
+    }
+}
+
+fn handle_deep_link_url(app: &AppHandle, url: &url::Url) {
+    match parse_deep_link(url) {
+        Some(DeepLinkIntent::Install(id)) => {
             info!("deep-link: open store with install intent id='{}'", id);
             // The intent rides on the URL query param
             // (`store.html?tab=extensions&install=<id>`) for fresh
@@ -247,8 +270,8 @@ fn handle_deep_link_url(app: &AppHandle, url: &url::Url) {
                 }
             });
         }
-        other => {
-            warn!("deep-link: unknown verb '{}' in URL '{}'", other, url);
+        None => {
+            // parse_deep_link already logged the reason.
         }
     }
 }

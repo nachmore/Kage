@@ -418,6 +418,65 @@ fn pending_permission_state_survives_failed_dismissal() {
 }
 
 #[test]
+fn deep_link_parse_gates_unsafe_install_ids() {
+    // Security-adjacent boundary: kage://install/<id> arrives from the
+    // OS (any process can open a URL). The parse must accept the two
+    // legitimate URL shapes and reject traversal/injection junk before
+    // anything reaches the store window.
+    use kage::setup::{parse_deep_link, DeepLinkIntent};
+
+    let parse = |s: &str| parse_deep_link(&url::Url::parse(s).unwrap());
+
+    // Accepted shapes — host-parsed and opaque-path variants.
+    assert_eq!(
+        parse("kage://install/spotify"),
+        Some(DeepLinkIntent::Install("spotify".into()))
+    );
+    assert_eq!(
+        parse("kage:install/link-preview"),
+        Some(DeepLinkIntent::Install("link-preview".into()))
+    );
+
+    // Rejected: traversal, encoding tricks, wrong scheme/verb, empty.
+    for bad in [
+        "kage://install/../../../etc/passwd",
+        "kage://install/%2e%2e",
+        "kage://install/UPPER CASE",
+        "kage://install/",
+        "kage://uninstall/spotify",
+        "https://install/spotify",
+        "kage://install/-leading-dash",
+    ] {
+        assert_eq!(parse(bad), None, "must reject: {bad}");
+    }
+}
+
+#[test]
+fn welcome_window_shown_only_on_first_run() {
+    // First-run gating regression = every user sees the welcome screen
+    // on every launch, or new users never see the consent step (which
+    // gates telemetry). Window creation works headless on MockRuntime.
+    let app = mock_app();
+
+    // Completed first run → no welcome window, even after the helper's
+    // internal 500ms delay.
+    kage::setup::maybe_show_welcome_window(app.handle(), true);
+    std::thread::sleep(std::time::Duration::from_millis(900));
+    assert!(
+        app.get_webview_window("welcome").is_none(),
+        "welcome window must not appear when first_run_completed = true"
+    );
+
+    // Fresh install → welcome window appears.
+    kage::setup::maybe_show_welcome_window(app.handle(), false);
+    let shown = wait_for(3_000, || app.get_webview_window("welcome").is_some());
+    assert!(
+        shown,
+        "welcome window must appear when first_run_completed = false"
+    );
+}
+
+#[test]
 fn emit_audience_filters_respect_window_labels() {
     // event_targets exists because WebviewWindow::emit LOOKS targeted
     // but broadcasts (documented past bug: MESSAGE_COMPLETE not reaching
