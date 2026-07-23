@@ -592,6 +592,14 @@ const SWEEP_DENYLIST: &[(&str, &str)] = &[
     // and waits on its startup (hung 20s+ on the macOS runner; would
     // leave a stray python process behind anywhere it succeeded).
     ("pocket_tts_start", "spawns a real Python TTS server"),
+    (
+        "pocket_tts_check_install",
+        "spawns python subprocess probes (seconds, not millis)",
+    ),
+    (
+        "dump_thread_info",
+        "walks every OS thread via ToolHelp/Wdk (seconds, not millis)",
+    ),
 ];
 
 /// Commands whose empty-args invoke is expected to be rejected by arg
@@ -620,22 +628,43 @@ fn command_sweep_no_wiring_failures() {
     let webview = mock_webview(&app);
     let commands = all_commands();
 
-    // Per-command watchdog. A handler that blocks on a real OS service
-    // (WinRT brokers, subprocess waits — headless CI sessions hang where
-    // desktops answer) must surface as a NAMED failure, not wedge the
-    // whole job: pre-watchdog, one such command sat CI at "cargo test"
-    // for 40+ minutes with zero output. The invoke runs on a throwaway
-    // thread; on timeout the thread leaks (it's blocked in the OS call)
-    // and the test process reaps it at exit.
-    const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+    // Per-command watchdog + whole-sweep budget. A handler that blocks
+    // on a real OS service (WinRT brokers, subprocess waits — headless
+    // CI sessions hang where desktops answer) must surface as a NAMED
+    // failure, fast. On a mock runtime every legitimate command returns
+    // in milliseconds, so 3s is already generous. The budget bounds the
+    // pathological case (a headless runner where MANY OS commands hang:
+    // pre-budget that wedged CI 40+ minutes with zero output, because
+    // cargo captures test output until the test finishes) — when blown,
+    // we fail immediately and the panic dumps everything collected so
+    // far plus which commands were never reached.
+    //
+    // Timed-out invokes leak their thread (it's blocked in the OS call);
+    // the test process reaps them at exit.
+    const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+    const SWEEP_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
 
+    let sweep_start = std::time::Instant::now();
     let mut offenses: Vec<String> = Vec::new();
-    for cmd in &commands {
+    let mut hung: Vec<String> = Vec::new();
+    for (idx, cmd) in commands.iter().enumerate() {
         if SWEEP_DENYLIST.iter().any(|(name, _)| name == cmd) {
             continue;
         }
-        // Progress marker: with --nocapture this identifies a hanging
-        // command instantly (the last printed name is the culprit).
+        if sweep_start.elapsed() > SWEEP_BUDGET {
+            let remaining: Vec<_> = commands[idx..].iter().map(|s| s.as_str()).collect();
+            offenses.push(format!(
+                "  SWEEP BUDGET EXCEEDED after {} commands. Hung so far: [{}]. \
+                 Never reached: [{}]",
+                idx,
+                hung.join(", "),
+                remaining.join(", ")
+            ));
+            break;
+        }
+        // Progress marker: shows in the failure dump (cargo prints
+        // captured output for failed tests) — the last line names the
+        // command that was running when things went sideways.
         eprintln!("[sweep] {cmd}");
         let (tx, rx) = std::sync::mpsc::channel();
         let webview = webview.clone();
@@ -662,6 +691,7 @@ fn command_sweep_no_wiring_failures() {
         let outcome = match rx.recv_timeout(COMMAND_TIMEOUT) {
             Ok(outcome) => outcome,
             Err(_) => {
+                hung.push(cmd.clone());
                 offenses.push(format!(
                     "  {cmd}: HUNG (no response in {COMMAND_TIMEOUT:?}) — \
                      blocks on a real OS service headless? Add to SWEEP_DENYLIST \

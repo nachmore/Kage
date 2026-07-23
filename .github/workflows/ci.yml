@@ -246,8 +246,11 @@ jobs:
         # in a headless server session) previously wedged the job for
         # 40+ minutes until someone force-cancelled — which destroys
         # the logs. A step timeout fails WITH logs preserved, so the
-        # culprit binary is identifiable from the output.
-        timeout-minutes: 25
+        # culprit binary is identifiable from the output. The mock-app
+        # sweep additionally has its own 3s-per-command watchdog and
+        # 120s budget, so in-test hangs self-report long before this
+        # backstop fires.
+        timeout-minutes: 12
         run: cargo test --workspace
 
       # End-to-end startup smoke test: launch the freshly built binary
