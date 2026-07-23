@@ -492,8 +492,15 @@ jobs:
           # generator with nothing to diff against.
           fetch-depth: 0
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      # jq is preinstalled on GitHub's ubuntu runner images; the guard
+      # keeps us safe if a future image drops it, without paying the
+      # apt-get update round-trip (~10-30s) on every release.
+      - name: Ensure jq is installed
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          jq --version
 
       - name: Download artefacts
         uses: actions/download-artifact@v8
