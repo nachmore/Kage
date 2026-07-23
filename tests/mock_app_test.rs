@@ -607,6 +607,15 @@ const SWEEP_DENYLIST: &[(&str, &str)] = &[
         "show_inline_assist",
         "synthesizes real copy keystrokes + clipboard reads",
     ),
+    // poll_interval is Option → empty args deserialize, and the real
+    // body opens the activity sqlite DB in the USER's config dir and
+    // spawns a persistent foreground-window poller — hung 5s+ on the
+    // headless Windows runner, and would leave a live poller (plus a
+    // real activity.db write) anywhere it succeeded.
+    (
+        "start_activity_tracker",
+        "opens the real activity DB + spawns an OS foreground-window poller",
+    ),
 ];
 
 /// Commands whose empty-args invoke is expected to be rejected by arg
