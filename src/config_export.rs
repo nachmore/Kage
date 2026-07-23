@@ -37,8 +37,10 @@
 //!   - Window geometry (`chat_window_*`, `last_window_*`,
 //!     `launcher_*`) — ties to the source machine's monitor layout.
 //!     Local values preserved.
-//!   - `auto_start` — Windows Run-key registry entry. The exported
-//!     value is informational only; we re-apply via the OS on import.
+//!   - `auto_start` — OS-level autostart hook (scheduled task / Run
+//!     key on Windows, LaunchAgent on macOS, XDG autostart on Linux).
+//!     The exported value is informational only; we re-apply via the
+//!     OS on import.
 //!   - `last_extension_update_check`, `updates.last_check_time`,
 //!     `updates.last_updated_version` — cache fields that just trigger
 //!     fresh checks. Reset to None.

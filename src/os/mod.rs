@@ -62,7 +62,7 @@ pub use process::{
     release_kill_on_exit_job,
 };
 pub use shell::{open_in_editor, open_path, open_url, reveal_in_file_manager};
-pub use startup::{get_startup_enabled, set_startup_enabled};
+pub use startup::{get_startup_enabled, migrate_startup_mechanism, set_startup_enabled};
 pub use user::get_user_profile;
 
 /// Simulate Ctrl+V paste keystroke to the foreground window.

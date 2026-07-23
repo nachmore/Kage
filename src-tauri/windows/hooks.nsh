@@ -43,8 +43,24 @@
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
-  ; Remove startup registry entry on uninstall
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}"
+  ; Remove both autostart mechanisms on real uninstalls only. The
+  ; $UpdateMode guard matters: the uninstall section also runs during
+  ; auto-updates, and an unguarded delete here would wipe the user's
+  ; autostart preference on every silent update (the template's own
+  ; Run-key delete carries the same guard for the same reason).
+  ${If} $UpdateMode <> 1
+    ; Run-key entry (fallback mechanism — see src/os/windows/startup.rs)
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}"
+    ; Logon Scheduled Task (preferred mechanism). Task name is
+    ; "Kage Autorun for <user>" — MUST stay in sync with
+    ; TASK_NAME_PREFIX in startup.rs. Best-effort: /TIMEOUT so a wedged
+    ; schtasks can't hang the uninstall (same rule as KAGE_KILL_SIDECARS
+    ; above); result discarded because "task not found" is the common,
+    ; fine case.
+    ReadEnvStr $0 "USERNAME"
+    nsExec::Exec /TIMEOUT=10000 'schtasks /Delete /TN "Kage Autorun for $0" /F'
+    Pop $0
+  ${EndIf}
   ; Remove the MCP binary
   Delete "$INSTDIR\kage-computer-control-mcp.exe"
 

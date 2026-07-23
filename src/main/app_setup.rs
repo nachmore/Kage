@@ -57,6 +57,9 @@ pub fn configure(
             warn!("Failed to cleanup orphaned processes: {}", e);
         }
     });
+    // Off the main thread: spawns schtasks on Windows (no-op unless a
+    // legacy Run-key autostart needs upgrading to the Scheduled Task).
+    std::thread::spawn(os::migrate_startup_mechanism);
     os::install_kill_on_exit_job();
     webview_recovery::set_app_handle(app.handle().clone());
 
