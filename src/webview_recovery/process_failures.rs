@@ -1,3 +1,13 @@
+//! WebView2 process-failure detection: the `add_ProcessFailed` listener,
+//! last-failure bookkeeping, and the soft-recovery grace window.
+//!
+//! NOT an `src/os/`-style platform module despite being Windows-only in
+//! substance — it's built on `tauri::AppHandle` / `tauri::Webview`
+//! (the os layer is deliberately Tauri-free), and it compiles on every
+//! platform with the Windows-specific paths behind interior
+//! `#[cfg(target_os = "windows")]` gates so the parent can call its
+//! surface unconditionally.
+
 #[cfg(target_os = "windows")]
 use super::trigger_recovery;
 #[cfg(target_os = "windows")]

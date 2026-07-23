@@ -83,7 +83,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-mod windows;
+mod process_failures;
 
 /// Substring matched against incoming log records to detect the wedge.
 /// `0x8007139F` is `ERROR_INVALID_STATE` on Windows; pairing it with the
@@ -223,7 +223,7 @@ static STARTUP_STATE: std::sync::OnceLock<RecoveryState> = std::sync::OnceLock::
 /// per-window diagnostics just degrade to "we don't know which window
 /// wedged." The auto-restart path still runs.
 pub fn set_app_handle(app: tauri::AppHandle) {
-    windows::set_app_handle(app);
+    process_failures::set_app_handle(app);
 }
 
 /// Records the most recent ProcessFailed event observed across all
@@ -233,7 +233,7 @@ pub fn set_app_handle(app: tauri::AppHandle) {
 /// rather than atomics because the payload is two strings.
 /// Install the platform's webview process-failure listener for a webview.
 pub fn install_process_failed_for<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
-    windows::install_process_failed_for(webview);
+    process_failures::install_process_failed_for(webview);
 }
 
 /// Predicate the log shim asks for every record. Returns `true` if the
@@ -325,7 +325,7 @@ pub fn trigger_recovery() {
     // from the reload itself, NOT a fresh wedge. Suppress the process
     // restart and clear the trigger flag so a genuine wedge later can
     // still escalate.
-    if windows::within_soft_recovery_grace() {
+    if process_failures::within_soft_recovery_grace() {
         info!(
             "webview-recovery: wedge log fired inside soft-recovery grace — \
              skipping process restart (per-window reload owns this incident)"
@@ -345,7 +345,7 @@ pub fn trigger_recovery() {
     // If a ProcessFailed callback fired in the last few seconds, the
     // wedge we just observed is almost certainly the same incident —
     // log them side by side so the post-mortem doesn't need to guess.
-    windows::log_recent_process_failure();
+    process_failures::log_recent_process_failure();
 
     // Diagnostic: what does the manager think every webview's state is
     // right now? On a clean wedge one window's `is_visible()` will hang
@@ -353,7 +353,7 @@ pub fn trigger_recovery() {
     // also what the rebuild path (option 3) keys off to decide which
     // single window to destroy + recreate, so logging it now is both
     // forensics and a checkpoint.
-    windows::log_webview_snapshot();
+    process_failures::log_webview_snapshot();
 
     match prior {
         RecoveryState::Clean => {
