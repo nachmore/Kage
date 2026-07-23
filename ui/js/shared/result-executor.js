@@ -73,6 +73,19 @@ export async function executeResult(result, query, ctx) {
                 // any settle delay. Unknown/absent callback → silently
                 // ignored, so this stays backward-compatible.
                 ctx.onRefreshWidgets();
+            } else if (action.type === 'open_extension_settings') {
+                // Deep-link into the extension's OWN settings page (e.g.
+                // Spotify's "connect before saving a Client ID" error).
+                // The section id is derived from the host-stamped
+                // _extensionId — the extension supplies no target, so it
+                // can't navigate the user to any other settings section.
+                try {
+                    await invoke('open_settings_window', {
+                        section: `ext-${result._extensionId}`,
+                    });
+                } catch (e) {
+                    console.warn('open_extension_settings failed:', e);
+                }
             }
         }
         // Timer/stopwatch special handling

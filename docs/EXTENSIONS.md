@@ -500,6 +500,7 @@ Returned by `execute()`:
 | `open_path` | Open file/folder | `value: string` |
 | `send_prompt` | Send to AI agent | `value: string` |
 | `replace_input` | Replace the floating window input text and trigger a new search | `value: string` |
+| `open_extension_settings` | Open Settings deep-linked to this extension's own settings page (the target is derived from the extension's id by the host — an extension cannot navigate to any other section) | — |
 | `custom` | Extension handles it | `data: any` |
 
 ### Score Guidelines
