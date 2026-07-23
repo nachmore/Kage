@@ -600,6 +600,13 @@ const SWEEP_DENYLIST: &[(&str, &str)] = &[
         "dump_thread_info",
         "walks every OS thread via ToolHelp/Wdk (seconds, not millis)",
     ),
+    // No required args → the real body synthesizes a Cmd/Ctrl+C
+    // keystroke (selection capture) and reads the OS clipboard —
+    // blocks on headless macOS runners.
+    (
+        "show_inline_assist",
+        "synthesizes real copy keystrokes + clipboard reads",
+    ),
 ];
 
 /// Commands whose empty-args invoke is expected to be rejected by arg
@@ -641,7 +648,11 @@ fn command_sweep_no_wiring_failures() {
     //
     // Timed-out invokes leak their thread (it's blocked in the OS call);
     // the test process reaps them at exit.
-    const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+    // 5s not 3s: commands answer in millis on the mock runtime, but the
+    // sweep shares the machine with 12 parallel tests — a 3s cutoff
+    // produced boundary flakes under load without catching anything 5s
+    // doesn't.
+    const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
     const SWEEP_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
 
     let sweep_start = std::time::Instant::now();

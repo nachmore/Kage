@@ -241,16 +241,17 @@ jobs:
         # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
         # exhaustion on Windows; CI inherits that.
         #
-        # timeout-minutes: a warm test step takes ~5-8 min; a hung test
-        # (e.g. a command blocking on an OS service that never answers
-        # in a headless server session) previously wedged the job for
-        # 40+ minutes until someone force-cancelled — which destroys
-        # the logs. A step timeout fails WITH logs preserved, so the
-        # culprit binary is identifiable from the output. The mock-app
-        # sweep additionally has its own 3s-per-command watchdog and
-        # 120s budget, so in-test hangs self-report long before this
-        # backstop fires.
-        timeout-minutes: 12
+        # timeout-minutes: measured green runs take 2m17s (Windows) /
+        # 1m03s (macOS) — compilation happens in the build step above,
+        # so this is pure test execution. 5 min is >2x the slowest
+        # observed pass. A hung test (a command blocking on an OS
+        # service that never answers headless) previously wedged the
+        # job 40+ min until force-cancel — which destroys the logs; a
+        # step timeout fails WITH logs preserved so the culprit binary
+        # is identifiable. The mock-app sweep additionally has its own
+        # 3s-per-command watchdog + 120s budget, so in-test hangs
+        # self-report well before this backstop.
+        timeout-minutes: 5
         run: cargo test --workspace
 
       # End-to-end startup smoke test: launch the freshly built binary
