@@ -240,6 +240,14 @@ jobs:
         # non-default member, so bare `cargo test` would skip it).
         # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
         # exhaustion on Windows; CI inherits that.
+        #
+        # timeout-minutes: a warm test step takes ~5-8 min; a hung test
+        # (e.g. a command blocking on an OS service that never answers
+        # in a headless server session) previously wedged the job for
+        # 40+ minutes until someone force-cancelled — which destroys
+        # the logs. A step timeout fails WITH logs preserved, so the
+        # culprit binary is identifiable from the output.
+        timeout-minutes: 25
         run: cargo test --workspace
 
       # End-to-end startup smoke test: launch the freshly built binary
