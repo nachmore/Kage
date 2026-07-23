@@ -1,6 +1,7 @@
 import { sanitizeExtensionHtml, findExtActions } from '../extension-html-sanitizer.js';
 import { t, tHtml } from '../i18n.js';
 import { applyMixin } from '../mixin.js';
+import { extensionDisplay } from './i18n.js';
 
 const WIDGET_MIN_INTERVAL_MS = 1_000;
 const WIDGET_MAX_INTERVAL_MS = 24 * 3_600 * 1_000;
@@ -330,9 +331,10 @@ export function installExtensionUiMethods(ExtensionManager) {
                 notice.className = 'ext-widget-paused';
                 notice.style.cssText =
                     'padding:8px 12px;font-size:12px;color:var(--kage-text-muted);background:var(--kage-bg-input);border-radius:4px;display:flex;align-items:center;gap:8px;';
-                const extName =
-                    this.extensions.get(controller.extensionId)?.manifest?.name ||
-                    controller.extensionId;
+                const extName = extensionDisplay(
+                    this.extensions.get(controller.extensionId),
+                    controller.extensionId
+                ).name;
                 notice.innerHTML = tHtml('shared.extension.widget.paused_html', { name: extName });
                 const retry = document.createElement('a');
                 retry.href = '#';

@@ -33,6 +33,22 @@ export function applyManifestI18n(manifest, catalog, fallback) {
 }
 
 /**
+ * Human-readable display fields for a loaded extension entry (the
+ * `{ manifest, localizedManifest, … }` objects in `ExtensionManager.
+ * extensions`). Prefers the localized manifest; falls back to the wire
+ * manifest, then to `fallbackId`. Never returns a raw `__MSG_*__` token —
+ * if localisation failed (no `_locales/`, missing key), the id is a
+ * better label than the token. Use this at every display site instead
+ * of reading `manifest.name` directly.
+ */
+export function extensionDisplay(ext, fallbackId = '') {
+    const display = ext?.localizedManifest || ext?.manifest || {};
+    let name = display.name || fallbackId;
+    if (typeof name === 'string' && /^__MSG_.+__$/.test(name)) name = fallbackId || name;
+    return { name, icon: display.icon || '' };
+}
+
+/**
  * Resolve a single extension i18n key against a catalog (with EN fallback),
  * returning the localised message or `fallbackText` if the key is unknown.
  *

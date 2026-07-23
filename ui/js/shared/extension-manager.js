@@ -18,12 +18,13 @@
  */
 
 import { ExtensionSandboxPool } from './extension-sandbox-host.js';
-import { applyManifestI18n } from './extension-manager/i18n.js';
+import { applyManifestI18n, extensionDisplay } from './extension-manager/i18n.js';
 import { installExtensionSourceMethods } from './extension-manager/sources.js';
 import { installExtensionSearchMethods } from './extension-manager/search.js';
 import { installExtensionUiMethods } from './extension-manager/ui.js';
 export {
     applyManifestI18n,
+    extensionDisplay,
     fetchExtensionLocaleViaInvoke,
     fetchSharedSourcesViaInvoke,
     localizeManifestForPrompt,
@@ -251,10 +252,10 @@ export class ExtensionManager {
             try {
                 const tools = await ext.sandbox.call('getTools', {});
                 if (Array.isArray(tools) && tools.length > 0) {
-                    const display = ext.localizedManifest || ext.manifest;
+                    const display = extensionDisplay(ext, id);
                     result.push({
                         extensionId: id,
-                        extensionName: display.name || id,
+                        extensionName: display.name,
                         extensionIcon: display.icon || '🧩',
                         tools,
                     });
@@ -389,7 +390,7 @@ export class ExtensionManager {
             try {
                 const triggers = await ext.sandbox.call('getTriggers', {});
                 if (Array.isArray(triggers) && triggers.length > 0) {
-                    const display = ext.localizedManifest || ext.manifest;
+                    const display = extensionDisplay(ext, id);
                     defs.push({
                         extensionId: id,
                         extensionName: display.name,
