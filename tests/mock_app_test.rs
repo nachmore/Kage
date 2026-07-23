@@ -570,12 +570,23 @@ const SWEEP_DENYLIST: &[(&str, &str)] = &[
     ("quit_app", "calls std::process::exit"),
     ("restart_app", "respawns + std::process::exit"),
     ("download_and_install_update", "runs the OS installer"),
-    // -- class 2: blocking OS UI --
+    // -- class 2: blocking OS UI / OS services --
     ("pick_folder", "opens a native folder picker (rfd)"),
     ("capture_hotkey_combo", "blocks on real key capture"),
     (
         "check_for_update",
         "hits the real update endpoint over the network",
+    ),
+    // hours arg is Option → empty args deserialize and the command
+    // REALLY queries the WinRT appointment store, which blocks forever
+    // in a headless CI server session (wedged the Windows runner ~40min).
+    (
+        "get_calendar_events",
+        "queries the real OS calendar (WinRT broker hangs headless)",
+    ),
+    (
+        "get_user_info",
+        "spawns OS subprocesses for avatar/name lookup",
     ),
 ];
 
@@ -605,6 +616,15 @@ fn command_sweep_no_wiring_failures() {
     let webview = mock_webview(&app);
     let commands = all_commands();
 
+    // Per-command watchdog. A handler that blocks on a real OS service
+    // (WinRT brokers, subprocess waits — headless CI sessions hang where
+    // desktops answer) must surface as a NAMED failure, not wedge the
+    // whole job: pre-watchdog, one such command sat CI at "cargo test"
+    // for 40+ minutes with zero output. The invoke runs on a throwaway
+    // thread; on timeout the thread leaks (it's blocked in the OS call)
+    // and the test process reaps it at exit.
+    const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
     let mut offenses: Vec<String> = Vec::new();
     for cmd in &commands {
         if SWEEP_DENYLIST.iter().any(|(name, _)| name == cmd) {
@@ -613,22 +633,39 @@ fn command_sweep_no_wiring_failures() {
         // Progress marker: with --nocapture this identifies a hanging
         // command instantly (the last printed name is the culprit).
         eprintln!("[sweep] {cmd}");
-        // Panics inside a handler unwind through on_message; catch them
-        // so one bad command doesn't hide the rest of the sweep.
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            tauri::test::get_ipc_response(
-                &webview,
-                tauri::webview::InvokeRequest {
-                    cmd: cmd.clone(),
-                    callback: tauri::ipc::CallbackFn(0),
-                    error: tauri::ipc::CallbackFn(1),
-                    url: "http://tauri.localhost".parse().unwrap(),
-                    body: tauri::ipc::InvokeBody::default(),
-                    headers: Default::default(),
-                    invoke_key: tauri::test::INVOKE_KEY.to_string(),
-                },
-            )
-        }));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let webview = webview.clone();
+        let cmd_for_thread = cmd.clone();
+        std::thread::spawn(move || {
+            // Panics inside a handler unwind through on_message; catch
+            // them so one bad command doesn't hide the rest of the sweep.
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                tauri::test::get_ipc_response(
+                    &webview,
+                    tauri::webview::InvokeRequest {
+                        cmd: cmd_for_thread,
+                        callback: tauri::ipc::CallbackFn(0),
+                        error: tauri::ipc::CallbackFn(1),
+                        url: "http://tauri.localhost".parse().unwrap(),
+                        body: tauri::ipc::InvokeBody::default(),
+                        headers: Default::default(),
+                        invoke_key: tauri::test::INVOKE_KEY.to_string(),
+                    },
+                )
+            }));
+            let _ = tx.send(outcome);
+        });
+        let outcome = match rx.recv_timeout(COMMAND_TIMEOUT) {
+            Ok(outcome) => outcome,
+            Err(_) => {
+                offenses.push(format!(
+                    "  {cmd}: HUNG (no response in {COMMAND_TIMEOUT:?}) — \
+                     blocks on a real OS service headless? Add to SWEEP_DENYLIST \
+                     with a justification if so."
+                ));
+                continue;
+            }
+        };
         match outcome {
             Err(panic) => {
                 let msg = panic
