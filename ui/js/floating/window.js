@@ -27,6 +27,7 @@ export class WindowManager {
         this.isDragging = false; // user dragging the ghost
         this._animSeq = 0;
         this._animFrame = null;
+        this._inputAnimCleanup = null; // pending animateInputResize cleanup, if mid-flight
         this._scheduled = false;
         this._suspended = false; // pause auto-resize (e.g. permission modal)
         this._lastTarget = 0; // last target we actually requested
@@ -179,6 +180,27 @@ export class WindowManager {
         const naturalLogical = this._measureNaturalHeight();
         const naturalPhys = Math.round(naturalLogical * scale);
 
+        // Sentinel: catch a stuck-large window. If we're measuring a tall
+        // natural height but the content area is effectively empty (no real
+        // response/suggestions rendered), something is inflating the measure
+        // — historically an orphaned inline `height`/`flex:none` lock left by
+        // an interrupted animateInputResize. Warn with the offending inline
+        // styles so it's diagnosable from app.jsonl rather than a silent
+        // "why is the launcher huge" report.
+        if (naturalLogical > DEFAULT_HEIGHT * 3) {
+            const ca = document.getElementById('contentArea');
+            const rt = document.getElementById('responseText');
+            const suggVisible = !!appSuggestions?.classList.contains('visible');
+            const hasContent = !!rt?.textContent.trim() || suggVisible;
+            if (ca && !hasContent && (ca.style.height || ca.style.flex === 'none')) {
+                console.warn(
+                    `[WindowManager] tall natural height (${Math.round(naturalLogical)}px) with empty ` +
+                        `content — leaked contentArea lock? flex=${ca.style.flex || '(unset)'} ` +
+                        `height=${ca.style.height || '(unset)'} inputAnimating=${this._inputAnimating}`
+                );
+            }
+        }
+
         let target;
         if (this.userSetHeight) {
             // Honor user's manual size, but grow past it if content needs more.
@@ -306,6 +328,12 @@ export class WindowManager {
             cancelAnimationFrame(this._animFrame);
             this._animFrame = null;
         }
+        // A previous input animation may still be mid-flight (two line-wraps
+        // within the 80ms window). Cancelling its rAF above skips its cleanup,
+        // so restore its locks now — otherwise the capture below would read the
+        // still-locked `flex:none; height:<px>` as this animation's "originals"
+        // and restore to them, leaking the lock forever.
+        if (this._inputAnimCleanup) this._inputAnimCleanup();
         const me = ++this._animSeq;
         this._inputAnimating = true;
 
@@ -351,7 +379,18 @@ export class WindowManager {
         const duration = 80;
         const start = performance.now();
 
+        // Idempotent — may be invoked either by the animation finishing/aborting
+        // OR out-of-band by suspendAutoResize() when a permission modal opens
+        // mid-animation and cancels our rAF loop. Without the out-of-band path,
+        // the inline `height`/`flex:none` lock on content-area would be orphaned:
+        // an empty `flex:none` element with an explicit height still reports that
+        // height via scrollHeight, so _measureNaturalHeight would stay stuck at
+        // the large value forever — the window freezes large with no content.
+        let cleanedUp = false;
         const cleanup = () => {
+            if (cleanedUp) return;
+            cleanedUp = true;
+            this._inputAnimCleanup = null;
             this._lastTarget = toOS;
             this._inputAnimating = false;
             for (const item of lockedItems) {
@@ -361,6 +400,7 @@ export class WindowManager {
             }
             input.style.overflowY = inputPrevOverflowY;
         };
+        this._inputAnimCleanup = cleanup;
 
         return new Promise((resolve) => {
             const step = (now) => {
@@ -418,6 +458,11 @@ export class WindowManager {
             this._animFrame = null;
         }
         this._animSeq++; // invalidate any in-flight step()
+        // If animateInputResize was mid-flight, cancelling its rAF loop above
+        // means its own cleanup() never runs — restore the content-area /
+        // suggestions inline locks now, or they'd freeze the window at the
+        // in-progress size (empty content, huge bubble) until a full reset.
+        if (this._inputAnimCleanup) this._inputAnimCleanup();
     }
 
     resumeAutoResize() {
