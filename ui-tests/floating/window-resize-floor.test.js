@@ -24,19 +24,23 @@ function mgr() {
 }
 
 describe('WindowManager._resizeFloor', () => {
-    // The drag floor is now the collapsed launcher height, independent of
-    // content. Regression: it used to floor at the natural content height,
-    // which meant a response made the window un-shrinkable (floor == content)
-    // and a long response pinned the floor to the whole screen (floor ==
-    // maxPhys), locking height entirely. Content taller than the window
-    // scrolls inside .content-area instead.
+    // Pure step: scale a logical-px floor to physical px, never below the
+    // collapsed launcher height. The logical floor itself (input + bars,
+    // plus one response line when a response shows) is measured from the DOM
+    // in _measureResizeFloorLogical, which jsdom can't exercise.
 
-    it('floors at the collapsed launcher height regardless of content', () => {
-        expect(mgr()._resizeFloor(1)).toBe(DEFAULT_HEIGHT);
+    it('scales the logical floor by the device pixel ratio', () => {
+        expect(mgr()._resizeFloor(300, 1)).toBe(300);
+        expect(mgr()._resizeFloor(300, 2)).toBe(600);
+    });
+
+    it('never goes below the collapsed launcher height', () => {
+        // A tiny logical floor (e.g. bubble not laid out yet) → launcher min.
+        expect(mgr()._resizeFloor(40, 1)).toBe(DEFAULT_HEIGHT);
     });
 
     it('applies the launcher minimum in physical px under DPI scaling', () => {
-        expect(mgr()._resizeFloor(2)).toBe(DEFAULT_HEIGHT * 2);
+        expect(mgr()._resizeFloor(40, 2)).toBe(DEFAULT_HEIGHT * 2);
     });
 });
 

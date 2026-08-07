@@ -63,28 +63,73 @@ export class WindowManager {
     }
 
     /**
-     * The minimum physical height the manual resize handle will allow:
-     * the collapsed launcher height, regardless of content.
+     * True when a real response is showing (as opposed to an empty or
+     * banner-only content-area). Governs whether the resize floor reserves
+     * a line of response space.
+     */
+    _hasResponseContent() {
+        const rt = document.getElementById('responseText');
+        return !!rt && rt.textContent.trim().length > 0;
+    }
+
+    /**
+     * Logical-px minimum the manual resize handle should allow, per the
+     * layout: the fixed chrome (input box + every floating bar — offline,
+     * extension/status bars, toolbar, suggestions, loading dots) plus, when
+     * a response is showing, one input-box-height of response content (with
+     * the content-area's own padding so the reserved line isn't cramped).
      *
-     * It used to floor at the *natural content height* so a multi-line
-     * response couldn't be clipped and the next reflow couldn't snap the
-     * window back up. Both concerns are now moot: content taller than the
-     * window scrolls inside `.content-area` (overflow-y:auto, capped at
-     * maxPhys), and `_targetHeight` honours `userSetHeight` exactly instead
-     * of growing past it. That old floor was actively harmful — with a
-     * response showing, it pinned the drag at the content height (so the
-     * window couldn't be shrunk), and with a long response it resolved to
-     * the whole screen (locking height entirely, leaving only width). The
-     * floor is now simply the launcher minimum; the user can always drag
-     * back down and the content scrolls.
+     * An empty / banner-only content-area reserves nothing, so after `clear`
+     * the floor is just input + bars. A response present adds exactly one
+     * line — content taller than that scrolls inside `.content-area`
+     * (overflow-y:auto), so the window can still be dragged down close to
+     * the input while the answer stays scrollable.
      *
-     * Pure arithmetic, extracted for unit testing (jsdom has no real layout).
+     * Layout-dependent (reads offsetHeight / computed padding) so, like
+     * `_measureNaturalHeight`, it isn't unit-tested — jsdom has no layout.
+     * The scale + launcher-minimum step is factored into the pure
+     * `_resizeFloor` below.
      *
+     * @returns {number} logical-px floor for the drag
+     */
+    _measureResizeFloorLogical() {
+        const bubble = document.querySelector('.speech-bubble');
+        if (!bubble) return DEFAULT_HEIGHT;
+        const contentArea = document.getElementById('contentArea');
+
+        // Fixed chrome: every bubble flow-child except the response area.
+        let sum = 0;
+        for (const child of bubble.children) {
+            if (child === contentArea) continue;
+            sum += this._measureFlow(child);
+        }
+
+        // Reserve one input-box-height of response when a response is showing.
+        if (contentArea && this._hasResponseContent()) {
+            const input = document.getElementById('promptInput');
+            const inputH = input ? input.offsetHeight : 0;
+            const cs = getComputedStyle(contentArea);
+            const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+            sum += inputH + pad;
+        }
+
+        return sum + BODY_PADDING;
+    }
+
+    /**
+     * Convert a logical-px floor to physical px, never below the collapsed
+     * launcher height. Pure arithmetic, extracted for unit testing (jsdom
+     * has no real layout).
+     *
+     * @param {number} floorLogical - logical-px floor (see _measureResizeFloorLogical)
      * @param {number} scaleFactor - device pixel ratio
      * @returns {number} physical-px floor for the drag
      */
-    _resizeFloor(scaleFactor) {
-        return Math.floor(DEFAULT_HEIGHT * scaleFactor);
+    _resizeFloor(floorLogical, scaleFactor) {
+        return Math.max(
+            Math.floor(DEFAULT_HEIGHT * scaleFactor),
+            Math.floor(floorLogical * scaleFactor)
+        );
     }
 
     /**
@@ -697,11 +742,11 @@ export class WindowManager {
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
             const minWidth = Math.floor(570 * scaleFactor);
-            // Floor the drag at the collapsed launcher height. Content taller
-            // than the window scrolls inside .content-area, and _targetHeight
-            // honours userSetHeight exactly, so the user can always shrink back
-            // to the launcher minimum without clipping or snap-back.
-            const minHeight = this._resizeFloor(scaleFactor);
+            // Floor the drag at [input + floating bars] plus one line of
+            // response when a response is showing. Content taller than that
+            // scrolls inside .content-area, and _targetHeight honours
+            // userSetHeight exactly, so there's no clipping or snap-back.
+            const minHeight = this._resizeFloor(this._measureResizeFloorLogical(), scaleFactor);
             const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
             const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + dy));
             this.userSetHeight = newHeight;
