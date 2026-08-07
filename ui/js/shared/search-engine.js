@@ -243,10 +243,14 @@ async function _keywordHints(query) {
  */
 export function looksLikeFileSearch(query) {
     if (!query) return false;
+    // A filename or glob has no spaces; a natural-language sentence does.
+    // Without this guard the trailing `?` in "…markdown rendering?" (or any
+    // sentence ending in a question mark, or containing `*`) was read as a
+    // glob wildcard and the whole sentence hit the disk on every keystroke.
+    const noSpace = !query.includes(' ');
     return (
-        /\.\w{0,6}$/.test(query) ||
-        query.includes('*') ||
-        query.includes('?') ||
+        (noSpace && /\.\w{0,6}$/.test(query)) ||
+        (noSpace && (query.includes('*') || query.includes('?'))) ||
         query.toLowerCase().startsWith('>find ')
     );
 }
@@ -584,7 +588,11 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     const trimmedQuery = query.trim();
     const findPrefix = trimmedQuery.toLowerCase().startsWith('>find ');
     const hasExtension = /\.\w{1,6}$/.test(trimmedQuery) && !trimmedQuery.includes(' ');
-    const hasWildcard = trimmedQuery.includes('*') || trimmedQuery.includes('?');
+    // Only treat `*`/`?` as a glob when the query has no spaces — otherwise a
+    // sentence ending in `?` (or containing `*`) would hit the disk. A real
+    // glob (`report_*.pdf`, `2024?.txt`) never contains spaces.
+    const hasWildcard =
+        !trimmedQuery.includes(' ') && (trimmedQuery.includes('*') || trimmedQuery.includes('?'));
     if (findPrefix || hasExtension || hasWildcard) {
         const fileQuery = findPrefix
             ? trimmedQuery.replace(/^>?find\s+/i, '').trim()

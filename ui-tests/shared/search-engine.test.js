@@ -70,6 +70,14 @@ describe('looksLikeFileSearch', () => {
     expect(looksLikeFileSearch('calculator')).toBe(false);
   });
 
+  it('is false for a natural-language sentence ending in a question mark', () => {
+    // Regression: the trailing `?` was read as a glob wildcard, so the whole
+    // sentence hit the disk on every keystroke and surfaced random files.
+    expect(looksLikeFileSearch('can you generate 500 lines of markdown?')).toBe(false);
+    expect(looksLikeFileSearch('what is 2 * 3')).toBe(false); // `*` mid-sentence
+    expect(looksLikeFileSearch('is this a file.txt or not')).toBe(false); // ext but has spaces
+  });
+
   it('is false for empty / nullish input', () => {
     expect(looksLikeFileSearch('')).toBe(false);
     expect(looksLikeFileSearch(undefined)).toBe(false);
