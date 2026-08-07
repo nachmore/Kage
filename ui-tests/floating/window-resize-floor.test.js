@@ -24,37 +24,19 @@ function mgr() {
 }
 
 describe('WindowManager._resizeFloor', () => {
-    it('floors at the natural content height (response cannot be clipped)', () => {
-        // A 400px-tall response + input at scale 1 must not be shrinkable
-        // below 400px.
-        const floor = mgr()._resizeFloor(400, 2000, 1);
-        expect(floor).toBe(400);
-    });
+    // The drag floor is now the collapsed launcher height, independent of
+    // content. Regression: it used to floor at the natural content height,
+    // which meant a response made the window un-shrinkable (floor == content)
+    // and a long response pinned the floor to the whole screen (floor ==
+    // maxPhys), locking height entirely. Content taller than the window
+    // scrolls inside .content-area instead.
 
-    it('never goes below the collapsed launcher height', () => {
-        // Tiny natural height (just the launcher, no response) → floor is the
-        // launcher default, not something smaller.
-        const floor = mgr()._resizeFloor(40, 2000, 1);
-        expect(floor).toBe(DEFAULT_HEIGHT);
-    });
-
-    it('caps the floor at the screen ceiling for tall (scrolling) responses', () => {
-        // A response taller than the screen already scrolls inside
-        // content-area, so the user must be able to shrink down to the cap.
-        const floor = mgr()._resizeFloor(5000, 900, 1);
-        expect(floor).toBe(900);
-    });
-
-    it('scales the content floor by the device pixel ratio', () => {
-        // 300 logical px at 2x DPI → 600 physical px floor.
-        const floor = mgr()._resizeFloor(300, 4000, 2);
-        expect(floor).toBe(600);
+    it('floors at the collapsed launcher height regardless of content', () => {
+        expect(mgr()._resizeFloor(1)).toBe(DEFAULT_HEIGHT);
     });
 
     it('applies the launcher minimum in physical px under DPI scaling', () => {
-        // No response: floor is DEFAULT_HEIGHT * scale.
-        const floor = mgr()._resizeFloor(40, 4000, 2);
-        expect(floor).toBe(DEFAULT_HEIGHT * 2);
+        expect(mgr()._resizeFloor(2)).toBe(DEFAULT_HEIGHT * 2);
     });
 });
 
@@ -89,10 +71,10 @@ describe('WindowManager._suggestionCap', () => {
 });
 
 describe('WindowManager._targetHeight', () => {
-    // Regression: with no maxPhys clamp on the userSetHeight branch, a long
-    // answer grew the window unbounded (observed 8000px+) once it had ever
-    // been manually resized. Content-driven growth must always cap at the
-    // screen ceiling — the response scrolls inside content-area past it.
+    // No manual size: auto-fit content, floored at the launcher minimum and
+    // capped at the ceiling. A long answer (8000px) caps at maxPhys — past it
+    // the response scrolls inside content-area. (Regression: the pre-cap code
+    // grew unbounded to 8000px+ once manually resized.)
 
     it('caps content-driven growth at the ceiling (no user size)', () => {
         const m = mgr();
@@ -100,28 +82,32 @@ describe('WindowManager._targetHeight', () => {
         expect(m._targetHeight(8000, 76, 900)).toBe(900);
     });
 
-    it('caps content-driven growth at the ceiling even after a manual resize', () => {
-        const m = mgr();
-        m.userSetHeight = 600; // user dragged the window to 600px
-        // A 500-line answer measures ~8000px — must still stop at the ceiling.
-        expect(m._targetHeight(8000, 76, 900)).toBe(900);
-    });
-
-    it('honors the user-dragged size as a floor when content is short', () => {
-        const m = mgr();
-        m.userSetHeight = 600;
-        expect(m._targetHeight(300, 76, 900)).toBe(600);
-    });
-
-    it('respects a manual size larger than the ceiling', () => {
-        const m = mgr();
-        m.userSetHeight = 1200; // user explicitly dragged past 65%
-        expect(m._targetHeight(300, 76, 900)).toBe(1200);
-    });
-
     it('floors at the collapsed launcher minimum with no user size', () => {
         const m = mgr();
         m.userSetHeight = null;
         expect(m._targetHeight(40, 76, 900)).toBe(76);
+    });
+
+    it('fits content between the floor and ceiling with no user size', () => {
+        const m = mgr();
+        m.userSetHeight = null;
+        expect(m._targetHeight(500, 76, 900)).toBe(500);
+    });
+
+    // Manual size set: honour it EXACTLY, regardless of content. The window is
+    // a fixed size the user chose; content scrolls within it. We must NOT grow
+    // to fit content — that snap-to-content was what jumped the window back to
+    // full-screen the instant the user tried to shrink it below a long answer.
+
+    it('honours a manual size exactly when content is taller', () => {
+        const m = mgr();
+        m.userSetHeight = 400; // user shrank to 400px…
+        expect(m._targetHeight(8000, 76, 900)).toBe(400); // …despite an 8000px response
+    });
+
+    it('honours a manual size exactly when content is shorter', () => {
+        const m = mgr();
+        m.userSetHeight = 600;
+        expect(m._targetHeight(300, 76, 900)).toBe(600);
     });
 });

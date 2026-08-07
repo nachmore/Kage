@@ -63,32 +63,28 @@ export class WindowManager {
     }
 
     /**
-     * The minimum physical height the manual resize handle will allow.
+     * The minimum physical height the manual resize handle will allow:
+     * the collapsed launcher height, regardless of content.
      *
-     * Floors the drag at the natural content height (full sum of the bubble's
-     * flow children — response area + extension bars + input + padding) so a
-     * multi-line response can't be clipped to its first line, and so the next
-     * reflow can't snap the window back up (`_applyNaturalHeight` grows past
-     * `userSetHeight` when content needs more room — if the floor already
-     * equals that, there's nothing to snap from).
-     *
-     * Capped at `maxPhys`: a response taller than the screen ceiling already
-     * scrolls inside `.content-area`, so the user must still be able to shrink
-     * down to the cap. Never goes below the collapsed launcher height.
+     * It used to floor at the *natural content height* so a multi-line
+     * response couldn't be clipped and the next reflow couldn't snap the
+     * window back up. Both concerns are now moot: content taller than the
+     * window scrolls inside `.content-area` (overflow-y:auto, capped at
+     * maxPhys), and `_targetHeight` honours `userSetHeight` exactly instead
+     * of growing past it. That old floor was actively harmful — with a
+     * response showing, it pinned the drag at the content height (so the
+     * window couldn't be shrunk), and with a long response it resolved to
+     * the whole screen (locking height entirely, leaving only width). The
+     * floor is now simply the launcher minimum; the user can always drag
+     * back down and the content scrolls.
      *
      * Pure arithmetic, extracted for unit testing (jsdom has no real layout).
      *
-     * @param {number} naturalLogical - logical-px natural content height
-     * @param {number} maxPhys - physical-px screen ceiling
      * @param {number} scaleFactor - device pixel ratio
      * @returns {number} physical-px floor for the drag
      */
-    _resizeFloor(naturalLogical, maxPhys, scaleFactor) {
-        const contentFloor = Math.max(
-            Math.floor(DEFAULT_HEIGHT * scaleFactor),
-            Math.floor(naturalLogical * scaleFactor)
-        );
-        return Math.min(Math.floor(maxPhys), contentFloor);
+    _resizeFloor(scaleFactor) {
+        return Math.floor(DEFAULT_HEIGHT * scaleFactor);
     }
 
     /**
@@ -113,16 +109,19 @@ export class WindowManager {
     /**
      * Resolve the physical-px window target from the measured content height.
      *
-     * Both branches clamp content-driven growth at `maxPhys` (the screen
-     * ceiling, ~65% of the monitor) — beyond it the response scrolls inside
-     * `.content-area` (overflow-y:auto). The only difference is the floor:
-     * with a user-dragged size we honour it (so the window doesn't snap
-     * smaller than they asked), otherwise the collapsed launcher minimum.
-     *
-     * Regression: the `userSetHeight` branch used to be
-     * `max(userSetHeight, naturalPhys)` with NO `maxPhys` clamp, so once the
-     * window had ever been manually resized a long answer grew it unbounded
-     * (observed: 8000px+ and climbing) instead of capping at the ceiling.
+     * Two regimes:
+     *   - No manual size: auto-fit the content, floored at the collapsed
+     *     launcher minimum and capped at `maxPhys` (~65% of the monitor).
+     *     Past the cap the response scrolls inside `.content-area`
+     *     (overflow-y:auto).
+     *   - Manual size set (`userSetHeight`): honour it EXACTLY. The user has
+     *     chosen a fixed window height; content scrolls within it. We do NOT
+     *     grow past it to fit content — that snap-to-content was what made a
+     *     long response jump the window back to full-screen the instant the
+     *     user tried to shrink it, and (with the earlier missing cap) grew it
+     *     unbounded. `userSetHeight` is already clamped to
+     *     [DEFAULT_HEIGHT, monitorHeight] by the resize handle, so no runaway
+     *     and no sub-launcher size is possible here.
      *
      * Pure arithmetic, extracted for unit testing (jsdom has no real layout).
      *
@@ -132,8 +131,8 @@ export class WindowManager {
      * @returns {number} physical-px window target
      */
     _targetHeight(naturalPhys, minPhys, maxPhys) {
-        const floor = this.userSetHeight || minPhys;
-        return Math.max(floor, Math.min(maxPhys, naturalPhys));
+        if (this.userSetHeight) return this.userSetHeight;
+        return Math.max(minPhys, Math.min(maxPhys, naturalPhys));
     }
 
     _measureFlow(el) {
@@ -698,17 +697,11 @@ export class WindowManager {
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
             const minWidth = Math.floor(570 * scaleFactor);
-            // Floor the drag at the natural height — the full sum of the
-            // bubble's flow children (response content area + extension bars +
-            // input + padding). Using only the input height let the user drag
-            // down until a multi-line response was clipped to its first line;
-            // worse, the next reflow (e.g. on keystroke) snapped the window
-            // back up to naturalPhys, since _applyNaturalHeight() grows past
-            // userSetHeight when content needs more room. Flooring here means
-            // userSetHeight can never be smaller than the content needs, so
-            // there's nothing to snap back from.
-            const minContentH = this._measureNaturalHeight();
-            const minHeight = this._resizeFloor(minContentH, maxHeight, scaleFactor);
+            // Floor the drag at the collapsed launcher height. Content taller
+            // than the window scrolls inside .content-area, and _targetHeight
+            // honours userSetHeight exactly, so the user can always shrink back
+            // to the launcher minimum without clipping or snap-back.
+            const minHeight = this._resizeFloor(scaleFactor);
             const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
             const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + dy));
             this.userSetHeight = newHeight;
