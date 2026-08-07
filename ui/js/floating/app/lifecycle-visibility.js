@@ -226,6 +226,17 @@ export const LifecycleVisibilityMethods = {
             }
             await this.appWindow.hide();
             this.banner.dismiss();
+            // Forget a manual resize made on the empty launcher. Resizing with
+            // no response stretches the input panel; that's fine while open,
+            // but it shouldn't survive a hide/show — the launcher should come
+            // back at its natural (input + bars) height. When a response IS
+            // showing, the manual size is intentional (e.g. dragged bigger to
+            // read a long answer) and is preserved. resizeWindow() snaps the
+            // now-hidden window back so the next show paints at natural height.
+            if (!this.windowManager._hasResponseContent()) {
+                this.windowManager.userSetHeight = null;
+                this.windowManager.resizeWindow();
+            }
             // Pause work that doesn't need to run while hidden.
             // - Mascot animation: ticks every ~120-150ms; over a long
             //   idle session that's real CPU we can give back to the

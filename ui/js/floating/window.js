@@ -66,8 +66,19 @@ export class WindowManager {
      * True when a real response is showing (as opposed to an empty or
      * banner-only content-area). Governs whether the resize floor reserves
      * a line of response space.
+     *
+     * Keys off the content-area being `.visible` AND carrying response text —
+     * NOT `responseText.textContent` alone. `resetUI()` (clear-ux, hide/show)
+     * removes `.visible` but leaves the last answer's text in the DOM, so a
+     * textContent-only check stayed true after a reset and the floor kept
+     * reserving a response line — the empty launcher then refused to shrink
+     * back to input height. Banner-only mode isn't a response either.
      */
     _hasResponseContent() {
+        const ca = document.getElementById('contentArea');
+        if (!ca?.classList.contains('visible') || ca.classList.contains('banner-only')) {
+            return false;
+        }
         const rt = document.getElementById('responseText');
         return !!rt && rt.textContent.trim().length > 0;
     }

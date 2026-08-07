@@ -14,7 +14,7 @@
  * handler can't run under jsdom (no real layout → offsetHeight is 0).
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { WindowManager } from '../../ui/js/floating/window.js';
 
 const DEFAULT_HEIGHT = 76; // keep in sync with window.js
@@ -22,6 +22,49 @@ const DEFAULT_HEIGHT = 76; // keep in sync with window.js
 function mgr() {
     return new WindowManager(async () => {});
 }
+
+/** Build the content-area / response-text DOM the resize floor keys off. */
+function setupContentDom({ visible, bannerOnly, text }) {
+    const ca = document.createElement('div');
+    ca.id = 'contentArea';
+    if (visible) ca.classList.add('visible');
+    if (bannerOnly) ca.classList.add('banner-only');
+    const rt = document.createElement('div');
+    rt.id = 'responseText';
+    rt.textContent = text || '';
+    ca.appendChild(rt);
+    document.body.appendChild(ca);
+    return { ca, rt };
+}
+
+describe('WindowManager._hasResponseContent', () => {
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('is true when the content-area is visible and has response text', () => {
+        setupContentDom({ visible: true, text: 'hello' });
+        expect(mgr()._hasResponseContent()).toBe(true);
+    });
+
+    it('is false when the content-area is hidden, even if stale text lingers', () => {
+        // Regression: resetUI() removes `.visible` but leaves the last answer's
+        // text in the DOM. A textContent-only check stayed true, so the floor
+        // kept reserving a response line and the empty launcher couldn't shrink.
+        setupContentDom({ visible: false, text: 'stale answer from before' });
+        expect(mgr()._hasResponseContent()).toBe(false);
+    });
+
+    it('is false in banner-only mode (a banner is not a response)', () => {
+        setupContentDom({ visible: true, bannerOnly: true, text: '' });
+        expect(mgr()._hasResponseContent()).toBe(false);
+    });
+
+    it('is false when visible but empty', () => {
+        setupContentDom({ visible: true, text: '   ' });
+        expect(mgr()._hasResponseContent()).toBe(false);
+    });
+});
 
 describe('WindowManager._resizeFloor', () => {
     // Pure step: scale a logical-px floor to physical px, never below the
