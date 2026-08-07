@@ -159,25 +159,47 @@ export class WindowManager {
      *     launcher minimum and capped at `maxPhys` (~65% of the monitor).
      *     Past the cap the response scrolls inside `.content-area`
      *     (overflow-y:auto).
-     *   - Manual size set (`userSetHeight`): honour it EXACTLY. The user has
-     *     chosen a fixed window height; content scrolls within it. We do NOT
-     *     grow past it to fit content — that snap-to-content was what made a
-     *     long response jump the window back to full-screen the instant the
-     *     user tried to shrink it, and (with the earlier missing cap) grew it
-     *     unbounded. `userSetHeight` is already clamped to
-     *     [DEFAULT_HEIGHT, monitorHeight] by the resize handle, so no runaway
-     *     and no sub-launcher size is possible here.
+     *   - Manual size set (`userSetHeight`): honour it as the budget for
+     *     everything EXCEPT the suggestions dropdown, then add the live
+     *     dropdown height on top (still capped at `maxPhys`). The dropdown is
+     *     transient typeahead — it must expand the window as the user types
+     *     and collapse back when the list closes, rather than eat into the
+     *     size they chose for the response. Response content still scrolls
+     *     within the budget; we do NOT grow to fit it (that snap-to-content
+     *     was what jumped the window to full-screen the instant the user
+     *     tried to shrink below a long answer). `userSetHeight` is captured
+     *     dropdown-free by the resize handle, so adding `suggestionsPhys`
+     *     here can't double-count.
      *
      * Pure arithmetic, extracted for unit testing (jsdom has no real layout).
      *
      * @param {number} naturalPhys - physical-px measured content height
      * @param {number} minPhys - physical-px collapsed launcher minimum
      * @param {number} maxPhys - physical-px screen ceiling
+     * @param {number} suggestionsPhys - physical-px of the visible dropdown (0 if hidden)
      * @returns {number} physical-px window target
      */
-    _targetHeight(naturalPhys, minPhys, maxPhys) {
-        if (this.userSetHeight) return this.userSetHeight;
+    _targetHeight(naturalPhys, minPhys, maxPhys, suggestionsPhys = 0) {
+        if (this.userSetHeight) {
+            return Math.max(minPhys, Math.min(maxPhys, this.userSetHeight + suggestionsPhys));
+        }
         return Math.max(minPhys, Math.min(maxPhys, naturalPhys));
+    }
+
+    /**
+     * Physical-px height the visible suggestions dropdown contributes (0 when
+     * hidden). Callers add this to `userSetHeight` so the transient typeahead
+     * list expands/collapses the window on top of the user's chosen size, and
+     * the resize handle subtracts it when capturing a manual resize so the
+     * stored budget stays dropdown-free.
+     *
+     * @param {number} scale - device pixel ratio
+     * @returns {number} physical-px dropdown height
+     */
+    _suggestionsPhys(scale) {
+        const el = document.getElementById('appSuggestions');
+        if (!el?.classList.contains('visible')) return 0;
+        return Math.round(this._measureFlow(el) * scale);
     }
 
     _measureFlow(el) {
@@ -271,7 +293,12 @@ export class WindowManager {
             }
         }
 
-        let target = this._targetHeight(naturalPhys, minPhys, maxPhys);
+        // The dropdown expands the window ON TOP OF a user-set budget (it's
+        // transient typeahead), so it's added to userSetHeight rather than
+        // eating into it. Measured here (maxHeight cleared above) so it's the
+        // uncapped list height, consistent with naturalPhys.
+        const suggestionsPhys = this._suggestionsPhys(scale);
+        let target = this._targetHeight(naturalPhys, minPhys, maxPhys, suggestionsPhys);
 
         // If suggestions list would push us past the cap, let it scroll.
         if (
@@ -749,7 +776,13 @@ export class WindowManager {
             const minHeight = this._resizeFloor(this._measureResizeFloorLogical(), scaleFactor);
             const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
             const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + dy));
-            this.userSetHeight = newHeight;
+            // Store the budget WITHOUT the dropdown: _targetHeight adds the
+            // live dropdown height back on top of userSetHeight, so if the
+            // list is open mid-resize we'd otherwise bake it into the budget
+            // and double-count it (window would jump taller on the next
+            // reflow). _lastTarget stays at the physical height shown, which
+            // equals userSetHeight + dropdown — so the observer doesn't fight.
+            this.userSetHeight = newHeight - this._suggestionsPhys(scaleFactor);
             this._lastTarget = newHeight; // observer would otherwise fight us
             try {
                 await this.invoke('resize_floating_window', {

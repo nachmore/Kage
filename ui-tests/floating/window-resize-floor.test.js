@@ -98,10 +98,11 @@ describe('WindowManager._targetHeight', () => {
         expect(m._targetHeight(500, 76, 900)).toBe(500);
     });
 
-    // Manual size set: honour it EXACTLY, regardless of content. The window is
-    // a fixed size the user chose; content scrolls within it. We must NOT grow
-    // to fit content — that snap-to-content was what jumped the window back to
-    // full-screen the instant the user tried to shrink it below a long answer.
+    // Manual size set: honour it as the budget for everything except the
+    // dropdown, regardless of response content. The window is a fixed size the
+    // user chose; content scrolls within it. We must NOT grow to fit content —
+    // that snap-to-content was what jumped the window back to full-screen the
+    // instant the user tried to shrink it below a long answer.
 
     it('honours a manual size exactly when content is taller', () => {
         const m = mgr();
@@ -113,5 +114,35 @@ describe('WindowManager._targetHeight', () => {
         const m = mgr();
         m.userSetHeight = 600;
         expect(m._targetHeight(300, 76, 900)).toBe(600);
+    });
+
+    // Dropdown is transient typeahead: it expands the window ON TOP OF the
+    // user's budget and collapses back, rather than eating into the size they
+    // chose for the response.
+
+    it('adds the dropdown height on top of a manual size', () => {
+        const m = mgr();
+        m.userSetHeight = 400;
+        expect(m._targetHeight(8000, 76, 900, 150)).toBe(550); // 400 + 150 dropdown
+    });
+
+    it('caps budget + dropdown at the ceiling', () => {
+        const m = mgr();
+        m.userSetHeight = 850;
+        expect(m._targetHeight(300, 76, 900, 200)).toBe(900); // 850 + 200 → capped
+    });
+
+    it('collapses back to the budget when the dropdown closes', () => {
+        const m = mgr();
+        m.userSetHeight = 400;
+        expect(m._targetHeight(300, 76, 900, 0)).toBe(400);
+    });
+
+    it('ignores the dropdown height when there is no manual size', () => {
+        const m = mgr();
+        m.userSetHeight = null;
+        // Auto-fit already measures the dropdown in naturalPhys, so the
+        // suggestionsPhys arg is only for the userSetHeight branch.
+        expect(m._targetHeight(500, 76, 900, 150)).toBe(500);
     });
 });
