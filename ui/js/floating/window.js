@@ -110,6 +110,32 @@ export class WindowManager {
         return capped > 40 ? capped : null;
     }
 
+    /**
+     * Resolve the physical-px window target from the measured content height.
+     *
+     * Both branches clamp content-driven growth at `maxPhys` (the screen
+     * ceiling, ~65% of the monitor) — beyond it the response scrolls inside
+     * `.content-area` (overflow-y:auto). The only difference is the floor:
+     * with a user-dragged size we honour it (so the window doesn't snap
+     * smaller than they asked), otherwise the collapsed launcher minimum.
+     *
+     * Regression: the `userSetHeight` branch used to be
+     * `max(userSetHeight, naturalPhys)` with NO `maxPhys` clamp, so once the
+     * window had ever been manually resized a long answer grew it unbounded
+     * (observed: 8000px+ and climbing) instead of capping at the ceiling.
+     *
+     * Pure arithmetic, extracted for unit testing (jsdom has no real layout).
+     *
+     * @param {number} naturalPhys - physical-px measured content height
+     * @param {number} minPhys - physical-px collapsed launcher minimum
+     * @param {number} maxPhys - physical-px screen ceiling
+     * @returns {number} physical-px window target
+     */
+    _targetHeight(naturalPhys, minPhys, maxPhys) {
+        const floor = this.userSetHeight || minPhys;
+        return Math.max(floor, Math.min(maxPhys, naturalPhys));
+    }
+
     _measureFlow(el) {
         const cs = getComputedStyle(el);
         if (cs.display === 'none') return 0;
@@ -201,13 +227,7 @@ export class WindowManager {
             }
         }
 
-        let target;
-        if (this.userSetHeight) {
-            // Honor user's manual size, but grow past it if content needs more.
-            target = Math.max(this.userSetHeight, naturalPhys);
-        } else {
-            target = Math.max(minPhys, Math.min(maxPhys, naturalPhys));
-        }
+        let target = this._targetHeight(naturalPhys, minPhys, maxPhys);
 
         // If suggestions list would push us past the cap, let it scroll.
         if (

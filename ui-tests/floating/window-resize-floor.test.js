@@ -87,3 +87,41 @@ describe('WindowManager._suggestionCap', () => {
         expect(mgr()._suggestionCap(140, 100)).toBe(null); // 40 is not > 40
     });
 });
+
+describe('WindowManager._targetHeight', () => {
+    // Regression: with no maxPhys clamp on the userSetHeight branch, a long
+    // answer grew the window unbounded (observed 8000px+) once it had ever
+    // been manually resized. Content-driven growth must always cap at the
+    // screen ceiling — the response scrolls inside content-area past it.
+
+    it('caps content-driven growth at the ceiling (no user size)', () => {
+        const m = mgr();
+        m.userSetHeight = null;
+        expect(m._targetHeight(8000, 76, 900)).toBe(900);
+    });
+
+    it('caps content-driven growth at the ceiling even after a manual resize', () => {
+        const m = mgr();
+        m.userSetHeight = 600; // user dragged the window to 600px
+        // A 500-line answer measures ~8000px — must still stop at the ceiling.
+        expect(m._targetHeight(8000, 76, 900)).toBe(900);
+    });
+
+    it('honors the user-dragged size as a floor when content is short', () => {
+        const m = mgr();
+        m.userSetHeight = 600;
+        expect(m._targetHeight(300, 76, 900)).toBe(600);
+    });
+
+    it('respects a manual size larger than the ceiling', () => {
+        const m = mgr();
+        m.userSetHeight = 1200; // user explicitly dragged past 65%
+        expect(m._targetHeight(300, 76, 900)).toBe(1200);
+    });
+
+    it('floors at the collapsed launcher minimum with no user size', () => {
+        const m = mgr();
+        m.userSetHeight = null;
+        expect(m._targetHeight(40, 76, 900)).toBe(76);
+    });
+});
