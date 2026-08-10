@@ -94,19 +94,28 @@ export const SearchMethods = {
         setTimeout(done, 250);
     },
 
-    async handleInputChange(_event) {
-        const rawQuery = this.elements.input.value;
-        const query = rawQuery.trim();
-
-        // Resize the textarea and OS window in lockstep — see animateInputResize.
-        // We measure scrollHeight via a clone so the live textarea never has
-        // a 1-frame "single line with overflow" state.
+    /**
+     * Resize the textarea (and OS window in lockstep) to fit its current
+     * content, applying the same scaling rules as typing. Measures scrollHeight
+     * via a clone so the live textarea never flashes a "single line with
+     * overflow" state. Shared by handleInputChange and programmatic value
+     * changes (history recall) where no `input` event fires to trigger it.
+     */
+    _resizeInputToContent() {
         const input = this.elements.input;
         const oldH = input.offsetHeight;
         const newH = Math.min(measureTextareaContentHeight(input), 100);
         if (newH !== oldH) {
             this.windowManager.animateInputResize(input, oldH, newH);
         }
+    },
+
+    async handleInputChange(_event) {
+        const rawQuery = this.elements.input.value;
+        const query = rawQuery.trim();
+
+        // Resize the textarea and OS window in lockstep — see animateInputResize.
+        this._resizeInputToContent();
 
         // Reset tab cycle state when user types
         this._tabCycleActive = false;

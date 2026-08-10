@@ -9,6 +9,7 @@ import {
     trackEvent,
     updateSelection,
 } from './dependencies.js';
+import { caretVisualRowInfo } from './helpers.js';
 
 export const InputMethods = {
     async executeCommandAction(cmd) {
@@ -59,64 +60,74 @@ export const InputMethods = {
                 updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
         } else if (event.key === 'ArrowDown') {
-            // History navigation: if browsing history, go forward
-            if (this._historyIndex >= 0 && this.currentMatches.length === 0) {
+            // Text-editor rule keyed on the caret's *visual* row (wrapping
+            // aware, not just literal "\n"): on the last row, ArrowDown steps
+            // forward through history toward the draft the user was typing;
+            // off the last row it falls through to default so the caret moves
+            // down within a multi-line / wrapped prompt.
+            const ta = this.elements.input;
+            const { isLastRow } = caretVisualRowInfo(ta);
+            if (isLastRow && this._historyIndex >= 0 && this.currentMatches.length === 0) {
                 event.preventDefault();
                 this._historyIndex--;
                 if (this._historyIndex < 0) {
                     // Back to the original input
-                    this.elements.input.value = this._historySaved;
+                    ta.value = this._historySaved;
                     this._historySaved = '';
                 } else {
-                    this.elements.input.value = this._messageHistory[this._historyIndex];
+                    ta.value = this._messageHistory[this._historyIndex];
                 }
+                ta.selectionStart = ta.selectionEnd = ta.value.length;
+                // Programmatic value change fires no `input` event, so scale
+                // the textarea to the recalled prompt's length explicitly.
+                this._resizeInputToContent();
                 return;
             }
             const itemCount =
                 this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
-            if (itemCount > 0) {
-                // Only navigate suggestions if cursor is on the last line of the textarea
-                const ta = this.elements.input;
-                const _textBeforeCursor = ta.value.substring(0, ta.selectionStart);
-                const textAfterCursor = ta.value.substring(ta.selectionEnd);
-                const isLastLine = !textAfterCursor.includes('\n');
-                if (isLastLine) {
-                    event.preventDefault();
-                    this.selectedIndex = (this.selectedIndex + 1) % itemCount;
-                    updateSelection(this.elements.appSuggestions, this.selectedIndex);
-                }
+            if (itemCount > 0 && isLastRow) {
+                // Only navigate suggestions when the caret is on the last visual row
+                event.preventDefault();
+                this.selectedIndex = (this.selectedIndex + 1) % itemCount;
+                updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
-            // When no suggestions or not on last line, let default behavior handle cursor movement
+            // Otherwise let default behavior move the caret down within the textarea
         } else if (event.key === 'ArrowUp') {
-            // History navigation: if input is empty (or already browsing) and no suggestions
-            if (this._messageHistory.length > 0 && this.currentMatches.length === 0) {
-                const inputVal = this.elements.input.value;
-                const isEmpty = inputVal.trim() === '' || this._historyIndex >= 0;
-                if (isEmpty && this._historyIndex < this._messageHistory.length - 1) {
+            // Text-editor rule keyed on the caret's *visual* row (wrapping
+            // aware): on the first row, ArrowUp recalls the previous prompt;
+            // off the first row it falls through to default so the caret moves
+            // up within a multi-line / wrapped prompt. Recall only when there's
+            // no typed draft we'd clobber (empty) or we're already browsing —
+            // so pressing Up in freshly-typed text never blows it away.
+            const ta = this.elements.input;
+            const { isFirstRow } = caretVisualRowInfo(ta);
+            if (isFirstRow && this._messageHistory.length > 0 && this.currentMatches.length === 0) {
+                const inputVal = ta.value;
+                const canRecall = inputVal.trim() === '' || this._historyIndex >= 0;
+                if (canRecall && this._historyIndex < this._messageHistory.length - 1) {
                     event.preventDefault();
                     if (this._historyIndex < 0) {
                         this._historySaved = inputVal; // stash whatever was typed
                     }
                     this._historyIndex++;
-                    this.elements.input.value = this._messageHistory[this._historyIndex];
+                    ta.value = this._messageHistory[this._historyIndex];
+                    ta.selectionStart = ta.selectionEnd = ta.value.length;
+                    // Programmatic value change fires no `input` event, so
+                    // scale the textarea to the recalled prompt's length.
+                    this._resizeInputToContent();
                     return;
                 }
             }
             const itemCount =
                 this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
-            if (itemCount > 0) {
-                // Only navigate suggestions if cursor is on the first line of the textarea
-                const ta = this.elements.input;
-                const textBeforeCursor = ta.value.substring(0, ta.selectionStart);
-                const isFirstLine = !textBeforeCursor.includes('\n');
-                if (isFirstLine) {
-                    event.preventDefault();
-                    this.selectedIndex =
-                        this.selectedIndex <= 0 ? itemCount - 1 : this.selectedIndex - 1;
-                    updateSelection(this.elements.appSuggestions, this.selectedIndex);
-                }
+            if (itemCount > 0 && isFirstRow) {
+                // Only navigate suggestions when the caret is on the first visual row
+                event.preventDefault();
+                this.selectedIndex =
+                    this.selectedIndex <= 0 ? itemCount - 1 : this.selectedIndex - 1;
+                updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
-            // When no suggestions or not on first line, let default behavior handle cursor movement
+            // Otherwise let default behavior move the caret up within the textarea
         } else if (event.key === 'Backspace') {
             // Empty-input backspace dismisses the App Mode chip (same
             // effect as clicking it). Lets users back out of a matched
