@@ -10,7 +10,11 @@ pub fn open_url_impl(url: &str) -> Result<()> {
     use windows::core::PCWSTR;
     use windows::Win32::UI::Shell::ShellExecuteW;
 
-    log::debug!("[open_url] ShellExecuteW: {}", url);
+    // info! (not debug!) so the single-vs-double call is visible in the
+    // default log level while we diagnose the "opens twice" report — the
+    // JS + command-layer logs already confirmed our stack invokes this once
+    // per click, so this pins whether ShellExecuteW itself is entered twice.
+    log::info!("[open_url] ShellExecuteW enter: {}", url);
 
     let verb: Vec<u16> = std::ffi::OsStr::new("open")
         .encode_wide()
@@ -32,10 +36,16 @@ pub fn open_url_impl(url: &str) -> Result<()> {
         )
     };
 
-    if result.0 as usize > 32 {
+    let code = result.0 as usize;
+    log::info!(
+        "[open_url] ShellExecuteW returned code={} for {}",
+        code,
+        url
+    );
+    if code > 32 {
         Ok(())
     } else {
-        anyhow::bail!("ShellExecuteW failed with code {}", result.0 as usize)
+        anyhow::bail!("ShellExecuteW failed with code {}", code)
     }
 }
 
