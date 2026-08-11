@@ -111,6 +111,9 @@ export const COMMAND_CAPABILITIES = Object.freeze({
 
     // --- notifications -----------------------------------------------------
     notify_frontend_ready: 'notifications',
+    // App-internal completion toast that foregrounds a Kage window on click.
+    // Not something extensions should trigger — never callable.
+    notify_response_ready: null,
 
     // --- calendar ----------------------------------------------------------
     get_calendar_events: 'calendar',
