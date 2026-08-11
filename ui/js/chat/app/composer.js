@@ -69,6 +69,7 @@ export function createComposerMixin(dependencies) {
                 this._toolCallIds = new Set();
                 this._sourceDomains = new Set();
                 this.isWaitingForResponse = true;
+                this._turnOriginatedHere = true; // plan revision is a chat-originated turn
                 this._streamStartTime = Date.now();
                 this.updateInputState();
                 this.showTypingIndicator();
@@ -269,7 +270,13 @@ export function createComposerMixin(dependencies) {
             this.scrollToBottom();
         }
 
-        startStreaming() {
+        // `originatedHere` distinguishes a turn this window actually sent from
+        // one it's only passively mirroring (the floating window's send, echoed
+        // via the `floating_message_sent` event). Only originated turns fire a
+        // completion notification — otherwise the floating window AND every
+        // chat window viewing the same session each toast the same completion.
+        startStreaming(originatedHere = true) {
+            this._turnOriginatedHere = originatedHere;
             this.currentStreamingContent = '';
             this.toolSources = [];
             this.toolUsages = [];

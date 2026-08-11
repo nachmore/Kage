@@ -34,6 +34,16 @@ pub async fn open_chat_window<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Re
 }
 
 #[tauri::command]
+pub async fn notify_response_ready<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    title: String,
+    body: String,
+    target_label: String,
+) -> Result<bool, AppError> {
+    implementation::notify_response_ready(app, title, body, target_label).await
+}
+
+#[tauri::command]
 pub async fn open_new_chat_window<R: tauri::Runtime>(
     resume_session_id: Option<String>,
     app: tauri::AppHandle<R>,

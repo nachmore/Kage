@@ -8,6 +8,7 @@ pub mod diagnostics;
 pub mod file_search;
 pub mod hotkey;
 pub mod icon;
+pub mod notification;
 pub mod power;
 pub mod process;
 pub mod shell;

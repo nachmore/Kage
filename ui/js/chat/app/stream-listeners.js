@@ -210,7 +210,9 @@ export function createStreamListenersMixin(dependencies) {
                     this.activeSessionId === this.currentAcpSessionId;
                 if (!isDefaultSession) return;
                 this.addUserMessage(message);
-                this.startStreaming();
+                // Passive mirror of the floating window's send — the floating
+                // window owns the completion notification, so don't double it.
+                this.startStreaming(false);
             });
 
             // Real-time context usage from ACP metadata notifications.

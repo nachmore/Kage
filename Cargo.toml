@@ -137,6 +137,11 @@ sys-locale = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"
+# Clickable toast with an activation callback — the notification plugin has no
+# desktop click hook. Pinned to the version Tauri's own tree already resolves
+# (it's a transitive dep of tauri-plugin-notification) so we don't fork the
+# windows-rs COM type identity. See src/os/windows/notification.rs.
+tauri-winrt-notification = "=0.7.2"
 windows-icons = "0.3"
 windows-collections = "0.3"
 windows-future = "0.3"

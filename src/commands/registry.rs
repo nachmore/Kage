@@ -38,6 +38,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::start_drag_window,
         crate::commands::open_chat_window,
         crate::commands::open_new_chat_window,
+        crate::commands::notify_response_ready,
         crate::commands::close_chat_window,
         crate::commands::list_chat_windows,
         crate::commands::resize_floating_window,

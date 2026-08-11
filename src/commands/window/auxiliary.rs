@@ -334,6 +334,73 @@ pub fn notify_frontend_ready(ui: tauri::State<'_, crate::state::UiState>) {
         .store(true, std::sync::atomic::Ordering::Release);
 }
 
+/// Show a "response ready" style notification whose click foregrounds the
+/// window named by `target_label` (e.g. "floating", "main", "chat-<uuid>").
+///
+/// Returns `Ok(true)` if a *clickable* notification was shown (Windows,
+/// installed build). Returns `Ok(false)` when the platform can't deliver a
+/// click — the frontend then falls back to the plain `sendNotification` plugin
+/// toast so the user still sees the message, just without click-to-open.
+///
+/// Why this exists: `tauri-plugin-notification` has no desktop click callback
+/// (its `onAction` is mobile-only), so clicking a completion toast did nothing.
+/// See src/os/notification.rs and src/os/windows/notification.rs.
+pub async fn notify_response_ready<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    title: String,
+    body: String,
+    target_label: String,
+) -> Result<bool, AppError> {
+    // WinRT toast activation only routes to an app with a registered AUMID.
+    // The installed build has one (config.identifier); dev builds run under
+    // the PowerShell AUMID, so a click wouldn't reach us — mirror the
+    // notification plugin's own "installed vs dev" gate and bail to the
+    // fallback path in dev. (The plugin checks the exe dir; we reuse the same
+    // rule so both agree.)
+    let is_installed = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|p| p.display().to_string()))
+        .map(|dir| {
+            let sep = std::path::MAIN_SEPARATOR;
+            !(dir.ends_with(&format!("{sep}target{sep}debug"))
+                || dir.ends_with(&format!("{sep}target{sep}release")))
+        })
+        .unwrap_or(false);
+    if !is_installed {
+        return Ok(false);
+    }
+
+    let aumid = app.config().identifier.clone();
+
+    // The click callback runs on a WinRT callback thread; window ops are
+    // thread-affine, so hop to the main thread before touching them.
+    let app_for_click = app.clone();
+    let shown = crate::os::notification::show_clickable(
+        &aumid,
+        &title,
+        &body,
+        Box::new(move || {
+            let app = app_for_click.clone();
+            let label = target_label.clone();
+            let _ = app.clone().run_on_main_thread(move || {
+                // Prefer the requested window; fall back to main so a click
+                // never dead-ends (e.g. a closed chat-<uuid> window).
+                let win = app
+                    .get_webview_window(&label)
+                    .or_else(|| app.get_webview_window(window_labels::MAIN));
+                if let Some(win) = win {
+                    let _ = win.unminimize();
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                }
+                crate::setup::update_activation_policy(&app);
+            });
+        }),
+    );
+
+    Ok(shown)
+}
+
 /// Get the source window info (title, process_name) captured when the hotkey was pressed.
 pub async fn get_source_window(
     ui: tauri::State<'_, crate::state::UiState>,

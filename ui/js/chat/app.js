@@ -417,8 +417,11 @@ export class ChatApp {
                     // just set false at the top of onAfterFinalRender, so that
                     // condition was always false and the notification never
                     // fired. The floating window uses the same `!focused && text`
-                    // test.
-                    if (finalContent && !app._windowFocused) {
+                    // test. Suppress for turns we only mirrored from the
+                    // floating window (_turnOriginatedHere === false) — the
+                    // floating window fires that one, so notifying here too
+                    // produces a duplicate toast.
+                    if (finalContent && !app._windowFocused && app._turnOriginatedHere !== false) {
                         const preview = finalContent
                             .substring(0, 100)
                             .replace(/[#*`\n]/g, ' ')
@@ -427,7 +430,9 @@ export class ChatApp {
                             app.invoke,
                             t('shared.notify.kage_title'),
                             preview || t('chat.notification.response_ready'),
-                            WINDOW.MAIN
+                            // Foreground THIS chat window on click — could be
+                            // 'main' or a 'chat-<uuid>' peer.
+                            app.windowLabel || WINDOW.MAIN
                         );
                     }
                 } catch {
