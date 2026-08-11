@@ -6,36 +6,47 @@ use std::process::Command;
 use super::process::spawn_detached_impl;
 
 pub fn open_url_impl(url: &str) -> Result<()> {
-    // Open via `cmd /c start "" "<url>"` rather than `ShellExecuteW("open", …)`.
-    //
-    // ShellExecuteW's "open" verb goes through the shell's per-protocol
-    // association, which for `http(s)` uses the browser's DDE ("open URL in
-    // existing window") channel. On some systems the shell BOTH launches the
-    // browser process AND fires the DDE command, so a single call opens the
-    // URL in two tabs. We confirmed via logs that our whole stack (JS handler
-    // → open_url command → this fn) runs exactly once per click and
-    // ShellExecuteW still returned success while two tabs opened — i.e. the
-    // duplication was inside the shell dispatch, not our code.
-    //
-    // `cmd /c start` performs a single CreateProcess-style launch with no DDE,
-    // so it dispatches exactly once. The URL is wrapped in quotes so `cmd`
-    // doesn't split it on `&` (the breakage that motivated the original switch
-    // to ShellExecuteW); the empty `""` first argument is `start`'s title
-    // parameter, required so a quoted URL isn't mistaken for the window title.
-    log::info!("[open_url] start: {}", url);
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-    // `raw_arg` passes the token to cmd verbatim (no C-runtime requoting).
-    // cmd.exe treats `&`, `|`, `^`, etc. as metacharacters UNLESS they're
-    // inside double quotes, so we wrap the URL in quotes ourselves — this is
-    // exactly how the `open` crate does it. `""` is start's (empty) window-
-    // title argument, required so a quoted URL isn't consumed as the title.
-    use std::os::windows::process::CommandExt;
-    let mut cmd = Command::new("cmd");
-    cmd.arg("/c")
-        .arg("start")
-        .raw_arg("\"\"")
-        .raw_arg(format!("\"{}\"", url));
-    spawn_detached_impl(&mut cmd).context("Failed to open URL")?;
+    // Open the URL through the shell's default-browser association — the OS
+    // owns browser selection, we don't hand-roll detection.
+    //
+    // The catch: when the default browser registers a `ddeexec` handler (e.g.
+    // Firefox: `firefox.exe -osint -url "%1"` + a `shell\open\ddeexec` key)
+    // and the shell call comes from a thread WITHOUT a running message pump
+    // (our tokio worker — same for cmd/ShellExecuteW), the shell starts a DDE
+    // conversation but doesn't pump messages to complete it, times out, and
+    // ALSO runs the fallback `open` command. The browser receives the URL
+    // twice → two tabs. This is why both plain ShellExecuteW and `cmd /c
+    // start` doubled: both consult the association and trigger the ddeexec
+    // race. Our logs proved every layer of our own code fired exactly once.
+    //
+    // SEE_MASK_NOASYNC (aka SEE_MASK_FLAG_DDEWAIT) tells the shell to finish
+    // the DDE conversation before returning instead of racing it with the
+    // fallback launch — the documented flag for callers that don't run a
+    // message loop. That collapses the double-open back to a single tab while
+    // leaving browser choice entirely to the OS. ShellExecuteExW is required
+    // because plain ShellExecuteW exposes no fMask.
+    log::info!("[open_url] ShellExecuteExW (NOASYNC): {}", url);
+
+    let mut verb: Vec<u16> = "open".encode_utf16().collect();
+    verb.push(0);
+    let mut file: Vec<u16> = std::ffi::OsStr::new(url).encode_wide().collect();
+    file.push(0);
+
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOASYNC,
+        lpVerb: PCWSTR(verb.as_ptr()),
+        lpFile: PCWSTR(file.as_ptr()),
+        nShow: SW_SHOWNORMAL.0,
+        ..unsafe { std::mem::zeroed() }
+    };
+
+    unsafe { ShellExecuteExW(&mut info) }.context("ShellExecuteExW failed to open URL")?;
     Ok(())
 }
 

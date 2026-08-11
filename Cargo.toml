@@ -158,6 +158,9 @@ webview2-com = "=0.38.2"
 windows = { version = "0.62", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell",
+    # SHELLEXECUTEINFOW lives behind this feature (used by open_url's
+    # ShellExecuteExW call with SEE_MASK_NOASYNC — see os/windows/shell.rs).
+    "Win32_System_Registry",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
