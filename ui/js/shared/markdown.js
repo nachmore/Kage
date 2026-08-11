@@ -2,6 +2,7 @@
 
 import { processCodeBlocks } from './markdown/code-blocks.js';
 import { resetDiagramFailures } from './markdown/diagrams.js';
+import { neutralizeLinks } from './link-handler.js';
 import { isFullTexDocument, makeTablesSortable, parseDelimited } from './markdown/previews.js';
 import {
     createTaskPlanElement,
@@ -420,6 +421,10 @@ function _doRender(markdown, targetElement, streaming) {
         // Process app-icon tags
         _processAppIcons(targetElement);
 
+        // Strip navigable hrefs so WebView2 can't open links itself (in
+        // addition to our click handler). See neutralizeLinks.
+        neutralizeLinks(targetElement);
+
         // Deduplicate taskplan blocks
         deduplicateTaskPlans(targetElement);
 
@@ -446,6 +451,10 @@ function _doRender(markdown, targetElement, streaming) {
 
     // Process app-icon tags
     _processAppIcons(targetElement);
+
+    // Strip navigable hrefs so WebView2 can't open links itself (in addition
+    // to our click handler). See neutralizeLinks.
+    neutralizeLinks(targetElement);
 
     // Deduplicate taskplan blocks — keep only the last one (most up-to-date)
     deduplicateTaskPlans(targetElement);

@@ -93,3 +93,72 @@ describe('link-handler', () => {
         expect(invoke).not.toHaveBeenCalled();
     });
 });
+
+describe('neutralizeLinks', () => {
+    function container(html) {
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        return div;
+    }
+
+    it('moves external hrefs to data-href and blanks href (kills native nav)', async () => {
+        const { neutralizeLinks } = await loadFresh();
+        const root = container('<a href="https://example.com/x">link</a>');
+        neutralizeLinks(root);
+        const a = root.querySelector('a');
+        // href="#" means WebView2 has nothing to navigate to; the URL lives on
+        // data-href for the click handler.
+        expect(a.getAttribute('href')).toBe('#');
+        expect(a.getAttribute('data-href')).toBe('https://example.com/x');
+    });
+
+    it('neutralizes mailto: and kage: too', async () => {
+        const { neutralizeLinks } = await loadFresh();
+        const root = container(
+            '<a href="mailto:a@b.com">m</a><a href="kage:settings">s</a>'
+        );
+        neutralizeLinks(root);
+        const [m, s] = root.querySelectorAll('a');
+        expect(m.getAttribute('data-href')).toBe('mailto:a@b.com');
+        expect(m.getAttribute('href')).toBe('#');
+        expect(s.getAttribute('data-href')).toBe('kage:settings');
+        expect(s.getAttribute('href')).toBe('#');
+    });
+
+    it('leaves in-page (#anchor) and unknown-scheme links alone', async () => {
+        const { neutralizeLinks } = await loadFresh();
+        const root = container('<a href="#section">jump</a><a href="ftp://h/f">ftp</a>');
+        neutralizeLinks(root);
+        const [jump, ftp] = root.querySelectorAll('a');
+        expect(jump.getAttribute('href')).toBe('#section');
+        expect(jump.hasAttribute('data-href')).toBe(false);
+        expect(ftp.getAttribute('href')).toBe('ftp://h/f');
+        expect(ftp.hasAttribute('data-href')).toBe(false);
+    });
+
+    it('is idempotent — a second pass does not re-wrap', async () => {
+        const { neutralizeLinks } = await loadFresh();
+        const root = container('<a href="https://example.com/">l</a>');
+        neutralizeLinks(root);
+        neutralizeLinks(root);
+        const a = root.querySelector('a');
+        expect(a.getAttribute('data-href')).toBe('https://example.com/');
+        expect(a.getAttribute('href')).toBe('#');
+    });
+
+    it('a click on a neutralized link opens exactly once via data-href', async () => {
+        const { initLinkHandler, neutralizeLinks } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const a = document.createElement('a');
+        a.setAttribute('href', 'https://example.com/deep');
+        document.body.appendChild(a);
+        neutralizeLinks(document.body);
+        a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        a.remove();
+
+        expect(invoke).toHaveBeenCalledTimes(1);
+        expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com/deep' });
+    });
+});

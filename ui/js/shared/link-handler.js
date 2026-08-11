@@ -54,6 +54,44 @@ async function handleKageProtocol(path) {
 }
 
 /**
+ * Neutralize navigable anchors inside `root` so WebView2 can't open them
+ * itself. For every `<a>` with an http(s)/mailto/kage: href, move the URL to
+ * `data-href` and set `href="#"`. The delegated click handler reads `data-href`
+ * and opens the URL exactly once via `open_url`.
+ *
+ * Why this is needed: a real `href` makes WebView2 perform a top-level
+ * navigation on click, which Tauri hands to the OS default browser — a SECOND
+ * open, in parallel with our handler's `open_url`, and one that never hits our
+ * command (so it produced no log while doubling every link). `preventDefault()`
+ * in the click handler does not reliably cancel that native navigation. Killing
+ * the navigable href removes the second open at the source. Idempotent: an
+ * anchor already carrying `data-href` is skipped.
+ *
+ * Call after rendering agent markdown (streaming and final).
+ *
+ * @param {ParentNode} root - container whose descendant <a> tags to neutralize
+ */
+export function neutralizeLinks(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    for (const a of root.querySelectorAll('a[href]')) {
+        if (a.hasAttribute('data-href')) continue; // already neutralized
+        const href = a.getAttribute('href');
+        if (!href || href === '#') continue;
+        // Only intercept schemes we actually handle; leave in-page anchors
+        // (#section) and anything unrecognised alone.
+        if (
+            href.startsWith('http://') ||
+            href.startsWith('https://') ||
+            href.startsWith('mailto:') ||
+            href.startsWith('kage:')
+        ) {
+            a.setAttribute('data-href', href);
+            a.setAttribute('href', '#');
+        }
+    }
+}
+
+/**
  * Initialize the global link click handler.
  * Call once per window on startup.
  */
@@ -71,7 +109,13 @@ export function initLinkHandler(invoke) {
         const anchor = e.target.closest('a');
         if (!anchor) return;
 
-        const href = anchor.getAttribute('href');
+        // Prefer data-href: neutralizeLinks() moves external URLs there and
+        // sets href="#" so WebView2 has nothing to natively navigate to. A
+        // real href would make WebView2 open the URL ITSELF (a top-level
+        // navigation the OS then hands to the default browser) IN ADDITION to
+        // our open_url call — that was the "opens twice" bug, and it bypassed
+        // open_url entirely (no log), which is why no open_url-side fix helped.
+        const href = anchor.getAttribute('data-href') || anchor.getAttribute('href');
         if (!href || href === '#') return;
 
         // kage: protocol — internal deep links
