@@ -12,6 +12,17 @@
 let _invoke = null;
 
 /**
+ * Guard against double-registration. The click listener is delegated on
+ * `document`, so registering it twice makes every link open twice (each
+ * listener independently calls `open_url` — `stopPropagation` only stops
+ * bubbling between nodes, not sibling listeners on the same node). If
+ * `initLinkHandler` is ever called more than once in a window (double module
+ * eval, a re-init on config change, a future refactor), we refresh `_invoke`
+ * but do NOT add a second listener.
+ */
+let _listenerInstalled = false;
+
+/**
  * kage: protocol routes.
  * Format: kage:<action>[/<param>]
  *
@@ -49,6 +60,13 @@ async function handleKageProtocol(path) {
 export function initLinkHandler(invoke) {
     _invoke = invoke;
 
+    // Idempotent: only ever install one delegated listener per document.
+    if (_listenerInstalled) {
+        console.warn('[link-handler] initLinkHandler called again — reusing existing listener');
+        return;
+    }
+    _listenerInstalled = true;
+
     document.addEventListener('click', (e) => {
         const anchor = e.target.closest('a');
         if (!anchor) return;
@@ -65,11 +83,14 @@ export function initLinkHandler(invoke) {
             return;
         }
 
-        // External URLs — open in default browser
+        // External URLs — open in default browser. Use the module-level
+        // `_invoke` (not the closure param) so a re-init refreshes the
+        // reference — consistent with the kage: branch above.
         if (href.startsWith('http://') || href.startsWith('https://')) {
             e.preventDefault();
             e.stopPropagation();
-            invoke('open_url', { url: href }).catch((err) =>
+            console.log(`[link-handler] open_url: ${href}`);
+            _invoke?.('open_url', { url: href }).catch((err) =>
                 console.warn('Failed to open URL:', err)
             );
             return;
@@ -79,7 +100,7 @@ export function initLinkHandler(invoke) {
         if (href.startsWith('mailto:')) {
             e.preventDefault();
             e.stopPropagation();
-            invoke('open_url', { url: href }).catch(() => {});
+            _invoke?.('open_url', { url: href }).catch(() => {});
             return;
         }
 
