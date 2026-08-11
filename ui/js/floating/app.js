@@ -297,7 +297,11 @@ export class FloatingApp {
                 this._refreshContextUsage();
 
                 try {
-                    if (!this._windowFocused && text) {
+                    const shouldNotify = !this._windowFocused && !!text;
+                    console.log(
+                        `[floating] complete: notify=${shouldNotify} (focused=${this._windowFocused}, hasContent=${!!text})`
+                    );
+                    if (shouldNotify) {
                         const preview = text
                             .substring(0, 100)
                             .replace(/[#*`\n]/g, ' ')

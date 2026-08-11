@@ -421,7 +421,12 @@ export class ChatApp {
                     // floating window (_turnOriginatedHere === false) — the
                     // floating window fires that one, so notifying here too
                     // produces a duplicate toast.
-                    if (finalContent && !app._windowFocused && app._turnOriginatedHere !== false) {
+                    const shouldNotify =
+                        finalContent && !app._windowFocused && app._turnOriginatedHere !== false;
+                    console.log(
+                        `[chat] complete: notify=${shouldNotify} (focused=${app._windowFocused}, originatedHere=${app._turnOriginatedHere}, hasContent=${!!finalContent})`
+                    );
+                    if (shouldNotify) {
                         const preview = finalContent
                             .substring(0, 100)
                             .replace(/[#*`\n]/g, ' ')

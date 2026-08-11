@@ -4,7 +4,7 @@ use super::floating::{clamp_into_monitor, find_monitor_at_position};
 use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use crate::window_labels;
-use log::info;
+use log::{debug, info, warn};
 use tauri::{Manager, WebviewWindow};
 
 pub async fn resize_floating_window<R: tauri::Runtime>(
@@ -357,20 +357,30 @@ pub async fn notify_response_ready<R: tauri::Runtime>(
     // notification plugin's own "installed vs dev" gate and bail to the
     // fallback path in dev. (The plugin checks the exe dir; we reuse the same
     // rule so both agree.)
-    let is_installed = std::env::current_exe()
+    let exe_dir = std::env::current_exe()
         .ok()
-        .and_then(|exe| exe.parent().map(|p| p.display().to_string()))
+        .and_then(|exe| exe.parent().map(|p| p.display().to_string()));
+    let is_installed = exe_dir
+        .as_deref()
         .map(|dir| {
             let sep = std::path::MAIN_SEPARATOR;
             !(dir.ends_with(&format!("{sep}target{sep}debug"))
                 || dir.ends_with(&format!("{sep}target{sep}release")))
         })
         .unwrap_or(false);
+    debug!(
+        "notify_response_ready: target='{}' installed={} exe_dir={:?}",
+        target_label, is_installed, exe_dir
+    );
     if !is_installed {
+        debug!(
+            "notify_response_ready: dev build — falling back to plugin toast (no clickable path)"
+        );
         return Ok(false);
     }
 
     let aumid = app.config().identifier.clone();
+    debug!("notify_response_ready: showing clickable WinRT toast (aumid='{aumid}')");
 
     // The click callback runs on a WinRT callback thread; window ops are
     // thread-affine, so hop to the main thread before touching them.
@@ -380,24 +390,48 @@ pub async fn notify_response_ready<R: tauri::Runtime>(
         &title,
         &body,
         Box::new(move || {
+            info!("notify_response_ready: toast activated (clicked) — foregrounding window");
             let app = app_for_click.clone();
             let label = target_label.clone();
-            let _ = app.clone().run_on_main_thread(move || {
+            if let Err(e) = app.clone().run_on_main_thread(move || {
                 // Prefer the requested window; fall back to main so a click
                 // never dead-ends (e.g. a closed chat-<uuid> window).
-                let win = app
+                let resolved = app
                     .get_webview_window(&label)
-                    .or_else(|| app.get_webview_window(window_labels::MAIN));
-                if let Some(win) = win {
-                    let _ = win.unminimize();
-                    let _ = win.show();
-                    let _ = win.set_focus();
+                    .map(|w| (label.clone(), w))
+                    .or_else(|| {
+                        app.get_webview_window(window_labels::MAIN)
+                            .map(|w| (window_labels::MAIN.to_string(), w))
+                    });
+                match resolved {
+                    Some((resolved_label, win)) => {
+                        info!(
+                            "notify_response_ready: activation foregrounding window '{resolved_label}' (requested '{label}')"
+                        );
+                        if let Err(e) = win.unminimize() {
+                            warn!("notify_response_ready: unminimize failed: {e}");
+                        }
+                        if let Err(e) = win.show() {
+                            warn!("notify_response_ready: show failed: {e}");
+                        }
+                        if let Err(e) = win.set_focus() {
+                            warn!("notify_response_ready: set_focus failed: {e}");
+                        }
+                    }
+                    None => {
+                        warn!(
+                            "notify_response_ready: activation found no window for '{label}' or main — nothing to foreground"
+                        );
+                    }
                 }
                 crate::setup::update_activation_policy(&app);
-            });
+            }) {
+                warn!("notify_response_ready: run_on_main_thread failed on activation: {e}");
+            }
         }),
     );
 
+    debug!("notify_response_ready: show_clickable returned shown={shown}");
     Ok(shown)
 }
 

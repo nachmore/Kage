@@ -25,15 +25,21 @@ pub fn show_clickable_impl(
         .title(title)
         .text1(body)
         .duration(Duration::Short)
-        .on_activated(move |_arg| {
+        .on_activated(move |arg| {
+            // English-only log (see I18N contract). `arg` is the activation
+            // action string; we set no buttons so it's normally None.
+            log::debug!("WinRT toast on_activated fired (arg={arg:?})");
             cb();
             Ok(())
         });
 
+    // English-only log (see I18N contract).
     match toast.show() {
-        Ok(()) => true,
+        Ok(()) => {
+            log::debug!("WinRT clickable toast shown (app_id='{app_id}')");
+            true
+        }
         Err(e) => {
-            // English-only log (see I18N contract).
             log::warn!("WinRT clickable toast failed ({e}); caller will fall back");
             false
         }
