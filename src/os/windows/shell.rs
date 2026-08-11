@@ -6,47 +6,37 @@ use std::process::Command;
 use super::process::spawn_detached_impl;
 
 pub fn open_url_impl(url: &str) -> Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
-    use windows::Win32::UI::Shell::ShellExecuteW;
+    // Open via `cmd /c start "" "<url>"` rather than `ShellExecuteW("open", …)`.
+    //
+    // ShellExecuteW's "open" verb goes through the shell's per-protocol
+    // association, which for `http(s)` uses the browser's DDE ("open URL in
+    // existing window") channel. On some systems the shell BOTH launches the
+    // browser process AND fires the DDE command, so a single call opens the
+    // URL in two tabs. We confirmed via logs that our whole stack (JS handler
+    // → open_url command → this fn) runs exactly once per click and
+    // ShellExecuteW still returned success while two tabs opened — i.e. the
+    // duplication was inside the shell dispatch, not our code.
+    //
+    // `cmd /c start` performs a single CreateProcess-style launch with no DDE,
+    // so it dispatches exactly once. The URL is wrapped in quotes so `cmd`
+    // doesn't split it on `&` (the breakage that motivated the original switch
+    // to ShellExecuteW); the empty `""` first argument is `start`'s title
+    // parameter, required so a quoted URL isn't mistaken for the window title.
+    log::info!("[open_url] start: {}", url);
 
-    // info! (not debug!) so the single-vs-double call is visible in the
-    // default log level while we diagnose the "opens twice" report — the
-    // JS + command-layer logs already confirmed our stack invokes this once
-    // per click, so this pins whether ShellExecuteW itself is entered twice.
-    log::info!("[open_url] ShellExecuteW enter: {}", url);
-
-    let verb: Vec<u16> = std::ffi::OsStr::new("open")
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    let file: Vec<u16> = std::ffi::OsStr::new(url)
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-
-    let result = unsafe {
-        ShellExecuteW(
-            None,
-            PCWSTR(verb.as_ptr()),
-            PCWSTR(file.as_ptr()),
-            PCWSTR(std::ptr::null()),
-            PCWSTR(std::ptr::null()),
-            windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
-        )
-    };
-
-    let code = result.0 as usize;
-    log::info!(
-        "[open_url] ShellExecuteW returned code={} for {}",
-        code,
-        url
-    );
-    if code > 32 {
-        Ok(())
-    } else {
-        anyhow::bail!("ShellExecuteW failed with code {}", code)
-    }
+    // `raw_arg` passes the token to cmd verbatim (no C-runtime requoting).
+    // cmd.exe treats `&`, `|`, `^`, etc. as metacharacters UNLESS they're
+    // inside double quotes, so we wrap the URL in quotes ourselves — this is
+    // exactly how the `open` crate does it. `""` is start's (empty) window-
+    // title argument, required so a quoted URL isn't consumed as the title.
+    use std::os::windows::process::CommandExt;
+    let mut cmd = Command::new("cmd");
+    cmd.arg("/c")
+        .arg("start")
+        .raw_arg("\"\"")
+        .raw_arg(format!("\"{}\"", url));
+    spawn_detached_impl(&mut cmd).context("Failed to open URL")?;
+    Ok(())
 }
 
 pub fn open_path_impl(path: &str) -> Result<()> {
