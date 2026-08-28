@@ -202,13 +202,20 @@ export function createStreamListenersMixin(dependencies) {
             this.listen('floating_message_sent', (event) => {
                 const { message } = event.payload || {};
                 if (!message) return;
-                // Only mirror if we're actually viewing the floating/default
-                // session. Require a real id — null === null must NOT match.
+                // Only mirror if this window is actually viewing the floating
+                // window's session — that's the ONLY session a floating send
+                // lands in, so it's the only view where the mirror is correct.
+                // Require a real id (null === null must NOT match). The old
+                // `|| activeSessionId === currentAcpSessionId` clause was the
+                // bug: currentAcpSessionId is THIS window's own pinned session
+                // (e.g. a fresh conversation), so the guard was trivially true
+                // whenever the user was viewing their own non-default session,
+                // painting a phantom prompt + spinner that never completed
+                // (the real chunks/complete stream to the floating session and
+                // are correctly filtered out here). The floating session is
+                // badged in the sidebar via SESSION_ACTIVITY instead.
                 if (!this.activeSessionId || !this.floatingSessionId) return;
-                const isDefaultSession =
-                    this.activeSessionId === this.floatingSessionId ||
-                    this.activeSessionId === this.currentAcpSessionId;
-                if (!isDefaultSession) return;
+                if (this.activeSessionId !== this.floatingSessionId) return;
                 this.addUserMessage(message);
                 // Passive mirror of the floating window's send — the floating
                 // window owns the completion notification, so don't double it.
