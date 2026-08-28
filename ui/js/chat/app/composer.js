@@ -75,7 +75,8 @@ export function createComposerMixin(dependencies) {
                 this.showTypingIndicator();
                 this.currentStreamingMessage = this.createMessageElement('assistant', '');
                 this.elements.messagesArea.appendChild(this.currentStreamingMessage);
-                this.scrollToBottom();
+                this._autoScrollEnabled = true;
+                this.scrollToBottom(true);
 
                 try {
                     trackEvent('message_sent', {
@@ -267,7 +268,10 @@ export function createComposerMixin(dependencies) {
             }
 
             this.elements.messagesArea.appendChild(msgEl);
-            this.scrollToBottom();
+            // A new user turn re-sticks the viewport to the bottom: the user
+            // is asking a question and wants to watch the answer stream in.
+            this._autoScrollEnabled = true;
+            this.scrollToBottom(true);
         }
 
         // `originatedHere` distinguishes a turn this window actually sent from

@@ -152,6 +152,8 @@ export function createLifecycleMixin(dependencies) {
         }
 
         setupEventListeners() {
+            this.setupScrollTracking();
+
             this.elements.chatInput.addEventListener('input', () => {
                 this.elements.chatInput.style.height = 'auto';
                 this.elements.chatInput.style.height =

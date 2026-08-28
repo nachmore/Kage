@@ -170,10 +170,12 @@ export function createSessionHistoryMixin(dependencies) {
             } else {
                 this.showTypingIndicator();
             }
-            this.scrollToBottom();
+            this.scrollToBottom(true);
         }
 
         displaySession(sessionData) {
+            // Loading/switching a session starts the user at the bottom.
+            this._autoScrollEnabled = true;
             this.messages = [];
             this.elements.messagesArea.innerHTML = '';
             this.toolSources = [];
@@ -235,7 +237,7 @@ export function createSessionHistoryMixin(dependencies) {
                         this.elements.chatHeaderTitle.textContent =
                             stripKageTags(session.title) || t('chat.session.fallback_title');
                     }
-                    this.scrollToBottom();
+                    this.scrollToBottom(true);
                     if (this.messages.length > 0) {
                         this.showSuggestionChips();
                     }

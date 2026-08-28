@@ -385,8 +385,14 @@ export function createChatActionsMixin(dependencies) {
             }
         }
 
-        scrollToBottom() {
+        scrollToBottom(force = false) {
             const area = this.elements.messagesArea;
+            // Stick-to-bottom gate: while a response is streaming in, only
+            // auto-scroll if the user is parked at the bottom watching it.
+            // If they've scrolled up to read earlier content, hold their
+            // viewport steady as new content lands. `force` (a discrete,
+            // user-initiated jump like sending a message) always wins.
+            if (!force && this._autoScrollEnabled === false) return;
             // 'auto' during streaming: renderStreaming re-issues this every
             // ~150ms, and overlapping smooth animations toward a growing
             // scrollHeight fight each other — visible jank on long responses.
@@ -395,6 +401,29 @@ export function createChatActionsMixin(dependencies) {
             requestAnimationFrame(() => {
                 area.scrollTo({ top: area.scrollHeight, behavior });
             });
+        }
+
+        // Track whether the user is parked at the bottom of the transcript.
+        // Attached once to the stable #messagesArea element. Appending content
+        // grows scrollHeight without firing a scroll event, so this flag only
+        // flips in response to a real user scroll — exactly what we want.
+        setupScrollTracking() {
+            const area = this.elements.messagesArea;
+            if (!area || this._scrollTrackingBound) return;
+            this._scrollTrackingBound = true;
+            this._autoScrollEnabled = true;
+            // Threshold in px: treat "within ~a line or two of the bottom" as
+            // still-at-bottom so a stray pixel doesn't disable auto-scroll.
+            const BOTTOM_THRESHOLD = 60;
+            area.addEventListener(
+                'scroll',
+                () => {
+                    const distanceFromBottom =
+                        area.scrollHeight - area.scrollTop - area.clientHeight;
+                    this._autoScrollEnabled = distanceFromBottom <= BOTTOM_THRESHOLD;
+                },
+                { passive: true }
+            );
         }
 
         convertFileSrc(path) {
