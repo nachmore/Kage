@@ -1,0 +1,952 @@
+<!doctype html>
+<!--
+  Kage mascot animation lab. GENERATED: edit lab.template.html, then run
+      python design/mascot-lab/build.py
+  which inlines the real ui/assets SVGs into mascot-lab.html. Open that file
+  straight from disk — no server or app build needed.
+
+  URL params (handy for screenshots / reproducing a moment):
+    ?at=1500                 simulate to t=1500ms, then freeze
+    &script=think@500,done@6000,poke@9000
+    &theme=light  &speed=0.5  &idle=10
+    &pose=poses/happy (force a pose)  &lid=1 (force eyelids shut)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kage mascot lab</title>
+<style>
+:root {
+    --body: #81e6d9;
+    --eyes: #1a202c;
+    --grad: linear-gradient(135deg, #81e6d9 0%, #319795 100%);
+    --page: #12161f;
+    --panel: #1a202c;
+    --panel2: #232a38;
+    --text: #e2e8f0;
+    --muted: #8a94a7;
+    --accent: #38b2ac;
+    --bubble: #ffffff;
+}
+body.light {
+    --body: #1a1a1a;
+    --eyes: #ffffff;
+    --page: #e9edf2;
+    --panel: #ffffff;
+    --panel2: #f3f5f8;
+    --text: #1a202c;
+    --muted: #5d6778;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 10px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid rgba(127,127,127,.25);
+}
+header h1 { font-size: 15px; margin: 0 10px 0 0; }
+button, select {
+    font: inherit; color: var(--text); background: var(--panel2);
+    border: 1px solid rgba(127,127,127,.35); border-radius: 6px;
+    padding: 5px 10px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.spacer { flex: 1; }
+.clock { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 120px; text-align: right; }
+main { display: grid; grid-template-columns: repeat(3, minmax(300px, 1fr)); gap: 12px; padding: 12px; }
+.col {
+    background: var(--panel); border-radius: 10px; padding: 12px;
+    border: 1px solid rgba(127,127,127,.2);
+    display: flex; flex-direction: column; gap: 10px;
+}
+.col h2 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.col h2 select { margin-left: auto; font-size: 12px; padding: 3px 6px; }
+.desc { color: var(--muted); font-size: 12px; min-height: 32px; }
+.views { display: flex; gap: 12px; align-items: flex-end; }
+.appmock {
+    display: flex; width: 160px; height: 100px; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,.4); flex-shrink: 0;
+}
+.appmock .bubble {
+    flex: 1; background: var(--bubble); padding: 10px 8px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.appmock .bubble i { display: block; height: 6px; border-radius: 3px; background: #dfe3ea; }
+.appmock .bubble i:nth-child(2) { width: 70%; }
+.appmock .bubble i:nth-child(3) { width: 85%; }
+.inspector {
+    width: 180px; height: 300px; border-radius: 12px; overflow: hidden; position: relative;
+    background: var(--grad); flex-shrink: 0;
+}
+.inspector .ground {
+    position: absolute; left: 0; right: 0; height: 1px;
+    background: rgba(255,255,255,.35);
+}
+.inspector > .view { position: absolute; left: 0; top: 0; transform-origin: 0 0; transform: scale(3); }
+.view {
+    position: relative; width: 60px; height: 100px; flex-shrink: 0;
+    background: var(--grad); overflow: hidden; cursor: pointer;
+}
+.rig {
+    position: absolute; transform-origin: 50% 100%;
+    filter: url(#kage-outline) drop-shadow(0 2px 4px rgba(0,0,0,.2));
+}
+.art { position: absolute; display: none; overflow: visible; }
+.art.show { display: block; }
+.shadow {
+    position: absolute; height: 3px; border-radius: 50%;
+    background: var(--body); opacity: 0; transform-origin: 50% 50%;
+}
+.fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.fx span { position: absolute; color: #fff; font-weight: 700; text-shadow: 0 0 2px rgba(0,0,0,.35); }
+.m-body { fill: var(--body); }
+.m-eyes { fill: var(--eyes); }
+.m-lid {
+    transform-box: fill-box; transform-origin: 50% 0;
+    transform: scaleY(var(--lid, 0));
+}
+/* The stroke hides the anti-aliased ring a same-size cover leaves behind. */
+.m-lid-shape { fill: var(--body); stroke: var(--body); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.feats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; font-size: 12px; }
+.feats label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+.feats label.sel { grid-column: span 2; }
+.feats select { font-size: 12px; padding: 2px 4px; }
+.notes { font-size: 12px; color: var(--muted); }
+.notes b { color: var(--text); }
+.log {
+    margin: 0 12px 12px; padding: 8px 10px; border-radius: 8px; background: var(--panel);
+    font: 11px/1.5 ui-monospace, Consolas, monospace; color: var(--muted); max-height: 90px; overflow: auto;
+}
+#err {
+    display: none; position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 99;
+    padding: 10px; background: #c53030; color: #fff; border-radius: 8px; font: 12px ui-monospace, monospace;
+    white-space: pre-wrap;
+}
+.findings { margin: 0 12px 12px; padding: 12px 14px; background: var(--panel); border-radius: 10px; }
+.findings h3 { margin: 0 0 6px; font-size: 13px; }
+.findings ol { margin: 0; padding-left: 18px; color: var(--muted); }
+.findings li b { color: var(--text); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+    <!-- Same outline filter mascot.js builds (feMorphology dilate, radius 2). -->
+    <filter id="kage-outline" x="-15%" y="-15%" width="130%" height="130%">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="2" result="expanded"/>
+        <feFlood flood-color="#319795" result="color"/>
+        <feComposite in="color" in2="expanded" operator="in" result="outline"/>
+        <feMerge><feMergeNode in="outline"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+</svg>
+
+<header>
+    <h1>Kage mascot lab</h1>
+    <button id="bThink" title="startThinking()">Start thinking</button>
+    <button id="bDone" title="stopThinking()">Response done</button>
+    <button id="bPoke" title="Click a mascot to poke it too">Poke</button>
+    <button id="bDemo">Auto demo</button>
+    <label>Idle timers
+        <select id="sIdle"><option value="1">1× (real)</option><option value="3">3× faster</option><option value="10" selected>10× faster</option></select>
+    </label>
+    <label>Playback
+        <select id="sSpeed"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option></select>
+    </label>
+    <button id="bTheme">Light theme</button>
+    <button id="bRestart">Restart</button>
+    <span class="spacer"></span>
+    <span class="clock" id="clock"></span>
+</header>
+
+<main id="cols"></main>
+<div class="log" id="log"></div>
+<section class="findings">
+    <h3>What's wrong with the current animations (from the frame art + mascot.js)</h3>
+    <ol>
+        <li><b>Wave ends in a snap.</b> It plays f1→f5 and cuts straight back to f1. f5 is a full head tilt, so the head jerks upright.</li>
+        <li><b>The cat shrinks when it starts thinking.</b> Jump frames draw the cat at less than half the idle size, and the switch to the 60px jump box is a hard cut.</li>
+        <li><b>Uniform frame timing.</b> Every frame is held equally (250ms wave, 125ms hop), with no anticipation, no hang at the apex and no landing beat. The hop's spacing is nearly linear on the way up.</li>
+        <li><b>Thinking never rests.</b> The 8 fps hop loops back-to-back for as long as the agent works, which gets frantic on long waits.</li>
+        <li><b>Idle is a still image.</b> Between waves (every 10±2s) nothing moves: no breathing, no blinks.</li>
+        <li><b>No reduced-motion support</b> anywhere in the app.</li>
+        <li><b>Unused art.</b> 50 poses in ui/assets (happy, winking, interested, sleeping, magnifying-glass…) that the mascot never uses.</li>
+    </ol>
+</section>
+<div id="err"></div>
+
+<script>
+'use strict';
+window.onerror = (m, s, l, c, e) => {
+    const el = document.getElementById('err');
+    el.style.display = 'block';
+    el.textContent += `${m} @${l}:${c}\n${e && e.stack ? e.stack : ''}\n`;
+};
+
+const ASSETS = /*__ASSETS_JSON__*/null;
+const NS = 'http://www.w3.org/2000/svg';
+const qs = new URLSearchParams(location.search);
+// Debug overrides for inspecting art: &pose=poses/happy  &lid=1
+const DEBUG_POSE = qs.get('pose');
+const DEBUG_LID = qs.has('lid') ? Number(qs.get('lid')) : null;
+const atParam = qs.get('at');
+
+// ─── utils ───────────────────────────────────────────────────────────────
+function mulberry32(seed) {
+    return () => {
+        seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, u) => a + (b - a) * u;
+const easeOut = (u) => 1 - (1 - u) ** 3;
+const easeIn = (u) => u * u * u;
+const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
+// Damped spring from 1 → 0 with overshoot: settles a squash/stretch.
+const springDecay = (u, k = 3) => Math.exp(-k * u) * Math.cos(u * Math.PI * 2.2);
+
+// ─── art ─────────────────────────────────────────────────────────────────
+function makeArt(asset, w, h) {
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', asset.vb.join(' '));
+    svg.setAttribute('width', w);
+    svg.setAttribute('height', h);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMax meet');
+    svg.classList.add('art');
+    svg.innerHTML = asset.svg;
+    // Eyelids: a body-coloured copy right after each eye shape. In the
+    // animation frames the eyes are holes in the body over a white band,
+    // so the copy sits behind the body and shows only through the holes;
+    // in the poses the eyes are drawn on top, so the copy covers them.
+    // Wrapped in a <g> because a CSS transform would override the shape's
+    // own transform="" attribute.
+    // Frame art: one white band behind both eyes AND the mouth, so the lid
+    // stops at 86% (eyes closed, mouth kept). Poses: separate eye shapes,
+    // lid fully, but only shapes small enough to be eyes (lidMask) — the
+    // magnifying glass's mirror is white too.
+    const lidMax = asset.lidMask ? 1 : 0.86;
+    svg.querySelectorAll('.m-eyes').forEach((eye, i) => {
+        if (asset.lidMask && !asset.lidMask[i]) return;
+        const g = document.createElementNS(NS, 'g');
+        g.setAttribute('class', 'm-lid');
+        g.style.transform = `scaleY(calc(var(--lid, 0) * ${lidMax}))`;
+        const lid = eye.cloneNode(true);
+        lid.setAttribute('class', 'm-lid-shape');
+        g.appendChild(lid);
+        eye.after(g);
+    });
+    return svg;
+}
+
+const aspectOf = (a) => a.vb[2] / a.vb[3];
+const asset = (key) => {
+    const [set, name] = key.split('/');
+    return ASSETS[set][name];
+};
+
+// Registration: draw the poses (their own 36.8×34.6 viewBox, different
+// scale) so their body matches waving-f1's body: same width, same bottom,
+// same centre. Measured once from real layout.
+let POSE_REG = null;
+function measureRegistration() {
+    const host = document.createElement('div');
+    host.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden';
+    document.body.appendChild(host);
+    const box = (key, w) => {
+        const a = asset(key);
+        const svg = makeArt(a, w, w / aspectOf(a));
+        svg.classList.add('show');
+        host.appendChild(svg);
+        const o = svg.getBoundingClientRect();
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        svg.querySelectorAll('.m-body').forEach((p) => {
+            const r = p.getBoundingClientRect();
+            x0 = Math.min(x0, r.left - o.left); y0 = Math.min(y0, r.top - o.top);
+            x1 = Math.max(x1, r.right - o.left); y1 = Math.max(y1, r.bottom - o.top);
+        });
+        return { w: x1 - x0, cx: (x0 + x1) / 2, bottom: y1, svgW: w };
+    };
+    const ref = box('waving/waving-f1', 400);
+    const pose = box('poses/happy', 400);
+    // Which white shapes in each pose are eyes (small) vs props (mirror, heart).
+    for (const a of Object.values(ASSETS.poses)) {
+        const svg = makeArt({ ...a, lidMask: [] }, 400, 400 / aspectOf(a));
+        svg.classList.add('show');
+        host.appendChild(svg);
+        const o = svg.getBoundingClientRect();
+        a.lidMask = [...svg.querySelectorAll('.m-eyes')].map((e) => {
+            const r = e.getBoundingClientRect();
+            return r.width / o.width < 0.16 && r.height / o.height < 0.22;
+        });
+    }
+    host.remove();
+    const k = ref.w / pose.w;
+    // In units of the reference art's width (scale-free).
+    POSE_REG = {
+        widthMul: k,
+        dx: (ref.cx - pose.cx * k) / ref.svgW,
+        dyFromBottom: (ref.bottom - pose.bottom * k) / ref.svgW,
+        refBottom: ref.bottom / ref.svgW,
+    };
+}
+
+// ─── scheduling helpers ──────────────────────────────────────────────────
+// Clips are timelines: { dur, sample(localMs) → partial pose sample }.
+function framesClip(set, names, durations, opts = {}) {
+    const dur = durations.reduce((a, b) => a + b, 0);
+    return {
+        dur, ...opts,
+        sample(ms) {
+            let acc = 0;
+            for (let i = 0; i < names.length; i++) {
+                acc += durations[i];
+                if (ms < acc) return { pose: `${set}/${names[i]}` };
+            }
+            return { pose: `${set}/${names[names.length - 1]}` };
+        },
+    };
+}
+
+// ─── Current engine (faithful to mascot.js as shipped) ───────────────────
+function CurrentEngine(view, rng) {
+    const W = 60, H = 100;
+    const rig = document.createElement('div');
+    rig.className = 'rig';
+    rig.style.cssText = `left:0;top:0;width:${W}px;height:${H}px;`;
+    view.appendChild(rig);
+    const arts = new Map();
+    // waving at size 40, aspect 43/36 → 40×33; jumping at 60, aspect 45/73 → 37×60.
+    const add = (key, w, h) => {
+        const svg = makeArt(asset(key), w, h);
+        svg.style.left = `${(W - w) / 2}px`;
+        svg.style.top = `${(H - h) / 2}px`;
+        rig.appendChild(svg);
+        arts.set(key, svg);
+    };
+    for (let i = 1; i <= 5; i++) add(`waving/waving-f${i}`, 40, Math.round(40 / (43 / 36)));
+    for (let i = 1; i <= 8; i++) add(`jumping/jumping-f${i}`, Math.round(60 * (45 / 73)), 60);
+
+    let shown = null;
+    let state = 'idle';
+    let clip = null, clipStart = 0;
+    let nextPeriodic = 500; // mascot.js plays the wave 500ms after preload
+    const wave = framesClip('waving', ['waving-f1', 'waving-f2', 'waving-f3', 'waving-f4', 'waving-f5'], [250, 250, 250, 250, 250]);
+    const jump = framesClip('jumping', [1, 2, 3, 4, 5, 6, 7, 8].map((i) => `jumping-f${i}`), Array(8).fill(125), { loop: true });
+
+    function show(key) {
+        if (shown === key) return;
+        if (shown) arts.get(shown).classList.remove('show');
+        arts.get(key).classList.add('show');
+        shown = key;
+    }
+    return {
+        event(name, t, cfg) {
+            if (name === 'think') {
+                state = 'active'; clip = jump; clipStart = t;
+            } else if (name === 'done') {
+                if (state !== 'active') return;
+                state = 'periodic'; clip = wave; clipStart = t; // setIdle(true) → playPeriodic
+            }
+            // poke: no reaction in the shipped app
+        },
+        update(t, cfg) {
+            if (state === 'idle' && t >= nextPeriodic) {
+                state = 'periodic'; clip = wave; clipStart = t;
+            }
+            if (clip) {
+                let ms = t - clipStart;
+                if (clip.loop) ms %= clip.dur;
+                if (!clip.loop && ms >= clip.dur) {
+                    clip = null; state = 'idle';
+                    nextPeriodic = t + (10000 + (rng() * 2 - 1) * 2000) / cfg.idleScale;
+                } else {
+                    show(clip.sample(ms).pose);
+                    return;
+                }
+            }
+            show('waving/waving-f1');
+        },
+    };
+}
+
+// ─── Proposed engine ─────────────────────────────────────────────────────
+const PRESETS = {
+    polish: {
+        label: 'A · Polish',
+        desc: 'Same art and states as today, with better timing: breathing, blinks, a wave that eases back, a hop with anticipation and rest beats, and no change in size.',
+        f: { breathe: true, blink: true, waveEase: true, hop: 'procedural', sizeAnim: true, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
+    },
+    personality: {
+        label: 'B · Personality',
+        desc: 'Everything in A, plus the unused pose art: glances and winks while idle, a magnifying glass on long thinks, dozing off when ignored, and a small celebration when a reply lands.',
+        f: { breathe: true, blink: true, waveEase: true, hop: 'procedural', sizeAnim: true, glances: true, doze: true, ponder: true, celebrate: true, poke: true, reduced: false },
+    },
+    framesRetimed: {
+        label: 'Retimed frames',
+        desc: 'Keeps the drawn jump frames, retimed with anticipation, a hang at the apex, a landing beat and rest between hops.',
+        f: { breathe: true, blink: true, waveEase: true, hop: 'frames-retimed', sizeAnim: false, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
+    },
+    reduced: {
+        label: 'Reduced motion',
+        desc: 'What prefers-reduced-motion users would get: pose changes and blinks only, with no hops, sway or breathing.',
+        f: { breathe: false, blink: true, waveEase: true, hop: 'procedural', sizeAnim: false, glances: true, doze: true, ponder: true, celebrate: true, poke: true, reduced: true },
+    },
+};
+
+const FEATURES = [
+    ['breathe', 'Breathing'],
+    ['blink', 'Blinks'],
+    ['waveEase', 'Wave eases back'],
+    ['sizeAnim', 'Grow (not cut) on think'],
+    ['glances', 'Idle glances / winks'],
+    ['doze', 'Doze when ignored'],
+    ['ponder', 'Ponder on long thinks'],
+    ['celebrate', 'Celebrate on done'],
+    ['poke', 'React to poke'],
+    ['reduced', 'Reduced motion'],
+];
+
+function ProposedEngine(view, rng) {
+    const W = 60, H = 100;
+    const CAT_W = 40;
+    const ref = asset('waving/waving-f1');
+    const CAT_H = CAT_W / aspectOf(ref);
+    const GROUND = (H + CAT_H) / 2; // same resting spot as the app (centred)
+    // Fraction of the art's height that is the baked-in ground shadow (cut
+    // off while airborne so the shadow doesn't fly with the cat).
+    // Rounded bottom corners so the airborne blob reads as round, not sliced.
+    const SHADOW_CUT = 0.1;
+    const AIR_CLIP = `inset(0 0 ${SHADOW_CUT * 100}% 0 round 0 0 46% 46% / 0 0 34% 34%)`;
+
+    const rig = document.createElement('div');
+    rig.className = 'rig';
+    rig.style.cssText = `left:${(W - CAT_W) / 2}px;top:${GROUND - CAT_H}px;width:${CAT_W}px;height:${CAT_H}px;`;
+    const shadow = document.createElement('div');
+    shadow.className = 'shadow';
+    const SH_W = CAT_W * 0.78;
+    shadow.style.cssText = `left:${(W - SH_W) / 2}px;top:${GROUND - 2.5}px;width:${SH_W}px;`;
+    const fx = document.createElement('div');
+    fx.className = 'fx';
+    view.append(shadow, rig, fx);
+
+    const arts = new Map();
+    const add = (key, el) => { rig.appendChild(el); arts.set(key, el); };
+    for (let i = 1; i <= 5; i++) {
+        const svg = makeArt(asset(`waving/waving-f${i}`), CAT_W, CAT_H);
+        svg.style.left = '0px'; svg.style.top = '0px';
+        add(`waving/waving-f${i}`, svg);
+    }
+    for (const name of Object.keys(ASSETS.poses)) {
+        const a = ASSETS.poses[name];
+        // Poses share one viewBox, so one registration fits them all.
+        const w = CAT_W * POSE_REG.widthMul;
+        const h = w / aspectOf(a);
+        const svg = makeArt(a, w, h);
+        svg.style.left = `${POSE_REG.dx * CAT_W}px`;
+        svg.style.top = `${POSE_REG.dyFromBottom * CAT_W}px`;
+        add(`poses/${name}`, svg);
+    }
+    // Retimed-frames option: the drawn jump, at the app's own jump box.
+    const JW = Math.round(60 * (45 / 73)), JH = 60;
+    for (let i = 1; i <= 8; i++) {
+        const svg = makeArt(asset(`jumping/jumping-f${i}`), JW, JH);
+        svg.style.left = `${(CAT_W - JW) / 2}px`;
+        svg.style.top = `${CAT_H - JH + 3}px`;
+        add(`jumping/jumping-f${i}`, svg);
+    }
+
+    let shown = null;
+    const show = (key) => {
+        if (shown === key) return;
+        if (shown) {
+            arts.get(shown).classList.remove('show');
+            arts.get(shown).style.clipPath = '';
+        }
+        arts.get(key).classList.add('show');
+        shown = key;
+    };
+
+    // ── state ──
+    let mode = 'idle'; // idle | think | done
+    let queue = []; // pending clips
+    let clip = null, clipStart = 0;
+    let modeStart = 0;
+    let lastActivity = 0;
+    let asleep = false;
+    let nextIdle = 2500, nextBlink = 1800, blinkAt = -1, blinkDouble = false;
+    let scale = 1, scaleTarget = 1, scaleVel = 0, lastT = 0;
+    let particles = [];
+    let nextZ = 0;
+    const NO_BLINK = new Set(['poses/happy', 'poses/winking', 'poses/sleeping']);
+
+    // ── clips ──
+    const BASE = 'waving/waving-f1';
+    const waveNames = ['waving-f1', 'waving-f2', 'waving-f3', 'waving-f4', 'waving-f5'];
+    function waveClip(f) {
+        if (!f.waveEase) return framesClip('waving', waveNames, [250, 250, 250, 250, 250], { breathe: true });
+        // Anticipate, accelerate into the tilt, hold the pose, ease back.
+        return framesClip('waving',
+            ['waving-f1', 'waving-f2', 'waving-f3', 'waving-f4', 'waving-f5', 'waving-f4', 'waving-f3', 'waving-f2', 'waving-f1'],
+            [90, 110, 110, 120, 300, 110, 100, 110, 80], { breathe: true });
+    }
+    function hopClip(A, pose = BASE, f = {}) {
+        // anticipate → launch → air (parabola) → land → spring recover
+        const T = { ant: 170, launch: 70, air: 340, land: 100, rec: 300 };
+        const dur = T.ant + T.launch + T.air + T.land + T.rec;
+        return {
+            dur, breathe: false,
+            sample(ms) {
+                let t = ms, sx = 1, sy = 1, y = 0;
+                if (t < T.ant) {
+                    const u = easeOut(t / T.ant);
+                    sy = lerp(1, 0.86, u); sx = lerp(1, 1.1, u);
+                } else if ((t -= T.ant) < T.launch) {
+                    const u = easeOut(t / T.launch);
+                    sy = lerp(0.86, 1.14, u); sx = lerp(1.1, 0.92, u);
+                    y = A * 0.12 * u;
+                } else if ((t -= T.launch) < T.air) {
+                    const u = t / T.air;
+                    const h = 4 * u * (1 - u); // 0→1→0, slow at the apex
+                    y = A * Math.max(h, u < 0.5 ? 0.12 : 0);
+                    const st = u < 0.5 ? lerp(1.14, 1.0, easeOut(u * 2)) : lerp(1.0, 1.07, easeIn((u - 0.5) * 2));
+                    sy = st; sx = 2 - st;
+                } else if ((t -= T.air) < T.land) {
+                    const u = easeOut(t / T.land);
+                    sy = lerp(1.07, 0.84, u); sx = lerp(0.95, 1.12, u);
+                } else {
+                    t -= T.land;
+                    const d = springDecay(t / T.rec);
+                    sy = 1 - 0.16 * d; sx = 1 + 0.12 * d;
+                }
+                return { pose, y, sx, sy, air: y > 0.4 };
+            },
+        };
+    }
+    function restClip(ms, pose = BASE) { return { dur: ms, breathe: true, sample: () => ({ pose }) }; }
+    function swapClip(pose, hold, opts = {}) {
+        // Squash-swap: a quick squash hides the pose change at its lowest point.
+        const SW = 200;
+        return {
+            dur: hold, breathe: true, ...opts,
+            sample(ms) {
+                const u = clamp(ms / SW, 0, 1);
+                const d = ms < SW ? Math.sin(u * Math.PI) : 0;
+                return { pose: ms < SW * 0.35 ? (opts.from || BASE) : pose, sy: 1 - 0.1 * d, sx: 1 + 0.06 * d, mirror: opts.mirror };
+            },
+        };
+    }
+    function ponderClip() {
+        return {
+            dur: 4200, breathe: false, ponder: true,
+            sample(ms) {
+                const p = ms / 4200;
+                return { pose: 'poses/magnifying-glass', y: 1.5 * Math.abs(Math.sin(p * Math.PI * 3)), rot: 2.2 * Math.sin(p * Math.PI * 2) };
+            },
+        };
+    }
+    function framesHop(retimed) {
+        const names = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => `jumping-f${i}`);
+        return retimed
+            ? framesClip('jumping', names, [170, 70, 70, 90, 170, 80, 70, 130], { breathe: false })
+            : framesClip('jumping', names, Array(8).fill(125), { breathe: false });
+    }
+
+    function play(list, t) { queue = list; clip = null; next(t); }
+    function next(t) { clip = queue.shift() || null; clipStart = t; }
+
+    function emit(kind, t) {
+        if (kind === 'sparkle') {
+            // t may be in the future: drawParticles keeps them hidden until then.
+            for (let i = 0; i < 6; i++) {
+                const a = (i / 6) * Math.PI * 2 + rng() * 0.5;
+                particles.push({ kind, t0: t, life: 650, a, r: 18 + rng() * 6, ch: '✦', size: 6 + rng() * 3 });
+            }
+        } else if (kind === 'z') {
+            particles.push({ kind, t0: t, life: 1900, ch: 'z', size: 7 });
+        }
+    }
+    function drawParticles(t) {
+        particles = particles.filter((p) => t - p.t0 < p.life);
+        while (fx.childNodes.length < particles.length) fx.appendChild(document.createElement('span'));
+        while (fx.childNodes.length > particles.length) fx.lastChild.remove();
+        particles.forEach((p, i) => {
+            const el = fx.childNodes[i];
+            const u = (t - p.t0) / p.life;
+            el.textContent = p.ch;
+            if (u < 0) { el.style.opacity = '0'; return; }
+            let x, y, s, o;
+            if (p.kind === 'sparkle') {
+                // Start at the head's edge, not on the face.
+                const d = 11 + easeOut(u) * p.r;
+                x = W / 2 + Math.cos(p.a) * d; y = GROUND - CAT_H * 0.55 + Math.sin(p.a) * d * 0.8;
+                s = p.size * (1 - u * 0.4); o = 1 - u;
+            } else {
+                x = W / 2 + 9 + u * 9 + Math.sin(u * 6) * 1.5; y = GROUND - CAT_H * 0.9 - u * 18;
+                s = p.size * (0.6 + u * 0.7); o = u < 0.2 ? u / 0.2 : 1 - (u - 0.2) / 0.8;
+            }
+            el.style.cssText = `left:${x}px;top:${y}px;font-size:${s}px;opacity:${o};transform:translate(-50%,-50%)`;
+        });
+    }
+
+    function goIdle(t, f) {
+        mode = 'idle'; modeStart = t; lastActivity = t;
+        scaleTarget = 1;
+        nextIdle = t + 3000;
+    }
+
+    return {
+        event(name, t, f) {
+            lastActivity = t;
+            const wake = asleep;
+            asleep = false;
+            if (name === 'think') {
+                mode = 'think'; modeStart = t;
+                scaleTarget = f.sizeAnim && !f.reduced ? 1.08 : 1;
+                if (f.reduced) play([swapClip('poses/interested', 600), restClip(1e9, 'poses/magnifying-glass')], t);
+                else if (f.hop === 'procedural') play(wake ? [hopClip(6, 'poses/interested')] : [], t);
+                else play([], t);
+            } else if (name === 'done') {
+                if (mode !== 'think') return;
+                mode = 'done'; scaleTarget = 1;
+                const list = [];
+                if (f.celebrate) {
+                    list.push(swapClip('poses/happy', 220, { from: shown }));
+                    if (!f.reduced) list.push(hopClip(9, 'poses/happy'));
+                    list.push(restClip(f.reduced ? 900 : 500, 'poses/happy'));
+                }
+                if (!f.reduced) list.push(waveClip(f));
+                play(list, t);
+                // Burst at the top of the celebration hop (swap 220 + anticipate/launch).
+                if (f.celebrate) emit('sparkle', t + (f.reduced ? 100 : 480));
+            } else if (name === 'poke') {
+                if (!f.poke || mode === 'think') return;
+                if (wake && !f.reduced) play([hopClip(5, 'poses/interested'), swapClip('poses/interested', 700)], t);
+                else play([swapClip('poses/interested', 900)], t);
+                mode = 'idle';
+            }
+        },
+        update(t, f) {
+            // ── behaviour scheduling ──
+            if (!clip) {
+                if (mode === 'think') {
+                    const thinkFor = t - modeStart;
+                    if (f.reduced) {
+                        queue.push(restClip(1e9, 'poses/magnifying-glass'));
+                    } else if (f.ponder && thinkFor > 7000 && f.hop === 'procedural') {
+                        queue.push(ponderClip(), ponderClip(), hopClip(6, 'poses/magnifying-glass'), restClip(500, 'poses/magnifying-glass'));
+                    } else if (f.hop === 'procedural') {
+                        queue.push(hopClip(13), restClip(380 + rng() * 320));
+                    } else {
+                        queue.push(framesHop(f.hop === 'frames-retimed'));
+                        if (f.hop === 'frames-retimed') queue.push(restClip(450, 'jumping/jumping-f1'));
+                    }
+                    next(t);
+                } else if (mode === 'done') {
+                    goIdle(t, f);
+                }
+            }
+            if (mode === 'idle' && !clip) {
+                if (f.doze && !asleep && t - lastActivity > 60000 / f.idleScale) {
+                    asleep = true;
+                    play([swapClip('poses/sleeping', 1e9)], t);
+                    nextZ = t + 600;
+                } else if (!asleep && t >= nextIdle) {
+                    const r = rng();
+                    const list = [];
+                    if (f.glances && r < 0.35) list.push(swapClip('poses/looking-to-the-right', 1500, { mirror: rng() < 0.5 }));
+                    else if (f.glances && r < 0.5) list.push(swapClip('poses/winking', 650));
+                    else if (f.glances && r < 0.62) list.push(swapClip('poses/interested', 1300));
+                    else if (!f.reduced) list.push(waveClip(f));
+                    if (list.length) play(list, t);
+                    nextIdle = t + (f.glances ? 6000 + rng() * 6000 : 10000 + (rng() * 2 - 1) * 2000) / f.idleScale;
+                }
+            }
+            // (The sleeping art already has drawn "zz"; no extra particles.)
+
+            // ── sample ──
+            let s = { pose: BASE, y: 0, sx: 1, sy: 1, rot: 0, air: false, mirror: false };
+            let breathe = true;
+            if (clip) {
+                const ms = t - clipStart;
+                if (ms >= clip.dur) { next(t); }
+                if (clip) {
+                    s = { ...s, ...clip.sample(t - clipStart) };
+                    breathe = clip.breathe !== false;
+                }
+            }
+            if (f.reduced) { s.y = 0; s.sx = 1; s.sy = 1; s.rot = 0; breathe = false; }
+            if (DEBUG_POSE) s.pose = DEBUG_POSE;
+            show(s.pose);
+
+            if (breathe && f.breathe) {
+                const period = asleep ? 5200 : 3600;
+                const amp = asleep ? 0.032 : 0.018;
+                const b = Math.sin((t / period) * Math.PI * 2);
+                s.sy *= 1 + amp * b;
+                s.sx *= 1 - amp * 0.45 * b;
+            }
+
+            // Size: spring towards the target instead of cutting.
+            // Fixed 16ms sub-steps so playback speed and frame rate don't
+            // change the spring's character.
+            const steps = clamp(Math.round((t - lastT) / 16), 0, 30);
+            lastT = t;
+            for (let i = 0; i < steps; i++) {
+                scaleVel += (scaleTarget - scale) * 0.012;
+                scaleVel *= 0.84;
+                scale += scaleVel;
+            }
+            if (!f.sizeAnim) scale = scaleTarget;
+
+            const mx = s.mirror ? -1 : 1;
+            rig.style.transform = `translate(0px, ${-s.y}px) rotate(${s.rot || 0}deg) scale(${s.sx * scale * mx}, ${s.sy * scale})`;
+            // Clip the art, not the rig: the rig carries the outline and
+            // drop-shadow filter, which a clip on it would cut into a box.
+            arts.get(shown).style.clipPath = s.air ? AIR_CLIP : '';
+            const sh = clamp(1 - s.y / 22, 0.45, 1);
+            shadow.style.opacity = s.air ? (0.55 * sh).toFixed(3) : '0';
+            shadow.style.transform = `scale(${sh * scale}, 1)`;
+
+            // ── blinks ──
+            let lid = 0;
+            if (f.blink && !NO_BLINK.has(s.pose) && !s.pose.startsWith('jumping')) {
+                if (t >= nextBlink && blinkAt < 0) { blinkAt = t; blinkDouble = rng() < 0.18; }
+                if (blinkAt >= 0) {
+                    const u = t - blinkAt;
+                    const one = (v) => (v < 60 ? v / 60 : v < 95 ? 1 : v < 160 ? 1 - (v - 95) / 65 : 0);
+                    lid = Math.max(one(u), blinkDouble ? one(u - 230) : 0);
+                    if (u > (blinkDouble ? 400 : 170)) { blinkAt = -1; nextBlink = t + 2400 + rng() * 3600; }
+                }
+            }
+            if (DEBUG_LID !== null) lid = DEBUG_LID;
+            rig.style.setProperty('--lid', lid.toFixed(3));
+            drawParticles(t);
+        },
+    };
+}
+
+// ─── columns ─────────────────────────────────────────────────────────────
+const columns = [];
+function buildColumn(spec) {
+    const col = document.createElement('section');
+    col.className = 'col';
+    const h2 = document.createElement('h2');
+    const title = document.createElement('span');
+    h2.appendChild(title);
+    col.appendChild(h2);
+    const desc = document.createElement('div');
+    desc.className = 'desc';
+    col.appendChild(desc);
+
+    const views = document.createElement('div');
+    views.className = 'views';
+    const appmock = document.createElement('div');
+    appmock.className = 'appmock';
+    const appView = document.createElement('div');
+    appView.className = 'view';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.innerHTML = '<i></i><i></i><i></i>';
+    appmock.append(appView, bubble);
+    const insp = document.createElement('div');
+    insp.className = 'inspector';
+    const inspView = document.createElement('div');
+    inspView.className = 'view';
+    const ground = document.createElement('div');
+    ground.className = 'ground';
+    insp.append(inspView, ground);
+    views.append(appmock, insp);
+    col.appendChild(views);
+
+    const state = { spec, f: null, engines: [], appView, inspView, ground };
+    let feats = null;
+    if (spec.kind === 'current') {
+        title.textContent = 'Current (as shipped)';
+        desc.textContent = 'Exactly what mascot.js does today: 4 fps wave every 10±2s, an 8 fps hop loop at a 60px box while thinking, one wave on done.';
+    } else {
+        const sel = document.createElement('select');
+        for (const [k, p] of Object.entries(PRESETS)) {
+            const o = document.createElement('option');
+            o.value = k; o.textContent = p.label;
+            sel.appendChild(o);
+        }
+        sel.value = spec.preset;
+        h2.appendChild(sel);
+        feats = document.createElement('div');
+        feats.className = 'feats';
+        col.appendChild(feats);
+        const applyPreset = (k) => {
+            const p = PRESETS[k];
+            title.textContent = p.label;
+            desc.textContent = p.desc;
+            state.f = { ...p.f };
+            renderFeats();
+            rebuild(state);
+        };
+        const renderFeats = () => {
+            feats.innerHTML = '';
+            const hopSel = document.createElement('label');
+            hopSel.className = 'sel';
+            hopSel.innerHTML = 'Thinking hop: ';
+            const hs = document.createElement('select');
+            for (const [v, l] of [['procedural', 'Procedural squash & stretch'], ['frames-retimed', 'Drawn frames, retimed'], ['frames-current', 'Drawn frames, as today']]) {
+                const o = document.createElement('option'); o.value = v; o.textContent = l; hs.appendChild(o);
+            }
+            hs.value = state.f.hop;
+            hs.onchange = () => { state.f.hop = hs.value; rebuild(state); };
+            hopSel.appendChild(hs);
+            feats.appendChild(hopSel);
+            for (const [key, label] of FEATURES) {
+                const l = document.createElement('label');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.checked = !!state.f[key];
+                cb.onchange = () => { state.f[key] = cb.checked; rebuild(state); };
+                l.append(cb, document.createTextNode(label));
+                feats.appendChild(l);
+            }
+        };
+        sel.onchange = () => applyPreset(sel.value);
+        state.f = { ...PRESETS[spec.preset].f };
+        title.textContent = PRESETS[spec.preset].label;
+        desc.textContent = PRESETS[spec.preset].desc;
+        renderFeats();
+    }
+    for (const v of [appView, inspView]) v.onclick = () => fire('poke');
+    document.getElementById('cols').appendChild(col);
+    columns.push(state);
+    rebuild(state);
+}
+
+function rebuild(state) {
+    for (const v of [state.appView, state.inspView]) v.innerHTML = '';
+    // Same seed for both views of a column, so they stay frame-identical.
+    const seed = 1234 + columns.indexOf(state);
+    const make = (v) => (state.spec.kind === 'current' ? CurrentEngine(v, mulberry32(seed)) : ProposedEngine(v, mulberry32(seed)));
+    state.engines = [make(state.appView), make(state.inspView)];
+    const GROUND_PX = state.spec.kind === 'current' ? 0 : (100 + 40 / aspectOf(asset('waving/waving-f1'))) / 2;
+    state.ground.style.display = state.spec.kind === 'current' ? 'none' : '';
+    state.ground.style.top = `${GROUND_PX * 3}px`;
+    // Replay history so a rebuilt column is in the same state as the others.
+    simTo(state, clock.t);
+}
+
+// ─── clock + events ──────────────────────────────────────────────────────
+const clock = { t: 0, speed: Number(qs.get('speed') || 1), idleScale: Number(qs.get('idle') || 10) };
+const history = []; // [{ name, t }]
+
+function cfgFor(state) { return { ...(state.f || {}), idleScale: clock.idleScale }; }
+
+function simTo(state, tEnd) {
+    // Events are cheap to replay; per-frame updates (DOM writes) are not.
+    // Apply every event, but only simulate frames for the last 8s.
+    // Frozen (screenshot) mode simulates everything so moments are exact.
+    const tStart = atParam !== null ? 0 : Math.max(0, tEnd - 8000);
+    let hi = 0;
+    while (hi < history.length && history[hi].t <= tStart) {
+        for (const e of state.engines) e.event(history[hi].name, history[hi].t, cfgFor(state));
+        hi++;
+    }
+    for (let t = tStart; t <= tEnd; t += 16) {
+        while (hi < history.length && history[hi].t <= t) {
+            for (const e of state.engines) e.event(history[hi].name, history[hi].t, cfgFor(state));
+            hi++;
+        }
+        for (const e of state.engines) e.update(t, cfgFor(state));
+    }
+}
+
+function fire(name) {
+    history.push({ name, t: clock.t });
+    for (const c of columns) for (const e of c.engines) e.event(name, clock.t, cfgFor(c));
+    log(`${(clock.t / 1000).toFixed(2)}s  ${name}`);
+}
+
+function log(msg) {
+    const el = document.getElementById('log');
+    el.textContent = `${msg}\n${el.textContent}`.slice(0, 4000);
+}
+
+// ─── demo script ─────────────────────────────────────────────────────────
+let demo = null;
+function startDemo() {
+    const steps = [['think', 3000], ['done', 9000], ['poke', 6000], ['think', 2500], ['done', 4000]];
+    let i = 0, at = clock.t + 1000;
+    demo = () => {
+        if (clock.t >= at) {
+            fire(steps[i][0]);
+            at = clock.t + steps[i][1];
+            i = (i + 1) % steps.length;
+        }
+    };
+}
+
+// ─── boot ────────────────────────────────────────────────────────────────
+measureRegistration();
+if (qs.get('theme') === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('bTheme').textContent = 'Dark theme';
+}
+buildColumn({ kind: 'current' });
+buildColumn({ kind: 'proposed', preset: 'polish' });
+buildColumn({ kind: 'proposed', preset: 'personality' });
+
+document.getElementById('bThink').onclick = () => fire('think');
+document.getElementById('bDone').onclick = () => fire('done');
+document.getElementById('bPoke').onclick = () => fire('poke');
+document.getElementById('bDemo').onclick = (e) => {
+    if (demo) { demo = null; e.target.classList.remove('on'); }
+    else { startDemo(); e.target.classList.add('on'); }
+};
+document.getElementById('sIdle').value = String(clock.idleScale);
+document.getElementById('sIdle').onchange = (e) => { clock.idleScale = Number(e.target.value); };
+document.getElementById('sSpeed').value = String(clock.speed);
+document.getElementById('sSpeed').onchange = (e) => { clock.speed = Number(e.target.value); };
+document.getElementById('bTheme').onclick = (e) => {
+    const light = document.body.classList.toggle('light');
+    e.target.textContent = light ? 'Dark theme' : 'Light theme';
+};
+document.getElementById('bRestart').onclick = () => {
+    history.length = 0; clock.t = 0;
+    for (const c of columns) rebuild(c);
+    document.getElementById('log').textContent = '';
+};
+
+if (qs.get('script')) {
+    for (const part of qs.get('script').split(',')) {
+        const [name, t] = part.split('@');
+        history.push({ name, t: Number(t) });
+    }
+}
+if (atParam !== null) {
+    // Frozen mode: deterministic simulation to a moment, for screenshots.
+    clock.t = Number(atParam);
+    for (const c of columns) rebuild(c);
+    document.getElementById('clock').textContent = `frozen at ${clock.t}ms`;
+} else {
+    let last = performance.now();
+    let pending = [...history].sort((a, b) => a.t - b.t);
+    history.length = 0;
+    const frame = (now) => {
+        const dt = Math.min(50, now - last) * clock.speed;
+        last = now;
+        clock.t += dt;
+        while (pending.length && pending[0].t <= clock.t) fire(pending.shift().name);
+        if (demo) demo();
+        for (const c of columns) for (const e of c.engines) e.update(clock.t, cfgFor(c));
+        document.getElementById('clock').textContent = `t = ${(clock.t / 1000).toFixed(1)}s`;
+        requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
