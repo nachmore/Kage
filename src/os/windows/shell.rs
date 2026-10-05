@@ -115,6 +115,64 @@ pub fn spawn_elevated_impl(program: &str, args: &[&str]) -> std::io::Result<std:
     }
 }
 
+/// PowerShell that sets (not toggles) the default playback device's mute
+/// state via Core Audio `IAudioEndpointVolume::SetMute`. The previous
+/// VK_VOLUME_MUTE keystroke only toggles, so "unmute" muted an unmuted system.
+/// `system_command_impl` must return a spawnable (program, args) pair, hence
+/// PowerShell + Add-Type rather than calling Core Audio in-process.
+///
+/// The unnamed methods (`f`..`p`) are placeholder vtable slots: 11 methods
+/// precede SetMute in IAudioEndpointVolume, 1 precedes GetDefaultAudioEndpoint
+/// in IMMDeviceEnumerator. Only the slot count matters for unused ones.
+///
+/// The script contains no double quotes or backslashes (the C# quotes are
+/// spelled `~` and swapped in by PowerShell) so it survives both Rust's argv
+/// quoting and the space-joined parameter string of the elevated path.
+macro_rules! set_mute_ps {
+    ($mute:literal) => {
+        concat!(
+            "$ErrorActionPreference = 'Stop'\n",
+            "$src = '\n",
+            "using System;\n",
+            "using System.Runtime.InteropServices;\n",
+            "[Guid(~5CDF2C82-841E-4546-9722-0CF74078229A~), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]\n",
+            "interface IAudioEndpointVolume {\n",
+            "  int f(); int g(); int h(); int i(); int j(); int k();\n",
+            "  int l(); int m(); int n(); int o(); int p();\n",
+            "  int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, IntPtr eventContext);\n",
+            "}\n",
+            "[Guid(~D666063F-1587-4E43-81F1-B948E807363F~), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]\n",
+            "interface IMMDevice {\n",
+            "  int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, out IAudioEndpointVolume endpoint);\n",
+            "}\n",
+            "[Guid(~A95664D2-9614-4F35-A746-DE8DB63617E6~), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]\n",
+            "interface IMMDeviceEnumerator {\n",
+            "  int f();\n",
+            "  int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);\n",
+            "}\n",
+            "[ComImport, Guid(~BCDE0395-E52F-467C-8E3D-C4579291692E~)] class MMDeviceEnumeratorComObject { }\n",
+            "public static class KageAudio {\n",
+            "  public static void SetMute(bool mute) {\n",
+            "    var enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumeratorComObject());\n",
+            "    IMMDevice device;\n",
+            // eRender = 0, eMultimedia = 1
+            "    Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(0, 1, out device));\n",
+            "    IAudioEndpointVolume volume;\n",
+            "    var iid = typeof(IAudioEndpointVolume).GUID;\n",
+            // CLSCTX_ALL = 23
+            "    Marshal.ThrowExceptionForHR(device.Activate(ref iid, 23, IntPtr.Zero, out volume));\n",
+            "    Marshal.ThrowExceptionForHR(volume.SetMute(mute, IntPtr.Zero));\n",
+            "  }\n",
+            "}\n",
+            "'.Replace('~', [string][char]34)\n",
+            "Add-Type -TypeDefinition $src\n",
+            "[KageAudio]::SetMute($",
+            $mute,
+            ")\n",
+        )
+    };
+}
+
 /// Get the program and arguments for a well-known system command on Windows.
 pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
     match cmd {
@@ -128,16 +186,18 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
             "powershell",
             vec![
                 "-NoProfile",
+                "-NonInteractive",
                 "-Command",
-                "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
+                set_mute_ps!("true"),
             ],
         ),
         "unmute" => (
             "powershell",
             vec![
                 "-NoProfile",
+                "-NonInteractive",
                 "-Command",
-                "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
+                set_mute_ps!("false"),
             ],
         ),
         "emoji" => ("cmd", vec!["/C", "start", "ms-inputapp:///emojiandmore"]),
@@ -157,5 +217,27 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
         "shutdown" => ("shutdown", vec!["/s", "/t", "0"]),
         "signout" => ("shutdown", vec!["/l"]),
         _ => ("cmd", vec!["/C", "echo", "Unknown command"]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::system_command_impl;
+
+    #[test]
+    fn mute_and_unmute_set_explicit_state() {
+        // Both used to send the same toggle keystroke.
+        let (_, mute) = system_command_impl("mute");
+        let (_, unmute) = system_command_impl("unmute");
+        let mute_script = mute.last().unwrap();
+        let unmute_script = unmute.last().unwrap();
+        assert!(mute_script.ends_with("[KageAudio]::SetMute($true)\n"));
+        assert!(unmute_script.ends_with("[KageAudio]::SetMute($false)\n"));
+        // The C# sits in a single-quoted PowerShell string, and nothing may
+        // need escaping on the command line (see `set_mute_ps!`).
+        let csharp_start = mute_script.find("$src = '").unwrap() + 8;
+        let csharp_end = mute_script.rfind("'.Replace(").unwrap();
+        assert!(!mute_script[csharp_start..csharp_end].contains('\''));
+        assert!(!mute_script.contains('"') && !mute_script.contains('\\'));
     }
 }

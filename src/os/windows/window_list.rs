@@ -88,6 +88,12 @@ fn get_process_info(pid: u32) -> (String, String) {
     }
 }
 
+/// True when `pid` is this Kage process (all of our top-level windows are
+/// created by the main process; WebView2 children are never top-level).
+fn is_own_process(pid: u32) -> bool {
+    pid != 0 && pid == std::process::id()
+}
+
 /// Check if a window is a real top-level app window (not a tool window, not owned)
 fn is_app_window(hwnd: isize) -> bool {
     unsafe {
@@ -121,13 +127,13 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
             None => return 1,
         };
 
-        // Skip our own window
-        if title.contains("Kage") {
-            return 1;
-        }
-
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
+        // Skip our own windows. Matched by PID, not title: a terminal whose
+        // cwd or an editor whose project is named "Kage" is a foreign window.
+        if is_own_process(pid) {
+            return 1;
+        }
         let (process_name, exe_path) = if pid > 0 {
             get_process_info(pid)
         } else {
@@ -190,7 +196,7 @@ pub fn focus_window_impl(handle: u64) -> Result<(), String> {
 }
 
 /// Get the foreground window's title and process name.
-/// Returns None if no foreground window or it's our own window.
+/// Returns None if no foreground window or it belongs to this process.
 pub fn get_foreground_window_info() -> Option<(String, String)> {
     #[allow(non_snake_case)]
     extern "system" {
@@ -204,12 +210,15 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
         }
 
         let title = get_window_title(hwnd)?;
-        if title.contains("Kage") {
-            return None;
-        }
 
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
+        // PID, not title: a title match ("PS C:\src\Kage>") used to drop the
+        // process name of a foreign terminal, which bypassed the Ctrl+C
+        // capture blocklist and killed whatever was running in it.
+        if is_own_process(pid) {
+            return None;
+        }
         let (process_name, _) = if pid > 0 {
             get_process_info(pid)
         } else {
@@ -236,4 +245,16 @@ pub fn get_window_icons(pids: &[u64]) -> std::collections::HashMap<u64, String> 
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn own_process_is_matched_by_pid() {
+        assert!(is_own_process(std::process::id()));
+        assert!(!is_own_process(0));
+        assert!(!is_own_process(std::process::id().wrapping_add(1)));
+    }
 }

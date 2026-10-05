@@ -37,7 +37,11 @@ const GMEM_MOVEABLE: u32 = 0x0002;
 
 pub fn read_clipboard_impl() -> Option<String> {
     unsafe {
-        if OpenClipboard(ptr::null_mut()) == 0 {
+        // Retry like the write path: selection capture reads right after
+        // Ctrl+C, exactly when clipboard-history listeners hold the clipboard.
+        // A missed read there loses the capture or skips the restore.
+        if !open_clipboard_with_retry() {
+            log::warn!("read_clipboard: OpenClipboard failed after retries");
             return None;
         }
         let handle = GetClipboardData(CF_UNICODETEXT);

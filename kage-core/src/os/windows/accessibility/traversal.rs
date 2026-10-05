@@ -4,7 +4,9 @@ use std::time::{Duration, Instant};
 
 use log::{info, warn};
 use uiautomation::controls::ControlType;
-use uiautomation::core::{UIAutomation, UIElement as UiaElement, UITreeWalker};
+use uiautomation::core::{UIAutomation, UICacheRequest, UIElement as UiaElement, UITreeWalker};
+use uiautomation::types::Handle;
+use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
 use crate::computer_control::tree::UIElement;
 use crate::os::accessibility::{AccessibleWindowInfo, FindElementsParams};
@@ -83,8 +85,38 @@ fn electron_hint(elem: &UiaElement, count: usize) -> Option<String> {
     }
 }
 
+/// Tree navigation for walks. With the worker's cache request, each step
+/// prefetches the properties `element` reads in the same round trip.
+struct Nav<'a> {
+    walker: &'a UITreeWalker,
+    cache: Option<&'a UICacheRequest>,
+}
+
+impl<'a> Nav<'a> {
+    fn new(state: &'a WorkerState) -> Self {
+        Self {
+            walker: &state.walker,
+            cache: state.cache.as_ref(),
+        }
+    }
+
+    fn first_child(&self, elem: &UiaElement) -> uiautomation::Result<UiaElement> {
+        match self.cache {
+            Some(cache) => self.walker.get_first_child_build_cache(elem, cache),
+            None => self.walker.get_first_child(elem),
+        }
+    }
+
+    fn next_sibling(&self, elem: &UiaElement) -> uiautomation::Result<UiaElement> {
+        match self.cache {
+            Some(cache) => self.walker.get_next_sibling_build_cache(elem, cache),
+            None => self.walker.get_next_sibling(elem),
+        }
+    }
+}
+
 fn build_element(
-    walker: &UITreeWalker,
+    nav: &Nav,
     elem: &UiaElement,
     depth: usize,
     max_depth: usize,
@@ -94,7 +126,7 @@ fn build_element(
     if state.exhausted() {
         return None;
     }
-    if !include_invisible && matches!(elem.is_offscreen(), Ok(true)) {
+    if !include_invisible && element::is_offscreen(elem) {
         return None;
     }
 
@@ -102,24 +134,19 @@ fn build_element(
     state.count += 1;
 
     if depth < max_depth && !state.exhausted() {
-        if let Ok(child) = walker.get_first_child(elem) {
-            if let Some(child_ui) = build_element(
-                walker,
-                &child,
-                depth + 1,
-                max_depth,
-                include_invisible,
-                state,
-            ) {
+        if let Ok(child) = nav.first_child(elem) {
+            if let Some(child_ui) =
+                build_element(nav, &child, depth + 1, max_depth, include_invisible, state)
+            {
                 ui.children.push(child_ui);
             }
             let mut next = child;
-            while let Ok(sibling) = walker.get_next_sibling(&next) {
+            while let Ok(sibling) = nav.next_sibling(&next) {
                 if state.exhausted() {
                     break;
                 }
                 if let Some(sibling_ui) = build_element(
-                    walker,
+                    nav,
                     &sibling,
                     depth + 1,
                     max_depth,
@@ -135,11 +162,25 @@ fn build_element(
     Some(ui)
 }
 
+/// The top-level window the user is working in. The UIA focused element is
+/// a control (an edit box, a button), so walking it would miss the window's
+/// menus, title bar and other controls; resolve the foreground HWND instead
+/// and fall back to the focused element only if that fails.
+fn foreground_window(automation: &UIAutomation) -> Result<UiaElement, String> {
+    let hwnd = unsafe { GetForegroundWindow() };
+    if !hwnd.is_invalid() {
+        if let Ok(window) = automation.element_from_handle(Handle::from(hwnd.0 as isize)) {
+            return Ok(window);
+        }
+    }
+    automation
+        .get_focused_element()
+        .map_err(|error| format!("No focused window: {}", error))
+}
+
 fn find_window(automation: &UIAutomation, title: Option<&str>) -> Result<UiaElement, String> {
     let Some(title) = title else {
-        return automation
-            .get_focused_element()
-            .map_err(|error| format!("No focused window: {}", error));
+        return foreground_window(automation);
     };
 
     let root = automation
@@ -179,7 +220,7 @@ pub(crate) fn get_ui_tree_inner(
     let window = find_window(&state.automation, window_title)?;
     let mut walk_state = WalkState::new(TREE_WALK_TIMEOUT_SECS);
     let mut element = build_element(
-        &state.walker,
+        &Nav::new(state),
         &window,
         0,
         max_depth,
@@ -213,7 +254,7 @@ pub(crate) fn find_elements_inner(
     let mut results = Vec::new();
     let mut walk_state = WalkState::new(SEARCH_TIMEOUT_SECS);
     search_recursive(
-        &state.walker,
+        &Nav::new(state),
         &window,
         params,
         &mut results,
@@ -232,7 +273,7 @@ pub(crate) fn find_elements_inner(
 }
 
 fn search_recursive(
-    walker: &UITreeWalker,
+    nav: &Nav,
     elem: &UiaElement,
     params: &FindElementsParams,
     results: &mut Vec<UIElement>,
@@ -247,40 +288,32 @@ fn search_recursive(
     let matched = params
         .role
         .as_ref()
-        .is_none_or(|role| element::role(elem) == role.to_lowercase())
+        .is_none_or(|role| element::match_role(elem) == role.to_lowercase())
         && params.name.as_ref().is_none_or(|name| {
-            element::name(elem)
+            element::match_name(elem)
                 .to_lowercase()
                 .contains(&name.to_lowercase())
         })
         && params
             .automation_id
             .as_ref()
-            .is_none_or(|automation_id| element::automation_id(elem) == *automation_id)
+            .is_none_or(|automation_id| element::match_automation_id(elem) == *automation_id)
         && params.value.as_ref().is_none_or(|value| {
-            element::value(elem)
+            element::match_value(elem)
                 .to_lowercase()
                 .contains(&value.to_lowercase())
         });
     if matched && depth > 0 {
         results.push(element::to_ui_element(elem));
     }
-    if let Ok(child) = walker.get_first_child(elem) {
-        search_recursive(walker, &child, params, results, depth + 1, max_depth, state);
+    if let Ok(child) = nav.first_child(elem) {
+        search_recursive(nav, &child, params, results, depth + 1, max_depth, state);
         let mut next = child;
-        while let Ok(sibling) = walker.get_next_sibling(&next) {
+        while let Ok(sibling) = nav.next_sibling(&next) {
             if state.exhausted() {
                 break;
             }
-            search_recursive(
-                walker,
-                &sibling,
-                params,
-                results,
-                depth + 1,
-                max_depth,
-                state,
-            );
+            search_recursive(nav, &sibling, params, results, depth + 1, max_depth, state);
             next = sibling;
         }
     }
@@ -340,7 +373,21 @@ pub(crate) fn get_element_children_inner(
     max_depth: usize,
 ) -> Result<UIElement, String> {
     let elem = native_registry::resolve(element_id)?;
+    // The registered element's cache dates from the walk that produced its
+    // ID; refresh it so the subtree root doesn't report stale state.
+    let elem = state
+        .cache
+        .as_ref()
+        .and_then(|cache| elem.build_updated_cache(cache).ok())
+        .unwrap_or(elem);
     let mut walk_state = WalkState::new(TREE_WALK_TIMEOUT_SECS);
-    build_element(&state.walker, &elem, 0, max_depth, false, &mut walk_state)
-        .ok_or_else(|| format!("Failed to build subtree for {}", element_id))
+    build_element(
+        &Nav::new(state),
+        &elem,
+        0,
+        max_depth,
+        false,
+        &mut walk_state,
+    )
+    .ok_or_else(|| format!("Failed to build subtree for {}", element_id))
 }

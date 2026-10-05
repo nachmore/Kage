@@ -35,7 +35,7 @@
 use std::sync::mpsc;
 use std::sync::OnceLock;
 
-use uiautomation::core::{UIAutomation, UITreeWalker};
+use uiautomation::core::{UIAutomation, UICacheRequest, UITreeWalker};
 
 use crate::computer_control::tree::UIElement;
 use crate::os::accessibility::{AccessibleWindowInfo, FindElementsParams};
@@ -116,6 +116,9 @@ pub(super) enum Job {
 pub(super) struct WorkerState {
     pub(super) automation: UIAutomation,
     pub(super) walker: UITreeWalker,
+    /// Prefetch request for tree walks. `None` only if creating it failed;
+    /// walks then fall back to per-property calls (slower, same output).
+    pub(super) cache: Option<UICacheRequest>,
 }
 
 /// Bounded channel — caller blocks if the worker is already deep in a
@@ -180,7 +183,21 @@ fn build_worker_state() -> Result<WorkerState, String> {
     let walker = automation
         .get_control_view_walker()
         .map_err(|e| format!("Walker: {}", e))?;
-    Ok(WorkerState { automation, walker })
+    let cache = match acc::create_cache_request(&automation) {
+        Ok(cache) => Some(cache),
+        Err(e) => {
+            log::warn!(
+                "UIA cache request unavailable, tree walks will be slower: {}",
+                e
+            );
+            None
+        }
+    };
+    Ok(WorkerState {
+        automation,
+        walker,
+        cache,
+    })
 }
 
 /// Run the requested job and send the result through its reply channel.

@@ -6,6 +6,7 @@
 // rolled MouseInput struct which would only work on x64 by accident of
 // padding.
 
+use uiautomation::inputs::MouseButton;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
     MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS,
@@ -60,33 +61,105 @@ pub fn key_press_impl(keys: &str) -> Result<String, String> {
     Ok(format!("Pressed: {}", keys))
 }
 
+/// Map the tool's button name to a UIA button. Unknown names are rejected
+/// rather than silently becoming a left click.
+fn parse_button(button: &str) -> Option<MouseButton> {
+    match button {
+        "left" => Some(MouseButton::LEFT),
+        "right" => Some(MouseButton::RIGHT),
+        "middle" => Some(MouseButton::MIDDLE),
+        _ => None,
+    }
+}
+
+/// Highest click count we synthesise; anything larger is a model mistake.
+const MAX_CLICK_COUNT: u32 = 10;
+
+/// How to deliver `count` clicks: whether to start with a double-click, and
+/// how many single clicks follow it. Repeats run back-to-back so the OS
+/// still counts them as one multi-click (e.g. 3 = triple-click).
+fn click_plan(count: u32) -> Result<(bool, u32), String> {
+    match count {
+        0 => Err("Click count must be at least 1".to_string()),
+        1 => Ok((false, 0)),
+        n if n <= MAX_CLICK_COUNT => Ok((true, n - 2)),
+        n => Err(format!(
+            "Click count {} exceeds the maximum of {}",
+            n, MAX_CLICK_COUNT
+        )),
+    }
+}
+
 pub fn click_impl(
     x: Option<i32>,
     y: Option<i32>,
     button: &str,
     count: u32,
 ) -> Result<String, String> {
+    let btn = parse_button(button).ok_or_else(|| {
+        format!(
+            "Unsupported mouse button '{}' (expected left, right or middle)",
+            button
+        )
+    })?;
+    let (double_first, extra_singles) = click_plan(count)?;
     let mouse = uiautomation::inputs::Mouse::new()
         .auto_move(true)
         .move_time(50);
-    if let (Some(px), Some(py)) = (x, y) {
-        let pt = uiautomation::types::Point::new(px, py);
-        let result = match (button, count) {
-            ("right", _) => mouse.right_click(&pt),
-            (_, 2) => mouse.double_click(&pt),
-            _ => mouse.click(&pt),
-        };
-        result.map_err(|e| format!("Click failed: {}", e))?;
-        Ok(format!("Clicked {} at ({}, {})", button, px, py))
+    // No coordinates means "click where the cursor is" — that path used to
+    // report success without clicking at all.
+    let pt = match (x, y) {
+        (Some(px), Some(py)) => {
+            let pt = uiautomation::types::Point::new(px, py);
+            mouse
+                .move_to(&pt)
+                .map_err(|e| format!("Failed to move mouse: {}", e))?;
+            pt
+        }
+        _ => uiautomation::inputs::Mouse::get_cursor_pos()
+            .map_err(|e| format!("Failed to read cursor position: {}", e))?,
+    };
+    let first = if double_first {
+        mouse.double_click_button(btn)
     } else {
-        let pos = uiautomation::inputs::Mouse::get_cursor_pos()
-            .unwrap_or(uiautomation::types::Point::new(0, 0));
-        Ok(format!(
-            "Clicked {} at ({}, {})",
-            button,
-            pos.get_x(),
-            pos.get_y()
-        ))
+        mouse.click_button(btn)
+    };
+    first.map_err(|e| format!("Click failed: {}", e))?;
+    for _ in 0..extra_singles {
+        mouse
+            .click_button(btn)
+            .map_err(|e| format!("Click failed: {}", e))?;
+    }
+    Ok(format!(
+        "Clicked {} x{} at ({}, {})",
+        button,
+        count,
+        pt.get_x(),
+        pt.get_y()
+    ))
+}
+
+/// Upper bound on a drag's duration. `duration` comes straight from the
+/// model; a huge value would hold the button down and block the sidecar.
+const MAX_DRAG_SECS: f64 = 10.0;
+
+/// Clamp a model-supplied drag duration into a sane range. Negative/NaN
+/// values used to panic in `Duration::from_secs_f64` mid-drag.
+fn sanitize_drag_duration(duration: f64) -> f64 {
+    if duration.is_finite() {
+        duration.clamp(0.0, MAX_DRAG_SECS)
+    } else {
+        0.5
+    }
+}
+
+/// Sends LEFTUP when dropped, so every exit path from a drag — including a
+/// panic unwind — releases the button instead of leaving it held system-wide.
+struct LeftButtonRelease;
+
+impl Drop for LeftButtonRelease {
+    fn drop(&mut self) {
+        win32_mouse_event(MOUSEEVENTF_LEFTUP, 0);
     }
 }
 
@@ -97,23 +170,26 @@ pub fn drag_impl(
     to_y: i32,
     duration: f64,
 ) -> Result<String, String> {
+    let duration = sanitize_drag_duration(duration);
     let _ = uiautomation::inputs::Mouse::set_cursor_pos(&uiautomation::types::Point::new(
         from_x, from_y,
     ));
     std::thread::sleep(std::time::Duration::from_millis(50));
     // Press, move in steps, release
     win32_mouse_event(MOUSEEVENTF_LEFTDOWN, 0);
+    let release = LeftButtonRelease;
     let steps = (duration * 60.0).max(10.0) as i32;
     let dx = (to_x - from_x) as f64 / steps as f64;
     let dy = (to_y - from_y) as f64 / steps as f64;
+    let step_sleep = std::time::Duration::from_secs_f64(duration / steps as f64);
     for i in 1..=steps {
         let _ = uiautomation::inputs::Mouse::set_cursor_pos(&uiautomation::types::Point::new(
             from_x + (dx * i as f64) as i32,
             from_y + (dy * i as f64) as i32,
         ));
-        std::thread::sleep(std::time::Duration::from_secs_f64(duration / steps as f64));
+        std::thread::sleep(step_sleep);
     }
-    win32_mouse_event(MOUSEEVENTF_LEFTUP, 0);
+    drop(release);
     Ok(format!(
         "Dragged from ({},{}) to ({},{})",
         from_x, from_y, to_x, to_y
@@ -193,7 +269,8 @@ pub fn convert_key_combo(keys: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::convert_key_combo;
+    use super::{click_plan, convert_key_combo, parse_button, sanitize_drag_duration};
+    use uiautomation::inputs::MouseButton;
 
     #[test]
     fn converts_modifiers_and_named_keys() {
@@ -201,5 +278,32 @@ mod tests {
         assert_eq!(convert_key_combo("alt+F4"), "{Alt}{F4}");
         assert_eq!(convert_key_combo("win+e"), "{Win}e");
         assert_eq!(convert_key_combo("enter"), "{Enter}");
+    }
+
+    #[test]
+    fn parses_supported_buttons_and_rejects_others() {
+        assert_eq!(parse_button("left"), Some(MouseButton::LEFT));
+        assert_eq!(parse_button("right"), Some(MouseButton::RIGHT));
+        assert_eq!(parse_button("middle"), Some(MouseButton::MIDDLE));
+        assert_eq!(parse_button("back"), None);
+        assert_eq!(parse_button(""), None);
+    }
+
+    #[test]
+    fn click_plan_covers_multi_clicks() {
+        assert_eq!(click_plan(1), Ok((false, 0)));
+        assert_eq!(click_plan(2), Ok((true, 0)));
+        assert_eq!(click_plan(3), Ok((true, 1)));
+        assert!(click_plan(0).is_err());
+        assert!(click_plan(11).is_err());
+    }
+
+    #[test]
+    fn drag_duration_is_clamped() {
+        assert_eq!(sanitize_drag_duration(-1.0), 0.0);
+        assert_eq!(sanitize_drag_duration(1e7), 10.0);
+        assert_eq!(sanitize_drag_duration(f64::NAN), 0.5);
+        assert_eq!(sanitize_drag_duration(f64::INFINITY), 0.5);
+        assert_eq!(sanitize_drag_duration(1.5), 1.5);
     }
 }

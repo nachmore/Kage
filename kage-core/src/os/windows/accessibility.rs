@@ -19,6 +19,7 @@ pub(super) use actions::{
     get_element_text_inner, scroll_element_inner, select_element_inner, set_element_value_inner,
     toggle_element_inner,
 };
+pub(super) use element::create_cache_request;
 pub(super) use traversal::{
     find_elements_inner, get_element_children_inner, get_focused_element_inner, get_ui_tree_inner,
     list_accessible_windows_inner,

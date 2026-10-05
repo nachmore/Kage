@@ -292,17 +292,11 @@ try {{
         match serde_json::from_str(&sanitized) {
             Ok(v) => v,
             Err(e) => {
-                let col = e.column().saturating_sub(1);
-                let context_start = col.saturating_sub(80);
-                let context_end = (col + 80).min(stdout.len());
-                let context = if context_end <= stdout.len() {
-                    &stdout[context_start..context_end]
-                } else {
-                    &stdout[context_start..]
-                };
+                // serde's position refers to `sanitized`, which is what it parsed.
+                let context = json_error_context(&sanitized, e.line(), e.column());
                 warn!(
-                    "[calendar] Failed to parse JSON array ({}): {} | around col {}: {:?}",
-                    label, e, col, context
+                    "[calendar] Failed to parse JSON array ({}): {} | context: {:?}",
+                    label, e, context
                 );
                 return Ok(vec![]);
             }
@@ -311,17 +305,11 @@ try {{
         match serde_json::from_str::<RawOutlookEvent>(&sanitized) {
             Ok(e) => vec![e],
             Err(e) => {
-                let col = e.column().saturating_sub(1);
-                let context_start = col.saturating_sub(80);
-                let context_end = (col + 80).min(stdout.len());
-                let context = if context_end <= stdout.len() {
-                    &stdout[context_start..context_end]
-                } else {
-                    &stdout[context_start..]
-                };
+                // serde's position refers to `sanitized`, which is what it parsed.
+                let context = json_error_context(&sanitized, e.line(), e.column());
                 warn!(
-                    "[calendar] Failed to parse single JSON object ({}): {} | around col {}: {:?}",
-                    label, e, col, context
+                    "[calendar] Failed to parse single JSON object ({}): {} | context: {:?}",
+                    label, e, context
                 );
                 return Ok(vec![]);
             }
@@ -330,11 +318,7 @@ try {{
         warn!(
             "[calendar] Unexpected stdout — not JSON ({}): {}",
             label,
-            if stdout.len() > 200 {
-                &stdout[..200]
-            } else {
-                &stdout
-            }
+            char_prefix(&stdout, 200)
         );
         return Ok(vec![]);
     };
@@ -357,6 +341,41 @@ try {{
             }
         })
         .collect())
+}
+
+/// Up to ~80 bytes either side of a serde_json error position, for logging.
+/// serde reports a 1-based line and a 1-based column within that line, so
+/// resolve the line first; bounds are clamped and snapped to char boundaries
+/// so non-ASCII event data (smart quotes, CJK) can't panic the slice.
+fn json_error_context(src: &str, line: usize, column: usize) -> &str {
+    const RADIUS: usize = 80;
+    let line_start = if line <= 1 {
+        0
+    } else {
+        src.match_indices('\n')
+            .nth(line - 2)
+            .map_or(src.len(), |(i, _)| i + 1)
+    };
+    let pos = line_start
+        .saturating_add(column.saturating_sub(1))
+        .min(src.len());
+    let mut start = pos.saturating_sub(RADIUS);
+    while !src.is_char_boundary(start) {
+        start -= 1;
+    }
+    let mut end = pos.saturating_add(RADIUS).min(src.len());
+    while !src.is_char_boundary(end) {
+        end += 1;
+    }
+    &src[start..end]
+}
+
+/// The first `max_chars` characters of `s` (char-safe, unlike `&s[..n]`).
+fn char_prefix(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((i, _)) => &s[..i],
+        None => s,
+    }
 }
 
 /// Sanitize JSON output from PowerShell. Walks through the string and escapes
@@ -436,7 +455,10 @@ mod tests {
     //! PowerShell JSON sanitizer. Both are defensive layers against
     //! untrusted Outlook data / malformed PS output, worth locking in.
 
-    use super::{is_strict_iso_date, run_with_timeout, sanitize_ps_json, RunError};
+    use super::{
+        char_prefix, is_strict_iso_date, json_error_context, run_with_timeout, sanitize_ps_json,
+        RunError,
+    };
     use std::process::{Command, Stdio};
     use std::time::{Duration, Instant};
 
@@ -612,5 +634,35 @@ mod tests {
         assert!(parsed.is_array());
         assert_eq!(parsed[0]["id"], "1");
         assert_eq!(parsed[1]["id"], "2\nhm");
+    }
+
+    // ---- error-log helpers -------------------------------------------------
+
+    #[test]
+    fn error_context_never_splits_multibyte_chars() {
+        // Sweep every column across smart quotes; none may panic.
+        let src = format!("{}\u{201C}quoted\u{201D}{}", "a".repeat(79), "b".repeat(90));
+        for col in 0..src.len() + 200 {
+            let ctx = json_error_context(&src, 1, col);
+            assert!(ctx.len() <= src.len());
+        }
+    }
+
+    #[test]
+    fn error_context_resolves_line_and_clamps() {
+        let long = format!("{}\n{}", "a".repeat(200), "b".repeat(200));
+        // Line 2, column 1 is centred on the first 'b'.
+        let ctx = json_error_context(&long, 2, 1);
+        assert_eq!(ctx, format!("{}\n{}", "a".repeat(79), "b".repeat(80)));
+        // A line past the end or a huge column clamps rather than panicking.
+        assert_eq!(json_error_context(&long, 99, 5), "b".repeat(80));
+        assert_eq!(json_error_context("x\ny", 2, 1000), "x\ny");
+    }
+
+    #[test]
+    fn char_prefix_is_char_safe() {
+        assert_eq!(char_prefix("h\u{e9}llo", 2), "h\u{e9}");
+        assert_eq!(char_prefix("abc", 10), "abc");
+        assert_eq!(char_prefix("", 3), "");
     }
 }

@@ -142,6 +142,9 @@ fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
                 Err(_) => continue,
             };
 
+        // The logo belongs to the package, not the entry: resolve, read and
+        // base64-encode it at most once, and only if an entry is inserted.
+        let mut package_icon: Option<Option<String>> = None;
         for entry in &entries {
             let di = match entry.DisplayInfo() {
                 Ok(d) => d,
@@ -167,7 +170,9 @@ fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
                 Err(_) => continue,
             };
 
-            let icon_data = get_uwp_icon_base64(&package);
+            let icon_data = package_icon
+                .get_or_insert_with(|| get_uwp_icon_base64(&package))
+                .clone();
 
             apps.insert(
                 key,
