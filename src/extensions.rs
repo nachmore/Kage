@@ -10,7 +10,9 @@ mod install;
 
 pub use archive::{extract_zip, install_from_zip};
 pub use discovery::discover_items;
-pub use install::{install_from_directory, uninstall};
+pub use install::{
+    commit_pending, discard_pending, install_from_directory, uninstall, InstallMode, Installed,
+};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

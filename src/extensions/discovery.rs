@@ -16,6 +16,11 @@ fn scan_directory(dir: &PathBuf, enabled_states: &HashMap<String, bool>) -> Vec<
         if !path.is_dir() {
             continue;
         }
+        // Dot-dirs are install staging/backup/parked-upgrade siblings (see
+        // install.rs); loading one would duplicate or downgrade an item.
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
         let manifest_path = path.join("manifest.json");
         if !manifest_path.exists() {
             continue;
@@ -61,4 +66,27 @@ pub fn discover_items(kind: &str, enabled_states: &HashMap<String, bool>) -> Vec
     let mut items: Vec<InstalledItem> = by_id.into_values().collect();
     items.sort_by(|a, b| a.manifest.name.cmp(&b.manifest.name));
     items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scan_skips_hidden_install_siblings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().to_path_buf();
+        for dir in ["todo", ".todo.pending", ".todo.bak"] {
+            let path = base.join(dir);
+            fs::create_dir_all(&path).unwrap();
+            let manifest = serde_json::json!({
+                "id": "todo", "name": dir, "version": "1.0.0", "type": "extension",
+            });
+            fs::write(path.join("manifest.json"), manifest.to_string()).unwrap();
+        }
+
+        let items = scan_directory(&base, &HashMap::new());
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].manifest.name, "todo");
+    }
 }

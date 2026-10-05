@@ -15,25 +15,34 @@ pub async fn install_extension_from_path<R: tauri::Runtime>(
     _app: tauri::AppHandle<R>,
 ) -> Result<extensions::InstalledItem, AppError> {
     let source = std::path::PathBuf::from(&source_path);
+    // An upgrade of an installed item is parked until the prompt resolves,
+    // so declining it keeps the working version.
+    let mode = extensions::InstallMode::DeferUpgrade;
 
-    let item = if source.extension().map(|e| e == "zip").unwrap_or(false) {
+    let installed = if source.extension().map(|e| e == "zip").unwrap_or(false) {
         // Install from zip file
-        extensions::install_from_zip(&source).map_err(|e| format!("Installation failed: {}", e))?
+        extensions::install_from_zip(&source, mode)
+            .map_err(|e| format!("Installation failed: {}", e))?
     } else {
         // Install from directory
-        extensions::install_from_directory(&source)
+        extensions::install_from_directory(&source, mode)
             .map_err(|e| format!("Installation failed: {}", e))?
     };
 
-    // Mark enabled so the commit step can flip the grant and load it.
-    let mut config = features.config.lock_or_recover();
-    config
-        .extension_states
-        .insert(item.manifest.id.clone(), true);
-    let _ = config.save();
-    drop(config);
+    // Mark a fresh install enabled so the commit step can flip the grant
+    // and load it. A parked upgrade is enabled by the commit itself.
+    if !installed.deferred {
+        let mut config = features.config.lock_or_recover();
+        record_install_state(
+            &mut config.extension_states,
+            &installed.item.manifest.id,
+            mode,
+        );
+        let _ = config.save();
+        drop(config);
+    }
 
-    Ok(item)
+    Ok(installed.item)
 }
 
 #[tauri::command]
@@ -48,6 +57,13 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
     // "invalid extension id" rather than a generic "uninstall failed").
     extensions::validate_extension_id(&id).map_err(|e| format!("Invalid extension id: {}", e))?;
 
+    // A declined upgrade prompt rolls back through here. Drop only the
+    // parked files: the previous version, its settings, grant and stored
+    // data all stay, and nothing loaded changed so there's nothing to emit.
+    if extensions::discard_pending(&id, &kind).map_err(|e| format!("Uninstall failed: {}", e))? {
+        return Ok(());
+    }
+
     extensions::uninstall(&id, &kind).map_err(|e| format!("Uninstall failed: {}", e))?;
 
     // Remove from enabled states and extension config
@@ -57,6 +73,13 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
     config.extension_grants.remove(&id);
     let _ = config.save();
     drop(config);
+
+    // Stored data is keyed only by id, so leaving it would hand an old
+    // extension's tokens to any later extension installed under the same id.
+    // Safe now that a declined upgrade returns above instead of landing here.
+    if let Err(e) = super::files::purge_extension_data(&id) {
+        warn!("Failed to remove stored data for '{}': {}", id, e);
+    }
 
     crate::telemetry::track(
         &app,
@@ -99,7 +122,17 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
     // set. Dropped entries log a warning so the drift gets noticed.
     let granted = extensions::normalize_permissions(&granted, &extension_id);
 
+    // Apply a parked upgrade before recording the grant, so a failed swap
+    // leaves the old version and its grant exactly as they were.
+    let upgraded = extensions::commit_pending(&extension_id)
+        .map_err(|e| format!("Installation failed: {}", e))?;
+
     let mut config = features.config.lock_or_recover();
+    if upgraded {
+        // The user approved this (re)install, so enable it — the same thing
+        // staging does for a fresh install.
+        config.extension_states.insert(extension_id.clone(), true);
+    }
     let record = crate::config::ExtensionGrant {
         granted,
         approved_version,

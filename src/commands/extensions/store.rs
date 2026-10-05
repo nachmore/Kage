@@ -187,7 +187,7 @@ pub async fn store_get_catalog(
     // Build list of (name, url) pairs to fetch from
     let mut store_urls: Vec<(String, String)> = Vec::new();
     if !primary_url.is_empty() {
-        store_urls.push(("Default".to_string(), primary_url));
+        store_urls.push((PRIMARY_SOURCE_NAME.to_string(), primary_url));
     }
     for s in &sources {
         if s.enabled
@@ -372,24 +372,26 @@ pub async fn store_get_catalog(
     }))
 }
 
+/// `source` is the catalog item's `_source`; omitted means the primary store.
 #[tauri::command]
 pub async fn store_get_detail(
     id: String,
+    source: Option<String>,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
 ) -> Result<serde_json::Value, AppError> {
     let base_url = {
         let config = features.config.lock_or_recover();
-        resolve_store_url(&config, ui.dev_mode)
+        resolve_source_url(&config, ui.dev_mode, source.as_deref())
     };
 
-    if base_url.is_empty() {
+    let Some(base_url) = base_url else {
         return Err(AppError::keyed(
             ErrorKind::Internal,
             "errors.extensions.no_store_url",
             &[],
         ));
-    }
+    };
 
     extensions::validate_store_url(&base_url)?;
     extensions::validate_extension_id(&id).map_err(|e| format!("Invalid id: {}", e))?;
@@ -424,38 +426,49 @@ pub async fn store_get_detail(
     Ok(body)
 }
 
-/// Stage an install from the store. The extension files are written to
-/// disk and `extension_states` is set to enabled, but `extensions_changed`
-/// is NOT emitted yet, so nothing loads the extension's code. The caller
-/// (frontend) shows a permission prompt based on the returned manifest;
-/// on approval it calls `commit_extension_install` which records the
-/// grant and emits the event. On rejection it calls `uninstall_extension`
-/// to roll back.
+/// Stage an install from the store. `extensions_changed` is NOT emitted
+/// yet, so nothing loads the new code. A fresh install is written to disk
+/// and marked enabled; an upgrade of an installed item is parked beside the
+/// live version, which keeps running untouched. The caller (frontend) shows
+/// a permission prompt based on the returned manifest; on approval it calls
+/// `commit_extension_install`, which applies a parked upgrade, records the
+/// grant and emits the event. On rejection it calls `uninstall_extension`,
+/// which discards a parked upgrade or rolls back a fresh install.
+///
+/// `source` is the catalog item's `_source`; omitted means the primary store.
 #[tauri::command]
 pub async fn store_install<R: tauri::Runtime>(
     id: String,
+    source: Option<String>,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
     app: tauri::AppHandle<R>,
 ) -> Result<extensions::InstalledItem, AppError> {
     let base_url = {
         let config = features.config.lock_or_recover();
-        resolve_store_url(&config, ui.dev_mode)
+        resolve_source_url(&config, ui.dev_mode, source.as_deref())
     };
 
-    if base_url.is_empty() {
+    let Some(base_url) = base_url else {
         return Err(AppError::keyed(
             ErrorKind::Internal,
             "errors.extensions.no_store_url",
             &[],
         ));
-    }
+    };
 
     extensions::validate_store_url(&base_url)?;
 
-    store_install_inner(&base_url, &id, &features, &app, false)
-        .await
-        .map_err(AppError::from)
+    store_install_inner(
+        &base_url,
+        &id,
+        &features,
+        &app,
+        false,
+        extensions::InstallMode::DeferUpgrade,
+    )
+    .await
+    .map_err(AppError::from)
 }
 
 /// Check for updates to installed extensions and optionally auto-install them.
@@ -543,9 +556,9 @@ pub async fn check_extension_updates<R: tauri::Runtime>(
                         id, local_version, remote_version
                     );
                     // Install the update in place. The existing capability
-                    // grant is preserved; if the updated manifest requests
-                    // more capabilities, the runtime drops them until the
-                    // user re-approves.
+                    // grant and enable flag are preserved; if the updated
+                    // manifest requests more capabilities, the runtime drops
+                    // them until the user re-approves.
                     //
                     // Crucially we pass emit_changed=false here and fire a
                     // SINGLE extensions_changed AFTER the whole loop. Emitting
@@ -555,7 +568,16 @@ pub async fn check_extension_updates<R: tauri::Runtime>(
                     // one re-mounts widgets that spawn OS processes (calendar's
                     // PowerShell, app-scan). A batch of 9 updates melted down a
                     // user's machine into process-exhaustion this way.
-                    match store_install_inner(&base_url, id, &features, &app, false).await {
+                    match store_install_inner(
+                        &base_url,
+                        id,
+                        &features,
+                        &app,
+                        false,
+                        extensions::InstallMode::Replace,
+                    )
+                    .await
+                    {
                         Ok(_) => {
                             updated += 1;
                             info!("Updated extension '{}' to {}", id, remote_version);
@@ -593,13 +615,20 @@ pub async fn check_extension_updates<R: tauri::Runtime>(
 /// frontend can show an install-time permission prompt before loading the
 /// extension. If the user approves, the frontend calls
 /// `commit_extension_install`, which saves the grant and emits.
+/// `mode` is `DeferUpgrade` for user-initiated installs (a prompt follows)
+/// and `Replace` for auto-updates.
 async fn store_install_inner<R: tauri::Runtime>(
     base_url: &str,
     id: &str,
     features: &State<'_, FeatureServices>,
     app: &tauri::AppHandle<R>,
     emit_changed: bool,
+    mode: extensions::InstallMode,
 ) -> Result<extensions::InstalledItem, String> {
+    // The id usually comes from remote catalog JSON; keep path separators
+    // and `..` out of the detail URL.
+    extensions::validate_extension_id(id).map_err(|e| format!("Invalid extension id: {}", e))?;
+
     // Resolve the download URL by fetching this id's detail page first.
     // We can't synthesise the zip URL from id alone because the package
     // file name embeds the version (`<id>-<version>.zip`), and we want
@@ -629,51 +658,20 @@ async fn store_install_inner<R: tauri::Runtime>(
         .and_then(|v| v.as_str())
         .map(String::from);
 
-    let zip_path = std::env::temp_dir().join(format!("kage-download-{}.zip", id));
+    let bytes = download_package(&download_url).await?;
+    verify_package(&bytes, expected_sha.as_deref(), id)?;
 
-    let resp = client
-        .get(&download_url)
-        .send()
-        .await
-        .map_err(|e| format!("Download failed: {}", e))?;
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read download: {}", e))?;
+    let installed = install_package_bytes(&bytes, mode)?;
+    let item = installed.item;
 
-    if bytes.len() < 4 || &bytes[0..4] != b"PK\x03\x04" {
-        return Err("Invalid zip archive".into());
+    // A parked upgrade leaves the live version's state alone; the commit
+    // step enables it once the user approves.
+    if !installed.deferred {
+        let mut config = features.config.lock_or_recover();
+        record_install_state(&mut config.extension_states, &item.manifest.id, mode);
+        let _ = config.save();
+        drop(config);
     }
-
-    // Verify checksum if the catalog published one. A mismatch here means
-    // the catalog and the zip are out of sync — better to refuse the install
-    // than silently load tampered code.
-    if let Some(expected) = expected_sha {
-        use sha2::Digest;
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(&bytes);
-        let actual = hex::encode(hasher.finalize());
-        if !actual.eq_ignore_ascii_case(&expected) {
-            return Err(format!(
-                "Checksum mismatch for '{}' (expected {}, got {})",
-                id, expected, actual
-            ));
-        }
-    }
-
-    std::fs::write(&zip_path, &bytes).map_err(|e| format!("Failed to save download: {}", e))?;
-
-    let item = extensions::install_from_zip(&zip_path)
-        .map_err(|e| format!("Installation failed: {}", e))?;
-
-    let _ = std::fs::remove_file(&zip_path);
-
-    let mut config = features.config.lock_or_recover();
-    config
-        .extension_states
-        .insert(item.manifest.id.clone(), true);
-    let _ = config.save();
-    drop(config);
 
     if emit_changed {
         if let Err(e) = app.emit(events::EXTENSIONS_CHANGED, ()) {

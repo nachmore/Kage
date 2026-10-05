@@ -173,6 +173,25 @@ fn resolve_data_path(extension_id: &str, key: &str) -> Result<std::path::PathBuf
     extensions::resolve_extension_data_path(&root, extension_id, key).map_err(|e| format!("{}", e))
 }
 
+/// Delete everything an extension stored (its whole data dir). Called on
+/// uninstall; a missing dir counts as success.
+pub(super) fn purge_extension_data(extension_id: &str) -> Result<(), String> {
+    extensions::validate_extension_id(extension_id)
+        .map_err(|e| format!("Invalid extension id: {}", e))?;
+    let dir = extension_data_root()?.join(extension_id);
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => {
+            info!("Removed stored data for '{}'", extension_id);
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!(
+            "Failed to remove extension data for '{}': {}",
+            extension_id, e
+        )),
+    }
+}
+
 /// Save arbitrary JSON data for an extension.
 /// Stored at: <config_dir>/kage/extension-data/<extension_id>/<key>.json
 #[tauri::command]

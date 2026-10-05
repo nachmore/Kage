@@ -1,4 +1,4 @@
-use super::{install_from_directory, InstalledItem};
+use super::{install_from_directory, InstallMode, Installed};
 use anyhow::{Context, Result};
 use log::info;
 use std::fs;
@@ -129,7 +129,7 @@ pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
 }
 
 /// Install an extension from a .zip file downloaded from the store.
-pub fn install_from_zip(zip_path: &PathBuf) -> Result<InstalledItem> {
+pub fn install_from_zip(zip_path: &PathBuf, mode: InstallMode) -> Result<Installed> {
     let temp_dir = std::env::temp_dir().join(format!(
         "kage-ext-{}",
         uuid::Uuid::new_v4()
@@ -162,7 +162,7 @@ pub fn install_from_zip(zip_path: &PathBuf) -> Result<InstalledItem> {
                 "No manifest.json found in zip archive (checked root and one level deep)",
             )?
         };
-        install_from_directory(&manifest_dir)
+        install_from_directory(&manifest_dir, mode)
     })();
 
     let _ = fs::remove_dir_all(&temp_dir);

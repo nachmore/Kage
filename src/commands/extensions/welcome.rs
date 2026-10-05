@@ -317,36 +317,12 @@ async fn welcome_store_install(
         .and_then(|v| v.as_str())
         .map(String::from);
 
-    let bytes = client
-        .get(&download_url)
-        .send()
-        .await
-        .map_err(|e| format!("Download failed: {}", e))?
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read download: {}", e))?;
-    if bytes.len() < 4 || &bytes[0..4] != b"PK\x03\x04" {
-        return Err("Invalid zip archive".into());
-    }
-    if let Some(expected) = expected_sha {
-        use sha2::Digest;
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(&bytes);
-        let actual = hex::encode(hasher.finalize());
-        if !actual.eq_ignore_ascii_case(&expected) {
-            return Err(format!(
-                "Checksum mismatch for '{}' (expected {}, got {})",
-                id, expected, actual
-            ));
-        }
-    }
+    let bytes = download_package(&download_url).await?;
+    verify_package(&bytes, expected_sha.as_deref(), id)?;
 
-    let zip_path = std::env::temp_dir().join(format!("kage-welcome-{}.zip", id));
-    std::fs::write(&zip_path, &bytes).map_err(|e| format!("Failed to save download: {}", e))?;
-    let item = extensions::install_from_zip(&zip_path)
-        .map_err(|e| format!("Installation failed: {}", e))?;
-    let _ = std::fs::remove_file(&zip_path);
-    Ok(item)
+    // Welcome only installs items that aren't on disk yet, so there is no
+    // older version to keep live behind a prompt.
+    Ok(install_package_bytes(&bytes, extensions::InstallMode::Replace)?.item)
 }
 
 #[cfg(test)]
