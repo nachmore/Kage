@@ -147,6 +147,14 @@ pub fn configure_breakaway_from_job(cmd: &mut std::process::Command) -> &mut std
     }
 }
 
+/// Undo `release_kill_on_exit_job` when the exit it prepared for is
+/// abandoned (a failed update install), so children spawned afterwards
+/// are again reaped with us on a crash. No-op on macOS/Linux, matching
+/// `release_kill_on_exit_job`.
+pub fn rearm_kill_on_exit_job() {
+    crate::os::platform::process::rearm_kill_on_exit_job_impl()
+}
+
 /// Set the current thread's name/description so it shows up in debuggers
 /// and in the thread dump diagnostic command. No-op on non-Windows.
 #[allow(unused)]

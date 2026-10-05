@@ -79,6 +79,10 @@ pub fn install_kill_on_exit_job_impl() {}
 /// impl for what this does there.
 pub fn release_kill_on_exit_job_impl() {}
 
+/// No-op companion to `release_kill_on_exit_job_impl` — see Windows
+/// impl for what this does there.
+pub fn rearm_kill_on_exit_job_impl() {}
+
 /// Linux uses WebKitGTK via Tauri; there's no user-data-dir lock
 /// contention pattern that requires foreign process cleanup. No-op.
 pub fn cleanup_stale_processes_impl(_marker_dir: &std::path::Path) -> usize {
@@ -91,9 +95,11 @@ where
 {
     std::thread::spawn(move || {
         let mut signals =
-            Signals::new(&[SIGTERM, SIGINT, SIGQUIT]).expect("Failed to register signal handlers");
+            Signals::new([SIGTERM, SIGINT, SIGQUIT]).expect("Failed to register signal handlers");
 
-        for sig in signals.forever() {
+        // Handle first signal then exit. (A `for` over `forever()` whose
+        // body always exits trips clippy's deny-by-default `never_loop`.)
+        if let Some(sig) = signals.forever().next() {
             info!("Received signal: {:?}", sig);
             cleanup_fn();
             std::process::exit(0);

@@ -49,7 +49,14 @@ pub async fn execute_automation_plan<R: tauri::Runtime>(
     // Reset cancellation flag at the start
     cancelled.store(false, std::sync::atomic::Ordering::Relaxed);
 
+    // Sub-agent steps use plain `send_prompt` and leave gaps between steps,
+    // so the ACP in-flight maps can't tell the silent-update scheduler a
+    // plan is running. Held for the whole worker; RAII so every exit path
+    // (cancel, failed step, panic) releases it.
+    let job_guard = crate::updater::AgentJobGuard::acquire();
+
     async_runtime::spawn_blocking(move || {
+        let _job_guard = job_guard;
         // On connect failure, fail every step visibly and fall through to
         // the shared epilogue — its automation_plan_complete is the only
         // thing that unlocks the plan UI (the command already returned Ok).

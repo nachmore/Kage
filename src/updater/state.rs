@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Instant;
 use tauri_plugin_updater::Update;
 
@@ -62,10 +62,50 @@ pub(super) fn clear_ready(state: &UpdaterState) {
     state.update_ready.store(false, Ordering::SeqCst);
 }
 
+/// Agent jobs the ACP client's in-flight / background-prompt maps can't
+/// see: an automation plan's sub-agent steps go through plain
+/// `send_prompt`, and nothing is in flight between steps. Process-wide
+/// rather than an `UpdaterState` field so the job doesn't need the
+/// updater's managed state to register itself.
+static ACTIVE_AGENT_JOBS: AtomicUsize = AtomicUsize::new(0);
+
+/// RAII hold that makes the silent-install scheduler treat the agent as
+/// busy for as long as it lives. Drop-based so an early return or panic
+/// in the job can't leave silent updates blocked (`MAX_BUSY_DEFER` is
+/// still the backstop for a guard that's leaked outright).
+#[must_use = "the hold is released as soon as the guard is dropped"]
+pub struct AgentJobGuard(());
+
+impl AgentJobGuard {
+    pub fn acquire() -> Self {
+        ACTIVE_AGENT_JOBS.fetch_add(1, Ordering::SeqCst);
+        Self(())
+    }
+}
+
+impl Drop for AgentJobGuard {
+    fn drop(&mut self) {
+        ACTIVE_AGENT_JOBS.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+pub(super) fn has_active_agent_jobs() -> bool {
+    ACTIVE_AGENT_JOBS.load(Ordering::SeqCst) > 0
+}
+
 #[cfg(test)]
 mod tests {
-    use super::is_user_facing_label;
+    use super::{has_active_agent_jobs, is_user_facing_label, AgentJobGuard};
     use crate::window_labels;
+
+    #[test]
+    fn agent_job_guard_marks_busy_while_held() {
+        // Only the held side is asserted: the counter is process-wide, so
+        // a concurrently running test could legitimately hold one too.
+        let guard = AgentJobGuard::acquire();
+        assert!(has_active_agent_jobs());
+        drop(guard);
+    }
 
     #[test]
     fn fixed_user_windows_are_user_facing() {

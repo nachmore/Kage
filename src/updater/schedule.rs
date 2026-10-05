@@ -1,4 +1,4 @@
-use super::state::{clear_ready, is_any_user_window_visible};
+use super::state::{clear_ready, has_active_agent_jobs, is_any_user_window_visible};
 use super::{
     persist_install_source, persist_resume_marker, plugin_check, plugin_download_and_install,
     relaunch_and_exit, InstallSource, UpdaterState,
@@ -149,9 +149,11 @@ fn spawn_idle_loop(
     });
 }
 
-/// Whether any prompt (user turn or background steering/title) is in flight.
+/// Whether any prompt (user turn or background steering/title) is in
+/// flight, or a multi-step agent job (automation plan) is running.
 fn is_agent_busy(client: &crate::acp_client::AcpClient) -> bool {
-    !client.in_flight_prompts.lock_or_recover().is_empty()
+    has_active_agent_jobs()
+        || !client.in_flight_prompts.lock_or_recover().is_empty()
         || !client
             .background_prompt_sessions
             .lock_or_recover()

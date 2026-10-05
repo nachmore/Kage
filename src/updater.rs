@@ -17,7 +17,7 @@ pub use markers::{
     consume_install_source, persist_install_source, persist_resume_marker, InstallSource,
 };
 pub use schedule::start_update_loop;
-pub use state::UpdaterState;
+pub use state::{AgentJobGuard, UpdaterState};
 
 use crate::config::Config;
 

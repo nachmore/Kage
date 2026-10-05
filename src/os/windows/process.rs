@@ -386,37 +386,57 @@ pub fn install_kill_on_exit_job_impl() {
 /// extended limit info. The job itself stays in place (and any future
 /// children we spawn would still inherit it for `BREAKAWAY_OK`
 /// purposes), but the OS-level kill-on-last-handle-close behaviour
-/// is gone.
-///
-/// We don't restore the flag — by the time this is called we're
-/// committed to exiting in a moment, and any orphan-cleanup
-/// guarantees we lose are already moot.
+/// is gone until `rearm_kill_on_exit_job_impl` restores it (the
+/// updater does so when the install fails and we keep running).
 pub fn release_kill_on_exit_job_impl() {
+    use windows::Win32::System::JobObjects::JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+
+    // Keep BREAKAWAY_OK; drop KILL_ON_JOB_CLOSE.
+    if set_job_limit_flags(JOB_OBJECT_LIMIT_BREAKAWAY_OK) {
+        info!("Job Object kill-on-close released — child processes will survive exit");
+    } else {
+        warn!("Failed to release Job Object kill-on-close — installer may be killed with us");
+    }
+}
+
+/// Undo `release_kill_on_exit_job_impl`: restore the startup limits
+/// (`KILL_ON_JOB_CLOSE | BREAKAWAY_OK`) so children spawned after an
+/// aborted exit (e.g. a failed update install) die with us again.
+pub fn rearm_kill_on_exit_job_impl() {
+    use windows::Win32::System::JobObjects::{
+        JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    if set_job_limit_flags(JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK) {
+        info!("Job Object kill-on-close re-armed — child processes will be killed on exit");
+    } else {
+        warn!("Failed to re-arm Job Object kill-on-close — children may outlive a crash");
+    }
+}
+
+/// Replace the saved job's basic limit flags. Returns false when no job
+/// was created at startup or the update was rejected.
+fn set_job_limit_flags(flags: windows::Win32::System::JobObjects::JOB_OBJECT_LIMIT) -> bool {
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::System::JobObjects::*;
 
     let Some(&handle_usize) = JOB_HANDLE.get() else {
-        warn!("Job Object handle not stored — cannot release kill-on-close");
-        return;
+        warn!("Job Object handle not stored — cannot change kill-on-close");
+        return false;
     };
     let job = HANDLE(handle_usize as *mut _);
 
     unsafe {
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-        // Keep BREAKAWAY_OK; drop KILL_ON_JOB_CLOSE.
-        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+        info.BasicLimitInformation.LimitFlags = flags;
 
-        let set_ok = SetInformationJobObject(
+        SetInformationJobObject(
             job,
             JobObjectExtendedLimitInformation,
             &info as *const _ as *const _,
             std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-        );
-        if set_ok.is_err() {
-            warn!("Failed to release Job Object kill-on-close — installer may be killed with us");
-        } else {
-            info!("Job Object kill-on-close released — child processes will survive exit");
-        }
+        )
+        .is_ok()
     }
 }
 

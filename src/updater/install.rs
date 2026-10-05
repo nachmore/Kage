@@ -3,7 +3,7 @@ use anyhow::Result;
 #[cfg(target_os = "macos")]
 use log::error;
 use log::{info, warn};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_updater::Update;
 
 /// Download, verify, and install a previously checked update.
@@ -25,13 +25,26 @@ pub async fn plugin_download_and_install<R: tauri::Runtime>(
     };
 
     info!("Update downloaded and verified, starting installer");
-    let visible_windows: Vec<&str> = RESTORABLE_WINDOWS
+    let visible_windows: Vec<&'static str> = RESTORABLE_WINDOWS
         .into_iter()
         .filter(|label| {
             app.get_webview_window(label)
                 .is_some_and(|window| window.is_visible().unwrap_or(false))
         })
         .collect();
+    // Snapshot what teardown is about to stop, so a failed install restores
+    // exactly that (and doesn't start anything the user had stopped).
+    let mut teardown = Teardown {
+        windows: visible_windows,
+        agent_was_connected: false,
+        tts_was_running: false,
+    };
+    if let Some(acp) = app.try_state::<crate::state::AcpHandles>() {
+        teardown.agent_was_connected = acp.client.is_connected();
+    }
+    if let Some(procs) = app.try_state::<crate::state::ChildProcesses>() {
+        teardown.tts_was_running = procs.pocket_tts.lock_or_recover().is_some();
+    }
     // Order matters: explicit child cleanup while the Job Object still
     // safety-nets, THEN release the kill flag so the installer survives us.
     crate::commands::system::graceful_shutdown(app);
@@ -42,10 +55,17 @@ pub async fn plugin_download_and_install<R: tauri::Runtime>(
     crate::app_log::flush();
 
     if let Err(error) = update.install(bytes) {
-        restore_after_failed_install(app, &visible_windows);
+        restore_after_failed_install(app, &teardown);
         return Err(install_failed(app, &update, &error));
     }
     Ok(())
+}
+
+/// What the pre-install teardown stopped, captured just before it ran.
+struct Teardown {
+    windows: Vec<&'static str>,
+    agent_was_connected: bool,
+    tts_was_running: bool,
 }
 
 /// Windows hidden by `graceful_shutdown` that we re-show if install fails
@@ -56,19 +76,55 @@ const RESTORABLE_WINDOWS: [&str; 3] = [
     crate::window_labels::SETTINGS,
 ];
 
-/// Undo the visible parts of the pre-install teardown so the user can see
-/// the error and keep using the app. The agent stays disconnected (the next
-/// send / reconnect re-spawns it).
-fn restore_after_failed_install<R: tauri::Runtime>(app: &tauri::AppHandle<R>, windows: &[&str]) {
-    warn!("Update install failed after teardown; restoring UI");
+/// Undo the pre-install teardown so the user can see the error and keep
+/// using the app: re-arm the Job Object, re-show the tray and windows, and
+/// bring back the Pocket TTS server and agent connection if they were up.
+/// An in-flight Pocket TTS pip install that teardown cancelled stays
+/// cancelled; the user can re-run it from Settings.
+fn restore_after_failed_install<R: tauri::Runtime>(app: &tauri::AppHandle<R>, teardown: &Teardown) {
+    warn!("Update install failed after teardown; restoring app state");
+    // First, so the children respawned below are reaped with us again if
+    // we later crash (teardown released the flag for the installer).
+    crate::os::rearm_kill_on_exit_job();
     if let Some(tray) = app.tray_by_id("main-tray") {
         let _ = tray.set_visible(true);
     }
-    for label in windows {
+    for label in &teardown.windows {
         if let Some(window) = app.get_webview_window(label) {
             let _ = window.show();
         }
     }
+    if teardown.tts_was_running {
+        crate::setup::spawn_pocket_tts_server(app);
+    }
+    if teardown.agent_was_connected {
+        reconnect_agent(app);
+    }
+}
+
+/// Re-spawn the agent that teardown disconnected. Done eagerly rather than
+/// on the next send because `disconnect` bumped the transport generation,
+/// so no `agent_disconnected` was emitted and windows still show the agent
+/// as connected.
+fn reconnect_agent<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let Some(acp) = app.try_state::<crate::state::AcpHandles>() else {
+        return;
+    };
+    let client = acp.client.clone();
+    let app = app.clone();
+    // connect() is a blocking spawn + handshake; keep it off async workers.
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Err(error) = client.connect() {
+            warn!("Agent reconnect after failed update install failed: {error}");
+            // Tell windows now rather than leaving a stale "connected"
+            // header (same reasoning as the config-change reconnect).
+            if let Err(error) = app.emit(crate::events::AGENT_DISCONNECTED, ()) {
+                warn!("Failed to emit agent_disconnected event: {error}");
+            }
+        } else {
+            info!("Agent reconnected after failed update install");
+        }
+    });
 }
 
 /// Record a failed download/install and roll back the relaunch markers both

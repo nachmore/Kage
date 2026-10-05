@@ -343,8 +343,21 @@ pub fn maybe_autostart_pocket_tts(app: &App, config: &crate::config::Config) {
         return;
     }
     info!("Pocket TTS auto-start enabled, spawning server in background");
-    let features: tauri::State<'_, FeatureServices> = app.state();
-    let procs: tauri::State<'_, ChildProcesses> = app.state();
+    spawn_pocket_tts_server(app.handle());
+}
+
+/// Spawn the Pocket TTS server in the background with the current config
+/// and record it in ChildProcesses. Ungated: callers decide whether it
+/// should run (startup auto-start, or the updater restoring a server its
+/// pre-install teardown killed).
+pub fn spawn_pocket_tts_server<R: tauri::Runtime>(app: &AppHandle<R>) {
+    let (Some(features), Some(procs)) = (
+        app.try_state::<FeatureServices>(),
+        app.try_state::<ChildProcesses>(),
+    ) else {
+        warn!("Pocket TTS spawn skipped: app state not managed");
+        return;
+    };
     let config_arc = features.config.clone();
     let tts_proc = procs.pocket_tts.clone();
     tauri::async_runtime::spawn(async move {

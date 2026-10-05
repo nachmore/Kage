@@ -78,6 +78,10 @@ pub fn install_kill_on_exit_job_impl() {}
 /// impl for what this does there.
 pub fn release_kill_on_exit_job_impl() {}
 
+/// No-op companion to `release_kill_on_exit_job_impl` — see Windows
+/// impl for what this does there.
+pub fn rearm_kill_on_exit_job_impl() {}
+
 /// macOS uses WKWebView via Tauri; there's no user-data-dir lock
 /// contention pattern that requires foreign process cleanup. No-op.
 pub fn cleanup_stale_processes_impl(_marker_dir: &std::path::Path) -> usize {
