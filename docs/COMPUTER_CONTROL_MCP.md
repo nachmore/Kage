@@ -17,8 +17,13 @@ Kage exposes agent-callable tools through two distinct mechanisms:
    spawned by the agent over stdio. JSON-RPC 2.0 on the wire. This is what
    computer-control uses.
 2. **Local extensions** — JS in the WebView declares tools in its
-   manifest. `send_extension_tool_steering` pushes those declarations to
-   the agent as a hidden steering message. The agent emits a
+   manifest. The host's `ui/js/shared/extension-tool-controller.js`
+   builds a steering block from those validated declarations and pushes
+   it to the agent as a hidden steering message via
+   `send_extension_tool_steering` — a host-only command (mapped to
+   `null` in `extension-permissions.js`), because the backend replays
+   the latest block into every new and recovered session, so extension
+   code must never supply it directly. The agent emits a
    specially-formatted call in its response stream; the frontend detects
    it (`detectExtensionToolCall` in `ui/js/shared/streaming-utils.js`),
    runs the extension's JS handler, and returns the result via the
@@ -143,6 +148,7 @@ and the current computer-control split is the canonical example.
 - Windows worker: `src/os/windows/uia_worker.rs`
 - macOS worker: `src/os/macos/ax_worker.rs`
 - Extension-tool pathway: `src/commands/messaging/permissions.rs`
-  (`extension_tool_response`, `send_extension_tool_steering`) and
+  (`extension_tool_response`, plus the host-only
+  `send_extension_tool_steering`) and
   `ui/js/shared/extension-tool-controller.js`
 - ACP transport: `src/acp_client/transport.rs`

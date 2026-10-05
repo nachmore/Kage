@@ -158,18 +158,18 @@ for users.
 | Capability      | Icon | Grants access to… |
 |-----------------|------|-------------------|
 | `storage`       | 💾  | The extension's own sandboxed data and config: `save_extension_data`, `load_extension_data`, `delete_extension_data`, `get_extension_config`, `save_extension_config`. |
-| `clipboard`     | 📋  | `read_clipboard`, `get_clipboard_history`, `paste_clipboard_item`. |
+| `clipboard`     | 📋  | `read_clipboard`, `get_clipboard_history`. Read-only — `paste_clipboard_item` (write + synthesised Ctrl+V into the focused app) is host-only. |
 | `urls`          | 🔗  | `open_url` for web links and a small allowlist of safe schemes (http, https, mailto, tel, sms, facetime, x-apple.systempreferences, ms-settings, prefs). Custom app URI schemes (`spotify://`, `vscode://`, etc.) are explicitly rejected — they need `launch`. |
 | `launch`        | 🚀  | `open_path` (open arbitrary files in their default OS handler) and `launch_app_by_name`. Distinct from `urls` because the blast radius is "execute external code on the user's behalf." Only request this when an extension genuinely needs to start programs. |
 | `network`       | 📡  | Outbound HTTP from the Rust runtime: `fetch_favicon`, `fetch_link_metadata`. Bypasses CORS and can reach intranet endpoints, so it's a separate capability from `urls`. |
 | `oauth`         | 🔐  | One-shot loopback HTTP listener for OAuth callbacks: `oauth_loopback_start`, `oauth_loopback_await`, `oauth_loopback_cancel`. |
-| `filesystem`    | 📂  | `pick_folder`, `scan_folder`, `execute_folder_plan`, `get_common_folders`, `search_files`, `resolve_directories`. |
-| `window`        | 🪟  | Kage-owned window chrome: `resize_floating_window`, `set_floating_opacity`, `start_drag_window`, window geometry. |
-| `windows`       | 🧿  | Other apps' windows: `list_open_windows`, `focus_open_window`, `get_process_name`, `get_source_window`, `get_app_icon`. |
+| `filesystem`    | 📂  | Discovery only: `pick_folder`, `scan_folder`, `get_common_folders`, `search_files`, `resolve_directories`. `execute_folder_plan` (move/rename/trash) is host-only. |
+| `window`        | 🪟  | Kage-owned window chrome: `resize_floating_window`, `set_floating_opacity`, `start_drag_window`, `save_window_position`, `save_chat_window_geometry`, `apply_chat_window_size`. |
+| `windows`       | 🧿  | Other apps' windows: `list_open_windows`, `get_window_icons`, `focus_open_window`, `get_process_name`, `get_source_window`, `get_app_icon`. |
 | `notifications` | 🔔  | `notify_frontend_ready`. |
 | `calendar`      | 📅  | `get_calendar_events`, `get_calendar_events_for_date`. |
-| `session`       | 💬  | `list_sessions`, `load_session`, `get_current_session_id`, `get_floating_session_id`, `get_sessions_directory`. |
-| `agent`         | 🤖  | LLM communication: `send_message_streaming`, `cancel_generation`, `send_steering_message`, `send_extension_tool_steering`, `extension_tool_response`, `open_chat_with_message`, `get_available_models`, `get_slash_commands`. |
+| `session`       | 💬  | `list_sessions`, `load_session`, `get_window_session`, `get_session_stream_snapshot`, `get_sessions_directory`. |
+| `agent`         | 🤖  | LLM communication: `send_message_streaming`, `cancel_generation`, `send_steering_message`, `extension_tool_response`, `open_chat_with_message`, `get_available_models`, `get_slash_commands`. |
 | `activity`      | 📊  | `start_activity_tracker`, `stop_activity_tracker`, `get_activity_report`, `is_activity_tracker_running`. |
 | `automation`    | ⚡   | `emit_automation_signal`, `list_automation_signals`, `get_power_status`. |
 | `tts`           | 🔈  | `pocket_tts_test`, `pocket_tts_voices`. |
@@ -183,8 +183,13 @@ a new one).
 ### Forbidden commands
 
 Some commands are never callable from any extension regardless of
-capabilities. These include: `save_config`, `quit_app`,
-`restart_app`, `execute_system_command`, install/uninstall commands,
+capabilities. These include: `get_config` and `save_config`,
+`quit_app`, `restart_app`, `execute_system_command`,
+`paste_clipboard_item` (keystroke injection), `execute_folder_plan`
+(file moves/renames/trash), `send_extension_tool_steering` (the host
+builds the tool-steering block from validated manifests, and the
+backend replays it into every session), `notify_response_ready`,
+`save_frecency` / `load_frecency`, install/uninstall commands,
 tool-permission policy commands, `read_extension_file`,
 `open_devtools`, MCP config commands, updater commands, inline
 assist, the shortcut executor, and more. See
