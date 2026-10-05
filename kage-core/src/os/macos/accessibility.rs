@@ -21,8 +21,9 @@ pub(crate) use actions::{
     scroll_element_inner, select_element_inner, set_element_value_inner, toggle_element_inner,
 };
 pub(crate) use tree::{
-    find_elements_inner, get_element_children_inner, get_element_text_inner,
-    get_focused_element_inner, get_ui_tree_inner, list_accessible_windows_inner,
+    configure_messaging_timeout, find_elements_inner, get_element_children_inner,
+    get_element_text_inner, get_focused_element_inner, get_ui_tree_inner,
+    list_accessible_windows_inner,
 };
 // Public dispatch — every _impl submits a job to the worker and blocks
 // ---------------------------------------------------------------------------

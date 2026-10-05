@@ -16,6 +16,12 @@
     <key>NSAppleEventsUsageDescription</key>
     <string>Kage uses System Events to list open windows, focus apps, and capture selected text for your queries.</string>
 
+    <!-- macOS 14+ requestFullAccessToEvents is silently denied (no TCC
+         prompt) without the FullAccess key; the legacy key below still
+         covers macOS 13 and earlier. -->
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Kage reads upcoming calendar events so you can ask about your schedule.</string>
+
     <key>NSCalendarsUsageDescription</key>
     <string>Kage reads upcoming calendar events so you can ask about your schedule.</string>
 

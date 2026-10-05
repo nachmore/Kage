@@ -46,17 +46,21 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
         "mute" => ("osascript", vec!["-e", "set volume with output muted"]),
         "unmute" => ("osascript", vec!["-e", "set volume without output muted"]),
         "emoji" => ("osascript", vec!["-e", "tell application \"System Events\" to keystroke \" \" using {command down, control down}"]),
-        "trash" => ("open", vec!["-a", "Finder", "/Users"]),
+        "trash" => ("osascript", vec!["-e", "tell application \"Finder\" to open trash", "-e", "tell application \"Finder\" to activate"]),
         "taskmanager" | "taskmgr" => ("open", vec!["-a", "Activity Monitor"]),
         "terminal" => ("open", vec!["-a", "Terminal"]),
         "filemanager" => ("open", vec!["-a", "Finder"]),
-        "settings" => ("open", vec!["-a", "System Preferences"]),
-        "display" => ("open", vec!["-a", "System Preferences", "--args", "Displays"]),
-        "sound" => ("open", vec!["-a", "System Preferences", "--args", "Sound"]),
-        "wifi" | "network" => ("open", vec!["-a", "System Preferences", "--args", "Network"]),
-        "bluetooth" => ("open", vec!["-a", "System Preferences", "--args", "Bluetooth"]),
+        // Pane URLs rather than `open -a "System Preferences" --args <pane>`:
+        // the app ignores --args (every entry opened the home pane) and is
+        // named "System Settings" on macOS 13+. The legacy pane IDs are
+        // still honoured by System Settings.
+        "settings" => ("open", vec!["x-apple.systempreferences:"]),
+        "display" => ("open", vec!["x-apple.systempreferences:com.apple.preference.displays"]),
+        "sound" => ("open", vec!["x-apple.systempreferences:com.apple.preference.sound"]),
+        "wifi" | "network" => ("open", vec!["x-apple.systempreferences:com.apple.preference.network"]),
+        "bluetooth" => ("open", vec!["x-apple.systempreferences:com.apple.preferences.Bluetooth"]),
         "apps" => ("open", vec!["/Applications"]),
-        "updates" => ("open", vec!["-a", "System Preferences", "--args", "Software Update"]),
+        "updates" => ("open", vec!["x-apple.systempreferences:com.apple.preferences.softwareupdate"]),
         "devicemanager" | "devmgr" => ("open", vec!["-a", "System Information"]),
         "restart" => ("osascript", vec!["-e", "tell application \"System Events\" to restart"]),
         "shutdown" => ("osascript", vec!["-e", "tell application \"System Events\" to shut down"]),

@@ -119,6 +119,7 @@ fn ensure_worker() -> &'static mpsc::SyncSender<Job> {
 /// Worker loop. Drains the job channel until every sender is dropped
 /// (process shutdown).
 fn run_worker(rx: mpsc::Receiver<Job>) {
+    acc::configure_messaging_timeout();
     for job in rx.iter() {
         dispatch(job);
     }

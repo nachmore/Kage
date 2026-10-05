@@ -38,7 +38,7 @@ use core_graphics::event::{
     CGEventType, CallbackResult, EventField,
 };
 use log::{info, warn};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -59,6 +59,12 @@ static CAPTURING: AtomicBool = AtomicBool::new(false);
 static RUNLOOP_PTR: AtomicUsize = AtomicUsize::new(0);
 
 static CAPTURED: Mutex<Option<CapturedHotkey>> = Mutex::new(None);
+
+/// Bumped per capture. Each capture's detached timeout thread only acts
+/// while the generation is still its own — otherwise a timer left over
+/// from a capture that finished early (key pressed) would stop the *next*
+/// capture's run loop and cut it short.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -90,13 +96,16 @@ pub fn capture_hotkey_impl(timeout_ms: u64) -> Option<CapturedHotkey> {
     }
     *CAPTURED.lock().unwrap() = None;
     RUNLOOP_PTR.store(0, Ordering::SeqCst);
+    // Bumped before the capture thread publishes its run loop, so a timer
+    // that observes the new pointer also observes the new generation.
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
     // The actual capture runs on a dedicated OS thread — it needs its
     // own CFRunLoop and mustn't block the Tauri main thread. We
     // `.join()` to get the captured result back synchronously.
     let handle = std::thread::Builder::new()
         .name("kage-hotkey-capture".to_string())
-        .spawn(move || run_capture_thread(timeout_ms))
+        .spawn(move || run_capture_thread(timeout_ms, generation))
         .expect("failed to spawn hotkey capture thread");
 
     let captured = handle.join().unwrap_or(None);
@@ -121,7 +130,7 @@ pub fn cancel_capture_impl() {
 // Capture thread
 // ---------------------------------------------------------------------------
 
-fn run_capture_thread(timeout_ms: u64) -> Option<CapturedHotkey> {
+fn run_capture_thread(timeout_ms: u64, generation: u64) -> Option<CapturedHotkey> {
     // Store the thread's run loop so cancel/timeout can stop it.
     let run_loop = CFRunLoop::get_current();
     // SAFETY: `CFRunLoop` is a `!Send` wrapper over a thread-safe CF pointer.
@@ -131,17 +140,36 @@ fn run_capture_thread(timeout_ms: u64) -> Option<CapturedHotkey> {
     let run_loop_ptr = unsafe { run_loop_raw(&run_loop) };
     RUNLOOP_PTR.store(run_loop_ptr as usize, Ordering::SeqCst);
 
+    // A cancel that landed before the pointer was published had nothing
+    // to stop; honour it now instead of entering a run loop that nothing
+    // would ever stop.
+    if !CAPTURING.load(Ordering::SeqCst) {
+        RUNLOOP_PTR.store(0, Ordering::SeqCst);
+        return None;
+    }
+
     // Timeout thread — stops the run loop when time's up. Separate from
     // the caller-visible cancel path so a user who lets the timer run
     // out still gets `None` back cleanly.
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(timeout_ms));
+        // Pointer first, then generation — see the ordering note in
+        // capture_hotkey_impl.
         let ptr = RUNLOOP_PTR.load(Ordering::SeqCst);
-        if ptr != 0 && CAPTURING.load(Ordering::SeqCst) {
-            info!("[HOTKEY_CAPTURE] Timeout after {}ms", timeout_ms);
-            CAPTURING.store(false, Ordering::SeqCst);
-            unsafe { cf_run_loop_stop(ptr as CFRunLoopRef) };
+        if ptr == 0 || GENERATION.load(Ordering::SeqCst) != generation {
+            return;
         }
+        // Still gated on CAPTURING: once a capture has completed (key
+        // pressed / Escape / cancel) the capture thread is on its way out
+        // and its CFRunLoop may be gone by the time we'd touch `ptr`.
+        // Nothing is left to stop in those paths anyway — the tap callback
+        // and `cancel_capture_impl` stop the loop themselves, and a stop
+        // issued before the loop starts is honoured on entry.
+        if !CAPTURING.swap(false, Ordering::SeqCst) {
+            return;
+        }
+        info!("[HOTKEY_CAPTURE] Timeout after {}ms", timeout_ms);
+        unsafe { cf_run_loop_stop(ptr as CFRunLoopRef) };
     });
 
     let result = CGEventTap::with_enabled(

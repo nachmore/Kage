@@ -2,33 +2,57 @@
 
 use anyhow::{Context, Result};
 use log::info;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
 use crate::os::launcher::AppInfo;
 
+/// Directories scanned (non-recursively) for `.app` bundles, in priority
+/// order: a user-installed copy in /Applications wins over the built-in
+/// one in /System/Applications (Catalina+ home of Calculator, Notes, …).
+fn application_dirs() -> Vec<PathBuf> {
+    let mut out = vec![
+        PathBuf::from("/Applications"),
+        PathBuf::from("/Applications/Utilities"),
+        PathBuf::from("/System/Applications"),
+        PathBuf::from("/System/Applications/Utilities"),
+    ];
+    if let Some(home) = dirs::home_dir() {
+        out.push(home.join("Applications"));
+    }
+    out
+}
+
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     let mut apps = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
 
-    let applications_dir = PathBuf::from("/Applications");
-    if applications_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&applications_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("app") {
-                    if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                        let icon_path = path.to_string_lossy().to_string();
-                        apps.push(AppInfo {
-                            name: name.to_string(),
-                            path: path.clone(),
-                            icon_path: Some(icon_path),
-                            emoji_icon: None,
-                            icon_data: None,
-                        });
-                    }
-                }
+    for dir in application_dirs() {
+        // Missing dirs (no ~/Applications, pre-Catalina layout) are normal.
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("app") {
+                continue;
             }
+            let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if !seen.insert(name.to_string()) {
+                continue;
+            }
+            let icon_path = path.to_string_lossy().to_string();
+            apps.push(AppInfo {
+                name: name.to_string(),
+                path,
+                icon_path: Some(icon_path),
+                emoji_icon: None,
+                icon_data: None,
+            });
         }
     }
 
@@ -123,6 +147,11 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     ];
 
     for (name, uri, emoji) in settings {
+        // "System Settings" also exists as /System/Applications/System
+        // Settings.app — keep the real bundle (it has an icon).
+        if !seen.insert(name.to_string()) {
+            continue;
+        }
         apps.push(AppInfo {
             name: name.to_string(),
             path: PathBuf::from(uri),

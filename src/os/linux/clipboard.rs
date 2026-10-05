@@ -34,11 +34,15 @@ pub fn simulate_paste_impl() {
     });
 }
 
+/// Text on the clipboard, or `None` when xclip can't produce text (empty
+/// clipboard, or non-text contents such as an image — xclip exits
+/// non-zero for both).
 pub fn read_clipboard_impl() -> Option<String> {
     Command::new("xclip")
         .args(["-selection", "clipboard", "-o"])
         .output()
         .ok()
+        .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
 }
 
@@ -76,7 +80,9 @@ pub fn capture_selection_impl() -> Option<String> {
             Some(new.clone())
         }
         (None, Some(new)) if !new.is_empty() => {
-            write_clipboard_impl("");
+            // Original clipboard held non-text (e.g. an image) so we can't
+            // restore it via the text API. Don't clobber it with an empty
+            // string — leave the captured selection in place instead.
             info!("[selection] Captured {} chars", new.trim().len());
             Some(new.clone())
         }

@@ -16,6 +16,9 @@ use super::core::*;
 const MAX_ELEMENTS: usize = 500;
 const TREE_WALK_TIMEOUT_SECS: f64 = 5.0;
 const SEARCH_TIMEOUT_SECS: f64 = 8.0;
+/// Wall-clock cap on probing running apps for windows. With the messaging
+/// timeout set, only several hung apps at once can approach this.
+const ENUMERATE_WINDOWS_TIMEOUT_SECS: f64 = 5.0;
 // Electron detection (port of the Windows provider's logic)
 // ---------------------------------------------------------------------------
 const ELECTRON_PROCESSES: &[&str] = &[
@@ -123,8 +126,10 @@ fn build_element(
     // bounds are the best proxy. If include_invisible is false and the
     // element has no usable bounds, include it anyway (menus, focus-only
     // roots legitimately have no bounds).
+    // Fetched once and reused for the element's own bounds below.
+    let bounds = get_bounds(elem);
     if !include_invisible {
-        if let Some((_, _, w, h)) = get_bounds(elem) {
+        if let Some((_, _, w, h)) = bounds {
             if w <= 0 || h <= 0 {
                 return None;
             }
@@ -134,13 +139,7 @@ fn build_element(
     let eid = register_native(elem);
     state.count += 1;
 
-    let mut ui = UIElement::new(eid, get_role(elem));
-    ui.name = safe_name(elem);
-    ui.value = get_value(elem);
-    ui.automation_id = safe_automation_id(elem);
-    ui.states = get_states(elem);
-    ui.actions = get_actions(elem);
-    ui.bounds = get_bounds(elem);
+    let mut ui = describe_element(elem, eid, bounds);
 
     if depth < max_depth && !state.exhausted() {
         let children = copy_elements_attr(elem, ax::kAXChildrenAttribute);
@@ -163,22 +162,62 @@ fn build_element(
     Some(ui)
 }
 
+/// Fill a UIElement's fields with one AX read per attribute. Each read is
+/// a cross-process IPC into the target app, so role and value are fetched
+/// once and shared by the state/action derivations instead of re-read.
+fn describe_element(
+    elem: ax::AXUIElementRef,
+    eid: String,
+    bounds: Option<(i32, i32, i32, i32)>,
+) -> UIElement {
+    let ax_role = get_ax_role(elem);
+    let value = get_value(elem);
+    let mut ui = UIElement::new(eid, normalize_role(&ax_role, ""));
+    ui.name = safe_name(elem);
+    ui.automation_id = safe_automation_id(elem);
+    ui.states = get_states(elem, &ax_role, &value);
+    ui.actions = get_actions(elem, &ax_role, &value);
+    ui.value = value;
+    ui.bounds = bounds;
+    ui
+}
+
 // ---------------------------------------------------------------------------
 // Window discovery — application enumeration via NSWorkspace
 // ---------------------------------------------------------------------------
 
 /// Enumerate AXWindowRefs belonging to running apps, optionally filtering
-/// by window title substring (case-insensitive).
-fn enumerate_windows(title_filter: Option<&str>) -> Vec<(AxElem, String, u32, String)> {
+/// by window title substring (case-insensitive). `first_only` stops at the
+/// first match — every app probed costs IPCs, so a title lookup shouldn't
+/// pay for the whole process list.
+fn enumerate_windows(
+    title_filter: Option<&str>,
+    first_only: bool,
+) -> Vec<(AxElem, String, u32, String)> {
     use objc2::rc::Retained;
-    use objc2_app_kit::NSWorkspace;
+    use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace};
 
     let mut out = Vec::new();
     let workspace = NSWorkspace::sharedWorkspace();
     let apps: Retained<objc2_foundation::NSArray<objc2_app_kit::NSRunningApplication>> =
         workspace.runningApplications();
+    let filter_lower = title_filter.map(str::to_lowercase);
+    let deadline =
+        Instant::now() + std::time::Duration::from_secs_f64(ENUMERATE_WINDOWS_TIMEOUT_SECS);
 
     for app in &apps {
+        if Instant::now() > deadline {
+            warn!(
+                "enumerate_windows: deadline hit after {} windows; results partial",
+                out.len()
+            );
+            break;
+        }
+        // Prohibited = background agents/daemons with no UI. They make up
+        // most of runningApplications and can never own a window.
+        if app.activationPolicy() == NSApplicationActivationPolicy::Prohibited {
+            continue;
+        }
         let pid = app.processIdentifier() as u32;
         if pid == 0 {
             continue;
@@ -197,20 +236,44 @@ fn enumerate_windows(title_filter: Option<&str>) -> Vec<(AxElem, String, u32, St
         let windows = copy_elements_attr(app_elem.as_ref(), ax::kAXWindowsAttribute);
         for win in windows {
             let title = safe_name(win.as_ref());
-            if let Some(filter) = title_filter {
-                if !title.to_lowercase().contains(&filter.to_lowercase()) {
+            if let Some(filter) = &filter_lower {
+                if !title.to_lowercase().contains(filter.as_str()) {
                     continue;
                 }
             }
             out.push((win, title, pid, process_name.clone()));
+            if first_only {
+                return out;
+            }
         }
     }
     out
 }
 
+/// Set the process-wide AX messaging timeout. Setting it on the
+/// system-wide element changes the default for every AX element, so a hung
+/// (beachballing) app costs this per IPC instead of the ~6s system default
+/// — which would otherwise stall the single AX worker and every job queued
+/// behind it. Not so short that big trees in slow apps (Xcode, Electron)
+/// fail legitimate reads. Call once, on the AX worker thread.
+pub(crate) fn configure_messaging_timeout() {
+    const AX_MESSAGING_TIMEOUT_SECS: f32 = 1.0;
+    let system = unsafe { ax::AXUIElementCreateSystemWide() };
+    if system.is_null() {
+        warn!("AXUIElementCreateSystemWide returned null; AX messaging timeout not set");
+        return;
+    }
+    let system = AxElem::take(system);
+    let err =
+        unsafe { ax::AXUIElementSetMessagingTimeout(system.as_ref(), AX_MESSAGING_TIMEOUT_SECS) };
+    if err != ax::kAXErrorSuccess {
+        warn!("AXUIElementSetMessagingTimeout failed: {}", err);
+    }
+}
+
 fn find_window(title: Option<&str>) -> Result<AxElem, String> {
     if let Some(t) = title {
-        let wins = enumerate_windows(Some(t));
+        let wins = enumerate_windows(Some(t), true);
         if let Some((win, _, _, _)) = wins.into_iter().next() {
             return Ok(win);
         }
@@ -289,7 +352,7 @@ pub(crate) fn list_accessible_windows_inner(
     title_filter: Option<&str>,
 ) -> Result<Vec<AccessibleWindowInfo>, String> {
     ensure_trusted()?;
-    let wins = enumerate_windows(title_filter);
+    let wins = enumerate_windows(title_filter, false);
     let mut out = Vec::with_capacity(wins.len());
     for (win, title, pid, pname) in wins {
         let bounds = get_bounds(win.as_ref());
@@ -315,14 +378,8 @@ pub(crate) fn get_focused_element_inner() -> Result<Option<UIElement>, String> {
         None => return Ok(None),
     };
     let eid = register_native(focused.as_ref());
-    let mut ui = UIElement::new(eid, get_role(focused.as_ref()));
-    ui.name = safe_name(focused.as_ref());
-    ui.value = get_value(focused.as_ref());
-    ui.automation_id = safe_automation_id(focused.as_ref());
-    ui.states = get_states(focused.as_ref());
-    ui.actions = get_actions(focused.as_ref());
-    ui.bounds = get_bounds(focused.as_ref());
-    Ok(Some(ui))
+    let bounds = get_bounds(focused.as_ref());
+    Ok(Some(describe_element(focused.as_ref(), eid, bounds)))
 }
 
 pub(crate) fn get_element_children_inner(
@@ -392,14 +449,7 @@ fn search_recursive(
     // provider — the window root itself is excluded from results.
     if depth > 0 && matches_predicate(elem, params) {
         let eid = register_native(elem);
-        let mut ui = UIElement::new(eid, get_role(elem));
-        ui.name = safe_name(elem);
-        ui.value = get_value(elem);
-        ui.automation_id = safe_automation_id(elem);
-        ui.states = get_states(elem);
-        ui.actions = get_actions(elem);
-        ui.bounds = get_bounds(elem);
-        results.push(ui);
+        results.push(describe_element(elem, eid, get_bounds(elem)));
     }
 
     let children = copy_elements_attr(elem, ax::kAXChildrenAttribute);

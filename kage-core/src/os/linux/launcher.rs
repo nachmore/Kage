@@ -2,37 +2,76 @@
 
 use anyhow::{Context, Result};
 use log::info;
+use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::os::launcher::AppInfo;
 
-pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
-    let mut apps = Vec::new();
+/// `applications/` dirs to scan, highest priority first: XDG_DATA_HOME
+/// (user overrides win), then XDG_DATA_DIRS, then the flatpak/snap export
+/// dirs in case the session didn't add them to XDG_DATA_DIRS.
+fn desktop_dirs() -> Vec<PathBuf> {
+    let home = dirs::home_dir();
+    let non_empty = |key: &str| std::env::var_os(key).filter(|v| !v.is_empty());
 
-    // Scan .desktop files in standard locations
-    let mut desktop_dirs = vec![
-        PathBuf::from("/usr/share/applications"),
-        PathBuf::from("/usr/local/share/applications"),
-    ];
-
-    if let Some(home) = dirs::home_dir() {
-        desktop_dirs.push(home.join(".local/share/applications"));
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if let Some(data_home) = non_empty("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| home.as_ref().map(|h| h.join(".local/share")))
+    {
+        roots.push(data_home);
+    }
+    if let Some(data_dirs) = non_empty("XDG_DATA_DIRS") {
+        roots.extend(std::env::split_paths(&data_dirs));
+    }
+    // Spec defaults — always included (dedup'd below) so a session that
+    // sets XDG_DATA_DIRS without them still finds the system apps.
+    roots.push(PathBuf::from("/usr/local/share"));
+    roots.push(PathBuf::from("/usr/share"));
+    roots.push(PathBuf::from("/var/lib/flatpak/exports/share"));
+    if let Some(h) = &home {
+        roots.push(h.join(".local/share/flatpak/exports/share"));
     }
 
-    for dir in desktop_dirs {
-        if dir.exists() {
-            if let Ok(entries) = fs::read_dir(&dir) {
-                for entry in entries.filter_map(|e| e.ok()) {
-                    let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
-                        if let Ok(content) = fs::read_to_string(&path) {
-                            if let Some(app_info) = parse_desktop_file(&content, &path) {
-                                apps.push(app_info);
-                            }
-                        }
-                    }
+    let mut out: Vec<PathBuf> = Vec::new();
+    let candidates = roots
+        .into_iter()
+        .map(|r| r.join("applications"))
+        .chain(std::iter::once(PathBuf::from(
+            "/var/lib/snapd/desktop/applications",
+        )));
+    for dir in candidates {
+        if !out.contains(&dir) {
+            out.push(dir);
+        }
+    }
+    out
+}
+
+pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
+    let mut apps = Vec::new();
+    // Desktop-file IDs already claimed by a higher-priority dir — per the
+    // spec, the first one found shadows the rest.
+    let mut seen_ids = HashSet::new();
+
+    for dir in desktop_dirs() {
+        // Missing dirs (no flatpak/snap, etc.) are normal.
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("desktop") {
+                continue;
+            }
+            if !seen_ids.insert(entry.file_name()) {
+                continue;
+            }
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Some(app_info) = parse_desktop_file(&content, &path) {
+                    apps.push(app_info);
                 }
             }
         }
@@ -41,47 +80,95 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     Ok(apps)
 }
 
-fn parse_desktop_file(content: &str, _path: &PathBuf) -> Option<AppInfo> {
-    let mut name = None;
-    let mut exec = None;
-    // Only parse the [Desktop Entry] section — actions ([Desktop Action ...])
-    // have their own Name/Exec we don't want to pick up by accident.
+/// First value of each key in the `[Desktop Entry]` section. Actions
+/// (`[Desktop Action ...]`) have their own Name/Exec we must not pick up,
+/// and localised keys (`Name[fr]`) are distinct keys so never shadow
+/// `Name`.
+fn desktop_entry_fields(content: &str) -> HashMap<&str, &str> {
+    let mut fields = HashMap::new();
     let mut in_main_section = false;
-
     for raw in content.lines() {
         let line = raw.trim();
         if line.starts_with('[') && line.ends_with(']') {
             in_main_section = line == "[Desktop Entry]";
             continue;
         }
-        if !in_main_section {
+        if !in_main_section || line.starts_with('#') {
             continue;
         }
-        // The first matching key in the section wins; skip later overrides
-        // (locale-specific Name[xx]=... lines never start with plain "Name=").
-        if name.is_none() {
-            if let Some(rest) = line.strip_prefix("Name=") {
-                name = Some(rest.to_string());
-                continue;
-            }
-        }
-        if exec.is_none() {
-            if let Some(rest) = line.strip_prefix("Exec=") {
-                exec = Some(rest.to_string());
-            }
+        if let Some((key, value)) = line.split_once('=') {
+            fields.entry(key.trim()).or_insert(value.trim());
         }
     }
+    fields
+}
 
-    let (name, exec) = (name?, exec?);
-    let program = parse_exec_field(&exec)?;
+/// Build an AppInfo whose `path` is the .desktop file itself. The Exec
+/// line is often a wrapper (`env FOO=1 /snap/bin/x`, `flatpak run …`,
+/// `sh -c "…"`) whose first token alone launches the wrong program, so
+/// launching goes through the desktop file (see `launch_desktop_file`).
+fn parse_desktop_file(content: &str, path: &Path) -> Option<AppInfo> {
+    let fields = desktop_entry_fields(content);
+    // Hidden/NoDisplay entries are helpers, MIME handlers and deleted
+    // entries — not things a user launches.
+    if fields.get("Type").is_some_and(|t| *t != "Application")
+        || fields.get("NoDisplay") == Some(&"true")
+        || fields.get("Hidden") == Some(&"true")
+    {
+        return None;
+    }
+    let name = fields.get("Name")?.to_string();
+    // Still require a parseable Exec — an entry we can't run isn't an app.
+    let program = parse_exec_field(fields.get("Exec")?)?;
+    // Icon= (a theme icon name or absolute path) is what an icon lookup
+    // wants; fall back to the program like before.
+    let icon_path = fields
+        .get("Icon")
+        .filter(|i| !i.is_empty())
+        .map_or(program, |i| i.to_string());
 
     Some(AppInfo {
         name,
-        path: PathBuf::from(&program),
-        icon_path: Some(program),
+        path: path.to_path_buf(),
+        icon_path: Some(icon_path),
         emoji_icon: None,
         icon_data: None,
     })
+}
+
+/// Launch a .desktop entry. `gio launch` and `gtk-launch` implement the
+/// full spec (field codes, Terminal=, DBusActivatable); running the Exec
+/// argv ourselves is the last resort for systems with neither. Note
+/// `xdg-open file.desktop` is not an option — many desktops open the file
+/// in a text editor.
+fn launch_desktop_file(path: &Path) -> Result<()> {
+    match Command::new("gio").arg("launch").arg(path).status() {
+        Ok(status) if status.success() => return Ok(()),
+        Ok(status) => info!("gio launch {:?} exited with {}", path, status),
+        Err(e) => info!("gio unavailable ({e}); trying gtk-launch"),
+    }
+    // gtk-launch takes the desktop-file ID (basename without .desktop) and
+    // only finds entries in the XDG dirs, which covers what we scan.
+    if let Some(id) = path.file_stem().and_then(|s| s.to_str()) {
+        if matches!(Command::new("gtk-launch").arg(id).status(), Ok(s) if s.success()) {
+            return Ok(());
+        }
+    }
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read desktop file {:?}", path))?;
+    let fields = desktop_entry_fields(&content);
+    let argv = fields
+        .get("Exec")
+        .copied()
+        .and_then(parse_exec_argv)
+        .with_context(|| format!("No usable Exec= in {:?}", path))?;
+    let (program, args) = argv.split_first().context("Exec= has no program token")?;
+    info!("Launching Exec= argv directly: {:?}", argv);
+    Command::new(program)
+        .args(args)
+        .spawn()
+        .context("Failed to launch application")?;
+    Ok(())
 }
 
 /// Extract the program path from a freedesktop `Exec=` field.
@@ -93,13 +180,18 @@ fn parse_desktop_file(content: &str, _path: &PathBuf) -> Option<AppInfo> {
 ///   %i / %c / %k   icon flag / translated name / desktop-file path
 ///   %d / %D / %n / %N / %v / %m   deprecated, ignored
 ///   %%        literal %
-/// We don't run the app directly, we just record the program for AppInfo,
-/// so we strip every `%X` token, honour `\\\\` and `\\"` escapes inside
-/// quoted strings, and return the first whitespace-separated token.
+/// We never have files/URLs to substitute, so `parse_exec_argv` strips
+/// every `%X` token, honours `\\\\` and `\\"` escapes inside quoted strings,
+/// and splits the rest into argv (the last-resort launch path in
+/// `launch_desktop_file`). `parse_exec_field` keeps just the program.
 ///
 /// Returns `None` if the Exec field has no usable program token (e.g.
 /// only field codes, only whitespace, or unbalanced quoting).
 fn parse_exec_field(exec: &str) -> Option<String> {
+    parse_exec_argv(exec)?.into_iter().next()
+}
+
+fn parse_exec_argv(exec: &str) -> Option<Vec<String>> {
     let mut tokens: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
@@ -141,7 +233,7 @@ fn parse_exec_field(exec: &str) -> Option<String> {
         tokens.push(current);
     }
 
-    tokens.into_iter().next()
+    (!tokens.is_empty()).then_some(tokens)
 }
 
 #[cfg(test)]
@@ -244,13 +336,54 @@ mod tests {
 
     #[test]
     fn desktop_file_extracts_name_and_exec_path_without_field_codes() {
-        // Headline regression: the original parser stored the entire Exec=
-        // line — including `%U` — as AppInfo.path. The fix routes through
-        // parse_exec_field so the path is launchable.
+        // The program recorded from Exec= must not carry field codes like `%U`.
         let content = "[Desktop Entry]\nName=Firefox\nExec=/usr/bin/firefox %U\n";
         let info = parse_desktop_file(content, &fake_path()).expect("parses");
         assert_eq!(info.name, "Firefox");
-        assert_eq!(info.path, PathBuf::from("/usr/bin/firefox"));
+        // Launching goes through the .desktop file (wrapper Exec lines break
+        // first-token launches); the program is only the icon fallback.
+        assert_eq!(info.path, fake_path());
+        assert_eq!(info.icon_path.as_deref(), Some("/usr/bin/firefox"));
+    }
+
+    #[test]
+    fn desktop_file_prefers_icon_key() {
+        let content = "[Desktop Entry]\nName=Firefox\nExec=firefox %U\nIcon=firefox-esr\n";
+        let info = parse_desktop_file(content, &fake_path()).expect("parses");
+        assert_eq!(info.icon_path.as_deref(), Some("firefox-esr"));
+    }
+
+    #[test]
+    fn desktop_file_skips_hidden_nodisplay_and_non_applications() {
+        for extra in ["NoDisplay=true", "Hidden=true", "Type=Link"] {
+            let content = format!("[Desktop Entry]\nName=X\nExec=/usr/bin/x\n{extra}\n");
+            assert!(
+                parse_desktop_file(&content, &fake_path()).is_none(),
+                "{extra} should be skipped"
+            );
+        }
+        let ok = "[Desktop Entry]\nType=Application\nName=X\nExec=/usr/bin/x\nNoDisplay=false\n";
+        assert!(parse_desktop_file(ok, &fake_path()).is_some());
+    }
+
+    #[test]
+    fn exec_argv_keeps_wrapper_arguments() {
+        assert_eq!(
+            parse_exec_argv("env BAMF_DESKTOP_FILE_HINT=/x.desktop /snap/bin/foo %U"),
+            Some(vec![
+                "env".to_string(),
+                "BAMF_DESKTOP_FILE_HINT=/x.desktop".to_string(),
+                "/snap/bin/foo".to_string(),
+            ])
+        );
+        assert_eq!(
+            parse_exec_argv(r#"sh -c "echo hi""#),
+            Some(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo hi".to_string()
+            ])
+        );
     }
 
     #[test]
@@ -267,7 +400,7 @@ Name=New Window\n\
 Exec=/usr/bin/main --new-window %U\n";
         let info = parse_desktop_file(content, &fake_path()).expect("parses");
         assert_eq!(info.name, "Main App");
-        assert_eq!(info.path, PathBuf::from("/usr/bin/main"));
+        assert_eq!(info.icon_path.as_deref(), Some("/usr/bin/main"));
     }
 
     #[test]
@@ -303,10 +436,7 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
     info!("Launching Linux application at {:?}", path);
 
     if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
-        Command::new("xdg-open")
-            .arg(path)
-            .spawn()
-            .context("Failed to launch application")?;
+        launch_desktop_file(path)?;
     } else {
         Command::new(path)
             .spawn()
@@ -324,6 +454,14 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
 pub fn shell_launch_impl(name: &str) -> Result<()> {
     if name.is_empty() {
         anyhow::bail!("shell_launch called with empty name");
+    }
+
+    // list_installed_apps hands the agent .desktop paths; launch those as
+    // desktop entries rather than trying to exec the file.
+    let as_path = Path::new(name);
+    if as_path.extension().and_then(|s| s.to_str()) == Some("desktop") && as_path.is_file() {
+        info!("shell_launch_impl: desktop entry '{}'", name);
+        return launch_desktop_file(as_path);
     }
 
     // Leading RFC 3986 URI scheme (same shape as macOS) goes through xdg-open.

@@ -2,7 +2,8 @@
 
 use anyhow::Result;
 use log::info;
-use nix::sys::signal::{kill, Signal};
+use nix::errno::Errno;
+use nix::sys::signal::{kill, killpg, Signal};
 use nix::unistd::Pid;
 use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
@@ -11,17 +12,46 @@ use std::process::Command;
 // Moved to kage-core; re-exported for `super::process::*` callers.
 pub use kage_core::os::linux::process::{get_process_name_impl, spawn_detached_impl};
 
+/// SIGTERM, wait up to 500ms for exit, then SIGKILL. Returns true once the
+/// target is gone — including the common case where it exits cleanly on
+/// SIGTERM (the SIGKILL then gets ESRCH, which used to be reported as a
+/// failure).
+///
+/// Agents are spawned as session/group leaders (`setsid` in
+/// `configure_spawn_impl`), so when `pid` leads its own group the whole
+/// group is signalled and the agent's MCP children go with it. Callers
+/// must have already confirmed `pid` is ours (PID-reuse check).
 pub fn kill_process_impl(pid: u32) -> bool {
-    // Try SIGTERM first
-    if kill(Pid::from_raw(pid as i32), Signal::SIGTERM).is_ok() {
-        std::thread::sleep(std::time::Duration::from_millis(500));
+    // 0 / negative would address groups or every process — never valid here.
+    let raw = match i32::try_from(pid) {
+        Ok(r) if r > 0 => r,
+        _ => return false,
+    };
+    let target = Pid::from_raw(raw);
+    // SAFETY: getpgid only reads process-table state; -1 on error (no such
+    // process) simply means "not a group leader".
+    let leads_group = unsafe { libc::getpgid(raw) } == raw;
+    let send = |sig: Option<Signal>| {
+        if leads_group {
+            killpg(target, sig)
+        } else {
+            kill(target, sig)
+        }
+    };
 
-        // Force kill if still alive
-        if kill(Pid::from_raw(pid as i32), Signal::SIGKILL).is_ok() {
+    if send(Some(Signal::SIGTERM)).is_err() {
+        return false;
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+    while std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        // Signal 0 = existence probe. (An unreaped child of ours still
+        // probes as alive, so that case falls through to SIGKILL.)
+        if send(None) == Err(Errno::ESRCH) {
             return true;
         }
     }
-    false
+    matches!(send(Some(Signal::SIGKILL)), Ok(()) | Err(Errno::ESRCH))
 }
 
 pub fn configure_spawn_impl(cmd: &mut Command) {

@@ -327,12 +327,16 @@ unsafe fn cfstring_to_string(cfstr: CFStringRef) -> String {
 // ---------------------------------------------------------------------------
 
 /// Normalise an AX role token to the same shape the Windows provider
-/// uses. Matches on `kAXRoleAttribute` values; subrole takes a second
-/// pass for things AX collapses into AXButton (e.g. `AXCloseButton`).
+/// uses. Subrole isn't fetched: `normalize_role` ignores it, and every
+/// attribute read is a cross-process IPC into the target app.
 pub(super) fn get_role(elem: ax::AXUIElementRef) -> String {
-    let ax_role = copy_string_attr(elem, ax::kAXRoleAttribute);
-    let subrole = copy_string_attr(elem, ax::kAXSubroleAttribute);
-    normalize_role(&ax_role, &subrole)
+    normalize_role(&get_ax_role(elem), "")
+}
+
+/// Raw `kAXRoleAttribute` (e.g. `AXCheckBox`), for callers that need both
+/// the normalised role and the AX token without reading it twice.
+pub(super) fn get_ax_role(elem: ax::AXUIElementRef) -> String {
+    copy_string_attr(elem, ax::kAXRoleAttribute)
 }
 
 /// Pure role-normalisation logic, extracted so it's unit-testable
@@ -423,7 +427,10 @@ pub(super) fn get_bounds(elem: ax::AXUIElementRef) -> Option<(i32, i32, i32, i32
     }
 }
 
-pub(super) fn get_actions(elem: ax::AXUIElementRef) -> Vec<String> {
+/// `ax_role` / `value` are the already-fetched `kAXRoleAttribute` and
+/// `kAXValueAttribute` (as from `get_ax_role` / `get_value`), passed in
+/// so they aren't re-read over IPC.
+pub(super) fn get_actions(elem: ax::AXUIElementRef, ax_role: &str, value: &str) -> Vec<String> {
     let ax_actions = copy_action_names(elem);
     let mut out = Vec::new();
     for a in &ax_actions {
@@ -450,12 +457,11 @@ pub(super) fn get_actions(elem: ax::AXUIElementRef) -> Vec<String> {
         out.push("set_value".to_string());
     }
     // get_text if element has a string value
-    if !copy_value_as_string(elem).is_empty() {
+    if !value.is_empty() {
         out.push("get_text".to_string());
     }
     // toggle if checkbox/menuitem with AXPress (already pushed invoke)
-    let role = copy_string_attr(elem, ax::kAXRoleAttribute);
-    if role == "AXCheckBox" && ax_actions.iter().any(|a| a == "AXPress") {
+    if ax_role == "AXCheckBox" && ax_actions.iter().any(|a| a == "AXPress") {
         out.push("toggle".to_string());
     }
     // Deduplicate while preserving order
@@ -464,15 +470,14 @@ pub(super) fn get_actions(elem: ax::AXUIElementRef) -> Vec<String> {
     out
 }
 
-pub(super) fn get_states(elem: ax::AXUIElementRef) -> Vec<String> {
+/// See `get_actions` for `ax_role` / `value`.
+pub(super) fn get_states(elem: ax::AXUIElementRef, ax_role: &str, value: &str) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(false) = copy_bool_attr(elem, ax::kAXEnabledAttribute) {
         out.push("disabled".to_string());
     }
-    let role = copy_string_attr(elem, ax::kAXRoleAttribute);
-    if role == "AXCheckBox" {
-        let v = copy_value_as_string(elem);
-        match v.as_str() {
+    if ax_role == "AXCheckBox" {
+        match value {
             "1" | "true" => out.push("checked".to_string()),
             "0" | "false" => out.push("unchecked".to_string()),
             _ => {}

@@ -8,9 +8,13 @@
 //
 // Each result is stat'ed for size + mtime. That's what makes this slow
 // on large result sets — Spotlight itself is fast (milliseconds for
-// index lookup), but stat-ing thousands of paths adds up. We cap at
-// `max_results` with `mdfind`'s `-count` limitation handled in-process
-// by truncating: `-count 100` exists but returns just a count, not paths.
+// index lookup), but stat-ing thousands of paths adds up, and a broad
+// query can stream hundreds of thousands of paths. So we read mdfind's
+// stdout incrementally, stop (and kill mdfind) after a bounded candidate
+// set of `max_results * CANDIDATE_MULTIPLIER`, and rank only those by
+// mtime. That's "most recent among the first N hits", not the globally
+// most recent — mdfind can't sort by date itself. (`-count` exists but
+// returns just a count, not paths.)
 //
 // No new dependencies — shells out to system binaries available on
 // every macOS since 10.4.
@@ -18,9 +22,19 @@
 use crate::os::file_search::FileSearchResult;
 use chrono::{DateTime, Local};
 use log::{debug, warn};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::Command;
-use std::time::SystemTime;
+use std::process::{Command, Stdio};
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::time::{Duration, Instant, SystemTime};
+
+/// How many mdfind hits to stat and rank per requested result.
+const CANDIDATE_MULTIPLIER: usize = 5;
+
+/// Internal ceiling for one mdfind run. The caller abandons the task at
+/// 12s (QUERY_TIMEOUT) but can't kill the child, so we do it here, a bit
+/// earlier, rather than leave mdfind streaming in the background.
+const MDFIND_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn search_files_impl(query: &str, max_results: usize) -> Vec<FileSearchResult> {
     let trimmed = query.trim();
@@ -40,43 +54,105 @@ pub fn search_files_impl(query: &str, max_results: usize) -> Vec<FileSearchResul
         }
     };
 
+    // mdfind's option parsing isn't getopt-standard, so `--` can't be
+    // relied on to end options — strip leading dashes instead so a query
+    // like "-foo" isn't taken as a flag.
+    let query = trimmed.trim_start_matches('-').trim_start();
+    if query.is_empty() {
+        return vec![];
+    }
+
     // `-interpret` lets users type the same things they'd put in
     // Spotlight (`kind:image vacation`, `created:yesterday`, plain
     // filename fragments). `-onlyin` restricts to the home tree.
-    let output = match Command::new("mdfind")
+    let mut child = match Command::new("mdfind")
         .arg("-interpret")
         .arg("-onlyin")
         .arg(&home)
-        .arg(trimmed)
-        .output()
+        .arg(query)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
     {
-        Ok(o) => o,
+        Ok(c) => c,
         Err(e) => {
             warn!("file_search: mdfind failed to launch: {e}");
             return vec![];
         }
     };
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        debug!(
-            "file_search: mdfind exited with {} — {}",
-            output.status,
-            stderr.trim()
-        );
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
         return vec![];
+    };
+
+    // Reader thread forwards lines so the deadline below can be enforced
+    // with recv_timeout. It exits on EOF, or on the first send after we
+    // drop the receiver (and the kill closes the pipe under it anyway).
+    let (tx, rx) = mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            let Ok(line) = line else { break };
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+
+    let cap = max_results.saturating_mul(CANDIDATE_MULTIPLIER);
+    let deadline = Instant::now() + MDFIND_TIMEOUT;
+    let mut paths: Vec<String> = Vec::new();
+    let mut reached_eof = false;
+    while paths.len() < cap {
+        match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(line) if line.is_empty() => {}
+            Ok(line) => paths.push(line),
+            Err(RecvTimeoutError::Timeout) => {
+                debug!(
+                    "file_search: mdfind still running after {:?}; using {} partial hits",
+                    MDFIND_TIMEOUT,
+                    paths.len()
+                );
+                break;
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                reached_eof = true;
+                break;
+            }
+        }
+    }
+    drop(rx);
+
+    if reached_eof {
+        match child.wait() {
+            Ok(status) if !status.success() => {
+                debug!("file_search: mdfind exited with {status}");
+                return vec![];
+            }
+            Ok(_) => {}
+            Err(e) => debug!("file_search: waiting on mdfind failed: {e}"),
+        }
+    } else {
+        // Enough candidates (or out of time) — stop mdfind instead of
+        // letting it stream the rest of the index, and reap it.
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let paths: Vec<&str> = stdout.lines().take(max_results).collect();
+    rank_candidates(&paths, max_results)
+}
 
-    let mut results: Vec<FileSearchResult> =
-        paths.into_iter().filter_map(result_for_path).collect();
-
-    // Sort by most recently modified — matches the Windows ranking and
-    // what users expect from a launcher. `mdfind` returns results in
-    // arbitrary order (index-internal).
+/// Stat the candidates, sort by most recently modified — matches the
+/// Windows ranking and what users expect from a launcher (`mdfind`
+/// returns results in arbitrary, index-internal order) — and keep the
+/// top `max_results`.
+fn rank_candidates(paths: &[String], max_results: usize) -> Vec<FileSearchResult> {
+    let mut results: Vec<FileSearchResult> = paths
+        .iter()
+        .filter_map(|p| result_for_path(p.as_str()))
+        .collect();
     results.sort_by(|a, b| b.modified.cmp(&a.modified));
+    results.truncate(max_results);
     results
 }
 
@@ -127,7 +203,6 @@ fn system_time_to_iso8601(t: SystemTime) -> String {
 mod tests {
     use super::*;
     use std::fs;
-    use std::time::Duration;
 
     #[test]
     fn empty_query_returns_empty() {
@@ -166,6 +241,31 @@ mod tests {
             "directory size should be reported as 0 — the inode-overhead \
              figure from metadata().len() is misleading to show users"
         );
+    }
+
+    #[test]
+    fn rank_candidates_sorts_by_mtime_and_truncates() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let old = tmpdir.path().join("old.txt");
+        let new = tmpdir.path().join("new.txt");
+        fs::write(&old, b"o").unwrap();
+        fs::write(&new, b"n").unwrap();
+        let past = SystemTime::now() - Duration::from_secs(3600);
+        fs::File::options()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(past)
+            .unwrap();
+
+        let paths = vec![
+            old.to_string_lossy().to_string(),
+            "/definitely/missing/file".to_string(),
+            new.to_string_lossy().to_string(),
+        ];
+        let ranked = rank_candidates(&paths, 1);
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].name, "new.txt");
     }
 
     #[test]

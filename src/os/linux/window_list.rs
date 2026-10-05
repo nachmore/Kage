@@ -27,15 +27,10 @@ fn list_with_wmctrl() -> Option<Vec<WindowInfo>> {
     let mut windows = Vec::new();
 
     for line in stdout.lines() {
-        let parts: Vec<&str> = line.splitn(5, char::is_whitespace).collect();
-        if parts.len() < 5 {
+        let Some((handle, pid, title)) = parse_wmctrl_line(line) else {
             continue;
-        }
-
-        let handle_str = parts[0].trim();
-        let handle = u64::from_str_radix(handle_str.trim_start_matches("0x"), 16).unwrap_or(0);
-        let pid: u32 = parts[2].trim().parse().unwrap_or(0);
-        let title = parts[4].trim().to_string();
+        };
+        let title = title.to_string();
 
         if title.is_empty() || title == "Desktop" {
             continue;
@@ -59,6 +54,27 @@ fn list_with_wmctrl() -> Option<Vec<WindowInfo>> {
     }
 
     Some(windows)
+}
+
+/// Split one `wmctrl -l -p` line into (handle, pid, title). wmctrl pads
+/// its columns with printf widths (`0x%.8lx %2ld %-6lu %s %s`), so the
+/// separators are runs of spaces — take the four leading tokens (id,
+/// desktop, pid, host) by whitespace runs and keep the remainder verbatim
+/// as the title, preserving any spacing inside it.
+fn parse_wmctrl_line(line: &str) -> Option<(u64, u32, &str)> {
+    fn next_token(s: &str) -> Option<(&str, &str)> {
+        let s = s.trim_start();
+        if s.is_empty() {
+            return None;
+        }
+        Some(s.split_once(char::is_whitespace).unwrap_or((s, "")))
+    }
+    let (id, rest) = next_token(line)?;
+    let (_desktop, rest) = next_token(rest)?;
+    let (pid, rest) = next_token(rest)?;
+    let (_host, rest) = next_token(rest)?;
+    let handle = u64::from_str_radix(id.trim_start_matches("0x"), 16).ok()?;
+    Some((handle, pid.parse().unwrap_or(0), rest.trim()))
 }
 
 fn list_with_xdotool() -> Option<Vec<WindowInfo>> {
@@ -154,4 +170,35 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
 
 pub fn get_window_icons(_handles: &[u64]) -> std::collections::HashMap<u64, String> {
     std::collections::HashMap::new() // TODO: implement on Linux
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_wmctrl_line;
+
+    #[test]
+    fn parses_padded_wmctrl_columns() {
+        let (handle, pid, title) =
+            parse_wmctrl_line("0x03a00003  0 1234   myhost Firefox  -  Docs").unwrap();
+        assert_eq!(handle, 0x03a00003);
+        assert_eq!(pid, 1234);
+        assert_eq!(title, "Firefox  -  Docs");
+    }
+
+    #[test]
+    fn parses_sticky_window_and_missing_host() {
+        let (_, pid, title) = parse_wmctrl_line("0x01e00006 -1 987    N/A Panel").unwrap();
+        assert_eq!(pid, 987);
+        assert_eq!(title, "Panel");
+    }
+
+    #[test]
+    fn untitled_and_malformed_lines() {
+        assert_eq!(
+            parse_wmctrl_line("0x01e00006  0 42     host").unwrap().2,
+            ""
+        );
+        assert!(parse_wmctrl_line("0x01e00006  0").is_none());
+        assert!(parse_wmctrl_line("").is_none());
+    }
 }

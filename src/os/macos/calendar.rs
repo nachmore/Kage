@@ -6,8 +6,9 @@
 //    (workspace member, provisioned by build.rs into src-tauri/binaries/
 //    and copied next to the app binary by tauri-build). Uses Apple's
 //    EventKit API via objc2-event-kit, returns JSON. Requires Calendar
-//    TCC permission (surfaced via `NSCalendarsUsageDescription` in
-//    Info.plist and prompted on first call). This is the canonical path.
+//    TCC permission (surfaced via `NSCalendarsFullAccessUsageDescription`
+//    / `NSCalendarsUsageDescription` in Info.plist and prompted on first
+//    call). This is the canonical path.
 //
 // 2. **icalBuddy** — third-party Homebrew tool (`brew install ical-buddy`).
 //    Zero permission dance but only helps if the user installed it.
@@ -165,24 +166,45 @@ fn run_eventkit_helper(args: &[&str]) -> HelperResult {
 // icalBuddy backend (legacy fallback)
 // ---------------------------------------------------------------------------
 
+/// Shared icalBuddy flags. `-nrd` plus fixed `-df`/`-tf` pin the datetime
+/// line to `2026-01-15 at 10:00 - 10:30` regardless of the user's locale —
+/// the defaults print "today"/"tomorrow" and locale-dependent 12h/24h
+/// times, which the parser can't handle.
+const ICALBUDDY_ARGS: &[&str] = &[
+    "-nc",
+    "-nrd",
+    "-df",
+    "%Y-%m-%d",
+    "-tf",
+    "%H:%M",
+    "-iep",
+    "title,datetime,location,notes,url,attendees",
+    "-po",
+    "title,datetime,location,notes,url,attendees",
+    "-b",
+    "* ",
+    "--separateByCalendar",
+];
+
+fn icalbuddy_args(range: &str) -> Vec<&str> {
+    let mut args: Vec<&str> = ICALBUDDY_ARGS.to_vec();
+    args.push(range);
+    args
+}
+
 fn get_upcoming_events_via_icalbuddy(hours: u32) -> Vec<CalendarEvent> {
     let now = Local::now();
     let end = now + Duration::hours(hours as i64);
     let start_str = now.format("%Y-%m-%d").to_string();
     let end_str = end.format("%Y-%m-%d").to_string();
 
+    // icalBuddy only takes whole days, so trim to [now, end) ourselves —
+    // same overlap semantics as the EventKit helper's predicate.
     let range = format!("eventsFrom:{start_str} to:{end_str}");
-    let events = run_icalbuddy(&[
-        "-nc",
-        "-iep",
-        "title,datetime,location,notes,url,attendees",
-        "-po",
-        "title,datetime,location,notes,url,attendees",
-        "-b",
-        "* ",
-        "--separateByCalendar",
-        &range,
-    ]);
+    let events: Vec<CalendarEvent> = run_icalbuddy(&icalbuddy_args(&range))
+        .into_iter()
+        .filter(|e| overlaps_window(e, now, end))
+        .collect();
 
     debug!("icalBuddy returned {} upcoming events", events.len());
     events
@@ -190,17 +212,24 @@ fn get_upcoming_events_via_icalbuddy(hours: u32) -> Vec<CalendarEvent> {
 
 fn get_events_for_date_via_icalbuddy(date: &str) -> Vec<CalendarEvent> {
     let range = format!("eventsFrom:{date} to:{date}");
-    run_icalbuddy(&[
-        "-nc",
-        "-iep",
-        "title,datetime,location,notes,url,attendees",
-        "-po",
-        "title,datetime,location,notes,url,attendees",
-        "-b",
-        "* ",
-        "--separateByCalendar",
-        &range,
-    ])
+    run_icalbuddy(&icalbuddy_args(&range))
+}
+
+/// True when the event's [start, start + duration) overlaps
+/// [window_start, window_end). All-day events carry local-midnight starts
+/// and whole-day durations, so today's all-day events overlap any window
+/// that starts today. Unparseable starts are kept rather than silently
+/// dropped.
+fn overlaps_window(
+    event: &CalendarEvent,
+    window_start: chrono::DateTime<Local>,
+    window_end: chrono::DateTime<Local>,
+) -> bool {
+    let Ok(start) = chrono::DateTime::parse_from_rfc3339(&event.start_time) else {
+        return true;
+    };
+    let end = start + Duration::minutes(i64::from(event.duration_minutes));
+    end > window_start && start < window_end
 }
 
 /// Check whether `icalBuddy` is on PATH. Cached for the process lifetime —
@@ -255,12 +284,12 @@ fn run_icalbuddy(args: &[&str]) -> Vec<CalendarEvent> {
 /// Work
 /// ----
 /// * Team standup
-///     Jan 15, 2026 at 10:00 AM - 10:30 AM
+///     2026-01-15 at 10:00 - 10:30
 ///     location: Zoom
 ///     url: https://zoom.us/j/12345
 ///
 /// * Lunch
-///     Jan 15, 2026 at 12:00 PM - 1:00 PM
+///     2026-01-15 at 12:00 - 13:00
 /// ```
 ///
 /// We tolerate missing fields — only the title and datetime lines are
@@ -373,80 +402,76 @@ impl EventBuilder {
     }
 }
 
-/// Parse icalBuddy's datetime line into (iso8601_start, duration_minutes,
-/// all_day). Examples:
+/// Parse icalBuddy's datetime line (as pinned by `ICALBUDDY_ARGS`) into
+/// (iso8601_start, duration_minutes, all_day). Examples:
 ///
-/// - `Jan 15, 2026 at 10:00 AM - 10:30 AM` → (ISO, 30, false)
-/// - `Jan 15, 2026 at 10:00 AM - Jan 16, 2026 at 2:00 PM` → multi-day
-/// - `Jan 15, 2026` → (ISO with midnight, 1440, true)
+/// - `2026-01-15 at 10:00 - 10:30` → (ISO, 30, false)
+/// - `2026-01-15 at 10:00 - 2026-01-16 at 14:00` → multi-day
+/// - `2026-01-15` → (ISO with midnight, 1440, true)
+/// - `2026-01-15 - 2026-01-17` → multi-day all-day (end date inclusive)
 ///
 /// Returns None on truly unparseable input — callers filter out events
 /// that would render as "sometime this year" with no useful time info.
 fn parse_datetime_range(line: &str) -> Option<(String, u32, bool)> {
-    // Split on " - " (spaces required — times contain ":" and dates contain
-    // "-" inside abbreviations that we must not split on).
+    // Split on " - " (spaces required — ISO dates contain bare "-").
     let (start_part, end_part) = match line.split_once(" - ") {
-        Some((s, e)) => (s.trim(), e.trim()),
-        // No range separator → all-day event.
-        None => {
-            let start = parse_single_datetime(line, false)?;
-            return Some((start, 24 * 60, true));
-        }
+        Some((s, e)) => (s.trim(), Some(e.trim())),
+        None => (line.trim(), None),
+    };
+    let (start_date, start_time) = parse_date_time_tokens(start_part);
+    let start_date = start_date?;
+    let (end_date, end_time) = end_part.map(parse_date_time_tokens).unwrap_or((None, None));
+
+    let Some(start_time) = start_time else {
+        // Date-only → all-day, spanning through the (inclusive) end date.
+        let days = end_date
+            .map(|ed| (ed - start_date).num_days() + 1)
+            .unwrap_or(1)
+            .max(1);
+        let midnight = chrono::NaiveTime::from_hms_opt(0, 0, 0)?;
+        let start = to_local_rfc3339(start_date.and_time(midnight))?;
+        return Some((start, (days * 24 * 60) as u32, true));
     };
 
-    let has_time_separator = start_part.contains(" at ");
-    let start = parse_single_datetime(start_part, has_time_separator)?;
-
-    // For the end, icalBuddy elides the date when it matches the start date
-    // ("10:00 AM - 10:30 AM"). Infer by detecting a " at " in the end part.
-    let end_has_date = end_part.contains(" at ");
-    let end_full = if end_has_date {
-        end_part.to_string()
-    } else {
-        // Reuse the start's date — pull everything before " at ".
-        let date_prefix = start_part
-            .split_once(" at ")
-            .map(|(d, _)| d)
-            .unwrap_or(start_part);
-        format!("{date_prefix} at {end_part}")
+    // icalBuddy elides the end date when it matches the start date
+    // ("10:00 - 10:30"), so default it to the start's. A start time with
+    // no end time (zero-length event, or a `date at time - date` line)
+    // becomes a zero-duration event rather than being dropped.
+    let start_dt = start_date.and_time(start_time);
+    let end_dt = match end_time {
+        Some(t) => end_date.unwrap_or(start_date).and_time(t),
+        None => start_dt,
     };
-    let end = parse_single_datetime(&end_full, true)?;
-
-    let duration_minutes = minutes_between(&start, &end).unwrap_or(0) as u32;
-    Some((start, duration_minutes, false))
+    let duration_minutes = (end_dt - start_dt).num_minutes().max(0) as u32;
+    Some((to_local_rfc3339(start_dt)?, duration_minutes, false))
 }
 
-fn parse_single_datetime(s: &str, has_time: bool) -> Option<String> {
-    use chrono::{NaiveDateTime, NaiveTime};
-
-    // icalBuddy uses the user's locale date format. The common US default is
-    // "%b %e, %Y at %l:%M %p" — match that first, fall back to a handful
-    // of variants we've seen in the wild.
-    let formats = if has_time {
-        &["%b %e, %Y at %l:%M %p", "%B %e, %Y at %l:%M %p"][..]
-    } else {
-        &["%b %e, %Y", "%B %e, %Y"][..]
-    };
-
-    for f in formats {
-        if has_time {
-            if let Ok(dt) = NaiveDateTime::parse_from_str(s, f) {
-                return Some(dt.and_local_timezone(Local).single()?.to_rfc3339());
+/// Pull the first `%Y-%m-%d` date and `%H:%M` time tokens out of one side
+/// of the range. Any other words (icalBuddy's localisable " at "
+/// separator) are ignored, so we don't depend on their wording.
+fn parse_date_time_tokens(s: &str) -> (Option<NaiveDate>, Option<chrono::NaiveTime>) {
+    let mut date = None;
+    let mut time = None;
+    for tok in s.split_whitespace() {
+        if date.is_none() {
+            if let Ok(d) = NaiveDate::parse_from_str(tok, "%Y-%m-%d") {
+                date = Some(d);
+                continue;
             }
-        } else if let Ok(d) = NaiveDate::parse_from_str(s, f) {
-            let midnight = NaiveTime::from_hms_opt(0, 0, 0)?;
-            let dt = d.and_time(midnight);
-            return Some(dt.and_local_timezone(Local).single()?.to_rfc3339());
+        }
+        if time.is_none() {
+            if let Ok(t) = chrono::NaiveTime::parse_from_str(tok, "%H:%M") {
+                time = Some(t);
+            }
         }
     }
-    None
+    (date, time)
 }
 
-fn minutes_between(start_iso: &str, end_iso: &str) -> Option<i64> {
-    use chrono::DateTime;
-    let start = DateTime::parse_from_rfc3339(start_iso).ok()?;
-    let end = DateTime::parse_from_rfc3339(end_iso).ok()?;
-    Some((end - start).num_minutes().max(0))
+fn to_local_rfc3339(dt: chrono::NaiveDateTime) -> Option<String> {
+    // `earliest` rather than `single` so the repeated hour on a DST
+    // fall-back day still resolves instead of dropping the event.
+    Some(dt.and_local_timezone(Local).earliest()?.to_rfc3339())
 }
 
 #[cfg(test)]
@@ -455,7 +480,7 @@ mod tests {
 
     #[test]
     fn parse_datetime_range_handles_same_day_event() {
-        let r = parse_datetime_range("Jan 15, 2026 at 10:00 AM - 10:30 AM").unwrap();
+        let r = parse_datetime_range("2026-01-15 at 10:00 - 10:30").unwrap();
         assert_eq!(r.1, 30);
         assert!(!r.2, "30-min event shouldn't be marked all-day");
         assert!(r.0.starts_with("2026-01-15T10:00:00"));
@@ -463,16 +488,79 @@ mod tests {
 
     #[test]
     fn parse_datetime_range_handles_all_day_event() {
-        let r = parse_datetime_range("Jan 15, 2026").unwrap();
+        let r = parse_datetime_range("2026-01-15").unwrap();
         assert_eq!(r.1, 24 * 60);
         assert!(r.2);
     }
 
     #[test]
     fn parse_datetime_range_handles_multi_day_event() {
-        let r = parse_datetime_range("Jan 15, 2026 at 10:00 AM - Jan 16, 2026 at 2:00 PM").unwrap();
+        let r = parse_datetime_range("2026-01-15 at 10:00 - 2026-01-16 at 14:00").unwrap();
         assert_eq!(r.1, 28 * 60); // 28 hours
         assert!(!r.2);
+    }
+
+    #[test]
+    fn parse_datetime_range_handles_multi_day_all_day_event() {
+        let r = parse_datetime_range("2026-01-15 - 2026-01-17").unwrap();
+        assert_eq!(r.1, 3 * 24 * 60);
+        assert!(r.2);
+    }
+
+    #[test]
+    fn parse_datetime_range_ignores_localised_separator_word() {
+        // " at " is localisable in icalBuddy; only the tokens matter.
+        let r = parse_datetime_range("2026-01-15 um 09:05 - 09:50").unwrap();
+        assert_eq!(r.1, 45);
+        assert!(r.0.starts_with("2026-01-15T09:05:00"));
+    }
+
+    #[test]
+    fn parse_datetime_range_rejects_relative_dates() {
+        assert!(parse_datetime_range("today at 10:00 - 10:30").is_none());
+    }
+
+    fn event_at(start: chrono::DateTime<Local>, minutes: u32) -> CalendarEvent {
+        CalendarEvent {
+            id: String::new(),
+            subject: String::new(),
+            location: String::new(),
+            organizer: String::new(),
+            start_time: start.to_rfc3339(),
+            duration_minutes: minutes,
+            all_day: false,
+            online_url: None,
+        }
+    }
+
+    #[test]
+    fn overlaps_window_keeps_only_events_in_range() {
+        let now = Local::now();
+        let end = now + Duration::hours(2);
+        // Already ended.
+        assert!(!overlaps_window(
+            &event_at(now - Duration::hours(2), 30),
+            now,
+            end
+        ));
+        // In progress.
+        assert!(overlaps_window(
+            &event_at(now - Duration::minutes(10), 30),
+            now,
+            end
+        ));
+        // Upcoming within the window.
+        assert!(overlaps_window(
+            &event_at(now + Duration::hours(1), 30),
+            now,
+            end
+        ));
+        // Starts after the window.
+        assert!(!overlaps_window(
+            &event_at(now + Duration::hours(3), 30),
+            now,
+            end
+        ));
     }
 
     #[test]
@@ -480,7 +568,7 @@ mod tests {
         let input = r#"Work
 ----
 * Team standup
-    Jan 15, 2026 at 10:00 AM - 10:30 AM
+    2026-01-15 at 10:00 - 10:30
     location: Zoom
     url: https://zoom.us/j/12345
 "#;
@@ -500,10 +588,10 @@ mod tests {
         let input = r#"Work
 ----
 * Standup
-    Jan 15, 2026 at 10:00 AM - 10:30 AM
+    2026-01-15 at 10:00 - 10:30
 
 * Lunch
-    Jan 15, 2026 at 12:00 PM - 1:00 PM
+    2026-01-15 at 12:00 - 13:00
     location: Kitchen
 "#;
         let events = parse_icalbuddy_output(input);
@@ -528,7 +616,7 @@ mod tests {
         // location string contains a Zoom/Teams link, the cross-platform
         // extractor should still pick it up.
         let input = r#"* Sync
-    Jan 15, 2026 at 10:00 AM - 10:30 AM
+    2026-01-15 at 10:00 - 10:30
     location: https://zoom.us/j/99999
 "#;
         let events = parse_icalbuddy_output(input);

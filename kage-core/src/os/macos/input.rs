@@ -125,6 +125,21 @@ pub fn click(x: Option<i32>, y: Option<i32>, button: &str, count: u32) -> Result
     Ok(format!("Clicked {} at ({}, {})", button, px, py))
 }
 
+/// Upper bound on a drag's duration. `duration` comes straight from the
+/// model; a huge value would hold the button down and block the sidecar.
+const MAX_DRAG_SECS: f64 = 10.0;
+
+/// Clamp a model-supplied drag duration into a sane range. Negative/NaN
+/// values would panic in `Duration::from_secs_f64` mid-drag, killing the
+/// sidecar with the button still held. Mirrors the Windows impl.
+fn sanitize_drag_duration(duration: f64) -> f64 {
+    if duration.is_finite() {
+        duration.clamp(0.0, MAX_DRAG_SECS)
+    } else {
+        0.5
+    }
+}
+
 /// Drag from (from_x, from_y) to (to_x, to_y) over the given duration.
 pub fn drag(
     from_x: i32,
@@ -133,6 +148,7 @@ pub fn drag(
     to_y: i32,
     duration: f64,
 ) -> Result<String, String> {
+    let duration = sanitize_drag_duration(duration);
     let src = source()?;
     let from = CGPoint::new(from_x as f64, from_y as f64);
 
@@ -153,26 +169,45 @@ pub fn drag(
     let dy = (to_y - from_y) as f64 / steps as f64;
     let step_duration = std::time::Duration::from_secs_f64(duration / steps as f64);
 
+    // A failed step must not `?` out past the mouse-up below — that would
+    // leave LeftMouseDown held system-wide. Remember the error, stop
+    // moving, release, then report it.
+    let mut step_err: Option<String> = None;
+    let mut last = from;
     for i in 1..=steps {
         let pt = CGPoint::new(from_x as f64 + dx * i as f64, from_y as f64 + dy * i as f64);
-        let drag_src = source()?;
-        let drag_event = CGEvent::new_mouse_event(
-            drag_src,
-            CGEventType::LeftMouseDragged,
-            pt,
-            CGMouseButton::Left,
-        )
-        .map_err(|()| "Failed to create drag event".to_string())?;
-        drag_event.post(CGEventTapLocation::HID);
+        let event = source().and_then(|s| {
+            CGEvent::new_mouse_event(s, CGEventType::LeftMouseDragged, pt, CGMouseButton::Left)
+                .map_err(|()| "Failed to create drag event".to_string())
+        });
+        match event {
+            Ok(e) => {
+                e.post(CGEventTapLocation::HID);
+                last = pt;
+            }
+            Err(e) => {
+                step_err = Some(e);
+                break;
+            }
+        }
         std::thread::sleep(step_duration);
     }
 
-    // Mouse up at end position
-    let to = CGPoint::new(to_x as f64, to_y as f64);
-    let up_src = source()?;
-    let up = CGEvent::new_mouse_event(up_src, CGEventType::LeftMouseUp, to, CGMouseButton::Left)
+    // Mouse up at the end position, or wherever the drag stopped.
+    let to = if step_err.is_some() {
+        last
+    } else {
+        CGPoint::new(to_x as f64, to_y as f64)
+    };
+    // Reuse the already-created source: if a step failed because
+    // `source()` started failing, a fresh one would fail here too and
+    // the button would stay held.
+    let up = CGEvent::new_mouse_event(src, CGEventType::LeftMouseUp, to, CGMouseButton::Left)
         .map_err(|()| "Failed to create mouse up event".to_string())?;
     up.post(CGEventTapLocation::HID);
+    if let Some(e) = step_err {
+        return Err(e);
+    }
 
     Ok(format!(
         "Dragged from ({},{}) to ({},{})",
@@ -442,3 +477,17 @@ pub use self::key_press as key_press_impl;
 pub use self::move_mouse as move_mouse_impl;
 pub use self::scroll as scroll_impl;
 pub use self::type_text as type_text_impl;
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_drag_duration;
+
+    #[test]
+    fn drag_duration_is_clamped_and_non_finite_defaults() {
+        assert_eq!(sanitize_drag_duration(-1.0), 0.0);
+        assert_eq!(sanitize_drag_duration(1e7), 10.0);
+        assert_eq!(sanitize_drag_duration(f64::NAN), 0.5);
+        assert_eq!(sanitize_drag_duration(f64::INFINITY), 0.5);
+        assert_eq!(sanitize_drag_duration(0.75), 0.75);
+    }
+}

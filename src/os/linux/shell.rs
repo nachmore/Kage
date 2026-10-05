@@ -55,17 +55,22 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
         "taskmanager" | "taskmgr" => ("gnome-system-monitor", vec![]),
         "terminal" => ("x-terminal-emulator", vec![]),
         "filemanager" => ("xdg-open", vec!["."]),
-        "settings" => ("xdg-open", vec!["gnome-control-center"]),
-        "display" => ("xdg-open", vec!["gnome-control-center", "display"]),
-        "sound" => ("xdg-open", vec!["gnome-control-center", "sound"]),
-        "wifi" | "network" => ("xdg-open", vec!["gnome-control-center", "network"]),
-        "bluetooth" => ("xdg-open", vec!["gnome-control-center", "bluetooth"]),
+        // gnome-control-center takes the panel as its own argument —
+        // xdg-open accepts exactly one file/URL, so routing these through
+        // it failed (silently: the caller only checks that spawn worked).
+        "settings" => ("gnome-control-center", vec![]),
+        "display" => ("gnome-control-center", vec!["display"]),
+        "sound" => ("gnome-control-center", vec!["sound"]),
+        "wifi" | "network" => ("gnome-control-center", vec!["network"]),
+        "bluetooth" => ("gnome-control-center", vec!["bluetooth"]),
         "apps" => ("xdg-open", vec!["/usr/share/applications"]),
-        "updates" => ("xdg-open", vec!["gnome-control-center", "info-overview"]),
+        "updates" => ("gnome-software", vec!["--mode=updates"]),
         "devicemanager" | "devmgr" => ("lshw", vec!["-short"]),
         "restart" => ("systemctl", vec!["reboot"]),
         "shutdown" => ("systemctl", vec!["poweroff"]),
-        "signout" => ("loginctl", vec!["terminate-user", ""]),
+        // No shell here, so no $XDG_SESSION_ID / $USER expansion — use the
+        // session manager's own logout.
+        "signout" => ("gnome-session-quit", vec!["--logout"]),
         _ => ("echo", vec!["Unknown command"]),
     }
 }
