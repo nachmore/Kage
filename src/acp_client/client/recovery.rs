@@ -103,6 +103,11 @@ impl AcpClient {
             let elapsed = start.elapsed();
             if elapsed >= total_timeout {
                 log::warn!("Compaction wait timed out after 60s — sending anyway");
+                // Release the gate: if the "completed" status never arrives
+                // (failed/aborted compaction, dropped notification), leaving it
+                // latched would stall every later prompt for another 60s.
+                *compacting = false;
+                cvar.notify_all();
                 return true;
             }
             let remaining = total_timeout - elapsed;

@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use log::{error, info, warn};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
@@ -56,6 +56,13 @@ pub struct AcpTransport {
     /// removes its own entry on the way out, so a late response just finds
     /// nothing in the map and gets logged + dropped — no cross-request leak.
     pending: Arc<Mutex<HashMap<u64, ResponseInbox>>>,
+    /// Connection generation. Bumped every time a reader thread starts and on
+    /// every disconnect; each reader captures the value it was started with.
+    /// A reader that outlives its connection (a pipe child that ignored the
+    /// kill deadline, or a TCP peer that keeps talking) sees a mismatch and
+    /// must not touch `connected` / `pending` or dispatch anything — those
+    /// belong to the replacement connection now.
+    generation: Arc<AtomicU64>,
     /// Notification handler called by the background reader thread
     notification_handler: NotificationHandler,
     pub max_retries: u32,
@@ -77,6 +84,7 @@ impl AcpTransport {
             // value, and avoiding it makes pre/post-fix log diffs easier to read.
             next_id: Arc::new(AtomicU64::new(1)),
             pending: Arc::new(Mutex::new(HashMap::new())),
+            generation: Arc::new(AtomicU64::new(0)),
             notification_handler: Arc::new(Mutex::new(None)),
             max_retries: 5,
             initial_retry_delay_ms: 100,
@@ -307,6 +315,9 @@ impl AcpTransport {
     // --- Background Reader Thread ---
 
     fn start_reader_thread(&self, source: ReaderSource) {
+        let my_generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let generation = self.generation.clone();
+        let is_current = move || generation.load(Ordering::SeqCst) == my_generation;
         let notification_handler = self.notification_handler.clone();
         let debug_mode = self.debug_mode.clone();
         let connected = self.connected.clone();
@@ -323,6 +334,10 @@ impl AcpTransport {
                 let mut line = String::new();
                 match reader.read_line(&mut line) {
                     Ok(0) => {
+                        if !is_current() {
+                            info!("Reader: superseded connection closed (EOF)");
+                            break;
+                        }
                         warn!("Reader: stream closed (EOF)");
                         *connected.lock_or_recover() = false;
                         // Drop every pending inbox sender. Each blocked
@@ -344,7 +359,15 @@ impl AcpTransport {
                         if e.kind() == std::io::ErrorKind::TimedOut
                             || e.kind() == std::io::ErrorKind::WouldBlock
                         {
+                            if !is_current() {
+                                info!("Reader: connection superseded; exiting");
+                                break;
+                            }
                             continue;
+                        }
+                        if !is_current() {
+                            info!("Reader: superseded connection ended: {}", e);
+                            break;
                         }
                         error!("Reader: error: {}", e);
                         *connected.lock_or_recover() = false;
@@ -353,6 +376,13 @@ impl AcpTransport {
                         Self::notify_disconnected(&notification_handler, "error");
                         break;
                     }
+                }
+
+                // A superseded connection's traffic (e.g. the tail of a turn
+                // on the old agent) must not be routed as if it were live.
+                if !is_current() {
+                    info!("Reader: connection superseded; exiting");
+                    break;
                 }
 
                 let trimmed = line.trim();
@@ -636,12 +666,33 @@ impl AcpTransport {
         anyhow::bail!("No write handle available")
     }
 
+    /// Drop the TCP write handle and shut the socket down. Dropping alone isn't
+    /// enough: the reader thread owns its own duplicate of the socket, so the
+    /// OS connection would stay open and the reader would spin on its read
+    /// timeout forever. A shutdown on any duplicate closes the shared socket
+    /// and unblocks the reader's `read_line` immediately.
+    fn shutdown_tcp(&self) {
+        // Take under the outer lock, then release it before locking the
+        // inner write mutex (a writer may hold it for up to the write timeout).
+        let writer = self.tcp_writer.lock_or_recover().take();
+        if let Some(writer) = writer {
+            if let Err(e) = writer.lock_or_recover().shutdown(Shutdown::Both) {
+                if e.kind() != std::io::ErrorKind::NotConnected {
+                    warn!("TCP shutdown failed: {}", e);
+                }
+            }
+        }
+    }
+
     /// Disconnect from the ACP server.
     pub fn disconnect(&self) {
         info!("Disconnecting from ACP server");
+        // Invalidate the current reader first so it can't race a reconnect
+        // and clobber the replacement connection's state.
+        self.generation.fetch_add(1, Ordering::SeqCst);
         *self.connected.lock_or_recover() = false;
         *self.pipe_stdin.lock_or_recover() = None;
-        *self.tcp_writer.lock_or_recover() = None;
+        self.shutdown_tcp();
         // Drop every pending inbox sender so blocked send_request
         // callers wake immediately with a Disconnected error rather
         // than timing out 60s later. Same semantics as the reader
@@ -664,10 +715,11 @@ impl AcpTransport {
     /// `Disconnected` error rather than letting them sit on the 60s timeout.
     pub fn force_disconnect(&self) {
         info!("Force-disconnecting ACP (full teardown)");
+        self.generation.fetch_add(1, Ordering::SeqCst);
         *self.connected.lock_or_recover() = false;
         self.pending.lock_or_recover().clear();
         *self.pipe_stdin.lock_or_recover() = None;
-        *self.tcp_writer.lock_or_recover() = None;
+        self.shutdown_tcp();
         // Same take-then-kill pattern as disconnect() — see comment there.
         let child = self
             .process_manager
