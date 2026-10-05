@@ -77,7 +77,13 @@ export const InputMethods = {
     async _awaitPriorTurnsSettled() {
         this._turnSeq = (this._turnSeq || 0) + 1;
         const seq = this._turnSeq;
+        // This send supersedes any older held one, so it owns the flag —
+        // clear it here too, or a superseded hold would leave it stuck.
+        this._heldSend = false;
         if (!this._pendingTurns?.length) return true;
+        // isWaitingForResponse is still false while held, so Stop/Escape
+        // check this instead (stopGenerating bumps _turnSeq to drop it).
+        this._heldSend = true;
         let timer;
         const settled = await Promise.race([
             new Promise((r) => this._turnWaiters.push(() => r(true))),
@@ -86,6 +92,8 @@ export const InputMethods = {
             }),
         ]);
         clearTimeout(timer);
+        // A newer send that superseded this one owns the flag now.
+        if (seq === this._turnSeq) this._heldSend = false;
         if (!settled) {
             console.warn('[floating] prior turn never settled; starting new turn anyway');
             this._pendingTurns.length = 0;
@@ -249,7 +257,7 @@ export const InputMethods = {
                 this._clearInput();
                 return;
             }
-            if (this.isWaitingForResponse) {
+            if (this.isWaitingForResponse || this._heldSend) {
                 event.preventDefault();
                 this.stopGenerating();
             } else if (this._justStoppedGenerating) {

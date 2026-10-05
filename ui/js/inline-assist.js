@@ -65,16 +65,44 @@ console.log(
     // Backend inline-assist events carry no run id, so a cancelled/abandoned
     // run's trailing chunk + complete (or error) would otherwise be credited
     // to the next run. Every sent run emits exactly one terminal event
-    // (complete or error), and runs on the floating session are serialised
-    // by the backend's per-session prompt lock, so stale terminals always
-    // arrive first: count them and swallow that many.
+    // (complete or error): count abandoned runs and swallow that many.
+    // That only works if stale terminals arrive first, which the backend's
+    // per-session prompt lock doesn't guarantee — with no floating session
+    // pinned, send_inline_assist creates a fresh session per run, so the
+    // runs race. So a new run isn't sent until every abandoned run's
+    // terminal has been swallowed.
     let currentRun = null; // { sent: boolean } for the active replace-mode run
     let staleRuns = 0;
+    const staleWaiters = [];
     let errorHideTimer = null;
+    // Upper bound on holding a new run for an abandoned one's terminal, in
+    // case it's lost. An unpinned abandoned run can't be cancelled (its
+    // session id is unknown) and must run to completion, hence generous.
+    const STALE_RUN_WAIT_MS = 30000;
 
     function abandonCurrentRun() {
         if (currentRun?.sent) staleRuns++;
         currentRun = null;
+    }
+
+    function releaseStaleRun() {
+        if (staleRuns > 0) staleRuns--;
+        if (staleRuns === 0) for (const w of staleWaiters.splice(0)) w();
+    }
+
+    function waitForStaleRuns() {
+        if (staleRuns === 0) return Promise.resolve();
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                console.warn('[inline-assist] abandoned run never settled; sending anyway');
+                staleRuns = 0;
+                for (const w of staleWaiters.splice(0)) w();
+            }, STALE_RUN_WAIT_MS);
+            staleWaiters.push(() => {
+                clearTimeout(timer);
+                resolve();
+            });
+        });
     }
 
     // --- Icon bubble — click to open full chat ---
@@ -139,7 +167,7 @@ console.log(
 
     await listen('inline_assist_complete', async () => {
         if (staleRuns > 0) {
-            staleRuns--;
+            releaseStaleRun();
             return;
         }
         if (!isProcessing) return;
@@ -160,7 +188,7 @@ console.log(
 
     await listen(EVT.INLINE_ASSIST_ERROR, async (event) => {
         if (staleRuns > 0) {
-            staleRuns--;
+            releaseStaleRun();
             return;
         }
         if (!isProcessing) return;
@@ -314,6 +342,8 @@ console.log(
             // Inline-assist runs on the floating session — that's the
             // hotkey-driven path that triggered this overlay.
             const sessionId = await getWindowSessionOrNull(invoke, WINDOW.FLOATING);
+            // Let any abandoned run's terminal pass first (see staleRuns).
+            await waitForStaleRuns();
             // Cancelled (Esc / re-summon) before we got here — don't send.
             if (currentRun !== run) return;
             run.sent = true;
@@ -323,7 +353,7 @@ console.log(
             if (currentRun !== run) {
                 // Already counted as stale, but a failed invoke never emits
                 // a terminal event — undo the count.
-                if (run.sent && staleRuns > 0) staleRuns--;
+                if (run.sent && staleRuns > 0) releaseStaleRun();
                 return;
             }
             currentRun = null;

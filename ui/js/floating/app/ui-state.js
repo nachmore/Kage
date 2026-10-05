@@ -120,6 +120,29 @@ export const UiStateMethods = {
     },
 
     stopGenerating() {
+        if (this._heldSend) {
+            // A send is held until the prior turn settles (see
+            // _awaitPriorTurnsSettled) — drop it so it never fires, and
+            // cancel the prior turn that's still running on the session.
+            this._heldSend = false;
+            this._turnSeq = (this._turnSeq || 0) + 1;
+            if (!this.isWaitingForResponse) {
+                this._justStoppedGenerating = true;
+                setTimeout(() => {
+                    this._justStoppedGenerating = false;
+                }, 300);
+                this.stopThinking();
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.updateDatetimeVisibility();
+                this.elements.contentArea.classList.remove('visible');
+                this.elements.expandBtn.classList.remove('visible');
+                this.windowManager.resizeWindow();
+                this.invoke('cancel_generation', { sessionId: this.floatingSessionId }).catch((e) =>
+                    console.log('Cancel:', e)
+                );
+                return;
+            }
+        }
         if (!this.isWaitingForResponse) return;
 
         // If an automation plan is running, stop it gracefully

@@ -143,7 +143,7 @@ export const LifecycleEventsMethods = {
                     this.speech.cancelSpeech();
                     return;
                 }
-                if (this.isWaitingForResponse) {
+                if (this.isWaitingForResponse || this._heldSend) {
                     e.preventDefault();
                     this.stopGenerating();
                     return;
