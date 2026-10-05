@@ -291,7 +291,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             app.loadModels();
             app.refreshContextUsage();
 
-            if (!app.activeSessionId && app.currentAcpSessionId) {
+            // A New Chat in flight nulls `activeSessionId` on purpose;
+            // auto-selecting here would supersede it and re-pin the old one.
+            if (!app._newSessionPending && !app.activeSessionId && app.currentAcpSessionId) {
                 const exists = app.sessions.find((s) => s.session_id === app.currentAcpSessionId);
                 if (exists) {
                     await app.selectSession(app.currentAcpSessionId);

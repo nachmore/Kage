@@ -17,12 +17,22 @@ export function createSessionStateMixin(dependencies) {
             // Read this window's own pinned session id. For `main` that's
             // bootstrapped at app launch. For `chat-<uuid>` peers it's
             // bootstrapped on first load via _bootstrapChatPeerSession.
+            // A New Chat in flight (or started while this read was in
+            // flight) owns `currentAcpSessionId`: the pin may still be the
+            // old session, and adopting it would let that session's
+            // MESSAGE_COMPLETE re-claim the view mid-switch.
+            const newChatGen = this._newSessionGen;
+            const newChatRaced = () =>
+                !!this._newSessionPending || newChatGen !== this._newSessionGen;
             try {
-                this.currentAcpSessionId = await this.invoke('get_window_session', {
+                const pinned = await this.invoke('get_window_session', {
                     label: this.windowLabel,
                 });
+                if (newChatRaced()) return;
+                this.currentAcpSessionId = pinned;
             } catch (e) {
                 console.error('Failed to get current session ID:', e);
+                if (newChatRaced()) return;
                 this.currentAcpSessionId = null;
             }
         }
@@ -45,6 +55,9 @@ export function createSessionStateMixin(dependencies) {
          */
         async _bootstrapChatPeerSession() {
             if (this.currentAcpSessionId) return; // already bootstrapped
+            // A New Chat clicked during init nulls the pin on purpose and
+            // will adopt its own session; bootstrapping here would race it.
+            if (this._newSessionPending) return;
 
             const isPeer = isChatLabel(this.windowLabel);
             if (isPeer) {

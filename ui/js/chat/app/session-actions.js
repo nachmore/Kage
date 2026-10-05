@@ -55,6 +55,16 @@ export function createSessionActionsMixin(dependencies) {
             this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.start_conversation')}</div>`;
             this.elements.chatHeaderTitle.textContent = t('chat.header.default_title');
 
+            // The backend pin still names the old session until the switch
+            // lands. While this is set, the focus refresh must not re-read
+            // that pin or auto-select from the null `activeSessionId`
+            // (either would undo this New Chat). A counter, so overlapping
+            // New Chats don't clear each other's flag.
+            this._newSessionPending = (this._newSessionPending || 0) + 1;
+            // Also bump a token so a pin read that resolves only after this
+            // New Chat has settled (IPC replies aren't strictly ordered) is
+            // still recognised as predating it.
+            this._newSessionGen = (this._newSessionGen || 0) + 1;
             try {
                 const newId = await this.invoke('switch_acp_session', { sessionId: null });
                 if (gen !== this._selectGen) {
@@ -96,6 +106,8 @@ export function createSessionActionsMixin(dependencies) {
                 }
                 enableInput();
                 this.renderSessionList();
+            } finally {
+                this._newSessionPending--;
             }
         }
 

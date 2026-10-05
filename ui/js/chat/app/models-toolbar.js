@@ -67,6 +67,10 @@ export function createModelsToolbarMixin(dependencies) {
             }
 
             this._isCompacting = true;
+            // Remember which session owns the gate: the user may switch away
+            // before its terminal `compaction_status` arrives, and that event
+            // must still release the gate.
+            this._compactingSessionId = this.activeSessionId;
             this._lastAutoCompactedAt = percent;
             try {
                 await this.invoke('execute_slash_command', {
@@ -80,6 +84,7 @@ export function createModelsToolbarMixin(dependencies) {
                 // Slash-command path failed — release the gate now since we
                 // won't get a `compaction_status` "completed" event.
                 this._isCompacting = false;
+                this._compactingSessionId = null;
             }
             // On success, `_isCompacting` stays true until the
             // `compaction_status` "completed" notification clears it.

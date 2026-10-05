@@ -265,9 +265,29 @@ export function createStreamListenersMixin(dependencies) {
             });
 
             // Compaction status from ACP notifications (works for both auto and manual /compact)
+            const TERMINAL_COMPACTION_STATUSES = new Set([
+                'completed',
+                'failed',
+                'error',
+                'cancelled',
+                'canceled',
+                'aborted',
+            ]);
             this.listen(EVT.COMPACTION_STATUS, (event) => {
-                if (isForeignSession(event)) return;
                 const status = event.payload?.params?.status?.type;
+                // Release the auto-compact gate before the foreign-session
+                // filter: if the user switched away mid-compaction, the
+                // owning session's terminal event is "foreign" now, and
+                // dropping it would leave the gate stuck for this window.
+                const sid = event?.payload?.params?.sessionId;
+                if (
+                    TERMINAL_COMPACTION_STATUSES.has(status) &&
+                    (!sid || sid === this._compactingSessionId)
+                ) {
+                    this._isCompacting = false;
+                    this._compactingSessionId = null;
+                }
+                if (isForeignSession(event)) return;
                 if (status === 'started') {
                     this.showCompactingNotice();
                 } else if (status === 'completed') {
