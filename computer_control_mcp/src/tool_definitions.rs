@@ -78,7 +78,7 @@ fn build_tools() -> serde_json::Value {
             "properties": {
                 "app_name": { "type": "string", "description": "Application name or path to launch" },
                 "max_depth": { "type": "integer", "default": 3 },
-                "wait_ms": { "type": "integer", "default": 2000, "description": "Milliseconds to wait after launch" }
+                "wait_ms": { "type": "integer", "default": 2000, "description": "Milliseconds to wait after launch (max 60000)" }
             },
             "required": ["app_name"]
         })),
@@ -158,8 +158,8 @@ fn build_tools() -> serde_json::Value {
         tool_def("move_mouse", "Move the mouse cursor to an absolute position.", serde_json::json!({
             "type": "object", "properties": { "x": { "type": "integer" }, "y": { "type": "integer" } }, "required": ["x", "y"]
         })),
-        tool_def("wait", "Wait for a specified number of milliseconds.", serde_json::json!({
-            "type": "object", "properties": { "milliseconds": { "type": "integer", "default": 500 } }
+        tool_def("wait", "Wait for a specified number of milliseconds (max 60000).", serde_json::json!({
+            "type": "object", "properties": { "milliseconds": { "type": "integer", "default": 500, "description": "Milliseconds to wait (max 60000)." } }
         })),
         tool_def("get_cursor_position", "Get the current mouse cursor position.", serde_json::json!({ "type": "object", "properties": {} })),
         tool_def("get_screen_size", "Get the screen dimensions.", serde_json::json!({ "type": "object", "properties": {} })),

@@ -1,6 +1,15 @@
 use kage_core::mcp_json_rpc::tool_result_text;
 use kage_core::os::input;
 
+/// Upper bound for model-supplied sleeps (`wait`, `launch_and_get_tree`'s
+/// `wait_ms`). The stdio loop is single-threaded, so an unbounded sleep
+/// freezes every later request — ping included — until it ends.
+pub(crate) const MAX_WAIT_MS: u64 = 60_000;
+
+pub(crate) fn clamp_wait_ms(ms: u64) -> u64 {
+    ms.min(MAX_WAIT_MS)
+}
+
 pub(crate) fn dispatch(
     id: &serde_json::Value,
     tool_name: &str,
@@ -9,11 +18,8 @@ pub(crate) fn dispatch(
     Some(match tool_name {
         "type_text" => {
             let text_val = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
-            log::info!(
-                "[type_text] Typing {} chars: {:?}",
-                text_val.len(),
-                text_val
-            );
+            // Count only: typed text can be a password, and the log is plaintext.
+            log::info!("[type_text] Typing {} chars", text_val.chars().count());
             result_text(id, input::type_text(text_val))
         }
         "key_press" => {
@@ -75,12 +81,14 @@ pub(crate) fn dispatch(
             result_text(id, input::move_mouse(x, y))
         }
         "wait" => {
-            let ms = args
+            let requested = args
                 .get("milliseconds")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(500);
+            let ms = clamp_wait_ms(requested);
             std::thread::sleep(std::time::Duration::from_millis(ms));
-            tool_result_text(id, &format!("Waited {}ms", ms), false)
+            let suffix = if ms < requested { " (capped)" } else { "" };
+            tool_result_text(id, &format!("Waited {}ms{}", ms, suffix), false)
         }
         "get_cursor_position" => match input::get_cursor_position() {
             Ok((cx, cy)) => {
@@ -106,5 +114,23 @@ fn result_text(id: &serde_json::Value, outcome: Result<String, String>) -> Strin
     match outcome {
         Ok(msg) => tool_result_text(id, &msg, false),
         Err(e) => tool_result_text(id, &e, true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clamp_wait_ms_passes_small_values_through() {
+        assert_eq!(clamp_wait_ms(0), 0);
+        assert_eq!(clamp_wait_ms(500), 500);
+        assert_eq!(clamp_wait_ms(MAX_WAIT_MS), MAX_WAIT_MS);
+    }
+
+    #[test]
+    fn clamp_wait_ms_caps_huge_values() {
+        assert_eq!(clamp_wait_ms(MAX_WAIT_MS + 1), MAX_WAIT_MS);
+        assert_eq!(clamp_wait_ms(u64::MAX), MAX_WAIT_MS);
     }
 }

@@ -24,7 +24,11 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
         .get("arguments")
         .cloned()
         .unwrap_or(serde_json::json!({}));
-    log::info!("[tool_call] {} args={}", tool_name, args);
+    log::info!(
+        "[tool_call] {} args={}",
+        tool_name,
+        args_for_log(tool_name, &args)
+    );
 
     if let Some(response) = input_tools::dispatch(id, tool_name, &args) {
         return response;
@@ -160,7 +164,9 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
         "launch_and_get_tree" => {
             let app = args.get("app_name").and_then(|v| v.as_str()).unwrap_or("");
             let depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
-            let wait = args.get("wait_ms").and_then(|v| v.as_u64()).unwrap_or(2000);
+            let wait = input_tools::clamp_wait_ms(
+                args.get("wait_ms").and_then(|v| v.as_u64()).unwrap_or(2000),
+            );
             log::info!(
                 "[launch_and_get_tree] Launching: '{}' (wait={}ms, depth={})",
                 app,
@@ -507,8 +513,11 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
             if root_str.is_empty() {
                 return tool_result_text(id, "Missing required parameter: root", true);
             }
-            let ops: Vec<kage_core::folder_tools::FolderOperation> = match args.get("operations") {
-                Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
+            let ops = match args.get("operations") {
+                Some(v) => match parse_folder_operations(v) {
+                    Ok(ops) => ops,
+                    Err(msg) => return tool_result_text(id, &msg, true),
+                },
                 None => {
                     return tool_result_text(id, "Missing required parameter: operations", true)
                 }
@@ -531,6 +540,51 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
         ),
     }
 }
+
+/// Cap on how much of a tool call's arguments reaches the sidecar log.
+/// Full payloads (scripts, set_value text) can run to megabytes.
+const MAX_LOGGED_ARGS_BYTES: usize = 200;
+
+/// Tools whose arguments carry text typed into other apps — possibly
+/// passwords — so only their size is logged, never the content.
+const TEXT_ENTRY_TOOLS: &[&str] = &["type_text", "set_value", "type_and_get_tree"];
+
+fn args_for_log(tool_name: &str, args: &serde_json::Value) -> String {
+    let s = args.to_string();
+    if TEXT_ENTRY_TOOLS.contains(&tool_name) {
+        return format!("<{} bytes redacted>", s.len());
+    }
+    if s.len() <= MAX_LOGGED_ARGS_BYTES {
+        return s;
+    }
+    let mut end = MAX_LOGGED_ARGS_BYTES;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}... ({} bytes)", &s[..end], s.len())
+}
+
+/// Parse `execute_folder_plan` operations element by element so a bad
+/// entry is reported by index instead of collapsing the whole plan into
+/// an empty Vec. Any invalid entry rejects the whole plan: plans can be
+/// order-dependent, so running only the valid subset could leave the tree
+/// half-reorganised.
+fn parse_folder_operations(
+    v: &serde_json::Value,
+) -> Result<Vec<kage_core::folder_tools::FolderOperation>, String> {
+    let Some(items) = v.as_array() else {
+        return Err("Invalid operations: expected an array".to_string());
+    };
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            serde_json::from_value(item.clone())
+                .map_err(|e| format!("Invalid operation at index {}: {}", i, e))
+        })
+        .collect()
+}
+
 fn dispatch_element_action(
     id: &serde_json::Value,
     args: &serde_json::Value,
@@ -543,5 +597,64 @@ fn dispatch_element_action(
     match action(eid) {
         Ok(msg) => tool_result_text(id, &msg, false),
         Err(e) => tool_result_text(id, &e, true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn args_for_log_keeps_short_args_verbatim() {
+        let args = json!({"name": "notepad"});
+        assert_eq!(args_for_log("launch_app", &args), args.to_string());
+    }
+
+    #[test]
+    fn args_for_log_truncates_on_char_boundary() {
+        // The leading 'x' shifts the 3-byte chars so byte 200 lands
+        // mid-codepoint; slicing there would panic without the backoff.
+        let args = json!({"script": format!("x{}", "日".repeat(500))});
+        let full_len = args.to_string().len();
+        let logged = args_for_log("run_script", &args);
+        assert!(logged.len() < full_len);
+        assert!(logged.ends_with(&format!("({} bytes)", full_len)));
+    }
+
+    #[test]
+    fn args_for_log_redacts_text_entry_tools() {
+        let args = json!({"text": "hunter2"});
+        assert!(!args_for_log("type_text", &args).contains("hunter2"));
+    }
+
+    #[test]
+    fn parse_folder_operations_accepts_valid_plan() {
+        let v = json!([
+            {"action": "move", "from": "a.txt", "to": "dir/a.txt"},
+            {"action": "delete", "from": "b.txt"}
+        ]);
+        assert_eq!(parse_folder_operations(&v).expect("valid plan").len(), 2);
+    }
+
+    #[test]
+    fn parse_folder_operations_names_bad_index() {
+        let v = json!([
+            {"action": "move", "from": "a.txt", "to": "dir/a.txt"},
+            {"action": "delete", "path": "x"}
+        ]);
+        let err = parse_folder_operations(&v).unwrap_err();
+        assert!(err.contains("index 1"), "got {err}");
+        assert!(err.contains("from"), "got {err}");
+    }
+
+    #[test]
+    fn parse_folder_operations_keeps_empty_array_empty() {
+        assert!(parse_folder_operations(&json!([])).unwrap().is_empty());
+    }
+
+    #[test]
+    fn parse_folder_operations_rejects_non_array() {
+        assert!(parse_folder_operations(&json!({"action": "move"})).is_err());
     }
 }
