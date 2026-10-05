@@ -307,15 +307,18 @@ pub fn snapshot(config: &Arc<std::sync::Mutex<Config>>) -> TelemetryInfo {
 ///
 /// What gets sent on panic:
 ///   - Event name `panic`.
-///   - `message`: panic payload as a string, truncated to 250 chars so
-///     accidentally-included file paths or user input don't balloon the
-///     event past Aptabase's property size cap. Local variables are
-///     never inspected.
+///   - `category`: a coarse bucket from [`panic_category`], matched on the
+///     fixed prefix std puts before any data. The payload itself is never
+///     sent: std panic messages embed the value being processed (a str
+///     slice panic quotes up to ~256 bytes of the string; `unwrap()` on an
+///     `Err` includes its Debug output, often a path), so it can carry
+///     user text.
 ///   - `location`: `<file>:<line>` from `PanicInfo::location` if known.
 ///     File paths in panic locations are source paths from rustc (e.g.
 ///     `src/foo.rs`), not user-content paths, so they're safe to send.
 ///
 /// What does NOT get sent:
+///   - The panic message. It stays in `crash.log` locally.
 ///   - Backtraces. They go to `crash.log` locally only — they can
 ///     contain frame symbols that leak module structure beyond what we
 ///     want in an analytics dashboard, and they're rarely actionable
@@ -348,23 +351,11 @@ pub fn panic_hook() -> PanicHook {
             return;
         }
 
-        // Truncate at a UTF-8 char boundary so we can't split a multi-
-        // byte sequence and ship invalid UTF-8 to the server.
-        const MAX: usize = 250;
-        let mut truncated = msg;
-        if truncated.len() > MAX {
-            let mut end = MAX;
-            while end > 0 && !truncated.is_char_boundary(end) {
-                end -= 1;
-            }
-            truncated.truncate(end);
-        }
-
         let location = info
             .location()
             .map(|l| format!("{}:{}", l.file(), l.line()));
 
-        let mut props = json!({ "message": truncated });
+        let mut props = json!({ "category": panic_category(&msg) });
         if let Some(loc) = location {
             props["location"] = json!(loc);
         }
@@ -374,4 +365,83 @@ pub fn panic_hook() -> PanicHook {
         // we don't need to flush ourselves.
         let _ = client.track_event("panic", Some(props));
     })
+}
+
+/// Map a panic message to a fixed category using only the literal prefix
+/// std emits before any interpolated data. Anything unrecognised —
+/// including `expect("...")` messages, whose custom text and trailing
+/// `Err` Debug can both carry data — is `"other"`.
+fn panic_category(msg: &str) -> &'static str {
+    const PREFIXES: &[(&str, &str)] = &[
+        ("byte index ", "str_slice"),
+        ("begin <= end ", "str_slice"),
+        ("called `Result::unwrap()`", "unwrap_err"),
+        ("called `Option::unwrap()`", "unwrap_none"),
+        ("index out of bounds", "index_oob"),
+        ("range start index ", "slice_range"),
+        ("range end index ", "slice_range"),
+        ("slice index starts at ", "slice_range"),
+        ("attempt to divide by zero", "div_zero"),
+        (
+            "attempt to calculate the remainder with a divisor of zero",
+            "div_zero",
+        ),
+        ("attempt to ", "overflow"),
+        ("already borrowed", "refcell"),
+        ("already mutably borrowed", "refcell"),
+        ("assertion ", "assertion"),
+        ("internal error: entered unreachable code", "unreachable"),
+        ("not yet implemented", "todo"),
+        ("not implemented", "todo"),
+    ];
+    PREFIXES
+        .iter()
+        .find(|&&(prefix, _)| msg.starts_with(prefix))
+        .map_or("other", |&(_, category)| category)
+}
+
+#[cfg(test)]
+mod panic_category_tests {
+    use super::panic_category;
+
+    #[test]
+    fn str_boundary_panic_maps_to_category_without_user_text() {
+        let msg = "byte index 3 is not a char boundary; it is inside 'é' (bytes 2..4) of `secret user message`";
+        let cat = panic_category(msg);
+        assert_eq!(cat, "str_slice");
+        assert!(!cat.contains("secret"));
+    }
+
+    #[test]
+    fn std_prefixes_map_to_fixed_categories() {
+        assert_eq!(
+            panic_category(
+                "called `Result::unwrap()` on an `Err` value: Os { path: \"C:\\\\Users\\\\me\" }"
+            ),
+            "unwrap_err"
+        );
+        assert_eq!(
+            panic_category("called `Option::unwrap()` on a `None` value"),
+            "unwrap_none"
+        );
+        assert_eq!(
+            panic_category("index out of bounds: the len is 3 but the index is 5"),
+            "index_oob"
+        );
+        assert_eq!(
+            panic_category("range end index 9 out of range for slice of length 4"),
+            "slice_range"
+        );
+        assert_eq!(
+            panic_category("attempt to subtract with overflow"),
+            "overflow"
+        );
+        assert_eq!(panic_category("attempt to divide by zero"), "div_zero");
+    }
+
+    #[test]
+    fn custom_messages_are_other() {
+        assert_eq!(panic_category("failed to load config: /home/me/x"), "other");
+        assert_eq!(panic_category(""), "other");
+    }
 }

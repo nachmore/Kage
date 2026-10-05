@@ -41,7 +41,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Condvar, LazyLock, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 const CACHE_FILE: &str = "link-metadata.json";
@@ -131,6 +131,10 @@ struct InMemoryCache {
     /// past this before writing — coalesces the bursts that happen
     /// when a chat lands with many links at once.
     last_dirty_at: Option<Instant>,
+    /// Bumped by `clear()`. The flush thread records it with each snapshot
+    /// and drops the write if a clear happened in between, so a pre-clear
+    /// snapshot can't resurrect cleared entries on disk.
+    generation: u64,
 }
 
 impl InMemoryCache {
@@ -148,50 +152,75 @@ static CACHE: LazyLock<Mutex<InMemoryCache>> = LazyLock::new(|| {
         loaded: false,
         dirty: false,
         last_dirty_at: None,
+        generation: 0,
     });
     spawn_flush_thread();
     cache
 });
 
+/// Wakes the flush thread when `store` marks the cache dirty. Paired with
+/// the `CACHE` mutex, so an idle app costs no periodic wakeups.
+static FLUSH_SIGNAL: Condvar = Condvar::new();
+
+/// Serialises disk writes between the flush thread and `clear()`. They
+/// share one `.tmp` sibling, and the generation check is only sound if
+/// no clear can slip in between it and the write. Always taken before
+/// `CACHE`, and `CACHE` is never held across the write itself, so
+/// lookups never block on disk I/O.
+static WRITE_LOCK: Mutex<()> = Mutex::new(());
+
 /// Debounce window. Bursts of `store` calls within this many ms after
 /// the last mutation are coalesced into a single disk write.
 const FLUSH_DEBOUNCE: Duration = Duration::from_millis(500);
+
+fn lock_cache() -> MutexGuard<'static, InMemoryCache> {
+    CACHE.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 fn spawn_flush_thread() {
     std::thread::Builder::new()
         .name("link-metadata-cache-flush".to_string())
         .spawn(|| loop {
-            std::thread::sleep(Duration::from_millis(250));
-            let snapshot: Option<CacheFile> = {
-                let mut cache = match CACHE.lock() {
-                    Ok(g) => g,
-                    Err(p) => p.into_inner(),
-                };
-                let due = cache
-                    .last_dirty_at
-                    .is_some_and(|t| t.elapsed() >= FLUSH_DEBOUNCE);
-                if cache.dirty && due {
-                    cache.dirty = false;
-                    cache.last_dirty_at = None;
-                    Some(cache.file.clone())
-                } else {
-                    None
+            let (file, generation) = {
+                let mut cache = FLUSH_SIGNAL
+                    .wait_while(lock_cache(), |c| !c.dirty)
+                    .unwrap_or_else(PoisonError::into_inner);
+                // Debounce: a store during the wait pushes the deadline
+                // back, so recompute from `last_dirty_at` after each wake.
+                while cache.dirty {
+                    let remaining = cache.last_dirty_at.map_or(Duration::ZERO, |t| {
+                        FLUSH_DEBOUNCE.saturating_sub(t.elapsed())
+                    });
+                    if remaining.is_zero() {
+                        break;
+                    }
+                    cache = FLUSH_SIGNAL
+                        .wait_timeout(cache, remaining)
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .0;
                 }
+                // `clear()` may have reset the flag while we waited.
+                if !cache.dirty {
+                    continue;
+                }
+                cache.dirty = false;
+                cache.last_dirty_at = None;
+                (cache.file.clone(), cache.generation)
             };
-            if let Some(file) = snapshot {
-                if let Err(e) = save_file(&file) {
-                    log::warn!("link_metadata_cache: flush failed: {}", e);
-                }
+            let _write = WRITE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+            if lock_cache().generation != generation {
+                // Cleared after the snapshot; `clear()` already wrote.
+                continue;
+            }
+            if let Err(e) = save_file(&file) {
+                log::warn!("link_metadata_cache: flush failed: {}", e);
             }
         })
         .expect("spawn link-metadata-cache flush thread");
 }
 
 fn with_cache<R>(f: impl FnOnce(&mut InMemoryCache) -> R) -> R {
-    let mut cache = match CACHE.lock() {
-        Ok(g) => g,
-        Err(p) => p.into_inner(),
-    };
+    let mut cache = lock_cache();
     cache.lazy_load();
     f(&mut cache)
 }
@@ -259,6 +288,7 @@ pub fn store(url: &str, meta: Option<serde_json::Value>) -> Result<()> {
         c.dirty = true;
         c.last_dirty_at = Some(Instant::now());
     });
+    FLUSH_SIGNAL.notify_one();
     Ok(())
 }
 
@@ -298,6 +328,9 @@ fn evict_to_capacity(file: &mut CacheFile) {
 /// synchronously so the user sees the cache size drop immediately when
 /// the settings page re-fetches stats.
 pub fn clear() -> Result<()> {
+    // Held across the bump and the save so an in-flight flush either
+    // finished before us or sees the new generation and skips.
+    let _write = WRITE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let snapshot = with_cache(|c| {
         c.file = CacheFile {
             version: FORMAT_VERSION,
@@ -305,6 +338,7 @@ pub fn clear() -> Result<()> {
         };
         c.dirty = false;
         c.last_dirty_at = None;
+        c.generation = c.generation.wrapping_add(1);
         c.file.clone()
     });
     save_file(&snapshot)

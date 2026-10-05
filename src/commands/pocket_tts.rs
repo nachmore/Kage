@@ -50,6 +50,20 @@ fn find_python() -> Option<String> {
     None
 }
 
+/// Use the configured interpreter, else probe for one on the blocking pool.
+/// Callers snapshot `configured` and release the config lock first:
+/// `find_python` spawns and waits on up to two processes, and the ACP
+/// reader thread contends for that lock.
+async fn resolve_python(configured: Option<String>) -> Option<String> {
+    if configured.is_some() {
+        return configured;
+    }
+    tauri::async_runtime::spawn_blocking(find_python)
+        .await
+        .ok()
+        .flatten()
+}
+
 /// Check if pocket-tts pip package is installed
 fn check_pocket_tts_installed(python: &str) -> bool {
     let mut cmd = Command::new(python);
@@ -114,17 +128,22 @@ pub fn get_server_script_path() -> std::path::PathBuf {
 pub async fn pocket_tts_check_install(
     features: State<'_, FeatureServices>,
 ) -> Result<PocketTtsStatus, AppError> {
-    let (port, python_path) = {
+    let (port, configured_python) = {
         let config = features.config.lock_or_recover();
-        let pp = config.pocket_tts.python_path.clone().or_else(find_python);
-        (config.pocket_tts.port, pp)
+        (
+            config.pocket_tts.port,
+            config.pocket_tts.python_path.clone(),
+        )
     };
+    let python_path = resolve_python(configured_python).await;
 
     let python_found = python_path.is_some();
-    let installed = if let Some(ref py) = python_path {
-        check_pocket_tts_installed(py)
-    } else {
-        false
+    // `import pocket_tts` pulls in torch — seconds of blocking work.
+    let installed = match python_path.clone() {
+        Some(py) => tauri::async_runtime::spawn_blocking(move || check_pocket_tts_installed(&py))
+            .await
+            .unwrap_or(false),
+        None => false,
     };
 
     let server_running = check_server_running(port).await;
@@ -144,14 +163,15 @@ pub async fn pocket_tts_install<R: tauri::Runtime>(
     procs: State<'_, ChildProcesses>,
     app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
-    let config = features.config.lock_or_recover();
-    let python = config
+    let configured_python = features
+        .config
+        .lock_or_recover()
         .pocket_tts
         .python_path
-        .clone()
-        .or_else(find_python)
+        .clone();
+    let python = resolve_python(configured_python)
+        .await
         .ok_or_else(|| "Python 3 not found. Please install Python 3.10+ first.".to_string())?;
-    drop(config);
 
     // Check if an install is already running
     {
@@ -306,21 +326,20 @@ pub async fn pocket_tts_start(
     features: State<'_, FeatureServices>,
     procs: State<'_, ChildProcesses>,
 ) -> Result<String, AppError> {
-    let (port, voice, temp, eos_threshold, python) = {
+    let (port, voice, temp, eos_threshold, configured_python, debug_mode) = {
         let config = features.config.lock_or_recover();
         (
             config.pocket_tts.port,
             config.pocket_tts.voice.clone(),
             config.pocket_tts.temp,
             config.pocket_tts.eos_threshold,
-            config
-                .pocket_tts
-                .python_path
-                .clone()
-                .or_else(find_python)
-                .ok_or_else(|| "Python 3 not found".to_string())?,
+            config.pocket_tts.python_path.clone(),
+            config.debug_mode,
         )
     };
+    let python = resolve_python(configured_python)
+        .await
+        .ok_or_else(|| "Python 3 not found".to_string())?;
 
     // Check if already running
     if check_server_running(port).await {
@@ -348,7 +367,7 @@ pub async fn pocket_tts_start(
         .stderr(Stdio::piped());
 
     // Pass --debug when Kage is in debug mode
-    if features.config.lock_or_recover().debug_mode {
+    if debug_mode {
         cmd.arg("--debug");
     }
 
@@ -405,8 +424,16 @@ pub async fn pocket_tts_start(
             let _ = tx.send(false);
         });
 
-        match rx.recv_timeout(std::time::Duration::from_secs(120)) {
-            Ok(true) => {
+        // Wait on the blocking pool: model load can take the full two
+        // minutes, and a std channel wait would park a Tokio worker.
+        let ready = tauri::async_runtime::spawn_blocking(move || {
+            rx.recv_timeout(std::time::Duration::from_secs(120)).ok()
+        })
+        .await
+        .ok()
+        .flatten();
+        match ready {
+            Some(true) => {
                 info!("pocket-tts server started successfully");
 
                 // Store the PID for cleanup
@@ -415,7 +442,7 @@ pub async fn pocket_tts_start(
 
                 Ok("Server started successfully".to_string())
             }
-            Ok(false) => {
+            Some(false) => {
                 // kill() alone leaves a zombie on macOS/Linux — std Child
                 // neither kills nor reaps on drop; wait() collects the exit
                 // status and lets the stdout/stderr reader threads see EOF.
@@ -423,7 +450,7 @@ pub async fn pocket_tts_start(
                 let _ = child.wait();
                 Err("Server failed to start — check that pocket-tts is installed correctly".into())
             }
-            Err(_) => {
+            None => {
                 warn!("Timeout waiting for pocket-tts server — it may still be loading the model");
                 // Keep it running, it might just be slow
                 let mut tts_proc = procs.pocket_tts.lock_or_recover();

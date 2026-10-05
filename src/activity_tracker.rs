@@ -18,7 +18,7 @@ use log::{debug, info, warn};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::lock_ext::LockExt;
@@ -101,6 +101,11 @@ pub struct SiteUsage {
 
 pub struct ActivityTrackerState {
     running: AtomicBool,
+    /// Bumped by every start and stop. A poll loop owns the generation it
+    /// was spawned with and exits once that's no longer current, so a loop
+    /// still asleep from before a quick stop/start can't run alongside the
+    /// new one and double-count every tick.
+    generation: AtomicU64,
     /// SQLite connection. Guarded by a sync mutex because all rusqlite calls
     /// are blocking — we never want to hold this across an `.await`. DB work
     /// happens inside `spawn_blocking`, not on the async scheduler.
@@ -112,6 +117,7 @@ impl Default for ActivityTrackerState {
     fn default() -> Self {
         Self {
             running: AtomicBool::new(false),
+            generation: AtomicU64::new(0),
             db: Mutex::new(None),
             poll_interval_secs: Mutex::new(DEFAULT_POLL_INTERVAL_SECS),
         }
@@ -125,6 +131,48 @@ impl ActivityTrackerState {
 
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::Relaxed)
+    }
+
+    /// Atomically flip `running` false → true and return the new
+    /// generation, or `None` if a tracker is already running. Every
+    /// extension window calls start at launch, so a plain load-then-store
+    /// let several callers through and spawn one poll loop each.
+    fn claim_start(&self) -> Option<u64> {
+        self.running
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()?;
+        Some(self.generation.fetch_add(1, Ordering::AcqRel) + 1)
+    }
+
+    /// Flip `running` true → false and retire the current generation.
+    /// Returns false if the tracker wasn't running.
+    fn release(&self) -> bool {
+        if !self.running.swap(false, Ordering::AcqRel) {
+            return false;
+        }
+        self.generation.fetch_add(1, Ordering::AcqRel);
+        true
+    }
+
+    /// True while the loop spawned for `generation` should keep polling.
+    fn is_current(&self, generation: u64) -> bool {
+        self.running.load(Ordering::Acquire)
+            && self.generation.load(Ordering::Acquire) == generation
+    }
+}
+
+/// Seconds to credit for one tick. `Instant` keeps counting through system
+/// sleep (QueryPerformanceCounter on Windows) and runtime stalls, so an
+/// unbounded delta would charge a whole night to whatever app was in front
+/// at resume. A gap well past the poll interval is treated as a resume and
+/// credited one interval; normal jitter is capped at two.
+fn credited_secs(elapsed: std::time::Duration, interval_secs: u64) -> u64 {
+    let interval = interval_secs.max(1);
+    let elapsed = elapsed.as_secs();
+    if elapsed > interval * 3 {
+        interval
+    } else {
+        elapsed.clamp(1, interval * 2)
     }
 }
 
@@ -242,26 +290,40 @@ pub async fn start_tracker(
     state: &Arc<ActivityTrackerState>,
     poll_interval: Option<u64>,
 ) -> Result<()> {
-    if state.running.load(Ordering::Relaxed) {
+    // Claim before any await so concurrent starts can't all pass the check.
+    let Some(generation) = state.claim_start() else {
         return Ok(()); // Already running
-    }
+    };
 
     if let Some(interval) = poll_interval {
         *state.poll_interval_secs.lock_or_recover() = interval.max(2);
     }
 
     // Open + init DB on the blocking pool (file I/O + schema create).
-    let conn = tokio::task::spawn_blocking(|| -> Result<Connection> {
+    let opened = match tokio::task::spawn_blocking(|| -> Result<Connection> {
         let conn = Connection::open(db_path()).context("Failed to open activity database")?;
         init_db(&conn)?;
         Ok(conn)
     })
     .await
-    .context("DB init task panicked")??;
+    {
+        Ok(result) => result,
+        Err(e) => Err(anyhow::Error::new(e).context("DB init task panicked")),
+    };
+    let conn = match opened {
+        Ok(conn) => conn,
+        Err(e) => {
+            // Undo the claim so a later start can retry — unless a stop
+            // (and maybe a newer start) already superseded this one.
+            if state.is_current(generation) {
+                state.release();
+            }
+            return Err(e);
+        }
+    };
 
     *state.db.lock_or_recover() = Some(conn);
 
-    state.running.store(true, Ordering::Relaxed);
     info!(
         "[ActivityTracker] Started (poll every {}s)",
         state.poll_interval_secs.lock_or_recover()
@@ -270,35 +332,33 @@ pub async fn start_tracker(
     // Spawn background poller
     let state_clone = Arc::clone(state);
     tokio::spawn(async move {
-        poll_loop(state_clone).await;
+        poll_loop(state_clone, generation).await;
     });
 
     Ok(())
 }
 
 pub async fn stop_tracker(state: &Arc<ActivityTrackerState>) {
-    if !state.running.load(Ordering::Relaxed) {
-        return;
+    if state.release() {
+        info!("[ActivityTracker] Stopped");
     }
-    state.running.store(false, Ordering::Relaxed);
-    info!("[ActivityTracker] Stopped");
 }
 
-async fn poll_loop(state: Arc<ActivityTrackerState>) {
+async fn poll_loop(state: Arc<ActivityTrackerState>, generation: u64) {
     crate::os::set_current_thread_name("activity-tracker");
     let mut last_process = String::new();
     let mut last_poll = std::time::Instant::now();
 
-    while state.running.load(Ordering::Relaxed) {
+    while state.is_current(generation) {
         let interval = *state.poll_interval_secs.lock_or_recover();
         tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
 
-        if !state.running.load(Ordering::Relaxed) {
+        if !state.is_current(generation) {
             break;
         }
 
         let now = std::time::Instant::now();
-        let elapsed_secs = now.duration_since(last_poll).as_secs().max(1);
+        let elapsed_secs = credited_secs(now.duration_since(last_poll), interval);
         last_poll = now;
 
         // Get foreground window
@@ -448,6 +508,53 @@ fn is_system_noise(process_name: &str) -> bool {
             | "gamebar"
             | "gamebarftserver"
     )
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn second_start_claim_is_rejected_while_running() {
+        let state = ActivityTrackerState::new();
+        let first = state.claim_start().expect("first claim wins");
+        assert!(
+            state.claim_start().is_none(),
+            "concurrent start must not spawn a second loop"
+        );
+        assert!(state.is_current(first));
+    }
+
+    #[test]
+    fn stale_loop_is_retired_by_quick_stop_start() {
+        let state = ActivityTrackerState::new();
+        let old = state.claim_start().unwrap();
+        assert!(state.release());
+        let new = state.claim_start().unwrap();
+        // The old loop wakes to running == true but must still exit.
+        assert!(!state.is_current(old));
+        assert!(state.is_current(new));
+    }
+
+    #[test]
+    fn release_when_stopped_is_a_noop() {
+        let state = ActivityTrackerState::new();
+        assert!(!state.release());
+    }
+
+    #[test]
+    fn credited_secs_passes_normal_ticks_through() {
+        assert_eq!(credited_secs(Duration::from_secs(5), 5), 5);
+        assert_eq!(credited_secs(Duration::from_millis(200), 5), 1);
+        assert_eq!(credited_secs(Duration::from_secs(12), 5), 10);
+    }
+
+    #[test]
+    fn credited_secs_does_not_charge_a_sleep_gap() {
+        // Lid closed overnight: ~15h between ticks.
+        assert_eq!(credited_secs(Duration::from_secs(54_000), 5), 5);
+    }
 }
 
 #[cfg(test)]

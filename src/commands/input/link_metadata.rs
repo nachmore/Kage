@@ -1,4 +1,29 @@
 use crate::error::AppError;
+use std::sync::LazyLock;
+
+/// Extraction window: every tag we read lives in the document head.
+const MAX_HTML_BYTES: usize = 32 * 1024;
+
+const HEAD_CLOSE: &[u8] = b"</head>";
+
+/// One client for the process so a chat full of links reuses connections
+/// and TLS setup instead of rebuilding them per preview.
+static HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::limited(3))
+        .user_agent("Mozilla/5.0 (compatible; Kage/1.0)")
+        .build()
+        .map_err(|e| e.to_string())
+});
+
+/// Case-insensitive search for `</head>`; past it there's nothing the
+/// extractors look at.
+fn contains_head_close(bytes: &[u8]) -> bool {
+    bytes
+        .windows(HEAD_CLOSE.len())
+        .any(|w| w.eq_ignore_ascii_case(HEAD_CLOSE))
+}
 
 /// Fetch metadata (title, description, image, favicon) from a URL for
 /// link previews. Consults the on-disk cache first; on a fresh hit
@@ -64,14 +89,11 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
 /// without nesting too deeply. Returns the same shape the command
 /// returns.
 async fn fetch_link_metadata_uncached(url: &str) -> Result<serde_json::Value, AppError> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .redirect(reqwest::redirect::Policy::limited(3))
-        .user_agent("Mozilla/5.0 (compatible; Kage/1.0)")
-        .build()
+    let client = HTTP_CLIENT
+        .as_ref()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
-    let resp = client
+    let mut resp = client
         .get(url)
         .send()
         .await
@@ -101,12 +123,28 @@ async fn fetch_link_metadata_uncached(url: &str) -> Result<serde_json::Value, Ap
         }));
     }
 
-    // Read only the first 32KB to extract meta tags (don't download entire pages)
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("Read error: {}", e))?;
-    let html = String::from_utf8_lossy(&bytes[..bytes.len().min(32768)]);
+    // Read only the first 32KB to extract meta tags. Stream it: `bytes()`
+    // buffers the whole body, so a huge page blew the 5s timeout and got
+    // negative-cached even though its <head> arrived in the first chunk.
+    let mut buf: Vec<u8> = Vec::with_capacity(MAX_HTML_BYTES);
+    loop {
+        match resp.chunk().await {
+            Ok(Some(chunk)) => {
+                let scan_from = buf.len().saturating_sub(HEAD_CLOSE.len() - 1);
+                buf.extend_from_slice(&chunk);
+                if buf.len() >= MAX_HTML_BYTES || contains_head_close(&buf[scan_from..]) {
+                    break;
+                }
+            }
+            Ok(None) => break,
+            // Timed out or dropped mid-body: a partial head still has the
+            // tags we want, so only fail if nothing arrived.
+            Err(e) if buf.is_empty() => return Err(format!("Read error: {}", e).into()),
+            Err(_) => break,
+        }
+    }
+    drop(resp);
+    let html = String::from_utf8_lossy(&buf[..buf.len().min(MAX_HTML_BYTES)]);
 
     let title = extract_meta(&html, "og:title")
         .or_else(|| extract_meta(&html, "twitter:title"))
@@ -164,8 +202,13 @@ pub async fn link_metadata_cache_stats() -> Result<crate::link_metadata_cache::C
 }
 
 /// Extract content from <meta property="X" content="..."> or <meta name="X" content="...">
+///
+/// Every helper here searches a lowercased copy and slices the original
+/// with the same offsets, so it must be `to_ascii_lowercase`: Unicode
+/// lowercasing changes byte lengths ('İ' grows, Kelvin 'K' shrinks) and
+/// would shift offsets onto the wrong text or mid-codepoint.
 fn extract_meta(html: &str, name: &str) -> Option<String> {
-    let lower = html.to_lowercase();
+    let lower = html.to_ascii_lowercase();
     // Try property= first (Open Graph), then name= (standard meta)
     for attr in &["property", "name"] {
         let needle = format!("{}=\"{}\"", attr, name);
@@ -190,7 +233,7 @@ fn extract_meta(html: &str, name: &str) -> Option<String> {
 
 /// Extract text content from <tag>...</tag>
 fn extract_tag_content(html: &str, tag: &str) -> Option<String> {
-    let lower = html.to_lowercase();
+    let lower = html.to_ascii_lowercase();
     let open = format!("<{}", tag);
     let close = format!("</{}>", tag);
     if let Some(start) = lower.find(&open) {
@@ -209,7 +252,7 @@ fn extract_tag_content(html: &str, tag: &str) -> Option<String> {
 
 /// Extract <link rel="icon" href="..."> or <link rel="shortcut icon" href="...">
 fn extract_link_icon(html: &str, base_url: &str) -> Option<String> {
-    let lower = html.to_lowercase();
+    let lower = html.to_ascii_lowercase();
     for pattern in &["rel=\"icon\"", "rel=\"shortcut icon\""] {
         if let Some(pos) = lower.find(pattern) {
             let tag_start = lower[..pos].rfind('<').unwrap_or(0);
@@ -236,7 +279,7 @@ fn extract_link_icon(html: &str, base_url: &str) -> Option<String> {
 
 /// Extract an attribute value from an HTML tag string
 fn extract_attr(tag: &str, attr: &str) -> Option<String> {
-    let lower = tag.to_lowercase();
+    let lower = tag.to_ascii_lowercase();
     let needle = format!("{}=", attr);
     if let Some(pos) = lower.find(&needle) {
         let after = &tag[pos + needle.len()..];
@@ -278,4 +321,45 @@ fn html_decode(s: &str) -> String {
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
         .replace("&#x27;", "'")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn meta_offsets_survive_length_changing_lowercase_chars() {
+        // 'İ' lowercases to 3 bytes and Kelvin 'K' to 1, so Unicode
+        // lowercasing would shift every later offset.
+        let html = "<title>İstanbul \u{212A}elvin</title>\
+                    <meta property=\"og:title\" content=\"İzmir news\">\
+                    <meta name=\"description\" content=\"\u{212A}\u{212A} \u{2126} ok\">";
+        assert_eq!(
+            extract_meta(html, "og:title").as_deref(),
+            Some("İzmir news")
+        );
+        assert_eq!(
+            extract_meta(html, "description").as_deref(),
+            Some("\u{212A}\u{212A} \u{2126} ok")
+        );
+        assert_eq!(
+            extract_tag_content(html, "title").as_deref(),
+            Some("İstanbul \u{212A}elvin")
+        );
+    }
+
+    #[test]
+    fn link_icon_offsets_survive_non_ascii_prefix() {
+        let html = "<title>\u{212A}\u{212A}\u{212A}</title><link rel=\"icon\" href=\"/i.png\">";
+        assert_eq!(
+            extract_link_icon(html, "https://example.com/page").as_deref(),
+            Some("https://example.com/i.png")
+        );
+    }
+
+    #[test]
+    fn head_close_is_found_case_insensitively() {
+        assert!(contains_head_close(b"<html><HEAD></Head><body>"));
+        assert!(!contains_head_close(b"<html><head><title>x</title>"));
+    }
 }

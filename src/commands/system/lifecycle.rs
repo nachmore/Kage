@@ -125,9 +125,11 @@ async fn shutdown_and_exit_inner<R: tauri::Runtime>(
                 tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             }
 
-            if let Ok(config) = config.try_lock() {
-                crate::auto_steering::generate_steering_on_quit(&acp_client, &config, &session_id);
-            }
+            // `will_run_steering` already checked auto_steering_enabled.
+            // Don't hold the config lock here: the extraction blocks until
+            // the agent replies, and the ACP reader thread needs that lock
+            // to answer any permission request the agent makes meanwhile.
+            crate::auto_steering::generate_steering_on_quit(&acp_client, &session_id);
         }
 
         acp_client.disconnect();

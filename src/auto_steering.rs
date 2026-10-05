@@ -25,7 +25,7 @@ use crate::lock_ext::LockExt;
 use anyhow::{Context, Result};
 use log::{error, info, warn};
 use std::fs;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -58,9 +58,18 @@ pub fn has_pending_messages() -> bool {
 /// Requires both the message count threshold AND the cooldown to have elapsed.
 pub fn tick_message_counter() -> bool {
     MESSAGES_SINCE_GENERATION.fetch_add(1, Ordering::Relaxed);
-    let count = MESSAGE_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
-    if count >= UPDATE_INTERVAL_MESSAGES {
-        MESSAGE_COUNTER.store(0, Ordering::Relaxed);
+    // Increment-and-wrap in one atomic step: a separate fetch_add + store(0)
+    // let two near-simultaneous ticks both see the threshold and both fire.
+    let prev = MESSAGE_COUNTER
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+            Some(if c + 1 >= UPDATE_INTERVAL_MESSAGES {
+                0
+            } else {
+                c + 1
+            })
+        })
+        .unwrap_or(0);
+    if prev + 1 >= UPDATE_INTERVAL_MESSAGES {
         // Check the hourly cooldown
         if let Ok(last) = LAST_GENERATION.lock() {
             let elapsed = last.map(|t| t.elapsed().as_secs()).unwrap_or(u64::MAX);
@@ -79,8 +88,71 @@ pub fn tick_message_counter() -> bool {
 /// Record that a generation just completed (periodic or on-quit).
 fn mark_generation() {
     MESSAGES_SINCE_GENERATION.store(0, Ordering::Relaxed);
+    arm_cooldown();
+}
+
+/// Start the hourly cooldown without clearing the pending-message count,
+/// so the quit-time pass still runs.
+fn arm_cooldown() {
     if let Ok(mut last) = LAST_GENERATION.lock() {
         *last = Some(Instant::now());
+    }
+}
+
+/// What a generation attempt actually did. Only `Written` counts as a
+/// completed generation; the rest must leave the update pending.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GenerationOutcome {
+    /// New document written to disk.
+    Written,
+    /// The session's prompt lock was busy; nothing was sent.
+    Deferred,
+    /// Not enough conversation to extract from; nothing was sent.
+    TooFewTurns,
+    /// A round trip happened but produced nothing usable (agent error,
+    /// empty reply, refusal, or no `## ` sections).
+    NoUsableReply,
+}
+
+/// Apply a periodic attempt's outcome to the trigger counters.
+fn record_periodic_outcome(outcome: GenerationOutcome) {
+    match outcome {
+        GenerationOutcome::Written => mark_generation(),
+        // Re-arm so the very next message_complete retries. LAST_GENERATION
+        // is untouched, so the cooldown that let this attempt through still
+        // passes.
+        GenerationOutcome::Deferred => {
+            MESSAGE_COUNTER.fetch_max(UPDATE_INTERVAL_MESSAGES - 1, Ordering::Relaxed);
+        }
+        // Retry after the next UPDATE_INTERVAL_MESSAGES messages.
+        GenerationOutcome::TooFewTurns => {}
+        // An LLM round trip was spent; keep the hourly cost bound, but leave
+        // the pending count so quit still tries.
+        GenerationOutcome::NoUsableReply => arm_cooldown(),
+    }
+}
+
+/// Set while a periodic extraction is running so overlapping triggers
+/// can't launch two passes that race to overwrite the file.
+static GENERATION_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+/// Clears `GENERATION_IN_FLIGHT` on every exit path of the spawned task,
+/// including early returns and panics — a leaked flag would disable
+/// periodic steering for the rest of the process.
+struct InFlightGuard;
+
+impl InFlightGuard {
+    fn acquire() -> Option<Self> {
+        GENERATION_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| InFlightGuard)
+    }
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        GENERATION_IN_FLIGHT.store(false, Ordering::Release);
     }
 }
 
@@ -142,7 +214,6 @@ If you cannot produce this document, respond with exactly "STEERING_DECLINED" on
 /// Read recent conversation turns from the current session's JSONL file.
 /// Returns labeled turns (both user and assistant) for full context.
 fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<String>> {
-    use std::collections::VecDeque;
     use std::io::{BufRead, BufReader};
 
     let home = dirs::home_dir().context("Failed to get home directory")?;
@@ -157,22 +228,50 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
     let file = fs::File::open(&jsonl_path).context("Failed to open session JSONL")?;
     let reader = BufReader::new(file);
 
-    // Ring buffer: keep only the most recent max_turns entries as we stream
-    let mut turns = VecDeque::with_capacity(max_turns + 1);
-
+    let mut collector = ConversationCollector::new(max_turns);
     for line_result in reader.lines() {
         let line = match line_result {
             Ok(l) => l,
             Err(_) => continue,
         };
-        let line = line.trim().to_string();
+        collector.push_line(&line);
+    }
+
+    Ok(collector.finish())
+}
+
+/// Streams session JSONL lines into a ring buffer of labelled turns.
+/// Split out of `read_recent_conversation` so the filtering is testable
+/// without a session file.
+struct ConversationCollector {
+    /// Ring buffer: keep only the most recent `max_turns` entries.
+    turns: std::collections::VecDeque<String>,
+    max_turns: usize,
+    /// Set after a Prompt that was entirely hidden (steering injection,
+    /// title request, a previous extraction). Its replies are hidden too:
+    /// otherwise the last pass's document is fed back as if the user had
+    /// reinforced every bullet, and acks/titles crowd out real turns.
+    skip_assistant: bool,
+}
+
+impl ConversationCollector {
+    fn new(max_turns: usize) -> Self {
+        Self {
+            turns: std::collections::VecDeque::with_capacity(max_turns + 1),
+            max_turns,
+            skip_assistant: false,
+        }
+    }
+
+    fn push_line(&mut self, line: &str) {
+        let line = line.trim();
         if line.is_empty() {
-            continue;
+            return;
         }
 
-        let val: serde_json::Value = match serde_json::from_str(&line) {
+        let val: serde_json::Value = match serde_json::from_str(line) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(_) => return,
         };
 
         let kind = val.get("kind").and_then(|k| k.as_str()).unwrap_or("");
@@ -180,37 +279,56 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
         let role = match kind {
             "Prompt" => "User",
             "AssistantMessage" => "Assistant",
-            _ => continue,
+            _ => return,
         };
 
-        let data = match val.get("data") {
-            Some(d) => d,
-            None => continue,
-        };
+        if role == "Assistant" && self.skip_assistant {
+            return;
+        }
 
-        let content_arr = match data.get("content").and_then(|c| c.as_array()) {
+        let content_arr = match val
+            .get("data")
+            .and_then(|d| d.get("content"))
+            .and_then(|c| c.as_array())
+        {
             Some(arr) => arr,
-            None => continue,
+            None => {
+                // Every Prompt decides afresh, so a hidden prompt that never
+                // got a reply can't swallow the next real exchange.
+                if role == "User" {
+                    self.skip_assistant = false;
+                }
+                return;
+            }
         };
 
         // Extract text content from this turn
         let mut text_parts = Vec::new();
+        let mut had_hidden = false;
         for item in content_arr {
             let item_kind = item.get("kind").and_then(|k| k.as_str()).unwrap_or("");
             if item_kind == "text" {
                 if let Some(text) = item.get("data").and_then(|d| d.as_str()) {
                     let text = text.trim();
                     // Skip steering messages and extraction prompts
-                    if !text.is_empty() && !text.starts_with("[KAGE_STEERING_IGNORE]") {
+                    if text.starts_with(STEERING_MSG_PREFIX) {
+                        had_hidden = true;
+                    } else if !text.is_empty() {
                         text_parts.push(text.to_string());
                     }
                 }
             }
         }
 
+        if role == "User" {
+            // Only a wholly hidden prompt hides its reply; a mixed one
+            // still carries real user text, so its answer is real too.
+            self.skip_assistant = had_hidden && text_parts.is_empty();
+        }
+
         if !text_parts.is_empty() {
-            if turns.len() == max_turns {
-                turns.pop_front();
+            if self.turns.len() == self.max_turns {
+                self.turns.pop_front();
             }
             let cap = if role == "User" {
                 MAX_USER_TURN_CHARS
@@ -218,18 +336,24 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
                 MAX_ASSISTANT_TURN_CHARS
             };
             let joined = text_parts.join("\n");
-            turns.push_back(format!("{}: {}", role, truncate_at_word(&joined, cap)));
+            self.turns
+                .push_back(format!("{}: {}", role, truncate_at_word(&joined, cap)));
         }
     }
 
-    Ok(turns.into_iter().collect())
+    fn finish(self) -> Vec<String> {
+        self.turns.into_iter().collect()
+    }
 }
 
 /// Generate the auto-steering document by sending conversation excerpts
 /// to the LLM. The caller passes the session id to analyse — typically
 /// the one the user just sent a message on (post-prompt epilogue) or
 /// `window_sessions["main"]` (quit-time hook).
-pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Result<()> {
+pub fn generate_steering_document(
+    client: &AcpClient,
+    session_id: &str,
+) -> Result<GenerationOutcome> {
     info!(
         "Starting auto-steering document generation for session {}",
         session_id
@@ -243,7 +367,7 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
             "Too few conversation turns ({}) for meaningful extraction — skipping",
             turns.len()
         );
-        return Ok(());
+        return Ok(GenerationOutcome::TooFewTurns);
     }
 
     // Build the extraction prompt with conversation excerpts
@@ -297,7 +421,7 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
         // next eligible message_complete.
         None => {
             info!("Prompt in progress — deferring auto-steering extraction to next turn");
-            return Ok(()); // Non-fatal
+            return Ok(GenerationOutcome::Deferred); // Non-fatal
         }
     };
 
@@ -306,7 +430,7 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
         // Drop the (possibly partial) accumulator so it doesn't bleed into
         // the next read on the same session.
         client.reset_session_accumulator(session_id);
-        return Ok(()); // Non-fatal
+        return Ok(GenerationOutcome::NoUsableReply); // Non-fatal
     }
 
     // Read the accumulated response and clear its bucket.
@@ -314,12 +438,12 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
 
     let cleaned = match parse_extraction_response(&result) {
         ExtractionOutcome::Empty => {
-            warn!("Auto-steering extraction returned empty result");
-            return Ok(());
+            warn!("Auto-steering extraction returned no usable document — keeping existing one");
+            return Ok(GenerationOutcome::NoUsableReply);
         }
         ExtractionOutcome::Refusal => {
             info!("Agent declined auto-steering generation — keeping existing document");
-            return Ok(());
+            return Ok(GenerationOutcome::NoUsableReply);
         }
         ExtractionOutcome::Content(c) => c,
     };
@@ -347,7 +471,7 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
         auto_path
     );
 
-    Ok(())
+    Ok(GenerationOutcome::Written)
 }
 
 /// Run auto-steering generation in the background if enabled.
@@ -363,8 +487,17 @@ pub fn maybe_generate_steering(
         return;
     }
 
-    // Spawn a background task so we don't block the message flow
-    tauri::async_runtime::spawn(async move {
+    // A pass already running covers this trigger.
+    let Some(in_flight) = InFlightGuard::acquire() else {
+        info!("Auto-steering: extraction already in flight — skipping trigger");
+        return;
+    };
+
+    // Blocking pool, not an async task: the extraction is a synchronous
+    // LLM round trip (tens of seconds) that would otherwise park a Tokio
+    // worker for its whole duration.
+    tauri::async_runtime::spawn_blocking(move || {
+        let _in_flight = in_flight;
         {
             let config = config.lock_or_recover();
             if !config.acp.agent.auto_steering_enabled {
@@ -381,7 +514,7 @@ pub fn maybe_generate_steering(
             UPDATE_INTERVAL_MESSAGES, MIN_UPDATE_INTERVAL_SECS
         );
         match generate_steering_document(&client, &session_id) {
-            Ok(()) => mark_generation(),
+            Ok(outcome) => record_periodic_outcome(outcome),
             Err(e) => error!("Auto-steering generation failed: {}", e),
         }
     });
@@ -390,12 +523,12 @@ pub fn maybe_generate_steering(
 /// Force an immediate steering document generation (e.g., on quit).
 /// This runs synchronously and blocks until complete. Skipped if no
 /// messages have been sent since the last generation. The caller picks
-/// the session id — quit-time uses `window_sessions["main"]`.
-pub fn generate_steering_on_quit(client: &AcpClient, config: &Config, session_id: &str) {
-    if !config.acp.agent.auto_steering_enabled {
-        return;
-    }
-
+/// the session id — quit-time uses `window_sessions["main"]` — and has
+/// already checked `auto_steering_enabled`. Takes no `Config` so the
+/// caller can't hold the config lock across the round trip: the ACP
+/// reader thread needs that lock to answer a permission request, and the
+/// reply we're blocked on can only arrive through that thread.
+pub fn generate_steering_on_quit(client: &AcpClient, session_id: &str) {
     if !client.is_connected() {
         return;
     }
@@ -407,7 +540,9 @@ pub fn generate_steering_on_quit(client: &AcpClient, config: &Config, session_id
 
     info!("Generating auto-steering document before quit");
     match generate_steering_document(client, session_id) {
-        Ok(()) => mark_generation(),
+        Ok(GenerationOutcome::Written) => mark_generation(),
+        // Process is exiting; nothing to re-arm.
+        Ok(outcome) => info!("Auto-steering on quit wrote nothing ({:?})", outcome),
         Err(e) => error!("Auto-steering generation on quit failed: {}", e),
     }
 }
@@ -415,7 +550,8 @@ pub fn generate_steering_on_quit(client: &AcpClient, config: &Config, session_id
 /// Outcome of running the LLM extraction response through the parser.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExtractionOutcome {
-    /// Response was blank or whitespace-only — skip the write.
+    /// Response was blank, or had no `## ` section to write — skip the
+    /// write, keep existing doc.
     Empty,
     /// Agent refused the extraction prompt — skip the write, keep existing doc.
     Refusal,
@@ -454,39 +590,43 @@ pub fn parse_extraction_response(raw: &str) -> ExtractionOutcome {
     if is_refusal_response(trimmed) {
         return ExtractionOutcome::Refusal;
     }
-    ExtractionOutcome::Content(strip_code_fences(raw))
+    // A reply with no `## ` section is chat, not a profile. Writing it would
+    // wipe the existing doc — and the next pass only feeds back a body that
+    // has sections, so the old preferences would be gone for good.
+    match extract_doc_body(trimmed) {
+        Some(body) => ExtractionOutcome::Content(body),
+        None => ExtractionOutcome::Empty,
+    }
+}
+
+fn is_fence(line: &str) -> bool {
+    line.trim_start().starts_with("```")
+}
+
+/// Pull the markdown document out of an extraction reply: skip any
+/// preamble up to the first fence or `## ` heading, keep everything up to
+/// the closing (or next) fence, and drop whatever follows it. Returns
+/// `None` unless the result contains at least one `## ` heading — any
+/// heading text is accepted, since models rename sections slightly.
+fn extract_doc_body(text: &str) -> Option<String> {
+    let mut lines = text
+        .lines()
+        .skip_while(|l| !is_fence(l) && !l.trim_start().starts_with("## "));
+    let first = lines.next()?;
+    let mut body: Vec<&str> = Vec::new();
+    if !is_fence(first) {
+        body.push(first);
+    }
+    body.extend(lines.take_while(|l| !is_fence(l)));
+    let body = body.join("\n").trim().to_string();
+    let has_section = body.lines().any(|l| l.trim_start().starts_with("## "));
+    has_section.then_some(body)
 }
 
 /// Header comment prepended to the auto-steering file. Kept as a function
 /// (rather than `const`) so the literal isn't repeated across modules.
 pub fn auto_steering_header() -> &'static str {
     "<!-- AUTO-GENERATED STEERING DOCUMENT\n     This file is automatically updated based on your conversations.\n     Any manual changes may be overridden.\n     To add your own persistent instructions, use a User Steering Document instead. -->\n\n"
-}
-
-/// Strip markdown code fences (```markdown ... ``` or ``` ... ```) from LLM output.
-fn strip_code_fences(text: &str) -> String {
-    let trimmed = text.trim();
-
-    // Check if the entire response is wrapped in a code fence
-    if trimmed.starts_with("```") {
-        let after_opening = if let Some(first_newline) = trimmed.find('\n') {
-            &trimmed[first_newline + 1..]
-        } else {
-            return trimmed.to_string();
-        };
-
-        // Strip trailing fence
-        let result = if after_opening.trim_end().ends_with("```") {
-            let end = after_opening.trim_end();
-            &end[..end.len() - 3]
-        } else {
-            after_opening
-        };
-
-        result.trim().to_string()
-    } else {
-        trimmed.to_string()
-    }
 }
 
 /// Strip the HTML header comment from the steering document content.
@@ -571,33 +711,61 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_strip_code_fences_markdown() {
-        let input = "```markdown\n# Hello\nWorld\n```";
-        assert_eq!(strip_code_fences(input), "# Hello\nWorld");
+    fn extract_doc_body_strips_fences() {
+        let input = "```markdown\n## Hello\n- World\n```";
+        assert_eq!(
+            extract_doc_body(input).as_deref(),
+            Some("## Hello\n- World")
+        );
     }
 
     #[test]
-    fn test_strip_code_fences_plain() {
-        let input = "```\nsome content\n```";
-        assert_eq!(strip_code_fences(input), "some content");
+    fn extract_doc_body_with_surrounding_whitespace() {
+        let input = "  \n```markdown\n## A\n- content here\n```\n  ";
+        assert_eq!(
+            extract_doc_body(input).as_deref(),
+            Some("## A\n- content here")
+        );
     }
 
     #[test]
-    fn test_strip_code_fences_no_fences() {
-        let input = "just plain text";
-        assert_eq!(strip_code_fences(input), "just plain text");
+    fn extract_doc_body_no_closing_fence() {
+        let input = "```markdown\n## A\n- content without closing";
+        assert_eq!(
+            extract_doc_body(input).as_deref(),
+            Some("## A\n- content without closing")
+        );
     }
 
     #[test]
-    fn test_strip_code_fences_with_whitespace() {
-        let input = "  \n```markdown\ncontent here\n```\n  ";
-        assert_eq!(strip_code_fences(input), "content here");
+    fn extract_doc_body_requires_a_section_heading() {
+        assert_eq!(extract_doc_body("just plain text"), None);
+        assert_eq!(extract_doc_body("```\nsome content\n```"), None);
+        assert_eq!(extract_doc_body("# Title only\n- x"), None);
     }
 
     #[test]
-    fn test_strip_code_fences_no_closing() {
-        let input = "```markdown\ncontent without closing";
-        assert_eq!(strip_code_fences(input), "content without closing");
+    fn parse_skips_preamble_and_trailing_text_around_fence() {
+        let raw = "Here's your profile:\n```markdown\n## About the User\n- Name: Alice\n```\nHope this helps!";
+        assert_eq!(
+            parse_extraction_response(raw),
+            ExtractionOutcome::Content("## About the User\n- Name: Alice".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_skips_unfenced_preamble() {
+        let raw = "Sure, here it is.\n\n## Kage Behavior\n- Be brief";
+        assert_eq!(
+            parse_extraction_response(raw),
+            ExtractionOutcome::Content("## Kage Behavior\n- Be brief".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_treats_chat_reply_as_empty_so_existing_doc_survives() {
+        let raw = "Sure — what would you like me to remember?";
+        assert_eq!(parse_extraction_response(raw), ExtractionOutcome::Empty);
     }
 
     #[test]
@@ -723,6 +891,68 @@ mod tests {
         }
         // At the threshold, should trigger (first time — no cooldown yet)
         assert!(tick_message_counter());
+    }
+
+    #[test]
+    fn in_flight_guard_is_exclusive_and_released_on_drop() {
+        let guard = InFlightGuard::acquire().expect("first acquire");
+        assert!(InFlightGuard::acquire().is_none());
+        drop(guard);
+        assert!(InFlightGuard::acquire().is_some());
+    }
+
+    fn jsonl(kind: &str, text: &str) -> String {
+        serde_json::json!({
+            "kind": kind,
+            "data": { "content": [{ "kind": "text", "data": text }] }
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn collector_drops_replies_to_hidden_prompts() {
+        let mut c = ConversationCollector::new(50);
+        for line in [
+            jsonl("Prompt", "[KAGE_STEERING_IGNORE] steering doc"),
+            jsonl("AssistantMessage", "ack"),
+            jsonl("Prompt", "how do I sort a vec?"),
+            jsonl("AssistantMessage", "use sort()"),
+            jsonl("AssistantMessage", "or sort_by()"),
+            jsonl(
+                "Prompt",
+                "[KAGE_STEERING_IGNORE] [AUTO_STEERING_EXTRACTION]\nprompt",
+            ),
+            jsonl("AssistantMessage", "## About the User\n- old bullet"),
+        ] {
+            c.push_line(&line);
+        }
+        assert_eq!(
+            c.finish(),
+            vec![
+                "User: how do I sort a vec?".to_string(),
+                "Assistant: use sort()".to_string(),
+                "Assistant: or sort_by()".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn collector_hidden_prompt_without_reply_does_not_eat_next_exchange() {
+        let mut c = ConversationCollector::new(50);
+        for line in [
+            jsonl("Prompt", "[KAGE_STEERING_IGNORE] [KAGE_TITLE] title?"),
+            jsonl("Prompt", "real question"),
+            jsonl("AssistantMessage", "real answer"),
+        ] {
+            c.push_line(&line);
+        }
+        assert_eq!(
+            c.finish(),
+            vec![
+                "User: real question".to_string(),
+                "Assistant: real answer".to_string(),
+            ]
+        );
     }
 
     #[test]
