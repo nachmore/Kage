@@ -17,6 +17,8 @@ import { t } from '../shared/i18n.js';
 export class MacPermissionsSettingsModule extends SettingsModule {
     constructor() {
         super('mac-permissions', t('settings.mac_permissions.title'), '');
+        // Read-only status pane; save() is a no-op.
+        this.persistsImmediately = true;
     }
 
     render() {

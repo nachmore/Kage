@@ -7,6 +7,8 @@ import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 export class McpSettingsModule extends SettingsModule {
     constructor() {
         super('mcp', t('settings.mcp.title'), '🔌');
+        // Every edit is written to mcp.json on the spot; save() is a no-op.
+        this.persistsImmediately = true;
         this._mcpConfig = null;
         this._mcpPath = null;
         // Built-in Computer Control registration state. The backend always

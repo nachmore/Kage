@@ -3,6 +3,7 @@
  * Coordinates all settings modules and handles save/load operations.
  */
 
+import { onConfigChange } from '../shared/config-cache.js';
 import { errLabel } from '../shared/error-message.js';
 import {
     applyManifestI18n,
@@ -15,6 +16,7 @@ import { renderSchema } from '../shared/settings-renderer.js';
 import { t } from '../shared/i18n.js';
 import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 import { SettingsModule } from './base.js';
+import { DIRTY_EVENT_TYPES, DirtyTracker, dirtySectionForEvent } from './dirty-tracker.js';
 import { renderCapabilityBadges } from './extension-capabilities.js';
 import { registerSettingsActions, setSettingsManager } from './module-registry.js';
 
@@ -185,6 +187,85 @@ export class SettingsManager {
             // user stays on the section they were on.
             window.location.reload();
         });
+
+        // Unsaved-edit tracking. Edits only persist on the global Save, so
+        // a section with edits must never be reloaded from config, and a
+        // section without edits must never be written back (its DOM may be
+        // stale versus changes made from other windows). Capture phase on
+        // document so module handlers that stopPropagation() can't hide an
+        // edit from us.
+        this._dirty = new DirtyTracker();
+        // Bumped whenever config is (re)applied or saved, so a refresh whose
+        // get_config was issued earlier can't apply an older snapshot.
+        this._refreshGen = 0;
+        const onEdit = (event) => {
+            const id = dirtySectionForEvent(event);
+            if (id) this.markDirty(id);
+        };
+        for (const type of DIRTY_EVENT_TYPES) {
+            document.addEventListener(type, onEdit, true);
+        }
+
+        // Changes made outside this window (shortcut/automation added from
+        // the floating window, grants changed, ...) broadcast config_updated.
+        // Refresh the visible section if it has no unsaved edits; hidden
+        // sections refresh when they're next shown (switchSection), and
+        // clean sections are never written by save(), so none can put a
+        // stale copy over the newer config. Debounced because a burst of
+        // writes (and the echo of our own Save) arrives back-to-back.
+        this._configRefreshTimer = null;
+        onConfigChange(() => {
+            if (this._configRefreshTimer) clearTimeout(this._configRefreshTimer);
+            this._configRefreshTimer = setTimeout(() => {
+                this._configRefreshTimer = null;
+                const active = this._activeModule();
+                if (active) this._refreshIfClean(active);
+            }, 150);
+        });
+    }
+
+    /** Flag a module as holding unsaved edits (see the constructor). */
+    markDirty(moduleId) {
+        const module = this.modules.find((m) => m.id === moduleId);
+        if (!module || module.persistsImmediately) return;
+        this._dirty.mark(moduleId);
+    }
+
+    isDirty(moduleId) {
+        return this._dirty.isDirty(moduleId);
+    }
+
+    /** The module whose section is currently visible, if any. */
+    _activeModule() {
+        const section = document.querySelector('[data-section-content]:not(.hidden)');
+        const id = section?.dataset.sectionContent;
+        return id ? this.modules.find((m) => m.id === id) || null : null;
+    }
+
+    /**
+     * Reload one module from fresh config unless it holds unsaved edits.
+     * Re-checks after the get_config round trip: the user may have started
+     * typing meanwhile, or a newer refresh / save may have superseded it.
+     */
+    async _refreshIfClean(module) {
+        if (this._dirty.isDirty(module.id)) return;
+        const gen = ++this._refreshGen;
+        let config;
+        try {
+            config = await this.invoke('get_config');
+        } catch (e) {
+            console.warn(`[Settings] Refresh of ${module.id} failed:`, e);
+            return;
+        }
+        if (gen !== this._refreshGen) return;
+        if (this._dirty.isDirty(module.id) || !this.modules.includes(module)) return;
+        // Callers fire-and-forget this, so a throwing load() must not become
+        // an unhandled rejection.
+        try {
+            this._applyModuleConfig(module, config);
+        } catch (e) {
+            console.error(`Settings module ${module.id} load failed:`, e);
+        }
     }
 
     /**
@@ -290,8 +371,8 @@ export class SettingsManager {
         this._initialized.add(module.id);
         // Some initialize() impls build the widgets load() populates (e.g.
         // the hotkey pickers), so re-load just this module once init has
-        // finished. Safe: the section has never been shown, so it can't
-        // hold unsaved edits yet.
+        // finished. _loadModule skips it if the user already started editing
+        // while an async initialize() was in flight.
         const reload = () =>
             this._loadModule(module).catch((e) =>
                 console.error(`Settings module ${module.id} load failed:`, e)
@@ -317,6 +398,7 @@ export class SettingsManager {
     /** Load a single module (plus its extension enabled state) from saved config. */
     async _loadModule(module) {
         const config = await this.invoke('get_config');
+        if (this._dirty.isDirty(module.id)) return;
         this._applyModuleConfig(module, config);
     }
 
@@ -358,16 +440,22 @@ export class SettingsManager {
         // Lazy initialise: most settings modules only need to wire up
         // their event listeners + load() once, the first time the user
         // navigates to them. See render() for the rationale.
-        // Don't reload every module from saved config here: edits are only
-        // persisted by the global Save, so a full reload on each tab switch
-        // silently reverted unsaved changes in other sections. Modules that
-        // need fresh backend data on each reveal implement onShow().
+        // On later reveals, reload the section from fresh config so changes
+        // made elsewhere show up - but only if it holds no unsaved edits:
+        // edits persist only on the global Save, and reloading a dirty
+        // section silently reverted them. A dirty section gets onShow()
+        // instead, to refresh backend-derived data (models, update status)
+        // while keeping the edits; for a clean one load() covers that.
         const targetModule = this.modules.find((m) => m.id === sectionId);
         if (targetModule && !this._initializeModule(targetModule)) {
-            try {
-                targetModule.onShow?.();
-            } catch (e) {
-                console.error(`Settings module ${targetModule.id} onShow failed:`, e);
+            if (!this._dirty.isDirty(targetModule.id)) {
+                this._refreshIfClean(targetModule);
+            } else {
+                try {
+                    targetModule.onShow?.();
+                } catch (e) {
+                    console.error(`Settings module ${targetModule.id} onShow failed:`, e);
+                }
             }
         }
 
@@ -382,6 +470,11 @@ export class SettingsManager {
     async load() {
         try {
             const config = await this.invoke('get_config');
+            // A full load is authoritative (boot, extension re-render, backup
+            // import): every section now mirrors config, so none is dirty,
+            // and any in-flight per-module refresh is superseded.
+            this._refreshGen++;
+            this._dirty.clearAll();
             this.modules.forEach((module) => {
                 this._applyModuleConfig(module, config);
             });
@@ -396,8 +489,19 @@ export class SettingsManager {
      */
     async save() {
         try {
-            // Validate all modules (legacy sync, sandboxed async)
-            for (const module of this.modules) {
+            // Only modules with unsaved edits are validated and written.
+            // `config` below is fresh from get_config, so it already holds
+            // the newest values for every clean module - calling their
+            // save() would overwrite those with this window's possibly
+            // stale DOM (e.g. drop a shortcut added from the floating
+            // window since this section was last shown). Snapshot the dirty
+            // set up front so edits made while the save is in flight stay
+            // dirty afterwards.
+            const dirtySnapshot = this._dirty.snapshot();
+            const dirtyModules = this.modules.filter((m) => dirtySnapshot.has(m.id));
+
+            // Validate (legacy sync, sandboxed async)
+            for (const module of dirtyModules) {
                 const raw = module.validate();
                 const validation = raw && typeof raw.then === 'function' ? await raw : raw;
                 if (!validation || typeof validation !== 'object' || !('valid' in validation)) {
@@ -432,7 +536,7 @@ export class SettingsManager {
             // here was silently flipping telemetry off on every Settings
             // save. Trust whatever value `get_config` already returned.
             const config = await this.invoke('get_config');
-            this.modules.forEach((module) => {
+            dirtyModules.forEach((module) => {
                 module.save(config);
                 // Save extension enabled state
                 if (module._extensionId) {
@@ -444,8 +548,13 @@ export class SettingsManager {
                 }
             });
 
-            // Save to backend
+            // Save to backend. Still done when nothing is dirty so Save keeps
+            // re-applying runtime config exactly as before.
             await this.invoke('save_config', { config });
+            this._dirty.clearSaved(dirtySnapshot);
+            // A refresh that fetched config before this write must not
+            // apply it over the values just saved.
+            this._refreshGen++;
 
             // Check if any module needs a restart
             const needsRestart = this.modules.some((m) => m._needsRestart);

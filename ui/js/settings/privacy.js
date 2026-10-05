@@ -13,6 +13,8 @@ import { t } from '../shared/i18n.js';
 export class PrivacySettingsModule extends SettingsModule {
     constructor() {
         super('privacy', t('settings.privacy.title'), '🛡️');
+        // Telemetry toggles call their own commands; save() is a no-op.
+        this.persistsImmediately = true;
         this._info = null;
     }
 

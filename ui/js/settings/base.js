@@ -1,3 +1,5 @@
+import { SETTINGS_DIRTY_EVENT } from './dirty-tracker.js';
+
 /**
  * Base class for settings modules
  * Each settings module should extend this class
@@ -7,6 +9,22 @@ export class SettingsModule {
         this.id = id;
         this.title = title;
         this.icon = icon;
+        // Set true in modules that persist every change themselves and whose
+        // save() is a no-op (MCP, privacy, …). The manager then never treats
+        // them as holding unsaved edits, so they always refresh from config.
+        this.persistsImmediately = false;
+    }
+
+    /**
+     * Flag this section as holding unsaved edits. The manager already
+     * catches input/change events and button clicks inside the section;
+     * call this for edits that arrive any other way (async results,
+     * keyboard-only widgets, …) so a refresh from config can't revert them
+     * and the global Save writes them.
+     */
+    markDirty() {
+        const section = document.querySelector(`[data-section-content="${this.id}"]`);
+        section?.dispatchEvent(new CustomEvent(SETTINGS_DIRTY_EVENT, { bubbles: true }));
     }
 
     /**
@@ -104,6 +122,13 @@ export class SettingsModule {
     validate() {
         return { valid: true };
     }
+
+    /**
+     * Optional `onShow()`: called when the section is re-shown while it holds
+     * unsaved edits (a clean section is reloaded via load() instead, so
+     * load() must cover whatever onShow() refreshes). Use it to refresh
+     * backend-derived data without clobbering the user's edits.
+     */
 
     /**
      * Initialize event listeners after rendering

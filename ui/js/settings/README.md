@@ -145,6 +145,24 @@ this.createSettingRow(
 7. **Saving** - `save(config)` writes to config
 8. **Destruction** - `destroy()` cleans up
 
+### Unsaved edits (dirty tracking)
+
+The manager tracks which sections hold unsaved edits (`dirty-tracker.js`):
+`input`/`change` events and clicks on buttons / `[data-action]` controls
+inside a section mark it dirty; call `this.markDirty()` for edits that arrive
+any other way. A successful Save clears it.
+
+- A **clean** section is reloaded via `load(config)` from fresh config each
+  time it's shown and when `config_updated` arrives while it's visible, so
+  `load()` must be safe to call repeatedly and must cover anything `onShow()`
+  refreshes.
+- A **dirty** section is never reloaded (that would revert the edits); it
+  gets the optional `onShow()` hook instead.
+- Save calls `validate()` / `save(config)` only for dirty sections; clean
+  sections' values are already current in the config Save starts from.
+- Modules that persist every change themselves (no-op `save()`) set
+  `this.persistsImmediately = true` so they're never treated as dirty.
+
 ## Examples
 
 See existing modules:

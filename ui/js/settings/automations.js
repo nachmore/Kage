@@ -149,6 +149,13 @@ export class AutomationsSettingsModule extends SettingsModule {
     }
     load(config) {
         this._automations = JSON.parse(JSON.stringify(config.macros || []));
+        // load() also runs to pick up changes made in other windows while
+        // this section has no unsaved edits (an expanded card with no edits
+        // is still "clean"). The list may have shifted, so drop the expanded
+        // index and its cancel snapshot rather than point them at a
+        // different automation.
+        this._expandedIndex = -1;
+        this._editSnapshot = null;
         for (const m of this._automations) {
             if (!m.trigger) m.trigger = { type: 'manual' };
             if (m.enabled === undefined) m.enabled = true;
