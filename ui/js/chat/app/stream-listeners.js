@@ -1,3 +1,19 @@
+function animateTitleSwap(el, newText, animate) {
+    if (!el) return;
+    if (!animate) {
+        el.textContent = newText;
+        return;
+    }
+    el.classList.add('kd-title-flash');
+    // Wait one frame so the fade-out is visible before the text swap.
+    requestAnimationFrame(() => {
+        el.textContent = newText;
+        // The CSS animation handles the fade back in; remove the class
+        // once it completes so subsequent changes don't double-trigger.
+        setTimeout(() => el.classList.remove('kd-title-flash'), 700);
+    });
+}
+
 export function createStreamListenersMixin(dependencies) {
     const { EVT, errLabel, t, submitSelection, processToolCallUpdate, drawContextRing } =
         dependencies;
@@ -229,7 +245,16 @@ export function createStreamListenersMixin(dependencies) {
             // 0.96%, not 96%); an earlier "scale up if ≤1" guess turned a
             // barely-touched session into 96% and triggered an
             // auto-compact loop.
+            //
+            // Metadata and compaction status are broadcast to every chat
+            // host, so filter by sessionId: another session's usage must not
+            // repaint our ring or auto-compact the session we're viewing.
+            const isForeignSession = (event) => {
+                const sid = event?.payload?.params?.sessionId;
+                return !!sid && sid !== this.activeSessionId && sid !== this.currentAcpSessionId;
+            };
             this.listen('context_metadata', (event) => {
+                if (!this.activeSessionId || isForeignSession(event)) return;
                 const raw = event.payload?.params?.contextUsagePercentage;
                 if (raw == null || !Number.isFinite(raw) || raw < 0) return;
                 const rounded = Math.round(raw);
@@ -241,6 +266,7 @@ export function createStreamListenersMixin(dependencies) {
 
             // Compaction status from ACP notifications (works for both auto and manual /compact)
             this.listen(EVT.COMPACTION_STATUS, (event) => {
+                if (isForeignSession(event)) return;
                 const status = event.payload?.params?.status?.type;
                 if (status === 'started') {
                     this.showCompactingNotice();

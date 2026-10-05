@@ -137,7 +137,8 @@ export function createLifecycleMixin(dependencies) {
                 if (!sid || sid === this.activeSessionId) return;
                 this.activeSessionId = sid;
                 this.currentAcpSessionId = sid;
-                if (!this.sessions.some((s) => s.session_id === sid)) {
+                const existing = this.sessions.find((s) => s.session_id === sid);
+                if (!existing) {
                     const now = new Date().toISOString();
                     this.sessions.unshift({
                         session_id: sid,
@@ -147,6 +148,10 @@ export function createLifecycleMixin(dependencies) {
                     });
                 }
                 this.renderSessionList();
+                // Match the init-time auto-select: the header names the
+                // adopted session rather than keeping a stale title.
+                this.elements.chatHeaderTitle.textContent =
+                    stripKageTags(existing?.title) || t('chat.session.current_title');
             });
         }
 
@@ -416,8 +421,15 @@ export function createLifecycleMixin(dependencies) {
                 // Ctrl/⌘+Shift+C — copy last response
                 if (cmdOrCtrlPressed(e) && e.shiftKey && e.key === 'C') {
                     e.preventDefault();
-                    if (this.currentStreamingContent) {
-                        navigator.clipboard.writeText(this.currentStreamingContent).catch(() => {});
+                    // While a reply streams, copy the live text; once it
+                    // completes, currentStreamingContent is reset, so fall
+                    // back to the last finished assistant message.
+                    const text =
+                        this.currentStreamingContent ||
+                        [...(this.messages || [])].reverse().find((m) => m.role === 'assistant')
+                            ?.content;
+                    if (text) {
+                        navigator.clipboard.writeText(text).catch(() => {});
                     }
                     return;
                 }

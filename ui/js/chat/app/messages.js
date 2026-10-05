@@ -94,8 +94,8 @@ export function createMessagesMixin(dependencies) {
                         // Stop any existing speech before starting new one
                         this.speech.cancelSpeech();
                         const text = contentDiv.textContent || '';
-                        this.speech.usedSpeechForLastMessage = true;
-                        this.speech.speakResponse(text);
+                        // speakText ignores the read-back gate (explicit request).
+                        this.speech.speakText(text);
                     }
                 };
                 actions.querySelector('[data-action="translate"]').onclick = async () => {

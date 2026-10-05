@@ -131,7 +131,9 @@ export function createSessionStateMixin(dependencies) {
                     chip.className = 'chat-chip';
                     chip.textContent = `${action.icon || '⚡'} ${action.label}`;
                     chip.onclick = () => {
-                        const prompt = action.prompt.replace(/\{text\}/g, responseText);
+                        // Replacer function: a string replacement would expand
+                        // `$&`, `$$`, etc. inside the agent's response text.
+                        const prompt = action.prompt.replace(/\{text\}/g, () => responseText);
                         this.elements.chatInput.value = prompt;
                         this.sendMessage();
                     };

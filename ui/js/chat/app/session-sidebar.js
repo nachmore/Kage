@@ -1,19 +1,3 @@
-function animateTitleSwap(el, newText, animate) {
-    if (!el) return;
-    if (!animate) {
-        el.textContent = newText;
-        return;
-    }
-    el.classList.add('kd-title-flash');
-    // Wait one frame so the fade-out is visible before the text swap.
-    requestAnimationFrame(() => {
-        el.textContent = newText;
-        // The CSS animation handles the fade back in; remove the class
-        // once it completes so subsequent changes don't double-trigger.
-        setTimeout(() => el.classList.remove('kd-title-flash'), 700);
-    });
-}
-
 export function createSessionSidebarMixin(dependencies) {
     const { escapeHtml, stripKageTags, STREAM, t, formatRelativeDate, orderSessionsForSidebar } =
         dependencies;
