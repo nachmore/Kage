@@ -75,11 +75,18 @@ pub fn assemble_steering_parts(inputs: &SteeringInputs) -> Vec<String> {
         match Config::get_auto_steering_path() {
             Ok(auto_path) => {
                 if auto_path.exists() {
-                    match fs::read_to_string(&auto_path) {
-                        Ok(content) if !content.trim().is_empty() => {
-                            parts.push(content);
+                    // Strip the header comment (it's for the human editing
+                    // the file, not the model) and enforce the size cap
+                    // here too: a doc written before the cap existed, or
+                    // hand-edited, would otherwise ship in full on every
+                    // session start until the next regeneration.
+                    if let Ok(content) = fs::read_to_string(&auto_path) {
+                        let body = crate::auto_steering::compact_steering_doc(
+                            &crate::auto_steering::strip_header_comment(&content),
+                        );
+                        if !body.is_empty() {
+                            parts.push(body);
                         }
-                        _ => {}
                     }
                 }
             }

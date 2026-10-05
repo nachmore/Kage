@@ -84,6 +84,25 @@ fn mark_generation() {
     }
 }
 
+/// Hard ceiling on the generated document body, in bytes. The doc is
+/// injected into EVERY new session, so each byte here is paid for on every
+/// session start — and an uncapped merge grows monotonically (one user's
+/// doc reached 18KB of task trivia). The prompt asks for ~1500; this is
+/// the deterministic backstop enforced by `compact_steering_doc`.
+pub const MAX_DOC_CHARS: usize = 2500;
+
+/// Max bullet (or prose) lines kept under any one heading.
+const MAX_LINES_PER_SECTION: usize = 5;
+
+/// Max bytes per line; longer lines are cut at a word boundary.
+const MAX_LINE_CHARS: usize = 240;
+
+/// Per-turn caps on the conversation excerpt fed to the extractor. User
+/// turns carry the preference signal; assistant replies are mostly task
+/// content, so they get a short leash. Bounds input tokens per pass.
+const MAX_USER_TURN_CHARS: usize = 1500;
+const MAX_ASSISTANT_TURN_CHARS: usize = 400;
+
 /// The prompt sent to the LLM to extract user preferences from conversation history.
 const EXTRACTION_PROMPT: &str = r#"<role>
 You are a preference extraction assistant for Kage, a desktop AI tool.
@@ -91,29 +110,29 @@ You are a preference extraction assistant for Kage, a desktop AI tool.
 
 <context>
 The user has opted in to "Auto-Steering" in their settings because they want Kage to remember their preferences across sessions. This document will be shown to the user and they can edit or delete it at any time. This is a user-requested personalization feature.
+
+The document is injected at the start of EVERY session, so it must be short. Every word costs tokens on every session.
 </context>
 
 <instructions>
-Review the conversation below and produce a concise markdown document summarizing what you've learned about the user. Extract information from:
-1. Direct statements ("My name is...", "I prefer...", "I work on...")
-2. Responses to questions (e.g., if asked "What's your name?" and they reply with a name)
-3. Implicit preferences (brief vs detailed messages, technical level, etc.)
+Produce a terse markdown profile of DURABLE facts about the user: who they are, how they want Kage to respond, and what they generally work on.
 
-Produce a markdown document with these sections (omit any section where nothing was found):
+Keep:
+- Identity and role (name, pronouns, job, team), one line each.
+- Stable response preferences (tone, length, format, things to avoid).
+- Broad domains of expertise, named in a few words ("PKI / X.509", "Rust", "AWS pricing").
+- Explicit standing instructions for Kage.
 
-## About the User
-(Name, pronouns, role, context — 2-4 bullet points max)
+Drop, never record:
+- Task content: facts, figures, limits, quotas, API names, command output, document titles, URLs, specific projects or tickets.
+- Anything learned while answering a question rather than about the user.
+- One-off requests and anything unlikely to matter next week.
+- Examples, quotes, and explanations of why.
 
-## Communication Preferences
-(How they like to be addressed, response style, detail level — 2-4 bullet points max)
-
-## Interests & Expertise
-(Topics, technologies, domains they work in — 2-4 bullet points max)
-
-## Kage Behavior
-(Any explicit instructions or preferences for how Kage should respond — 2-4 bullet points max)
-
-Only include information clearly stated or strongly implied. If very little information is available, output a minimal document with just what you found.
+Format, strictly:
+- Sections in this order, omitting any that are empty: `## About the User`, `## Communication Preferences`, `## Interests & Expertise`, `## Kage Behavior`.
+- At most 4 bullets per section. Each bullet is one fragment of at most 20 words. No sub-bullets.
+- Whole document under 1500 characters. Shorter is better.
 
 Respond with only the markdown document. No preamble, no explanation.
 
@@ -193,7 +212,13 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
             if turns.len() == max_turns {
                 turns.pop_front();
             }
-            turns.push_back(format!("{}: {}", role, text_parts.join("\n")));
+            let cap = if role == "User" {
+                MAX_USER_TURN_CHARS
+            } else {
+                MAX_ASSISTANT_TURN_CHARS
+            };
+            let joined = text_parts.join("\n");
+            turns.push_back(format!("{}: {}", role, truncate_at_word(&joined, cap)));
         }
     }
 
@@ -242,8 +267,8 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
         full_prompt
     } else {
         format!(
-            "{}\n\n---\n\n<existing_preferences>\nMerge new findings into this existing document. Retain all critical personal information (name, role, etc.) even if not mentioned in the new conversation. Add or update sections as needed.\n\n{}\n</existing_preferences>",
-            full_prompt, existing_body.trim()
+            "{}\n\n---\n\n<existing_preferences>\nThis is the current document. Rewrite it from scratch rather than appending: keep identity facts (name, role) and still-valid preferences, fold in what the new conversation shows, merge near-duplicates into one bullet, generalize specifics into broad domains, and delete anything stale, task-specific, or not reinforced. When space is tight, drop the least durable bullets. The result must obey every format rule above, even where this document does not.\n\n{}\n</existing_preferences>",
+            full_prompt, compact_steering_doc(&existing_body)
         )
     };
 
@@ -305,7 +330,15 @@ pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Resul
         fs::create_dir_all(parent)?;
     }
 
-    let content = format!("{}{}", auto_steering_header(), cleaned.trim());
+    let compacted = compact_steering_doc(&cleaned);
+    if compacted.len() < cleaned.trim().len() {
+        info!(
+            "Auto-steering: compacted extraction reply {} -> {} bytes",
+            cleaned.trim().len(),
+            compacted.len()
+        );
+    }
+    let content = format!("{}{}", auto_steering_header(), compacted);
     fs::write(&auto_path, &content)?;
 
     info!(
@@ -457,7 +490,7 @@ fn strip_code_fences(text: &str) -> String {
 }
 
 /// Strip the HTML header comment from the steering document content.
-fn strip_header_comment(text: &str) -> String {
+pub fn strip_header_comment(text: &str) -> String {
     let trimmed = text.trim();
     if trimmed.starts_with("<!--") {
         if let Some(end_pos) = trimmed.find("-->") {
@@ -465,6 +498,72 @@ fn strip_header_comment(text: &str) -> String {
         }
     }
     trimmed.to_string()
+}
+
+/// Cut `text` to at most `max` bytes including the trailing `…`, backing up
+/// to a char boundary and then to the last whitespace so words aren't
+/// split. Output never exceeds `max`, so re-truncating is a no-op.
+fn truncate_at_word(text: &str, max: usize) -> String {
+    if text.len() <= max {
+        return text.to_string();
+    }
+    let mut end = max.saturating_sub('…'.len_utf8());
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let cut = &text[..end];
+    let cut = match cut.rfind(char::is_whitespace) {
+        // Don't back up so far that one long token eats most of the line.
+        Some(i) if i > end / 2 => &cut[..i],
+        _ => cut,
+    };
+    format!("{}…", cut.trim_end())
+}
+
+/// Deterministic size bound on a steering document body. The prompt asks
+/// the model to stay small, but models drift, and the merge pass feeds the
+/// previous doc back in — without a hard cap the doc only ever grows.
+///
+/// Headings are kept; at most `MAX_LINES_PER_SECTION` content lines per
+/// heading (earlier lines win — the prompt orders by importance); each line
+/// cut to `MAX_LINE_CHARS`; blank lines dropped; and once the body would
+/// exceed `MAX_DOC_CHARS`, everything after is dropped. A heading is only
+/// emitted once one of its lines fits, so no empty sections survive.
+pub fn compact_steering_doc(body: &str) -> String {
+    let mut out = String::with_capacity(body.len().min(MAX_DOC_CHARS + 64));
+    let mut pending_heading: Option<&str> = None;
+    let mut lines_in_section = 0usize;
+
+    for raw in body.lines() {
+        let line = raw.trim_end();
+        if line.trim().is_empty() {
+            continue;
+        }
+        if line.trim_start().starts_with('#') {
+            pending_heading = Some(line.trim());
+            lines_in_section = 0;
+            continue;
+        }
+        if lines_in_section >= MAX_LINES_PER_SECTION {
+            continue;
+        }
+        let line = truncate_at_word(line, MAX_LINE_CHARS);
+        let heading_cost = pending_heading.map_or(0, |h| h.len() + 2);
+        if out.len() + heading_cost + line.len() + 1 > MAX_DOC_CHARS {
+            break;
+        }
+        if let Some(h) = pending_heading.take() {
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str(h);
+            out.push('\n');
+        }
+        out.push_str(&line);
+        out.push('\n');
+        lines_in_section += 1;
+    }
+    out.trim_end().to_string()
 }
 
 #[cfg(test)]
@@ -624,5 +723,106 @@ mod tests {
         }
         // At the threshold, should trigger (first time — no cooldown yet)
         assert!(tick_message_counter());
+    }
+
+    #[test]
+    fn truncate_at_word_leaves_short_text_alone() {
+        assert_eq!(truncate_at_word("short line", 100), "short line");
+    }
+
+    #[test]
+    fn truncate_at_word_cuts_on_whitespace_and_marks_cut() {
+        let out = truncate_at_word("alpha beta gamma delta", 13);
+        assert_eq!(out, "alpha beta…");
+    }
+
+    #[test]
+    fn truncate_at_word_never_splits_a_codepoint() {
+        // 'é' is 2 bytes; a cap landing mid-codepoint must back up, not panic.
+        let s = "é".repeat(50);
+        let out = truncate_at_word(&s, 7);
+        assert!(out.ends_with('…'));
+        assert!(out.trim_end_matches('…').chars().all(|c| c == 'é'));
+    }
+
+    #[test]
+    fn compact_keeps_a_small_doc_verbatim() {
+        let doc = "## About the User\n- Sam, PM\n\n## Kage Behavior\n- Be brief";
+        assert_eq!(compact_steering_doc(doc), doc);
+    }
+
+    #[test]
+    fn compact_caps_lines_per_section() {
+        let mut doc = String::from("## Interests & Expertise\n");
+        for i in 0..20 {
+            doc.push_str(&format!("- topic {}\n", i));
+        }
+        let out = compact_steering_doc(&doc);
+        assert_eq!(
+            out.lines().filter(|l| l.starts_with("- ")).count(),
+            MAX_LINES_PER_SECTION
+        );
+        assert!(out.contains("- topic 0"), "earlier lines win");
+        assert!(!out.contains("- topic 19"));
+    }
+
+    #[test]
+    fn compact_bounds_the_observed_runaway_doc() {
+        // Shape of the real regression: few sections, each holding a handful
+        // of 1-2KB run-on bullets of task trivia. Must land under the cap.
+        let wall = "Deep PKI/X.509 rate limits, quotas and API surface; ".repeat(40);
+        let mut doc = String::new();
+        for h in [
+            "About the User",
+            "Communication Preferences",
+            "Interests & Expertise",
+            "Kage Behavior",
+        ] {
+            doc.push_str(&format!("## {}\n", h));
+            for _ in 0..6 {
+                doc.push_str(&format!("- {}\n", wall));
+            }
+            doc.push('\n');
+        }
+        assert!(
+            doc.len() > 18_000,
+            "precondition: input resembles the 18KB doc"
+        );
+        let out = compact_steering_doc(&doc);
+        assert!(out.len() <= MAX_DOC_CHARS, "got {} bytes", out.len());
+        assert!(out.lines().all(|l| l.len() <= MAX_LINE_CHARS));
+        assert!(
+            out.starts_with("## About the User"),
+            "identity section survives"
+        );
+    }
+
+    #[test]
+    fn compact_drops_headings_with_no_room_for_content() {
+        // ~240-byte lines, 5 per section: A and B fill ~2400 of the 2500
+        // budget, so C's first line can't fit.
+        let filler = format!("- {}\n", "x ".repeat(119));
+        let mut doc = String::new();
+        for h in ["A", "B", "C"] {
+            doc.push_str(&format!("## {}\n", h));
+            for _ in 0..5 {
+                doc.push_str(&filler);
+            }
+        }
+        let out = compact_steering_doc(&doc);
+        assert!(out.contains("## B"));
+        assert!(
+            !out.contains("## C"),
+            "heading with no room for content is dropped"
+        );
+        assert!(!out.lines().last().unwrap_or("").starts_with('#'));
+    }
+
+    #[test]
+    fn compact_is_idempotent() {
+        let wall = "word ".repeat(400);
+        let doc = format!("## A\n- {}\n- {}\n## B\n- {}\n", wall, wall, wall);
+        let once = compact_steering_doc(&doc);
+        assert_eq!(compact_steering_doc(&once), once);
     }
 }
