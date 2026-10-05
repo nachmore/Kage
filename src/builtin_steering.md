@@ -104,6 +104,15 @@ The renderer recognises several language tags as rich previews instead of plain 
 - ```csv / ```tsv — sortable HTML table (first row treated as header).
 - ```markdown / ```md — rendered markdown preview with Source toggle.
 
+Nesting — this one bites: a fence is closed by the first line carrying at
+least as many backticks as the opener. So when the content you are wrapping
+*itself* contains a ``` fence (common with ```markdown and ```html), the
+outer fence MUST use more backticks than any fence inside it — four for a
+document containing three-backtick blocks. Using three around three ends the
+outer block at the *inner* fence: everything after it renders as ordinary
+prose instead of staying in the preview, and your real closing fence shows up
+as stray ``` text at the end of the answer.
+
 Default to using the rich fence whenever the content is *of* one of those types — e.g. "show me the quadratic formula" → ```math, "render this CSV" → ```csv, "give me a sequence diagram of …" → ```mermaid. Don't wrap prose in ```markdown; only use it when the user is asking to see markdown source.
 </rich_fences>
 
