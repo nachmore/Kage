@@ -399,14 +399,41 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         });
     }
 
+    const sessionOf = (q) => q.notification?.params?.sessionId || '';
+
+    /**
+     * Bring a queued request for `sessionId` forward when its session becomes
+     * the visible one. Without this, a request queued behind another
+     * session's (hidden) prompt stayed invisible on switching back, and only
+     * surfaced once that other prompt was answered — in the wrong session's
+     * view. The currently-hidden request is requeued by showPermissionModal.
+     * Returns true if one was shown.
+     */
+    function showQueuedForSession(sessionId) {
+        if (!sessionId) return false;
+        const modal = document.getElementById('permissionModal');
+        if (currentPermissionRequest && isShowing(modal)) return false;
+        const idx = _permissionQueue.findIndex((q) => sessionOf(q) === sessionId);
+        if (idx < 0) return false;
+        const [next] = _permissionQueue.splice(idx, 1);
+        showPermissionModal(next.notification, next.toolName);
+        return true;
+    }
+
     return {
         init,
         show: showPermissionModal,
         hide: hidePermissionModal,
         showForExtensionTool,
+        showQueuedForSession,
         /** Get the current permission request (for session-scoping in chat) */
         getCurrentRequest() {
             return currentPermissionRequest;
+        },
+        /** True if the current or any queued request belongs to `sessionId`. */
+        hasRequestForSession(sessionId) {
+            if (currentPermissionRequest?.sessionId === sessionId) return true;
+            return _permissionQueue.some((q) => sessionOf(q) === sessionId);
         },
     };
 }

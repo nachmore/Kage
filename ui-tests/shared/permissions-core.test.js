@@ -208,3 +208,47 @@ describe('permissions-core keyboard handling across session switches', () => {
         await expect(answer).resolves.toBe(false);
     });
 });
+
+describe('permissions-core queued request per session', () => {
+    let modal;
+    let handler;
+
+    beforeEach(() => {
+        modal = mountModal();
+        handler = createPermissionHandler(vi.fn(async () => undefined), { listen: vi.fn() });
+        handler.init();
+    });
+
+    it('brings a queued request forward when its session becomes active', async () => {
+        await handler.show(acpRequest(1, 'A'));
+        modal.style.display = 'none'; // user switched to B
+        await handler.show(acpRequest(2, 'B')); // A is requeued behind B
+        expect(handler.getCurrentRequest().id).toBe(2);
+
+        // Back to A: hide B's, then A's queued request must surface.
+        modal.style.display = 'none';
+        expect(handler.showQueuedForSession('A')).toBe(true);
+        await flush();
+        expect(handler.getCurrentRequest().id).toBe(1);
+        expect(modal.style.display).toBe('flex');
+        // B's request was requeued, not dropped.
+        expect(handler.hasRequestForSession('B')).toBe(true);
+    });
+
+    it('does nothing while another request is visible or none is queued', async () => {
+        await handler.show(acpRequest(1, 'A'));
+        expect(handler.showQueuedForSession('A')).toBe(false); // visible
+        modal.style.display = 'none';
+        expect(handler.showQueuedForSession('C')).toBe(false); // nothing queued
+        expect(handler.showQueuedForSession(null)).toBe(false);
+        expect(handler.getCurrentRequest().id).toBe(1);
+    });
+
+    it('hasRequestForSession sees current and queued requests', async () => {
+        await handler.show(acpRequest(1, 'A'));
+        await handler.show(acpRequest(2, 'B')); // queued behind visible A
+        expect(handler.hasRequestForSession('A')).toBe(true);
+        expect(handler.hasRequestForSession('B')).toBe(true);
+        expect(handler.hasRequestForSession('C')).toBe(false);
+    });
+});

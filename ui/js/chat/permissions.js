@@ -15,7 +15,17 @@ waitForTauri(({ invoke, appWindow }) => {
         // Store session ID on the modal element for session-scoping
         onShow(modal) {
             const req = handler.getCurrentRequest();
-            if (req) modal.dataset.sessionId = req.sessionId;
+            if (!req) return;
+            modal.dataset.sessionId = req.sessionId;
+            // A queued request advanced (another prompt was answered) while
+            // the user is viewing a different session: keep it pending and
+            // hidden until its session is shown. Runs in the same task as the
+            // display flip, so it never paints. Session-less prompts
+            // (extension tools) are window-global and always show.
+            const active = window._chatApp?.activeSessionId;
+            if (req.sessionId && active && req.sessionId !== active) {
+                modal.style.display = 'none';
+            }
         },
         onHide(modal) {
             if (modal) modal.dataset.sessionId = '';
@@ -44,19 +54,21 @@ waitForTauri(({ invoke, appWindow }) => {
         onSessionSwitch(newSessionId) {
             const modal = document.getElementById('permissionModal');
             const req = handler.getCurrentRequest();
-            if (!modal || !req) return;
-            if (req.sessionId !== newSessionId) {
-                // Different session — hide but don't dismiss (keep the request pending)
-                modal.style.display = 'none';
-            } else {
-                // Same session — show it again
+            if (!modal) return;
+            if (req && (!req.sessionId || req.sessionId === newSessionId)) {
+                // Same session (or a session-less extension prompt) — show it
                 modal.style.display = 'flex';
+                return;
             }
+            // Different session — hide but don't dismiss (keep the request pending)
+            if (req) modal.style.display = 'none';
+            // A request for the session we're switching to may be queued
+            // behind the one we just hid: bring it forward.
+            handler.showQueuedForSession(newSessionId);
         },
-        /** Check if there's a pending request for a given session */
+        /** Check if there's a pending request (current or queued) for a given session */
         hasPendingRequest(sessionId) {
-            const req = handler.getCurrentRequest();
-            return req && req.sessionId === sessionId;
+            return handler.hasRequestForSession(sessionId);
         },
         /** Show the permission modal for an extension tool call. Returns promise<boolean>. */
         showForExtensionTool: handler.showForExtensionTool,
