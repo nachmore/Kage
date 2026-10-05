@@ -68,7 +68,10 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     } catch {}
     setTerminatorMode(isTerminator);
 
-    // Render sidebar mascot and title — extracted so it can be refreshed on config change
+    // Render sidebar mascot and title — extracted so it can be refreshed on config change.
+    // The previous controller must be destroyed on refresh: clearing the
+    // container only detaches its <img>s, its periodic timers keep running.
+    let sidebarMascotCtrl = null;
     async function refreshSidebarMascot() {
         const title = document.querySelector('.sidebar-title');
         const mascot = document.getElementById('sidebarMascot');
@@ -82,6 +85,8 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             }
         }
         if (mascot) {
+            sidebarMascotCtrl?.destroy();
+            sidebarMascotCtrl = null;
             mascot.innerHTML = '';
             if (isTerminator) {
                 const svg = await createMascot({
@@ -92,7 +97,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                 mascot.appendChild(svg);
             } else {
                 const { outlineColor, invert } = getMascotThemeSettings();
-                createMascotController(mascot, {
+                sidebarMascotCtrl = createMascotController(mascot, {
                     size: 28,
                     idle: ANIMATIONS.waving,
                     periodic: ANIMATIONS.waving,
@@ -202,7 +207,10 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                             desktopViewer.restoreInputArea();
                             app.renderSessionList();
                             if (app.activeSessionId) {
-                                app.selectSession(app.activeSessionId);
+                                // The external viewer painted over the
+                                // transcript without changing activeSessionId,
+                                // so force a re-render of the same id.
+                                app.selectSession(app.activeSessionId, { force: true });
                             }
                         }
                     });

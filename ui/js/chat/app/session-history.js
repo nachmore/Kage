@@ -10,8 +10,22 @@ export function createSessionHistoryMixin(dependencies) {
         formatDuration,
     } = dependencies;
     return class {
-        async selectSession(sessionId) {
-            if (sessionId === this.activeSessionId) return;
+        /**
+         * @param {string} sessionId
+         * @param {{force?: boolean}} [opts] `force` re-renders the session
+         *   even when it's already active (e.g. after the Other Agents view
+         *   painted over the transcript). The ACP switch is skipped then —
+         *   the backend is already on this session.
+         */
+        async selectSession(sessionId, { force = false } = {}) {
+            const sameSession = sessionId === this.activeSessionId;
+            if (sameSession && !force) return;
+
+            // Overlapping selections resolve their IPCs in any order; the
+            // token lets a superseded one bail instead of painting its
+            // transcript / adopting its id over the newer selection.
+            const gen = this._nextSelectGen();
+            const isStale = () => gen !== this._selectGen || this.activeSessionId !== sessionId;
 
             // Switching AWAY from a mid-stream session: detach the viewport
             // without touching the turn. The agent keeps working; the
@@ -23,12 +37,23 @@ export function createSessionHistoryMixin(dependencies) {
                 this.currentStreamingMessage = null;
                 this.currentStreamingContent = '';
                 this.isWaitingForResponse = false;
+                // Drop stop-mode; the forced same-session path below may
+                // return without touching the input again.
+                this.updateInputState();
             }
 
             // Mark as seen (removes the "new" indicator)
             this._seenSessionIds.add(sessionId);
 
             this.activeSessionId = sessionId;
+            if (!sameSession) {
+                // The old pin is no longer ours: without this, the old
+                // session's MESSAGE_COMPLETE still matches `currentAcpSessionId`
+                // and its recovery-adoption branch hijacks `activeSessionId`
+                // mid-switch (making this selection stale with the input left
+                // on "connecting"). Re-set once the new session is pinned.
+                this.currentAcpSessionId = null;
+            }
             // Entering the session consumes its unread badge (if any).
             this.streamRegistry.markRead(sessionId);
             this.renderSessionList();
@@ -42,10 +67,13 @@ export function createSessionHistoryMixin(dependencies) {
             }
 
             // Load and display session messages from files immediately
+            let rendered = Promise.resolve();
             try {
                 const sessionData = await this.invoke('load_session', { sessionId });
-                this.displaySession(sessionData);
+                if (isStale()) return;
+                rendered = this.displaySession(sessionData);
             } catch (error) {
+                if (isStale()) return;
                 console.error('Failed to load session files:', error);
                 this.showError(errLabel(t('chat.error.failed_load_session'), error));
             }
@@ -61,7 +89,12 @@ export function createSessionHistoryMixin(dependencies) {
                     label: this.windowLabel,
                     sessionId,
                 }).catch(() => {});
-                await this._attachToLiveStream(sessionId);
+                // History renders in rAF batches; attaching before the last
+                // batch lands would bury the live bubble mid-transcript.
+                await rendered;
+                if (isStale()) return;
+                await this._attachToLiveStream(sessionId, isStale);
+                if (isStale()) return;
                 this.isConnected = true;
                 this.updateConnectionStatus();
                 this.elements.chatInput.disabled = false;
@@ -70,14 +103,46 @@ export function createSessionHistoryMixin(dependencies) {
                 return;
             }
 
+            // Forced re-render of the already-active session: don't churn
+            // switch_acp_session if the backend is already pinned for this
+            // view (`currentAcpSessionId` is nulled on every transition and
+            // only re-set once a pin lands) or the original selection's
+            // switch is still in flight (it will finish the job). If the
+            // original bailed before switching (superseded by this forced
+            // call), fall through and switch.
+            if (
+                sameSession &&
+                (this.currentAcpSessionId || this._pendingSwitchSessionId === sessionId)
+            ) {
+                return;
+            }
+
             // Show connecting state in the input
             this.elements.chatInput.disabled = true;
             this.elements.chatInput.placeholder = t('chat.placeholder.connecting');
             this.elements.sendBtn.disabled = true;
 
+            // The switch result is judged by its own token, not the render
+            // token: a forced same-session re-render bumps `_selectGen` but
+            // relies on this in-flight switch to re-enable the input.
+            this._switchGen = (this._switchGen || 0) + 1;
+            const switchGen = this._switchGen;
+            this._pendingSwitchSessionId = sessionId;
+            const switchStale = () => {
+                if (switchGen !== this._switchGen) return true;
+                this._pendingSwitchSessionId = null;
+                return this.activeSessionId !== sessionId;
+            };
+
             // Switch ACP session in parallel
             try {
                 const adoptedId = await this.invoke('switch_acp_session', { sessionId });
+                if (switchStale()) {
+                    // The backend pinned this window to `adoptedId`; a newer
+                    // selection may already have pinned the right one.
+                    this._repinWindowSession();
+                    return;
+                }
                 this.currentAcpSessionId = adoptedId;
                 console.log('ACP session switched to:', adoptedId);
                 this.isConnected = true;
@@ -87,6 +152,8 @@ export function createSessionHistoryMixin(dependencies) {
                 this.elements.sendBtn.disabled = false;
                 this.elements.chatInput.focus();
             } catch (error) {
+                // A stale failure must not lock the input of the newer session.
+                if (switchStale()) return;
                 console.error('Failed to switch ACP session:', error);
                 const msg = this.formatError(error);
                 const isLocked =
@@ -117,7 +184,7 @@ export function createSessionHistoryMixin(dependencies) {
          * backgrounded, then lets the normal chunk stream continue rendering
          * from that point.
          */
-        async _attachToLiveStream(sessionId) {
+        async _attachToLiveStream(sessionId, isStale = () => false) {
             // Restore tool chips tracked while backgrounded.
             const entry = this.streamRegistry.get(sessionId);
             if (entry) {
@@ -142,6 +209,8 @@ export function createSessionHistoryMixin(dependencies) {
             // complete listener consumed the registry entry. displaySession
             // already painted the final text from disk in that case.
             if (!this.streamRegistry.isStreaming(sessionId)) return;
+            // The user may have switched elsewhere during the snapshot await.
+            if (isStale()) return;
 
             // The user's own message isn't on disk until the turn completes —
             // paint it from the in-flight record so switching away and back
@@ -173,7 +242,43 @@ export function createSessionHistoryMixin(dependencies) {
             this.scrollToBottom(true);
         }
 
+        /** Bump and return the selection token (see selectSession). */
+        _nextSelectGen() {
+            this._selectGen = (this._selectGen || 0) + 1;
+            return this._selectGen;
+        }
+
+        /** Re-pin the backend window→session map to the current view. */
+        _repinWindowSession() {
+            if (!this.activeSessionId) return;
+            this.invoke('set_window_session', {
+                label: this.windowLabel,
+                sessionId: this.activeSessionId,
+            }).catch(() => {});
+        }
+
+        /**
+         * Stop an in-flight batched history render and settle its promise
+         * (so awaiters don't hang on a render that will never finish).
+         */
+        _cancelDisplaySessionRender() {
+            if (this._displaySessionRafId) {
+                cancelAnimationFrame(this._displaySessionRafId);
+                this._displaySessionRafId = null;
+            }
+            const resolve = this._displaySessionResolve;
+            this._displaySessionResolve = null;
+            resolve?.();
+        }
+
+        /**
+         * Render a session transcript. Returns a promise that resolves once
+         * the last rAF batch has landed (or the render is superseded).
+         */
         displaySession(sessionData) {
+            // Cancel any previous in-flight batch render before clearing the
+            // area, so its remaining batches can't append into this view.
+            this._cancelDisplaySessionRender();
             // Loading/switching a session starts the user at the bottom.
             this._autoScrollEnabled = true;
             this.messages = [];
@@ -187,7 +292,7 @@ export function createSessionHistoryMixin(dependencies) {
 
             if (!sessionData.messages || sessionData.messages.length === 0) {
                 this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.empty_session')}</div>`;
-                return;
+                return Promise.resolve();
             }
 
             // Phase 1: parse messages into lightweight render instructions (no DOM work)
@@ -195,7 +300,7 @@ export function createSessionHistoryMixin(dependencies) {
 
             if (fullQueue.length === 0) {
                 this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.empty_session')}</div>`;
-                return;
+                return Promise.resolve();
             }
 
             // Cap the initial render: a long session (hundreds–thousands of
@@ -214,11 +319,11 @@ export function createSessionHistoryMixin(dependencies) {
             // Phase 2: render in batches to avoid blocking the main thread
             const BATCH_SIZE = 10;
             let idx = 0;
-            // Cancel any previous in-flight batch render
-            if (this._displaySessionRafId) {
-                cancelAnimationFrame(this._displaySessionRafId);
-                this._displaySessionRafId = null;
-            }
+            let resolveRender;
+            const done = new Promise((resolve) => {
+                resolveRender = resolve;
+            });
+            this._displaySessionResolve = resolveRender;
 
             const renderBatch = () => {
                 const end = Math.min(idx + BATCH_SIZE, renderQueue.length);
@@ -238,9 +343,18 @@ export function createSessionHistoryMixin(dependencies) {
                             stripKageTags(session.title) || t('chat.session.fallback_title');
                     }
                     this.scrollToBottom(true);
-                    if (this.messages.length > 0) {
+                    // Mid-stream: chips belong after the live reply, which
+                    // MESSAGE_COMPLETE will add — not above the bubble.
+                    const live =
+                        this.isWaitingForResponse ||
+                        this.streamRegistry?.isStreaming(this.activeSessionId);
+                    if (this.messages.length > 0 && !live) {
                         this.showSuggestionChips();
                     }
+                    if (this._displaySessionResolve === resolveRender) {
+                        this._displaySessionResolve = null;
+                    }
+                    resolveRender();
                 }
             };
 
@@ -252,6 +366,7 @@ export function createSessionHistoryMixin(dependencies) {
             }
 
             renderBatch();
+            return done;
         }
 
         /**
