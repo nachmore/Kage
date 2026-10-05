@@ -388,10 +388,7 @@ pub async fn rename_session<R: tauri::Runtime>(
     }
 
     // Invalidate session list cache
-    {
-        let mut session_cache = features.session_cache.lock_or_recover();
-        *session_cache = None;
-    }
+    invalidate_session_cache(&features.session_cache);
 
     // Refresh window titles for any window pinned to this session.
     let labels: Vec<String> = ui
@@ -553,9 +550,7 @@ pub fn maybe_generate_ai_title<R: tauri::Runtime>(
 
         // Invalidate the in-memory session list cache so the next
         // list_sessions reads the new title.
-        if let Ok(mut sc) = session_cache.lock() {
-            *sc = None;
-        }
+        invalidate_session_cache(&session_cache);
 
         // Emit session_changed so existing chat-host listeners update
         // window titles, sidebars, and chat headers without us having

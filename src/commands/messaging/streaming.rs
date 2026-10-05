@@ -236,10 +236,7 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
         // available — fresh sessions get their first real title here.
         // Invalidate the session cache first so the JSONL re-extract
         // sees the new content rather than the cached "New Chat".
-        {
-            let mut cache = session_cache_for_send.lock_or_recover();
-            *cache = None;
-        }
+        crate::commands::sessions::invalidate_session_cache(&session_cache_for_send);
         crate::commands::sessions::update_window_title(
             &app_for_send,
             &config_for_title,

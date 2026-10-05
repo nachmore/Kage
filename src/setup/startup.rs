@@ -402,7 +402,8 @@ fn send_startup_steering(
         )
     };
     info!("Sending steering message ({} chars)", steering_msg.len());
-    if let Err(e) = client.send_chat_streaming(session_id, &steering_msg, None) {
+    // Muted: the steering "ack" must not stream into the launch window.
+    if let Err(e) = client.send_chat_streaming_background(session_id, &steering_msg, false) {
         error!("Failed to send steering message: {}", e);
     }
 }

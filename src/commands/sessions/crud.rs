@@ -374,8 +374,10 @@ static SCAN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// watcher flush / delete can't be served after it.
 static CACHE_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Clear the session-list cache and fence off any scan in flight.
-fn invalidate_session_cache(cache: &std::sync::Mutex<Option<SessionCache>>) {
+/// Clear the session-list cache and fence off any scan in flight. Every
+/// invalidation must go through here: a bare `*cache = None` skips the
+/// epoch bump, so a scan already in flight re-caches the stale listing.
+pub fn invalidate_session_cache(cache: &std::sync::Mutex<Option<SessionCache>>) {
     let mut cache = cache.lock_or_recover();
     CACHE_EPOCH.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     *cache = None;

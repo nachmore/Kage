@@ -136,7 +136,11 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     send_message_streaming: 'agent',
     cancel_generation: 'agent',
     send_steering_message: 'agent',
-    send_extension_tool_steering: 'agent',
+    // Host-only: the backend replays the latest block into every new and
+    // recovered session, so an extension-supplied block would persist into
+    // sessions it never touched. Only extension-tool-controller.js (host
+    // code) sends it, built from the validated tool definitions.
+    send_extension_tool_steering: null,
     extension_tool_response: 'agent',
     open_chat_with_message: 'agent',
     get_available_models: 'agent',

@@ -177,9 +177,10 @@ fn create_session<R: tauri::Runtime>(
         crate::commands::system::STEERING_MSG_PREFIX,
         parts.join("\n\n---\n\n")
     );
-    let _ = client.send_chat_streaming(&session_id, &steering_msg, None);
+    // Muted: the steering "ack" is not a turn the user asked for.
+    let _ = client.send_chat_streaming_background(&session_id, &steering_msg, false);
 
-    *session_cache.lock_or_recover() = None;
+    super::invalidate_session_cache(&session_cache);
     if let Ok(mut sessions) = window_sessions.lock() {
         sessions.insert(window_label.clone(), session_id.clone());
     }
