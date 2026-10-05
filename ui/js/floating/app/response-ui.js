@@ -74,10 +74,10 @@ export const ResponseUiMethods = {
         if (speakBtn) {
             speakBtn.onclick = () => {
                 if (this.speech && this.currentResponse) {
-                    // Stop any existing speech before starting new one
+                    // Stop any existing speech before starting new one.
+                    // speakText ignores the read-back gate (explicit request).
                     this.speech.cancelSpeech();
-                    this.speech.usedSpeechForLastMessage = true;
-                    this.speech.speakResponse(this.currentResponse);
+                    this.speech.speakText(this.currentResponse);
                 }
             };
         }

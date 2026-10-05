@@ -11,6 +11,7 @@ import { WINDOW } from './shared/window-labels.js';
 import { getWindowSessionOrNull } from './shared/session-resolve.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { interceptConsole } from './shared/kage-log.js';
+import { escapeHtml } from './shared/tool-utils.js';
 
 // Mirror console.warn/error + uncaught errors into the app log — this
 // window previously logged only to the WebView console, so failures
@@ -236,7 +237,9 @@ console.log(
             }
             const el = document.createElement('div');
             el.className = 'action-item';
-            el.innerHTML = `<span class="action-icon">${action.icon || '⚡'}</span><span class="action-label">${action.label}</span>`;
+            // Labels/icons come from user-editable (importable) macros and
+            // quick actions — escape before injecting as HTML.
+            el.innerHTML = `<span class="action-icon">${escapeHtml(action.icon || '⚡')}</span><span class="action-label">${escapeHtml(action.label)}</span>`;
             el.addEventListener('click', () => {
                 if (action._macro) {
                     executeMacro(action._macro);

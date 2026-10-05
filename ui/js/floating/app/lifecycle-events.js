@@ -380,9 +380,10 @@ export const LifecycleEventsMethods = {
                                 actions,
                                 quickActionsContainer,
                                 (promptTemplate) => {
+                                    // Replacer fn so `$&`, `$$`, `$'` in the selection stay literal.
                                     const prompt = promptTemplate.replace(
                                         /\{text\}/g,
-                                        this.lastSelection
+                                        () => this.lastSelection
                                     );
                                     this.sendChatMessage(prompt, { skipSelection: true });
                                 }
