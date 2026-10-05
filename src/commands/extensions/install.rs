@@ -45,10 +45,14 @@ pub async fn install_extension_from_path<R: tauri::Runtime>(
     Ok(installed.item)
 }
 
+/// Uninstall an item. `rollback` is set only by a declined (or failed)
+/// install prompt; without it this is always a real uninstall, so a parked
+/// upgrade left behind by an abandoned prompt can't swallow one.
 #[tauri::command]
 pub async fn uninstall_extension<R: tauri::Runtime>(
     id: String,
     kind: String,
+    rollback: Option<bool>,
     features: State<'_, FeatureServices>,
     app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
@@ -57,11 +61,31 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
     // "invalid extension id" rather than a generic "uninstall failed").
     extensions::validate_extension_id(&id).map_err(|e| format!("Invalid extension id: {}", e))?;
 
-    // A declined upgrade prompt rolls back through here. Drop only the
-    // parked files: the previous version, its settings, grant and stored
-    // data all stay, and nothing loaded changed so there's nothing to emit.
-    if extensions::discard_pending(&id, &kind).map_err(|e| format!("Uninstall failed: {}", e))? {
-        return Ok(());
+    if rollback.unwrap_or(false) {
+        // A declined upgrade: drop only the parked files. The previous
+        // version, its settings, grant and stored data all stay, and nothing
+        // loaded changed so there's nothing to emit.
+        if extensions::discard_pending(&id, &kind)
+            .map_err(|e| format!("Uninstall failed: {}", e))?
+        {
+            return Ok(());
+        }
+        // Nothing parked, yet the item was approved before this stage: its
+        // parked copy was superseded (e.g. an auto-update swapped a version
+        // in while the prompt was open). Declining must not uninstall it.
+        if features
+            .config
+            .lock_or_recover()
+            .extension_grants
+            .contains_key(&id)
+        {
+            info!(
+                "Declined update for '{}' has no parked copy; keeping the installed version",
+                id
+            );
+            return Ok(());
+        }
+        // Otherwise this was a fresh install: roll it back fully below.
     }
 
     extensions::uninstall(&id, &kind).map_err(|e| format!("Uninstall failed: {}", e))?;
@@ -76,7 +100,7 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
 
     // Stored data is keyed only by id, so leaving it would hand an old
     // extension's tokens to any later extension installed under the same id.
-    // Safe now that a declined upgrade returns above instead of landing here.
+    // Safe now that a declined upgrade of an approved item returns above.
     if let Err(e) = super::files::purge_extension_data(&id) {
         warn!("Failed to remove stored data for '{}': {}", id, e);
     }

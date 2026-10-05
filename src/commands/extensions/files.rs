@@ -14,11 +14,15 @@ use super::*;
 /// keep extensions from escaping their own directory via `..` segments in
 /// the language code. The language argument is restricted to a small
 /// alphabet (letters, digits, hyphens) for the same reason.
+///
+/// `staged` (install prompt only) reads from an upgrade parked for approval,
+/// when there is one, since the live dir still holds the old version.
 #[tauri::command]
 pub async fn read_extension_locale(
     extension_id: String,
     kind: String,
     language: String,
+    staged: Option<bool>,
 ) -> Result<serde_json::Value, AppError> {
     extensions::validate_extension_id(&extension_id).map_err(|e| {
         AppError::keyed(
@@ -55,7 +59,12 @@ pub async fn read_extension_locale(
             &[("reason", &e.to_string())],
         )
     })?;
-    let ext_root = base.join(&extension_id);
+    let parked = if staged.unwrap_or(false) {
+        extensions::parked_upgrade_dir(&base, &extension_id)
+    } else {
+        None
+    };
+    let ext_root = parked.unwrap_or_else(|| base.join(&extension_id));
     let locales_dir = ext_root.join("_locales");
 
     // Try the requested language, then region-stripped form, then en. The

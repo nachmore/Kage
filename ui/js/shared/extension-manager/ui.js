@@ -19,6 +19,12 @@ function withRealHrefs(container) {
     return clone.innerHTML;
 }
 
+// Per-container count of formatMessage calls. renderMarkdown calls
+// formatMessage on every render, so a bump means the content was re-rendered.
+// Async decorators (Prism lazy-load, diagrams, app icons) change innerHTML
+// without bumping it, so they don't invalidate an in-flight formatter.
+const _formatGeneration = new WeakMap();
+
 const WIDGET_MIN_INTERVAL_MS = 1_000;
 const WIDGET_MAX_INTERVAL_MS = 24 * 3_600 * 1_000;
 const WIDGET_SLOW_RENDER_MS = 5_000;
@@ -536,7 +542,10 @@ export function installExtensionUiMethods(ExtensionManager) {
          * null to leave the content unchanged. During streaming we skip
          * formatters that haven't opted into live formatting.
          */ async formatMessage(container, context) {
-            if (!container || !this.extensions?.size) return;
+            if (!container) return;
+            const generation = (_formatGeneration.get(container) || 0) + 1;
+            _formatGeneration.set(container, generation);
+            if (!this.extensions?.size) return;
             const ctx = {
                 streaming: !!context?.streaming,
                 role: String(context?.role || ''),
@@ -550,16 +559,16 @@ export function installExtensionUiMethods(ExtensionManager) {
                 if (ctx.streaming && !ext.sandbox.formatterOptsInStreaming) continue;
                 try {
                     // renderMarkdown doesn't await us, so newer chunks can
-                    // land while the RPC is in flight. Remember what we sent
-                    // and drop the result if the container moved on —
+                    // land while the RPC is in flight. Drop the result if the
+                    // message was re-rendered (or cleared) meanwhile —
                     // otherwise a slow formatter rolls the message back.
-                    const snapshot = container.innerHTML;
                     const out = await ext.sandbox.call('formatMessage', {
                         html: withRealHrefs(container),
                         context: ctx,
                     });
                     if (out && typeof out.html === 'string') {
-                        if (container.innerHTML !== snapshot) continue;
+                        if (_formatGeneration.get(container) !== generation) continue;
+                        if (!container.hasChildNodes()) continue;
                         const frag = sanitizeExtensionHtml(out.html, 'rich');
                         // Replace the container's children with the sanitized
                         // fragment. We use replaceChildren so existing

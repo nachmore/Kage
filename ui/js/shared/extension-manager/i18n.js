@@ -76,8 +76,12 @@ export function resolveExtensionMessage(key, catalog, fallback, fallbackText = '
  * if the extension ships no `_locales/` or anything fails — the caller
  * is allowed to surface raw `__MSG_*__` tokens rather than block on the
  * locale read.
+ *
+ * `staged: true` reads a parked upgrade's catalog when one is waiting on the
+ * install prompt (the live dir still holds the old version); the backend
+ * falls back to the live dir otherwise.
  */
-export async function fetchExtensionLocaleViaInvoke(invoke, manifest) {
+export async function fetchExtensionLocaleViaInvoke(invoke, manifest, { staged = false } = {}) {
     try {
         const id = manifest?.id;
         if (!id) return { catalog: {}, fallback: {}, language: hostLanguage(), rtl: hostIsRtl() };
@@ -88,6 +92,7 @@ export async function fetchExtensionLocaleViaInvoke(invoke, manifest) {
                     extensionId: id,
                     kind,
                     language: code,
+                    ...(staged ? { staged: true } : {}),
                 });
                 return v && typeof v === 'object' ? v : null;
             } catch {
@@ -104,11 +109,12 @@ export async function fetchExtensionLocaleViaInvoke(invoke, manifest) {
  * e.g. the install-time permission prompt, which shows the extension's
  * name and description before the manager has loaded the extension.
  *
- * Returns the original manifest unchanged if anything fails.
+ * Returns the original manifest unchanged if anything fails. `opts.staged`
+ * is passed through to `fetchExtensionLocaleViaInvoke`.
  */
-export async function localizeManifestForPrompt(invoke, manifest) {
+export async function localizeManifestForPrompt(invoke, manifest, opts) {
     try {
-        const i18n = await fetchExtensionLocaleViaInvoke(invoke, manifest);
+        const i18n = await fetchExtensionLocaleViaInvoke(invoke, manifest, opts);
         return applyManifestI18n(manifest, i18n.catalog, i18n.fallback);
     } catch {
         return manifest;

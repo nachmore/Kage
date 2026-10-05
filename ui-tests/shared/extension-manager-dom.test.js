@@ -397,6 +397,58 @@ describe('ExtensionManager formatMessage', () => {
         expect(container.innerHTML).toContain('<p>ok</p>');
         expect(container.innerHTML).not.toContain('should not appear');
     });
+
+    it('still applies the result when an async decorator touched the container', async () => {
+        let container;
+        const sandbox = stubSandbox({
+            formatMessage: ({ html }) => {
+                // e.g. Prism lazy-loading a language pack mid-RPC.
+                container.querySelector('code').innerHTML = '<span>highlighted</span>';
+                return { html: html + '<p class="ext-annotation">preview</p>' };
+            },
+        });
+        sandbox.hasFormatter = true;
+        const mgr = makeManagerWithExtension({
+            extensionId: 'lp',
+            manifest: { id: 'lp', name: 'Link Preview', permissions: [] },
+            sandbox,
+        });
+        container = document.createElement('div');
+        container.innerHTML = '<pre><code>x = 1</code></pre>';
+        await mgr.formatMessage(container, { streaming: false });
+        expect(container.querySelector('.ext-annotation')?.textContent).toBe('preview');
+    });
+
+    it('drops a result that lands after the message was re-rendered', async () => {
+        let release;
+        const gate = new Promise((r) => {
+            release = r;
+        });
+        let calls = 0;
+        const sandbox = stubSandbox({
+            formatMessage: async ({ html }) => {
+                calls++;
+                if (calls === 1) await gate;
+                return { html: html + `<p class="ext-annotation">call ${calls}</p>` };
+            },
+        });
+        sandbox.hasFormatter = true;
+        sandbox.formatterOptsInStreaming = true;
+        const mgr = makeManagerWithExtension({
+            extensionId: 'lp',
+            manifest: { id: 'lp', name: 'Link Preview', permissions: [] },
+            sandbox,
+        });
+        const container = document.createElement('div');
+        container.innerHTML = '<p>chunk 1</p>';
+        const first = mgr.formatMessage(container, { streaming: true });
+        container.innerHTML = '<p>chunk 1 and 2</p>';
+        await mgr.formatMessage(container, { streaming: false });
+        release();
+        await first;
+        expect(container.textContent).toContain('chunk 1 and 2');
+        expect(container.querySelectorAll('.ext-annotation')).toHaveLength(1);
+    });
 });
 
 describe('ExtensionManager widget render', () => {

@@ -36,6 +36,10 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         cb(false);
     }
 
+    function isShowing(modal) {
+        return modal?.style.display === 'flex';
+    }
+
     async function showPermissionModal(notification, toolName) {
         const modal = document.getElementById('permissionModal');
         const toolTitleEl = document.getElementById('permissionToolTitle');
@@ -45,16 +49,26 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             return;
         }
 
-        // If a permission is pending, queue this one. Don't key on the
-        // modal's visibility: chat's onSessionSwitch hides it while the
-        // request stays pending, and overwriting it would orphan that
-        // request forever.
-        if (currentPermissionRequest) {
+        // If a permission is showing, queue this one.
+        if (currentPermissionRequest && isShowing(modal)) {
             _permissionQueue.push({ notification, toolName });
             console.log(
                 `[Permissions] Queued permission request (${_permissionQueue.length} in queue)`
             );
             return;
+        }
+
+        // Pending but hidden (chat's onSessionSwitch hides another session's
+        // request): show the new one, and put the hidden one back at the
+        // front of the queue rather than overwriting — and orphaning — it.
+        // A request mid-answer is already on its way out; don't requeue it.
+        const hidden = currentPermissionRequest;
+        if (hidden && !hidden.answering) {
+            _permissionQueue.unshift({
+                notification: { ...hidden.notification, extCallback: hidden.extCallback },
+                toolName: hidden.toolName,
+            });
+            console.log('[Permissions] Requeued a hidden request behind a new one');
         }
 
         const params = notification.params || {};
@@ -68,6 +82,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             toolName: toolName || null,
             isExtension: !!notification.extCallback,
             extCallback: notification.extCallback || null,
+            notification,
         };
 
         toolTitleEl.textContent = toolCall.title || t('shared.permission.unknown_tool');
@@ -130,6 +145,9 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         const hideIfStillCurrent = async () => {
             if (currentPermissionRequest === req) await hidePermissionModal();
         };
+        // An answer is in flight: a new request arriving now (after a session
+        // switch hid this one) must not requeue it.
+        req.answering = true;
 
         try {
             const policyTitle =
@@ -178,6 +196,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             await new Promise((r) => setTimeout(r, 100));
             await hideIfStillCurrent();
         } catch (error) {
+            // Still unanswered — the user can retry.
+            req.answering = false;
             console.error('Failed to send permission response:', error);
         }
     }
@@ -260,7 +280,10 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         document.addEventListener(
             'keydown',
             (e) => {
+                // A request hidden by a session switch must not swallow
+                // typing in the session the user is actually in.
                 if (!currentPermissionRequest) return;
+                if (!isShowing(document.getElementById('permissionModal'))) return;
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     e.stopPropagation();
@@ -323,11 +346,27 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         });
     }
 
+    // Extension-tool prompts carry no ACP session id, so once a session
+    // switch hid one, no later switch could show it again and its tool call
+    // would wait forever. Keep them visible: put the modal back whenever
+    // something other than hidePermissionModal hides it (that one clears
+    // currentPermissionRequest synchronously, before this callback runs).
+    function wireExtensionPromptVisibility() {
+        const modal = document.getElementById('permissionModal');
+        if (!modal || typeof MutationObserver === 'undefined') return;
+        new MutationObserver(() => {
+            if (currentPermissionRequest?.isExtension && !isShowing(modal)) {
+                modal.style.display = 'flex';
+            }
+        }).observe(modal, { attributes: true, attributeFilter: ['style'] });
+    }
+
     /** Standard init: wire buttons, overlay, keyboard, listeners */
     function init() {
         wireButtons();
         wireOverlayDismiss();
         wireKeyboard();
+        wireExtensionPromptVisibility();
         wirePermissionRequestListener();
         wireDismissalListener();
     }

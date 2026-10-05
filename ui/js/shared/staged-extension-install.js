@@ -6,10 +6,11 @@ import { showPermissionPrompt } from './permission-prompt.js';
  * A declined approval removes staged files before they can be loaded.
  *
  * For an upgrade the backend parks the new version beside the live one, so
- * the decline path's `uninstall_extension` only discards the parked files —
- * the working version, its settings, grant and data stay put. The backend
- * (not this caller) decides which case applies, keyed on whether a parked
- * upgrade exists.
+ * the decline path's `uninstall_extension` (with `rollback: true`) only
+ * discards the parked files — the working version, its settings, grant and
+ * data stay put. The backend (not this caller) decides which case applies,
+ * keyed on whether a parked upgrade exists. Without `rollback` the command
+ * is always a real uninstall, so only this decline path may pass it.
  */
 export async function runStagedExtensionInstall(invoke, stager, { onSuccess } = {}) {
     let priorGrant = null;
@@ -30,23 +31,40 @@ export async function runStagedExtensionInstall(invoke, stager, { onSuccess } = 
     const grantedSet = new Set(previouslyGranted);
     const expandsCaps = requested.some((cap) => !grantedSet.has(cap));
 
-    const decision =
-        existing && !expandsCaps
-            ? { approved: true, granted: requested }
-            : await showPermissionPrompt(await localizeManifestForPrompt(invoke, manifest), {
-                  isUpgrade: !!existing,
-                  previouslyGranted,
-              });
-
-    if (!decision.approved) {
+    const rollback = async () => {
         try {
             await invoke('uninstall_extension', {
                 id: manifest.id,
                 kind: manifest.type || 'extension',
+                rollback: true,
             });
         } catch (error) {
             console.warn('Rollback uninstall failed:', error);
         }
+    };
+
+    let decision;
+    try {
+        decision =
+            existing && !expandsCaps
+                ? { approved: true, granted: requested }
+                : await showPermissionPrompt(
+                      // A parked upgrade's new name/description live in its
+                      // parked dir, not the old live one.
+                      await localizeManifestForPrompt(invoke, manifest, { staged: true }),
+                      {
+                          isUpgrade: !!existing,
+                          previouslyGranted,
+                      }
+                  );
+    } catch (error) {
+        // Never leave staged files behind a prompt that didn't resolve.
+        await rollback();
+        throw error;
+    }
+
+    if (!decision.approved) {
+        await rollback();
         return { cancelled: true };
     }
 

@@ -141,6 +141,15 @@ fn commit_pending_in(base: &Path, id: &str) -> Result<bool> {
     Ok(true)
 }
 
+/// The dir holding an upgrade parked for `id` under `base`, if one is
+/// waiting on a prompt in this run. The install prompt reads the new
+/// version's files (e.g. its locale catalog) from here.
+pub fn parked_upgrade_dir(base: &Path, id: &str) -> Option<PathBuf> {
+    let parked_upgrades = PARKED_UPGRADES.lock_or_recover();
+    let parked = sibling(base, id, PENDING_SUFFIX);
+    parked_upgrades.contains(&parked).then_some(parked)
+}
+
 /// Drop an upgrade parked for `id` (the user declined it), leaving the live
 /// version untouched. Returns false when nothing was parked for `id`.
 pub fn discard_pending(id: &str, kind: &str) -> Result<bool> {
@@ -201,11 +210,21 @@ fn uninstall_in(base: &Path, id: &str) -> Result<()> {
 /// `staged` is removed.
 fn swap_in(base: &Path, id: &str, staged: &Path, target: &Path) -> Result<()> {
     if !target.exists() {
-        if let Err(e) = rename_dir(staged, target) {
-            remove_if_exists(staged);
-            return Err(e).context("Failed to move new installation into place");
-        }
-        return Ok(());
+        // With no old version to protect, a rename that still fails (a
+        // scanner holding the fresh files past the retries) falls back to
+        // copying straight into place, as fresh installs did before staging.
+        let moved = match rename_dir(staged, target) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                warn!(
+                    "Failed to rename {:?} into place ({}); copying instead",
+                    staged, e
+                );
+                copy_fresh(staged, target)
+            }
+        };
+        remove_if_exists(staged);
+        return moved.context("Failed to move new installation into place");
     }
 
     let backup = sibling(base, id, BACKUP_SUFFIX);
@@ -230,22 +249,41 @@ fn swap_in(base: &Path, id: &str, staged: &Path, target: &Path) -> Result<()> {
     Ok(())
 }
 
-/// `fs::rename` with a short retry. Windows briefly refuses to rename a
-/// directory whose files were just written (antivirus / indexer handles),
-/// which is exactly the state a fresh staging copy is in; a real lock (a
-/// running binary inside) still fails after the last attempt.
+/// `fs::rename` with a retry. Windows refuses to rename a directory whose
+/// files were just written while antivirus / indexer handles are open,
+/// which is exactly the state a fresh staging copy is in, so those errors
+/// get a budget of several seconds; anything else gets a short one. A real
+/// lock (a running binary inside) still fails after the last attempt.
 fn rename_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     const RETRIES: u64 = 5;
+    // ~7.75 s total with the capped back-off below.
+    const IN_USE_RETRIES: u64 = 20;
     let mut attempt = 0;
     loop {
         match fs::rename(from, to) {
-            Err(e) if attempt < RETRIES && e.kind() != std::io::ErrorKind::NotFound => {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                let budget = if is_file_in_use(&e) {
+                    IN_USE_RETRIES
+                } else {
+                    RETRIES
+                };
+                if attempt >= budget {
+                    return Err(e);
+                }
                 attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(50 * attempt));
+                std::thread::sleep(std::time::Duration::from_millis((50 * attempt).min(500)));
             }
             result => return result,
         }
     }
+}
+
+/// Windows' "a file inside is open" family: ACCESS_DENIED (mapped to
+/// PermissionDenied), ERROR_SHARING_VIOLATION (32), ERROR_LOCK_VIOLATION (33).
+fn is_file_in_use(e: &std::io::Error) -> bool {
+    cfg!(windows)
+        && (e.kind() == std::io::ErrorKind::PermissionDenied
+            || matches!(e.raw_os_error(), Some(32 | 33)))
 }
 
 /// Clean up after a crash mid-swap for `id`: put the backup back if the live
@@ -395,6 +433,22 @@ mod tests {
         assert_eq!(installed_version(&base, "approve"), "2.0.0");
         assert_eq!(entry_names(&base), vec!["approve"]);
         assert!(!commit_pending_in(&base, "approve").unwrap());
+    }
+
+    #[test]
+    fn parked_upgrade_dir_points_at_the_waiting_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (base, src) = (tmp.path().join("ext"), tmp.path().join("src"));
+        write_package(&src, "loc", "1.0.0");
+        install(&base, &src, InstallMode::Replace);
+        assert!(parked_upgrade_dir(&base, "loc").is_none());
+        write_package(&src, "loc", "2.0.0");
+        install(&base, &src, InstallMode::DeferUpgrade);
+
+        let parked = parked_upgrade_dir(&base, "loc").unwrap();
+        assert_eq!(fs::read_to_string(parked.join("main.js")).unwrap(), "2.0.0");
+        assert!(discard_pending_in(&base, "loc"));
+        assert!(parked_upgrade_dir(&base, "loc").is_none());
     }
 
     #[test]
