@@ -9,6 +9,19 @@ export class McpSettingsModule extends SettingsModule {
         super('mcp', t('settings.mcp.title'), '🔌');
         this._mcpConfig = null;
         this._mcpPath = null;
+        // Built-in Computer Control registration state. The backend always
+        // (un)registers it in the default mcp.json, so this is read from
+        // there rather than from the (possibly custom) displayed file.
+        this._builtinEnabled = null;
+    }
+
+    async _refreshBuiltinEnabled(invoke) {
+        try {
+            this._builtinEnabled = await invoke('get_computer_control_enabled');
+        } catch (e) {
+            console.warn('[MCP] Failed to read Computer Control state:', e);
+            this._builtinEnabled = null;
+        }
     }
 
     render() {
@@ -51,6 +64,7 @@ export class McpSettingsModule extends SettingsModule {
             if (pathEl) pathEl.textContent = this._mcpPath;
 
             this._mcpConfig = await invoke('get_mcp_config', { path: customPath });
+            await this._refreshBuiltinEnabled(invoke);
             this._renderServerList();
         } catch (e) {
             console.warn('[MCP] Failed to load config:', e);
@@ -127,7 +141,8 @@ export class McpSettingsModule extends SettingsModule {
         // Render built-in servers first
         for (const b of builtins) {
             const entry = servers[b.key];
-            const enabled = !!entry && !entry.disabled;
+            const enabled =
+                this._builtinEnabled !== null ? this._builtinEnabled : !!entry && !entry.disabled;
             const toggleId = `mcp-toggle-${b.key}`;
             html += `<div class="mcp-server-item">
                 <div class="mcp-server-info">
@@ -204,6 +219,9 @@ export class McpSettingsModule extends SettingsModule {
                     this._mcpConfig = await invoke('get_mcp_config', {
                         path: this._customPath || null,
                     });
+                    // The toggle reflects the default mcp.json the backend
+                    // just changed, not the displayed custom file.
+                    await this._refreshBuiltinEnabled(invoke);
                     this._renderServerList();
                 } else {
                     const servers = this._mcpConfig.mcpServers || {};

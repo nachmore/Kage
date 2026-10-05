@@ -163,8 +163,9 @@ function rawCommitEnd(text) {
             continue;
         }
         // Inline code doesn't span lines in practice; a stray backtick must
-        // not block committing for the rest of the reply.
-        if (tok === '\n') inCode = false;
+        // not block committing for the rest of the reply. Sentence-boundary
+        // tokens swallow trailing newlines ('.\n\n'), so check for any '\n'.
+        if (tok.includes('\n')) inCode = false;
         if (inCode) continue;
         end = m.index + tok.length;
     }
@@ -279,6 +280,10 @@ export class TtsStreamer {
         // past it is processed, so sent sentences are never re-cleaned or
         // re-indexed when later text (e.g. a closing ``` fence) changes the split.
         this._rawOffset = 0;
+        // The raw text up to _rawOffset, used to detect the caller resetting
+        // its accumulator mid-turn (e.g. after an extension tool call) so the
+        // new text is read from its start instead of from a stale offset.
+        this._committedPrefix = '';
         this._finished = false;
         this._audioQueue = [];
         this._currentAudio = null;
@@ -299,12 +304,21 @@ export class TtsStreamer {
         });
     }
 
+    _syncOffset(text) {
+        if (!text.startsWith(this._committedPrefix)) {
+            this._rawOffset = 0;
+            this._committedPrefix = '';
+        }
+    }
+
     feedText(accumulatedText) {
         if (this._stopped) return;
+        this._syncOffset(accumulatedText);
         const tail = accumulatedText.slice(this._rawOffset);
         const end = rawCommitEnd(tail);
         if (end === 0 || tail.slice(0, end).trim().length < MIN_COMMIT_CHARS) return;
         this._rawOffset += end;
+        this._committedPrefix = accumulatedText.slice(0, this._rawOffset);
         for (const sentence of splitSentences(tail.slice(0, end))) {
             this._enqueueSentence(sentence);
         }
@@ -313,8 +327,10 @@ export class TtsStreamer {
     finishText(finalText) {
         if (this._stopped) return;
         this._finished = true;
+        this._syncOffset(finalText);
         const tail = finalText.slice(this._rawOffset);
         this._rawOffset = finalText.length;
+        this._committedPrefix = finalText;
         for (const sentence of splitSentences(tail)) {
             this._enqueueSentence(sentence);
         }
