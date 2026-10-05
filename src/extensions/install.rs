@@ -4,9 +4,10 @@ use super::{
 use crate::lock_ext::LockExt;
 use anyhow::{Context, Result};
 use log::{info, warn};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, TryLockError};
 
 /// Item kinds whose install dirs can hold a parked upgrade.
 const ITEM_KINDS: [&str; 3] = ["extension", "theme", "commands"];
@@ -302,6 +303,67 @@ fn recover_leftovers(base: &Path, id: &str, target: &Path) {
     }
 }
 
+/// Sweep install leftovers under `base` that nothing in this run owns:
+/// staging/backup/removal dirs from a crash mid-swap (restoring the backup
+/// when the live dir is gone) and `.pending` upgrades whose prompt died with
+/// an earlier run. Run from discovery so a crash doesn't leave dead copies
+/// on disk until the same id happens to be installed or uninstalled again.
+pub(super) fn sweep_leftovers(base: &Path) {
+    // An install holds this lock across its whole copy + swap, so its own
+    // staging/parked dir must not be swept from under it. Rather than stall
+    // discovery behind a multi-second copy, skip: the next discovery sweeps.
+    let parked_upgrades = match PARKED_UPGRADES.try_lock() {
+        Ok(guard) => guard,
+        Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+        Err(TryLockError::WouldBlock) => return,
+    };
+    sweep_leftovers_in(base, &parked_upgrades);
+}
+
+fn sweep_leftovers_in(base: &Path, parked_upgrades: &[PathBuf]) {
+    let Ok(entries) = fs::read_dir(base) else {
+        return;
+    };
+    let mut crashed_ids = BTreeSet::new();
+    for entry in entries.flatten() {
+        if !entry.file_type().is_ok_and(|t| t.is_dir()) {
+            continue;
+        }
+        let name = entry.file_name();
+        // Only `.<valid id>.<known suffix>` is ours; anything else that
+        // happens to start with a dot is left alone.
+        let Some((id, suffix)) = name
+            .to_str()
+            .and_then(|n| n.strip_prefix('.'))
+            .and_then(|n| n.rsplit_once('.'))
+        else {
+            continue;
+        };
+        if validate_extension_id(id).is_err() {
+            continue;
+        }
+        let path = entry.path();
+        match suffix {
+            // Liveness is the in-memory parked list: a prompt from this run
+            // is still waiting on its dir; any other `.pending` is orphaned.
+            PENDING_SUFFIX if !parked_upgrades.contains(&path) => {
+                info!("Removing orphaned staged update {:?}", path);
+                remove_if_exists(&path);
+            }
+            BACKUP_SUFFIX | STAGING_SUFFIX | REMOVING_SUFFIX => {
+                info!("Cleaning up interrupted install leftover {:?}", path);
+                crashed_ids.insert(id.to_string());
+            }
+            _ => {}
+        }
+    }
+    // Same recovery an install of the id would run, so a backup whose live
+    // dir vanished mid-swap is restored rather than deleted.
+    for id in crashed_ids {
+        recover_leftovers(base, &id, &base.join(&id));
+    }
+}
+
 fn take_parked(parked_upgrades: &mut Vec<PathBuf>, dir: &Path) -> bool {
     let before = parked_upgrades.len();
     parked_upgrades.retain(|p| p.as_path() != dir);
@@ -473,6 +535,55 @@ mod tests {
         recover_leftovers(&base, "crash", &base.join("crash"));
         assert_eq!(installed_version(&base, "crash"), "1.0.0");
         assert_eq!(entry_names(&base), vec!["crash"]);
+    }
+
+    #[test]
+    fn sweep_drops_crash_leftovers_and_orphaned_pending() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("ext");
+        // Live item with every kind of stale sibling beside it.
+        write_package(&base.join("live"), "live", "1.0.0");
+        for suffix in [
+            BACKUP_SUFFIX,
+            STAGING_SUFFIX,
+            REMOVING_SUFFIX,
+            PENDING_SUFFIX,
+        ] {
+            write_package(&sibling(&base, "live", suffix), "live", "0.0.0");
+        }
+        // Crash after moving the live dir aside: the backup must come back.
+        write_package(&sibling(&base, "crash", BACKUP_SUFFIX), "crash", "1.0.0");
+        write_package(&sibling(&base, "crash", STAGING_SUFFIX), "crash", "2.0.0");
+        // Not ours: unknown suffix and an invalid id are left alone.
+        fs::create_dir_all(base.join(".live.other")).unwrap();
+        fs::create_dir_all(base.join(".Bad.staging")).unwrap();
+
+        sweep_leftovers_in(&base, &[]);
+        assert_eq!(installed_version(&base, "live"), "1.0.0");
+        assert_eq!(installed_version(&base, "crash"), "1.0.0");
+        assert_eq!(
+            entry_names(&base),
+            vec![".Bad.staging", ".live.other", "crash", "live"]
+        );
+    }
+
+    #[test]
+    fn sweep_keeps_upgrade_parked_in_this_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("ext");
+        write_package(&base.join("wait"), "wait", "1.0.0");
+        let parked = sibling(&base, "wait", PENDING_SUFFIX);
+        write_package(&parked, "wait", "2.0.0");
+
+        sweep_leftovers_in(&base, std::slice::from_ref(&parked));
+        assert_eq!(fs::read_to_string(parked.join("main.js")).unwrap(), "2.0.0");
+        assert_eq!(installed_version(&base, "wait"), "1.0.0");
+    }
+
+    #[test]
+    fn sweep_of_missing_dir_is_a_no_op() {
+        let tmp = tempfile::tempdir().unwrap();
+        sweep_leftovers_in(&tmp.path().join("absent"), &[]);
     }
 
     #[test]

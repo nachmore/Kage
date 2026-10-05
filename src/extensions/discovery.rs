@@ -57,6 +57,7 @@ pub fn discover_items(kind: &str, enabled_states: &HashMap<String, bool>) -> Vec
 
     if let Ok(subdir) = kind_to_subdir(kind) {
         if let Ok(user_dir) = user_item_dir(subdir) {
+            super::install::sweep_leftovers(&user_dir);
             for item in scan_directory(&user_dir, enabled_states) {
                 by_id.insert(item.manifest.id.clone(), item);
             }
