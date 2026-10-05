@@ -2,6 +2,22 @@ import { sanitizeExtensionHtml, findExtActions } from '../extension-html-sanitiz
 import { t, tHtml } from '../i18n.js';
 import { applyMixin } from '../mixin.js';
 import { extensionDisplay } from './i18n.js';
+import { neutralizeLinks } from '../link-handler.js';
+
+/**
+ * Serialize `container` for a message formatter with neutralized links
+ * (href="#", URL in data-href) turned back into real hrefs. The sanitizer
+ * strips data-* on the way back, so without this every agent link would come
+ * back as a dead "#" anchor — and formatters keyed on hrefs would see none.
+ */
+function withRealHrefs(container) {
+    const clone = container.cloneNode(true);
+    for (const a of clone.querySelectorAll('a[data-href]')) {
+        a.setAttribute('href', a.getAttribute('data-href'));
+        a.removeAttribute('data-href');
+    }
+    return clone.innerHTML;
+}
 
 const WIDGET_MIN_INTERVAL_MS = 1_000;
 const WIDGET_MAX_INTERVAL_MS = 24 * 3_600 * 1_000;
@@ -533,17 +549,27 @@ export function installExtensionUiMethods(ExtensionManager) {
                 // so round-tripping per chunk is wasted work.
                 if (ctx.streaming && !ext.sandbox.formatterOptsInStreaming) continue;
                 try {
+                    // renderMarkdown doesn't await us, so newer chunks can
+                    // land while the RPC is in flight. Remember what we sent
+                    // and drop the result if the container moved on —
+                    // otherwise a slow formatter rolls the message back.
+                    const snapshot = container.innerHTML;
                     const out = await ext.sandbox.call('formatMessage', {
-                        html: container.innerHTML,
+                        html: withRealHrefs(container),
                         context: ctx,
                     });
                     if (out && typeof out.html === 'string') {
+                        if (container.innerHTML !== snapshot) continue;
                         const frag = sanitizeExtensionHtml(out.html, 'rich');
                         // Replace the container's children with the sanitized
                         // fragment. We use replaceChildren so existing
                         // listeners on the container itself are preserved.
                         container.replaceChildren();
                         container.appendChild(frag);
+                        // The sanitizer keeps real http(s) hrefs; re-neutralize
+                        // so WebView2 can't natively open them (double-open)
+                        // and the host click handler sees data-href again.
+                        neutralizeLinks(container);
                         // Wire any declared extension actions in the new DOM.
                         this._wireExtActionsFor(id, container);
                     }

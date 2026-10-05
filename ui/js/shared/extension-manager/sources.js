@@ -6,6 +6,75 @@ const SANDBOX_VENDOR_ALLOWLIST = {
     math: 'vendor/lib/math.js',
 };
 
+// Extension CSS is injected into the trusted host document, so it must not
+// be able to restyle the permission UI (hide Deny, swap buttons, overlay
+// it) or phone home via @import/url(). Parsed with the browser's own CSS
+// parser in an inert document (no resource loads), then filtered rule by
+// rule. Not a full scoping solution — it targets the redress and beacon
+// vectors without breaking extensions that style their own rows/widgets.
+const PERMISSION_UI_SELECTOR = /permission|kage-ext-perm/i;
+// data: URIs cause no network request; anything else (incl. image-set
+// strings) can beacon.
+const NON_DATA_URL = /url\(\s*(?!['"]?data:)|image-set\(/i;
+
+// Pseudo-elements never match in matches()/querySelector(), so
+// `button::after { content: 'Deny' }` would sail through. Strip them for
+// the probe; a bare one (`::before`) means `*::before`.
+const PSEUDO_ELEMENT = /::[\w-]+(?:\([^)]*\))?|:(?:before|after|first-line|first-letter)\b/gi;
+
+function ruleTouchesPermissionUi(selectorText) {
+    if (PERMISSION_UI_SELECTOR.test(selectorText)) return true;
+    // Generic selectors (`button`, `div > *`) reach the modal without
+    // naming it — test against the live modal DOM. Unparseable → drop.
+    const modal = document.getElementById('permissionModal');
+    if (!modal) return false;
+    const probe = selectorText.replace(PSEUDO_ELEMENT, (_m, offset, s) =>
+        offset === 0 || /[\s>+~,(]/.test(s[offset - 1]) ? '*' : ''
+    );
+    try {
+        return modal.matches(probe) || !!modal.querySelector(probe);
+    } catch {
+        return true;
+    }
+}
+
+function sanitizeCssRules(list, id) {
+    for (let i = list.cssRules.length - 1; i >= 0; i--) {
+        const rule = list.cssRules[i];
+        let drop = false;
+        if (rule.type === CSSRule.IMPORT_RULE) {
+            drop = true;
+        } else if (rule.selectorText !== undefined && ruleTouchesPermissionUi(rule.selectorText)) {
+            drop = true;
+        }
+        if (drop) {
+            console.warn(`Extension '${id}': dropped CSS rule: ${rule.cssText.slice(0, 120)}`);
+            list.deleteRule(i);
+            continue;
+        }
+        const style = rule.style;
+        if (style) {
+            for (let j = style.length - 1; j >= 0; j--) {
+                const prop = style[j];
+                if (NON_DATA_URL.test(style.getPropertyValue(prop))) style.removeProperty(prop);
+            }
+        }
+        // Grouping (@media/@supports) and nested style rules.
+        if (rule.cssRules) sanitizeCssRules(rule, id);
+    }
+}
+
+function sanitizeExtensionCss(cssCode, id) {
+    const doc = document.implementation.createHTMLDocument('');
+    const el = doc.createElement('style');
+    el.textContent = cssCode;
+    doc.head.appendChild(el);
+    const sheet = el.sheet;
+    if (!sheet) return '';
+    sanitizeCssRules(sheet, id);
+    return Array.from(sheet.cssRules, (r) => r.cssText).join('\n');
+}
+
 export function installExtensionSourceMethods(ExtensionManager) {
     applyMixin(ExtensionManager.prototype, {
         _hasSandboxedProvider(sources) {
@@ -213,8 +282,10 @@ export function installExtensionSourceMethods(ExtensionManager) {
         async _loadExtensionCss(id, manifest) {
             const cssFiles = manifest.contributes?.css;
             if (!Array.isArray(cssFiles) || cssFiles.length === 0) return;
+            // Checked once, not per file: every file's <style> carries the
+            // same data-ext-css, so a per-file check skipped all but the first.
+            if (document.querySelector(`style[data-ext-css="${CSS.escape(id)}"]`)) return;
             for (const cssPath of cssFiles) {
-                if (document.querySelector(`style[data-ext-css="${id}"]`)) continue;
                 try {
                     const cssCode = await this.invoke('read_extension_file', {
                         extensionId: id,
@@ -223,7 +294,7 @@ export function installExtensionSourceMethods(ExtensionManager) {
                     });
                     const style = document.createElement('style');
                     style.dataset.extCss = id;
-                    style.textContent = cssCode;
+                    style.textContent = sanitizeExtensionCss(String(cssCode ?? ''), id);
                     document.head.appendChild(style);
                     console.log(`ExtensionManager: loaded CSS for '${id}'`);
                 } catch (e) {

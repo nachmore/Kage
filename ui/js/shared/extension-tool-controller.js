@@ -197,12 +197,9 @@ export class ExtensionToolController {
     }
 
     async _resolvePolicy(extension, tool) {
-        const toolDefs = await this.host.extensionManager.getToolDefinitions();
-        const extDef = toolDefs.find((d) => d.extensionId === extension);
-        const toolDef = extDef?.tools?.find((t) => t.name === tool);
-        if (toolDef?.hasBuiltInConfirmation === true) return 'allow';
+        let policy;
         try {
-            return await this.host.invoke('check_extension_tool_permission', {
+            policy = await this.host.invoke('check_extension_tool_permission', {
                 extensionId: extension,
                 toolName: tool,
             });
@@ -210,6 +207,14 @@ export class ExtensionToolController {
             console.error('Failed to check extension tool permission:', e);
             return 'ask';
         }
+        // The user's stored policy is authoritative. `hasBuiltInConfirmation`
+        // comes from untrusted sandbox code, so it may only skip the host
+        // prompt (the extension confirms itself) — never override a deny.
+        if (policy !== 'ask') return policy;
+        const toolDefs = await this.host.extensionManager.getToolDefinitions();
+        const extDef = toolDefs.find((d) => d.extensionId === extension);
+        const toolDef = extDef?.tools?.find((t) => t.name === tool);
+        return toolDef?.hasBuiltInConfirmation === true ? 'allow' : policy;
     }
 
     async _sendResponse(extension, tool, message, success) {

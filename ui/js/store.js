@@ -15,6 +15,7 @@
 import { alertDialog, confirmDialog } from './shared/confirm-dialog.js';
 import { errMessage } from './shared/error-message.js';
 import { escapeAttr } from './shared/tool-utils.js';
+import { localizeManifestForPrompt } from './shared/extension-manager.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { runStagedExtensionInstall } from './shared/staged-extension-install.js';
 import { cmdOrCtrlPressed } from './shared/shortcuts.js';
@@ -203,7 +204,11 @@ async function refreshInstalled() {
             const items = await invoke(cmd);
             const captured = await Promise.all(items.map((e) => captureManifest(e, kind)));
             items.forEach((e, i) => installedMap.set(e.manifest.id, captured[i]));
-        } catch {}
+        } catch (e) {
+            // Logged so a broken capture (e.g. a missing import) doesn't
+            // silently render every installed item as "Install".
+            console.warn(`[store] ${cmd} failed:`, e);
+        }
     };
     await Promise.all([
         collect('list_extensions', 'extension'),

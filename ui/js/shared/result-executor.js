@@ -246,20 +246,25 @@ export async function handleEnterAction(opts) {
     // If a suggestion is selected, execute it
     if (suggestions.length > 0 && selectedIndex >= 0) {
         const selected = suggestions[selectedIndex];
+        // Extension rows choose their own `type`; they must never reach the
+        // built-in system/selection handlers (shutdown, elevated terminal,
+        // slash commands). They always go back to the extension via
+        // executeResult below.
+        const builtIn = !selected._extensionId;
 
         // System commands have a special confirmation flow (floating-only)
-        if (selected.type === 'system' && onSystemCommand) {
+        if (builtIn && selected.type === 'system' && onSystemCommand) {
             const d = selected.data || selected;
             await onSystemCommand(d.cmdId, d.needsConfirm, false);
             return { handled: true };
         }
-        if (selected.type === 'system_confirm' && onSystemCommand) {
+        if (builtIn && selected.type === 'system_confirm' && onSystemCommand) {
             const d = selected.data || selected;
             await onSystemCommand(d.cmdId, false, d.elevated || false);
             return { handled: true };
         }
         // Selection lists (floating-only)
-        if (selected.type === 'selection' && onSelection) {
+        if (builtIn && selected.type === 'selection' && onSelection) {
             await onSelection(
                 selected.data?.command || selected.command,
                 selected.data?.value || selected.value

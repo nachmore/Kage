@@ -2,6 +2,37 @@ import { sanitizeExtensionHtml } from '../extension-html-sanitizer.js';
 import { resolveExtensionMessage } from './i18n.js';
 import { applyMixin } from '../mixin.js';
 
+// Result types the host acts on directly (system commands, slash-command
+// selections, clipboard paste, keyword fill) before delegating to the
+// owning extension. An extension row claiming one of these is renamed so
+// no host branch keyed on `type` alone can be spoofed into running it.
+const HOST_RESERVED_TYPES = new Set([
+    'system',
+    'system_confirm',
+    'selection',
+    'clipboard',
+    'ext_keyword',
+]);
+
+function stampExtensionResult(m, id) {
+    const out = { ...m, _extensionId: id };
+    if (HOST_RESERVED_TYPES.has(out.type)) out.type = `ext_${out.type}`;
+    return out;
+}
+
+// Custom-render cache key. Scoped by owning extension (ids are free strings
+// and can collide across extensions) and by the visible payload, so a row
+// whose id stays stable while its content changes (e.g. a "no match for
+// '<query>'" row) gets re-rendered instead of showing the first HTML.
+function customRenderKey(r) {
+    try {
+        const { label, description, icon, type, data } = r;
+        return JSON.stringify([r._extensionId, r.id, label, description, icon, type, data]);
+    } catch {
+        return null; // unserialisable payload — just don't cache it
+    }
+}
+
 export function installExtensionSearchMethods(ExtensionManager) {
     applyMixin(ExtensionManager.prototype, {
         async _buildKeywordGate(lowerQuery) {
@@ -42,7 +73,7 @@ export function installExtensionSearchMethods(ExtensionManager) {
                 promises.push(
                     ext.sandbox
                         .call('match', { query })
-                        .then((matches) => (matches || []).map((m) => ({ ...m, _extensionId: id })))
+                        .then((matches) => (matches || []).map((m) => stampExtensionResult(m, id)))
                         .catch((e) => {
                             console.warn(`match() in '${id}' failed:`, e);
                             return [];
@@ -65,7 +96,7 @@ export function installExtensionSearchMethods(ExtensionManager) {
                 promises.push(
                     ext.sandbox
                         .call('matchAsync', { query })
-                        .then((matches) => (matches || []).map((m) => ({ ...m, _extensionId: id })))
+                        .then((matches) => (matches || []).map((m) => stampExtensionResult(m, id)))
                         .catch((e) => {
                             console.warn(`matchAsync() in '${id}' failed:`, e);
                             return [];
@@ -157,7 +188,8 @@ export function installExtensionSearchMethods(ExtensionManager) {
             if (!id) return false;
             const ext = this.extensions.get(id);
             if (!ext?.sandbox?.hasSearch) return false;
-            const cached = this._customRenderCache?.get(result.id);
+            const key = customRenderKey(result);
+            const cached = key && this._customRenderCache?.get(key);
             if (!cached) return false;
             // Result rows are structural — use rich sanitization so the
             // extension can lay out its own row (icon + label + buttons).
@@ -194,12 +226,14 @@ export function installExtensionSearchMethods(ExtensionManager) {
                 const ext = this.extensions.get(id);
                 if (!ext?.sandbox?.hasSearch) continue;
                 if (!r.id) continue;
-                if (this._customRenderCache.has(r.id)) {
+                const key = customRenderKey(r);
+                if (!key) continue;
+                if (this._customRenderCache.has(key)) {
                     // Re-insert at the tail so recently-used entries survive
                     // the next eviction pass.
-                    const v = this._customRenderCache.get(r.id);
-                    this._customRenderCache.delete(r.id);
-                    this._customRenderCache.set(r.id, v);
+                    const v = this._customRenderCache.get(key);
+                    this._customRenderCache.delete(key);
+                    this._customRenderCache.set(key, v);
                     continue;
                 }
                 // Strip host-only stamp.
@@ -209,7 +243,7 @@ export function installExtensionSearchMethods(ExtensionManager) {
                         .call('renderCustom', { result: clean })
                         .then((out) => {
                             if (out && typeof out.html === 'string') {
-                                this._customRenderCache.set(r.id, out);
+                                this._customRenderCache.set(key, out);
                             }
                         })
                         .catch(() => {

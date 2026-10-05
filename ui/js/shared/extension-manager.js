@@ -299,22 +299,32 @@ export class ExtensionManager {
             /* non-fatal */
         }
 
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(
+        let timer;
+        const timeoutPromise = new Promise((_, reject) => {
+            timer = setTimeout(
                 () =>
                     reject(
                         new Error(`Extension tool timed out (${Math.round(timeoutMs / 1000)}s)`)
                     ),
                 timeoutMs
-            )
-        );
+            );
+        });
         try {
             return await Promise.race([
-                ext.sandbox.call('executeTool', { toolName, params }),
+                // The RPC layer's own 10s default would otherwise fire first
+                // for tools declaring longer timeouts. Give it a little slack
+                // so the race above reports the friendlier tool-level error.
+                ext.sandbox.call(
+                    'executeTool',
+                    { toolName, params },
+                    { timeoutMs: timeoutMs + 1000 }
+                ),
                 timeoutPromise,
             ]);
         } catch (e) {
             return { error: e?.message || String(e) };
+        } finally {
+            clearTimeout(timer);
         }
     }
 

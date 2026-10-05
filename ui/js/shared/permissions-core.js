@@ -22,17 +22,34 @@ import { t } from './i18n.js';
 
 export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     let currentPermissionRequest = null;
-    let _extensionToolCallback = null;
     let _permissionQueue = [];
+
+    // Extension-tool prompts carry their resolve fn on the notification
+    // (`extCallback`) so it travels through the queue with its own request
+    // — a module-level callback would capture the answer to whichever
+    // prompt happens to be visible. Any path that drops a request without
+    // an answer must resolve it false so the awaiting tool call ends.
+    function rejectDropped(req) {
+        const cb = req?.extCallback;
+        if (!cb) return;
+        req.extCallback = null;
+        cb(false);
+    }
 
     async function showPermissionModal(notification, toolName) {
         const modal = document.getElementById('permissionModal');
         const toolTitleEl = document.getElementById('permissionToolTitle');
         const toolNameEl = document.getElementById('permissionToolName');
-        if (!modal || !toolTitleEl) return;
+        if (!modal || !toolTitleEl) {
+            rejectDropped(notification);
+            return;
+        }
 
-        // If a permission is already showing, queue this one
-        if (currentPermissionRequest && modal.style.display === 'flex') {
+        // If a permission is pending, queue this one. Don't key on the
+        // modal's visibility: chat's onSessionSwitch hides it while the
+        // request stays pending, and overwriting it would orphan that
+        // request forever.
+        if (currentPermissionRequest) {
             _permissionQueue.push({ notification, toolName });
             console.log(
                 `[Permissions] Queued permission request (${_permissionQueue.length} in queue)`
@@ -49,6 +66,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             toolCall: toolCall,
             options: params.options || [],
             toolName: toolName || null,
+            isExtension: !!notification.extCallback,
+            extCallback: notification.extCallback || null,
         };
 
         toolTitleEl.textContent = toolCall.title || t('shared.permission.unknown_tool');
@@ -73,6 +92,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     async function hidePermissionModal() {
         const modal = document.getElementById('permissionModal');
         if (modal) modal.style.display = 'none';
+        // Hidden without an answer (external dismissal) — release the waiter.
+        rejectDropped(currentPermissionRequest);
         currentPermissionRequest = null;
 
         // Show next queued permission request
@@ -102,6 +123,14 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         if (allowDropdown) allowDropdown.style.display = 'none';
         if (denyDropdown) denyDropdown.style.display = 'none';
 
+        // Requests can advance while we await IPC below (external dismissal
+        // shows the next queued one); only hide if ours is still current,
+        // or we'd hide — and for extensions, auto-deny — the next request.
+        const req = currentPermissionRequest;
+        const hideIfStillCurrent = async () => {
+            if (currentPermissionRequest === req) await hidePermissionModal();
+        };
+
         try {
             const policyTitle =
                 currentPermissionRequest.toolName ||
@@ -109,18 +138,23 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 t('shared.permission.unknown');
 
             // Extension tool requests use a callback instead of ACP response
-            if (_extensionToolCallback) {
+            if (currentPermissionRequest.isExtension) {
                 const allowed = optionId === 'allow_once' || optionId === 'allow_always';
+                const cb = currentPermissionRequest.extCallback;
+                // Already answered (double-click while the policy update
+                // was in flight).
+                if (!cb) return;
+                // Claim the callback first so hidePermissionModal doesn't
+                // treat this answered request as dropped.
+                currentPermissionRequest.extCallback = null;
                 if (policyOverride) {
                     await invoke('update_tool_policy', {
                         toolTitle: policyTitle,
                         policy: policyOverride,
                         grantType: grantType || 'once',
-                    });
+                    }).catch((e) => console.error('Failed to update tool policy:', e));
                 }
-                const cb = _extensionToolCallback;
-                _extensionToolCallback = null;
-                await hidePermissionModal();
+                await hideIfStillCurrent();
                 cb(allowed);
                 return;
             }
@@ -142,7 +176,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
 
             // Small delay to ensure the response is processed
             await new Promise((r) => setTimeout(r, 100));
-            await hidePermissionModal();
+            await hideIfStillCurrent();
         } catch (error) {
             console.error('Failed to send permission response:', error);
         }
@@ -273,6 +307,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             if (dismissedId === undefined || dismissedId === null) {
                 // Broadcast dismissal (legacy shape) — drop everything.
                 console.log('Permission dismissed externally (broadcast)');
+                for (const q of _permissionQueue) rejectDropped(q.notification);
                 _permissionQueue = [];
                 hidePermissionModal();
                 return;
@@ -300,8 +335,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     /** Show the permission modal for an extension tool call. Returns promise<boolean>. */
     function showForExtensionTool(extensionId, toolName, icon) {
         // The promise resolves when the user accepts/denies via the
-        // modal — the resolve fn is stashed in `_extensionToolCallback`
-        // and invoked by the modal's button handlers. The modal show
+        // modal — the resolve fn rides on the notification (`extCallback`)
+        // and is invoked by the modal's button handlers. The modal show
         // itself is async (loads i18n, etc) but we don't need its
         // outcome here, so fire-and-forget the await rather than
         // wrapping the executor in `async` (which Biome flags because
@@ -316,11 +351,10 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                     },
                     options: [],
                 },
+                extCallback: resolve,
             };
-            _extensionToolCallback = resolve;
             showPermissionModal(notification, toolTitle).catch((err) => {
                 console.error('[permissions] showPermissionModal failed:', err);
-                _extensionToolCallback = null;
                 resolve(false);
             });
         });

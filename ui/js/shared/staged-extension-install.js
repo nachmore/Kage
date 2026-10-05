@@ -4,6 +4,12 @@ import { showPermissionPrompt } from './permission-prompt.js';
 /**
  * Stages an extension and commits it only after capability approval.
  * A declined approval removes staged files before they can be loaded.
+ *
+ * For an upgrade the backend parks the new version beside the live one, so
+ * the decline path's `uninstall_extension` only discards the parked files —
+ * the working version, its settings, grant and data stay put. The backend
+ * (not this caller) decides which case applies, keyed on whether a parked
+ * upgrade exists.
  */
 export async function runStagedExtensionInstall(invoke, stager, { onSuccess } = {}) {
     let priorGrant = null;

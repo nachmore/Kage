@@ -45,7 +45,10 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // --- clipboard ---------------------------------------------------------
     read_clipboard: 'clipboard',
     get_clipboard_history: 'clipboard',
-    paste_clipboard_item: 'clipboard',
+    // Writes caller-supplied text to the clipboard and synthesises Ctrl+V
+    // into whatever app has focus — keystroke injection, not "read your
+    // clipboard". Host launcher UI only.
+    paste_clipboard_item: null,
 
     // --- urls: hand a link to the user's browser ---------------------------
     // Scope-limited at the Rust boundary to http/https, common comms
@@ -88,7 +91,10 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // --- filesystem: folder/file discovery ---------------------------------
     pick_folder: 'filesystem',
     scan_folder: 'filesystem',
-    execute_folder_plan: 'filesystem',
+    // Moves/renames/trashes files under a caller-chosen root — far beyond
+    // the "scan folders and search files" the capability promises. Only the
+    // agent's MCP path uses it; no extension does.
+    execute_folder_plan: null,
     get_common_folders: 'filesystem',
     search_files: 'filesystem',
     resolve_directories: 'filesystem',

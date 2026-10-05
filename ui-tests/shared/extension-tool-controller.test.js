@@ -156,8 +156,9 @@ describe('ExtensionToolController._handleToolCall', () => {
         }));
     });
 
-    it('hasBuiltInConfirmation: bypasses permission check', async () => {
+    it('hasBuiltInConfirmation: skips the host prompt when policy is ask', async () => {
         const host = makeHost({
+            invoke: vi.fn(async (cmd) => cmd === 'check_extension_tool_permission' ? 'ask' : null),
             extensionManager: {
                 buildToolSteeringBlock: vi.fn(),
                 getToolDefinitionsCached: vi.fn().mockReturnValue([]),
@@ -169,8 +170,25 @@ describe('ExtensionToolController._handleToolCall', () => {
         });
         const c = new ExtensionToolController(host);
         await c._handleToolCall({ extension: 'e', tool: 't', params: {} });
-        expect(host.invoke).not.toHaveBeenCalledWith('check_extension_tool_permission', expect.any(Object));
+        expect(host.permissionModal.showForExtensionTool).not.toHaveBeenCalled();
         expect(host.extensionManager.executeExtensionTool).toHaveBeenCalled();
+    });
+
+    it('hasBuiltInConfirmation: never overrides a deny policy', async () => {
+        const host = makeHost({
+            invoke: vi.fn(async (cmd) => cmd === 'check_extension_tool_permission' ? 'deny' : null),
+            extensionManager: {
+                buildToolSteeringBlock: vi.fn(),
+                getToolDefinitionsCached: vi.fn().mockReturnValue([]),
+                getToolDefinitions: vi.fn().mockResolvedValue([
+                    { extensionId: 'e', tools: [{ name: 't', hasBuiltInConfirmation: true }] }
+                ]),
+                executeExtensionTool: vi.fn().mockResolvedValue({ result: 'ok' }),
+            },
+        });
+        const c = new ExtensionToolController(host);
+        await c._handleToolCall({ extension: 'e', tool: 't', params: {} });
+        expect(host.extensionManager.executeExtensionTool).not.toHaveBeenCalled();
     });
 
     it('relays tool error: success=false with the error payload', async () => {
