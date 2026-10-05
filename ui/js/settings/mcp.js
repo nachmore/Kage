@@ -42,6 +42,9 @@ export class McpSettingsModule extends SettingsModule {
         try {
             // Use custom path from config if set, otherwise default
             const customPath = config.mcp_config_path || null;
+            // Remember the custom file so writes go back to the file we read
+            // (null → backend default mcp.json).
+            this._customPath = customPath;
             this._mcpPath = customPath || (await invoke('get_mcp_json_path'));
             const pathEl = document.getElementById('mcpPathDisplay');
             if (pathEl) pathEl.textContent = this._mcpPath;
@@ -77,6 +80,7 @@ export class McpSettingsModule extends SettingsModule {
                 });
                 if (selected) {
                     this._mcpPath = selected;
+                    this._customPath = selected;
                     document.getElementById('mcpPathDisplay').textContent = selected;
                     // Save the custom path to config
                     const config = await invoke('get_config');
@@ -199,7 +203,12 @@ export class McpSettingsModule extends SettingsModule {
 
                 if (isBuiltin) {
                     await invoke('set_computer_control_enabled', { enabled });
-                    this._mcpConfig = await invoke('get_mcp_config', { path: null });
+                    // Re-read the file we write to: reading the default here
+                    // while saves target a custom file would later copy the
+                    // default's servers over the custom one.
+                    this._mcpConfig = await invoke('get_mcp_config', {
+                        path: this._customPath || null,
+                    });
                     this._renderServerList();
                 } else {
                     const servers = this._mcpConfig.mcpServers || {};
@@ -209,7 +218,10 @@ export class McpSettingsModule extends SettingsModule {
                         } else {
                             servers[key].disabled = true;
                         }
-                        await invoke('save_mcp_config', { path: null, config: this._mcpConfig });
+                        await invoke('save_mcp_config', {
+                            path: this._customPath || null,
+                            config: this._mcpConfig,
+                        });
                         this._renderServerList();
                     }
                 }
@@ -228,7 +240,10 @@ export class McpSettingsModule extends SettingsModule {
                 if (!confirm(t('settings.mcp.delete_confirm', { key }))) return;
                 const servers = this._mcpConfig.mcpServers || {};
                 delete servers[key];
-                await invoke('save_mcp_config', { path: null, config: this._mcpConfig });
+                await invoke('save_mcp_config', {
+                    path: this._customPath || null,
+                    config: this._mcpConfig,
+                });
                 this._renderServerList();
             });
         });
@@ -287,11 +302,19 @@ export class McpSettingsModule extends SettingsModule {
             }
 
             if (!this._mcpConfig.mcpServers) this._mcpConfig.mcpServers = {};
-            this._mcpConfig.mcpServers[key] = { command: cmd, args, disabled: false };
-            if (cwd) this._mcpConfig.mcpServers[key].cwd = cwd;
+            // Merge into the existing entry on edit: mcp.json is shared with
+            // the agent backend and entries carry fields this dialog doesn't
+            // show (env tokens, timeout, autoApprove, url, disabled…).
+            const entry = { ...(isEdit ? existing : {}), command: cmd, args };
+            if (cwd) entry.cwd = cwd;
+            else delete entry.cwd;
+            this._mcpConfig.mcpServers[key] = entry;
 
             const invoke = window.__TAURI__?.core?.invoke;
-            await invoke('save_mcp_config', { path: null, config: this._mcpConfig });
+            await invoke('save_mcp_config', {
+                path: this._customPath || null,
+                config: this._mcpConfig,
+            });
             overlay.remove();
             this._renderServerList();
         });

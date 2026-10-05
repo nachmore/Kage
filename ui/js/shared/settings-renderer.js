@@ -103,7 +103,15 @@ export class RenderedSettings {
             this.log.warn?.('settings refresh: getSettings failed:', e);
             return;
         }
-        if (!schema || typeof schema !== 'object') return;
+        // Re-validate: the template interpolation relies on validateSchema's
+        // id / min / max guarantees, and the extension is untrusted, so a
+        // refreshed schema gets the same check as the first one. Validate
+        // before destroy() so a bad schema leaves the current panel intact.
+        const r = validateSchema(schema);
+        if (!r.ok) {
+            this.log.warn?.('settings refresh: invalid schema:', r.error);
+            return;
+        }
 
         // Snapshot live values so the rebuild doesn't reset them to defaults.
         const carried = this.save();
@@ -111,7 +119,7 @@ export class RenderedSettings {
         // Tear down old listeners before we replace the DOM.
         this.destroy();
 
-        this.schema = schema;
+        this.schema = r.schema;
         this.values = {};
         this.render();
         this.load(carried);
@@ -241,7 +249,9 @@ export class RenderedSettings {
     }
 
     _renderRow(ctrl) {
-        const rowId = this._rowId(ctrl);
+        // Ids/numbers are schema-validated; escaping is defence in depth
+        // since this markup lands in the privileged settings window.
+        const rowId = escapeAttr(this._rowId(ctrl));
         const showWhenAttr = ctrl.showWhen
             ? ` data-ext-showwhen='${escapeAttr(JSON.stringify(ctrl.showWhen))}'`
             : '';
@@ -267,7 +277,7 @@ export class RenderedSettings {
     }
 
     _renderCheckboxRow(ctrl, rowId, showWhenAttr) {
-        const inputId = this._inputId(ctrl);
+        const inputId = escapeAttr(this._inputId(ctrl));
         return `
             <div class="setting-row setting-row-checkbox" id="${rowId}"${showWhenAttr}>
                 <div class="setting-label-with-checkbox">
@@ -281,7 +291,7 @@ export class RenderedSettings {
     }
 
     _renderTextRow(ctrl, rowId, showWhenAttr) {
-        const inputId = this._inputId(ctrl);
+        const inputId = escapeAttr(this._inputId(ctrl));
         const style = ctrl.maxWidth ? ` style="max-width:${+ctrl.maxWidth}px;"` : '';
         return `
             <div class="setting-row" id="${rowId}"${showWhenAttr}>
@@ -295,11 +305,11 @@ export class RenderedSettings {
     }
 
     _renderNumberRow(ctrl, rowId, showWhenAttr) {
-        const inputId = this._inputId(ctrl);
+        const inputId = escapeAttr(this._inputId(ctrl));
         const style = ` style="max-width:${+(ctrl.maxWidth || 80)}px;"`;
-        const minAttr = typeof ctrl.min === 'number' ? ` min="${ctrl.min}"` : '';
-        const maxAttr = typeof ctrl.max === 'number' ? ` max="${ctrl.max}"` : '';
-        const stepAttr = typeof ctrl.step === 'number' ? ` step="${ctrl.step}"` : '';
+        const minAttr = typeof ctrl.min === 'number' ? ` min="${escapeAttr(ctrl.min)}"` : '';
+        const maxAttr = typeof ctrl.max === 'number' ? ` max="${escapeAttr(ctrl.max)}"` : '';
+        const stepAttr = typeof ctrl.step === 'number' ? ` step="${escapeAttr(ctrl.step)}"` : '';
         return `
             <div class="setting-row" id="${rowId}"${showWhenAttr}>
                 <div class="setting-label">${escapeHtml(ctrl.label)}</div>
@@ -311,7 +321,7 @@ export class RenderedSettings {
     }
 
     _renderSelectRow(ctrl, rowId, showWhenAttr) {
-        const inputId = this._inputId(ctrl);
+        const inputId = escapeAttr(this._inputId(ctrl));
         const style = ` style="max-width:${+(ctrl.maxWidth || 200)}px;"`;
         const opts = (ctrl.options || [])
             .map((o) => `<option value="${escapeAttr(o.value)}">${escapeHtml(o.label)}</option>`)
@@ -327,11 +337,11 @@ export class RenderedSettings {
     }
 
     _renderRangeRow(ctrl, rowId, showWhenAttr) {
-        const inputId = this._inputId(ctrl);
+        const inputId = escapeAttr(this._inputId(ctrl));
         const labelId = `${inputId}__label`;
-        const minAttr = ` min="${ctrl.min}"`;
-        const maxAttr = ` max="${ctrl.max}"`;
-        const stepAttr = typeof ctrl.step === 'number' ? ` step="${ctrl.step}"` : '';
+        const minAttr = ` min="${escapeAttr(ctrl.min)}"`;
+        const maxAttr = ` max="${escapeAttr(ctrl.max)}"`;
+        const stepAttr = typeof ctrl.step === 'number' ? ` step="${escapeAttr(ctrl.step)}"` : '';
         const unit = ctrl.unit ? escapeHtml(ctrl.unit) : '';
         return `
             <div class="setting-row" id="${rowId}"${showWhenAttr}>
@@ -345,7 +355,7 @@ export class RenderedSettings {
     }
 
     _renderActionRow(ctrl, rowId, showWhenAttr) {
-        const btnId = this._inputId(ctrl);
+        const btnId = escapeAttr(this._inputId(ctrl));
         const statusId = `${btnId}__status`;
         const variantClass =
             ctrl.variant === 'danger' ? ' danger' : ctrl.variant === 'primary' ? ' primary' : '';

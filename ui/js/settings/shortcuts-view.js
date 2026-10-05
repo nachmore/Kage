@@ -1,5 +1,15 @@
 import { t } from '../shared/i18n.js';
-import { escapeHtml } from '../shared/tool-utils.js';
+import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
+
+/**
+ * Icons can come from an imported (untrusted) shortcuts file, so only
+ * base64 image data URLs are rendered as <img>; anything else is text.
+ */
+const SAFE_ICON_DATA_URL = /^data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]*$/i;
+
+export function isSafeIconDataUrl(icon) {
+    return typeof icon === 'string' && SAFE_ICON_DATA_URL.test(icon);
+}
 
 export function renderShortcutsSettings(module) {
     return `
@@ -295,10 +305,10 @@ export function renderShortcutsListView(module) {
             }
 
             let iconHtml;
-            if (s.icon?.startsWith('data:')) {
-                iconHtml = `<img src="${s.icon}" style="width:24px;height:24px;border-radius:4px;object-fit:cover;margin-right:8px;">`;
+            if (isSafeIconDataUrl(s.icon)) {
+                iconHtml = `<img src="${escapeAttr(s.icon)}" style="width:24px;height:24px;border-radius:4px;object-fit:cover;margin-right:8px;">`;
             } else if (s.icon) {
-                iconHtml = `<span style="font-size:18px;margin-right:8px;">${s.icon}</span>`;
+                iconHtml = `<span style="font-size:18px;margin-right:8px;">${escapeHtml(s.icon)}</span>`;
             } else {
                 iconHtml = `<span style="font-size:18px;margin-right:8px;">⚡</span>`;
             }

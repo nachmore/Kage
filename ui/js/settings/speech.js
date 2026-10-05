@@ -2,6 +2,7 @@ import { SettingsModule } from './base.js';
 import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 import { renderSpeechSettings } from './speech-view.js';
+import { errMessage } from '../shared/error-message.js';
 /**
  * Unified Speech Settings Module
  * Combines voice input (STT), read-back (TTS), and Pocket TTS configuration.
@@ -405,7 +406,7 @@ async function pocketTtsInstall() {
     } catch (e) {
         if (status)
             status.textContent = t('settings.speech.pocket.install.error_prefix', {
-                reason: String(e),
+                reason: errMessage(e),
             });
         if (btn) {
             btn.textContent = t('settings.speech.pocket.install.retry');
@@ -452,7 +453,7 @@ async function pocketTtsToggleServer() {
     } catch (e) {
         if (status)
             status.textContent = t('settings.speech.pocket.install.error_prefix', {
-                reason: String(e),
+                reason: errMessage(e),
             });
     }
     if (btn) btn.disabled = false;

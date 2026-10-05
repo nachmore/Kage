@@ -13,6 +13,7 @@ import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
 import { renderSchema } from '../shared/settings-renderer.js';
 import { t } from '../shared/i18n.js';
+import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 import { SettingsModule } from './base.js';
 import { renderCapabilityBadges } from './extension-capabilities.js';
 import { registerSettingsActions, setSettingsManager } from './module-registry.js';
@@ -219,15 +220,17 @@ export class SettingsManager {
             const hidden = index === 0 ? '' : ' hidden';
             html += `<div class="settings-section${hidden}" data-section-content="${module.id}">`;
             if (module._extensionId) {
-                const extId = module._extensionId;
-                // Framework-owned header: icon + title on left, enable/disable button on right
+                const extId = escapeAttr(module._extensionId);
+                // Framework-owned header: icon + title on left, enable/disable button on right.
+                // icon/title/description come from the (untrusted) extension manifest and
+                // this window has full __TAURI__ access — always escape.
                 html += `<h2 class="settings-section-header ext-section-header">
-                    <span>${module.icon} ${module.title}</span>
+                    <span>${escapeHtml(module.icon)} ${escapeHtml(module.title)}</span>
                     <button class="setting-button" id="ext-toggle-btn-${extId}" style="min-width:80px;font-size:12px;" data-action="toggleExtension" data-arg="${extId}">Disable</button>
                     <input type="hidden" id="ext-enabled-${extId}" value="true">
                 </h2>`;
                 if (module.description) {
-                    html += `<p style="font-size:12px;color:var(--kage-text-muted);margin:0 0 16px;line-height:1.4;">${module.description}</p>`;
+                    html += `<p style="font-size:12px;color:var(--kage-text-muted);margin:0 0 16px;line-height:1.4;">${escapeHtml(module.description)}</p>`;
                 }
                 // Capability badges — visible surface of the extension permission system
                 html += renderCapabilityBadges(module._capabilities, module._legacyPermissions);
@@ -283,20 +286,50 @@ export class SettingsManager {
      * the returned promise is awaitable but most callers fire-and-forget.
      */
     _initializeModule(module) {
-        if (this._initialized.has(module.id)) return;
+        if (this._initialized.has(module.id)) return false;
         this._initialized.add(module.id);
+        // Some initialize() impls build the widgets load() populates (e.g.
+        // the hotkey pickers), so re-load just this module once init has
+        // finished. Safe: the section has never been shown, so it can't
+        // hold unsaved edits yet.
+        const reload = () =>
+            this._loadModule(module).catch((e) =>
+                console.error(`Settings module ${module.id} load failed:`, e)
+            );
         try {
             const result = module.initialize();
-            if (result && typeof result.catch === 'function') {
-                result.catch((e) => {
+            if (result && typeof result.then === 'function') {
+                result.then(reload, (e) => {
                     // Don't unset _initialized — a busted initialize will keep
                     // throwing on every reveal otherwise. Surface the error
                     // and leave the section in whatever state it reached.
                     console.error(`Settings module ${module.id} initialize failed:`, e);
                 });
+            } else {
+                reload();
             }
         } catch (e) {
             console.error(`Settings module ${module.id} initialize failed:`, e);
+        }
+        return true;
+    }
+
+    /** Load a single module (plus its extension enabled state) from saved config. */
+    async _loadModule(module) {
+        const config = await this.invoke('get_config');
+        this._applyModuleConfig(module, config);
+    }
+
+    _applyModuleConfig(module, config) {
+        module.load(config);
+        // Load extension enabled state
+        if (module._extensionId) {
+            const extId = module._extensionId;
+            const states = config.extension_states || {};
+            const enabled = states[extId] !== false;
+            const hiddenInput = document.getElementById('ext-enabled-' + extId);
+            if (hiddenInput) hiddenInput.value = enabled ? 'true' : 'false';
+            _updateExtToggleUI(extId, enabled);
         }
     }
 
@@ -325,13 +358,18 @@ export class SettingsManager {
         // Lazy initialise: most settings modules only need to wire up
         // their event listeners + load() once, the first time the user
         // navigates to them. See render() for the rationale.
+        // Don't reload every module from saved config here: edits are only
+        // persisted by the global Save, so a full reload on each tab switch
+        // silently reverted unsaved changes in other sections. Modules that
+        // need fresh backend data on each reveal implement onShow().
         const targetModule = this.modules.find((m) => m.id === sectionId);
-        if (targetModule) {
-            this._initializeModule(targetModule);
+        if (targetModule && !this._initializeModule(targetModule)) {
+            try {
+                targetModule.onShow?.();
+            } catch (e) {
+                console.error(`Settings module ${targetModule.id} onShow failed:`, e);
+            }
         }
-
-        // Reload config when switching tabs so data is fresh
-        this.load();
 
         // Reset scroll to top
         const content = document.querySelector('.settings-content');
@@ -345,16 +383,7 @@ export class SettingsManager {
         try {
             const config = await this.invoke('get_config');
             this.modules.forEach((module) => {
-                module.load(config);
-                // Load extension enabled state
-                if (module._extensionId) {
-                    const extId = module._extensionId;
-                    const states = config.extension_states || {};
-                    const enabled = states[extId] !== false;
-                    const hiddenInput = document.getElementById('ext-enabled-' + extId);
-                    if (hiddenInput) hiddenInput.value = enabled ? 'true' : 'false';
-                    _updateExtToggleUI(extId, enabled);
-                }
+                this._applyModuleConfig(module, config);
             });
         } catch (error) {
             this.showStatus(errLabel(t('settings.manager.error.failed_load'), error), 'error');

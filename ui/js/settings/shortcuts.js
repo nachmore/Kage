@@ -1,6 +1,10 @@
 import { SettingsModule } from './base.js';
 import { summarizeNamedPlaceholders } from '../shared/shortcuts.js';
-import { renderShortcutsListView, renderShortcutsSettings } from './shortcuts-view.js';
+import {
+    isSafeIconDataUrl,
+    renderShortcutsListView,
+    renderShortcutsSettings,
+} from './shortcuts-view.js';
 import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
 import { errLabel } from '../shared/error-message.js';
@@ -203,9 +207,12 @@ export class ShortcutsSettingsModule extends SettingsModule {
         const clearBtn = document.getElementById('shortcutIconClear');
         if (!preview) return;
 
-        if (icon?.startsWith('data:')) {
-            // Base64 image
-            preview.innerHTML = `<img src="${icon}">`;
+        if (isSafeIconDataUrl(icon)) {
+            // Base64 image. Built via DOM (not innerHTML) because the icon
+            // may come from an imported shortcuts file.
+            const img = document.createElement('img');
+            img.src = icon;
+            preview.replaceChildren(img);
             if (emojiInput) emojiInput.value = '';
             if (clearBtn) clearBtn.style.display = '';
         } else if (icon) {
@@ -589,7 +596,17 @@ export class ShortcutsSettingsModule extends SettingsModule {
                         alert(t('settings.shortcuts.import.invalid_format'));
                         return;
                     }
-                    this.shortcuts = imported;
+                    // Imported files are untrusted: keep only plain-object
+                    // entries and drop non-string icons so the renderers'
+                    // string handling holds.
+                    this.shortcuts = imported
+                        .filter((s) => s && typeof s === 'object' && !Array.isArray(s))
+                        .map((s) => {
+                            const copy = { ...s };
+                            if (copy.icon != null && typeof copy.icon !== 'string')
+                                delete copy.icon;
+                            return copy;
+                        });
                     this.renderShortcutsList();
                 } catch (err) {
                     alert(t('settings.shortcuts.import.parse_failed', { message: err.message }));

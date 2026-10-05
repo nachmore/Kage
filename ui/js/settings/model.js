@@ -47,21 +47,27 @@ export class ModelSettingsModule extends SettingsModule {
         }
     }
 
-    async loadModels() {
+    async loadModels(preferred) {
         try {
             this.models = (await this.getInvoke()('get_available_models')) || [];
         } catch (e) {
             console.log('Could not load models:', e);
             this.models = [];
         }
-        this.renderModelList();
+        this.renderModelList(preferred);
+    }
+
+    /** Called by the manager each time the tab is re-shown. */
+    onShow() {
+        // Refresh the model list but keep the user's unsaved selection.
+        this.loadModels(this.getSelectedModelId());
     }
 
     getInvoke() {
         return window.__TAURI__.core.invoke;
     }
 
-    renderModelList() {
+    renderModelList(preferred) {
         const select = document.getElementById('defaultModelSelect');
         if (!select) return;
 
@@ -70,7 +76,7 @@ export class ModelSettingsModule extends SettingsModule {
             return;
         }
 
-        const defaultModel = this._loadedDefault || '';
+        const defaultModel = preferred || this._loadedDefault || '';
         select.innerHTML = this.models
             .map((m) => {
                 const selected = m.modelId === defaultModel ? ' selected' : '';
@@ -86,7 +92,7 @@ export class ModelSettingsModule extends SettingsModule {
 
     load(config) {
         this._loadedDefault = config.acp?.agent?.default_model || '';
-        // Refresh models from backend every time the tab is shown
+        // Refresh models from backend on (re)load; onShow() covers tab reveals
         this.loadModels();
 
         const threshold = config.acp?.agent?.auto_compact_threshold ?? 90;

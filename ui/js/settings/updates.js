@@ -1,6 +1,7 @@
 import { SettingsModule } from './base.js';
 import { escapeHtml } from '../shared/tool-utils.js';
 import { errMessage } from '../shared/error-message.js';
+import { neutralizeLinks } from '../shared/link-handler.js';
 import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
 
@@ -299,12 +300,43 @@ export class UpdatesSettingsModule extends SettingsModule {
             if (window.marked) {
                 marked.setOptions({ breaks: true, gfm: true });
                 container.innerHTML = marked.parse(markdown);
+                this._hardenChangelogLinks(container);
             } else {
                 container.textContent = markdown;
             }
         } catch (_e) {
             container.innerHTML = `<em>${t('settings.updates.changelog.load_failed')}</em>`;
         }
+    }
+
+    /**
+     * Release notes come from PR titles, and marked still emits markdown
+     * links like [x](javascript:…) as live hrefs — in a window with full
+     * __TAURI__ access. Move http(s)/mailto URLs to data-href (opened via
+     * open_url on click) and strip every other scheme.
+     */
+    _hardenChangelogLinks(container) {
+        neutralizeLinks(container);
+        for (const a of container.querySelectorAll('a[href]')) {
+            const href = a.getAttribute('href') || '';
+            if (href === '#' && a.hasAttribute('data-href')) continue;
+            a.removeAttribute('href');
+        }
+        // Track the element, not a flag: a settings re-render (e.g. on
+        // extensions_changed) replaces the container with a fresh one.
+        if (this._changelogClickContainer === container) return;
+        this._changelogClickContainer = container;
+        container.addEventListener('click', (e) => {
+            const anchor = e.target.closest('a');
+            if (!anchor) return;
+            e.preventDefault();
+            const url = anchor.getAttribute('data-href') || '';
+            if (/^(https?:\/\/|mailto:)/.test(url)) {
+                window.__TAURI__?.core
+                    ?.invoke('open_url', { url })
+                    .catch((err) => console.warn('[Updates] Failed to open URL:', err));
+            }
+        });
     }
 
     load(config) {

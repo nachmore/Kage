@@ -338,21 +338,35 @@ export class AutomationsSettingsModule extends SettingsModule {
         if (t === 'schedule') {
             trigConfig = scheduleConfigHtml(auto.trigger);
         } else if (t === 'signal') {
+            // This window only knows the system signals (extension trigger
+            // providers aren't loaded here), so keep a stored signal that
+            // isn't in the list as a selected option — otherwise expanding
+            // and saving the card would silently clear trigger.signal.
+            const stored = auto.trigger.signal || '';
+            const unknownOpt =
+                stored && !this._signals.some((s) => s.name === stored)
+                    ? '<option value="' +
+                      escapeAutomationHtml(stored) +
+                      '" selected>⚡ ' +
+                      escapeAutomationHtml(stored) +
+                      '</option>'
+                    : '';
             const sigOpts =
                 '<option value="">Select signal...</option>' +
+                unknownOpt +
                 this._signals
                     .map(
                         (s) =>
                             '<option value="' +
-                            s.name +
+                            escapeAutomationHtml(s.name) +
                             '"' +
-                            (auto.trigger.signal === s.name ? ' selected' : '') +
+                            (stored === s.name ? ' selected' : '') +
                             '>' +
-                            (s.icon || '⚡') +
+                            escapeAutomationHtml(s.icon || '⚡') +
                             ' ' +
-                            s.name +
+                            escapeAutomationHtml(s.name) +
                             ' — ' +
-                            (s.description || '') +
+                            escapeAutomationHtml(s.description || '') +
                             '</option>'
                     )
                     .join('');

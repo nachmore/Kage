@@ -529,8 +529,8 @@ export class AssistantSettingsModule extends SettingsModule {
         row.className = 'app-mode-row';
         row.style.cssText =
             'border:1px solid var(--kage-border);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;';
-        const nameVal = (rule?.friendly_name || '').replace(/"/g, '&quot;');
-        const exeVal = (rule?.executable || '').replace(/"/g, '&quot;');
+        const nameVal = escapeAttr(rule?.friendly_name || '');
+        const exeVal = escapeAttr(rule?.executable || '');
         const steeringVal = rule?.steering || '';
         const enabledChecked = rule?.enabled === false ? '' : ' checked';
         row.innerHTML = `
@@ -664,9 +664,9 @@ export class AssistantSettingsModule extends SettingsModule {
         row.className = 'custom-action-row';
         row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px;';
         row.innerHTML = `
-            <input type="text" class="setting-input ca-icon" placeholder="📝" value="${action?.icon || ''}" style="width:40px;text-align:center;">
-            <input type="text" class="setting-input ca-label" placeholder="Label" value="${action?.label || ''}" style="width:100px;">
-            <input type="text" class="setting-input ca-prompt" placeholder="Prompt ({text} = selection)" value="${(action?.prompt || '').replace(/"/g, '&quot;')}" style="flex:1;">
+            <input type="text" class="setting-input ca-icon" placeholder="📝" value="${escapeAttr(action?.icon || '')}" style="width:40px;text-align:center;">
+            <input type="text" class="setting-input ca-label" placeholder="Label" value="${escapeAttr(action?.label || '')}" style="width:100px;">
+            <input type="text" class="setting-input ca-prompt" placeholder="Prompt ({text} = selection)" value="${escapeAttr(action?.prompt || '')}" style="flex:1;">
             <button class="setting-button ca-remove" style="padding:4px 8px;">✕</button>
         `;
         row.querySelector('.ca-remove').addEventListener('click', () => row.remove());

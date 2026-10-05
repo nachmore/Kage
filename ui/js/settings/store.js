@@ -1,6 +1,7 @@
 import { SettingsModule } from './base.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 import { t } from '../shared/i18n.js';
+import { errMessage } from '../shared/error-message.js';
 /**
  * Store Settings Module — auto-update, primary store URL, and additional store sources.
  */
@@ -118,7 +119,10 @@ export class StoreSettingsModule extends SettingsModule {
                     showResult(t('settings.store.update_check.up_to_date'), 'success');
                 }
             } catch (e) {
-                showResult(t('settings.store.update_check.failed', { reason: String(e) }), 'error');
+                showResult(
+                    t('settings.store.update_check.failed', { reason: errMessage(e) }),
+                    'error'
+                );
             }
         });
     }

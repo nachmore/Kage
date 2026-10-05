@@ -1,5 +1,6 @@
 import { t } from '../shared/i18n.js';
 import { formatBytes } from '../shared/tool-utils.js';
+import { getSettingsManager } from './module-registry.js';
 
 export function installAboutBackupMethods(AboutSettingsModule) {
     Object.assign(AboutSettingsModule.prototype, {
@@ -207,6 +208,16 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                 }),
                 'success'
             );
+
+            // The bundle replaced config.json, but every module's form still
+            // holds pre-import values; a later Save would write them back
+            // over the import. Reload before the restart prompt so this
+            // holds even when the user declines the restart.
+            try {
+                await getSettingsManager()?.load();
+            } catch (e) {
+                console.warn('[Settings] Reload after import failed:', e);
+            }
 
             try {
                 const { ask } = window.__TAURI__.dialog || {};

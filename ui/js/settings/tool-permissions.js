@@ -187,11 +187,29 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         this.renderToolsList();
     }
 
+    /** Called by the manager each time the tab is re-shown. */
+    async onShow() {
+        // Tool edits persist immediately, so the list holds no unsaved state;
+        // refresh it so tools seen / grants consumed since open are shown.
+        try {
+            const config = await window.__TAURI__.core.invoke('get_config');
+            this.tools = config.tool_permissions?.tools || [];
+            this.renderToolsList();
+        } catch (e) {
+            console.warn('Failed to refresh tool permissions:', e);
+        }
+    }
+
     save(config) {
         config.tool_permissions = {
             trust_all: false, // deprecated, kept for compat
             terminator_mode: this.terminatorMode,
-            tools: this.tools,
+            // Every per-tool edit (policy, remove, reset) is persisted
+            // immediately, so keep the backend's current list (config is
+            // fresh from get_config) rather than this window's snapshot —
+            // which would drop tools seen, and restore one-shot grants
+            // consumed, since the settings window opened.
+            tools: config.tool_permissions?.tools ?? this.tools,
         };
     }
 
@@ -248,15 +266,22 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         container.innerHTML = toolsHtml;
     }
 
-    async updatePolicy(index, policy) {
+    async updatePolicy(index, policy, grantType) {
         if (index >= 0 && index < this.tools.length) {
             const tool = this.tools[index];
+            // The two "allow" options differ only by grant type; without it
+            // the backend defaults to a one-shot grant. Mirror the backend's
+            // write locally so a later manager save() stays consistent.
+            const grant = grantType || 'once';
             tool.policy = policy;
+            tool.grant_type = grant;
+            tool.granted_at = new Date().toISOString();
 
             try {
                 await window.__TAURI__.core.invoke('update_tool_policy', {
                     toolTitle: tool.title,
                     policy: policy,
+                    grantType: grant,
                 });
             } catch (error) {
                 console.error('Failed to update tool policy:', error);
@@ -410,10 +435,10 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
 }
 
 // Global functions for onclick handlers
-function updateToolPolicy(index, policy) {
+function updateToolPolicy(index, policy, grantType) {
     const settingsManager = getSettingsManager();
     const module = settingsManager?.modules.find((m) => m.id === 'tool-permissions');
-    if (module) module.updatePolicy(index, policy);
+    if (module) module.updatePolicy(index, policy, grantType);
 }
 
 function removeSeenTool(index) {
@@ -428,7 +453,7 @@ function removeSeenTool(index) {
 // the element argument.
 registerSettingsActions({
     'toolPermissions.updatePolicy': (arg, el) => {
-        updateToolPolicy(parseInt(arg, 10), el.value);
+        updateToolPolicy(parseInt(arg, 10), el.value, el.selectedOptions?.[0]?.dataset.grant);
     },
     'toolPermissions.removeTool': (arg) => {
         removeSeenTool(parseInt(arg, 10));
