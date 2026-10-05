@@ -58,32 +58,10 @@ pub async fn save_config<R: tauri::Runtime>(
         (prior, prior_acp)
     };
 
-    // If the active agent connection changed, hot-swap the transport mode
-    // and reconnect so the user doesn't have to restart the app.
-    if new_acp_mode != prior_acp_mode {
-        info!("Active ACP connection changed, reconnecting");
-        let (new_connection_mode, _) = crate::startup::acp_mode_for(&new_acp_mode);
-        acp.client.set_mode(new_connection_mode);
-        if let Err(e) = acp.client.connect() {
-            log::warn!("ACP reconnect after config save failed: {}", e);
-        }
-    }
+    apply_runtime_config(&acp, &prior_acp_mode, &new_acp_mode, new_language);
 
     // Update app log buffer size if changed
     crate::app_log::set_max_size(new_log_buffer_size);
-
-    // Apply the language override BEFORE emitting `config_updated`. The
-    // settings UI persists language via the normal save_config path; the
-    // event fires once and every window's `i18n.js` listener immediately
-    // calls `get_i18n_catalog`. If we left active locale untouched here,
-    // those windows would refetch the OLD catalog and conclude nothing
-    // changed — surfaces wouldn't reflow until a separate `set_language`
-    // command landed. `None` / empty means "follow system".
-    let preferred = new_language
-        .clone()
-        .filter(|s| !s.trim().is_empty())
-        .or_else(sys_locale::get_locale);
-    crate::i18n::set_language(preferred.as_deref().unwrap_or("en"));
 
     if prior_terminator != new_terminator {
         crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
@@ -95,11 +73,46 @@ pub async fn save_config<R: tauri::Runtime>(
 
     info!("Configuration saved successfully");
 
-    if let Err(e) = app.emit(crate::events::CONFIG_UPDATED, ()) {
+    if let Err(e) = app.emit(
+        crate::events::CONFIG_UPDATED,
+        crate::commands::i18n::ConfigUpdatedI18n::current(),
+    ) {
         error!("Failed to emit config_updated event: {}", e);
     }
 
     Ok(())
+}
+
+/// Apply the parts of a config swap that live outside the `Config` struct.
+/// Shared by `save_config` and `import_config_bundle` so an import takes
+/// effect without a restart. Must run BEFORE the caller emits
+/// `config_updated`.
+fn apply_runtime_config(
+    acp: &AcpHandles,
+    prior_acp_mode: &crate::config::AcpMode,
+    new_acp_mode: &crate::config::AcpMode,
+    new_language: Option<String>,
+) {
+    // If the active agent connection changed, hot-swap the transport mode
+    // and reconnect so the user doesn't have to restart the app.
+    if new_acp_mode != prior_acp_mode {
+        info!("Active ACP connection changed, reconnecting");
+        let (new_connection_mode, _) = crate::startup::acp_mode_for(new_acp_mode);
+        acp.client.set_mode(new_connection_mode);
+        if let Err(e) = acp.client.connect() {
+            log::warn!("ACP reconnect after config change failed: {}", e);
+        }
+    }
+
+    // Apply the language override before `config_updated` goes out: every
+    // window's `i18n.js` listener immediately calls `get_i18n_catalog`, and
+    // if the active locale were still the old one those windows would
+    // refetch the OLD catalog and conclude nothing changed. `None` / empty
+    // means "follow system".
+    let preferred = new_language
+        .filter(|s| !s.trim().is_empty())
+        .or_else(sys_locale::get_locale);
+    crate::i18n::set_language(preferred.as_deref().unwrap_or("en"));
 }
 
 /// Overwrite backend-owned fields in an incoming JS config snapshot with
@@ -415,6 +428,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
     path: String,
     passphrase: Option<String>,
     features: State<'_, FeatureServices>,
+    acp: State<'_, AcpHandles>,
     app: tauri::AppHandle<R>,
 ) -> Result<crate::config_export::ImportSummary, AppError> {
     let bytes = std::fs::read(&path).map_err(|e| {
@@ -431,7 +445,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
 
     // Disk + decryption work happens off the runtime so the dialog
     // stays responsive even with Argon2's intentionally-slow KDF.
-    let (new_config, summary) = tauri::async_runtime::spawn_blocking(move || {
+    let (mut new_config, summary) = tauri::async_runtime::spawn_blocking(move || {
         crate::config_export::import(&bytes, passphrase.as_deref(), &local)
     })
     .await
@@ -454,9 +468,18 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
     // mirrors save_config so concurrent permission saves don't race.
     let new_log_buffer = new_config.system.log_buffer_size;
     let new_terminator = new_config.tool_permissions.terminator_mode;
-    let prior_terminator = {
+    let new_language = new_config.ui.language.clone();
+    let new_acp_mode = new_config.acp.active_mode();
+    let (prior_terminator, prior_acp_mode) = {
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
+        let prior_acp = state_config.acp.active_mode();
+        // Grants are backend-owned and recorded by install consent on THIS
+        // machine. Keep the local map whole: a backup must neither strip
+        // grants from extensions installed here nor (being a plain,
+        // possibly hand-edited file) raise an installed extension's
+        // capabilities without the user consenting here.
+        new_config.extension_grants = state_config.extension_grants.clone();
         *state_config = new_config;
         // Channel is a typed enum — unknown values from a hand-edited
         // backup collapsed to Stable at deserialise time.
@@ -467,8 +490,10 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
                 &[("message", &e.to_string())],
             )
         })?;
-        prior
+        (prior, prior_acp)
     };
+
+    apply_runtime_config(&acp, &prior_acp_mode, &new_acp_mode, new_language);
 
     crate::app_log::set_max_size(new_log_buffer);
     if prior_terminator != new_terminator {
@@ -490,7 +515,10 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
     };
     crate::os::set_startup_enabled(auto_start);
 
-    let _ = app.emit(crate::events::CONFIG_UPDATED, ());
+    let _ = app.emit(
+        crate::events::CONFIG_UPDATED,
+        crate::commands::i18n::ConfigUpdatedI18n::current(),
+    );
     Ok(summary)
 }
 

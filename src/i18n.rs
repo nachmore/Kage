@@ -42,29 +42,32 @@
 //! 3. Run `python scripts/translate.py` to fill in the other 30 languages. The
 //!    drift-check CI gate will fail any PR that adds a key without translations.
 
-use serde::Deserialize;
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-/// One entry in a `messages.json` catalog. We deserialise into this struct rather
-/// than `serde_json::Value` so that catalogs with malformed entries fail fast at
-/// startup instead of at lookup time.
-#[derive(Debug, Clone, Deserialize)]
-struct Entry {
-    message: String,
-    /// Translator-facing context. Only consumed by `scripts/translate.py`; the
-    /// runtime ignores it. We still deserialise it to avoid a "panic on unknown
-    /// fields" surprise if we ever switch to `deny_unknown_fields`.
+/// One raw `messages.json` value. Regular entries carry `message`; the
+/// reserved `_meta` block carries the metadata fields instead. A single
+/// shape lets the catalog parse in one pass straight from the text, with
+/// no intermediate `serde_json::Value` DOM. Translator-only fields
+/// (`description`, `_source_hash`, `_machine_translated`) are skipped by
+/// serde without allocating.
+#[derive(Deserialize)]
+struct RawEntry {
     #[serde(default)]
-    #[allow(dead_code)]
-    description: String,
+    message: Option<String>,
+    #[serde(default)]
+    language: String,
+    #[serde(default)]
+    rtl: bool,
+    #[serde(default)]
+    machine_translated: bool,
 }
 
 /// Top-level catalog metadata. Lives under the reserved `_meta` key.
 #[derive(Debug, Clone, Deserialize, Default)]
 struct Meta {
-    #[serde(default)]
-    language: String,
     #[serde(default)]
     name: String,
     #[serde(default)]
@@ -76,50 +79,55 @@ struct Meta {
     machine_translated: bool,
 }
 
+/// Just the `_meta` block of a catalog; every other key is skipped. Used to
+/// list languages without parsing all of their messages.
+#[derive(Deserialize)]
+struct MetaOnly {
+    #[serde(default, rename = "_meta")]
+    meta: Meta,
+}
+
 #[derive(Debug, Clone)]
 pub struct Catalog {
     pub language: String,
-    pub display_name: String,
     pub rtl: bool,
     pub machine_translated: bool,
-    entries: HashMap<String, Entry>,
+    /// key → message.
+    entries: HashMap<String, String>,
 }
 
 impl Catalog {
     fn parse(raw: &str) -> Result<Self, String> {
-        // Two-pass parse: first as a Map<String, Value> so we can pull `_meta`
-        // out before the rest. Avoids defining a dual-shape struct that would
-        // accept both Meta and Entry under the same field.
-        let mut value: HashMap<String, serde_json::Value> =
+        let value: HashMap<String, RawEntry> =
             serde_json::from_str(raw).map_err(|e| format!("catalog json parse failed: {}", e))?;
 
-        let meta: Meta = match value.remove("_meta") {
-            Some(v) => {
-                serde_json::from_value(v).map_err(|e| format!("_meta block invalid: {}", e))?
-            }
-            None => Meta::default(),
+        let mut cat = Catalog {
+            language: String::new(),
+            rtl: false,
+            machine_translated: false,
+            entries: HashMap::with_capacity(value.len()),
         };
-
-        let mut entries = HashMap::with_capacity(value.len());
         for (k, v) in value {
-            let entry: Entry = serde_json::from_value(v)
-                .map_err(|e| format!("catalog entry {:?} invalid: {}", k, e))?;
-            entries.insert(k, entry);
+            if k == "_meta" {
+                cat.language = v.language;
+                cat.rtl = v.rtl;
+                cat.machine_translated = v.machine_translated;
+                continue;
+            }
+            // A malformed entry fails the whole catalog so a broken file is
+            // caught by the parse-every-catalog test, not at lookup time.
+            let message = v
+                .message
+                .ok_or_else(|| format!("catalog entry {:?} has no message", k))?;
+            cat.entries.insert(k, message);
         }
-
-        Ok(Catalog {
-            language: meta.language,
-            display_name: meta.name,
-            rtl: meta.rtl,
-            machine_translated: meta.machine_translated,
-            entries,
-        })
+        Ok(cat)
     }
 
     /// Look up a key. Returns `None` for missing keys; the caller picks the
     /// fallback strategy.
     pub fn get(&self, key: &str) -> Option<&str> {
-        self.entries.get(key).map(|e| e.message.as_str())
+        self.entries.get(key).map(|s| s.as_str())
     }
 
     /// Number of message keys, excluding `_meta`. Used by drift-check tests.
@@ -165,10 +173,45 @@ embed_locales!(
     "ko", "nl", "no", "pl", "pt", "ro", "ru", "sv", "th", "tr", "uk", "ur", "vi", "zh-CN", "zh-TW",
 );
 
-/// All catalogs successfully loaded at startup, keyed by language code.
-/// `OnceLock` so we pay the parse cost exactly once per process. A failed
-/// parse is treated as a startup error in `init()`.
-static CATALOGS: OnceLock<HashMap<String, Catalog>> = OnceLock::new();
+/// One lazily-parsed slot per `EMBEDDED` entry (same index). Parsing all 32
+/// catalogs (~11 MB) up front cost startup time before any window could
+/// paint, for languages nobody uses; now only EN and the active language
+/// are parsed, each at most once per process. `None` in a slot means that
+/// catalog failed to parse.
+static PARSED: OnceLock<Vec<OnceLock<Option<Catalog>>>> = OnceLock::new();
+
+/// The parsed catalog for `code`, parsing it on first use. `None` when the
+/// code isn't embedded or its catalog failed to parse.
+fn catalog(code: &str) -> Option<&'static Catalog> {
+    let idx = EMBEDDED.iter().position(|(c, _)| *c == code)?;
+    let slots = PARSED.get_or_init(|| EMBEDDED.iter().map(|_| OnceLock::new()).collect());
+    slots[idx]
+        .get_or_init(|| {
+            let (code, raw) = EMBEDDED[idx];
+            match Catalog::parse(raw) {
+                Ok(mut cat) => {
+                    // Use the embed key as the canonical code rather than
+                    // trusting the catalog's own _meta.language — that way a
+                    // copy/paste mistake in the json doesn't silently route
+                    // lookups for "ja" to the "ko" file.
+                    if cat.language.is_empty() {
+                        cat.language = code.to_string();
+                    }
+                    Some(cat)
+                }
+                Err(e) => {
+                    // Catalog parse failures are programmer errors, not user
+                    // errors — they mean a hand-edited or build-corrupted JSON
+                    // file shipped. Crash loudly during dev, but degrade
+                    // gracefully in release: fall through to English.
+                    debug_assert!(false, "i18n catalog {} failed to parse: {}", code, e);
+                    log::error!("i18n: catalog {} failed to parse: {}", code, e);
+                    None
+                }
+            }
+        })
+        .as_ref()
+}
 
 /// The user's currently active language code (e.g. "en", "ja", "ar").
 /// Set by `set_language()`; defaults to "en" until `init()` runs.
@@ -178,60 +221,75 @@ fn active_lock() -> &'static std::sync::RwLock<String> {
     ACTIVE.get_or_init(|| std::sync::RwLock::new("en".to_string()))
 }
 
-/// Load every embedded catalog and pick the active language. Should be called
-/// exactly once during `main()` startup, before any code touches `t!`.
+/// Pick the active language and parse its catalog plus the English fallback.
+/// Should be called once during `main()` startup, before any code touches
+/// `t!`. Other catalogs are parsed on demand by `set_language`.
 ///
 /// Returns the resolved active language code so callers can log it.
 pub fn init(preferred: Option<&str>) -> String {
-    let mut map: HashMap<String, Catalog> = HashMap::new();
-    for (code, raw) in EMBEDDED {
-        match Catalog::parse(raw) {
-            Ok(cat) => {
-                // Use the embed key as the canonical code rather than trusting
-                // the catalog's own _meta.language — that way a copy/paste
-                // mistake in the json doesn't silently route lookups for
-                // "ja" to the "ko" file.
-                let mut cat = cat;
-                if cat.language.is_empty() {
-                    cat.language = (*code).to_string();
-                }
-                map.insert((*code).to_string(), cat);
-            }
-            Err(e) => {
-                // Catalog parse failures are programmer errors, not user
-                // errors — they mean a hand-edited or build-corrupted JSON
-                // file shipped. Crash loudly during dev, but degrade
-                // gracefully in release: fall through to English.
-                debug_assert!(false, "i18n catalog {} failed to parse: {}", code, e);
-                log::error!("i18n: catalog {} failed to parse: {}", code, e);
-            }
-        }
-    }
-    let _ = CATALOGS.set(map);
-
+    let _ = catalog("en");
     let resolved = resolve_language(preferred);
     *active_lock().write().unwrap() = resolved.clone();
     resolved
 }
 
-/// Pick the best available language given a user preference. Falls back through
-/// region-stripped variants ("zh-CN" → "zh") and finally to "en".
+/// Pick the best available language for a user preference or OS locale tag
+/// (see `language_candidates`), falling back to "en".
 fn resolve_language(preferred: Option<&str>) -> String {
-    let catalogs = match CATALOGS.get() {
-        Some(c) => c,
-        None => return "en".to_string(),
-    };
     if let Some(p) = preferred {
-        if catalogs.contains_key(p) {
-            return p.to_string();
-        }
-        if let Some((stem, _)) = p.split_once('-') {
-            if catalogs.contains_key(stem) {
-                return stem.to_string();
+        for candidate in language_candidates(p) {
+            if catalog(&candidate).is_some() {
+                return candidate;
             }
         }
     }
     "en".to_string()
+}
+
+/// Catalog codes to try for a locale tag, best match first. OS tags don't
+/// line up with our codes one-to-one: case varies, POSIX uses `_` and a
+/// `.UTF-8` / `@euro` suffix, macOS adds a script subtag (`zh-Hans-CN`),
+/// Windows reports Norwegian as `nb-NO` / `nn-NO` (we ship `no`), and
+/// Chinese has to map onto `zh-CN` (Simplified) or `zh-TW` (Traditional).
+fn language_candidates(tag: &str) -> Vec<String> {
+    let tag = tag.split(['.', '@']).next().unwrap_or("").trim();
+    let parts: Vec<&str> = tag.split(['-', '_']).filter(|s| !s.is_empty()).collect();
+    let Some(first) = parts.first() else {
+        return Vec::new();
+    };
+    let lang = first.to_ascii_lowercase();
+    let mut script: Option<String> = None;
+    let mut region: Option<String> = None;
+    for p in &parts[1..] {
+        if p.len() == 4 {
+            if script.is_none() {
+                script = Some(p.to_ascii_lowercase());
+            }
+        } else if region.is_none() {
+            region = Some(p.to_ascii_uppercase());
+        }
+    }
+
+    if lang == "zh" {
+        let traditional = match script.as_deref() {
+            Some("hant") => true,
+            Some("hans") => false,
+            _ => matches!(region.as_deref(), Some("TW" | "HK" | "MO")),
+        };
+        let code = if traditional { "zh-TW" } else { "zh-CN" };
+        return vec![code.to_string()];
+    }
+
+    let lang = match lang.as_str() {
+        "nb" | "nn" => "no".to_string(),
+        _ => lang,
+    };
+    let mut out = Vec::with_capacity(2);
+    if let Some(r) = region {
+        out.push(format!("{}-{}", lang, r));
+    }
+    out.push(lang);
+    out
 }
 
 /// Replace the active language. Called when the user changes the setting or
@@ -248,77 +306,71 @@ pub fn active_language() -> String {
 
 /// `true` if the active language is right-to-left.
 pub fn active_is_rtl() -> bool {
-    let lang = active_language();
-    CATALOGS
-        .get()
-        .and_then(|m| m.get(&lang))
-        .map(|c| c.rtl)
-        .unwrap_or(false)
+    catalog(&active_language()).is_some_and(|c| c.rtl)
 }
 
 /// `true` if the active catalog is mostly machine-translated. Surfaced in the
 /// settings UI as a banner.
 pub fn active_is_machine_translated() -> bool {
-    let lang = active_language();
-    CATALOGS
-        .get()
-        .and_then(|m| m.get(&lang))
-        .map(|c| c.machine_translated)
-        .unwrap_or(false)
+    catalog(&active_language()).is_some_and(|c| c.machine_translated)
 }
 
-/// Snapshot of a single catalog entry suitable for shipping to the frontend.
-/// Layered on top of the internal `Entry` so consumers don't get to peek at
-/// the storage representation.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct EntrySnapshot {
-    pub message: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub description: String,
+/// A catalog serialised for the frontend as `{ key: { message } }` — the
+/// same shape as `messages.json` minus translator-only fields. Serialises
+/// straight from the parsed catalog, so shipping it clones nothing. An
+/// unknown or unparseable code serialises as `{}`.
+#[derive(Debug, Clone, Copy)]
+pub struct CatalogView(Option<&'static Catalog>);
+
+#[derive(Serialize)]
+struct EntrySnapshot<'a> {
+    message: &'a str,
 }
 
-/// Serialise a catalog as a `{ key: { message, description } }` map for shipping
-/// to the frontend. Keeps the on-the-wire shape identical to what's stored in
-/// `messages.json` so the JS side has a single mental model.
-pub fn serialise_catalog(code: &str) -> Option<HashMap<String, EntrySnapshot>> {
-    let cat = CATALOGS.get()?.get(code)?;
-    let mut out = HashMap::with_capacity(cat.entries.len());
-    for (k, v) in &cat.entries {
-        out.insert(
-            k.clone(),
-            EntrySnapshot {
-                message: v.message.clone(),
-                description: v.description.clone(),
-            },
-        );
+impl Serialize for CatalogView {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let entries = self.0.map(|c| &c.entries);
+        let mut map = serializer.serialize_map(Some(entries.map_or(0, |e| e.len())))?;
+        for (k, v) in entries.into_iter().flatten() {
+            map.serialize_entry(k, &EntrySnapshot { message: v })?;
+        }
+        map.end()
     }
-    Some(out)
 }
 
-/// Every loaded language as `(code, display_name, rtl, machine_translated)`. Used
-/// by the settings UI to populate the language dropdown.
+/// The catalog for `code`, ready to ship to the frontend.
+pub fn catalog_view(code: &str) -> CatalogView {
+    CatalogView(catalog(code))
+}
+
+/// Every embedded language as `(code, display_name, rtl, machine_translated)`.
+/// Used by the settings UI to populate the language dropdown. Reads only each
+/// catalog's `_meta` block (once per process) instead of parsing them all.
 pub fn available_languages() -> Vec<(String, String, bool, bool)> {
-    let mut out: Vec<(String, String, bool, bool)> = CATALOGS
-        .get()
-        .map(|m| {
-            m.iter()
-                .map(|(code, cat)| {
-                    (
-                        code.clone(),
-                        if cat.display_name.is_empty() {
-                            code.clone()
-                        } else {
-                            cat.display_name.clone()
-                        },
-                        cat.rtl,
-                        cat.machine_translated,
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    out.sort_by(|a, b| a.0.cmp(&b.0));
-    out
+    static LIST: OnceLock<Vec<(String, String, bool, bool)>> = OnceLock::new();
+    LIST.get_or_init(|| {
+        let mut out: Vec<(String, String, bool, bool)> = EMBEDDED
+            .iter()
+            .filter_map(|(code, raw)| {
+                let meta = match serde_json::from_str::<MetaOnly>(raw) {
+                    Ok(m) => m.meta,
+                    Err(e) => {
+                        log::error!("i18n: catalog {} metadata failed to parse: {}", code, e);
+                        return None;
+                    }
+                };
+                let name = if meta.name.is_empty() {
+                    (*code).to_string()
+                } else {
+                    meta.name
+                };
+                Some(((*code).to_string(), name, meta.rtl, meta.machine_translated))
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    })
+    .clone()
 }
 
 /// Translate a key in the active language with the given `{name}` substitutions.
@@ -333,13 +385,9 @@ pub fn translate(key: &str, params: &[(&str, &str)]) -> String {
 /// Translate a key in a specific language. Used by `Display for AppError` to
 /// keep log output stable in English regardless of the user's UI locale.
 pub fn translate_in(lang: &str, key: &str, params: &[(&str, &str)]) -> String {
-    let raw = CATALOGS
-        .get()
-        .and_then(|m| {
-            m.get(lang)
-                .and_then(|c| c.get(key))
-                .or_else(|| m.get("en").and_then(|c| c.get(key)))
-        })
+    let raw = catalog(lang)
+        .and_then(|c| c.get(key))
+        .or_else(|| catalog("en").and_then(|c| c.get(key)))
         .unwrap_or(key);
     interpolate(raw, params)
 }
@@ -483,6 +531,64 @@ mod tests {
         let bad = r#"{ "_meta": { "language": "xx" }, "k": 42 }"#;
         let r = Catalog::parse(bad);
         assert!(r.is_err());
+    }
+
+    #[test]
+    fn catalog_parse_rejects_entry_without_message() {
+        let bad = r#"{ "_meta": { "language": "xx" }, "k": { "description": "d" } }"#;
+        assert!(Catalog::parse(bad).is_err());
+    }
+
+    #[test]
+    fn every_embedded_catalog_parses() {
+        // Catalogs now parse lazily, so a corrupt one would otherwise only
+        // surface when a user picks that language. Catch it in CI instead.
+        for (code, raw) in EMBEDDED {
+            let cat = Catalog::parse(raw)
+                .unwrap_or_else(|e| panic!("catalog {} failed to parse: {}", code, e));
+            assert!(cat.key_count() > 0, "catalog {} is empty", code);
+        }
+    }
+
+    #[test]
+    fn available_languages_lists_every_embedded_catalog() {
+        let langs = available_languages();
+        assert_eq!(langs.len(), EMBEDDED.len());
+        let ja = langs.iter().find(|l| l.0 == "ja").expect("ja listed");
+        assert_ne!(ja.1, "ja", "display name comes from _meta");
+        assert!(langs.iter().any(|l| l.0 == "ar" && l.2), "ar is rtl");
+    }
+
+    #[test]
+    fn os_locale_tags_resolve_to_shipped_catalogs() {
+        // Windows Norwegian, macOS script-tagged Chinese, POSIX-style tags,
+        // and odd casing must all land on the catalog we actually ship.
+        assert_eq!(resolve_language(Some("nb-NO")), "no");
+        assert_eq!(resolve_language(Some("nn-NO")), "no");
+        assert_eq!(resolve_language(Some("zh-Hans-CN")), "zh-CN");
+        assert_eq!(resolve_language(Some("zh-Hant-TW")), "zh-TW");
+        assert_eq!(resolve_language(Some("zh-Hant")), "zh-TW");
+        assert_eq!(resolve_language(Some("zh-HK")), "zh-TW");
+        assert_eq!(resolve_language(Some("zh-SG")), "zh-CN");
+        assert_eq!(resolve_language(Some("zh")), "zh-CN");
+        assert_eq!(resolve_language(Some("zh_CN.UTF-8")), "zh-CN");
+        assert_eq!(resolve_language(Some("ZH-cn")), "zh-CN");
+        assert_eq!(resolve_language(Some("de_DE@euro")), "de");
+        assert_eq!(resolve_language(Some("pt-BR")), "pt");
+        assert_eq!(resolve_language(Some("JA")), "ja");
+        assert_eq!(resolve_language(Some("")), "en");
+        assert_eq!(resolve_language(Some("xx-YY")), "en");
+    }
+
+    #[test]
+    fn catalog_view_ships_messages_only() {
+        let json = serde_json::to_value(catalog_view("en")).unwrap();
+        let entry = json.get("settings.about.title").expect("key present");
+        assert_eq!(entry, &serde_json::json!({ "message": "About Kage" }));
+        assert_eq!(
+            serde_json::to_value(catalog_view("xx")).unwrap(),
+            serde_json::json!({})
+        );
     }
 
     #[test]

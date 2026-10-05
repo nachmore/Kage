@@ -63,6 +63,9 @@ let _catalog = null;
 let _fallback = null;
 let _meta = { language: 'en', system_language: '', rtl: false, machine_translated: false };
 let _loadPromise = null;
+// False until a real catalog payload has been applied, so a failed initial
+// load never lets the config_updated fast path skip the retry.
+let _loaded = false;
 
 /**
  * Initialise the i18n module. Call once per window during startup, before
@@ -90,7 +93,15 @@ export async function initI18n(invoke) {
     // changed) and re-broadcast `kage:i18n-changed`.
     const listen = window?.__TAURI__?.event?.listen;
     if (typeof listen === 'function') {
-        listen('config_updated', async () => {
+        listen('config_updated', async (event) => {
+            // Emit sites that know the active locale put it in the payload.
+            // Same language as ours → nothing to reload; skip the ~0.5 MB
+            // catalog round-trip that every settings save used to trigger.
+            // No language in the payload means "unknown", so re-fetch.
+            const announced = event?.payload?.language;
+            if (_loaded && typeof announced === 'string' && announced === _meta.language) {
+                return;
+            }
             try {
                 const payload = await invoke('get_i18n_catalog');
                 const langChanged = payload?.language !== _meta.language;
@@ -112,6 +123,7 @@ export async function initI18n(invoke) {
 }
 
 function _applyPayload(payload) {
+    _loaded = true;
     _catalog = payload?.catalog || {};
     _fallback = payload?.fallback || {};
     _meta = {

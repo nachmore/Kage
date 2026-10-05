@@ -14,8 +14,25 @@
 use crate::error::AppError;
 use crate::i18n;
 use serde::Serialize;
-use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, State};
+
+/// `config_updated` payload from emit sites that know the active locale.
+/// `i18n.js` skips its catalog re-fetch when `language` matches what it
+/// already has, so routine settings saves don't ship ~0.5 MB of catalog to
+/// every window. Emit sites that send `()` still work: a missing language
+/// means "unknown, re-fetch".
+#[derive(Debug, Clone, Serialize)]
+pub struct ConfigUpdatedI18n {
+    pub language: String,
+}
+
+impl ConfigUpdatedI18n {
+    pub fn current() -> Self {
+        Self {
+            language: i18n::active_language(),
+        }
+    }
+}
 
 /// Payload returned by `get_i18n_catalog`. Mirrors the shape consumed by
 /// `ui/js/shared/i18n.js`.
@@ -33,13 +50,13 @@ pub struct I18nPayload {
     pub rtl: bool,
     /// `true` if the active catalog is mostly machine-translated.
     pub machine_translated: bool,
-    /// Active locale's catalog as a `key → { message, description }` map.
-    pub catalog: HashMap<String, crate::i18n::EntrySnapshot>,
+    /// Active locale's catalog as a `key → { message }` map.
+    pub catalog: i18n::CatalogView,
     /// English fallback catalog — same shape. Always shipped so a missing
     /// translation in a non-English locale degrades gracefully without a
     /// second IPC roundtrip. For active=en this duplicates `catalog` but
-    /// the cost is negligible and the frontend code path stays uniform.
-    pub fallback: HashMap<String, crate::i18n::EntrySnapshot>,
+    /// the frontend code path stays uniform.
+    pub fallback: i18n::CatalogView,
 }
 
 /// Catalog payload metadata exposed for the language picker. The full per-language
@@ -53,8 +70,10 @@ pub struct AvailableLanguage {
     pub machine_translated: bool,
 }
 
+/// `async` so the (large) catalog serialisation runs on the async runtime,
+/// not the main event-loop thread.
 #[tauri::command]
-pub fn get_i18n_catalog() -> Result<I18nPayload, AppError> {
+pub async fn get_i18n_catalog() -> Result<I18nPayload, AppError> {
     let language = i18n::active_language();
     let rtl = i18n::active_is_rtl();
     let machine_translated = i18n::active_is_machine_translated();
@@ -63,12 +82,10 @@ pub fn get_i18n_catalog() -> Result<I18nPayload, AppError> {
     // settings UI honestly answer "what is the system language?".
     let system_language = sys_locale::get_locale().unwrap_or_default();
 
-    let catalog = i18n::serialise_catalog(&language).unwrap_or_default();
-    let fallback = if language == "en" {
-        catalog.clone()
-    } else {
-        i18n::serialise_catalog("en").unwrap_or_default()
-    };
+    // Views borrow the parsed catalogs; nothing is cloned until serde
+    // writes the IPC payload.
+    let catalog = i18n::catalog_view(&language);
+    let fallback = i18n::catalog_view("en");
 
     Ok(I18nPayload {
         language,
@@ -80,8 +97,9 @@ pub fn get_i18n_catalog() -> Result<I18nPayload, AppError> {
     })
 }
 
+/// `async` because the first call scans every catalog's `_meta` block.
 #[tauri::command]
-pub fn get_available_languages() -> Vec<AvailableLanguage> {
+pub async fn get_available_languages() -> Vec<AvailableLanguage> {
     i18n::available_languages()
         .into_iter()
         .map(|(code, name, rtl, machine_translated)| AvailableLanguage {
@@ -129,6 +147,6 @@ pub fn set_language<R: tauri::Runtime>(
     i18n::set_language(preferred.as_deref().unwrap_or("en"));
 
     // Broadcast so every window rerenders.
-    let _ = app.emit(crate::events::CONFIG_UPDATED, ());
+    let _ = app.emit(crate::events::CONFIG_UPDATED, ConfigUpdatedI18n::current());
     Ok(())
 }

@@ -36,6 +36,28 @@ pub const CURRENT_VERSION: u32 = 1;
 /// the migration framework existed.
 pub const MIN_SUPPORTED_VERSION: u32 = 1;
 
+/// Returned (inside the `anyhow::Error`) when the stored config was written
+/// by a newer build. Typed so `Config::load` can match on it (`Error::is`)
+/// instead of string-matching the message — that branch must preserve the
+/// file.
+#[derive(Debug)]
+pub struct NewerVersionError {
+    pub stored: u32,
+}
+
+impl std::fmt::Display for NewerVersionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "config version {} is newer than this build understands (max {}); \
+             refusing to migrate to avoid data loss",
+            self.stored, CURRENT_VERSION
+        )
+    }
+}
+
+impl std::error::Error for NewerVersionError {}
+
 /// Migrate the given JSON config from its stored `version` up to
 /// `CURRENT_VERSION`. Returns the mutated `Value` with an updated
 /// `version` field.
@@ -54,12 +76,7 @@ pub fn migrate(mut value: Value) -> Result<Value> {
     let stored = read_version(&value);
 
     if stored > CURRENT_VERSION {
-        bail!(
-            "config version {} is newer than this build understands (max {}); \
-             refusing to migrate to avoid data loss",
-            stored,
-            CURRENT_VERSION
-        );
+        bail!(NewerVersionError { stored });
     }
     if stored < MIN_SUPPORTED_VERSION {
         bail!(
@@ -146,6 +163,7 @@ mod tests {
         let v = json!({ "version": CURRENT_VERSION + 1 });
         let err = migrate(v).unwrap_err();
         assert!(format!("{}", err).contains("newer"));
+        assert!(err.downcast_ref::<NewerVersionError>().is_some());
     }
 
     #[test]

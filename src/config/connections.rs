@@ -194,7 +194,11 @@ pub struct AgentConfig {
     pub auto_compact_threshold: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// `Deserialize` is hand-written (via `AcpModeWire`) so an unknown
+/// `type` or a malformed payload degrades to `AcpMode::default()`
+/// instead of failing the whole `Config::load` — see the Default impl
+/// below for why that's the right failure mode.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum AcpMode {
     Local {
@@ -205,6 +209,62 @@ pub enum AcpMode {
         port: u16,
         timeout_ms: u64,
     },
+}
+
+/// Wire mirror of `AcpMode` with per-field defaults, so a hand-edited
+/// entry that omits (say) `timeout_ms` still loads.
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum AcpModeWire {
+    Local {
+        #[serde(default)]
+        spawn_command: String,
+    },
+    Remote {
+        #[serde(default = "default_remote_host")]
+        host: String,
+        #[serde(default = "default_remote_port")]
+        port: u16,
+        #[serde(default = "default_remote_timeout_ms")]
+        timeout_ms: u64,
+    },
+}
+
+impl<'de> Deserialize<'de> for AcpMode {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = serde_json::Value::deserialize(deserializer)?;
+        match AcpModeWire::deserialize(&raw) {
+            Ok(AcpModeWire::Local { spawn_command }) => Ok(AcpMode::Local { spawn_command }),
+            Ok(AcpModeWire::Remote {
+                host,
+                port,
+                timeout_ms,
+            }) => Ok(AcpMode::Remote {
+                host,
+                port,
+                timeout_ms,
+            }),
+            Err(e) => {
+                log::warn!(
+                    "Unrecognised agent connection mode ({}); using an empty local mode",
+                    e
+                );
+                Ok(AcpMode::default())
+            }
+        }
+    }
+}
+
+fn default_remote_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_remote_port() -> u16 {
+    8765
+}
+
+fn default_remote_timeout_ms() -> u64 {
+    30000
 }
 
 /// Default for `AcpMode` when an old/hand-edited config entry omits

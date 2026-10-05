@@ -3,8 +3,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
 
 use crate::config_migrations;
+
+/// Serialises `save_to`'s write+rename across threads. See `save_to`.
+static SAVE_LOCK: Mutex<()> = Mutex::new(());
+/// Suffix counter for unique temp file names.
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+/// Set by `load` when config.json was written by a newer build: `save()`
+/// becomes a no-op so this build's defaults can't overwrite it.
+static PRESERVE_NEWER_FILE: AtomicBool = AtomicBool::new(false);
+static NEWER_SKIP_LOGGED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -171,14 +182,26 @@ impl Config {
 
     pub fn load() -> Result<Self> {
         let config_path = Self::get_config_path()?;
+        let (config, preserve_newer) = Self::load_from(&config_path)?;
+        if preserve_newer {
+            PRESERVE_NEWER_FILE.store(true, Ordering::SeqCst);
+        }
+        Ok(config)
+    }
 
+    /// Load from an explicit path. The bool is `true` when the file was
+    /// written by a newer build and must not be overwritten by this one
+    /// (`load` turns that into the process-wide `save()` guard). Saves made
+    /// here go through `save_to` directly: they run before any other thread
+    /// can touch the config.
+    fn load_from(config_path: &std::path::Path) -> Result<(Self, bool)> {
         if !config_path.exists() {
             let config = Self::default();
-            config.save()?;
-            return Ok(config);
+            config.save_to(config_path)?;
+            return Ok((config, false));
         }
 
-        let metadata = fs::metadata(&config_path).context("Failed to read config file metadata")?;
+        let metadata = fs::metadata(config_path).context("Failed to read config file metadata")?;
         if metadata.len() > Self::MAX_CONFIG_SIZE {
             // Too-large config is almost certainly corrupted (maybe a
             // truncated write that got padded, or a log file written to
@@ -189,13 +212,13 @@ impl Config {
                 metadata.len(),
                 Self::MAX_CONFIG_SIZE
             );
-            Self::backup_corrupt(&config_path, "oversized");
+            Self::backup_corrupt(config_path, "oversized");
             let config = Self::default();
-            config.save()?;
-            return Ok(config);
+            config.save_to(config_path)?;
+            return Ok((config, false));
         }
 
-        let content = fs::read_to_string(&config_path).context("Failed to read config file")?;
+        let content = fs::read_to_string(config_path).context("Failed to read config file")?;
 
         // Parse to a generic Value first so we can run migrations on the
         // JSON representation before it hits the strongly-typed struct.
@@ -208,10 +231,10 @@ impl Config {
                     "Config file is not valid JSON ({}); backing up and resetting",
                     e
                 );
-                Self::backup_corrupt(&config_path, "invalid-json");
+                Self::backup_corrupt(config_path, "invalid-json");
                 let config = Self::default();
-                config.save()?;
-                return Ok(config);
+                config.save_to(config_path)?;
+                return Ok((config, false));
             }
         };
 
@@ -222,30 +245,45 @@ impl Config {
                 //   1. Version is newer than we understand — preserve the
                 //      file, start with defaults *without* overwriting.
                 //   2. Version is too old to migrate — back up and reset.
-                let msg = format!("{}", e);
-                if msg.contains("newer") {
+                if e.is::<config_migrations::NewerVersionError>() {
                     log::warn!(
-                        "Config is from a newer build ({}); running with defaults without overwriting the file",
+                        "Config is from a newer build ({}); running with defaults and not saving \
+                         this session so the newer file survives",
                         e
                     );
-                    return Ok(Self::default());
+                    return Ok((Self::default(), true));
                 }
                 log::warn!("Config migration failed ({}); backing up and resetting", e);
-                Self::backup_corrupt(&config_path, "migration-failed");
+                Self::backup_corrupt(config_path, "migration-failed");
                 let config = Self::default();
-                config.save()?;
-                return Ok(config);
+                config.save_to(config_path)?;
+                return Ok((config, false));
             }
         };
 
-        let config: Config = match serde_json::from_value(migrated) {
+        // Deserialize from a borrow so the salvage path below still has
+        // the original value when the strict parse fails.
+        let config: Config = match Config::deserialize(&migrated) {
             Ok(c) => c,
             Err(e) => {
+                // One bad section (an unknown variant from a newer build,
+                // a hand-edit) shouldn't cost the user every other setting.
+                // Default only the top-level sections that fail; the backup
+                // keeps the original for anything that was dropped. Not
+                // saved here — the next regular save persists the result.
+                Self::backup_corrupt(config_path, "schema-mismatch");
+                if let Some((salvaged, dropped)) = Self::deserialize_salvaging(&migrated) {
+                    log::warn!(
+                        "Config did not match current schema ({}); reset only section(s) {:?}",
+                        e,
+                        dropped
+                    );
+                    return Ok((salvaged, false));
+                }
                 log::warn!("Post-migration config did not match current schema ({}); backing up and resetting", e);
-                Self::backup_corrupt(&config_path, "schema-mismatch");
                 let config = Self::default();
-                config.save()?;
-                return Ok(config);
+                config.save_to(config_path)?;
+                return Ok((config, false));
             }
         };
 
@@ -254,11 +292,36 @@ impl Config {
         if config.version < config_migrations::CURRENT_VERSION {
             let mut upgraded = config.clone();
             upgraded.version = config_migrations::CURRENT_VERSION;
-            let _ = upgraded.save();
-            return Ok(upgraded);
+            let _ = upgraded.save_to(config_path);
+            return Ok((upgraded, false));
         }
 
-        Ok(config)
+        Ok((config, false))
+    }
+
+    /// Deserialize `value`, defaulting only the top-level keys that fail
+    /// to parse on their own. Returns the config plus the dropped key
+    /// names, or `None` if the root isn't an object or still won't parse.
+    fn deserialize_salvaging(value: &serde_json::Value) -> Option<(Self, Vec<String>)> {
+        let obj = value.as_object()?;
+        let mut kept = serde_json::Map::with_capacity(obj.len());
+        let mut dropped = Vec::new();
+        for (k, v) in obj {
+            // Every top-level field is `#[serde(default)]`, so a single-key
+            // object parses iff that one section is valid.
+            let mut single = serde_json::Map::with_capacity(1);
+            single.insert(k.clone(), v.clone());
+            let probe = serde_json::Value::Object(single);
+            if Config::deserialize(&probe).is_ok() {
+                if let serde_json::Value::Object(m) = probe {
+                    kept.extend(m);
+                }
+            } else {
+                dropped.push(k.clone());
+            }
+        }
+        let config = Config::deserialize(&serde_json::Value::Object(kept)).ok()?;
+        Some((config, dropped))
     }
 
     /// Copy a bad config file aside so the user can inspect it later.
@@ -282,6 +345,17 @@ impl Config {
     /// hotkeys, and grants live in this file; truncating it via plain
     /// fs::write meant a poorly-timed crash could lose all of them.
     pub fn save(&self) -> Result<()> {
+        if PRESERVE_NEWER_FILE.load(Ordering::SeqCst) {
+            // Ok, not Err: callers `?` this into user-facing errors, and the
+            // skip is deliberate. Logged once to keep the log readable.
+            if !NEWER_SKIP_LOGGED.swap(true, Ordering::SeqCst) {
+                log::warn!(
+                    "Config on disk is from a newer build; not saving. Settings changed \
+                     this session will be lost when Kage exits"
+                );
+            }
+            return Ok(());
+        }
         let config_path = Self::get_config_path()?;
         Self::save_to(self, &config_path)
     }
@@ -295,10 +369,19 @@ impl Config {
 
         let content = serde_json::to_string_pretty(self).context("Failed to serialize config")?;
 
+        // Several callers save a snapshot from another thread after
+        // releasing the config mutex, so in-process saves can overlap.
+        // Serialise the write+rename so two of them can't interleave their
+        // bytes into one file. Leaf lock: nothing else is taken under it.
+        let _save_guard = SAVE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
         // Sibling temp file so the rename is same-volume (cross-volume
-        // renames degrade to copy+delete, which loses atomicity). Include
-        // the PID so concurrent processes can't collide on the temp path.
-        let tmp_path = config_path.with_extension(format!("json.tmp.{}", std::process::id()));
+        // renames degrade to copy+delete, which loses atomicity). PID +
+        // per-process counter keeps the name unique across processes and
+        // across saves within this one.
+        let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+        let tmp_path =
+            config_path.with_extension(format!("json.tmp.{}.{}", std::process::id(), seq));
 
         // Write + flush, then close (drop) the file before renaming —
         // Windows refuses to rename over an open handle.
@@ -636,5 +719,94 @@ mod partial_config_tests {
         assert_eq!(back.id, conn.id);
         assert_eq!(back.name, conn.name);
         assert_eq!(back.mode, conn.mode);
+    }
+}
+
+#[cfg(test)]
+mod load_resilience_tests {
+    use super::*;
+
+    fn write(dir: &std::path::Path, body: &str) -> std::path::PathBuf {
+        let path = dir.join("config.json");
+        fs::write(&path, body).unwrap();
+        path
+    }
+
+    #[test]
+    fn newer_version_file_is_left_untouched_and_flagged() {
+        let dir = tempfile::tempdir().unwrap();
+        let body = format!(
+            r#"{{ "version": {}, "debug_mode": true }}"#,
+            config_migrations::CURRENT_VERSION + 1
+        );
+        let path = write(dir.path(), &body);
+
+        let (cfg, preserve) = Config::load_from(&path).unwrap();
+        assert!(preserve, "newer file must arm the save guard");
+        assert!(!cfg.debug_mode, "runs with defaults");
+        assert_eq!(fs::read_to_string(&path).unwrap(), body);
+    }
+
+    #[test]
+    fn one_bad_section_resets_only_that_section() {
+        let dir = tempfile::tempdir().unwrap();
+        // `hotkey.key` has the wrong type; `debug_mode` is fine.
+        let path = write(
+            dir.path(),
+            r#"{ "version": 1, "debug_mode": true, "hotkey": { "key": 42 } }"#,
+        );
+
+        let (cfg, preserve) = Config::load_from(&path).unwrap();
+        assert!(!preserve);
+        assert!(cfg.debug_mode, "valid sections survive");
+        assert_eq!(cfg.hotkey.key, "Space", "bad section falls back to default");
+    }
+
+    #[test]
+    fn unknown_automation_trigger_loads_as_unknown() {
+        let m: MacroConfig = serde_json::from_str(
+            r#"{ "name": "x", "trigger": { "type": "app_focus", "app": "code" } }"#,
+        )
+        .expect("unknown trigger type must not fail the macro");
+        assert!(matches!(m.trigger, AutomationTrigger::Unknown));
+    }
+
+    #[test]
+    fn acp_mode_tolerates_missing_fields_and_unknown_types() {
+        let m: AcpMode = serde_json::from_str(r#"{ "type": "remote", "host": "h" }"#).unwrap();
+        assert_eq!(
+            m,
+            AcpMode::Remote {
+                host: "h".into(),
+                port: 8765,
+                timeout_ms: 30000
+            }
+        );
+        let m: AcpMode = serde_json::from_str(r#"{ "type": "local" }"#).unwrap();
+        assert_eq!(m, AcpMode::default());
+        let m: AcpMode = serde_json::from_str(r#"{ "type": "quantum" }"#).unwrap();
+        assert_eq!(m, AcpMode::default());
+    }
+
+    #[test]
+    fn concurrent_saves_never_produce_invalid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let handles: Vec<_> = (0..8)
+            .map(|i| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    let mut c = Config::default();
+                    // Vary the length so overlapping writes would leave a tail.
+                    c.hotkey.key = "k".repeat(i * 50);
+                    c.save_to(&path).unwrap();
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        let raw = fs::read_to_string(&path).unwrap();
+        serde_json::from_str::<Config>(&raw).expect("saved config must be valid JSON");
     }
 }

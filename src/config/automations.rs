@@ -98,6 +98,13 @@ pub enum AutomationTrigger {
         #[serde(default)]
         filter: Option<String>,
     },
+    /// Forward-compat: a trigger type from a newer build loads as this
+    /// instead of failing the whole Config::load. The scheduler only acts
+    /// on Schedule / Signal, so it behaves like Manual. The newer
+    /// variant's payload is dropped on the next save.
+    #[serde(rename = "unknown")]
+    #[serde(other)]
+    Unknown,
 }
 
 /// Power/battery awareness settings for automations.
