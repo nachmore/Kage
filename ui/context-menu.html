@@ -93,8 +93,15 @@
                 await appWindow.hide();
             }
 
+            // Pending blur-dismiss timer. Cancelled on focus so a quick
+            // re-show (show_context_menu always re-focuses) isn't hidden
+            // by the previous blur's stale timer.
+            let blurTimer = null;
+
             // Reset actionTaken each time the window becomes visible
             appWindow.listen('tauri://focus', () => {
+                clearTimeout(blurTimer);
+                blurTimer = null;
                 actionTaken = false;
             });
 
@@ -110,7 +117,9 @@
 
             // Hide on blur
             appWindow.listen('tauri://blur', () => {
-                setTimeout(() => {
+                clearTimeout(blurTimer);
+                blurTimer = setTimeout(() => {
+                    blurTimer = null;
                     if (!actionTaken) emitAndHide('dismissed');
                 }, 150);
             });

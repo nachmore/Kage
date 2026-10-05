@@ -690,7 +690,12 @@
             });
         }
 
-        backBtn.addEventListener('click', () => { if (currentStep > 0) showStep(currentStep - 1); });
+        backBtn.addEventListener('click', () => {
+            // A pending Next transition will showStep(from + 1) when it
+            // settles; going Back underneath it would be silently undone.
+            if (stepTransitionPending) return;
+            if (currentStep > 0) showStep(currentStep - 1);
+        });
 
         // Load recommended extensions for the extensions step
         async function loadExtensionCatalog() {
@@ -798,54 +803,66 @@
             });
         }
 
+        // In-flight guard: the step-1 save awaits IPC, and a double-click
+        // (or double "Use this agent") would otherwise advance twice and
+        // skip the Preferences step.
+        let stepTransitionPending = false;
         nextBtn.addEventListener('click', async () => {
-            if (currentStep < totalSteps - 1) {
-                // Save ACP config when leaving step 1 (the agent step).
-                if (currentStep === 1) {
-                    try {
-                        const api = kageAgentConnections;
-                        const config = await invoke('get_config');
-                        if (!config.acp) config.acp = {};
+            if (stepTransitionPending) return;
+            // Capture before any await so the target step can't drift.
+            const from = currentStep;
+            if (from < totalSteps - 1) {
+                stepTransitionPending = true;
+                try {
+                    // Save ACP config when leaving step 1 (the agent step).
+                    if (from === 1) {
+                        try {
+                            const api = kageAgentConnections;
+                            const config = await invoke('get_config');
+                            if (!config.acp) config.acp = {};
 
-                        // The user can land in three states:
-                        //   1. Picked a detected agent → we already
-                        //      stored it in pendingConnection.
-                        //   2. Edited the manual form → read it back.
-                        //   3. Did neither (rare; the no-detection path
-                        //      auto-shows the manual form so the empty
-                        //      state still produces a saveable shape).
-                        let conn = null;
-                        if (manualEditorRendered && api) {
-                            conn = api.readEditForm('wConnEdit', pendingConnection);
-                        } else if (pendingConnection) {
-                            conn = pendingConnection;
+                            // The user can land in three states:
+                            //   1. Picked a detected agent → we already
+                            //      stored it in pendingConnection.
+                            //   2. Edited the manual form → read it back.
+                            //   3. Did neither (rare; the no-detection path
+                            //      auto-shows the manual form so the empty
+                            //      state still produces a saveable shape).
+                            let conn = null;
+                            if (manualEditorRendered && api) {
+                                conn = api.readEditForm('wConnEdit', pendingConnection);
+                            } else if (pendingConnection) {
+                                conn = pendingConnection;
+                            }
+                            if (conn?.mode) {
+                                // Single-connection bootstrap: replace the
+                                // connections array with this one entry,
+                                // and mark it active.
+                                if (!conn.id) conn.id = api ? api.uuidLite() : 'default';
+                                config.acp.connections = [conn];
+                                config.acp.active_connection_id = conn.id;
+                            }
+                            await invoke('save_config', { config });
+                        } catch (e) {
+                            console.error('Failed to save ACP config:', e);
                         }
-                        if (conn?.mode) {
-                            // Single-connection bootstrap: replace the
-                            // connections array with this one entry,
-                            // and mark it active.
-                            if (!conn.id) conn.id = api ? api.uuidLite() : 'default';
-                            config.acp.connections = [conn];
-                            config.acp.active_connection_id = conn.id;
+                    }
+                    // Load extension catalog when entering step 3
+                    if (from + 1 === 3) {
+                        loadExtensionCatalog();
+                    }
+                    // Render macOS permission cards when entering step 5 (mac only)
+                    if (isMacOS && from + 1 === 5 && !macPermsRendered) {
+                        const container = document.getElementById('wMacPermCards');
+                        if (container) {
+                            renderMacPermsInto(container, invoke, 'wMacPerm');
+                            macPermsRendered = true;
                         }
-                        await invoke('save_config', { config });
-                    } catch (e) {
-                        console.error('Failed to save ACP config:', e);
                     }
+                    showStep(from + 1);
+                } finally {
+                    stepTransitionPending = false;
                 }
-                // Load extension catalog when entering step 3
-                if (currentStep + 1 === 3) {
-                    loadExtensionCatalog();
-                }
-                // Render macOS permission cards when entering step 5 (mac only)
-                if (isMacOS && currentStep + 1 === 5 && !macPermsRendered) {
-                    const container = document.getElementById('wMacPermCards');
-                    if (container) {
-                        renderMacPermsInto(container, invoke, 'wMacPerm');
-                        macPermsRendered = true;
-                    }
-                }
-                showStep(currentStep + 1);
             } else {
                 const decisions = storeExtensions.map((ext, i) => ({
                     id: ext.id,
@@ -892,6 +909,10 @@
                 console.log('[welcome] complete_first_run: done');
             } catch (e) {
                 console.error('[welcome] complete_first_run failed:', e);
+                // The skip path raised the overlay up front; drop it so
+                // the re-enabled button is reachable again. No-op for
+                // the Finish path (overlay not shown yet).
+                hideLaunchOverlay();
                 if (triggerBtn) triggerBtn.disabled = false;
                 alert('Setup failed: ' + (e?.message || e) + '\n\nPlease try again.');
                 return;
@@ -994,8 +1015,17 @@
             // Ensure the recommended catalog is loaded so we have the
             // full list to install. The render side-effect is harmless on
             // a step the user never sees.
-            await loadExtensionCatalog();
-            const decisions = storeExtensions.map(ext => ({ id: ext.id, checked: true }));
+            let decisions;
+            try {
+                await loadExtensionCatalog();
+                decisions = storeExtensions.map(ext => ({ id: ext.id, checked: true }));
+            } catch (e) {
+                // Don't leave the user stranded behind the overlay.
+                console.error('[welcome] skip: extension catalog failed:', e);
+                hideLaunchOverlay();
+                if (btn) btn.disabled = false;
+                return;
+            }
 
             await runFinishFlow(decisions, btn);
         }
@@ -1007,6 +1037,10 @@
         // Guards re-entry: the skip path shows the overlay up front for
         // instant feedback, then runFinishFlow() tries to show it again.
         let launchOverlayShown = false;
+        // Separate from launchOverlayShown: the overlay can be hidden
+        // and re-shown after a failed skip, but the mascot must only be
+        // created once or a retry stacks a second controller + timers.
+        let launchMascotCreated = false;
         let quipTimer = null;
 
         /**
@@ -1015,9 +1049,8 @@
          * Reuses the same ANIMATIONS import as the first welcome mascot
          * so we don't have to ship another copy. Idempotent — safe to
          * call from both the skip fast-path (early, for instant feedback)
-         * and runFinishFlow(); the second call is a no-op. There's no
-         * "hide" counterpart — the window closes a couple of seconds
-         * later.
+         * and runFinishFlow(); the second call is a no-op. Undone by
+         * hideLaunchOverlay() only when the skip path fails.
          */
         function showLaunchOverlay() {
             if (launchOverlayShown) return;
@@ -1028,7 +1061,8 @@
             overlay.classList.add('active');
 
             const mascotEl = document.getElementById('launchMascot');
-            if (mascotEl) {
+            if (mascotEl && !launchMascotCreated) {
+                launchMascotCreated = true;
                 const { outlineColor, invert } = getMascotThemeSettings();
                 createMascotController(mascotEl, {
                     size: 160,
@@ -1042,6 +1076,26 @@
             }
 
             startQuipRotation();
+        }
+
+        /**
+         * Reverse showLaunchOverlay() so a failed skip-path setup leaves
+         * the wizard usable and a retry can show the overlay fresh.
+         */
+        function hideLaunchOverlay() {
+            if (!launchOverlayShown) return;
+            launchOverlayShown = false;
+            stopQuipRotation();
+            const overlay = document.getElementById('launchOverlay');
+            if (overlay) {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+            }
+            const quipEl = document.getElementById('launchQuip');
+            if (quipEl) {
+                quipEl.classList.remove('visible');
+                quipEl.textContent = '';
+            }
         }
 
         /**
