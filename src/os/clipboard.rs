@@ -2,10 +2,11 @@
 //
 // Each platform's `clipboard` submodule defines its own opaque
 // `SelectionCaptureToken` type — the data needed to complete a
-// two-phase capture is genuinely different per OS (Windows uses the
-// clipboard sequence number; macOS/Linux just capture synchronously
-// and stash the result). We re-export the platform's token here so
-// callers see a uniform name.
+// two-phase capture is genuinely different per OS (Windows snapshots
+// the clipboard sequence number; macOS snapshots the clipboard plus
+// `NSPasteboard.changeCount` and `finish` polls for the change; Linux
+// still captures synchronously in `begin` and just stashes the result).
+// We re-export the platform's token here so callers see a uniform name.
 
 pub use crate::os::platform::clipboard::SelectionCaptureToken;
 

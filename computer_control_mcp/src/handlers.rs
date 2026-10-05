@@ -371,7 +371,13 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
                 .get("filter")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_lowercase());
-            match kage_core::os::launcher::scan_applications() {
+            // Only name + path reach the model, so skip the per-package
+            // UWP logo read + base64 encode the GUI launcher needs.
+            #[cfg(target_os = "windows")]
+            let scanned = kage_core::os::platform::launcher::scan_applications_without_icons_impl();
+            #[cfg(not(target_os = "windows"))]
+            let scanned = kage_core::os::launcher::scan_applications();
+            match scanned {
                 Ok(apps) => {
                     let list: Vec<serde_json::Value> = apps
                         .into_iter()

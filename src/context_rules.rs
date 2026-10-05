@@ -49,15 +49,19 @@ pub struct ContextRule {
     /// have an "IDE" rule that matches `code` and a "Dev terminal"
     /// rule that also matches a different exe — friendly_name is
     /// what shows up in the chip.
+    #[serde(default)]
     pub friendly_name: String,
     /// What we match against the foreground process name. Free-form
     /// string the user types; `.exe` stripping + tokenisation makes
-    /// "Code" or "Visual Studio Code" both work.
+    /// "Code" or "Visual Studio Code" both work. A missing value
+    /// defaults to empty, which `matches` treats as never-matching.
+    #[serde(default)]
     pub executable: String,
     /// Steering body the model sees inside `<_kage_app_steering>`.
     /// Truncated to `MAX_STEERING_LEN` chars when injected; we
     /// preserve the user's literal string in storage so a bigger cap
     /// later doesn't silently eat data.
+    #[serde(default)]
     pub steering: String,
     /// Lets a user temporarily disable a rule without deleting it.
     #[serde(default = "crate::config::default_true")]
@@ -423,6 +427,26 @@ mod tests {
                 r.executable
             );
         }
+    }
+
+    #[test]
+    fn rule_with_missing_fields_still_deserialises() {
+        // One hand-edited / older rule missing a field must not fail the
+        // whole Config::load (CLAUDE.md: every config field has a default).
+        let r: ContextRule = serde_json::from_value(serde_json::json!({
+            "friendly_name": "Partial"
+        }))
+        .expect("partial rule must deserialise");
+        assert_eq!(r.friendly_name, "Partial");
+        assert!(r.executable.is_empty());
+        assert!(r.steering.is_empty());
+        assert!(r.enabled);
+        // An empty executable never matches, so the partial rule is inert.
+        assert!(first_matching(std::slice::from_ref(&r), "code").is_none());
+
+        let empty: ContextRule = serde_json::from_value(serde_json::json!({}))
+            .expect("empty rule object must deserialise");
+        assert!(empty.friendly_name.is_empty());
     }
 
     #[test]

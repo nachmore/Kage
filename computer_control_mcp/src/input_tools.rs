@@ -10,6 +10,15 @@ pub(crate) fn clamp_wait_ms(ms: u64) -> u64 {
     ms.min(MAX_WAIT_MS)
 }
 
+/// Narrow a model-supplied click count to `u32` without wrapping (a bare
+/// `as u32` turns 2^32 + 1 into 1) and cap it at `MAX_CLICK_COUNT`. 0
+/// passes through so the platform layer can reject it.
+pub(crate) fn clamp_click_count(count: u64) -> u32 {
+    u32::try_from(count)
+        .unwrap_or(u32::MAX)
+        .min(input::MAX_CLICK_COUNT)
+}
+
 pub(crate) fn dispatch(
     id: &serde_json::Value,
     tool_name: &str,
@@ -54,7 +63,7 @@ pub(crate) fn dispatch(
                 .get("button")
                 .and_then(|v| v.as_str())
                 .unwrap_or("left");
-            let count = args.get("count").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let count = clamp_click_count(args.get("count").and_then(|v| v.as_u64()).unwrap_or(1));
             result_text(id, input::click(x, y, button, count))
         }
         "drag" => {
@@ -132,5 +141,24 @@ mod tests {
     fn clamp_wait_ms_caps_huge_values() {
         assert_eq!(clamp_wait_ms(MAX_WAIT_MS + 1), MAX_WAIT_MS);
         assert_eq!(clamp_wait_ms(u64::MAX), MAX_WAIT_MS);
+    }
+
+    #[test]
+    fn clamp_click_count_passes_valid_counts_through() {
+        assert_eq!(clamp_click_count(0), 0);
+        assert_eq!(clamp_click_count(1), 1);
+        assert_eq!(clamp_click_count(2), 2);
+        assert_eq!(
+            clamp_click_count(u64::from(input::MAX_CLICK_COUNT)),
+            input::MAX_CLICK_COUNT
+        );
+    }
+
+    #[test]
+    fn clamp_click_count_caps_without_wrapping() {
+        assert_eq!(clamp_click_count(11), input::MAX_CLICK_COUNT);
+        // 2^32 + 1 would wrap to 1 under a bare `as u32`.
+        assert_eq!(clamp_click_count((1u64 << 32) + 1), input::MAX_CLICK_COUNT);
+        assert_eq!(clamp_click_count(u64::MAX), input::MAX_CLICK_COUNT);
     }
 }

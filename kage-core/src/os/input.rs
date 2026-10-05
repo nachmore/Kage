@@ -25,8 +25,17 @@ pub fn key_press(keys: &str) -> Result<String, String> {
     crate::os::platform::input::key_press_impl(keys)
 }
 
+/// Highest click count the tool layer passes through; larger requests
+/// are clamped to this before reaching the platform impl.
+pub const MAX_CLICK_COUNT: u32 = 10;
+
 /// Click at (x, y) — or at the current cursor position when None —
-/// with the given button ("left"/"right") and count (2 = double-click).
+/// with the given button ("left", "right" or "middle") and count:
+/// 1 = single click, N = an N-click sequence the OS treats as one
+/// multi-click (2 = double, 3 = triple, …), from 1 up to
+/// `MAX_CLICK_COUNT`. Windows rejects other button names and counts
+/// outside 1..=`MAX_CLICK_COUNT`; macOS treats an unknown button as left
+/// and a count of 0 as 1.
 pub fn click(x: Option<i32>, y: Option<i32>, button: &str, count: u32) -> Result<String, String> {
     crate::os::platform::input::click_impl(x, y, button, count)
 }

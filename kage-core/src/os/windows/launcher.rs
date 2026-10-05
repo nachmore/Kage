@@ -11,6 +11,18 @@ use winreg::RegKey;
 use crate::os::launcher::AppInfo;
 
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
+    scan_applications_with(true)
+}
+
+/// Same listing as `scan_applications_impl`, but never reads or
+/// base64-encodes UWP package logos (`icon_data` stays `None` for them).
+/// For callers that only need names + launch paths — the MCP sidecar's
+/// `list_installed_apps` tool — where the icon payload would be thrown away.
+pub fn scan_applications_without_icons_impl() -> Result<Vec<AppInfo>> {
+    scan_applications_with(false)
+}
+
+fn scan_applications_with(include_icons: bool) -> Result<Vec<AppInfo>> {
     let mut apps = HashMap::new();
 
     // Scan Start Menu shortcuts (.lnk files)
@@ -30,7 +42,7 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     scan_registry_apps(&mut apps)?;
 
     // Scan UWP/Store packages
-    scan_uwp_packages(&mut apps);
+    scan_uwp_packages(&mut apps, include_icons);
 
     // Add Windows Settings pages (URI-based, not packages)
     add_settings_pages(&mut apps);
@@ -99,8 +111,9 @@ fn scan_registry_apps(apps: &mut HashMap<String, AppInfo>) -> Result<()> {
     Ok(())
 }
 
-/// Scan installed UWP/Store packages for launchable apps
-fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
+/// Scan installed UWP/Store packages for launchable apps. With
+/// `include_icons == false` the package logo is never touched.
+fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>, include_icons: bool) {
     use windows::core::HSTRING;
     use windows::Management::Deployment::PackageManager;
     use windows_collections::IVectorView;
@@ -170,9 +183,13 @@ fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
                 Err(_) => continue,
             };
 
-            let icon_data = package_icon
-                .get_or_insert_with(|| get_uwp_icon_base64(&package))
-                .clone();
+            let icon_data = if include_icons {
+                package_icon
+                    .get_or_insert_with(|| get_uwp_icon_base64(&package))
+                    .clone()
+            } else {
+                None
+            };
 
             apps.insert(
                 key,
