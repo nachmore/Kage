@@ -35,18 +35,30 @@ export class EchoCancelledVAD {
         this._active = false;
         this._paused = false;
         this._cooldownUntil = 0;
+        // Bumped by start() and stop(); lets a start() that was awaiting
+        // getUserMedia notice it was stopped meanwhile and release the mic.
+        this._gen = 0;
+        this._starting = false;
     }
 
     async start() {
-        if (this._active) return;
+        if (this._active || this._starting) return;
+        const gen = ++this._gen;
+        this._starting = true;
         try {
-            this._stream = await navigator.mediaDevices.getUserMedia({
+            const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
                 },
             });
+            if (gen !== this._gen) {
+                // stop() ran while we were waiting — don't leave the mic open.
+                stream.getTracks().forEach((t) => t.stop());
+                return;
+            }
+            this._stream = stream;
 
             this._audioCtx = new AudioContext();
             const source = this._audioCtx.createMediaStreamSource(this._stream);
@@ -61,10 +73,14 @@ export class EchoCancelledVAD {
             console.log('[VAD] Echo-cancelled voice activity detector started');
         } catch (e) {
             console.warn('[VAD] Failed to start:', e);
+        } finally {
+            if (gen === this._gen) this._starting = false;
         }
     }
 
     stop() {
+        this._gen++;
+        this._starting = false;
         this._active = false;
         this._paused = false;
         if (this._checkInterval) {

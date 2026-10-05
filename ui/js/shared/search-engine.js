@@ -690,9 +690,11 @@ function _mergeAsyncBatch(results, batch) {
 }
 
 function _applyFrecency(results, query) {
-    for (const r of results) {
-        r.score += getFrecencyBoost(query, r.id);
-    }
-    results.sort((a, b) => b.score - a.score);
-    return results.slice(0, 12);
+    // Boost copies, not the shared rows: progressive flushes call this
+    // repeatedly on the same accumulated objects, and mutating them in place
+    // stacked the boost once per flush (favouring rows that arrived early).
+    return results
+        .map((r) => ({ ...r, score: r.score + getFrecencyBoost(query, r.id) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 12);
 }

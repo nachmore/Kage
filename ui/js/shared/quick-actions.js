@@ -171,6 +171,50 @@ function _getOsLanguageCode() {
     }
 }
 
+// ISO 639-1 codes considered when mapping a free-text translate_language
+// ("French", "Français", "fr") back to a code for the already-in-target check.
+const _KNOWN_LANG_CODES = (
+    'af am ar az be bg bn bs ca cs cy da de el en eo es et eu fa fi fr ga gl gu he hi hr hu hy id is it ja ka kk km kn ' +
+    'ko lo lt lv mk ml mn mr ms my nb ne nl no pa pl pt ro ru si sk sl sq sr sv sw ta te th tl tr uk ur uz vi yi zh zu'
+).split(' ');
+const _langCodeCache = new Map();
+
+/**
+ * Resolve a user-entered language name or tag to an ISO 639-1 code, or null
+ * when it can't be identified. Matches English names, names in the OS
+ * locale, and endonyms.
+ */
+function _langCodeForName(name) {
+    const wanted = String(name || '')
+        .trim()
+        .toLowerCase();
+    if (!wanted) return null;
+    if (_langCodeCache.has(wanted)) return _langCodeCache.get(wanted);
+    let code = null;
+    if (/^[a-z]{2}(-[a-z0-9]{2,8})*$/.test(wanted)) {
+        // Already a language tag such as "fr" or "pt-br".
+        code = wanted.split('-')[0];
+    } else {
+        try {
+            const namers = ['en', navigator.language || 'en'].map(
+                (l) => new Intl.DisplayNames([l], { type: 'language' })
+            );
+            for (const c of _KNOWN_LANG_CODES) {
+                const names = namers.map((n) => n.of(c));
+                names.push(new Intl.DisplayNames([c], { type: 'language' }).of(c));
+                if (names.some((n) => n && n.toLowerCase() === wanted)) {
+                    code = c;
+                    break;
+                }
+            }
+        } catch {
+            code = null;
+        }
+    }
+    _langCodeCache.set(wanted, code);
+    return code;
+}
+
 /**
  * Strip markdown and code noise from text so language detection sees clean prose.
  * AI responses often contain code fences, inline code, URLs, and headings that
@@ -292,8 +336,13 @@ export async function getActionsForText(text, config) {
         ) {
             // Handle dynamic translate action — only show if text is in a different language
             if (action._dynamic === 'translate') {
-                const targetLangCode = _getOsLanguageCode();
-                if (!(await _isTextInTargetLanguage(text, targetLangCode))) {
+                // Compare against the configured target, not the OS language.
+                // An unrecognised free-text target (null code) skips the check
+                // and always offers the chip rather than guessing wrong.
+                const targetLangCode = config.translate_language
+                    ? _langCodeForName(config.translate_language)
+                    : _getOsLanguageCode();
+                if (!targetLangCode || !(await _isTextInTargetLanguage(text, targetLangCode))) {
                     actions.push({
                         ...action,
                         label: `→ ${translateLang}`,

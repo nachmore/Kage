@@ -7,6 +7,7 @@
  *   const picker = new HotkeyPicker(containerEl, invoke, { modifiers: ['Alt'], key: 'Space' });
  *   picker.onChange((hotkey) => { ... });
  */
+import { errMessage } from './error-message.js';
 import { t } from './i18n.js';
 
 export class HotkeyPicker {
@@ -108,7 +109,8 @@ export class HotkeyPicker {
     }
 
     friendlyError(err) {
-        const msg = String(err);
+        // AppError rejections are `{ kind, message }`; String() gives "[object Object]".
+        const msg = errMessage(err);
         if (msg.includes('already used as the main hotkey')) {
             return t('shared.hotkey_picker.error.main');
         }

@@ -12,38 +12,39 @@ export function speakWithBrowser(controller, text) {
         if (voice) utterance.voice = voice;
     }
 
+    // Bind callbacks to this utterance's own bar: speechSynthesis.cancel()
+    // delivers the previous utterance's end/error event asynchronously, after
+    // the replacement bar exists, and it must not tear that one down.
+    let bar = null;
     if (controller.barContainer) {
-        controller._browserBar = new TtsPlaybackBar(
-            controller.barContainer,
-            controller.onVisibilityUpdate,
-            {
-                onPause: () => {
-                    if (speechSynthesis.paused) {
-                        speechSynthesis.resume();
-                        controller._browserBar.setPauseIcon(false);
-                        controller._browserBar.setStatus('Speaking...');
-                    } else {
-                        speechSynthesis.pause();
-                        controller._browserBar.setPauseIcon(true);
-                        controller._browserBar.setStatus('Paused');
-                    }
-                },
-                onStop: () => speechSynthesis.cancel(),
-            }
-        );
-        controller._browserBar.show();
-        controller._browserBar.setStatus('Speaking...');
+        bar = new TtsPlaybackBar(controller.barContainer, controller.onVisibilityUpdate, {
+            onPause: () => {
+                if (speechSynthesis.paused) {
+                    speechSynthesis.resume();
+                    bar.setPauseIcon(false);
+                    bar.setStatus('Speaking...');
+                } else {
+                    speechSynthesis.pause();
+                    bar.setPauseIcon(true);
+                    bar.setStatus('Paused');
+                }
+            },
+            onStop: () => speechSynthesis.cancel(),
+        });
+        controller._browserBar = bar;
+        bar.show();
+        bar.setStatus('Speaking...');
     }
 
     utterance.onend = () => {
-        if (!controller._browserBar) return;
-        controller._browserBar.hideAfterDelay();
-        controller._browserBar = null;
+        if (!bar) return;
+        bar.hideAfterDelay();
+        if (controller._browserBar === bar) controller._browserBar = null;
     };
     utterance.onerror = () => {
-        if (!controller._browserBar) return;
-        controller._browserBar.hide();
-        controller._browserBar = null;
+        if (!bar) return;
+        bar.hide();
+        if (controller._browserBar === bar) controller._browserBar = null;
     };
 
     speechSynthesis.speak(utterance);

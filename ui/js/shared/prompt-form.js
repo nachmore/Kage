@@ -100,7 +100,10 @@ export function mountPromptForm(container, formCmd, callbacks = {}) {
     container.appendChild(root);
 
     function collect() {
-        const out = { ...(formCmd.prefilled || {}) };
+        // Only the form's own values: names prefilled from positional args are
+        // refilled by those same args on rebuild. Echoing them back here made
+        // the rebuild see 0 args consumed and re-send them all into {*}.
+        const out = {};
         for (const [name, input] of Object.entries(inputsByName)) {
             const v = input.value;
             if (v !== '' || formCmd.missing.find((m) => m.name === name)?.optional) {

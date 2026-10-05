@@ -8,7 +8,7 @@
  *   this.speech.setup();
  */
 
-import { TtsStreamer, cleanForTts, preloadEmojiNames } from './tts-streamer.js';
+import { TtsStreamer, TtsPlaybackBar, cleanForTts, preloadEmojiNames } from './tts-streamer.js';
 import { EchoCancelledVAD } from './echo-canceller.js';
 import { speakWithBrowser } from './browser-speech.js';
 
@@ -327,6 +327,19 @@ export class SpeechController {
             this._streamedThisResponse = false;
             return;
         }
+
+        this.speakText(text);
+    }
+
+    /**
+     * Speak `text` on explicit user request (Speak buttons). Unlike
+     * speakResponse this ignores the read-back setting and leaves the
+     * auto-read flags untouched so the next reply's behaviour is unchanged.
+     */
+    speakText(text) {
+        if (!text) return;
+        // Emoji names are otherwise only preloaded when read-back/Pocket TTS is on.
+        preloadEmojiNames();
 
         const clean = text
             .replace(/```[\s\S]*?```/g, ' code block ')

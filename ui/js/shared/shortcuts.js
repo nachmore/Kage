@@ -371,36 +371,31 @@ export function buildShortcutCommand(shortcut, args, selectionText = '', paramsB
 
     const substitute = (template, encode = false) => {
         if (!template) return '';
-        let result = template;
         const enc = (v) => (encode ? encodeURIComponent(v) : v);
-
-        result = result.replace(/\{selection\}/g, enc(selectionText));
-
-        // Named placeholders first — replace by literal token so we don't
-        // need to escape anything. Both required and optional forms.
-        for (const [name, value] of Object.entries(namedResolution.filled)) {
-            result = result.split(`{${name}}`).join(enc(value));
-            result = result.split(`{${name}?}`).join(enc(value));
-        }
-        // Strip any unfilled optional named placeholders that survived.
-        result = result.replace(/\{[A-Za-z][A-Za-z0-9_-]*\?\}/g, '');
-
-        if (result.includes('{*}')) {
-            // {*} captures whatever's left after named placeholders ate
-            // their portion. Wildcard captures the original input minus
-            // named-consumed prefix — matches user expectation: "first
-            // arg goes to {lang}, then the rest is the body."
-            const all = remainingArgs.join(' ');
-            result = result.split('{*}').join(enc(all));
-        } else {
-            result = result.replace(/\{(\d+)\?\}/g, (_, idx) => {
-                const i = parseInt(idx, 10);
-                return enc(i < args.length ? args[i] : '');
-            });
-            for (let i = 0; i < args.length; i++) {
-                result = result.split(`{${i}}`).join(enc(args[i]));
+        // One pass with a replacer function: substituted values (selection,
+        // args) are never re-scanned for placeholders, and `$` sequences in
+        // them aren't treated as replacement patterns.
+        const wildcard = template.includes('{*}');
+        const filled = namedResolution.filled;
+        const result = template.replace(PLACEHOLDER_REGEX, (raw, token, opt) => {
+            const optional = opt === '?';
+            if (token === 'selection') return optional ? '' : enc(selectionText);
+            if (token === '*') {
+                // {*} captures whatever's left after named placeholders ate
+                // their portion: "first arg goes to {lang}, the rest is the body."
+                return optional ? raw : enc(remainingArgs.join(' '));
             }
-        }
+            if (/^\d+$/.test(token)) {
+                // Numbered placeholders are ignored when the template uses {*}.
+                if (wildcard) return raw;
+                const i = parseInt(token, 10);
+                if (optional) return enc(i < args.length ? args[i] : '');
+                return i < args.length ? enc(args[i]) : raw;
+            }
+            if (Object.hasOwn(filled, token)) return enc(filled[token]);
+            // Unfilled optional named placeholders are dropped.
+            return optional ? '' : raw;
+        });
         return result;
     };
 

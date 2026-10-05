@@ -271,19 +271,28 @@ function formatDateTime(date, fmt) {
     const Y = date.getFullYear();
     const dow = date.getDay();
 
-    return fmt
-        .replace('dddd', daysFull[dow])
-        .replace('ddd', days[dow])
-        .replace('MMMM', monthsFull[M])
-        .replace('MMM', months[M])
-        .replace('YYYY', String(Y))
-        .replace('MM', String(M + 1).padStart(2, '0'))
-        .replace('DD', String(D).padStart(2, '0'))
-        .replace('HH', String(h24).padStart(2, '0'))
-        .replace('hh', String(h12).padStart(2, '0'))
-        .replace(/\bh\b/, String(h12))
-        .replace('mm', String(m).padStart(2, '0'))
-        .replace('ss', String(s).padStart(2, '0'))
-        .replace('A', ampm)
-        .replace(/\bD\b/, String(D));
+    const pad = (n) => String(n).padStart(2, '0');
+    const values = {
+        dddd: daysFull[dow],
+        ddd: days[dow],
+        MMMM: monthsFull[M],
+        MMM: months[M],
+        YYYY: String(Y),
+        MM: pad(M + 1),
+        DD: pad(D),
+        HH: pad(h24),
+        hh: pad(h12),
+        mm: pad(m),
+        ss: pad(s),
+        h: String(h12),
+        D: String(D),
+        A: ampm,
+    };
+    // Single tokenizing pass (longest tokens first) so substituted text is
+    // never re-scanned: chained replace()s turned the 'A' in "Aug"/"Apr"
+    // into AM/PM ("PMug 8").
+    return fmt.replace(
+        /dddd|ddd|MMMM|MMM|YYYY|MM|DD|HH|hh|mm|ss|\bh\b|\bD\b|A/g,
+        (tok) => values[tok]
+    );
 }

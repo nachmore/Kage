@@ -65,6 +65,16 @@ const SYMBOL_MAP = {
     '∞': ' infinity ',
 };
 
+// Hoisted so cleanForTts (run on every streaming commit) doesn't rebuild them.
+// Only used via replace()/matchAll(), which reset/copy lastIndex.
+const EMOJI_UNIT_RE =
+    /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(\u200D(\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*/gu;
+// Match one or more consecutive emoji (possibly separated by whitespace)
+const EMOJI_GROUP_RE = new RegExp(
+    `(${EMOJI_UNIT_RE.source})(\\s*(${EMOJI_UNIT_RE.source}))*`,
+    'gu'
+);
+
 /**
  * Clean text for TTS consumption:
  * - Replace common symbols with spoken equivalents
@@ -78,13 +88,9 @@ export function cleanForTts(text) {
     }
     // Replace emoji sequences with their spoken names, wrapped in commas for a natural pause.
     // Consecutive emojis are grouped (e.g. 🤣🤣🤣 → ", rolling on the floor laughing x3,")
-    const emojiUnit =
-        /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(\u200D(\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*/gu;
-    // Match one or more consecutive emoji (possibly separated by whitespace)
-    const emojiGroup = new RegExp(`(${emojiUnit.source})(\\s*(${emojiUnit.source}))*`, 'gu');
-    text = text.replace(emojiGroup, (match) => {
+    text = text.replace(EMOJI_GROUP_RE, (match) => {
         // Split the group into individual emoji
-        const singles = [...match.matchAll(emojiUnit)].map((m) => m[0]);
+        const singles = [...match.matchAll(EMOJI_UNIT_RE)].map((m) => m[0]);
         // Count consecutive duplicates and build spoken parts
         const parts = [];
         let i = 0;
@@ -129,6 +135,40 @@ function splitSentences(text) {
         }
     }
     return merged;
+}
+
+// Raw-text tokens that matter for choosing a safe streaming commit point.
+const COMMIT_SCAN_RE = /```|`|\n|[.!?]\s+(?=[A-Z\u00C0-\u024F"])/g;
+// Don't commit tiny fragments on their own; they'd become choppy one-word requests.
+const MIN_COMMIT_CHARS = 20;
+
+/**
+ * Raw-text offset up to which `text` holds only complete sentences that can be
+ * spoken now: the last newline / sentence boundary that is not inside an open
+ * ``` fence or inline code span. 0 if there is none yet.
+ */
+function rawCommitEnd(text) {
+    let end = 0;
+    let inFence = false;
+    let inCode = false;
+    for (const m of text.matchAll(COMMIT_SCAN_RE)) {
+        const tok = m[0];
+        if (tok === '```') {
+            inFence = !inFence;
+            continue;
+        }
+        if (inFence) continue;
+        if (tok === '`') {
+            inCode = !inCode;
+            continue;
+        }
+        // Inline code doesn't span lines in practice; a stray backtick must
+        // not block committing for the rest of the reply.
+        if (tok === '\n') inCode = false;
+        if (inCode) continue;
+        end = m.index + tok.length;
+    }
+    return end;
 }
 
 // ─── Reusable Playback Bar ───
@@ -235,8 +275,10 @@ export class TtsStreamer {
         this.port = port;
         this.voice = voice;
         this._onFinished = onFinished || null;
-        this._sentencesSent = 0;
-        this._lastSentences = [];
+        // Raw-text offset of the prefix already split and enqueued. Only text
+        // past it is processed, so sent sentences are never re-cleaned or
+        // re-indexed when later text (e.g. a closing ``` fence) changes the split.
+        this._rawOffset = 0;
         this._finished = false;
         this._audioQueue = [];
         this._currentAudio = null;
@@ -259,22 +301,26 @@ export class TtsStreamer {
 
     feedText(accumulatedText) {
         if (this._stopped) return;
-        const sentences = splitSentences(accumulatedText);
-        while (this._sentencesSent < sentences.length - 1) {
-            this._enqueueSentence(sentences[this._sentencesSent]);
-            this._sentencesSent++;
+        const tail = accumulatedText.slice(this._rawOffset);
+        const end = rawCommitEnd(tail);
+        if (end === 0 || tail.slice(0, end).trim().length < MIN_COMMIT_CHARS) return;
+        this._rawOffset += end;
+        for (const sentence of splitSentences(tail.slice(0, end))) {
+            this._enqueueSentence(sentence);
         }
-        this._lastSentences = sentences;
     }
 
     finishText(finalText) {
         if (this._stopped) return;
         this._finished = true;
-        const sentences = splitSentences(finalText);
-        while (this._sentencesSent < sentences.length) {
-            this._enqueueSentence(sentences[this._sentencesSent]);
-            this._sentencesSent++;
+        const tail = finalText.slice(this._rawOffset);
+        this._rawOffset = finalText.length;
+        for (const sentence of splitSentences(tail)) {
+            this._enqueueSentence(sentence);
         }
+        // Everything may already have been committed (and played) during
+        // streaming; kick the queue so the finished path still runs.
+        if (!this._isPlaying && !this._dispatching) this._playNext();
     }
 
     _enqueueSentence(sentence) {

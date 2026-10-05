@@ -7,7 +7,7 @@ const SOUNDS = {
     'two-tone': {
         name: 'Two-Tone Beep',
         play: () => {
-            const ctx = new AudioContext();
+            const ctx = _getCtx();
             _tone(ctx, 800, 0, 0.25, 0.3);
             _tone(ctx, 1000, 0.3, 0.25, 0.3);
         },
@@ -15,7 +15,7 @@ const SOUNDS = {
     chime: {
         name: 'Chime',
         play: () => {
-            const ctx = new AudioContext();
+            const ctx = _getCtx();
             _tone(ctx, 523, 0, 0.15, 0.25);
             _tone(ctx, 659, 0.15, 0.15, 0.25);
             _tone(ctx, 784, 0.3, 0.15, 0.25);
@@ -25,7 +25,7 @@ const SOUNDS = {
     alert: {
         name: 'Alert',
         play: () => {
-            const ctx = new AudioContext();
+            const ctx = _getCtx();
             _tone(ctx, 880, 0, 0.1, 0.35);
             _tone(ctx, 880, 0.15, 0.1, 0.35);
             _tone(ctx, 880, 0.3, 0.1, 0.35);
@@ -34,7 +34,7 @@ const SOUNDS = {
     gentle: {
         name: 'Gentle',
         play: () => {
-            const ctx = new AudioContext();
+            const ctx = _getCtx();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'sine';
@@ -51,7 +51,7 @@ const SOUNDS = {
     bell: {
         name: 'Bell',
         play: () => {
-            const ctx = new AudioContext();
+            const ctx = _getCtx();
             [1, 2.4, 3, 4.5].forEach((mult, i) => {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
@@ -68,13 +68,23 @@ const SOUNDS = {
     success: {
         name: 'Success',
         play: () => {
-            const ctx = new AudioContext();
+            const ctx = _getCtx();
             _tone(ctx, 523, 0, 0.12, 0.25);
             _tone(ctx, 659, 0.12, 0.12, 0.25);
             _tone(ctx, 784, 0.24, 0.2, 0.3);
         },
     },
 };
+
+// One shared context for every tone: a running AudioContext is never garbage
+// collected (it holds an output stream + render thread until close()), so a
+// context per play() leaked several per timer fire in long-lived windows.
+let _ctx = null;
+function _getCtx() {
+    if (!_ctx || _ctx.state === 'closed') _ctx = new AudioContext();
+    if (_ctx.state === 'suspended') _ctx.resume().catch(() => {});
+    return _ctx;
+}
 
 function _tone(ctx, freq, startTime, duration, volume) {
     const osc = ctx.createOscillator();

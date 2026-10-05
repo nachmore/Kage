@@ -94,6 +94,7 @@ function buildMascotFromSource(doc, size) {
 // ─── CSS (injected once) ────────────────────────────────────────────────────
 let _cssInjected = false;
 let _filterCounter = 0;
+const _outlineFilterIds = new Map();
 
 function ensureCSS() {
     if (_cssInjected) return;
@@ -125,7 +126,13 @@ function ensureCSS() {
  * @returns {string} The filter ID to use in `filter: url(#id)`
  */
 export function ensureOutlineFilter(color, radius = 2) {
+    // Reuse one filter per (color, radius): callers run per avatar render, and
+    // a fresh <filter> each time piled up identical nodes for the window's life.
+    const key = `${color}|${radius}`;
+    const cachedId = _outlineFilterIds.get(key);
+    if (cachedId && document.getElementById(cachedId)) return cachedId;
     const id = `kage-outline-${++_filterCounter}`;
+    _outlineFilterIds.set(key, id);
     let svgHost = document.getElementById('kage-svg-filters');
     if (!svgHost) {
         svgHost = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
