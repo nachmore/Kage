@@ -86,9 +86,10 @@ fn wait_for_pasteboard_change(before: isize, timeout_ms: u64) -> bool {
 /// over the image) and is locale-independent.
 mod pasteboard {
     use objc2::msg_send;
-    use objc2::rc::{autoreleasepool, Retained};
+    use objc2::rc::{autoreleasepool, Allocated, Retained};
     use objc2::runtime::{AnyClass, AnyObject};
     use objc2_foundation::NSString;
+    use std::ptr;
 
     fn general() -> Option<Retained<AnyObject>> {
         let cls = AnyClass::get(c"NSPasteboard")?;
@@ -106,15 +107,253 @@ mod pasteboard {
         })
     }
 
+    /// Plain text if present; otherwise the text of an RTF- or HTML-only
+    /// pasteboard (some apps publish only rich types, which pbpaste used
+    /// to coerce for us). A rich payload with no readable text (e.g. the
+    /// `<img>` wrapper a browser adds to a copied image) stays `None`, so
+    /// the capture path won't "restore" an empty string over the image.
     pub fn read_text() -> Option<String> {
         autoreleasepool(|_| {
             let pb = general()?;
-            let ty = NSString::from_str("public.utf8-plain-text");
-            // SAFETY: -stringForType: takes an NSPasteboardType (NSString)
-            // and returns a nullable NSString.
-            let text: Option<Retained<NSString>> = unsafe { msg_send![&*pb, stringForType: &*ty] };
-            text.map(|s| s.to_string())
+            if let Some(text) = string_for_type(&pb, "public.utf8-plain-text") {
+                return Some(text);
+            }
+            let readable = |text: &String| !text.trim().is_empty();
+            rtf_text(&pb).filter(readable).or_else(|| {
+                string_for_type(&pb, "public.html")
+                    .map(|html| super::html_to_text(&html))
+                    .filter(readable)
+            })
         })
+    }
+
+    fn string_for_type(pb: &AnyObject, ty: &str) -> Option<String> {
+        let ty = NSString::from_str(ty);
+        // SAFETY: -stringForType: takes an NSPasteboardType (NSString)
+        // and returns a nullable NSString.
+        let text: Option<Retained<NSString>> = unsafe { msg_send![pb, stringForType: &*ty] };
+        text.map(|s| s.to_string())
+    }
+
+    /// Flatten `public.rtf` via NSAttributedString's AppKit RTF importer.
+    /// Unlike the HTML importer (WebKit-backed, main-thread only) the RTF
+    /// reader is safe off the main thread, which matters because
+    /// `read_clipboard` runs on async command workers.
+    fn rtf_text(pb: &AnyObject) -> Option<String> {
+        let ty = NSString::from_str("public.rtf");
+        // SAFETY: -dataForType: takes an NSPasteboardType (NSString) and
+        // returns a nullable NSData.
+        let data: Option<Retained<AnyObject>> = unsafe { msg_send![pb, dataForType: &*ty] };
+        let data = data?;
+        let cls = AnyClass::get(c"NSAttributedString")?;
+        // SAFETY: +alloc returns an uninitialised +1 instance, consumed by
+        // the init call below (which releases it itself if parsing fails).
+        let alloc: Allocated<AnyObject> = unsafe { msg_send![cls, alloc] };
+        // SAFETY: -initWithRTF:documentAttributes: takes NSData plus a
+        // nullable `NSDictionary **` out-parameter (NULL = we don't want
+        // the document attributes) and returns nil on malformed RTF.
+        let attributed: Option<Retained<AnyObject>> = unsafe {
+            msg_send![
+                alloc,
+                initWithRTF: &*data,
+                documentAttributes: ptr::null_mut::<*mut AnyObject>()
+            ]
+        };
+        let attributed = attributed?;
+        // SAFETY: -[NSAttributedString string] returns a non-null NSString.
+        let text: Retained<NSString> = unsafe { msg_send![&*attributed, string] };
+        // Embedded pictures surface as U+FFFC attachment placeholders,
+        // which carry no text — drop them so an image-only RTF stays None.
+        Some(text.to_string().replace('\u{FFFC}', ""))
+    }
+}
+
+/// Conservative HTML -> plain text for an HTML-only pasteboard. We don't
+/// use `-[NSAttributedString initWithHTML:]`: that importer drives WebKit,
+/// must run on the main thread and spins the run loop, while
+/// `read_clipboard` is called from async command workers. We only need
+/// the readable text, so: drop tags, comments and script/style/title
+/// bodies, turn block boundaries into newlines, collapse whitespace
+/// outside `<pre>`, and decode the common entities.
+fn html_to_text(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    // Tag name whose body is being discarded (script/style/...).
+    let mut skipping: Option<String> = None;
+    let mut pre_depth = 0usize;
+    loop {
+        let Some(lt) = rest.find('<') else {
+            if skipping.is_none() {
+                push_html_text(&mut out, rest, pre_depth > 0);
+            }
+            break;
+        };
+        let after = &rest[lt + 1..];
+        let starts_markup =
+            after.starts_with(|c: char| c.is_ascii_alphabetic() || matches!(c, '/' | '!' | '?'));
+        if !starts_markup {
+            // A stray `<` (sloppy "a < b") is text, not markup.
+            if skipping.is_none() {
+                push_html_text(&mut out, &rest[..=lt], pre_depth > 0);
+            }
+            rest = after;
+            continue;
+        }
+        if skipping.is_none() {
+            push_html_text(&mut out, &rest[..lt], pre_depth > 0);
+        }
+        if let Some(comment) = after.strip_prefix("!--") {
+            rest = comment.find("-->").map_or("", |end| &comment[end + 3..]);
+            continue;
+        }
+        // Unterminated tag: nothing readable follows it.
+        let Some(gt) = find_tag_end(after) else {
+            break;
+        };
+        let tag = &after[..gt];
+        rest = &after[gt + 1..];
+        let closing = tag.starts_with('/');
+        let name: String = tag
+            .trim_start_matches('/')
+            .chars()
+            .take_while(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect();
+        if let Some(end) = &skipping {
+            if closing && name == *end {
+                skipping = None;
+            }
+            continue;
+        }
+        if !closing && matches!(name.as_str(), "script" | "style" | "title" | "template") {
+            skipping = Some(name);
+            continue;
+        }
+        match name.as_str() {
+            "br" => {
+                trim_trailing_blanks(&mut out);
+                out.push('\n');
+            }
+            "pre" => {
+                if closing {
+                    pre_depth = pre_depth.saturating_sub(1);
+                } else {
+                    pre_depth += 1;
+                }
+                start_new_line(&mut out);
+            }
+            "td" | "th" if !closing => {
+                // Cells on the same row read best tab-separated.
+                if !out.is_empty() && !out.ends_with(['\n', '\t']) {
+                    out.truncate(out.trim_end_matches(' ').len());
+                    out.push('\t');
+                }
+            }
+            "p" | "div" | "li" | "tr" | "ul" | "ol" | "table" | "blockquote" | "hr" | "h1"
+            | "h2" | "h3" | "h4" | "h5" | "h6" | "dt" | "dd" | "section" | "article" | "header"
+            | "footer" => start_new_line(&mut out),
+            _ => {}
+        }
+    }
+    out.trim().to_string()
+}
+
+/// Index of the `>` closing a tag, ignoring any inside quoted attribute
+/// values (`title="a>b"`). Only a quote right after `=` opens a value, so
+/// a stray apostrophe in an unquoted attribute can't swallow the rest of
+/// the document.
+fn find_tag_end(tag: &str) -> Option<usize> {
+    let mut quote: Option<char> = None;
+    let mut prev_non_space = ' ';
+    for (i, c) in tag.char_indices() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => {}
+            None if c == '>' => return Some(i),
+            None if matches!(c, '"' | '\'') && prev_non_space == '=' => quote = Some(c),
+            None => {}
+        }
+        if !c.is_whitespace() {
+            prev_non_space = c;
+        }
+    }
+    None
+}
+
+fn push_html_text(out: &mut String, raw: &str, preformatted: bool) {
+    let text = decode_html_entities(raw);
+    if preformatted {
+        out.push_str(&text);
+        return;
+    }
+    // HTML renders any whitespace run as a single space.
+    for c in text.chars() {
+        if !c.is_whitespace() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with(char::is_whitespace) {
+            out.push(' ');
+        }
+    }
+}
+
+fn trim_trailing_blanks(out: &mut String) {
+    out.truncate(out.trim_end_matches([' ', '\t']).len());
+}
+
+fn start_new_line(out: &mut String) {
+    trim_trailing_blanks(out);
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+}
+
+fn decode_html_entities(s: &str) -> std::borrow::Cow<'_, str> {
+    if !s.contains('&') {
+        return std::borrow::Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(amp) = rest.find('&') {
+        out.push_str(&rest[..amp]);
+        let after = &rest[amp + 1..];
+        // The entities we decode are short; a far-off `;` means this `&`
+        // is literal text.
+        let decoded = after
+            .find(';')
+            .filter(|&end| end <= 10)
+            .and_then(|end| decode_html_entity(&after[..end]).map(|c| (c, end)));
+        match decoded {
+            Some((c, end)) => {
+                out.push(c);
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push('&');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    std::borrow::Cow::Owned(out)
+}
+
+fn decode_html_entity(name: &str) -> Option<char> {
+    match name {
+        "amp" => Some('&'),
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "quot" => Some('"'),
+        "apos" => Some('\''),
+        // A plain space: NBSPs in pasted text trip up search and diffs.
+        "nbsp" => Some(' '),
+        _ => {
+            let num = name.strip_prefix('#')?;
+            let code = match num.strip_prefix(['x', 'X']) {
+                Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+                None => num.parse::<u32>().ok()?,
+            };
+            char::from_u32(code)
+        }
     }
 }
 
@@ -175,8 +414,8 @@ fn warn_paste_once(reason: &str) {
     });
 }
 
-/// Text on the clipboard, or `None` when it holds no plain text (image,
-/// file, …).
+/// Text on the clipboard (RTF/HTML-only contents flattened to plain text),
+/// or `None` when it holds no text at all (image, file, …).
 pub fn read_clipboard_impl() -> Option<String> {
     pasteboard::read_text()
 }
@@ -209,12 +448,46 @@ pub fn capture_selection_impl() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::non_empty_trimmed;
+    use super::{html_to_text, non_empty_trimmed};
 
     #[test]
     fn non_empty_trimmed_drops_blank_and_missing_text() {
         assert_eq!(non_empty_trimmed(None), None);
         assert_eq!(non_empty_trimmed(Some("  \n".into())), None);
         assert_eq!(non_empty_trimmed(Some(" hi \n".into())), Some("hi".into()));
+    }
+
+    #[test]
+    fn html_to_text_strips_markup_and_decodes_entities() {
+        let html = "<meta charset='utf-8'><!-- StartFragment --><p>Tom &amp; <b>Jerry</b>\n  \
+                    &lt;3&#33;&nbsp;&#x41;</p><p>Second<br>line</p>";
+        assert_eq!(html_to_text(html), "Tom & Jerry <3! A\nSecond\nline");
+    }
+
+    #[test]
+    fn html_to_text_drops_script_style_and_title_bodies() {
+        let html = "<html><head><title>T</title><style>p{color:red}</style></head>\
+                    <body><script>var a = '<p>';</script>Body</body></html>";
+        assert_eq!(html_to_text(html), "Body");
+    }
+
+    #[test]
+    fn html_to_text_keeps_stray_brackets_and_quoted_gt() {
+        assert_eq!(html_to_text("a < b & c"), "a < b & c");
+        assert_eq!(html_to_text("<a title=\"x>y\" href='z'>link</a>"), "link");
+    }
+
+    #[test]
+    fn html_to_text_preserves_pre_and_separates_cells() {
+        assert_eq!(html_to_text("<pre>a\n  b</pre>"), "a\n  b");
+        assert_eq!(
+            html_to_text("<table><tr><td>1</td><td>2</td></tr><tr><td>3</td></tr></table>"),
+            "1\t2\n3"
+        );
+    }
+
+    #[test]
+    fn html_to_text_of_image_only_markup_is_empty() {
+        assert_eq!(html_to_text("<img src=\"https://x/y.png\" alt=\"\">"), "");
     }
 }
