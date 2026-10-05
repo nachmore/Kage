@@ -1,7 +1,8 @@
+use crate::lock_ext::LockExt;
 use anyhow::Result;
-use log::info;
 #[cfg(target_os = "macos")]
-use log::{error, warn};
+use log::error;
+use log::{info, warn};
 use tauri::Manager;
 use tauri_plugin_updater::Update;
 
@@ -14,31 +15,88 @@ pub async fn plugin_download_and_install<R: tauri::Runtime>(
         "Downloading update v{} (body: {:?})",
         update.version, update.body
     );
-    let app_for_finish = app.clone();
-    let result = update
-        .download_and_install(
-            |_, _| {},
-            move || {
-                info!("Update downloaded, starting installer");
-                crate::commands::system::graceful_shutdown(&app_for_finish);
-                if let Some(acp) = app_for_finish.try_state::<crate::state::AcpHandles>() {
-                    acp.client.disconnect();
-                }
-                crate::os::release_kill_on_exit_job();
-                crate::app_log::flush();
-            },
-        )
-        .await;
-    if let Err(error) = result {
-        let reason = classify_install_error(&error);
-        crate::telemetry::track(
-            app,
-            "update_install_failed",
-            Some(serde_json::json!({ "reason": reason })),
-        );
-        return Err(format_install_error(&error, reason));
+    // Split download from install: the plugin's `download` fires its
+    // finish callback *before* verifying the signature, so tearing down
+    // there left a corrupt download with a headless, disconnected app.
+    // `download` returns only verified bytes, so teardown happens after.
+    let bytes = match update.download(|_, _| {}, || {}).await {
+        Ok(bytes) => bytes,
+        Err(error) => return Err(install_failed(app, &update, &error)),
+    };
+
+    info!("Update downloaded and verified, starting installer");
+    let visible_windows: Vec<&str> = RESTORABLE_WINDOWS
+        .into_iter()
+        .filter(|label| {
+            app.get_webview_window(label)
+                .is_some_and(|window| window.is_visible().unwrap_or(false))
+        })
+        .collect();
+    // Order matters: explicit child cleanup while the Job Object still
+    // safety-nets, THEN release the kill flag so the installer survives us.
+    crate::commands::system::graceful_shutdown(app);
+    if let Some(acp) = app.try_state::<crate::state::AcpHandles>() {
+        acp.client.disconnect();
+    }
+    crate::os::release_kill_on_exit_job();
+    crate::app_log::flush();
+
+    if let Err(error) = update.install(bytes) {
+        restore_after_failed_install(app, &visible_windows);
+        return Err(install_failed(app, &update, &error));
     }
     Ok(())
+}
+
+/// Windows hidden by `graceful_shutdown` that we re-show if install fails
+/// (only those that were visible beforehand).
+const RESTORABLE_WINDOWS: [&str; 3] = [
+    crate::window_labels::FLOATING,
+    crate::window_labels::MAIN,
+    crate::window_labels::SETTINGS,
+];
+
+/// Undo the visible parts of the pre-install teardown so the user can see
+/// the error and keep using the app. The agent stays disconnected (the next
+/// send / reconnect re-spawns it).
+fn restore_after_failed_install<R: tauri::Runtime>(app: &tauri::AppHandle<R>, windows: &[&str]) {
+    warn!("Update install failed after teardown; restoring UI");
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let _ = tray.set_visible(true);
+    }
+    for label in windows {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.show();
+        }
+    }
+}
+
+/// Record a failed download/install and roll back the relaunch markers both
+/// callers wrote beforehand, so the next ordinary launch doesn't resume a
+/// stale session or show the post-update banner for an update that never
+/// landed.
+fn install_failed<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    update: &Update,
+    error: &tauri_plugin_updater::Error,
+) -> anyhow::Error {
+    super::markers::clear_install_markers();
+    if let Some(features) = app.try_state::<crate::state::FeatureServices>() {
+        let mut cfg = features.config.lock_or_recover();
+        if cfg.updates.last_updated_version.as_deref() == Some(update.version.as_str()) {
+            cfg.updates.last_updated_version = None;
+            if let Err(save_error) = cfg.save() {
+                warn!("Failed to save config (update rollback): {save_error}");
+            }
+        }
+    }
+    let reason = classify_install_error(error);
+    crate::telemetry::track(
+        app,
+        "update_install_failed",
+        Some(serde_json::json!({ "reason": reason })),
+    );
+    format_install_error(error, reason)
 }
 
 /// Stable telemetry category for an installer failure.

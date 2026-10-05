@@ -348,7 +348,7 @@ pub fn maybe_autostart_pocket_tts(app: &App, config: &crate::config::Config) {
     let config_arc = features.config.clone();
     let tts_proc = procs.pocket_tts.clone();
     tauri::async_runtime::spawn(async move {
-        let (port, voice, temp, eos_threshold, python) = {
+        let (port, voice, temp, eos_threshold, python, debug_mode) = {
             let config = config_arc.lock_or_recover();
             (
                 config.pocket_tts.port,
@@ -360,6 +360,7 @@ pub fn maybe_autostart_pocket_tts(app: &App, config: &crate::config::Config) {
                     .python_path
                     .clone()
                     .unwrap_or_else(|| "python".to_string()),
+                config.debug_mode,
             )
         };
 
@@ -375,17 +376,59 @@ pub fn maybe_autostart_pocket_tts(app: &App, config: &crate::config::Config) {
             .args(["--voice", &voice])
             .args(["--temp", &temp.to_string()])
             .args(["--eos-threshold", &eos_threshold.to_string()])
+            // server.py relies on the launcher for this; without it a
+            // non-ASCII write to the cp1252 pipe raises on Windows.
+            .env("PYTHONIOENCODING", "utf-8:replace")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
+        // Match the manual `pocket_tts_start` path.
+        if debug_mode {
+            cmd.arg("--debug");
+        }
         crate::commands::pocket_tts::configure_no_window(&mut cmd);
 
         match cmd.spawn() {
-            Ok(child) => {
+            Ok(mut child) => {
                 info!("Pocket TTS server auto-started (PID: {})", child.id());
+                if let Some(stdout) = child.stdout.take() {
+                    spawn_pipe_relay(stdout, "[pocket-tts]", log::Level::Info);
+                }
+                if let Some(stderr) = child.stderr.take() {
+                    spawn_pipe_relay(stderr, "[pocket-tts stderr]", log::Level::Warn);
+                }
                 let mut proc = tts_proc.lock_or_recover();
                 *proc = Some(child);
             }
             Err(e) => warn!("Failed to auto-start Pocket TTS server: {}", e),
+        }
+    });
+}
+
+/// Drain a child's pipe into the log for the child's whole lifetime. An
+/// undrained pipe fills (~4 KB on Windows) and the server's next write to
+/// it blocks that thread forever, hanging TTS requests. Reads bytes and
+/// decodes lossily so one bad sequence can't stop the drain.
+fn spawn_pipe_relay<P: std::io::Read + Send + 'static>(
+    pipe: P,
+    tag: &'static str,
+    level: log::Level,
+) {
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        let mut reader = std::io::BufReader::new(pipe);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    let line = String::from_utf8_lossy(&buf);
+                    let line = line.trim_end();
+                    if !line.is_empty() {
+                        log::log!(level, "{} {}", tag, line);
+                    }
+                }
+            }
         }
     });
 }

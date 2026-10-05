@@ -419,6 +419,40 @@ mod tests {
     }
 
     #[test]
+    fn truncate_msg_respects_char_boundaries() {
+        // 'あ' is 3 bytes, so the second one straddles byte MAX_MSG_LEN.
+        let long = format!("{}ああ", "a".repeat(MAX_MSG_LEN - 1));
+        let truncated = truncate_msg(&long);
+        assert!(truncated.starts_with(&"a".repeat(MAX_MSG_LEN - 1)));
+        // Neither 'あ' fits under the cap, so the suffix follows the 'a's.
+        assert!(truncated[MAX_MSG_LEN - 1..].starts_with("... [truncated"));
+    }
+
+    #[test]
+    fn load_reads_only_tail_window_and_skips_partial_line() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("app.jsonl");
+        {
+            let mut f = File::create(&path).unwrap();
+            // Long multi-byte messages push the file well past the tail
+            // window for max_size=2, so the seek path (and its mid-character
+            // landing) is exercised.
+            for i in 0..20 {
+                let msg = format!("{i}-{}", "日本".repeat(150));
+                let entry = make_entry("info", "t", &msg);
+                writeln!(f, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+            }
+        }
+        let log = AppLog::new(2, &path).unwrap();
+        let prefixes: Vec<_> = log
+            .entries()
+            .into_iter()
+            .map(|e| e.msg.split('-').next().unwrap().to_string())
+            .collect();
+        assert_eq!(prefixes, vec!["18".to_string(), "19".to_string()]);
+    }
+
+    #[test]
     fn writer_loop_appends_batch_to_file() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("app.jsonl");

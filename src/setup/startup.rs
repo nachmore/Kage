@@ -162,7 +162,11 @@ pub fn maybe_spawn_default_session(
     let models_arc = acp.available_models.clone();
     let app_handle = app.handle().clone();
 
-    tauri::async_runtime::spawn(async move {
+    // Blocking pool, not an async worker: every call below is a synchronous
+    // ACP round-trip (connect retries, session/load history replay, the whole
+    // steering turn) and would pin a Tokio worker while the webviews fire
+    // their first invokes.
+    tauri::async_runtime::spawn_blocking(move || {
         info!("Connecting ACP client on launch...");
         if let Err(e) = acp_client.connect() {
             error!("Failed to connect on launch: {}", e);

@@ -55,6 +55,21 @@ pub fn persist_install_source(source: InstallSource) {
     write_marker("install-source.txt", source.as_str(), "install source");
 }
 
+/// Remove the resume and install-source markers after a failed install, so
+/// the next ordinary launch doesn't resume a stale session or act as if an
+/// update had just happened.
+pub fn clear_install_markers() {
+    for name in ["last-session.txt", "install-source.txt"] {
+        if let Some(path) = marker(name) {
+            match std::fs::remove_file(&path) {
+                Ok(()) => info!("Removed stale updater marker {path:?}"),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => warn!("Failed to remove updater marker {path:?}: {error}"),
+            }
+        }
+    }
+}
+
 /// Consume the install source marker, deleting it even if its content is invalid.
 pub fn consume_install_source() -> Option<InstallSource> {
     let path = marker("install-source.txt")?;

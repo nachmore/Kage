@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use log::{info, warn};
 use std::fs;
 use std::path::PathBuf;
@@ -90,9 +90,17 @@ impl ProcessManager {
                     }
                 }
 
-                // Remove the PID file
-                let _ = fs::remove_file(&pid_file);
-                info!("PID file removed");
+                // Compare-and-delete: this runs on a detached thread that
+                // races the launch-time agent spawn, and the kill above can
+                // take ~500ms. If `store_process` rewrote the file with the
+                // new agent's PID meanwhile, deleting it would lose track of
+                // that agent for the next launch's orphan cleanup.
+                if fs::read_to_string(&pid_file).is_ok_and(|now| now == content) {
+                    let _ = fs::remove_file(&pid_file);
+                    info!("PID file removed");
+                } else {
+                    info!("PID file was rewritten by a new spawn; leaving it in place");
+                }
             }
             Err(e) => {
                 warn!("Failed to read PID file: {}", e);
@@ -108,11 +116,16 @@ impl ProcessManager {
         let pid = child.id();
         info!("Storing process with PID: {}", pid);
 
-        // Write PID to file
-        fs::write(&self.pid_file, pid.to_string()).context("Failed to write PID file")?;
-
+        // Track the child before the fallible PID-file write: bailing out
+        // first would drop the Child untracked (std neither kills nor reaps
+        // on drop), so terminate()/disconnect() could never stop it. The
+        // file only feeds next launch's orphan cleanup, so it's best-effort.
         self.pid = Some(pid);
         *self.child.lock_or_recover() = Some(child);
+
+        if let Err(e) = fs::write(&self.pid_file, pid.to_string()) {
+            warn!("Failed to write PID file {:?}: {}", self.pid_file, e);
+        }
 
         info!("✅ Process registered for cleanup (PID: {})", pid);
         Ok(())
@@ -319,8 +332,9 @@ pub fn register_child_killer(kill: impl Fn() + Send + Sync + 'static) {
     }
 }
 
-/// Run every registered killer. Used by the signal handler.
-fn run_all_killers() {
+/// Run every registered killer. Used by the signal handler and the
+/// `RunEvent::Exit` path.
+pub fn run_all_killers() {
     let killers = match CHILD_KILLERS.lock() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
