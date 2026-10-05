@@ -19,10 +19,31 @@
 ;      the installer — bound the wait so a hang becomes a skipped kill
 ;      (the app-side reap already covers the normal case), not a dead
 ;      install. nsExec force-terminates the child when the timeout fires.
+;
+; Only terminate when the exe is ACTUALLY locked. Force-killing another
+; process is a behaviour endpoint protection scores (it's a step in the
+; dropper pattern an unsigned installer launched from a parent that just
+; exited already matches), and in the normal case the app-side reap has
+; already dealt with the sidecar — so taskkill was firing for nothing on
+; every update. FileOpen in append mode is the liveness probe: it fails
+; exactly when another process holds the file open, which is the only case
+; where overwriting it would surface "Error opening file for writing".
 !macro KAGE_KILL_SIDECARS
-  DetailPrint "Stopping Kage helper processes..."
-  nsExec::Exec /TIMEOUT=5000 'taskkill /F /IM kage-computer-control-mcp.exe'
-  Pop $0 ; discard result — "not found" (128) and "timeout" are both fine
+  Push $0
+  Push $1
+  ${If} ${FileExists} "$INSTDIR\kage-computer-control-mcp.exe"
+    ClearErrors
+    FileOpen $1 "$INSTDIR\kage-computer-control-mcp.exe" a
+    ${If} ${Errors}
+      DetailPrint "Stopping Kage helper processes..."
+      nsExec::Exec /TIMEOUT=5000 'taskkill /F /IM kage-computer-control-mcp.exe'
+      Pop $0 ; discard result — "not found" (128) and "timeout" are both fine
+    ${Else}
+      FileClose $1
+    ${EndIf}
+  ${EndIf}
+  Pop $1
+  Pop $0
 !macroend
 
 !macro NSIS_HOOK_PREINSTALL

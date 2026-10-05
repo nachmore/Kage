@@ -52,6 +52,7 @@ pub async fn plugin_download_and_install<R: tauri::Runtime>(
         acp.client.disconnect();
     }
     crate::os::release_kill_on_exit_job();
+    redirect_installer_staging_dir();
     crate::app_log::flush();
 
     if let Err(error) = update.install(bytes) {
@@ -59,6 +60,49 @@ pub async fn plugin_download_and_install<R: tauri::Runtime>(
         return Err(install_failed(app, &update, &error));
     }
     Ok(())
+}
+
+/// Stage the installer under our own config dir instead of `%TEMP%`.
+///
+/// The plugin writes the verified installer to a `tempfile` directory and
+/// launches it from there. "Unsigned PE written to %TEMP% and executed
+/// silently by the process that downloaded it" is the canonical dropper
+/// shape, and endpoint protection (CrowdStrike Falcon among others) scores
+/// execution-from-temp heavily — it was killing the installer mid-run.
+///
+/// `tempfile` honours `std::env::temp_dir()`, which on Windows reads `TMP`
+/// then `TEMP`, so pointing those at `<config>/updates` moves the staging
+/// directory without reimplementing the plugin's launch (arg construction,
+/// NSIS escaping and `ShellExecuteW` stay the plugin's job — see the
+/// "never call run_installer" note in CLAUDE.md).
+///
+/// Process-wide, but this runs microseconds before the installer handoff
+/// and `process::exit(0)`, so the only thing that inherits it is the
+/// installer itself (NSIS uses it for `$PLUGINSDIR`, which we also want out
+/// of `%TEMP%`). Best-effort: on any failure we leave the env alone and the
+/// plugin falls back to `%TEMP%` exactly as before.
+fn redirect_installer_staging_dir() {
+    if !cfg!(windows) {
+        return;
+    }
+    let Some(dir) = dirs::config_dir().map(|d| d.join("kage").join("updates")) else {
+        warn!("Could not resolve config dir; staging the installer in %TEMP%");
+        return;
+    };
+    // Clear any installer a previous run left behind (the plugin keeps its
+    // temp dir so the installer outlives us, so nothing else prunes these).
+    if dir.exists() {
+        if let Err(error) = std::fs::remove_dir_all(&dir) {
+            warn!("Could not clear stale installer staging dir: {error}");
+        }
+    }
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        warn!("Could not create {}: {error}; using %TEMP%", dir.display());
+        return;
+    }
+    info!("Staging installer in {}", dir.display());
+    std::env::set_var("TMP", &dir);
+    std::env::set_var("TEMP", &dir);
 }
 
 /// What the pre-install teardown stopped, captured just before it ran.
