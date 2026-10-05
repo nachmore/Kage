@@ -67,6 +67,15 @@ pub struct AcpClient {
     /// and conversely, a load of X must not swallow *live* chunks streaming
     /// on an unrelated session Z.
     pub loading_sessions: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// Sessions with a *background* prompt (auto-steering extraction,
+    /// session titler) in flight via `try_send_prompt`. The notification
+    /// handler still accumulates their chunks (the caller reads the reply
+    /// back) but does not forward them to any window — otherwise the
+    /// extraction reply streams into whichever chat has that session
+    /// pinned. Safe against hiding real output because `try_send_prompt`
+    /// holds the session's prompt lock, so no user prompt is concurrently
+    /// streaming on it.
+    pub background_prompt_sessions: Arc<Mutex<std::collections::HashSet<String>>>,
     /// Vendor extension namespace observed from incoming notifications.
     /// Two ACP vendor namespaces are recognised: `_kage.dev/` and
     /// `_kiro.dev/`. The extension surface (commands/available,
@@ -129,6 +138,7 @@ impl AcpClient {
             in_flight_prompts: Arc::new(Mutex::new(HashMap::new())),
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
             loading_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            background_prompt_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
             vendor_prefix: Arc::new(Mutex::new(None)),
             prompt_locks: Arc::new(Mutex::new(HashMap::new())),
             restart_guard: Arc::new(Mutex::new(None)),
@@ -141,6 +151,14 @@ impl AcpClient {
     /// other sessions through.
     pub fn is_loading_session(&self, session_id: &str) -> bool {
         self.loading_sessions.lock_or_recover().contains(session_id)
+    }
+
+    /// Whether a background prompt is in flight on `session_id`; its
+    /// streamed output must not be forwarded to the UI.
+    pub fn is_background_prompt_session(&self, session_id: &str) -> bool {
+        self.background_prompt_sessions
+            .lock_or_recover()
+            .contains(session_id)
     }
 
     /// Record the vendor prefix observed in an inbound method name. Idempotent
@@ -435,15 +453,101 @@ impl AcpClient {
         // Reset under the lock, mirroring `send_prompt` — only now that we
         // own the slot is it safe to clear the bucket.
         self.reset_session_accumulator(session_id);
+        let _bg = BackgroundPromptGuard::new(&self.background_prompt_sessions, session_id);
         self.transport
             .send_prompt_request("session/prompt", params)
             .map(Some)
     }
 }
 
+/// RAII marker for `AcpClient::background_prompt_sessions`; clears on drop
+/// so error/early-return paths can't leave a session muted.
+struct BackgroundPromptGuard {
+    set: Arc<Mutex<std::collections::HashSet<String>>>,
+    session_id: String,
+}
+
+impl BackgroundPromptGuard {
+    fn new(set: &Arc<Mutex<std::collections::HashSet<String>>>, session_id: &str) -> Self {
+        set.lock_or_recover().insert(session_id.to_string());
+        Self {
+            set: set.clone(),
+            session_id: session_id.to_string(),
+        }
+    }
+}
+
+impl Drop for BackgroundPromptGuard {
+    fn drop(&mut self) {
+        self.set.lock_or_recover().remove(&self.session_id);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn background_prompt_session_unmarked_by_default() {
+        // A session carrying ordinary user traffic must never be muted —
+        // the notification handler consults this to decide whether chunks
+        // reach the UI at all.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        assert!(!client.is_background_prompt_session("session-a"));
+    }
+
+    #[test]
+    fn background_prompt_guard_marks_then_clears_on_drop() {
+        // RAII is what keeps the `?`/early-return paths in
+        // `try_send_prompt` from leaving a session permanently muted —
+        // a leaked marker would silently swallow every later response
+        // on that session.
+        let set = Arc::new(Mutex::new(std::collections::HashSet::new()));
+        {
+            let _g = BackgroundPromptGuard::new(&set, "session-a");
+            assert!(set.lock_or_recover().contains("session-a"));
+        }
+        assert!(
+            !set.lock_or_recover().contains("session-a"),
+            "guard must clear the marker on drop"
+        );
+    }
+
+    #[test]
+    fn background_prompt_guard_is_scoped_to_its_own_session() {
+        // Muting is per-session: an extraction running on session A must
+        // not hide live output streaming on session B.
+        let set = Arc::new(Mutex::new(std::collections::HashSet::new()));
+        let _a = BackgroundPromptGuard::new(&set, "session-a");
+        assert!(set.lock_or_recover().contains("session-a"));
+        assert!(!set.lock_or_recover().contains("session-b"));
+    }
+
+    #[test]
+    fn yielded_try_send_prompt_does_not_mark_background() {
+        // The ordering property that makes muting safe: the marker is set
+        // only AFTER the prompt lock is acquired. If a yielded background
+        // attempt marked the session, it would mute the *user's* in-flight
+        // prompt — exactly the bug the marker exists to prevent, inverted.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let lock = client.prompt_lock_for("session-a");
+        let _held = lock.lock_or_recover();
+
+        // Lock is held, so this takes the WouldBlock early return and
+        // never reaches the transport — safe to call without a live agent.
+        let result = client
+            .try_send_prompt("session-a", serde_json::json!({}))
+            .expect("yield is not an error");
+        assert!(result.is_none(), "must yield when the prompt slot is taken");
+        assert!(
+            !client.is_background_prompt_session("session-a"),
+            "a yielded attempt must not mute the session that won the slot"
+        );
+    }
 
     #[test]
     fn vendor_method_suffix_recognises_both_prefixes() {

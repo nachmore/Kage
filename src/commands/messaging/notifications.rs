@@ -129,8 +129,11 @@ pub fn setup_notification_handler(
                                 .accumulate_chunk(&sid, text)
                                 .map(|s| s.to_string());
 
+                            // Background prompts (auto-steering, titler) are
+                            // read back from the accumulator, never shown.
+                            let background = client_for_handler.is_background_prompt_session(&sid);
                             if let Some(emitted) = emitted_owned {
-                                if !emitted.is_empty() {
+                                if !emitted.is_empty() && !background {
                                     // Append to the per-session pending
                                     // buffer. The flush thread emits
                                     // `message_chunk` events with this
@@ -223,12 +226,18 @@ pub fn setup_notification_handler(
                             }
                         }
                         // Forward to streaming-aware windows; frontend
-                        // filters by sessionId in the payload.
-                        crate::event_targets::emit_streaming_audience(
-                            &app_handle,
-                            events::TOOL_CALL_UPDATE,
-                            &notification,
-                        );
+                        // filters by sessionId in the payload. Skipped for
+                        // background prompts so their tool use stays invisible.
+                        let background = update_session_id
+                            .as_deref()
+                            .is_some_and(|sid| client_for_handler.is_background_prompt_session(sid));
+                        if !background {
+                            crate::event_targets::emit_streaming_audience(
+                                &app_handle,
+                                events::TOOL_CALL_UPDATE,
+                                &notification,
+                            );
+                        }
                         return;
                     }
                 }
