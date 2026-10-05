@@ -1,17 +1,21 @@
 /**
- * Regression test for the "input + extension bar jump up, then snap back"
- * bug on multi-line prompts when the floating window is already large.
+ * Regression tests for the "input + extension bar jump up, then snap back"
+ * bug on multi-line prompts (Shift+Enter / wrapping, up to the 100px
+ * textarea cap) while a response is showing.
  *
- * Bug: animateInputResize() always grew the OS window by the textarea's
- * growth. When the window was pinned — at the screen ceiling, or at a
- * height the user dragged it to — the next observer pass shrank it straight
- * back to the cap, so every wrap/Shift+Enter (up to the 100px textarea cap,
- * i.e. the first ~4 lines) bounced the input and bars, flashing the
- * transparent window background where they'd been.
+ * Root cause: the textarea height changed on a timer (an 80ms lockstep
+ * animation) while the OS window resize — an IPC round trip plus a WebView2
+ * viewport resize — landed one or more frames later. The animation released
+ * its layout lock on the frame it sent the last resize, so the flex
+ * `.content-area` absorbed the delta against the OLD viewport: the input and
+ * the bars above it jumped up, then snapped back when the window landed.
+ * When the window was pinned (screen ceiling / user-set height) the window
+ * grew anyway and the observer immediately shrank it back.
  *
- * Fix: resolve the settled window target up front (same `_targetHeight` the
- * observer uses), move the OS window only as far as that allows, and have
- * the content-area give up the rest on the same curve.
+ * Fix: freeze the layout, request the final size once (from the same
+ * `_targetHeight` the observer uses), and apply the new textarea height in
+ * the viewport `resize` event — which fires before the first paint at the
+ * new size. A pinned window gets no IPC: DOM-only, one paint.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,40 +24,31 @@ import { WindowManager } from '../../ui/js/floating/window.js';
 describe('WindowManager._clampInputResizeTarget', () => {
     const wm = new WindowManager(async () => {});
 
-    it('grows freely when the target has room', () => {
+    it('returns the settled target exactly when moving with the input', () => {
         expect(wm._clampInputResizeTarget(500, 24, 524)).toBe(524);
-        expect(wm._clampInputResizeTarget(500, 24, 900)).toBe(524);
+        // Off-by-rounding from the free answer: use the target, so the
+        // observer pass that follows has nothing to correct.
+        expect(wm._clampInputResizeTarget(500, 24, 526)).toBe(526);
     });
 
     it('does not grow a window pinned at its target', () => {
         expect(wm._clampInputResizeTarget(900, 24, 900)).toBe(900);
     });
 
-    it('grows only up to the target when partly pinned', () => {
-        expect(wm._clampInputResizeTarget(890, 24, 900)).toBe(900);
-    });
-
     it('never moves against the input direction', () => {
-        // Target below the current height must not shrink the window while
-        // the input grows (that's the observer's job, not the keystroke's).
         expect(wm._clampInputResizeTarget(900, 24, 700)).toBe(900);
         expect(wm._clampInputResizeTarget(700, -24, 900)).toBe(700);
     });
 
     it('keeps a pinned window still when the input shrinks', () => {
-        // Content is still taller than the cap after the line is removed.
         expect(wm._clampInputResizeTarget(900, -24, 900)).toBe(900);
-    });
-
-    it('snaps sub-pixel measurement noise to the free answer', () => {
-        expect(wm._clampInputResizeTarget(500, 24, 522)).toBe(524);
     });
 });
 
-describe('WindowManager.animateInputResize when pinned', () => {
+describe('WindowManager.animateInputResize', () => {
     let contentArea;
     let input;
-    let rafCallbacks;
+    let viewportH;
 
     beforeEach(() => {
         document.body.innerHTML = '';
@@ -62,62 +57,111 @@ describe('WindowManager.animateInputResize when pinned', () => {
         Object.defineProperty(contentArea, 'offsetHeight', { configurable: true, get: () => 400 });
         document.body.appendChild(contentArea);
         input = document.createElement('textarea');
+        input.style.height = '24px';
         document.body.appendChild(input);
 
-        rafCallbacks = [];
-        vi.stubGlobal('requestAnimationFrame', (cb) => {
-            rafCallbacks.push(cb);
-            return rafCallbacks.length;
-        });
+        viewportH = 900;
         vi.stubGlobal('devicePixelRatio', 1);
-        vi.stubGlobal('innerHeight', 900);
+        Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => viewportH });
     });
 
     afterEach(() => {
+        vi.useRealTimers();
         vi.unstubAllGlobals();
         document.body.innerHTML = '';
     });
 
-    function runToEnd(wm) {
-        const start = performance.now();
-        // Drive frames past the 80ms duration.
-        while (rafCallbacks.length) {
-            const cb = rafCallbacks.shift();
-            cb(start + 1000);
-        }
-        return wm;
-    }
-
-    it('shrinks the content-area instead of resizing the OS window', async () => {
+    it('pinned window: DOM-only change in one step, no resize IPC, no lock', async () => {
         const invoke = vi.fn(async () => {});
         const wm = new WindowManager(invoke);
         wm._maxPhys = 900; // screen ceiling == current window height
         wm._measureNaturalHeight = () => 1400; // response far taller than the cap
 
-        const done = wm.animateInputResize(input, 24, 48);
-        // Mid-flight the lock is on, and the content-area is giving up space.
-        expect(contentArea.style.flex).toBe('0 0 auto');
-        runToEnd(wm);
-        await done;
+        await wm.animateInputResize(input, 24, 48);
 
-        expect(invoke).not.toHaveBeenCalledWith('resize_floating_window', expect.anything());
+        expect(invoke).not.toHaveBeenCalled();
         expect(input.style.height).toBe('48px');
-        // Lock released at the end — flex layout takes over at the new size.
-        expect(contentArea.style.height).toBe('');
+        expect(contentArea.style.flex).toBe('');
+        expect(wm._inputAnimating).toBeFalsy();
         expect(wm._lastTarget).toBe(900);
     });
 
-    it('still grows the OS window when there is room', async () => {
+    it('free window: holds the layout until the viewport reaches the target', async () => {
         const invoke = vi.fn(async () => {});
         const wm = new WindowManager(invoke);
         wm._maxPhys = 1200;
         wm._measureNaturalHeight = () => 900; // auto-fit: window == natural
 
-        const done = wm.animateInputResize(input, 24, 48);
-        runToEnd(wm);
-        await done;
+        await wm.animateInputResize(input, 24, 48);
 
-        expect(invoke).toHaveBeenLastCalledWith('resize_floating_window', { height: 924 });
+        // One request, straight to the settled size.
+        expect(invoke).toHaveBeenCalledTimes(1);
+        expect(invoke).toHaveBeenCalledWith('resize_floating_window', { height: 924 });
+        // Nothing has changed yet: the viewport is still the old size.
+        expect(input.style.height).toBe('24px');
+        expect(contentArea.style.flex).toBe('0 0 auto');
+        expect(wm._inputAnimating).toBe(true);
+
+        // A resize to some other size (e.g. a stray intermediate) is ignored.
+        viewportH = 910;
+        window.dispatchEvent(new Event('resize'));
+        expect(input.style.height).toBe('24px');
+
+        // The viewport lands: apply in the resize event, before paint.
+        viewportH = 924;
+        window.dispatchEvent(new Event('resize'));
+        expect(input.style.height).toBe('48px');
+        expect(contentArea.style.flex).toBe('');
+        expect(contentArea.style.height).toBe('');
+        expect(wm._inputAnimating).toBe(false);
         expect(wm._lastTarget).toBe(924);
+    });
+
+    it('falls back to applying if the window never reaches the target', async () => {
+        vi.useFakeTimers();
+        const wm = new WindowManager(vi.fn(async () => {}));
+        wm._maxPhys = 1200;
+        wm._measureNaturalHeight = () => 900;
+
+        await wm.animateInputResize(input, 24, 48);
+        expect(input.style.height).toBe('24px');
+
+        vi.advanceTimersByTime(300);
+        expect(input.style.height).toBe('48px');
+        expect(contentArea.style.flex).toBe('');
+        expect(wm._inputAnimating).toBe(false);
+    });
+
+    it('applies immediately if the resize IPC fails', async () => {
+        const wm = new WindowManager(
+            vi.fn(async () => {
+                throw new Error('nope');
+            })
+        );
+        wm._maxPhys = 1200;
+        wm._measureNaturalHeight = () => 900;
+
+        await wm.animateInputResize(input, 24, 48);
+        expect(input.style.height).toBe('48px');
+        expect(contentArea.style.flex).toBe('');
+    });
+
+    it('a second line while waiting applies the first before starting', async () => {
+        const invoke = vi.fn(async () => {});
+        const wm = new WindowManager(invoke);
+        wm._maxPhys = 1200;
+        wm._measureNaturalHeight = () => 900;
+
+        await wm.animateInputResize(input, 24, 48);
+        await wm.animateInputResize(input, 48, 72);
+
+        // First was applied (lock released, then re-taken by the second with
+        // unlocked originals); second waits for its own viewport.
+        expect(invoke).toHaveBeenCalledTimes(2);
+        viewportH = 924; // second measured from 900 → +24
+        window.dispatchEvent(new Event('resize'));
+        expect(input.style.height).toBe('72px');
+        expect(contentArea.style.flex).toBe('');
+        expect(contentArea.style.height).toBe('');
     });
 });

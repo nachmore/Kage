@@ -408,34 +408,15 @@ export class WindowManager {
     }
 
     /**
-     * Animate textarea height and OS window size in lockstep over 80ms.
-     * Used by the input handler when a line wraps/unwraps.
-     *
-     * Why lockstep, not snap+IPC: snapping the textarea height instantly
-     * while the OS window catches up async makes the flex `.content-area`
-     * absorb the delta for one paint — every element between content-area
-     * and the textarea bounces (up if growing, down if shrinking) and then
-     * returns. With both animations on the same linear curve, the math
-     * `content-area = bubble - input - others` is invariant: content-area
-     * stays constant, nothing bounces.
-     *
-     * Observer-driven resizes are gated by `_inputAnimating` so they don't
-     * fight the in-flight animation.
-     */
-    /**
      * Where the OS window should end up when the input changes by
      * `deltaPhys`, given `target` — what `_targetHeight` will settle on once
-     * the input has changed. The window moves in the input's direction, but
-     * never further than the input alone and never past `target`. When the
-     * window is pinned (screen ceiling, or a height the user dragged to),
-     * this returns `fromOS` and the content-area must give up the space
-     * instead. Growing the window anyway is what made the input + bars
-     * jump and snap back: the observer pass would immediately shrink the
-     * window back to its cap.
-     *
-     * Within 2px of the unpinned answer we take the unpinned answer, so
-     * sub-pixel noise between the measured natural height and the live
-     * window can't nudge the content-area on an ordinary auto-fit wrap.
+     * the input has changed. Returns `target` exactly (so the observer pass
+     * that follows agrees and doesn't issue a corrective resize), except it
+     * never moves the window against the input's direction: a keystroke
+     * that grows the input must not shrink the window, and vice versa —
+     * the observer owns those corrections. When the window is pinned
+     * (screen ceiling, or a height the user dragged to) this returns
+     * `fromOS` and the content-area absorbs the change.
      *
      * Pure arithmetic, extracted for unit testing.
      *
@@ -445,20 +426,48 @@ export class WindowManager {
      * @returns {number} physical-px window height to animate to
      */
     _clampInputResizeTarget(fromOS, deltaPhys, target) {
-        const free = fromOS + deltaPhys;
-        const to =
-            deltaPhys > 0
-                ? Math.min(free, Math.max(fromOS, target))
-                : Math.max(free, Math.min(fromOS, target));
-        return Math.abs(to - free) <= 2 ? free : to;
+        return deltaPhys > 0 ? Math.max(fromOS, target) : Math.min(fromOS, target);
     }
 
+    /**
+     * Resize the textarea and the OS window together when a line wraps or
+     * unwraps, without any frame where the two disagree.
+     *
+     * The window resize is an IPC round trip plus a WebView2 viewport resize,
+     * which lands one or more frames after we ask for it. Every scheme that
+     * changes the DOM on a timer (snap, or an 80ms lockstep animation) paints
+     * at least one frame where the input has grown but the viewport hasn't:
+     * the flex `.content-area` absorbs the delta, so the input and the bars
+     * above it jump up, then snap back when the window lands (with a flash
+     * of the transparent window background).
+     *
+     * Instead: freeze the layout, ask for the final window size once, and
+     * apply the new textarea height in the viewport's `resize` event. That
+     * event fires before the first paint at the new size, so the first frame
+     * at the new size already has the new layout. If the window can't move
+     * (pinned at the screen ceiling or a user-set height) there's no IPC at
+     * all: the textarea changes and the content-area absorbs it in one paint.
+     *
+     * The target comes from the same `_targetHeight` the observer uses, so
+     * the observer pass that follows the DOM change agrees and does nothing.
+     *
+     * Observer-driven resizes are gated by `_inputAnimating` until applied.
+     */
     async animateInputResize(input, fromInput, toInput) {
         const delta = toInput - fromInput;
+        // A previous resize may still be waiting for its window. Apply it now
+        // (restoring its locks) so the capture below reads the unlocked
+        // styles as originals rather than leaking the lock.
+        if (this._inputAnimCleanup) this._inputAnimCleanup();
         if (Math.abs(delta) < 1) {
             input.style.height = toInput + 'px';
             return;
         }
+        if (this._animFrame) {
+            cancelAnimationFrame(this._animFrame);
+            this._animFrame = null;
+        }
+        this._animSeq++; // supersede any in-flight _animateTo
 
         const scale = window.devicePixelRatio || 1;
         const fromOS = Math.round(window.innerHeight * scale);
@@ -477,27 +486,17 @@ export class WindowManager {
             toOS = this._clampInputResizeTarget(fromOS, deltaPhys, target);
         }
 
-        if (this._animFrame) {
-            cancelAnimationFrame(this._animFrame);
-            this._animFrame = null;
+        // Window can't (or needn't) move: DOM-only, one paint.
+        if (Math.abs(toOS - fromOS) < 2) {
+            input.style.height = toInput + 'px';
+            this._lastTarget = fromOS;
+            return;
         }
-        // A previous input animation may still be mid-flight (two line-wraps
-        // within the 80ms window). Cancelling its rAF above skips its cleanup,
-        // so restore its locks now — otherwise the capture below would read the
-        // still-locked `flex:none; height:<px>` as this animation's "originals"
-        // and restore to them, leaking the lock forever.
-        if (this._inputAnimCleanup) this._inputAnimCleanup();
-        const me = ++this._animSeq;
+
         this._inputAnimating = true;
 
-        // Lock content-area + suggestions at their current height so flex
-        // redistribution can't squeeze them when input grows. Without this,
-        // every input wrap leaves a 1-frame gap where the OS window IPC has
-        // not landed but the textarea has grown — content-area absorbs the
-        // delta, its content overflows, scrollbar flashes, response shifts.
-        // With the lock, bubble's natural height = locked + input + others,
-        // so it can only fit by growing the OS window — which we do in
-        // lockstep below.
+        // Freeze everything at its current size until the viewport changes,
+        // so nothing reflows against the old viewport.
         const contentArea = document.getElementById('contentArea');
         const suggestions = document.getElementById('appSuggestions');
         const lockedItems = [];
@@ -518,47 +517,37 @@ export class WindowManager {
         tryLock(contentArea);
         tryLock(suggestions);
 
-        // Logical px the window can't take (it's pinned): the content-area
-        // gives them up on the same linear curve, so `bubble = content +
-        // input + others` stays invariant and nothing bounces. Bounded by
-        // the content-area's min-height; any remainder (or no visible
-        // content-area at all) falls back to growing the window.
-        const contentLock = lockedItems.find((item) => item.el === contentArea);
-        const contentFrom = contentLock ? contentArea.offsetHeight : 0;
-        let absorb = delta - (toOS - fromOS) / scale;
-        if (!contentLock || Math.abs(absorb) < 1) {
-            absorb = 0;
-        } else if (absorb > 0) {
-            const minH = parseFloat(getComputedStyle(contentArea).minHeight) || 0;
-            absorb = Math.min(absorb, Math.max(0, contentFrom - minH));
-        }
-        toOS = fromOS + Math.round((delta - absorb) * scale);
-
-        // The textarea's own scrollbar flashes during the animation: its
-        // content reflows to the wrapped layout instantly, but we're
-        // interpolating its `height` over 80ms — so for ~half the animation
-        // it's shorter than its content. Mask it for the duration.
+        // While we wait, the textarea already holds the extra line at its old
+        // height and would auto-scroll to the caret, shifting its text up a
+        // line and back. Pin it to the top until the new height lands.
         const inputPrevOverflowY = input.style.overflowY || '';
         input.style.overflowY = 'hidden';
+        const pinScroll = () => {
+            input.scrollTop = 0;
+        };
+        if (delta > 0) input.addEventListener('scroll', pinScroll);
 
-        const duration = 80;
-        const start = performance.now();
-        let lastOS = fromOS;
-
-        // Idempotent — may be invoked either by the animation finishing/aborting
-        // OR out-of-band by suspendAutoResize() when a permission modal opens
-        // mid-animation and cancels our rAF loop. Without the out-of-band path,
-        // the inline `height`/`flex:none` lock on content-area would be orphaned:
-        // an empty `flex:none` element with an explicit height still reports that
-        // height via scrollHeight, so _measureNaturalHeight would stay stuck at
-        // the large value forever — the window freezes large with no content.
-        let cleanedUp = false;
-        const cleanup = () => {
-            if (cleanedUp) return;
-            cleanedUp = true;
+        // Idempotent. Runs from the resize event, the timeout fallback, a
+        // superseding call, or out-of-band from suspendAutoResize() when a
+        // permission modal opens. Without the out-of-band path the inline
+        // `height`/`flex:none` lock on content-area would be orphaned: an empty
+        // `flex:none` element with an explicit height still reports that height
+        // via scrollHeight, so _measureNaturalHeight would stay stuck large.
+        let timer = null;
+        let applied = false;
+        const onResize = () => {
+            if (Math.abs(Math.round(window.innerHeight * scale) - toOS) <= 2) apply();
+        };
+        const apply = () => {
+            if (applied) return;
+            applied = true;
+            window.removeEventListener('resize', onResize);
+            input.removeEventListener('scroll', pinScroll);
+            if (timer) clearTimeout(timer);
             this._inputAnimCleanup = null;
             this._lastTarget = toOS;
             this._inputAnimating = false;
+            input.style.height = toInput + 'px';
             for (const item of lockedItems) {
                 item.el.style.flex = item.flex;
                 item.el.style.height = item.height;
@@ -566,35 +555,17 @@ export class WindowManager {
             }
             input.style.overflowY = inputPrevOverflowY;
         };
-        this._inputAnimCleanup = cleanup;
+        this._inputAnimCleanup = apply;
+        window.addEventListener('resize', onResize);
+        // The OS may clamp or drop the request (monitor edge, DPI change):
+        // never leave the layout frozen waiting for a size that won't come.
+        timer = setTimeout(apply, 250);
 
-        return new Promise((resolve) => {
-            const step = (now) => {
-                if (me !== this._animSeq) {
-                    cleanup();
-                    resolve();
-                    return;
-                }
-                const t = Math.min((now - start) / duration, 1);
-                input.style.height = fromInput + delta * t + 'px';
-                if (absorb) contentArea.style.height = contentFrom - absorb * t + 'px';
-                // A pinned window takes no IPC at all: the whole change is
-                // DOM-only, so it lands in a single paint with no OS lag.
-                const osH = Math.round(fromOS + (toOS - fromOS) * t);
-                if (osH !== lastOS) {
-                    lastOS = osH;
-                    this.invoke('resize_floating_window', { height: osH }).catch(() => {});
-                }
-                if (t < 1 && me === this._animSeq) {
-                    this._animFrame = requestAnimationFrame(step);
-                } else {
-                    this._animFrame = null;
-                    cleanup();
-                    resolve();
-                }
-            };
-            this._animFrame = requestAnimationFrame(step);
-        });
+        try {
+            await this.invoke('resize_floating_window', { height: toOS });
+        } catch {
+            apply();
+        }
     }
 
     /**
