@@ -308,6 +308,16 @@ pub fn setup_notification_handler(
                                 *is_compacting = false;
                                 cvar.notify_all();
                             }
+                            // A compaction that ends without "completed"
+                            // would otherwise hold every prompt for the full
+                            // 60s gate timeout. Only explicit terminal words
+                            // release: an unknown progress-style status must
+                            // not open the gate mid-compaction.
+                            "failed" | "error" | "cancelled" | "canceled" | "aborted" => {
+                                warn!("Compaction ended with status {:?} — releasing prompt gate", status);
+                                *is_compacting = false;
+                                cvar.notify_all();
+                            }
                             _ => {}
                         }
                     }
