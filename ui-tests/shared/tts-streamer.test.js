@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TtsStreamer } from '../../ui/js/shared/tts-streamer.js';
 
 // Capture enqueued sentences instead of hitting the TTS server.
@@ -49,5 +49,210 @@ describe('TtsStreamer streaming commits', () => {
     s.finishText('First sentence is long enough.\nSecond sentence follows here.');
     expect(sent.filter((x) => x.includes('First sentence')).length).toBe(1);
     expect(sent.join(' ')).toContain('Second sentence follows here.');
+  });
+});
+
+// ─── Playback queue / completion ───
+
+// Fake Audio: tests drive `onended` / `onerror` / play() rejection by hand.
+class FakeAudio {
+  static instances = [];
+  static playImpl = () => Promise.resolve();
+  constructor(src) {
+    this.src = src;
+    this.onended = null;
+    this.onerror = null;
+    FakeAudio.instances.push(this);
+  }
+  play() {
+    return FakeAudio.playImpl(this);
+  }
+  pause() {}
+}
+
+// Deferred fetch: every /tts request is held until the test settles it.
+function installFetch() {
+  const calls = [];
+  const fetchMock = vi.fn((url, opts = {}) => {
+    if (String(url).endsWith('/stop')) return Promise.resolve({ ok: true });
+    return new Promise((resolve, reject) => {
+      const call = { url, opts, resolve, reject };
+      opts.signal?.addEventListener('abort', () =>
+        reject(new DOMException('aborted', 'AbortError'))
+      );
+      calls.push(call);
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return { calls, fetchMock };
+}
+
+const okAudio = () => ({
+  ok: true,
+  status: 200,
+  headers: { get: () => 'audio/wav' },
+  blob: async () => new Blob(['x']),
+});
+const serverError = () => ({
+  ok: false,
+  status: 500,
+  headers: { get: () => null },
+  json: async () => ({ error: 'boom' }),
+});
+
+// Let the async dispatch loop run its pending continuations.
+const flush = async () => {
+  for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+};
+
+const TWO_SENTENCES = 'This is the first sentence here. This is the second sentence here.';
+
+describe('TtsStreamer playback completion', () => {
+  let origCreate;
+  let origRevoke;
+
+  beforeEach(() => {
+    FakeAudio.instances = [];
+    FakeAudio.playImpl = () => Promise.resolve();
+    vi.stubGlobal('Audio', FakeAudio);
+    origCreate = URL.createObjectURL;
+    origRevoke = URL.revokeObjectURL;
+    let n = 0;
+    URL.createObjectURL = () => `blob:${++n}`;
+    URL.revokeObjectURL = () => {};
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    URL.createObjectURL = origCreate;
+    URL.revokeObjectURL = origRevoke;
+  });
+
+  function makePlayer() {
+    const onFinished = vi.fn();
+    const s = new TtsStreamer({ port: 1, voice: 'v', barContainer: null, onFinished });
+    return { s, onFinished };
+  }
+
+  it('fires onFinished when the last fetch fails after earlier audio played', async () => {
+    const { calls } = installFetch();
+    const { s, onFinished } = makePlayer();
+    s.finishText(TWO_SENTENCES);
+    await flush();
+    expect(calls).toHaveLength(1);
+
+    calls[0].resolve(okAudio());
+    await flush();
+    expect(FakeAudio.instances).toHaveLength(1);
+    expect(calls).toHaveLength(2);
+
+    // First chunk finishes while the second fetch is still in flight.
+    FakeAudio.instances[0].onended();
+    expect(onFinished).not.toHaveBeenCalled();
+
+    calls[1].resolve(serverError());
+    await flush();
+    expect(onFinished).toHaveBeenCalledTimes(1);
+    expect(s.isActive).toBe(false);
+  });
+
+  it('fires onFinished once when every fetch fails', async () => {
+    const { calls } = installFetch();
+    const { s, onFinished } = makePlayer();
+    s.finishText(TWO_SENTENCES);
+    await flush();
+    calls[0].resolve(serverError());
+    await flush();
+    // First failure must not complete early while the second is still queued.
+    expect(onFinished).not.toHaveBeenCalled();
+    calls[1].resolve(serverError());
+    await flush();
+    expect(onFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a failed middle chunk and still plays the next one', async () => {
+    const { calls } = installFetch();
+    const { s, onFinished } = makePlayer();
+    s.finishText(
+      'This is the first sentence here. This is the second sentence here. ' +
+        'This is the third sentence here.'
+    );
+    await flush();
+    calls[0].resolve(okAudio());
+    await flush();
+    FakeAudio.instances[0].onended();
+    calls[1].resolve(serverError());
+    await flush();
+    expect(onFinished).not.toHaveBeenCalled();
+    calls[2].resolve(okAudio());
+    await flush();
+    expect(FakeAudio.instances).toHaveLength(2);
+    FakeAudio.instances[1].onended();
+    expect(onFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('advances once when a decode error both fires onerror and rejects play()', async () => {
+    const { calls } = installFetch();
+    let rejectPlay;
+    FakeAudio.playImpl = () =>
+      new Promise((_, reject) => {
+        rejectPlay = reject;
+      });
+    const { s, onFinished } = makePlayer();
+    s.finishText(TWO_SENTENCES);
+    await flush();
+    calls[0].resolve(okAudio());
+    await flush();
+    calls[1].resolve(okAudio());
+    await flush();
+    expect(FakeAudio.instances).toHaveLength(1);
+
+    FakeAudio.playImpl = () => Promise.resolve();
+    FakeAudio.instances[0].onerror();
+    rejectPlay(new DOMException('decode', 'NotSupportedError'));
+    await flush();
+    // The second chunk plays exactly once; it isn't skipped by the
+    // duplicate failure signal.
+    expect(FakeAudio.instances).toHaveLength(2);
+    expect(onFinished).not.toHaveBeenCalled();
+    FakeAudio.instances[1].onended();
+    expect(onFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire onFinished when stopped mid-fetch, nor retry the abort', async () => {
+    const { calls, fetchMock } = installFetch();
+    const { s, onFinished } = makePlayer();
+    s.finishText(TWO_SENTENCES);
+    await flush();
+    calls[0].resolve(okAudio());
+    await flush();
+    expect(calls).toHaveLength(2);
+
+    s.stop();
+    // stop() blanks the element's src, which raises an error event.
+    FakeAudio.instances[0].onerror?.();
+    await flush();
+    expect(onFinished).not.toHaveBeenCalled();
+    // Only the two /tts requests plus the /stop call; the aborted fetch
+    // didn't schedule a retry.
+    expect(calls).toHaveLength(2);
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith('/stop'))).toHaveLength(1);
+    expect(s.isActive).toBe(false);
+  });
+
+  it('does not fire onFinished again when stopped after completion', async () => {
+    const { calls } = installFetch();
+    const { s, onFinished } = makePlayer();
+    s.finishText('This is a single sentence to speak.');
+    await flush();
+    calls[0].resolve(okAudio());
+    await flush();
+    FakeAudio.instances[0].onended();
+    expect(onFinished).toHaveBeenCalledTimes(1);
+    s.stop();
+    FakeAudio.instances[0].onerror?.();
+    s.finishText('This is a single sentence to speak.');
+    await flush();
+    expect(onFinished).toHaveBeenCalledTimes(1);
   });
 });

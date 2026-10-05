@@ -285,6 +285,9 @@ export class TtsStreamer {
         // new text is read from its start instead of from a stale offset.
         this._committedPrefix = '';
         this._finished = false;
+        // Latched once onFinished has fired so no late callback (a duplicate
+        // audio error, a trailing failed fetch) can report completion twice.
+        this._completed = false;
         this._audioQueue = [];
         this._currentAudio = null;
         this._isPlaying = false;
@@ -427,6 +430,9 @@ export class TtsStreamer {
                     if (!this._isPlaying && !this._isPaused) this._playNext();
                     return; // Success — exit retry loop
                 } catch (e) {
+                    // stop() aborts in-flight fetches; don't sit out a retry
+                    // delay for a cancelled request.
+                    if (this._stopped) return;
                     lastError = e;
                     if (attempt < maxRetries) {
                         this._bar.setStatus(`Waiting for voice server... (${attempt + 1}s)`);
@@ -440,13 +446,28 @@ export class TtsStreamer {
             setTimeout(() => this._bar.hideAfterDelay(3000), 0);
         } finally {
             this._pendingFetches--;
+            // A failed fetch queues no audio, so nothing else would call
+            // _playNext. If it was the last sentence and earlier audio has
+            // already finished, completion would never fire (speaking state
+            // stuck, voice-mode mic never resumes). Kick the queue so the
+            // failed chunk is skipped; a success already started playback.
+            if (!this._stopped && !this._isPlaying && !this._isPaused) this._playNext();
         }
     }
     _playNext() {
         if (this._stopped || this._isPaused) return;
         if (this._audioQueue.length === 0) {
             this._isPlaying = false;
-            if (this._finished && this._pendingFetches === 0) {
+            // _dispatchQueue: a failed fetch kicks the queue from inside the
+            // dispatch loop, before the next queued sentence is counted in
+            // _pendingFetches.
+            if (
+                this._finished &&
+                this._pendingFetches === 0 &&
+                this._dispatchQueue.length === 0 &&
+                !this._completed
+            ) {
+                this._completed = true;
                 this._bar.hideAfterDelay();
                 if (this._onFinished) this._onFinished();
             }
@@ -454,23 +475,30 @@ export class TtsStreamer {
         }
         this._isPlaying = true;
         const chunk = this._audioQueue.shift();
-        this._currentAudio = new Audio(chunk.url);
-        this._currentAudio.onended = () => {
+        const audio = new Audio(chunk.url);
+        this._currentAudio = audio;
+        // A decode failure can surface as both an `error` event and a
+        // rejected play(); advance at most once per chunk so the following
+        // chunk isn't skipped (or two played at once).
+        let settled = false;
+        const advance = () => {
+            if (settled) return;
+            settled = true;
             URL.revokeObjectURL(chunk.url);
-            this._currentAudio = null;
+            if (this._currentAudio === audio) this._currentAudio = null;
+            if (this._stopped) return;
             this._playedChunks++;
             this._updateBarStatus();
             this._playNext();
         };
-        this._currentAudio.onerror = () => {
-            URL.revokeObjectURL(chunk.url);
-            this._currentAudio = null;
-            this._playedChunks++;
-            this._updateBarStatus();
-            this._playNext();
-        };
+        audio.onended = advance;
+        audio.onerror = advance;
         this._updateBarStatus();
-        this._currentAudio.play().catch(() => this._playNext());
+        audio.play().catch((e) => {
+            // AbortError = play() interrupted by pause()/stop(); the chunk
+            // is still current and resume() replays it, so don't skip it.
+            if (e?.name !== 'AbortError') advance();
+        });
     }
 
     pause() {
