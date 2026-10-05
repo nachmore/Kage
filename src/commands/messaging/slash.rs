@@ -185,7 +185,10 @@ pub async fn send_steering_message(
     let client = acp.client.clone();
     async_runtime::spawn_blocking(move || {
         if client.is_connected() {
-            if let Err(e) = client.send_chat_streaming(&session_id, &steering_msg, None) {
+            // Muted: the ack must not stream into (and badge) the session's
+            // windows — nothing emits a complete for it.
+            if let Err(e) = client.send_chat_streaming_background(&session_id, &steering_msg, false)
+            {
                 warn!("Failed to send auto-steering message: {}", e);
             }
         }

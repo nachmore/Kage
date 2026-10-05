@@ -196,6 +196,7 @@ pub async fn has_pending_permission(
 /// and send it back to the ACP agent as a follow-up message so the LLM
 /// can continue its response with the data.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri commands take state via parameters.
 pub async fn extension_tool_response<R: tauri::Runtime>(
     session_id: String,
     extension_id: String,
@@ -203,6 +204,7 @@ pub async fn extension_tool_response<R: tauri::Runtime>(
     result_json: String,
     success: bool,
     acp: State<'_, AcpHandles>,
+    ui: State<'_, UiState>,
     window: WebviewWindow<R>,
 ) -> Result<(), AppError> {
     info!(
@@ -214,6 +216,8 @@ pub async fn extension_tool_response<R: tauri::Runtime>(
     );
 
     let client = acp.client.clone();
+    let originators = ui.pending_prompt_originators.clone();
+    let window_label = window.label().to_string();
 
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
@@ -238,18 +242,44 @@ pub async fn extension_tool_response<R: tauri::Runtime>(
             )
         };
 
+        // The originating send's epilogue already dropped its originator
+        // entry; re-tag so permission prompts raised by the continuation
+        // route to this window instead of falling back to floating.
+        if let Ok(mut m) = originators.lock() {
+            m.insert(session_id.clone(), window_label.clone());
+        }
+
         // Send as a follow-up user message so the agent continues
-        if let Err(e) = client.send_chat_streaming(&session_id, &content, None) {
+        let result = client.send_chat_streaming(&session_id, &content, None);
+
+        // Only drop the tag if it's still ours — a user send from another
+        // window may have re-tagged the session meanwhile.
+        if let Ok(mut m) = originators.lock() {
+            if m.get(&session_id) == Some(&window_label) {
+                m.remove(&session_id);
+            }
+        }
+
+        let app = window.app_handle();
+        super::notifications::flush_session_chunks(app, &client, &session_id);
+        if let Err(e) = result {
             crate::event_targets::emit_to_self(
                 &window,
                 events::MESSAGE_ERROR,
                 &format!("Failed to send tool result: {}", e),
             );
+            // Peers only hear broadcasts; clear their activity badge.
+            crate::event_targets::emit_streaming_audience(
+                app,
+                events::SESSION_ACTIVITY,
+                &serde_json::json!({ "sessionId": &session_id, "kind": "failed" }),
+            );
+            return;
         }
 
         // Tell streaming-aware peers that the follow-up response is done.
         crate::event_targets::emit_streaming_audience(
-            window.app_handle(),
+            app,
             events::MESSAGE_COMPLETE,
             &serde_json::json!({ "sessionId": &session_id }),
         );
@@ -271,47 +301,59 @@ pub async fn send_extension_tool_steering(
         return Ok(());
     }
 
-    // Deduplicate: skip if the steering content hasn't changed since last send
-    let hash = {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut hasher = DefaultHasher::new();
-        tool_steering.hash(&mut hasher);
-        hasher.finish()
+    // Deduplicate per session: skip if THIS session already has (or is
+    // receiving) this exact block. The claim is released if the send fails.
+    let Some(hash) = acp
+        .tool_steering
+        .lock_or_recover()
+        .claim(&session_id, &tool_steering)
+    else {
+        return Ok(());
     };
-    {
-        let mut last = acp.last_tool_steering_hash.lock_or_recover();
-        if *last == hash {
-            return Ok(());
-        }
-        *last = hash;
-    }
-
-    info!(
-        "Sending extension tool steering ({} chars)",
-        tool_steering.len()
-    );
 
     let client = acp.client.clone();
+    let state = acp.tool_steering.clone();
 
     async_runtime::spawn_blocking(move || {
-        if !client.is_connected() {
-            return;
-        }
-
-        let msg = format!(
-            "{} {}\n\n---\n\n<instructions>Respond with only \"ack\" to confirm receipt. Do not summarize or comment on the content above.</instructions>",
-            crate::commands::system::STEERING_MSG_PREFIX,
-            tool_steering
-        );
-
-        match client.send_chat_streaming(&session_id, &msg, None) {
-            Ok(_) => info!("Extension tool steering sent"),
-            Err(e) => warn!("Failed to send extension tool steering: {}", e),
-        }
+        deliver_tool_steering(&client, &state, &session_id, hash, &tool_steering);
     });
 
     Ok(())
+}
+
+/// Send a claimed extension tool steering block on `session_id` as a muted
+/// prompt (its "ack" never streams into a window). Releases the claim when
+/// the send doesn't happen, so the next attempt retries. Blocking.
+pub(super) fn deliver_tool_steering(
+    client: &crate::acp_client::AcpClient,
+    state: &std::sync::Mutex<crate::state::ToolSteeringState>,
+    session_id: &str,
+    hash: u64,
+    tool_steering: &str,
+) {
+    if !client.is_connected() {
+        state.lock_or_recover().release(session_id, hash);
+        return;
+    }
+
+    info!(
+        "Sending extension tool steering on {} ({} chars)",
+        session_id,
+        tool_steering.len()
+    );
+    let msg = format!(
+        "{} {}\n\n---\n\n<instructions>Respond with only \"ack\" to confirm receipt. Do not summarize or comment on the content above.</instructions>",
+        crate::commands::system::STEERING_MSG_PREFIX,
+        tool_steering
+    );
+
+    match client.send_chat_streaming_background(session_id, &msg, false) {
+        Ok(()) => info!("Extension tool steering sent"),
+        Err(e) => {
+            warn!("Failed to send extension tool steering: {}", e);
+            state.lock_or_recover().release(session_id, hash);
+        }
+    }
 }
 
 /// Check the permission policy for an extension tool call.

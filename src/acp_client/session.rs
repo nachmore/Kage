@@ -225,13 +225,16 @@ impl AcpClient {
             crate::auto_steering::BUILTIN_STEERING
         );
 
-        // `send_prompt` resets the accumulator under the prompt lock.
-        let result = self.send_prompt(
+        // Muted: the ack must never stream into a window. Unmuted, its tail
+        // could still be in the chunk batcher when the recovery ladder emits
+        // session_migrated, and render glued to the front of the resend.
+        let result = self.send_prompt_muted(
             session_id,
             serde_json::json!({
                 "sessionId": session_id,
                 "prompt": [{ "type": "text", "text": steering_msg }]
             }),
+            false,
         );
 
         match result {
@@ -247,6 +250,32 @@ impl AcpClient {
         session_id: &str,
         content: &str,
         attachments: Option<&[serde_json::Value]>,
+    ) -> Result<()> {
+        self.send_chat_prompt(session_id, content, attachments, None)
+    }
+
+    /// `send_chat_streaming` for hidden prompts (steering, inline-assist,
+    /// macro steps): the reply is accumulated but never streamed to a
+    /// window, so it can't leave a session badged "streaming" with no
+    /// matching complete. `keep_reply` keeps the reply bucket for a
+    /// following `take_session_accumulator`; otherwise it is discarded.
+    pub fn send_chat_streaming_background(
+        &self,
+        session_id: &str,
+        content: &str,
+        keep_reply: bool,
+    ) -> Result<()> {
+        self.send_chat_prompt(session_id, content, None, Some(keep_reply))
+    }
+
+    /// Shared body of the two senders above. `muted` is `None` for a
+    /// visible prompt, `Some(keep_reply)` for a background one.
+    fn send_chat_prompt(
+        &self,
+        session_id: &str,
+        content: &str,
+        attachments: Option<&[serde_json::Value]>,
+        muted: Option<bool>,
     ) -> Result<()> {
         // Wait for any in-progress compaction to finish before sending
         self.wait_for_compaction();
@@ -309,13 +338,14 @@ impl AcpClient {
             prompt.push(serde_json::json!({ "type": "text", "text": "" }));
         }
 
-        let response = self.send_prompt(
-            session_id,
-            serde_json::json!({
-                "sessionId": session_id,
-                "prompt": prompt
-            }),
-        )?;
+        let params = serde_json::json!({
+            "sessionId": session_id,
+            "prompt": prompt
+        });
+        let response = match muted {
+            None => self.send_prompt(session_id, params)?,
+            Some(keep_reply) => self.send_prompt_muted(session_id, params, keep_reply)?,
+        };
 
         if let Some(error) = response.error {
             return Err(bail_acp_error("ACP error", &error));

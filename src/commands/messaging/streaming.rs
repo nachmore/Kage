@@ -40,6 +40,7 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
     let app_for_send = app.clone();
     let window_label = window.label().to_string();
     let originators = ui.pending_prompt_originators.clone();
+    let tool_steering = acp.tool_steering.clone();
 
     // Tag this session as originated from this window. The permission
     // handler reads this map to decide which window the modal goes to;
@@ -92,6 +93,23 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
             }
         }
 
+        // Extension tool steering is sent per session by the window that
+        // loaded the extensions, at init. Sessions created or adopted since
+        // (new chat, peer window, recovery) never got it, so replay the
+        // latest block here, muted, before the first prompt that could use
+        // a tool. Bound first: an `if let` scrutinee would hold the lock
+        // across the send, which takes it again on failure.
+        let pending_steering = tool_steering.lock_or_recover().claim_latest(&session_id);
+        if let Some((hash, block)) = pending_steering {
+            super::permissions::deliver_tool_steering(
+                &client,
+                &tool_steering,
+                &session_id,
+                hash,
+                &block,
+            );
+        }
+
         // The notification handler (set up at app init) handles all streaming
         // chunks, permissions, and tool calls via Tauri events.
         let had_attachments = attachments.as_ref().is_some_and(|a| !a.is_empty());
@@ -104,6 +122,14 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
             Ok(id) => id.clone(),
             Err(_) => session_id.clone(),
         };
+
+        // Every chunk of this turn is already queued in the batcher (the
+        // reader handles them before the prompt response); deliver the
+        // tail now so no terminal event below can overtake it.
+        super::notifications::flush_session_chunks(&app_for_send, &client, &active_session_id);
+        if active_session_id != session_id {
+            super::notifications::flush_session_chunks(&app_for_send, &client, &session_id);
+        }
 
         if let Err(e) = send_result {
             let error_str = format!("{}", e);
@@ -305,6 +331,7 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
     session_id: Option<String>,
     message: String,
     acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
     app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
@@ -327,9 +354,23 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
             message.clone(),
         );
 
+        // Nothing to send (e.g. the inline-assist icon clicked with no
+        // selection) — opening the window was the whole job. Sending would
+        // create a session and an empty prompt nobody is waiting on.
+        if message.trim().is_empty() {
+            return Ok(());
+        }
+
+        // Main had no pinned session when the caller passed none; the one
+        // created below must be pinned and announced or main drops every
+        // chunk of the reply as another session's background activity.
+        let needs_pin = !matches!(session_id.as_deref(), Some(s) if !s.trim().is_empty());
         let client = acp.client.clone();
         let window = main.clone();
         let originators = ui.pending_prompt_originators.clone();
+        let window_sessions = ui.window_sessions.clone();
+        let config = features.config.clone();
+        let session_cache = features.session_cache.clone();
 
         async_runtime::spawn_blocking(move || {
             if !client.is_connected() {
@@ -356,6 +397,26 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
                     return;
                 }
             };
+            if needs_pin {
+                // Same pin `set_window_session` does, then tell main to adopt
+                // the id. Emitted before the prompt goes out, so it lands
+                // ahead of the first chunk.
+                window_sessions
+                    .lock_or_recover()
+                    .insert(window_labels::MAIN.to_string(), session_id.clone());
+                crate::commands::sessions::update_window_title(
+                    window.app_handle(),
+                    &config,
+                    &session_cache,
+                    window_labels::MAIN,
+                    &session_id,
+                );
+                crate::event_targets::emit_to_self(
+                    &window,
+                    "initial_message_session",
+                    &serde_json::json!({ "sessionId": &session_id }),
+                );
+            }
             // Tag the in-flight prompt so permission notifications route to
             // the main chat window, not the (now hidden) floating one.
             if let Ok(mut m) = originators.lock() {
@@ -369,6 +430,13 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
                 Ok(id) => id.clone(),
                 Err(_) => session_id.clone(),
             };
+            // Deliver the batched tail before the terminal event; see the
+            // matching flush in send_message_streaming.
+            let app = window.app_handle();
+            super::notifications::flush_session_chunks(app, &client, &active_session_id);
+            if active_session_id != session_id {
+                super::notifications::flush_session_chunks(app, &client, &session_id);
+            }
             if let Err(e) = result {
                 crate::event_targets::emit_to_self(
                     &window,
@@ -385,7 +453,7 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
             // session need to drop their thinking indicator. See the
             // parallel emit in send_message_streaming for the reasoning.
             crate::event_targets::emit_streaming_audience(
-                window.app_handle(),
+                app,
                 events::MESSAGE_COMPLETE,
                 &serde_json::json!({
                     "sessionId": &active_session_id,

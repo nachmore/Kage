@@ -22,6 +22,79 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use crate::lock_ext::LockExt;
+
+/// Shared pending-chunk buffer plus the lock that orders its emits.
+///
+/// Two paths drain it: the periodic flush thread, and the terminal paths
+/// (`message_complete` / `message_error` / `session_reset`), which must
+/// deliver a session's batched tail *before* announcing the turn is over —
+/// otherwise the window finalises the message and then drops the late
+/// chunk. `emit_lock` is held across take + emit in both, so a terminal
+/// flush can't find the bucket empty while the flush thread is still
+/// holding that session's text in a snapshot it hasn't emitted yet.
+#[derive(Default)]
+pub struct ChunkBatcher {
+    pending: Mutex<HashMap<String, String>>,
+    emit_lock: Mutex<()>,
+}
+
+impl ChunkBatcher {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Append a streamed delta to `session_id`'s bucket. Never waits on an
+    /// emit — only the brief map lock — so the ACP reader isn't stalled by
+    /// the IPC bridge.
+    pub fn push(&self, session_id: String, text: &str) {
+        self.pending
+            .lock_or_recover()
+            .entry(session_id)
+            .or_default()
+            .push_str(text);
+    }
+
+    /// Flush-thread entry point: [`drain_and_emit_pending`] under the emit
+    /// lock.
+    pub fn drain_and_emit<F>(&self, emit: F) -> bool
+    where
+        F: FnMut(&str, &str) -> Result<(), String>,
+    {
+        let _order = self.emit_lock.lock_or_recover();
+        drain_and_emit_pending(&self.pending, emit)
+    }
+
+    /// Emit whatever is still pending for `session_id` right now. Call
+    /// before any terminal event for that session; once this returns, no
+    /// chunk queued before the call can be emitted after it. Returns
+    /// `false` if the emit failed — the text is re-queued for the flush
+    /// thread's retry rather than lost.
+    pub fn flush_session<F>(&self, session_id: &str, emit: F) -> bool
+    where
+        F: FnOnce(&str, &str) -> Result<(), String>,
+    {
+        let _order = self.emit_lock.lock_or_recover();
+        let text = match self.pending.lock_or_recover().remove(session_id) {
+            Some(t) if !t.is_empty() => t,
+            _ => return true,
+        };
+        if emit(session_id, &text).is_ok() {
+            return true;
+        }
+        let mut guard = self.pending.lock_or_recover();
+        guard
+            .entry(session_id.to_string())
+            .or_default()
+            .insert_str(0, &text);
+        let total: usize = guard.values().map(|v| v.len()).sum();
+        if total > MAX_PENDING_BYTES {
+            guard.clear();
+        }
+        false
+    }
+}
+
 /// Ceiling on the total bytes parked in `pending` while emission is
 /// failing. Under sustained emit failure the map is fed by every
 /// `agent_message_chunk` and drained by nobody; without a cap it grows
@@ -215,5 +288,86 @@ mod tests {
 
         let events = emitted.lock().unwrap().clone();
         assert_eq!(events, vec!["Hello, world!".to_string()]);
+    }
+
+    #[test]
+    fn flush_session_emits_only_that_session_and_leaves_others() {
+        let batcher = ChunkBatcher::new();
+        batcher.push("a".into(), "tail of a");
+        batcher.push("b".into(), "mid b");
+
+        let mut seen = Vec::new();
+        assert!(batcher.flush_session("a", |sid, text| {
+            seen.push((sid.to_string(), text.to_string()));
+            Ok(())
+        }));
+        assert_eq!(seen, vec![("a".to_string(), "tail of a".to_string())]);
+
+        // b is still queued for the flush thread.
+        let mut rest = Vec::new();
+        assert!(batcher.drain_and_emit(|sid, text| {
+            rest.push((sid.to_string(), text.to_string()));
+            Ok(())
+        }));
+        assert_eq!(rest, vec![("b".to_string(), "mid b".to_string())]);
+    }
+
+    #[test]
+    fn flush_session_with_nothing_pending_does_not_emit() {
+        let batcher = ChunkBatcher::new();
+        let mut calls = 0;
+        assert!(batcher.flush_session("a", |_, _| {
+            calls += 1;
+            Ok(())
+        }));
+        assert_eq!(calls, 0);
+    }
+
+    #[test]
+    fn flush_session_requeues_on_failed_emit() {
+        let batcher = ChunkBatcher::new();
+        batcher.push("a".into(), "first ");
+        assert!(!batcher.flush_session("a", |_, _| Err("down".to_string())));
+        batcher.push("a".into(), "second");
+        let mut got = String::new();
+        batcher.drain_and_emit(|_, text| {
+            got.push_str(text);
+            Ok(())
+        });
+        assert_eq!(got, "first second");
+    }
+
+    #[test]
+    fn flush_session_waits_for_an_in_progress_drain() {
+        // The ordering guarantee: if the flush thread has already taken a
+        // snapshot holding this session's text, a terminal flush must not
+        // return (and let MESSAGE_COMPLETE go out) until that snapshot has
+        // been emitted.
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::mpsc;
+
+        let batcher = Arc::new(ChunkBatcher::new());
+        batcher.push("a".into(), "tail");
+        let drained = Arc::new(AtomicBool::new(false));
+
+        let (in_emit_tx, in_emit_rx) = mpsc::channel();
+        let b = batcher.clone();
+        let d = drained.clone();
+        let drainer = std::thread::spawn(move || {
+            b.drain_and_emit(|_, _| {
+                in_emit_tx.send(()).unwrap();
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                d.store(true, Ordering::SeqCst);
+                Ok(())
+            });
+        });
+
+        in_emit_rx.recv().unwrap();
+        batcher.flush_session("a", |_, _| Ok(()));
+        assert!(
+            drained.load(Ordering::SeqCst),
+            "terminal flush returned before the in-flight drain emitted"
+        );
+        drainer.join().unwrap();
     }
 }

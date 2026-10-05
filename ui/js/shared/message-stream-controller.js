@@ -34,11 +34,12 @@
  *
  *   - onCompleteHeader()              early bookkeeping (mark online,
  *                                     hide stop button, …)
- *   - dropEmptyComplete()             bool — true if we should bail on
- *                                     empty completion (floating)
- *   - onBeforeFinalRender()           remove streaming indicator etc.
  *   - waitForPendingChunks()          optional — sleep/yield so the last
  *                                     few chunk events flush
+ *   - dropEmptyComplete()             bool — true if we should bail on
+ *                                     empty completion (floating); checked
+ *                                     after waitForPendingChunks
+ *   - onBeforeFinalRender()           remove streaming indicator etc.
  *   - renderFinal(text)               final markdown render
  *   - onAfterFinalRender(text)        post-completion UI (response actions,
  *                                     suggestion chips, notifications, push
@@ -106,12 +107,15 @@ export class MessageStreamController {
 
         await host.onCompleteHeader?.();
 
-        if (host.dropEmptyComplete?.()) return;
-
         // Wait for any trailing chunks to flush before checking controllers.
         // The last chunk (e.g. closing ``` fence) can arrive milliseconds
         // before message_complete and may not have been processed yet.
         await host.waitForPendingChunks?.();
+
+        // Only judge "empty" after the wait: a short reply that fit in one
+        // trailing chunk would otherwise be dropped as empty, leaving the
+        // window stuck thinking with the text on screen.
+        if (host.dropEmptyComplete?.()) return;
 
         if (host.automationPlanController.started) return;
 

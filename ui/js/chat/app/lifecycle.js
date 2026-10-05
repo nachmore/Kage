@@ -23,6 +23,7 @@ export function createLifecycleMixin(dependencies) {
             this.setupSpeech();
             this.setupEventListeners();
             this.setupStreamingListeners();
+            this._listenForInitialMessageSession();
             // Load user info early — before any of the awaits below — so that
             // historical messages rendered by displaySession (triggered either
             // from this init or from the tauri://focus listener in main.js)
@@ -46,9 +47,6 @@ export function createLifecycleMixin(dependencies) {
             await this.extensionManager.initialize();
             setExtensionManager(this.extensionManager);
             await loadFrecency(this.invoke);
-
-            // Send extension tool definitions to the agent as steering
-            this.extensionToolController.sendSteering();
 
             // Load sessions in background — don't block init
             this.loadSessions();
@@ -107,6 +105,13 @@ export function createLifecycleMixin(dependencies) {
                     stripKageTags(exists?.title) || t('chat.session.current_title');
             }
 
+            // Send extension tool definitions to the agent as steering. After
+            // the auto-select above: main only sets activeSessionId there, and
+            // sendSteering skips when the host has no session id. Sessions
+            // adopted later get it replayed by the backend before their first
+            // prompt.
+            this.extensionToolController.sendSteering();
+
             this.elements.chatInput.focus();
 
             // RTL detection — flip input and message layout when first char is RTL
@@ -118,6 +123,31 @@ export function createLifecycleMixin(dependencies) {
             );
 
             console.log('Chat app initialized');
+        }
+
+        /**
+         * open_chat_with_message created (and pinned) a session because this
+         * window had none. Adopt it so the reply — which streams under that
+         * id — renders here instead of being filed as another session's
+         * background activity, leaving the typing indicator up forever.
+         */
+        _listenForInitialMessageSession() {
+            this.listen('initial_message_session', (event) => {
+                const sid = event?.payload?.sessionId;
+                if (!sid || sid === this.activeSessionId) return;
+                this.activeSessionId = sid;
+                this.currentAcpSessionId = sid;
+                if (!this.sessions.some((s) => s.session_id === sid)) {
+                    const now = new Date().toISOString();
+                    this.sessions.unshift({
+                        session_id: sid,
+                        title: t('chat.session.current_title'),
+                        created_at: now,
+                        updated_at: now,
+                    });
+                }
+                this.renderSessionList();
+            });
         }
 
         cacheElements() {

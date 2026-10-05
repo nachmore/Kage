@@ -38,10 +38,10 @@ pub fn setup_notification_handler(
     // handler invocation), and the WebView2 emitter has no backpressure —
     // bursts pile up in Tauri's internal queue. Coalescing into ~60 fps
     // batches drops the IPC roundtrip count by 1-2 orders of magnitude
-    // without changing the on-screen feel of streaming.
-    let pending_chunks: std::sync::Arc<
-        std::sync::Mutex<std::collections::HashMap<String, String>>,
-    > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    // without changing the on-screen feel of streaming. The batcher lives
+    // on the client so send paths can flush a session's tail before its
+    // terminal event (see `flush_session_chunks`).
+    let pending_chunks = client.chunk_batcher.clone();
     spawn_chunk_flush_thread(app_handle.clone(), pending_chunks.clone());
 
     // Throttle config saves for last_seen updates — at most once per 60s
@@ -67,6 +67,14 @@ pub fn setup_notification_handler(
         // later. See AcpClient::notify_session_migrated.
         if method == "_kage/session_migrated" {
             if let Some(params) = notification.get("params") {
+                // Deliver the failed attempt's tail first: once windows
+                // re-pin, a late old-id chunk would re-badge the dead
+                // session as streaming with nothing left to complete it.
+                for key in ["oldSessionId", "newSessionId"] {
+                    if let Some(sid) = params.get(key).and_then(|v| v.as_str()) {
+                        flush_session_chunks(&app_handle, &client_for_handler, sid);
+                    }
+                }
                 crate::event_targets::emit_streaming_audience(
                     &app_handle,
                     "session_migrated",
@@ -140,9 +148,7 @@ pub fn setup_notification_handler(
                                     // text every CHUNK_FLUSH_INTERVAL_MS,
                                     // one per non-empty session bucket.
                                     // Frontend filters by sessionId.
-                                    if let Ok(mut map) = pending_chunks.lock() {
-                                        map.entry(sid).or_default().push_str(&emitted);
-                                    }
+                                    pending_chunks.push(sid, &emitted);
                                 }
                             }
                         }
@@ -210,12 +216,16 @@ pub fn setup_notification_handler(
                                 if was_new && names.len() > MAX_TOOL_NAMES {
                                     // HashMap iteration order is not insertion
                                     // order, so this is "drop arbitrary 25%"
-                                    // rather than strict LRU. Acceptable: a
-                                    // mis-attributed tool name in an audit log
-                                    // is preferable to unbounded growth.
+                                    // rather than strict LRU. A dropped entry
+                                    // makes a later permission request fall
+                                    // back to its descriptive title, which
+                                    // misses the user's per-tool policy — so
+                                    // never drop the call just inserted, whose
+                                    // permission request is the likeliest next.
                                     let drop_n = names.len() - MAX_TOOL_NAMES * 3 / 4;
                                     let to_drop: Vec<String> = names
                                         .keys()
+                                        .filter(|k| k.as_str() != call_id)
                                         .take(drop_n)
                                         .cloned()
                                         .collect();
@@ -308,16 +318,47 @@ pub fn setup_notification_handler(
                     );
                 }
                 "error/rate_limit" => {
-                    let message = notification.get("params")
+                    let params = notification.get("params");
+                    let message = params
                         .and_then(|p| p.get("message"))
                         .and_then(|m| m.as_str())
                         .unwrap_or("Rate limit exceeded. Please wait a moment before trying again.");
-                    warn!("Rate limit hit: {}", message);
-                    crate::event_targets::emit_streaming_audience(
-                        &app_handle,
-                        events::MESSAGE_ERROR,
-                        &message,
-                    );
+                    let session_id = params
+                        .and_then(|p| p.get("sessionId"))
+                        .and_then(|s| s.as_str());
+                    warn!("Rate limit hit (session {:?}): {}", session_id, message);
+                    // MESSAGE_ERROR carries no session id, so every listener
+                    // treats it as terminal for its own turn. Route it to the
+                    // window that owns the rate-limited prompt rather than
+                    // tearing down unrelated in-flight answers.
+                    let background = session_id
+                        .is_some_and(|sid| client_for_handler.is_background_prompt_session(sid));
+                    let originator = session_id.and_then(|sid| {
+                        app_handle
+                            .try_state::<UiState>()?
+                            .pending_prompt_originators
+                            .lock()
+                            .ok()?
+                            .get(sid)
+                            .cloned()
+                    });
+                    match rate_limit_route(session_id.is_some(), background, originator) {
+                        RateLimitRoute::LogOnly => {}
+                        RateLimitRoute::Window(label) => {
+                            let _ = app_handle.emit_to(
+                                tauri::EventTarget::webview_window(label.as_str()),
+                                events::MESSAGE_ERROR,
+                                message,
+                            );
+                        }
+                        RateLimitRoute::Broadcast => {
+                            crate::event_targets::emit_streaming_audience(
+                                &app_handle,
+                                events::MESSAGE_ERROR,
+                                &message,
+                            );
+                        }
+                    }
                 }
                 _ => {
                     // Unknown vendor extension — forward to streaming-aware
@@ -367,7 +408,7 @@ const CHUNK_FLUSH_MAX_CONSECUTIVE_FAILURES: u32 = 64;
 /// undelivered text, bounded by `chunk_batcher::MAX_PENDING_BYTES`.
 fn spawn_chunk_flush_thread(
     app_handle: tauri::AppHandle,
-    pending: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    pending: std::sync::Arc<crate::chunk_batcher::ChunkBatcher>,
 ) {
     let _ = std::thread::Builder::new()
         .name("acp-chunk-flush".into())
@@ -376,33 +417,9 @@ fn spawn_chunk_flush_thread(
             let mut consecutive_failures: u32 = 0;
             loop {
                 std::thread::sleep(interval);
-                let alive =
-                    crate::chunk_batcher::drain_and_emit_pending(&pending, |session_id, text| {
-                        let payload = serde_json::json!({
-                            "text": text,
-                            "sessionId": session_id,
-                        });
-                        // Streaming-audience target — chat hosts + floating +
-                        // settings — so the per-frame chunk doesn't fan out
-                        // to every webview that happens to subscribe to
-                        // anything else. We call `emit_filter` directly here
-                        // (rather than the helper) because the chunk-flush
-                        // thread relies on the emit's Err to detect shutdown;
-                        // the helper swallows errors at debug-log level.
-                        app_handle
-                            .emit_filter(events::MESSAGE_CHUNK, &payload, |t| match t {
-                                tauri::EventTarget::Window { label }
-                                | tauri::EventTarget::Webview { label }
-                                | tauri::EventTarget::WebviewWindow { label }
-                                | tauri::EventTarget::AnyLabel { label } => {
-                                    window_labels::is_session_host_label(label)
-                                        || label == window_labels::FLOATING
-                                        || label == window_labels::SETTINGS
-                                }
-                                _ => false,
-                            })
-                            .map_err(|e| format!("{}", e))
-                    });
+                let alive = pending.drain_and_emit(|session_id, text| {
+                    emit_chunk_batch(&app_handle, session_id, text)
+                });
                 if alive {
                     consecutive_failures = 0;
                     continue;
@@ -421,6 +438,85 @@ fn spawn_chunk_flush_thread(
                 }
             }
         });
+}
+
+/// Emit one batched `message_chunk` for `session_id`.
+///
+/// Streaming-audience target — chat hosts + floating + settings — so the
+/// per-frame chunk doesn't fan out to every webview that happens to
+/// subscribe to anything else. Calls `emit_filter` directly (rather than
+/// the helper) because the chunk-flush thread relies on the emit's Err to
+/// detect shutdown; the helper swallows errors at debug-log level.
+fn emit_chunk_batch<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    session_id: &str,
+    text: &str,
+) -> Result<(), String> {
+    let payload = serde_json::json!({
+        "text": text,
+        "sessionId": session_id,
+    });
+    app_handle
+        .emit_filter(events::MESSAGE_CHUNK, &payload, |t| match t {
+            tauri::EventTarget::Window { label }
+            | tauri::EventTarget::Webview { label }
+            | tauri::EventTarget::WebviewWindow { label }
+            | tauri::EventTarget::AnyLabel { label } => {
+                window_labels::is_session_host_label(label)
+                    || label == window_labels::FLOATING
+                    || label == window_labels::SETTINGS
+            }
+            _ => false,
+        })
+        .map_err(|e| format!("{}", e))
+}
+
+/// Emit `session_id`'s still-batched chunks now. Call before any terminal
+/// event for a turn (`message_complete`, `message_error`, `session_reset`,
+/// `session_migrated`): the reader thread queues every chunk before the
+/// prompt response wakes the sender, but the flush thread may be mid-sleep,
+/// and a chunk landing after the terminal event is dropped by the window
+/// (or re-badges the session as streaming in its peers).
+pub(super) fn flush_session_chunks<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    client: &crate::acp_client::AcpClient,
+    session_id: &str,
+) {
+    let delivered = client.chunk_batcher.flush_session(session_id, |sid, text| {
+        emit_chunk_batch(app_handle, sid, text)
+    });
+    if !delivered {
+        log::debug!("flush_session_chunks({session_id}) emit failed; left for flush thread");
+    }
+}
+
+/// Where an `error/rate_limit` notification's MESSAGE_ERROR goes.
+#[derive(Debug, PartialEq, Eq)]
+enum RateLimitRoute {
+    /// Background prompt (titler, auto-steering) or a prompt with no
+    /// owning window: nobody is waiting on it, so don't end anyone's turn.
+    LogOnly,
+    /// The window that issued the prompt.
+    Window(String),
+    /// Agent sent no session id — can't tell whose turn it is.
+    Broadcast,
+}
+
+fn rate_limit_route(
+    has_session_id: bool,
+    background: bool,
+    originator: Option<String>,
+) -> RateLimitRoute {
+    if !has_session_id {
+        return RateLimitRoute::Broadcast;
+    }
+    if background {
+        return RateLimitRoute::LogOnly;
+    }
+    match originator {
+        Some(label) => RateLimitRoute::Window(label),
+        None => RateLimitRoute::LogOnly,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -634,5 +730,37 @@ fn handle_permission_notification(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{rate_limit_route, RateLimitRoute};
+
+    #[test]
+    fn background_rate_limit_reaches_no_window() {
+        // A titler/auto-steering prompt hitting the limit must not tear
+        // down an unrelated answer streaming in a chat window.
+        assert_eq!(
+            rate_limit_route(true, true, Some("main".into())),
+            RateLimitRoute::LogOnly
+        );
+    }
+
+    #[test]
+    fn rate_limit_goes_to_the_originating_window_only() {
+        assert_eq!(
+            rate_limit_route(true, false, Some("chat-1".into())),
+            RateLimitRoute::Window("chat-1".into())
+        );
+        assert_eq!(rate_limit_route(true, false, None), RateLimitRoute::LogOnly);
+    }
+
+    #[test]
+    fn rate_limit_without_session_id_falls_back_to_broadcast() {
+        assert_eq!(
+            rate_limit_route(false, false, None),
+            RateLimitRoute::Broadcast
+        );
     }
 }

@@ -76,6 +76,11 @@ pub struct AcpClient {
     /// holds the session's prompt lock, so no user prompt is concurrently
     /// streaming on it.
     pub background_prompt_sessions: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// Streamed deltas waiting to be emitted to the UI as batched
+    /// `message_chunk` events. Lives here (not inside the notification
+    /// handler) so send paths can flush a session's tail before emitting
+    /// its terminal event — see `ChunkBatcher::flush_session`.
+    pub chunk_batcher: Arc<crate::chunk_batcher::ChunkBatcher>,
     /// Vendor extension namespace observed from incoming notifications.
     /// Two ACP vendor namespaces are recognised: `_kage.dev/` and
     /// `_kiro.dev/`. The extension surface (commands/available,
@@ -139,6 +144,7 @@ impl AcpClient {
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
             loading_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
             background_prompt_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            chunk_batcher: Arc::new(crate::chunk_batcher::ChunkBatcher::new()),
             vendor_prefix: Arc::new(Mutex::new(None)),
             prompt_locks: Arc::new(Mutex::new(HashMap::new())),
             restart_guard: Arc::new(Mutex::new(None)),
@@ -423,6 +429,35 @@ impl AcpClient {
         self.transport.send_prompt_request("session/prompt", params)
     }
 
+    /// Like `send_prompt`, but the reply is muted: still accumulated, but
+    /// never forwarded to any window. For hidden prompts that must still
+    /// run — steering before a recovery resend, inline-assist, macro steps
+    /// — so it queues on the prompt lock instead of yielding like
+    /// `try_send_prompt`.
+    ///
+    /// `keep_reply = false` discards the reply bucket before the lock is
+    /// released (steering acks nobody reads); `true` leaves it for the
+    /// caller's `take_session_accumulator`.
+    fn send_prompt_muted(
+        &self,
+        session_id: &str,
+        params: serde_json::Value,
+        keep_reply: bool,
+    ) -> Result<AcpResponse> {
+        let lock = self.prompt_lock_for(session_id);
+        // Declared before the marker so it drops AFTER it: the mute must
+        // clear before a queued prompt can take the lock, or that prompt's
+        // first chunks would be hidden.
+        let _guard = lock.lock_or_recover();
+        self.reset_session_accumulator(session_id);
+        let _bg = BackgroundPromptGuard::new(&self.background_prompt_sessions, session_id);
+        let response = self.transport.send_prompt_request("session/prompt", params);
+        if !keep_reply {
+            self.reset_session_accumulator(session_id);
+        }
+        response
+    }
+
     /// Like `send_prompt`, but for *background* prompts that must never
     /// make a user wait: yields instead of queuing when a prompt is
     /// already in flight on the session.
@@ -547,6 +582,21 @@ mod tests {
             !client.is_background_prompt_session("session-a"),
             "a yielded attempt must not mute the session that won the slot"
         );
+    }
+
+    #[test]
+    fn muted_send_clears_marker_and_discards_reply_on_failure() {
+        // No transport → the write fails fast. The mute must not outlive
+        // the call (it would hide the next real prompt's output), and a
+        // discard-reply send must not leave a stale bucket behind.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        client.accumulate_chunk("session-a", "stale");
+        let result = client.send_prompt_muted("session-a", serde_json::json!({}), false);
+        assert!(result.is_err());
+        assert!(!client.is_background_prompt_session("session-a"));
+        assert_eq!(client.peek_session_accumulator("session-a"), "");
     }
 
     #[test]

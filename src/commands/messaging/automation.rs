@@ -50,18 +50,49 @@ pub async fn execute_automation_plan<R: tauri::Runtime>(
     cancelled.store(false, std::sync::atomic::Ordering::Relaxed);
 
     async_runtime::spawn_blocking(move || {
-        if !client.is_connected() {
-            if let Err(e) = client.connect() {
-                crate::event_targets::emit_to_self(
-                    &window,
-                    "automation_plan_error",
-                    &format!("Unable to connect: {}", e),
-                );
-                return;
-            }
-        }
+        // On connect failure, fail every step visibly and fall through to
+        // the shared epilogue — its automation_plan_complete is the only
+        // thing that unlocks the plan UI (the command already returned Ok).
+        let connected = client.is_connected()
+            || match client.connect() {
+                Ok(()) => true,
+                Err(e) => {
+                    warn!("Automation plan could not connect: {}", e);
+                    for (i, step) in plan.iter().enumerate() {
+                        let task = step
+                            .get("task")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("Unknown task");
+                        let payload = if i == 0 {
+                            serde_json::json!({
+                                "step": 1,
+                                "totalSteps": total_steps,
+                                "task": task,
+                                "result": format!("Unable to connect: {}", e),
+                                "success": false,
+                            })
+                        } else {
+                            serde_json::json!({
+                                "step": i + 1,
+                                "totalSteps": total_steps,
+                                "task": task,
+                                "result": "Skipped due to earlier step failure",
+                                "success": false,
+                                "stopped": true,
+                            })
+                        };
+                        crate::event_targets::emit_to_self(
+                            &window,
+                            events::AUTOMATION_STEP_COMPLETE,
+                            &payload,
+                        );
+                    }
+                    false
+                }
+            };
+        let runnable_steps = if connected { plan.len() } else { 0 };
 
-        for (i, step) in plan.iter().enumerate() {
+        for (i, step) in plan.iter().enumerate().take(runnable_steps) {
             // Check cancellation before starting each step
             if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                 info!("Automation plan cancelled by user at step {}", i + 1);
@@ -233,8 +264,15 @@ pub async fn execute_automation_plan<R: tauri::Runtime>(
         // chat-host windows — emit there regardless of which window
         // started the plan, otherwise a plan kicked off from the
         // floating launcher leaves the chat row in "streaming" state.
+        // Chat hosts match completes by sessionId, so it must carry one
+        // (a bare `()` never matched and left the session badged live).
         let app = window.app_handle().clone();
-        crate::event_targets::emit_to_chat_hosts(&app, events::MESSAGE_COMPLETE, &());
+        super::notifications::flush_session_chunks(&app, &client, &session_id);
+        crate::event_targets::emit_to_chat_hosts(
+            &app,
+            events::MESSAGE_COMPLETE,
+            &serde_json::json!({ "sessionId": &session_id }),
+        );
     });
 
     Ok(())
@@ -283,9 +321,11 @@ pub async fn send_inline_assist<R: tauri::Runtime>(
             }
         };
 
-        // send_chat_streaming resets its own session bucket; once it
-        // returns, the response is available in that bucket.
-        if let Err(e) = client.send_chat_streaming(&session_id, &message, None) {
+        // Muted: the reply is delivered via inline_assist_chunk below, not
+        // streamed into whichever chat has this session pinned (which never
+        // gets a complete for it). The send resets its own session bucket;
+        // once it returns, the response is available in that bucket.
+        if let Err(e) = client.send_chat_streaming_background(&session_id, &message, true) {
             crate::event_targets::emit_to_inline_assist(
                 &app,
                 events::INLINE_ASSIST_ERROR,
@@ -407,7 +447,11 @@ pub async fn execute_macro<R: tauri::Runtime>(
                             ));
                         }
                     }
-                    if let Err(e) = client.send_chat_streaming(&session_id, &full_prompt, None) {
+                    // Muted for the same reason as inline-assist: the result
+                    // is read back from the accumulator, never streamed.
+                    if let Err(e) =
+                        client.send_chat_streaming_background(&session_id, &full_prompt, true)
+                    {
                         return Err(AppError::keyed(
                             ErrorKind::Internal,
                             "errors.macro.step_failed",

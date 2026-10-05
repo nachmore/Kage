@@ -32,8 +32,65 @@ pub struct AcpHandles {
     pub slash_commands: Arc<std::sync::Mutex<Vec<SlashCommand>>>,
     /// Available models from the ACP session/new response
     pub available_models: Arc<std::sync::Mutex<Vec<AcpModel>>>,
-    /// Hash of the last sent extension tool steering (to avoid sending duplicates)
-    pub last_tool_steering_hash: Arc<std::sync::Mutex<u64>>,
+    /// Which extension tool steering block each session has been sent (to
+    /// avoid duplicates, per session). See `ToolSteeringState`.
+    pub tool_steering: Arc<std::sync::Mutex<ToolSteeringState>>,
+}
+
+/// Per-session delivery bookkeeping for extension tool steering.
+///
+/// Keyed by session because every window sends the same block on its own
+/// session: a single process-wide hash let whichever window sent first
+/// starve every other session of the tool definitions.
+#[derive(Debug, Default)]
+pub struct ToolSteeringState {
+    /// Latest block any window sent. Replayed to sessions that haven't had
+    /// it (new chats, recovered sessions) before their next user prompt.
+    latest: Option<(u64, String)>,
+    /// Session id → hash of the block delivered (or in flight) on it.
+    sent: HashMap<String, u64>,
+}
+
+impl ToolSteeringState {
+    fn hash_block(block: &str) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        block.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Record `block` as the latest and claim `session_id` for it. Returns
+    /// the hash to send under, or `None` if this session already has (or is
+    /// receiving) exactly this block. Claiming before the send is what stops
+    /// two windows sharing a session from both sending it.
+    pub fn claim(&mut self, session_id: &str, block: &str) -> Option<u64> {
+        let hash = Self::hash_block(block);
+        self.latest = Some((hash, block.to_string()));
+        if self.sent.get(session_id) == Some(&hash) {
+            return None;
+        }
+        self.sent.insert(session_id.to_string(), hash);
+        Some(hash)
+    }
+
+    /// Claim `session_id` for the latest known block if it hasn't had it.
+    /// Returns the hash and block to send.
+    pub fn claim_latest(&mut self, session_id: &str) -> Option<(u64, String)> {
+        let (hash, block) = self.latest.clone()?;
+        if self.sent.get(session_id) == Some(&hash) {
+            return None;
+        }
+        self.sent.insert(session_id.to_string(), hash);
+        Some((hash, block))
+    }
+
+    /// Undo a claim whose send failed so a later call retries. Leaves a
+    /// newer claim (different hash) alone.
+    pub fn release(&mut self, session_id: &str, hash: u64) {
+        if self.sent.get(session_id) == Some(&hash) {
+            self.sent.remove(session_id);
+        }
+    }
 }
 
 /// Frontend-driven UI state — typically set when the floating window's
@@ -155,7 +212,7 @@ pub fn build_managed_state(
             pending_permissions: Arc::new(std::sync::Mutex::new(HashMap::new())),
             slash_commands: Arc::new(std::sync::Mutex::new(Vec::new())),
             available_models: Arc::new(std::sync::Mutex::new(Vec::new())),
-            last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
+            tool_steering: Arc::new(std::sync::Mutex::new(ToolSteeringState::default())),
         },
         ui_state: UiState {
             dev_mode,
@@ -238,4 +295,56 @@ pub struct AcpModel {
     pub model_id: String,
     pub name: String,
     pub description: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolSteeringState;
+
+    #[test]
+    fn tool_steering_is_deduplicated_per_session_not_globally() {
+        // The regression: floating sent on F first, and the main window's
+        // identical block for M was swallowed by a process-wide hash.
+        let mut st = ToolSteeringState::default();
+        assert!(st.claim("F", "tools").is_some());
+        assert!(st.claim("M", "tools").is_some());
+        assert!(st.claim("F", "tools").is_none());
+        assert!(st.claim("M", "tools").is_none());
+    }
+
+    #[test]
+    fn changed_block_is_resent() {
+        let mut st = ToolSteeringState::default();
+        assert!(st.claim("F", "v1").is_some());
+        assert!(st.claim("F", "v2").is_some());
+    }
+
+    #[test]
+    fn released_claim_is_retried() {
+        // A failed or disconnected send must not mark the session done.
+        let mut st = ToolSteeringState::default();
+        let h = st.claim("F", "tools").unwrap();
+        st.release("F", h);
+        assert!(st.claim("F", "tools").is_some());
+    }
+
+    #[test]
+    fn release_leaves_a_newer_claim_alone() {
+        let mut st = ToolSteeringState::default();
+        let old = st.claim("F", "v1").unwrap();
+        st.claim("F", "v2").unwrap();
+        st.release("F", old);
+        assert!(st.claim("F", "v2").is_none());
+    }
+
+    #[test]
+    fn claim_latest_replays_to_sessions_that_never_got_it() {
+        let mut st = ToolSteeringState::default();
+        assert!(st.claim_latest("new").is_none(), "nothing sent yet");
+        st.claim("F", "tools").unwrap();
+        let (_, block) = st.claim_latest("new").expect("new session needs the block");
+        assert_eq!(block, "tools");
+        assert!(st.claim_latest("new").is_none(), "claimed once");
+        assert!(st.claim_latest("F").is_none(), "F already has it");
+    }
 }
