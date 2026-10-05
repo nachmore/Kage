@@ -76,12 +76,14 @@ pub fn assemble_steering_parts(inputs: &SteeringInputs) -> Vec<String> {
             Ok(auto_path) => {
                 if auto_path.exists() {
                     // Strip the header comment (it's for the human editing
-                    // the file, not the model) and enforce the size cap
-                    // here too: a doc written before the cap existed, or
-                    // hand-edited, would otherwise ship in full on every
-                    // session start until the next regeneration.
+                    // the file, not the model) and enforce the byte cap
+                    // here too: a doc written before the cap existed would
+                    // otherwise ship in full on every session start until
+                    // the next regeneration. Only the byte/line caps apply
+                    // — not the per-section cap — so lines the user added
+                    // in Settings aren't silently dropped.
                     if let Ok(content) = fs::read_to_string(&auto_path) {
-                        let body = crate::auto_steering::compact_steering_doc(
+                        let body = crate::auto_steering::cap_steering_doc(
                             &crate::auto_steering::strip_header_comment(&content),
                         );
                         if !body.is_empty() {

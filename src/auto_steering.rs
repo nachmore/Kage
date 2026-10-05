@@ -392,7 +392,7 @@ pub fn generate_steering_document(
     } else {
         format!(
             "{}\n\n---\n\n<existing_preferences>\nThis is the current document. Rewrite it from scratch rather than appending: keep identity facts (name, role) and still-valid preferences, fold in what the new conversation shows, merge near-duplicates into one bullet, generalize specifics into broad domains, and delete anything stale, task-specific, or not reinforced. When space is tight, drop the least durable bullets. The result must obey every format rule above, even where this document does not.\n\n{}\n</existing_preferences>",
-            full_prompt, compact_steering_doc(&existing_body)
+            full_prompt, cap_steering_doc(&existing_body)
         )
     };
 
@@ -660,9 +660,10 @@ fn truncate_at_word(text: &str, max: usize) -> String {
     format!("{}…", cut.trim_end())
 }
 
-/// Deterministic size bound on a steering document body. The prompt asks
-/// the model to stay small, but models drift, and the merge pass feeds the
-/// previous doc back in — without a hard cap the doc only ever grows.
+/// Deterministic size bound on a steering document body the MODEL wrote.
+/// The prompt asks the model to stay small, but models drift, and the merge
+/// pass feeds the previous doc back in — without a hard cap the doc only
+/// ever grows.
 ///
 /// Headings are kept; at most `MAX_LINES_PER_SECTION` content lines per
 /// heading (earlier lines win — the prompt orders by importance); each line
@@ -670,6 +671,32 @@ fn truncate_at_word(text: &str, max: usize) -> String {
 /// exceed `MAX_DOC_CHARS`, everything after is dropped. A heading is only
 /// emitted once one of its lines fits, so no empty sections survive.
 pub fn compact_steering_doc(body: &str) -> String {
+    compact_doc(body, Some(MAX_LINES_PER_SECTION))
+}
+
+/// Size bound for the doc as it sits on disk — applied at injection time
+/// and to the existing doc fed into the merge pass. The user can edit this
+/// file line by line in Settings, so only the byte budget (`MAX_DOC_CHARS`)
+/// and per-line cap apply here; the per-section line cap is reserved for
+/// model output, otherwise a sixth bullet the user added would be silently
+/// skipped at injection and then lost at the next merge.
+pub fn cap_steering_doc(body: &str) -> String {
+    compact_doc(body, None)
+}
+
+/// Markdown ATX heading: 1-6 `#` followed by whitespace or end of line.
+/// `#1 rule: ...` is content, not a heading.
+fn is_heading(line: &str) -> bool {
+    let line = line.trim_start();
+    let hashes = line.len() - line.trim_start_matches('#').len();
+    (1..=6).contains(&hashes)
+        && line[hashes..]
+            .chars()
+            .next()
+            .is_none_or(char::is_whitespace)
+}
+
+fn compact_doc(body: &str, max_lines_per_section: Option<usize>) -> String {
     let mut out = String::with_capacity(body.len().min(MAX_DOC_CHARS + 64));
     let mut pending_heading: Option<&str> = None;
     let mut lines_in_section = 0usize;
@@ -679,12 +706,12 @@ pub fn compact_steering_doc(body: &str) -> String {
         if line.trim().is_empty() {
             continue;
         }
-        if line.trim_start().starts_with('#') {
+        if is_heading(line) {
             pending_heading = Some(line.trim());
             lines_in_section = 0;
             continue;
         }
-        if lines_in_section >= MAX_LINES_PER_SECTION {
+        if max_lines_per_section.is_some_and(|max| lines_in_section >= max) {
             continue;
         }
         let line = truncate_at_word(line, MAX_LINE_CHARS);
@@ -1054,5 +1081,54 @@ mod tests {
         let doc = format!("## A\n- {}\n- {}\n## B\n- {}\n", wall, wall, wall);
         let once = compact_steering_doc(&doc);
         assert_eq!(compact_steering_doc(&once), once);
+    }
+
+    #[test]
+    fn cap_keeps_user_added_lines_beyond_section_cap() {
+        // User appended bullets in Settings: all must survive injection
+        // and the merge input, not just the first MAX_LINES_PER_SECTION.
+        let mut doc = String::from("## Kage Behavior\n");
+        for i in 0..(MAX_LINES_PER_SECTION + 3) {
+            doc.push_str(&format!("- rule {}\n", i));
+        }
+        let out = cap_steering_doc(&doc);
+        assert_eq!(out, doc.trim_end());
+        assert!(out.contains(&format!("- rule {}", MAX_LINES_PER_SECTION + 2)));
+    }
+
+    #[test]
+    fn cap_keeps_headingless_doc_in_full() {
+        let doc = (0..10)
+            .map(|i| format!("pref {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(cap_steering_doc(&doc), doc);
+    }
+
+    #[test]
+    fn cap_still_enforces_byte_and_line_budget() {
+        let wall = "word ".repeat(400);
+        let mut doc = String::from("## A\n");
+        for _ in 0..30 {
+            doc.push_str(&format!("- {}\n", wall));
+        }
+        let out = cap_steering_doc(&doc);
+        assert!(out.len() <= MAX_DOC_CHARS, "got {} bytes", out.len());
+        assert!(out.lines().all(|l| l.len() <= MAX_LINE_CHARS));
+        assert_eq!(cap_steering_doc(&out), out, "idempotent");
+    }
+
+    #[test]
+    fn hash_prefixed_content_is_not_a_heading() {
+        assert!(is_heading("## About the User"));
+        assert!(is_heading("###### Deep"));
+        assert!(is_heading("  # Indented"));
+        assert!(!is_heading("#1 rule: be brief"));
+        assert!(!is_heading("#hashtag"));
+        assert!(!is_heading("####### seven"));
+        // A trailing "#1 rule" line is kept, not swallowed as an empty heading.
+        let doc = "## Kage Behavior\n- Be brief\n#1 rule: no emoji";
+        assert_eq!(cap_steering_doc(doc), doc);
+        assert_eq!(compact_steering_doc(doc), doc);
     }
 }
