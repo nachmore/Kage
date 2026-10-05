@@ -1,5 +1,6 @@
 import { SettingsModule } from './base.js';
 import { t } from '../shared/i18n.js';
+import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 /**
  * MCP Settings Module
  */
@@ -157,19 +158,19 @@ export class McpSettingsModule extends SettingsModule {
                 <div class="mcp-server-info">
                     <span class="mcp-server-icon">📦</span>
                     <div class="mcp-server-details">
-                        <div class="mcp-server-name">${esc(key)}</div>
-                        <div class="mcp-server-desc mcp-server-cmd">${esc(cmd)} ${esc(args)}</div>
+                        <div class="mcp-server-name">${escapeHtml(key)}</div>
+                        <div class="mcp-server-desc mcp-server-cmd">${escapeHtml(cmd)} ${escapeHtml(args)}</div>
                     </div>
                 </div>
                 <div class="mcp-server-actions">
-                    <button class="mcp-server-edit-btn" data-key="${esc(key)}" title="${t('settings.mcp.action.edit_title')}">
+                    <button class="mcp-server-edit-btn" data-key="${escapeAttr(key)}" title="${t('settings.mcp.action.edit_title')}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button class="mcp-server-delete-btn" data-key="${esc(key)}" title="${t('settings.mcp.action.delete_title')}">
+                    <button class="mcp-server-delete-btn" data-key="${escapeAttr(key)}" title="${t('settings.mcp.action.delete_title')}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                     <label class="kage-toggle">
-                        <input type="checkbox" id="${toggleId}" ${enabled ? 'checked' : ''} data-key="${esc(key)}">
+                        <input type="checkbox" id="${escapeAttr(toggleId)}" ${enabled ? 'checked' : ''} data-key="${escapeAttr(key)}">
                         <span class="kage-toggle-slider"></span>
                     </label>
                 </div>
@@ -182,12 +183,6 @@ export class McpSettingsModule extends SettingsModule {
 
         list.innerHTML = html;
         this._bindServerEvents(list);
-
-        function esc(s) {
-            const d = document.createElement('div');
-            d.textContent = s;
-            return d.innerHTML;
-        }
     }
 
     _bindServerEvents(list) {
@@ -266,13 +261,13 @@ export class McpSettingsModule extends SettingsModule {
             <div class="mcp-dialog">
                 <div class="mcp-dialog-title">${isEdit ? t('settings.mcp.dialog.edit_title') : t('settings.mcp.dialog.add_title')}</div>
                 <label class="mcp-dialog-label">${t('settings.mcp.dialog.name.label')}</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogKey" value="${isEdit ? editKey : ''}" ${isEdit ? 'disabled' : ''} placeholder="${t('settings.mcp.dialog.name.placeholder')}">
+                <input class="setting-input mcp-dialog-input" id="mcpDialogKey" value="${isEdit ? escapeAttr(editKey) : ''}" ${isEdit ? 'disabled' : ''} placeholder="${t('settings.mcp.dialog.name.placeholder')}">
                 <label class="mcp-dialog-label">${t('settings.mcp.dialog.command.label')}</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogCmd" value="${existing.command || ''}" placeholder="${t('settings.mcp.dialog.command.placeholder')}">
+                <input class="setting-input mcp-dialog-input" id="mcpDialogCmd" value="${escapeAttr(existing.command || '')}" placeholder="${t('settings.mcp.dialog.command.placeholder')}">
                 <label class="mcp-dialog-label">${t('settings.mcp.dialog.args.label')}</label>
-                <textarea class="setting-input mcp-dialog-input" id="mcpDialogArgs" rows="3" placeholder="${t('settings.mcp.dialog.args.placeholder')}">${(existing.args || []).join('\n')}</textarea>
+                <textarea class="setting-input mcp-dialog-input" id="mcpDialogArgs" rows="3" placeholder="${t('settings.mcp.dialog.args.placeholder')}">${escapeHtml((existing.args || []).join('\n'))}</textarea>
                 <label class="mcp-dialog-label">${t('settings.mcp.dialog.cwd.label')}</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogCwd" value="${existing.cwd || ''}" placeholder="${t('settings.mcp.dialog.cwd.placeholder')}">
+                <input class="setting-input mcp-dialog-input" id="mcpDialogCwd" value="${escapeAttr(existing.cwd || '')}" placeholder="${t('settings.mcp.dialog.cwd.placeholder')}">
                 <div class="mcp-dialog-actions">
                     <button class="setting-button" id="mcpDialogCancel">${t('common.cancel')}</button>
                     <button class="setting-button mcp-dialog-save" id="mcpDialogSave">${isEdit ? t('settings.mcp.dialog.save') : t('settings.mcp.dialog.add')}</button>

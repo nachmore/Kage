@@ -42,9 +42,10 @@ The complete list of features we track is visible in [`ui/js/shared/telemetry.js
 
 ### Crash signal
 - If Kage panics (an unrecoverable internal error), we send a single `panic` event so we know a buggy build is in the wild.
-- The event carries the panic message (truncated to ~250 characters) and the source location it occurred at — e.g. `src/foo.rs:42`. These are paths *inside our own source code*, not paths to your files.
-- A full crash report with the backtrace and recent app log is written to a `crash.log` file on your machine. **This local file never leaves your machine** unless you choose to attach it to a bug report yourself.
-- Backtraces, local variables, and the app log are intentionally not included in the `panic` event.
+- The event carries only a coarse category from a fixed list (e.g. `unwrap_none`, `index_oob`, `other`) and the source location it occurred at — e.g. `src/foo.rs:42`. These are paths *inside our own source code*, not paths to your files.
+- The panic message itself is never sent: it can quote whatever data was being processed when the error hit, so it stays on your machine.
+- A full crash report with the panic message, backtrace, and recent app log is written to a `crash.log` file on your machine. **This local file never leaves your machine** unless you choose to attach it to a bug report yourself.
+- The panic message, backtraces, local variables, and the app log are intentionally not included in the `panic` event.
 
 ## What is never collected
 

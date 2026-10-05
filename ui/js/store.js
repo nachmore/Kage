@@ -152,7 +152,7 @@ async function handleDeepLinkInstall(rawId) {
         return;
     }
     try {
-        await installFromStore(id);
+        await installFromStore(id, card?.dataset.itemSource);
     } catch (e) {
         console.warn('[store] deep-link install failed', e);
     }
@@ -436,7 +436,7 @@ function renderCard(item, kind) {
             : '';
 
     return `
-        <div class="store-card" data-item-id="${esc(item.id)}">
+        <div class="store-card" data-item-id="${esc(item.id)}" data-item-source="${esc(itemSource)}">
             <div class="store-card-header">
                 <div class="store-card-icon">${esc(item.icon || '📦')}</div>
                 <div>
@@ -500,14 +500,18 @@ function setCardBusy(id, label) {
  * capability set as before and the approval is implicit-same, we
  * skip the prompt and commit directly — no user friction for
  * routine updates that don't expand the capability surface.
+ *
+ * Install/update/reinstall all take the catalog item's `_source` so the
+ * backend downloads from the store that listed the item instead of the
+ * primary one. Empty/missing means the primary store.
  */
-async function installFromStore(id) {
+async function installFromStore(id, source) {
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Installing…');
     try {
         const result = await runStagedExtensionInstall(
             invoke,
-            () => invoke('store_install', { id }),
+            () => invoke('store_install', { id, source: source || null }),
             {
                 onSuccess: async () => {
                     await refreshInstalled();
@@ -529,15 +533,19 @@ async function installFromStore(id) {
     }
 }
 
-async function updateItem(id) {
+async function updateItem(id, source) {
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Updating…');
     try {
-        await runStagedExtensionInstall(invoke, () => invoke('store_install', { id }), {
-            onSuccess: async () => {
-                await refreshInstalled();
-            },
-        });
+        await runStagedExtensionInstall(
+            invoke,
+            () => invoke('store_install', { id, source: source || null }),
+            {
+                onSuccess: async () => {
+                    await refreshInstalled();
+                },
+            }
+        );
         renderTab();
     } catch (e) {
         await alertDialog({
@@ -549,15 +557,19 @@ async function updateItem(id) {
     }
 }
 
-async function reinstallItem(id) {
+async function reinstallItem(id, source) {
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Reinstalling…');
     try {
-        await runStagedExtensionInstall(invoke, () => invoke('store_install', { id }), {
-            onSuccess: async () => {
-                await refreshInstalled();
-            },
-        });
+        await runStagedExtensionInstall(
+            invoke,
+            () => invoke('store_install', { id, source: source || null }),
+            {
+                onSuccess: async () => {
+                    await refreshInstalled();
+                },
+            }
+        );
         renderTab();
     } catch (e) {
         await alertDialog({
@@ -643,21 +655,22 @@ document.getElementById('storeContent')?.addEventListener('click', (e) => {
     const card = btn.closest('.store-card');
     const id = card?.dataset.itemId;
     if (!id) return;
+    const source = card.dataset.itemSource;
     switch (btn.dataset.action) {
         case 'settings':
             openSettings(id);
             break;
         case 'update':
-            updateItem(id);
+            updateItem(id, source);
             break;
         case 'reinstall':
-            reinstallItem(id);
+            reinstallItem(id, source);
             break;
         case 'uninstall':
             uninstallItem(id, btn.dataset.kind);
             break;
         case 'install':
-            installFromStore(id);
+            installFromStore(id, source);
             break;
     }
 });
