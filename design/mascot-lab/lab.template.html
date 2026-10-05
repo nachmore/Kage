@@ -17,8 +17,12 @@
 <title>Kage mascot lab</title>
 <style>
 :root {
-    --body: #81e6d9;
-    --eyes: #1a202c;
+    /* The app draws animated frames as <img>, which page CSS can't recolour,
+       so the mascot is always the raw art: black body, white eyes, in both
+       themes. Only --kage-mascot-invert (filter: invert(1)) changes that,
+       mirrored here by the "Invert mascot" toggle. */
+    --body: #000000;
+    --eyes: #ffffff;
     --grad: linear-gradient(135deg, #81e6d9 0%, #319795 100%);
     --page: #12161f;
     --panel: #1a202c;
@@ -29,8 +33,6 @@
     --bubble: #ffffff;
 }
 body.light {
-    --body: #1a1a1a;
-    --eyes: #ffffff;
     --page: #e9edf2;
     --panel: #ffffff;
     --panel2: #f3f5f8;
@@ -99,6 +101,7 @@ main { display: grid; grid-template-columns: repeat(3, minmax(300px, 1fr)); gap:
     position: absolute; transform-origin: 50% 100%;
     filter: url(#kage-outline) drop-shadow(0 2px 4px rgba(0,0,0,.2));
 }
+body.invert .art { filter: invert(1); }
 .art { position: absolute; display: none; overflow: visible; }
 .art.show { display: block; }
 .shadow {
@@ -160,6 +163,7 @@ main { display: grid; grid-template-columns: repeat(3, minmax(300px, 1fr)); gap:
         <select id="sSpeed"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option></select>
     </label>
     <button id="bTheme">Light theme</button>
+    <button id="bInvert" title="--kage-mascot-invert: 1">Invert mascot</button>
     <button id="bRestart">Restart</button>
     <span class="spacer"></span>
     <span class="clock" id="clock"></span>
@@ -913,6 +917,9 @@ document.getElementById('sSpeed').onchange = (e) => { clock.speed = Number(e.tar
 document.getElementById('bTheme').onclick = (e) => {
     const light = document.body.classList.toggle('light');
     e.target.textContent = light ? 'Dark theme' : 'Light theme';
+};
+document.getElementById('bInvert').onclick = (e) => {
+    e.target.classList.toggle('on', document.body.classList.toggle('invert'));
 };
 document.getElementById('bRestart').onclick = () => {
     history.length = 0; clock.t = 0;
