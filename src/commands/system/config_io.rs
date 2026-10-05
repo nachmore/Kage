@@ -58,7 +58,7 @@ pub async fn save_config<R: tauri::Runtime>(
         (prior, prior_acp)
     };
 
-    apply_runtime_config(&acp, &prior_acp_mode, &new_acp_mode, new_language);
+    apply_runtime_config(&app, &acp, &prior_acp_mode, &new_acp_mode, new_language);
 
     // Update app log buffer size if changed
     crate::app_log::set_max_size(new_log_buffer_size);
@@ -87,7 +87,8 @@ pub async fn save_config<R: tauri::Runtime>(
 /// Shared by `save_config` and `import_config_bundle` so an import takes
 /// effect without a restart. Must run BEFORE the caller emits
 /// `config_updated`.
-fn apply_runtime_config(
+fn apply_runtime_config<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     acp: &AcpHandles,
     prior_acp_mode: &crate::config::AcpMode,
     new_acp_mode: &crate::config::AcpMode,
@@ -101,6 +102,13 @@ fn apply_runtime_config(
         acp.client.set_mode(new_connection_mode);
         if let Err(e) = acp.client.connect() {
             log::warn!("ACP reconnect after config change failed: {}", e);
+            // set_mode tore down the old connection, and its reader was
+            // superseded, so nothing else reports the drop. Tell windows
+            // now rather than leaving a stale "connected" header. Only on
+            // failure: a successful swap must not flip headers.
+            if let Err(e) = app.emit(crate::events::AGENT_DISCONNECTED, ()) {
+                error!("Failed to emit agent_disconnected event: {}", e);
+            }
         }
     }
 
@@ -139,6 +147,50 @@ pub(crate) fn preserve_backend_owned_fields(incoming: &mut Config, authoritative
             authoritative.extension_grants.len()
         );
         incoming.extension_grants = authoritative.extension_grants.clone();
+    }
+}
+
+/// Replace an imported config's grants with the local map, then fill in
+/// backup grants only for extensions with no local grant.
+///
+/// A backup is often restored after config.json was reset, which wipes
+/// the local grants while the install dirs survive. Dropping every
+/// backup grant would leave those extensions enabled but running with
+/// no capabilities. A backup grant is accepted only when the extension
+/// is installed here, the approved version matches the installed
+/// manifest, and the granted set is a subset of what that manifest
+/// requests (install consent is all-or-nothing on that set, so this
+/// grants nothing local consent wouldn't have). Otherwise the extension
+/// is disabled so the user re-enables it rather than running it broken.
+pub(crate) fn merge_imported_grants(
+    imported: &mut Config,
+    local_grants: &std::collections::HashMap<String, crate::config::ExtensionGrant>,
+    installed: &[crate::extensions::ExtensionManifest],
+) {
+    let backup = std::mem::replace(&mut imported.extension_grants, local_grants.clone());
+    for (id, grant) in backup {
+        if local_grants.contains_key(&id) {
+            continue;
+        }
+        let Some(manifest) = installed.iter().find(|m| m.id == id) else {
+            continue;
+        };
+        let requested = crate::extensions::normalize_permissions(
+            manifest.permissions.as_deref().unwrap_or(&[]),
+            &manifest.id,
+        );
+        if grant.approved_version == manifest.version
+            && grant.granted.iter().all(|cap| requested.contains(cap))
+        {
+            imported.extension_grants.insert(id, grant);
+        } else {
+            log::warn!(
+                "import_config_bundle: backup grant for '{}' doesn't match the installed \
+                 manifest; disabling it until the user re-enables it",
+                id
+            );
+            imported.extension_states.insert(id, false);
+        }
     }
 }
 
@@ -444,9 +496,22 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
     };
 
     // Disk + decryption work happens off the runtime so the dialog
-    // stays responsive even with Argon2's intentionally-slow KDF.
-    let (mut new_config, summary) = tauri::async_runtime::spawn_blocking(move || {
-        crate::config_export::import(&bytes, passphrase.as_deref(), &local)
+    // stays responsive even with Argon2's intentionally-slow KDF. The
+    // installed manifests are read here too (off the config lock) so the
+    // backup's grants can be checked against what's actually on disk.
+    let (mut new_config, summary, installed) = tauri::async_runtime::spawn_blocking(move || {
+        crate::config_export::import(&bytes, passphrase.as_deref(), &local).map(
+            |(config, summary)| {
+                let installed: Vec<crate::extensions::ExtensionManifest> = ["extension", "theme"]
+                    .iter()
+                    .flat_map(|kind| {
+                        crate::extensions::discover_items(kind, &local.extension_states)
+                    })
+                    .map(|item| item.manifest)
+                    .collect();
+                (config, summary, installed)
+            },
+        )
     })
     .await
     .map_err(|e| {
@@ -478,8 +543,9 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
         // machine. Keep the local map whole: a backup must neither strip
         // grants from extensions installed here nor (being a plain,
         // possibly hand-edited file) raise an installed extension's
-        // capabilities without the user consenting here.
-        new_config.extension_grants = state_config.extension_grants.clone();
+        // capabilities without the user consenting here. Backup grants
+        // only fill gaps the local install consent would have covered.
+        merge_imported_grants(&mut new_config, &state_config.extension_grants, &installed);
         *state_config = new_config;
         // Channel is a typed enum — unknown values from a hand-edited
         // backup collapsed to Stable at deserialise time.
@@ -493,7 +559,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
         (prior, prior_acp)
     };
 
-    apply_runtime_config(&acp, &prior_acp_mode, &new_acp_mode, new_language);
+    apply_runtime_config(&app, &acp, &prior_acp_mode, &new_acp_mode, new_language);
 
     crate::app_log::set_max_size(new_log_buffer);
     if prior_terminator != new_terminator {
@@ -652,5 +718,76 @@ mod tests {
 
         preserve_backend_owned_fields(&mut incoming, &authoritative);
         assert_eq!(incoming.extension_grants, authoritative.extension_grants);
+    }
+
+    fn manifest(id: &str, version: &str, perms: &[&str]) -> crate::extensions::ExtensionManifest {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "name": id,
+            "version": version,
+            "type": "extension",
+            "permissions": perms,
+        }))
+        .expect("test manifest must deserialize")
+    }
+
+    fn imported_with(id: &str, caps: &[&str]) -> Config {
+        let mut cfg = Config::default();
+        cfg.extension_states.insert(id.into(), true);
+        cfg.extension_grants.insert(id.into(), grant(caps));
+        cfg
+    }
+
+    #[test]
+    fn import_restores_backup_grant_matching_installed_manifest() {
+        // Restore-after-reset: no local grant, extension still on disk.
+        let mut imported = imported_with("spotify", &["storage", "oauth"]);
+        let installed = [manifest("spotify", "1.0.0", &["storage", "urls", "oauth"])];
+
+        merge_imported_grants(&mut imported, &Default::default(), &installed);
+
+        assert_eq!(
+            imported.extension_grants.get("spotify").unwrap().granted,
+            vec!["storage", "oauth"]
+        );
+        assert_eq!(imported.extension_states.get("spotify"), Some(&true));
+    }
+
+    #[test]
+    fn import_rejects_backup_grant_for_other_version() {
+        let mut imported = imported_with("spotify", &["storage"]);
+        let installed = [manifest("spotify", "2.0.0", &["storage"])];
+
+        merge_imported_grants(&mut imported, &Default::default(), &installed);
+
+        assert!(imported.extension_grants.is_empty());
+        assert_eq!(imported.extension_states.get("spotify"), Some(&false));
+    }
+
+    #[test]
+    fn import_rejects_backup_grant_wider_than_manifest() {
+        let mut imported = imported_with("todos", &["storage", "oauth"]);
+        let installed = [manifest("todos", "1.0.0", &["storage"])];
+
+        merge_imported_grants(&mut imported, &Default::default(), &installed);
+
+        assert!(imported.extension_grants.is_empty());
+        assert_eq!(imported.extension_states.get("todos"), Some(&false));
+    }
+
+    #[test]
+    fn import_keeps_local_grant_and_drops_uninstalled_ones() {
+        let mut imported = imported_with("todos", &["storage", "oauth"]);
+        imported
+            .extension_grants
+            .insert("gone".into(), grant(&["storage"]));
+        let mut local = std::collections::HashMap::new();
+        local.insert("todos".to_string(), grant(&["storage"]));
+        let installed = [manifest("todos", "1.0.0", &["storage", "oauth"])];
+
+        merge_imported_grants(&mut imported, &local, &installed);
+
+        assert_eq!(imported.extension_grants, local);
+        assert_eq!(imported.extension_states.get("todos"), Some(&true));
     }
 }

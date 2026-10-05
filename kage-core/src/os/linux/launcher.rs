@@ -436,7 +436,29 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
     info!("Launching Linux application at {:?}", path);
 
     if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
-        launch_desktop_file(path)?;
+        // Report an unreadable or Exec-less entry to the caller now; the
+        // helpers below can only fail on things we can't check up front.
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read desktop file {:?}", path))?;
+        desktop_entry_fields(&content)
+            .get("Exec")
+            .copied()
+            .and_then(parse_exec_argv)
+            .with_context(|| format!("No usable Exec= in {:?}", path))?;
+        // gio launch / gtk-launch wait for the helper to exit, which for a
+        // DBusActivatable entry with a broken service means the ~25s D-Bus
+        // timeout. The caller holds the app-launcher lock (search waits on
+        // it) and hides the window only after we return, so run the chain
+        // on a detached thread and return at once, as a plain spawn did.
+        let path = path.clone();
+        std::thread::Builder::new()
+            .name("desktop-launch".to_string())
+            .spawn(move || {
+                if let Err(e) = launch_desktop_file(&path) {
+                    log::warn!("Failed to launch {:?}: {:#}", path, e);
+                }
+            })
+            .context("Failed to start desktop launch thread")?;
     } else {
         Command::new(path)
             .spawn()

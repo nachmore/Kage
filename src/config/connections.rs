@@ -194,10 +194,11 @@ pub struct AgentConfig {
     pub auto_compact_threshold: u32,
 }
 
-/// `Deserialize` is hand-written (via `AcpModeWire`) so an unknown
-/// `type` or a malformed payload degrades to `AcpMode::default()`
-/// instead of failing the whole `Config::load` — see the Default impl
-/// below for why that's the right failure mode.
+/// `Deserialize` is hand-written (via `AcpModeWire`) so missing fields
+/// take per-field defaults and a missing or unknown `type` degrades to
+/// `AcpMode::default()` instead of failing the whole `Config::load` —
+/// see the Default impl below for why that's the right failure mode.
+/// Invalid values for a known type are still an error.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum AcpMode {
@@ -233,6 +234,17 @@ enum AcpModeWire {
 impl<'de> Deserialize<'de> for AcpMode {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = serde_json::Value::deserialize(deserializer)?;
+        // A known type with a bad value (port 87650, negative timeout) is an
+        // error, not a silent reset: this impl also parses IPC args
+        // (`save_config`, `validate_agent_connection`), where degrading to
+        // an empty local mode would drop the user's remote host with no
+        // visible error. On disk, `Config::load` still defaults only the
+        // failing section. Missing fields default per field (AcpModeWire);
+        // only a missing or unknown `type` falls through to the default.
+        let known_type = matches!(
+            raw.get("type").and_then(|t| t.as_str()),
+            Some("local" | "remote")
+        );
         match AcpModeWire::deserialize(&raw) {
             Ok(AcpModeWire::Local { spawn_command }) => Ok(AcpMode::Local { spawn_command }),
             Ok(AcpModeWire::Remote {
@@ -244,6 +256,7 @@ impl<'de> Deserialize<'de> for AcpMode {
                 port,
                 timeout_ms,
             }),
+            Err(e) if known_type => Err(serde::de::Error::custom(e)),
             Err(e) => {
                 log::warn!(
                     "Unrecognised agent connection mode ({}); using an empty local mode",

@@ -227,3 +227,33 @@ fn save_to_overwriting_existing_file_replaces_atomically() {
         "second save must fully replace first"
     );
 }
+
+#[test]
+fn acp_mode_rejects_invalid_values_for_known_types() {
+    // The same Deserialize parses `save_config` / `validate_agent_connection`
+    // IPC args. A mistyped port must surface as an error, not silently turn
+    // the user's remote connection into an empty local one.
+    use kage::config::AcpMode;
+    for bad in [
+        r#"{ "type": "remote", "host": "h", "port": 87650, "timeout_ms": 30000 }"#,
+        r#"{ "type": "remote", "host": "h", "port": -1, "timeout_ms": 30000 }"#,
+        r#"{ "type": "remote", "host": "h", "port": null, "timeout_ms": 30000 }"#,
+        r#"{ "type": "remote", "host": "h", "port": 8765, "timeout_ms": -5 }"#,
+        r#"{ "type": "local", "spawn_command": 42 }"#,
+    ] {
+        assert!(
+            serde_json::from_str::<AcpMode>(bad).is_err(),
+            "{} must fail to deserialize",
+            bad
+        );
+    }
+    // Unknown or missing types still degrade to the inert default.
+    assert_eq!(
+        serde_json::from_str::<AcpMode>(r#"{ "type": "quantum", "port": 1 }"#).unwrap(),
+        AcpMode::default()
+    );
+    assert_eq!(
+        serde_json::from_str::<AcpMode>("{}").unwrap(),
+        AcpMode::default()
+    );
+}
