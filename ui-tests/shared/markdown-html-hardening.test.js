@@ -142,6 +142,22 @@ describe('marked raw-HTML hardening', () => {
         expect(out).toContain('chart (evil.example)');
     });
 
+    it('renders a linked remote image as plain label text, not a nested anchor', () => {
+        // [![badge](img)](url): a second <a> inside the link would make the
+        // HTML parser empty the outer link and open the image URL instead.
+        const out = marked.parse(
+            '[![build](https://img.shields.io/badge/ci-passing-green)](https://github.com/org/repo/actions)'
+        );
+        expect(out).not.toMatch(/<img\s/i);
+        expect(out.match(/<a\s/gi)).toHaveLength(1);
+        expect(out).toContain('href="https://github.com/org/repo/actions"');
+        expect(out).toContain('build (img.shields.io)');
+        // Also for an image wrapped in emphasis inside the link.
+        const nested = marked.parse('[*![x](https://evil.example/p.png)*](https://ok.example/)');
+        expect(nested.match(/<a\s/gi)).toHaveLength(1);
+        expect(nested).not.toContain('href="https://evil.example/p.png"');
+    });
+
     it('still renders data: image URLs inline', () => {
         const out = marked.parse('![dot](data:image/png;base64,iVBORw0KGgo=)');
         expect(out).toMatch(/<img\s[^>]*src="data:image\/png/i);

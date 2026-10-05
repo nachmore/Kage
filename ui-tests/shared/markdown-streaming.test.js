@@ -257,6 +257,23 @@ describe('renderMarkdown — streaming throttle and incremental append', () => {
         expect(el.querySelector('.markdown-tail').textContent).toContain(p3);
     });
 
+    it('does not freeze indented list continuations as a code block', () => {
+        vi.useFakeTimers();
+        const el = fresh();
+        const intro = 'Here is the plan for getting the project building locally.';
+        const rest = 'Now configure the settings file and restart the app to pick it up.';
+        const list = '- Install deps\n\n    - run npm install\n    - run cargo build --release';
+        renderMarkdown(`${intro}\n\n${list}`, el, true);
+        // The list head is frozen; its indented continuation is the tail.
+        expect(el.querySelector('.markdown-frozen').textContent).toContain('Install deps');
+        vi.advanceTimersByTime(200);
+        renderMarkdown(`${intro}\n\n${list}\n\n${rest}`, el, true);
+        const frozen = el.querySelector('.markdown-frozen');
+        expect(frozen.textContent).toContain('run cargo build');
+        expect(frozen.querySelector('pre')).toBeNull();
+        expect(frozen.querySelectorAll('li').length).toBe(3);
+    });
+
     it('neutralizes links in text before an in-progress automation_plan', () => {
         const el = fresh();
         renderMarkdown(

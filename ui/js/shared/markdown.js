@@ -76,7 +76,10 @@ function _renderImageToken(token) {
     }
     const alt = token.text || '';
     const label = alt && host ? `${alt} (${host})` : alt || host || href;
-    if (!remote) return _escapeHtmlForMarked(label);
+    // Inside a link (`[![badge](img)](url)`) an <a> of our own would nest
+    // anchors; the HTML parser then empties the outer link and the click
+    // opens the image URL. Emit just the label so the outer link works.
+    if (!remote || token._kageInLink) return _escapeHtmlForMarked(label);
     const a = document.createElement('a');
     a.className = 'md-remote-image';
     a.setAttribute('href', href);
@@ -85,10 +88,23 @@ function _renderImageToken(token) {
     return a.outerHTML;
 }
 
+// Flag every image nested (at any depth, e.g. inside emphasis) in a link's
+// inline tokens so _renderImageToken knows not to emit its own anchor.
+function _flagImagesInLink(tokens) {
+    for (const t of tokens || []) {
+        if (t.type === 'image') t._kageInLink = true;
+        if (t.tokens) _flagImagesInLink(t.tokens);
+    }
+}
+
 export function hardenMarkedOnce() {
     if (_markedHardenedFlag) return;
     if (typeof marked === 'undefined' || !marked.use) return;
     marked.use({
+        // walkTokens runs over the whole token tree before rendering.
+        walkTokens(token) {
+            if (token.type === 'link') _flagImagesInLink(token.tokens);
+        },
         renderer: {
             html(token) {
                 return _escapeHtmlForMarked(token.text || '');
@@ -276,6 +292,19 @@ function _clearFrozenState(targetElement) {
     _frozenMarkdown.delete(targetElement);
 }
 
+// A newly frozen slice is parsed on its own and appended, which only
+// matches a whole-prefix parse when the slice can't belong to a block that
+// opened earlier. Indented text (list continuations, nested bullets) would
+// become an indented code block, and a list marker on either side of the
+// split would break a numbered or loose list apart.
+const _LIST_ITEM_LINE = /^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|\r?\n|$)/;
+function _isSliceSelfContained(prevFrozenMd, slice) {
+    const head = slice.replace(/^(?:[ \t]*\n)+/, '');
+    if (/^[ \t]/.test(head) || _LIST_ITEM_LINE.test(head)) return false;
+    const prev = prevFrozenMd.trimEnd();
+    return !_LIST_ITEM_LINE.test(prev.slice(prev.lastIndexOf('\n') + 1));
+}
+
 function _doRender(markdown, targetElement, streaming) {
     _lastRenderTime.set(targetElement, Date.now());
 
@@ -362,13 +391,14 @@ function _doRender(markdown, targetElement, streaming) {
         // and process only the newly frozen slice and append it, instead of
         // re-parsing (and re-highlighting, re-building previews for) the
         // whole prefix at every paragraph. The slice starts at a top-level
-        // blank line outside any fence. Cross-slice constructs (loose
-        // lists, reference definitions) may render slightly differently
-        // until the final non-streaming render re-parses everything.
+        // blank line outside any fence; slices that could continue a list
+        // take the full rebuild instead. Reference definitions in a later
+        // slice stay unresolved until the final non-streaming render.
         const canAppend =
             frozenChanged &&
             prevFrozenMd.length > 0 &&
             prefixMd.startsWith(prevFrozenMd) &&
+            _isSliceSelfContained(prevFrozenMd, prefixMd.slice(prevFrozenMd.length)) &&
             !!targetElement.querySelector(':scope > .markdown-frozen') &&
             !!targetElement.querySelector(':scope > .markdown-tail');
 
