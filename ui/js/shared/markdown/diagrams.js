@@ -99,7 +99,7 @@ export async function tryBackgroundDiagramRender(existingWrapper, code, language
                 const svg = graphviz.layout(code, 'svg', engine);
                 const diagramContent = existingWrapper.querySelector('.diagram-content');
                 if (diagramContent && existingWrapper.isConnected) {
-                    diagramContent.innerHTML = svg;
+                    _insertGraphvizSvg(diagramContent, svg);
                     const svgEl = diagramContent.querySelector('svg');
                     if (svgEl) {
                         svgEl.style.maxWidth = '100%';
@@ -138,6 +138,40 @@ function _codeHash(code) {
 export function resetDiagramFailures() {
     _diagramFailures.clear();
     _diagramPending.clear();
+}
+
+/**
+ * Insert Graphviz SVG output into `container` with every URL-bearing
+ * attribute stripped. The dot source is agent-controlled, and graphviz
+ * faithfully emits `href=` / `URL=` / `image=` as `<a xlink:href>` /
+ * `<image xlink:href>` — including `javascript:` URLs, which would run in
+ * this privileged webview on click. Parsed in an inert <template> so
+ * nothing loads before the strip. http(s) links on <a> are kept as
+ * `data-href` so the global link handler can still open them in the
+ * browser. Done before insertion so the lightbox clone gets the clean copy.
+ */
+function _insertGraphvizSvg(container, svg) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = svg;
+    for (const el of tpl.content.querySelectorAll('*')) {
+        for (const attr of Array.from(el.attributes)) {
+            const name = attr.localName.toLowerCase();
+            if (name === 'href' || name === 'src' || name.startsWith('on')) {
+                const value = attr.value.trim();
+                el.removeAttributeNode(attr);
+                if (
+                    name === 'href' &&
+                    el.localName === 'a' &&
+                    /^https?:\/\//i.test(value) &&
+                    !el.hasAttribute('data-href')
+                ) {
+                    el.setAttribute('data-href', value);
+                }
+            }
+        }
+    }
+    container.textContent = '';
+    container.appendChild(tpl.content);
 }
 
 /** Mark a diagram wrapper as successfully rendered and show its save button */
@@ -342,7 +376,7 @@ async function renderGraphvizInto(container, code, language, streaming = false) 
         const svg = graphviz.layout(code, 'svg', engine);
         _diagramPending.delete(hash);
         // Success — replace placeholder with rendered SVG
-        container.innerHTML = svg;
+        _insertGraphvizSvg(container, svg);
         const svgEl = container.querySelector('svg');
         if (svgEl) {
             svgEl.style.maxWidth = '100%';

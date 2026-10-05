@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { loadPrismLanguage, _resetForTests } from '../../ui/js/shared/prism-loader.js';
+import {
+    loadPrismLanguage,
+    resolvePrismLanguage,
+    _resetForTests,
+} from '../../ui/js/shared/prism-loader.js';
 
 // Stub out Prism with a tiny `languages` map. Each test starts with only
 // 'clike' loaded so we can simulate the deps-loading path realistically.
@@ -92,16 +96,25 @@ describe('loadPrismLanguage', () => {
     });
 
     it('rejects when the script fails to load', async () => {
-        stubScriptInjector({ failingLanguages: new Set(['xyzlang']) });
-        await expect(loadPrismLanguage('xyzlang')).rejects.toThrow(/Failed to load/);
+        stubScriptInjector({ failingLanguages: new Set(['sql']) });
+        await expect(loadPrismLanguage('sql')).rejects.toThrow(/Failed to load/);
     });
 
     it('does NOT poison the cache on failure — retry kicks off a fresh fetch', async () => {
-        const { calls } = stubScriptInjector({ failingLanguages: new Set(['xyzlang']) });
-        await expect(loadPrismLanguage('xyzlang')).rejects.toThrow();
+        const { calls } = stubScriptInjector({ failingLanguages: new Set(['sql']) });
+        await expect(loadPrismLanguage('sql')).rejects.toThrow();
         // Second attempt should re-inject (not return the cached failed promise)
-        await expect(loadPrismLanguage('xyzlang')).rejects.toThrow();
+        await expect(loadPrismLanguage('sql')).rejects.toThrow();
         expect(calls).toHaveLength(2);
+    });
+
+    it('never injects a script for a language with no shipped pack', async () => {
+        // An unknown fence tag would 404 — and since failures retry, every
+        // streaming re-render used to append another dead <script>.
+        const { calls } = stubScriptInjector();
+        await expect(loadPrismLanguage('xyzlang')).rejects.toThrow(/No Prism pack/);
+        await expect(loadPrismLanguage('xyzlang')).rejects.toThrow(/No Prism pack/);
+        expect(calls).toEqual([]);
     });
 
     it('rejects if the pack loads but does not register the language', async () => {
@@ -116,5 +129,22 @@ describe('loadPrismLanguage', () => {
         await loadPrismLanguage('typescript');
         // Match the language name from the end of the path: prism-<lang>.min.js
         expect(calls.map(s => s.match(/prism-(\w+)\.min\.js$/)[1])).toEqual(['clike', 'javascript', 'typescript']);
+    });
+});
+
+describe('resolvePrismLanguage', () => {
+    it('maps common fence aliases to their shipped pack', () => {
+        expect(resolvePrismLanguage('py')).toBe('python');
+        expect(resolvePrismLanguage('ts')).toBe('typescript');
+        expect(resolvePrismLanguage('sh')).toBe('bash');
+        expect(resolvePrismLanguage('shell')).toBe('bash');
+        expect(resolvePrismLanguage('yml')).toBe('yaml');
+        expect(resolvePrismLanguage('Python')).toBe('python');
+    });
+
+    it('returns null for tags with no shipped pack', () => {
+        expect(resolvePrismLanguage('kotlin')).toBeNull();
+        expect(resolvePrismLanguage('ps1')).toBeNull();
+        expect(resolvePrismLanguage('')).toBeNull();
     });
 });

@@ -5,6 +5,35 @@ import { isFullTexDocument, renderJsonTree, renderMathPreview } from './previews
 
 export { isFullTexDocument, renderJsonTree, renderMathPreview };
 
+// The sandbox blocks scripts but not subresource loads: agent-supplied
+// <img>/<link>/CSS url() would fetch remote URLs (a zero-click exfiltration
+// channel) before any onload cleanup could run. A CSP meta as the first
+// thing in <head> blocks every network fetch; only inline styles and data:
+// images/fonts are allowed. Agent http-equiv metas are dropped too — a
+// `refresh` would navigate the frame to a remote URL, which CSP doesn't
+// cover. Parsed with DOMParser, which is inert (no fetches), and the
+// original doctype is kept so the preview's standards/quirks mode is
+// unchanged.
+const PREVIEW_CSP = "default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'";
+
+function _withPreviewCsp(code) {
+    const doc = new DOMParser().parseFromString(code, 'text/html');
+    for (const m of doc.querySelectorAll('meta[http-equiv]')) m.remove();
+    // <link rel=dns-prefetch/preconnect> resolve hosts outside CSP's reach
+    // (a DNS-label exfil channel); stylesheets are CSP-blocked anyway.
+    for (const l of doc.querySelectorAll('link')) l.remove();
+    const noPrefetch = doc.createElement('meta');
+    noPrefetch.setAttribute('http-equiv', 'x-dns-prefetch-control');
+    noPrefetch.setAttribute('content', 'off');
+    doc.head.prepend(noPrefetch);
+    const meta = doc.createElement('meta');
+    meta.setAttribute('http-equiv', 'Content-Security-Policy');
+    meta.setAttribute('content', PREVIEW_CSP);
+    doc.head.prepend(meta);
+    const doctype = doc.doctype ? new XMLSerializer().serializeToString(doc.doctype) : '';
+    return doctype + doc.documentElement.outerHTML;
+}
+
 export function renderHtmlPreview(codeBlock, pre) {
     const code = codeBlock.textContent;
 
@@ -37,7 +66,7 @@ export function renderHtmlPreview(codeBlock, pre) {
     const iframe = document.createElement('iframe');
     iframe.sandbox = 'allow-same-origin'; // No allow-scripts
     iframe.style.cssText = 'width:100%;border:none;background:#fff;min-height:60px;';
-    iframe.srcdoc = code;
+    iframe.srcdoc = _withPreviewCsp(code);
     previewDiv.appendChild(iframe);
 
     // Auto-resize iframe to fit content

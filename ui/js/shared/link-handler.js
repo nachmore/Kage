@@ -11,6 +11,8 @@
 
 let _invoke = null;
 
+const XLINK_NS = 'http://www.w3.org/1999/xlink';
+
 /**
  * Guard against double-registration. The click listener is delegated on
  * `document`, so registering it twice makes every link open twice (each
@@ -109,18 +111,29 @@ export function initLinkHandler(invoke) {
         const anchor = e.target.closest('a');
         if (!anchor) return;
 
+        // Cancel native activation for EVERY anchor up front, before any early
+        // return — the only URLs we follow are the ones we explicitly open
+        // below. An SVG <a xlink:href="javascript:…"> (e.g. from a Graphviz
+        // diagram) used to slip past the `!href` return and run in this
+        // privileged webview.
+        e.preventDefault();
+
         // Prefer data-href: neutralizeLinks() moves external URLs there and
         // sets href="#" so WebView2 has nothing to natively navigate to. A
         // real href would make WebView2 open the URL ITSELF (a top-level
         // navigation the OS then hands to the default browser) IN ADDITION to
         // our open_url call — that was the "opens twice" bug, and it bypassed
         // open_url entirely (no log), which is why no open_url-side fix helped.
-        const href = anchor.getAttribute('data-href') || anchor.getAttribute('href');
+        // SVG anchors carry a namespaced xlink:href that getAttribute('href')
+        // doesn't see.
+        const href =
+            anchor.getAttribute('data-href') ||
+            anchor.getAttribute('href') ||
+            anchor.getAttributeNS(XLINK_NS, 'href');
         if (!href || href === '#') return;
 
         // kage: protocol — internal deep links
         if (href.startsWith('kage:')) {
-            e.preventDefault();
             e.stopPropagation();
             const path = href.slice('kage:'.length);
             handleKageProtocol(path).catch((err) => console.warn('kage: link error:', err));
@@ -131,7 +144,6 @@ export function initLinkHandler(invoke) {
         // `_invoke` (not the closure param) so a re-init refreshes the
         // reference — consistent with the kage: branch above.
         if (href.startsWith('http://') || href.startsWith('https://')) {
-            e.preventDefault();
             e.stopPropagation();
             console.log(`[link-handler] open_url: ${href}`);
             _invoke?.('open_url', { url: href }).catch((err) =>
@@ -142,13 +154,11 @@ export function initLinkHandler(invoke) {
 
         // mailto: links — let the OS handle them
         if (href.startsWith('mailto:')) {
-            e.preventDefault();
             e.stopPropagation();
             _invoke?.('open_url', { url: href }).catch(() => {});
-            return;
         }
 
-        // Anything else — prevent navigation away from the app
-        e.preventDefault();
+        // Anything else — already prevented above, so no navigation away
+        // from the app.
     });
 }

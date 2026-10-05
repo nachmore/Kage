@@ -1,4 +1,4 @@
-import { loadPrismLanguage } from '../prism-loader.js';
+import { loadPrismLanguage, resolvePrismLanguage } from '../prism-loader.js';
 import { t } from '../i18n.js';
 
 export function highlightOrLazy(codeBlock, language) {
@@ -17,17 +17,21 @@ export function highlightOrLazy(codeBlock, language) {
         }
         return;
     }
+    // Normalise aliases (py → python, sh → bash, …) and skip tags with no
+    // shipped pack — loading those would just 404 on every re-render.
+    const pack = resolvePrismLanguage(language);
+    if (!pack) return;
     // Capture the source text now — by the time the load resolves, the
     // codeBlock element may have been replaced (the streaming renderer
     // throws away nodes between debounced repaints). Re-highlighting a
     // detached node is harmless; if it's still attached the user sees
     // the colors arrive a beat later.
     const source = codeBlock.textContent;
-    loadPrismLanguage(language)
+    loadPrismLanguage(pack)
         .then(() => {
-            if (!Prism.languages[language]) return;
+            if (!Prism.languages[pack]) return;
             try {
-                codeBlock.innerHTML = Prism.highlight(source, Prism.languages[language], language);
+                codeBlock.innerHTML = Prism.highlight(source, Prism.languages[pack], pack);
                 codeBlock.className = 'language-' + language;
             } catch {
                 /* skip */

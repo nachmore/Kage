@@ -21,7 +21,7 @@
  * post-state-change asserts so the throttle doesn't matter.
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { marked } from 'marked';
 
 let renderMarkdown;
@@ -222,5 +222,50 @@ describe('renderMarkdown — taskplan deduplication', () => {
         // shape; the deduplication tests in markdown.test.js
         // cover that.
         expect(el.textContent).toContain('reply');
+    });
+});
+
+describe('renderMarkdown — streaming throttle and incremental append', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('the throttled timer paints the newest text, not the scheduling snapshot', () => {
+        vi.useFakeTimers();
+        const el = fresh();
+        renderMarkdown('chunk one', el, true); // immediate
+        renderMarkdown('chunk one two', el, true); // schedules timer
+        renderMarkdown('chunk one two three', el, true); // must not be dropped
+        vi.advanceTimersByTime(200);
+        expect(el.textContent).toContain('chunk one two three');
+    });
+
+    it('appends newly frozen paragraphs without rebuilding earlier frozen nodes', () => {
+        vi.useFakeTimers();
+        const el = fresh();
+        const p1 = 'First paragraph of the reply, long enough to stand on its own.';
+        const p2 = 'Second paragraph of the reply, also long enough to stand alone here.';
+        const p3 = 'Third paragraph streaming in now and it is long enough to be the tail.';
+        renderMarkdown(`${p1}\n\n${p2}`, el, true);
+        const firstFrozen = el.querySelector('.markdown-frozen > p');
+        expect(firstFrozen?.textContent).toBe(p1);
+        vi.advanceTimersByTime(200);
+        renderMarkdown(`${p1}\n\n${p2}\n\n${p3}`, el, true);
+        // Same node — the old frozen content was kept, the new slice appended.
+        expect(el.querySelector('.markdown-frozen > p')).toBe(firstFrozen);
+        expect(el.querySelector('.markdown-frozen').textContent).toContain(p2);
+        expect(el.querySelector('.markdown-tail').textContent).toContain(p3);
+    });
+
+    it('neutralizes links in text before an in-progress automation_plan', () => {
+        const el = fresh();
+        renderMarkdown(
+            'See [docs](https://example.com/x) first.\n\n```automation_plan\n[{"task":"a"',
+            el,
+            true
+        );
+        const a = el.querySelector('a');
+        expect(a.getAttribute('href')).toBe('#');
+        expect(a.getAttribute('data-href')).toBe('https://example.com/x');
     });
 });

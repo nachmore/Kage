@@ -75,6 +75,22 @@ export function processCodeBlocks(container, streaming, savedDiagrams) {
                 /* fall through to default rendering */
             }
         }
+        // While streaming, show preview-style fences as plain highlighted
+        // source. Building the preview every 150ms tail render meant a new
+        // iframe document (re-fetching subresources), sanitizer pass or
+        // KaTeX run per chunk, all thrown away by the next render. The
+        // final non-streaming render builds the real preview.
+        if (
+            streaming &&
+            (HTML_LANGUAGES.has(language) ||
+                MARKDOWN_LANGUAGES.has(language) ||
+                SVG_LANGUAGES.has(language) ||
+                MATH_LANGUAGES.has(language))
+        ) {
+            highlightOrLazy(codeBlock, language);
+            wrapCodeBlock(codeBlock, pre, language);
+            return;
+        }
         if (HTML_LANGUAGES.has(language)) {
             renderHtmlPreview(codeBlock, pre);
             return;

@@ -13,8 +13,9 @@
  *   if (Prism.languages.typescript) Prism.highlight(...);
  *
  * Concurrent calls for the same language share one fetch. Already-loaded
- * languages resolve synchronously. Failures (offline, 404) reject the
- * promise but do *not* poison the cache — a retry on the next code block
+ * languages resolve synchronously. Names with no shipped pack reject
+ * immediately without touching the DOM. Load failures of a shipped pack
+ * reject but do *not* poison the cache — a retry on the next code block
  * gets a fresh attempt.
  */
 
@@ -36,6 +37,67 @@ const PRISM_DEPENDENCIES = {
     // bash, json, sql, yaml, python, clike, markup are self-contained.
 };
 
+/**
+ * Packs that actually ship under vendor/lib/prism-components/. Keep in
+ * sync with PRISM_LANGUAGES in ui-vendor/setup.js. Anything else would
+ * 404, so we never inject a <script> for it — otherwise every streaming
+ * re-render of e.g. a ```sh block appended another dead tag to <head>.
+ */
+const SHIPPED_PACKS = new Set([
+    'bash',
+    'clike',
+    'csharp',
+    'css',
+    'go',
+    'java',
+    'javascript',
+    'json',
+    'markdown',
+    'markup',
+    'python',
+    'rust',
+    'sql',
+    'typescript',
+    'yaml',
+]);
+
+/**
+ * Common fence tags → canonical pack name. Prism only registers these
+ * aliases once the canonical pack has loaded, so `Prism.languages.py` is
+ * undefined until something loads `python`.
+ */
+const PRISM_ALIASES = {
+    py: 'python',
+    python3: 'python',
+    ts: 'typescript',
+    sh: 'bash',
+    shell: 'bash',
+    zsh: 'bash',
+    console: 'bash',
+    yml: 'yaml',
+    cs: 'csharp',
+    rs: 'rust',
+    golang: 'go',
+    js: 'javascript',
+    md: 'markdown',
+    jsonc: 'json',
+    html: 'markup',
+    htm: 'markup',
+    xml: 'markup',
+    svg: 'markup',
+};
+
+/**
+ * Map a fence tag to the shipped pack that provides it, or null if no
+ * shipped pack does (caller should leave the block unhighlighted).
+ */
+export function resolvePrismLanguage(language) {
+    if (!language) return null;
+    const lower = String(language).toLowerCase();
+    const canonical = PRISM_ALIASES[lower] || lower;
+    return SHIPPED_PACKS.has(canonical) ? canonical : null;
+}
+
 /** Map of language name → Promise resolving when load is complete. */
 const _inflight = new Map();
 
@@ -50,6 +112,10 @@ export function loadPrismLanguage(language) {
     }
     if (window.Prism.languages[language]) {
         return Promise.resolve();
+    }
+    if (!SHIPPED_PACKS.has(language)) {
+        // Permanent miss — no pack to fetch, so no retry either.
+        return Promise.reject(new Error(`No Prism pack shipped for '${language}'`));
     }
     const existing = _inflight.get(language);
     if (existing) return existing;
@@ -83,7 +149,11 @@ function _injectScript(src) {
         s.src = src;
         s.async = false; // preserve eval order vs. other in-flight injects
         s.onload = () => resolve();
-        s.onerror = () => reject(new Error(`Failed to load ${src}`));
+        s.onerror = () => {
+            // Drop the dead tag so retries don't accumulate them in <head>.
+            s.remove();
+            reject(new Error(`Failed to load ${src}`));
+        };
         document.head.appendChild(s);
     });
 }

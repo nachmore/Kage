@@ -92,6 +92,27 @@ describe('link-handler', () => {
 
         expect(invoke).not.toHaveBeenCalled();
     });
+
+    it('cancels activation of SVG anchors whose only URL is xlink:href', async () => {
+        // Graphviz emits <a xlink:href="javascript:…">; getAttribute('href')
+        // misses the namespaced attribute, which used to skip preventDefault
+        // and let the javascript: URL run.
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const a = document.createElementNS('http://www.w3.org/2000/svg', 'a');
+        a.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', 'javascript:alert(1)');
+        svg.appendChild(a);
+        document.body.appendChild(svg);
+        const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+        a.dispatchEvent(ev);
+        svg.remove();
+
+        expect(ev.defaultPrevented).toBe(true);
+        expect(invoke).not.toHaveBeenCalled();
+    });
 });
 
 describe('neutralizeLinks', () => {
