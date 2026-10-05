@@ -61,7 +61,7 @@ pub fn tick_message_counter() -> bool {
     // Increment-and-wrap in one atomic step: a separate fetch_add + store(0)
     // let two near-simultaneous ticks both see the threshold and both fire.
     let prev = MESSAGE_COUNTER
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
             Some(if c + 1 >= UPDATE_INTERVAL_MESSAGES {
                 0
             } else {
