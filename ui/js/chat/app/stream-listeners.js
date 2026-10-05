@@ -171,7 +171,7 @@ export function createStreamListenersMixin(dependencies) {
             });
 
             // Refresh session list when the backend detects directory changes
-            this.listen('sessions_changed', () => this.loadSessions(true));
+            this.listen('sessions_changed', () => this._reloadSessionsAfterChange());
 
             // Cross-window session lifecycle. Backend emits this on rename
             // or delete; we refresh the sidebar always, and react to the
@@ -182,7 +182,7 @@ export function createStreamListenersMixin(dependencies) {
                 // Re-fetch the session list so renames/deletions show. We
                 // pass the affected id so renderSessionList can flag the
                 // sidebar entry for an animation when source is "ai".
-                await this.loadSessions(true);
+                await this._reloadSessionsAfterChange();
                 if (source === 'ai') {
                     this._flashAiTitleInSidebar(id);
                 }
@@ -336,6 +336,30 @@ export function createStreamListenersMixin(dependencies) {
                 this.elements.messagesArea.appendChild(container);
                 this.scrollToBottom();
             });
+        }
+
+        /**
+         * Full (unpaginated) session-list refresh for backend change events.
+         * Unlike `loadSessions(true)` it doesn't pass `force`: every backend
+         * path that emits these events has already invalidated the session
+         * cache, so the first window to ask rescans and every other window
+         * is served from that cache instead of running its own scan. Keeps
+         * the `loadAll` semantics (replace the list, mark fully loaded) so
+         * a window that already loaded everything still sees the change.
+         */
+        async _reloadSessionsAfterChange() {
+            try {
+                this.sessions = await this.invoke('list_sessions', {});
+                this._sessionsFullyLoaded = true;
+                if (this._seenSessionIds.size === 0) {
+                    for (const s of this.sessions) this._seenSessionIds.add(s.session_id);
+                }
+                this.renderSessionList();
+            } catch (error) {
+                // Keep the current list — a transient failure on a background
+                // refresh shouldn't blank the sidebar.
+                console.error('Failed to refresh sessions:', error);
+            }
         }
 
         // --- Session Management ---

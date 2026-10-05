@@ -1,7 +1,4 @@
-use super::{
-    cached_or_missing, content, dir_unavailable, parse_error, read_error, KiroDesktopProvider,
-    PROVIDER_ID,
-};
+use super::{content, dir_unavailable, parse_error, read_error, KiroDesktopProvider, PROVIDER_ID};
 use crate::agent_sessions::{
     clip_title, rfc3339_from_system_time, AgentMessage, AgentSession, CachedSession,
 };
@@ -43,29 +40,51 @@ pub(super) fn scan_sessions(
         }
     }
 
-    let keys: std::collections::HashSet<PathBuf> =
-        files.iter().map(|(path, ..)| path.clone()).collect();
-    let (mut sessions, misses) = cached_or_missing(&provider.workspace_sessions, files, &keys);
-    let mut fresh = Vec::with_capacity(misses.len());
-    for (path, fingerprint, (workspace, encoded)) in misses {
-        let Some(session) = parse_session(&path, &workspace, &encoded) else {
+    // Evict entries for files that are gone (over the full key set,
+    // before narrowing to `limit` below).
+    {
+        let keys: std::collections::HashSet<&PathBuf> =
+            files.iter().map(|(path, ..)| path).collect();
+        provider
+            .workspace_sessions
+            .lock_or_recover()
+            .retain(|path, _| keys.contains(path));
+    }
+
+    // updated_at is the file mtime, so the newest `limit` files by
+    // fingerprint mtime ARE the listing — walk newest-first and stop once
+    // it's full instead of reading and parsing every session JSON. Files
+    // that don't parse (or have an empty history) are skipped and the
+    // walk continues.
+    files.sort_by_key(|(_, fingerprint, _)| std::cmp::Reverse(fingerprint.mtime));
+    let mut sessions = Vec::with_capacity(limit.min(files.len()));
+    for (path, fingerprint, (workspace, encoded)) in files {
+        if sessions.len() >= limit {
+            break;
+        }
+        let cached = provider
+            .workspace_sessions
+            .lock_or_recover()
+            .get(&path)
+            .filter(|cached| cached.fp == fingerprint)
+            .map(|cached| cached.session.clone());
+        if let Some(session) = cached {
+            sessions.push(session);
+            continue;
+        }
+        let Some(session) = parse_session(&path, &workspace, &encoded, fingerprint.mtime) else {
             continue;
         };
-        fresh.push((
+        provider.workspace_sessions.lock_or_recover().insert(
             path,
             CachedSession {
                 fp: fingerprint,
                 session: session.clone(),
             },
-        ));
+        );
         sessions.push(session);
     }
-    if !fresh.is_empty() {
-        let mut cache = provider.workspace_sessions.lock_or_recover();
-        cache.extend(fresh);
-    }
     sessions.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
-    sessions.truncate(limit);
     Ok(sessions)
 }
 
@@ -89,7 +108,14 @@ fn workspace_directories(
         .collect())
 }
 
-fn parse_session(path: &Path, workspace: &str, encoded: &str) -> Option<AgentSession> {
+/// `mtime` comes from the listing's fingerprint so the displayed
+/// timestamp matches the order the listing was selected in.
+fn parse_session(
+    path: &Path,
+    workspace: &str,
+    encoded: &str,
+    mtime: std::time::SystemTime,
+) -> Option<AgentSession> {
     let id = path.file_stem()?.to_str()?.to_string();
     let json: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
@@ -103,11 +129,7 @@ fn parse_session(path: &Path, workspace: &str, encoded: &str) -> Option<AgentSes
             .unwrap_or("Untitled"),
         80,
     );
-    let updated_at = std::fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .ok()
-        .map(rfc3339_from_system_time)
-        .unwrap_or_default();
+    let updated_at = rfc3339_from_system_time(mtime);
     Some(AgentSession {
         provider_id: PROVIDER_ID.to_string(),
         session_id: id.clone(),

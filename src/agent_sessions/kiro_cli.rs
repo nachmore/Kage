@@ -99,60 +99,34 @@ impl AgentSessionProvider for KiroCliProvider {
         }
         let db = Self::open_db()?;
 
-        let mut stmt = db
-            .prepare(
-                "SELECT key, conversation_id, value, created_at, updated_at \
-                 FROM conversations_v2 ORDER BY updated_at DESC LIMIT ?1",
+        let rows = query_session_rows(&db, limit).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.read_failed",
+                &[("reason", &e.to_string())],
             )
-            .map_err(|e| {
-                AppError::keyed(
-                    ErrorKind::Internal,
-                    "errors.session.read_failed",
-                    &[("reason", &e.to_string())],
-                )
-            })?;
-
-        let rows = stmt
-            .query_map([limit as i64], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, i64>(4)?,
-                ))
-            })
-            .map_err(|e| {
-                AppError::keyed(
-                    ErrorKind::Internal,
-                    "errors.session.read_failed",
-                    &[("reason", &e.to_string())],
-                )
-            })?;
+        })?;
 
         let db_path_str = db_path.to_string_lossy().to_string();
-        let mut sessions = Vec::new();
-        for row in rows {
-            let Ok((workspace, conv_id, value_json, _created_at, updated_at)) = row else {
-                continue;
-            };
-            let title = extract_title(&value_json);
-            let message_count = count_messages(&value_json);
-
-            sessions.push(AgentSession {
+        let sessions = rows
+            .into_iter()
+            .map(|row| AgentSession {
                 provider_id: PROVIDER_ID.to_string(),
-                session_id: conv_id.clone(),
-                title,
-                updated_at: rfc3339_from_epoch_ms(updated_at),
-                message_count,
-                container: Some(workspace.clone()),
-                locator: json!({ "conversation_id": conv_id }),
+                session_id: row.conversation_id.clone(),
+                title: title_from_first_entry(row.first_entry.as_deref()),
+                updated_at: rfc3339_from_epoch_ms(row.updated_at),
+                message_count: row
+                    .transcript_len
+                    .and_then(|n| usize::try_from(n).ok())
+                    .unwrap_or(0),
+                container: Some(row.workspace.clone()),
+                locator: json!({ "conversation_id": row.conversation_id }),
                 extras: json!({
-                    "workspace": workspace,
+                    "workspace": row.workspace,
                     "file_path": db_path_str,
                 }),
-            });
-        }
+            })
+            .collect();
         Ok(sessions)
     }
 
@@ -231,34 +205,61 @@ impl AgentSessionProvider for KiroCliProvider {
     }
 }
 
-/// Pull the title from the first transcript entry.
-fn extract_title(value_json: &str) -> String {
-    let Ok(json) = serde_json::from_str::<serde_json::Value>(value_json) else {
-        return "Untitled".to_string();
-    };
-    let Some(transcript) = json.get("transcript").and_then(|t| t.as_array()) else {
-        return "Untitled".to_string();
-    };
-    let Some(first) = transcript.first().and_then(|t| t.as_str()) else {
-        return "Untitled".to_string();
-    };
-    let clean = first.trim().trim_start_matches('>').trim();
+/// Listing query. `value` holds the whole conversation (history + tool
+/// results, often MBs), so SQLite projects out just `transcript[0]` and
+/// the transcript length instead of copying every blob into Rust. The
+/// `json_valid` guards keep one malformed row from erroring the step
+/// (which would drop every row after it); the `json_type` guard keeps a
+/// non-string first entry from surfacing as raw JSON text. CASE only
+/// evaluates the branch it takes, so the guards short-circuit. The JSON
+/// functions are always present: rusqlite is built `bundled`.
+const LIST_SESSIONS_SQL: &str = "SELECT key, conversation_id, \
+     CASE WHEN json_valid(value) THEN \
+         CASE WHEN json_type(value, '$.transcript[0]') = 'text' \
+         THEN json_extract(value, '$.transcript[0]') END \
+     END, \
+     CASE WHEN json_valid(value) THEN json_array_length(value, '$.transcript') END, \
+     updated_at \
+     FROM conversations_v2 ORDER BY updated_at DESC LIMIT ?1";
+
+struct SessionRow {
+    workspace: String,
+    conversation_id: String,
+    /// `transcript[0]` when it is a string; None when missing, non-text,
+    /// or the row's JSON is malformed.
+    first_entry: Option<String>,
+    /// `transcript` length; 0 when it is not an array, None when absent.
+    transcript_len: Option<i64>,
+    updated_at: i64,
+}
+
+fn query_session_rows(
+    db: &rusqlite::Connection,
+    limit: usize,
+) -> rusqlite::Result<Vec<SessionRow>> {
+    let mut stmt = db.prepare(LIST_SESSIONS_SQL)?;
+    let rows = stmt.query_map([limit as i64], |row| {
+        Ok(SessionRow {
+            workspace: row.get(0)?,
+            conversation_id: row.get(1)?,
+            first_entry: row.get(2)?,
+            transcript_len: row.get(3)?,
+            updated_at: row.get(4)?,
+        })
+    })?;
+    // A row that fails to map (e.g. NULL key) is skipped, not fatal.
+    let rows: Vec<SessionRow> = rows.filter_map(Result::ok).collect();
+    Ok(rows)
+}
+
+/// Title from the first transcript entry (already projected by SQLite).
+fn title_from_first_entry(first: Option<&str>) -> String {
+    let clean = first.unwrap_or("").trim().trim_start_matches('>').trim();
     if clean.is_empty() {
         "Untitled".to_string()
     } else {
         clip_title(clean, 80)
     }
-}
-
-fn count_messages(value_json: &str) -> usize {
-    serde_json::from_str::<serde_json::Value>(value_json)
-        .ok()
-        .and_then(|j| {
-            j.get("transcript")
-                .and_then(|t| t.as_array())
-                .map(|a| a.len())
-        })
-        .unwrap_or(0)
 }
 
 /// Walk the kiro-cli `history` array and project each entry into one or
@@ -394,34 +395,69 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extract_title_handles_empty_transcript() {
-        assert_eq!(extract_title("{}"), "Untitled");
-        assert_eq!(extract_title(r#"{"transcript":[]}"#), "Untitled");
+    fn title_handles_missing_or_blank_first_entry() {
+        assert_eq!(title_from_first_entry(None), "Untitled");
+        assert_eq!(title_from_first_entry(Some("  > ")), "Untitled");
     }
 
     #[test]
-    fn extract_title_clips_long_first_entry() {
-        let v = serde_json::json!({"transcript": [
-            "> ".to_string() + &"a".repeat(120)
-        ]})
-        .to_string();
-        let title = extract_title(&v);
+    fn title_clips_long_first_entry() {
+        let first = "> ".to_string() + &"a".repeat(120);
+        let title = title_from_first_entry(Some(&first));
         assert!(title.ends_with("..."));
         // 80 chars + "..."
         assert_eq!(title.chars().count(), 83);
     }
 
     #[test]
-    fn extract_title_strips_leading_caret_prefix() {
-        let v = r#"{"transcript":["> hello world"]}"#;
-        assert_eq!(extract_title(v), "hello world");
+    fn title_strips_leading_caret_prefix() {
+        assert_eq!(title_from_first_entry(Some("> hello world")), "hello world");
     }
 
+    /// The listing projection runs in SQLite; verify it tolerates the
+    /// row shapes the old Rust-side parse tolerated (malformed JSON,
+    /// missing/non-array transcript, non-string first entry) without
+    /// dropping rows or erroring the query.
     #[test]
-    fn count_messages_returns_transcript_length() {
-        assert_eq!(count_messages(r#"{"transcript":["a","b","c"]}"#), 3);
-        assert_eq!(count_messages(r#"{}"#), 0);
-        assert_eq!(count_messages("not json"), 0);
+    fn query_session_rows_projects_and_tolerates_bad_rows() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "CREATE TABLE conversations_v2 (key TEXT, conversation_id TEXT, value TEXT, \
+             created_at INTEGER, updated_at INTEGER);",
+        )
+        .unwrap();
+        let rows: [(&str, &str, i64); 5] = [
+            ("ok", r#"{"transcript":["> hi","b","c"]}"#, 5),
+            ("bad", "not json", 4),
+            ("empty", "{}", 3),
+            ("obj", r#"{"transcript":[{"a":1}]}"#, 2),
+            ("notarr", r#"{"transcript":"x"}"#, 1),
+        ];
+        for (id, value, updated) in rows {
+            db.execute(
+                "INSERT INTO conversations_v2 VALUES ('ws', ?1, ?2, 0, ?3)",
+                rusqlite::params![id, value, updated],
+            )
+            .unwrap();
+        }
+
+        let got = query_session_rows(&db, 10).unwrap();
+        let ids: Vec<&str> = got.iter().map(|r| r.conversation_id.as_str()).collect();
+        assert_eq!(ids, ["ok", "bad", "empty", "obj", "notarr"]);
+
+        assert_eq!(got[0].first_entry.as_deref(), Some("> hi"));
+        assert_eq!(got[0].transcript_len, Some(3));
+        assert_eq!(got[0].workspace, "ws");
+        assert_eq!(got[0].updated_at, 5);
+        for r in &got[1..] {
+            assert_eq!(r.first_entry, None, "row {}", r.conversation_id);
+        }
+        assert_eq!(got[1].transcript_len, None);
+        assert_eq!(got[2].transcript_len, None);
+        assert_eq!(got[3].transcript_len, Some(1));
+        assert_eq!(got[4].transcript_len, Some(0));
+
+        assert_eq!(query_session_rows(&db, 2).unwrap().len(), 2);
     }
 
     #[test]

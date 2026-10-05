@@ -122,44 +122,49 @@ impl AgentSessionProvider for ClaudeCodeProvider {
             }
         }
 
-        let seen_keys: std::collections::HashSet<PathBuf> =
-            seen_files.iter().map(|(p, _)| p.clone()).collect();
-        let mut sessions: Vec<AgentSession> = Vec::with_capacity(seen_files.len());
-        let mut misses: Vec<(PathBuf, FileFingerprint)> = Vec::new();
+        // Evict entries for files that are gone (over the full key set,
+        // before narrowing to `limit` below).
         {
+            let seen_keys: std::collections::HashSet<&PathBuf> =
+                seen_files.iter().map(|(p, _)| p).collect();
             let mut guard = self.sessions.lock_or_recover();
             guard.retain(|k, _| seen_keys.contains(k));
-            for (path, fp) in seen_files {
-                match guard.get(&path) {
-                    Some(cached) if cached.fp == fp => sessions.push(cached.session.clone()),
-                    _ => misses.push((path, fp)),
-                }
-            }
         }
 
-        let mut fresh: Vec<(PathBuf, CachedSession)> = Vec::with_capacity(misses.len());
-        for (path, fp) in misses {
-            let Some(session) = parse_session_metadata(&path) else {
+        // updated_at is the file mtime, so the newest `limit` files by
+        // fingerprint mtime ARE the listing — walk newest-first and stop
+        // once it's full instead of parsing every session on disk. Files
+        // whose parse fails are skipped and the walk continues.
+        seen_files.sort_by_key(|(_, fp)| std::cmp::Reverse(fp.mtime));
+        let mut sessions: Vec<AgentSession> = Vec::with_capacity(limit.min(seen_files.len()));
+        for (path, fp) in seen_files {
+            if sessions.len() >= limit {
+                break;
+            }
+            let cached = self
+                .sessions
+                .lock_or_recover()
+                .get(&path)
+                .filter(|cached| cached.fp == fp)
+                .map(|cached| cached.session.clone());
+            if let Some(session) = cached {
+                sessions.push(session);
+                continue;
+            }
+            let Some(session) = parse_session_metadata(&path, fp.mtime) else {
                 continue;
             };
-            fresh.push((
+            self.sessions.lock_or_recover().insert(
                 path,
                 CachedSession {
                     fp,
                     session: session.clone(),
                 },
-            ));
+            );
             sessions.push(session);
-        }
-        if !fresh.is_empty() {
-            let mut guard = self.sessions.lock_or_recover();
-            for (path, entry) in fresh {
-                guard.insert(path, entry);
-            }
         }
 
         sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-        sessions.truncate(limit);
         Ok(sessions)
     }
 
@@ -215,8 +220,10 @@ impl AgentSessionProvider for ClaudeCodeProvider {
 /// `None` if the file is empty/unreadable or has no real user content
 /// (sessions that contain only tool_result + assistant lines are
 /// recoverable but typically uninteresting; we still emit them with
-/// "Untitled" rather than silently hiding them).
-fn parse_session_metadata(path: &Path) -> Option<AgentSession> {
+/// "Untitled" rather than silently hiding them). `mtime` comes from the
+/// listing's fingerprint so the displayed timestamp matches the order the
+/// listing was selected in, even if the file is written mid-parse.
+fn parse_session_metadata(path: &Path, mtime: std::time::SystemTime) -> Option<AgentSession> {
     use std::io::{BufRead, BufReader};
     let file = std::fs::File::open(path).ok()?;
     let reader = BufReader::new(file);
@@ -288,11 +295,7 @@ fn parse_session_metadata(path: &Path) -> Option<AgentSession> {
         }
     }
 
-    let updated_at = std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .map(rfc3339_from_system_time)
-        .unwrap_or_default();
+    let updated_at = rfc3339_from_system_time(mtime);
 
     let title = title.unwrap_or_else(|| "Untitled".to_string());
     let message_count = user_count + assistant_count;

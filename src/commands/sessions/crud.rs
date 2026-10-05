@@ -30,12 +30,12 @@ fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {
                 continue;
             }
         };
-        let line = line.trim().to_string();
+        let line = line.trim();
         if line.is_empty() {
             continue;
         }
 
-        let val: serde_json::Value = match serde_json::from_str(&line) {
+        let mut val: serde_json::Value = match serde_json::from_str(line) {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed to parse JSONL line: {}", e);
@@ -49,7 +49,12 @@ fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {
             .unwrap_or("")
             .to_string();
 
-        let data = val.get("data").cloned().unwrap_or(serde_json::Value::Null);
+        // Move subtrees out of `val` rather than cloning them — tool-result
+        // lines can be megabytes, and `val` is discarded after this line.
+        let mut data = val
+            .get_mut("data")
+            .map(serde_json::Value::take)
+            .unwrap_or(serde_json::Value::Null);
 
         let message_id = data
             .get("message_id")
@@ -57,21 +62,23 @@ fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {
             .unwrap_or("")
             .to_string();
 
-        let content_arr = data
-            .get("content")
-            .and_then(|c| c.as_array())
-            .cloned()
-            .unwrap_or_default();
+        let content_arr = match data.get_mut("content").map(serde_json::Value::take) {
+            Some(serde_json::Value::Array(items)) => items,
+            _ => Vec::new(),
+        };
 
         let content: Vec<MessageContent> = content_arr
             .into_iter()
-            .map(|item| {
+            .map(|mut item| {
                 let item_kind = item
                     .get("kind")
                     .and_then(|k| k.as_str())
                     .unwrap_or("unknown")
                     .to_string();
-                let item_data = item.get("data").cloned().unwrap_or(serde_json::Value::Null);
+                let item_data = item
+                    .get_mut("data")
+                    .map(serde_json::Value::take)
+                    .unwrap_or(serde_json::Value::Null);
                 MessageContent {
                     kind: item_kind,
                     data: item_data,
@@ -103,9 +110,82 @@ pub struct SessionCache {
 /// in a process-wide static so the Tauri `RunEvent::Exit` hook can
 /// drop it during clean shutdown.
 pub struct SessionWatcherHandle {
-    /// Closing this channel wakes the thread out of its `recv()` and
-    /// makes it exit. The receiver lives on the watcher thread.
-    _shutdown_tx: std::sync::mpsc::Sender<()>,
+    /// Shared with the notify callback; the handle's `Drop` sends
+    /// `Shutdown` on it so the thread exits.
+    tx: std::sync::mpsc::Sender<WatcherMsg>,
+}
+
+impl Drop for SessionWatcherHandle {
+    fn drop(&mut self) {
+        // The notify callback holds its own Sender clone, so the channel
+        // never disconnects while the watcher lives — shutdown has to be
+        // an explicit message. Err just means the thread already exited.
+        let _ = self.tx.send(WatcherMsg::Shutdown);
+    }
+}
+
+/// Messages into the watcher thread.
+enum WatcherMsg {
+    /// A session file changed (already filtered by `is_session_file_path`).
+    Changed,
+    Shutdown,
+}
+
+/// Flush once the directory has been quiet this long.
+const WATCH_QUIET: std::time::Duration = std::time::Duration::from_millis(400);
+/// ...or after this long of continuous writes, so a long burst still
+/// refreshes the sidebar periodically.
+const WATCH_MAX_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Trailing-edge debounce for watcher events. The agent writes a turn as
+/// a burst (JSONL appends, then the .json metadata); invalidating on the
+/// first event and dropping the rest let the frontend's rescan race the
+/// burst and cache the half-written state with nothing re-firing after.
+/// Flushing after the burst means its last write is always reflected.
+#[derive(Default)]
+struct TrailingDebounce {
+    first: Option<std::time::Instant>,
+    last: Option<std::time::Instant>,
+}
+
+impl TrailingDebounce {
+    fn note(&mut self, now: std::time::Instant) {
+        self.first = Some(self.first.unwrap_or(now));
+        self.last = Some(now);
+    }
+
+    /// Time left until the pending burst is due; `None` when idle.
+    fn remaining(&self, now: std::time::Instant) -> Option<std::time::Duration> {
+        let (first, last) = (self.first?, self.last?);
+        let due = (last + WATCH_QUIET).min(first + WATCH_MAX_WAIT);
+        Some(due.saturating_duration_since(now))
+    }
+
+    /// True (and resets) when a pending burst is due at `now`.
+    fn take_due(&mut self, now: std::time::Instant) -> bool {
+        if self.remaining(now).is_some_and(|left| left.is_zero()) {
+            *self = Self::default();
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Whether a watcher event path is an agent session file. Dot-files are
+/// Kage's own (`.title-cache.json` and its `.json.tmp.<pid>` siblings),
+/// whose writers already invalidate the cache themselves — reacting to
+/// them only re-triggers a full rescan in every window.
+fn is_session_file_path(path: &std::path::Path) -> bool {
+    let session_ext = matches!(
+        path.extension().and_then(|e| e.to_str()),
+        Some("json" | "jsonl")
+    );
+    let hidden = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.starts_with('.'));
+    session_ext && !hidden
 }
 
 pub fn start_session_watcher(
@@ -113,8 +193,15 @@ pub fn start_session_watcher(
     app_handle: tauri::AppHandle,
 ) -> Option<SessionWatcherHandle> {
     use notify::{Event, EventKind, RecursiveMode, Watcher};
+    use std::sync::mpsc::RecvTimeoutError;
 
-    let sessions_dir = match crate::agent_presets::default_sessions_dir() {
+    // Watch the same directory list_sessions scans (honours the active
+    // connection's `sessions_directory` override), not just the default.
+    let sessions_dir = match app_handle
+        .try_state::<FeatureServices>()
+        .and_then(|features| resolve_sessions_dir_locked(&features.config).ok())
+        .or_else(crate::agent_presets::default_sessions_dir)
+    {
         Some(dir) => dir,
         None => {
             log::warn!("Cannot start session watcher: no home directory");
@@ -127,16 +214,12 @@ pub fn start_session_watcher(
         let _ = fs::create_dir_all(&sessions_dir);
     }
 
-    let (shutdown_tx, shutdown_rx) = std::sync::mpsc::channel::<()>();
+    let (tx, rx) = std::sync::mpsc::channel::<WatcherMsg>();
+    let event_tx = tx.clone();
 
     std::thread::Builder::new()
         .name("session-watcher".into())
         .spawn(move || {
-            // Debounce: ignore events within 2s of the last invalidation
-            let last_invalidation = std::sync::Mutex::new(
-                std::time::Instant::now() - std::time::Duration::from_secs(10),
-            );
-
             let cache = session_cache;
             let app = app_handle;
 
@@ -150,7 +233,7 @@ pub fn start_session_watcher(
                         }
                     };
 
-                    // Only care about creates, removes, and modifications to .json/.jsonl files
+                    // Only care about creates, removes, and modifications to session files
                     let dominated = matches!(
                         event.kind,
                         EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_)
@@ -158,31 +241,15 @@ pub fn start_session_watcher(
                     if !dominated {
                         return;
                     }
-
-                    let dominated_ext = event.paths.iter().any(|p| {
-                        p.extension()
-                            .and_then(|e| e.to_str())
-                            .map(|e| e == "json" || e == "jsonl")
-                            .unwrap_or(false)
-                    });
-                    if !dominated_ext {
+                    if !event
+                        .paths
+                        .iter()
+                        .any(|p| is_session_file_path(p.as_path()))
+                    {
                         return;
                     }
-
-                    // Debounce
-                    {
-                        let mut last = last_invalidation.lock_or_recover();
-                        if last.elapsed() < std::time::Duration::from_secs(2) {
-                            return;
-                        }
-                        *last = std::time::Instant::now();
-                    }
-
-                    log::info!("Session directory changed, invalidating cache");
-                    if let Ok(mut c) = cache.lock() {
-                        *c = None;
-                    }
-                    crate::event_targets::emit_to_chat_hosts(&app, "sessions_changed", &());
+                    // Err means the thread is shutting down.
+                    let _ = event_tx.send(WatcherMsg::Changed);
                 }) {
                     Ok(w) => w,
                     Err(e) => {
@@ -202,25 +269,34 @@ pub fn start_session_watcher(
 
             log::info!("Session watcher started on {:?}", sessions_dir);
 
-            // Block until the shutdown sender is dropped. Any send is
-            // ignored; we only care about the channel disconnecting.
-            // When the function returns, `watcher` drops and the
-            // platform-specific FS subscription is unregistered cleanly
-            // (Core Foundation run loop on macOS, inotify fd on Linux,
-            // ReadDirectoryChangesW handle on Windows). Pre-fix the
-            // thread sat in `sleep(3600)` forever, so the watcher was
-            // only ever cleaned up by process death.
-            match shutdown_rx.recv() {
-                Ok(()) | Err(_) => {
-                    log::info!("Session watcher shutting down");
+            // Block for events (no polling while idle), debounce bursts,
+            // and exit on Shutdown. When the closure returns, `watcher`
+            // drops and the platform-specific FS subscription is
+            // unregistered cleanly (Core Foundation run loop on macOS,
+            // inotify fd on Linux, ReadDirectoryChangesW handle on
+            // Windows).
+            let mut debounce = TrailingDebounce::default();
+            loop {
+                let msg = match debounce.remaining(std::time::Instant::now()) {
+                    None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
+                    Some(wait) => rx.recv_timeout(wait),
+                };
+                match msg {
+                    Ok(WatcherMsg::Changed) => debounce.note(std::time::Instant::now()),
+                    Ok(WatcherMsg::Shutdown) | Err(RecvTimeoutError::Disconnected) => break,
+                    Err(RecvTimeoutError::Timeout) => {}
+                }
+                if debounce.take_due(std::time::Instant::now()) {
+                    log::info!("Session directory changed, invalidating cache");
+                    invalidate_session_cache(&cache);
+                    crate::event_targets::emit_to_chat_hosts(&app, "sessions_changed", &());
                 }
             }
+            log::info!("Session watcher shutting down");
         })
         .expect("Failed to spawn session-watcher thread");
 
-    Some(SessionWatcherHandle {
-        _shutdown_tx: shutdown_tx,
-    })
+    Some(SessionWatcherHandle { tx })
 }
 
 #[tauri::command]
@@ -234,40 +310,93 @@ pub async fn list_sessions(
 
     // Serve from cache unless invalidated by the file watcher or a force refresh
     if !force {
-        let cache = features.session_cache.lock_or_recover();
-        if let Some(ref cached) = *cache {
-            let sessions = paginate(&cached.sessions, limit, offset);
-            info!(
-                "Found {} sessions (returning {} from cache, offset {})",
-                cached.sessions.len(),
-                sessions.len(),
-                offset.unwrap_or(0)
-            );
+        if let Some(sessions) = cached_page(&features.session_cache, limit, offset) {
             return Ok(sessions);
         }
     }
 
-    // Scan and cache
-    let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
-    let all_sessions = scan_sessions_in_dir(&sessions_dir)?;
-    let total = all_sessions.len();
+    // The scan is blocking FS work (read_dir, a stat per session, JSONL
+    // reads on title-cache misses) — keep it off the async runtime.
+    let session_cache = features.session_cache.clone();
+    let config = features.config.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<SessionSummary>, AppError> {
+        // Single-flight: every chat-host window refreshes on the same
+        // event, so concurrent callers queue here and all but the first
+        // are served from the cache that scan just filled.
+        let _scan = SCAN_LOCK.lock_or_recover();
+        if !force {
+            if let Some(sessions) = cached_page(&session_cache, limit, offset) {
+                return Ok(sessions);
+            }
+        }
 
-    // Store in cache
-    {
-        let mut cache = features.session_cache.lock_or_recover();
-        *cache = Some(SessionCache {
-            sessions: all_sessions.clone(),
-        });
-    }
+        let epoch = CACHE_EPOCH.load(std::sync::atomic::Ordering::SeqCst);
+        let sessions_dir = resolve_sessions_dir_locked(&config)?;
+        let all_sessions = scan_sessions_in_dir(&sessions_dir)?;
+        let total = all_sessions.len();
+        let sessions = paginate(&all_sessions, limit, offset);
+        {
+            // Only cache if nothing invalidated mid-scan: otherwise this
+            // pre-change listing would be served to the callers the
+            // invalidation's event is about to send here.
+            let mut cache = session_cache.lock_or_recover();
+            if CACHE_EPOCH.load(std::sync::atomic::Ordering::SeqCst) == epoch {
+                *cache = Some(SessionCache {
+                    sessions: all_sessions,
+                });
+            }
+        }
 
-    let sessions = paginate(&all_sessions, limit, offset);
+        info!(
+            "Found {} sessions (returning {}, offset {})",
+            total,
+            sessions.len(),
+            offset.unwrap_or(0)
+        );
+        Ok(sessions)
+    })
+    .await
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.task.failed",
+            &[("reason", &e.to_string())],
+        )
+    })?
+}
+
+/// Serializes session-directory scans; see `list_sessions`.
+static SCAN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Bumped by `invalidate_session_cache` (under the cache lock). A scan
+/// that sees it change while running returns its result but doesn't
+/// cache it, so with single-flight a listing that started before a
+/// watcher flush / delete can't be served after it.
+static CACHE_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Clear the session-list cache and fence off any scan in flight.
+fn invalidate_session_cache(cache: &std::sync::Mutex<Option<SessionCache>>) {
+    let mut cache = cache.lock_or_recover();
+    CACHE_EPOCH.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    *cache = None;
+}
+
+/// The requested page from the in-memory session cache, if populated.
+fn cached_page(
+    cache: &std::sync::Mutex<Option<SessionCache>>,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Option<Vec<SessionSummary>> {
+    let cache = cache.lock_or_recover();
+    let cached = cache.as_ref()?;
+    let sessions = paginate(&cached.sessions, limit, offset);
     info!(
-        "Found {} sessions (returning {}, offset {})",
-        total,
+        "Found {} sessions (returning {} from cache, offset {})",
+        cached.sessions.len(),
         sessions.len(),
         offset.unwrap_or(0)
     );
-    Ok(sessions)
+    Some(sessions)
 }
 
 fn paginate(
@@ -282,6 +411,26 @@ fn paginate(
         None => iter.cloned().collect(),
     }
 }
+
+/// A JSONL's `(mtime, len)`; `None` when the file is missing, which is
+/// itself a fingerprint so a JSONL that appears later is re-extracted.
+type JsonlFingerprint = Option<(Option<std::time::SystemTime>, u64)>;
+
+fn jsonl_fingerprint(path: &std::path::Path) -> JsonlFingerprint {
+    fs::metadata(path)
+        .ok()
+        .map(|m| (m.modified().ok(), m.len()))
+}
+
+/// Sessions whose title extraction came back "New Chat", with the JSONL
+/// fingerprint it was computed from. Those never get a title-cache entry
+/// (opened-but-unused sessions hold only the steering exchange), so
+/// without this every scan reopens and re-parses their JSONL twice. Kept
+/// in memory only, and apart from `session_cache` (which the watcher
+/// wipes): an appended prompt changes the fingerprint, so a real title is
+/// still picked up.
+static UNTITLED_JSONL: std::sync::LazyLock<std::sync::Mutex<HashMap<String, JsonlFingerprint>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
 
 fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, String> {
     if !sessions_dir.exists() {
@@ -301,6 +450,11 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
         error!("Failed to read sessions directory: {}", e);
         format!("Failed to read sessions directory: {}", e)
     })?;
+
+    // Rebuilt every scan, so sessions that are gone or have since been
+    // titled drop out and the map stays bounded.
+    let prev_untitled = std::mem::take(&mut *UNTITLED_JSONL.lock_or_recover());
+    let mut untitled: HashMap<String, JsonlFingerprint> = HashMap::new();
 
     for entry in entries {
         let entry = match entry {
@@ -365,7 +519,12 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
             cached.title.clone()
         } else {
             let jsonl_path = path.with_extension("jsonl");
-            if let Some(recovered) = extract_ai_title_from_jsonl(&jsonl_path) {
+            let jsonl_fp = jsonl_fingerprint(&jsonl_path);
+            if prev_untitled.get(&session_id) == Some(&jsonl_fp) {
+                // Unchanged since it last extracted as "New Chat".
+                untitled.insert(session_id.clone(), jsonl_fp);
+                "New Chat".to_string()
+            } else if let Some(recovered) = extract_ai_title_from_jsonl(&jsonl_path) {
                 new_entries.insert(
                     session_id.clone(),
                     TitleEntry {
@@ -384,6 +543,8 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
                             source: TitleSource::Extracted,
                         },
                     );
+                } else {
+                    untitled.insert(session_id.clone(), jsonl_fp);
                 }
                 extracted
             }
@@ -396,6 +557,8 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
             updated_at,
         });
     }
+
+    *UNTITLED_JSONL.lock_or_recover() = untitled;
 
     // Persist newly extracted entries. Re-load under the lock and merge
     // (entry API — an entry that appeared while we were scanning, e.g. a
@@ -564,10 +727,7 @@ pub async fn delete_session<R: tauri::Runtime>(
     }
 
     // Invalidate session list cache
-    {
-        let mut cache = features.session_cache.lock_or_recover();
-        *cache = None;
-    }
+    invalidate_session_cache(&features.session_cache);
 
     // Tell chat-host windows (main + chat-*): this session is gone.
     // Windows pinned to it clear their chat area and show a "no
@@ -684,4 +844,100 @@ pub async fn clear_window_session(
         .map_err(|e| format!("Lock error: {}", e))?;
     map.remove(&label);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn parse_jsonl_moves_payloads_and_keeps_fallbacks() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.jsonl");
+        let lines = [
+            r#"{"kind":"Prompt","data":{"message_id":"m1","content":[{"kind":"text","data":"hi"},{"data":{"x":1}}]}}"#,
+            "not json",
+            r#"{"data":{"content":"not an array"}}"#,
+            "",
+            r#"{"kind":"AssistantMessage","data":{"message_id":"m2","content":[{"kind":"text"}]}}"#,
+        ];
+        fs::write(&path, lines.join("\n")).unwrap();
+
+        let msgs = parse_jsonl(&path);
+        assert_eq!(msgs.len(), 3);
+
+        assert_eq!(msgs[0].kind, "Prompt");
+        assert_eq!(msgs[0].message_id, "m1");
+        assert_eq!(msgs[0].content.len(), 2);
+        assert_eq!(msgs[0].content[0].kind, "text");
+        assert_eq!(msgs[0].content[0].data, serde_json::json!("hi"));
+        assert_eq!(msgs[0].content[1].kind, "unknown");
+        assert_eq!(msgs[0].content[1].data, serde_json::json!({"x": 1}));
+
+        assert_eq!(msgs[1].kind, "");
+        assert_eq!(msgs[1].message_id, "");
+        assert!(msgs[1].content.is_empty());
+
+        assert_eq!(msgs[2].content[0].data, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn watcher_filter_skips_kage_dotfiles() {
+        assert!(is_session_file_path(Path::new("/s/abc.json")));
+        assert!(is_session_file_path(Path::new("/s/abc.jsonl")));
+        assert!(!is_session_file_path(Path::new("/s/abc.lock")));
+        assert!(!is_session_file_path(Path::new("/s/.title-cache.json")));
+        assert!(!is_session_file_path(Path::new(
+            "/s/.title-cache.json.tmp.123"
+        )));
+    }
+
+    #[test]
+    fn debounce_is_idle_until_an_event_is_noted() {
+        let mut d = TrailingDebounce::default();
+        let t0 = Instant::now();
+        assert_eq!(d.remaining(t0), None);
+        assert!(!d.take_due(t0));
+    }
+
+    #[test]
+    fn debounce_fires_after_quiet_period_from_last_event() {
+        let mut d = TrailingDebounce::default();
+        let t0 = Instant::now();
+        d.note(t0);
+        d.note(t0 + Duration::from_millis(300));
+        let mid = t0 + Duration::from_millis(500);
+        assert!(!d.take_due(mid));
+        assert_eq!(d.remaining(mid), Some(Duration::from_millis(200)));
+        let after = t0 + Duration::from_millis(700);
+        assert!(d.take_due(after));
+        // Reset: idle again, nothing pending.
+        assert_eq!(d.remaining(after), None);
+    }
+
+    #[test]
+    fn debounce_caps_continuous_bursts_at_max_wait() {
+        let mut d = TrailingDebounce::default();
+        let t0 = Instant::now();
+        let mut t = t0;
+        while t < t0 + WATCH_MAX_WAIT {
+            d.note(t);
+            t += Duration::from_millis(100);
+        }
+        assert!(d.take_due(t0 + WATCH_MAX_WAIT));
+    }
+
+    #[test]
+    fn jsonl_fingerprint_distinguishes_missing_and_appended() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.jsonl");
+        assert_eq!(jsonl_fingerprint(&path), None);
+        fs::write(&path, "a").unwrap();
+        let first = jsonl_fingerprint(&path);
+        assert!(first.is_some());
+        fs::write(&path, "ab").unwrap();
+        assert_ne!(jsonl_fingerprint(&path), first);
+    }
 }
