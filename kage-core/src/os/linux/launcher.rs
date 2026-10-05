@@ -236,6 +236,109 @@ fn parse_exec_argv(exec: &str) -> Option<Vec<String>> {
     (!tokens.is_empty()).then_some(tokens)
 }
 
+pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
+    info!("Launching Linux application at {:?}", path);
+
+    if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
+        // Report an unreadable or Exec-less entry to the caller now; the
+        // helpers below can only fail on things we can't check up front.
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read desktop file {:?}", path))?;
+        desktop_entry_fields(&content)
+            .get("Exec")
+            .copied()
+            .and_then(parse_exec_argv)
+            .with_context(|| format!("No usable Exec= in {:?}", path))?;
+        // gio launch / gtk-launch wait for the helper to exit, which for a
+        // DBusActivatable entry with a broken service means the ~25s D-Bus
+        // timeout. The caller holds the app-launcher lock (search waits on
+        // it) and hides the window only after we return, so run the chain
+        // on a detached thread and return at once, as a plain spawn did.
+        let path = path.clone();
+        std::thread::Builder::new()
+            .name("desktop-launch".to_string())
+            .spawn(move || {
+                if let Err(e) = launch_desktop_file(&path) {
+                    log::warn!("Failed to launch {:?}: {:#}", path, e);
+                }
+            })
+            .context("Failed to start desktop launch thread")?;
+    } else {
+        Command::new(path)
+            .spawn()
+            .context("Failed to launch application")?;
+    }
+
+    Ok(())
+}
+
+/// Launch by name. Linux has no built-in app-name → binary resolution the
+/// way Windows (ShellExecuteW) or macOS (`open -a`) do, so this is a best
+/// effort: URIs go through `xdg-open`, everything else is attempted as a
+/// direct command. Proper name resolution would require walking the
+/// freedesktop `.desktop` index; tracked as future work.
+pub fn shell_launch_impl(name: &str) -> Result<()> {
+    if name.is_empty() {
+        anyhow::bail!("shell_launch called with empty name");
+    }
+
+    // list_installed_apps hands the agent .desktop paths; launch those as
+    // desktop entries rather than trying to exec the file.
+    let as_path = Path::new(name);
+    if as_path.extension().and_then(|s| s.to_str()) == Some("desktop") && as_path.is_file() {
+        info!("shell_launch_impl: desktop entry '{}'", name);
+        return launch_desktop_file(as_path);
+    }
+
+    // Leading RFC 3986 URI scheme (same shape as macOS) goes through xdg-open.
+    if looks_like_uri(name) {
+        info!("shell_launch_impl: xdg-open '{}'", name);
+        let status = Command::new("xdg-open")
+            .arg(name)
+            .status()
+            .context("xdg-open failed to start")?;
+        if !status.success() {
+            anyhow::bail!("xdg-open '{}' exited with {}", name, status);
+        }
+        return Ok(());
+    }
+
+    // Split on first space so `"firefox --private-window"` lands as
+    // `firefox` + `["--private-window"]` (parity with the Windows impl).
+    let (program, args) = match name.split_once(' ') {
+        Some((p, rest)) => (p, rest.split_whitespace().collect::<Vec<_>>()),
+        None => (name, Vec::new()),
+    };
+
+    info!("shell_launch_impl: exec '{}' args={:?}", program, args);
+    Command::new(program)
+        .args(args)
+        .spawn()
+        .with_context(|| format!("Failed to launch '{}'", name))?;
+    Ok(())
+}
+
+/// True if `s` starts with an RFC 3986 URI scheme. Mirrors the macOS helper —
+/// kept inline rather than shared because the rest of the Linux launcher is
+/// already platform-specific and duplicating a 10-line helper is cheaper
+/// than threading another cross-platform module.
+fn looks_like_uri(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
+        return false;
+    }
+    for &b in bytes.iter().skip(1) {
+        if b == b':' {
+            return true;
+        }
+        let ok = b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.';
+        if !ok {
+            return false;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,107 +533,4 @@ Exec=/usr/bin/x\n";
         let content = "[Desktop Entry]\nName=Bad\nExec=%U\n";
         assert!(parse_desktop_file(content, &fake_path()).is_none());
     }
-}
-
-pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
-    info!("Launching Linux application at {:?}", path);
-
-    if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
-        // Report an unreadable or Exec-less entry to the caller now; the
-        // helpers below can only fail on things we can't check up front.
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read desktop file {:?}", path))?;
-        desktop_entry_fields(&content)
-            .get("Exec")
-            .copied()
-            .and_then(parse_exec_argv)
-            .with_context(|| format!("No usable Exec= in {:?}", path))?;
-        // gio launch / gtk-launch wait for the helper to exit, which for a
-        // DBusActivatable entry with a broken service means the ~25s D-Bus
-        // timeout. The caller holds the app-launcher lock (search waits on
-        // it) and hides the window only after we return, so run the chain
-        // on a detached thread and return at once, as a plain spawn did.
-        let path = path.clone();
-        std::thread::Builder::new()
-            .name("desktop-launch".to_string())
-            .spawn(move || {
-                if let Err(e) = launch_desktop_file(&path) {
-                    log::warn!("Failed to launch {:?}: {:#}", path, e);
-                }
-            })
-            .context("Failed to start desktop launch thread")?;
-    } else {
-        Command::new(path)
-            .spawn()
-            .context("Failed to launch application")?;
-    }
-
-    Ok(())
-}
-
-/// Launch by name. Linux has no built-in app-name → binary resolution the
-/// way Windows (ShellExecuteW) or macOS (`open -a`) do, so this is a best
-/// effort: URIs go through `xdg-open`, everything else is attempted as a
-/// direct command. Proper name resolution would require walking the
-/// freedesktop `.desktop` index; tracked as future work.
-pub fn shell_launch_impl(name: &str) -> Result<()> {
-    if name.is_empty() {
-        anyhow::bail!("shell_launch called with empty name");
-    }
-
-    // list_installed_apps hands the agent .desktop paths; launch those as
-    // desktop entries rather than trying to exec the file.
-    let as_path = Path::new(name);
-    if as_path.extension().and_then(|s| s.to_str()) == Some("desktop") && as_path.is_file() {
-        info!("shell_launch_impl: desktop entry '{}'", name);
-        return launch_desktop_file(as_path);
-    }
-
-    // Leading RFC 3986 URI scheme (same shape as macOS) goes through xdg-open.
-    if looks_like_uri(name) {
-        info!("shell_launch_impl: xdg-open '{}'", name);
-        let status = Command::new("xdg-open")
-            .arg(name)
-            .status()
-            .context("xdg-open failed to start")?;
-        if !status.success() {
-            anyhow::bail!("xdg-open '{}' exited with {}", name, status);
-        }
-        return Ok(());
-    }
-
-    // Split on first space so `"firefox --private-window"` lands as
-    // `firefox` + `["--private-window"]` (parity with the Windows impl).
-    let (program, args) = match name.split_once(' ') {
-        Some((p, rest)) => (p, rest.split_whitespace().collect::<Vec<_>>()),
-        None => (name, Vec::new()),
-    };
-
-    info!("shell_launch_impl: exec '{}' args={:?}", program, args);
-    Command::new(program)
-        .args(&args)
-        .spawn()
-        .with_context(|| format!("Failed to launch '{}'", name))?;
-    Ok(())
-}
-
-/// True if `s` starts with an RFC 3986 URI scheme. Mirrors the macOS helper —
-/// kept inline rather than shared because the rest of the Linux launcher is
-/// already platform-specific and duplicating a 10-line helper is cheaper
-/// than threading another cross-platform module.
-fn looks_like_uri(s: &str) -> bool {
-    let bytes = s.as_bytes();
-    if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
-        return false;
-    }
-    for &b in bytes.iter().skip(1) {
-        if b == b':' {
-            return true;
-        }
-        let ok = b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.';
-        if !ok {
-            return false;
-        }
-    }
-    false
 }
