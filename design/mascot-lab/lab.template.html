@@ -386,23 +386,28 @@ function CurrentEngine(view, rng) {
 const PRESETS = {
     polish: {
         label: 'A · Polish',
-        desc: 'Same art and states as today, with better timing: breathing, blinks, a wave that eases back, a hop with anticipation and rest beats, and no change in size.',
-        f: { breathe: true, blink: true, waveEase: true, hop: 'procedural', sizeAnim: true, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
+        desc: 'Same art and states as today, with better timing: breathing, blinks, a wave that eases back, and the drawn jump (arms and all) on a controllable eased arc with anticipation, a hang at the top and rest beats, at the idle size.',
+        f: { breathe: true, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 500, sizeAnim: true, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
     },
     personality: {
         label: 'B · Personality',
         desc: 'Everything in A, plus the unused pose art: glances and winks while idle, a magnifying glass on long thinks, dozing off when ignored, and a small celebration when a reply lands.',
-        f: { breathe: true, blink: true, waveEase: true, hop: 'procedural', sizeAnim: true, glances: true, doze: true, ponder: true, celebrate: true, poke: true, reduced: false },
+        f: { breathe: true, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 500, sizeAnim: true, glances: true, doze: true, ponder: true, celebrate: true, poke: true, reduced: false },
+    },
+    blob: {
+        label: 'Blob hop',
+        desc: 'The earlier proposal: a squash-and-stretch hop on the idle art, with no arm movement.',
+        f: { breathe: true, blink: true, waveEase: true, hop: 'procedural', hopHeight: 24, hopRest: 500, sizeAnim: true, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
     },
     framesRetimed: {
         label: 'Retimed frames',
         desc: 'Keeps the drawn jump frames, retimed with anticipation, a hang at the apex, a landing beat and rest between hops.',
-        f: { breathe: true, blink: true, waveEase: true, hop: 'frames-retimed', sizeAnim: false, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
+        f: { breathe: true, blink: true, waveEase: true, hop: 'frames-retimed', hopHeight: 24, hopRest: 500, sizeAnim: false, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
     },
     reduced: {
         label: 'Reduced motion',
         desc: 'What prefers-reduced-motion users would get: pose changes and blinks only, with no hops, sway or breathing.',
-        f: { breathe: false, blink: true, waveEase: true, hop: 'procedural', sizeAnim: false, glances: true, doze: true, ponder: true, celebrate: true, poke: true, reduced: true },
+        f: { breathe: false, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 500, sizeAnim: false, glances: true, doze: true, ponder: true, celebrate: true, poke: true, reduced: true },
     },
 };
 
@@ -459,6 +464,29 @@ function ProposedEngine(view, rng) {
         svg.style.top = `${POSE_REG.dyFromBottom * CAT_W}px`;
         add(`poses/${name}`, svg);
     }
+    // Drawn frames + procedural arc: the jump frames at the idle art's scale
+    // (both are ~1 unit per unit; only the app's 60px jump box shrank them),
+    // each shifted down by its own baked height so the cat stands on the
+    // ground in every frame, with the baked shadow clipped off. The arc and
+    // shadow are then ours. Heights measured from the art: the cat's bottom
+    // above its standing ground (69.7 units from the viewBox top), per frame.
+    const JUMP_BAKED = [0, 9.9, 22.3, 32.3, 43.7, 31.3, 16.4, 0];
+    const JUMP_GROUND = 69.7;
+    const unit = CAT_W / ASSETS.waving['waving-f1'].vb[2];
+    // waving-f1's body sits ~1.4 units above its own (merged) shadow.
+    const BODY_LIFT = 1.4 * unit;
+    for (let i = 1; i <= 8; i++) {
+        const a = asset(`jumping/jumping-f${i}`);
+        const w = a.vb[2] * unit, h = a.vb[3] * unit;
+        const svg = makeArt(a, w, h);
+        svg.style.left = `${(CAT_W - w) / 2}px`;
+        svg.style.top = `${CAT_H - BODY_LIFT - JUMP_GROUND * unit + JUMP_BAKED[i - 1] * unit}px`;
+        // Bottom 4.6% of the viewBox is the baked shadow (and below-ground
+        // overhang once shifted); our own shadow replaces it.
+        svg.style.clipPath = 'inset(0 -10% 4.6% -10%)';
+        add(`jumpArc/f${i}`, svg);
+    }
+
     // Retimed-frames option: the drawn jump, at the app's own jump box.
     const JW = Math.round(60 * (45 / 73)), JH = 60;
     for (let i = 1; i <= 8; i++) {
@@ -473,7 +501,7 @@ function ProposedEngine(view, rng) {
         if (shown === key) return;
         if (shown) {
             arts.get(shown).classList.remove('show');
-            arts.get(shown).style.clipPath = '';
+            if (!shown.startsWith('jumpArc')) arts.get(shown).style.clipPath = '';
         }
         arts.get(key).classList.add('show');
         shown = key;
@@ -532,6 +560,41 @@ function ProposedEngine(view, rng) {
                     sy = 1 - 0.16 * d; sx = 1 + 0.12 * d;
                 }
                 return { pose, y, sx, sy, air: y > 0.4 };
+            },
+        };
+    }
+    function drawnHop(A) {
+        // Frame holds: a long crouch (anticipation), quick launch, a hang on
+        // the apex frame, a held landing squash. Air time = frames 2..7.
+        const seq = [[1, 190], [2, 70], [3, 90], [4, 100], [5, 170], [6, 90], [7, 80], [8, 150]];
+        const AIR0 = seq[0][1];
+        const AIR = seq.slice(1, 7).reduce((a, f) => a + f[1], 0);
+        const dur = seq.reduce((a, f) => a + f[1], 0);
+        return {
+            dur, breathe: false,
+            sample(ms) {
+                let acc = 0, frame = 8;
+                for (const [i, d] of seq) {
+                    acc += d;
+                    if (ms < acc) { frame = i; break; }
+                }
+                let y = 0;
+                if (ms >= AIR0 && ms < AIR0 + AIR) {
+                    const u = (ms - AIR0) / AIR;
+                    // Flattened sine: fast off the ground, lingers at the top.
+                    y = A * Math.sin(Math.PI * u) ** 0.8;
+                }
+                return { pose: `jumpArc/f${frame}`, y, shadow: true, shadowW: 0.62 };
+            },
+        };
+    }
+    function landRest(ms) {
+        // Settle out of the landing squash into the standing pose.
+        return {
+            dur: ms, breathe: true,
+            sample(t) {
+                const d = springDecay(clamp(t / 320, 0, 1));
+                return { pose: BASE, sy: 1 - 0.09 * d, sx: 1 + 0.06 * d };
             },
         };
     }
@@ -616,7 +679,7 @@ function ProposedEngine(view, rng) {
                 mode = 'think'; modeStart = t;
                 scaleTarget = f.sizeAnim && !f.reduced ? 1.08 : 1;
                 if (f.reduced) play([swapClip('poses/interested', 600), restClip(1e9, 'poses/magnifying-glass')], t);
-                else if (f.hop === 'procedural') play(wake ? [hopClip(6, 'poses/interested')] : [], t);
+                else if (f.hop === 'procedural' || f.hop === 'drawn-arc') play(wake ? [hopClip(6, 'poses/interested')] : [], t);
                 else play([], t);
             } else if (name === 'done') {
                 if (mode !== 'think') return;
@@ -645,10 +708,12 @@ function ProposedEngine(view, rng) {
                     const thinkFor = t - modeStart;
                     if (f.reduced) {
                         queue.push(restClip(1e9, 'poses/magnifying-glass'));
-                    } else if (f.ponder && thinkFor > 7000 && f.hop === 'procedural') {
+                    } else if (f.ponder && thinkFor > 7000 && (f.hop === 'procedural' || f.hop === 'drawn-arc')) {
                         queue.push(ponderClip(), ponderClip(), hopClip(6, 'poses/magnifying-glass'), restClip(500, 'poses/magnifying-glass'));
+                    } else if (f.hop === 'drawn-arc') {
+                        queue.push(drawnHop(f.hopHeight), landRest(Math.max(320, f.hopRest + (rng() - 0.5) * 200)));
                     } else if (f.hop === 'procedural') {
-                        queue.push(hopClip(13), restClip(380 + rng() * 320));
+                        queue.push(hopClip(f.hopHeight * 0.55), restClip(Math.max(0, f.hopRest + (rng() - 0.5) * 300)));
                     } else {
                         queue.push(framesHop(f.hop === 'frames-retimed'));
                         if (f.hop === 'frames-retimed') queue.push(restClip(450, 'jumping/jumping-f1'));
@@ -715,10 +780,11 @@ function ProposedEngine(view, rng) {
             rig.style.transform = `translate(0px, ${-s.y}px) rotate(${s.rot || 0}deg) scale(${s.sx * scale * mx}, ${s.sy * scale})`;
             // Clip the art, not the rig: the rig carries the outline and
             // drop-shadow filter, which a clip on it would cut into a box.
-            arts.get(shown).style.clipPath = s.air ? AIR_CLIP : '';
-            const sh = clamp(1 - s.y / 22, 0.45, 1);
-            shadow.style.opacity = s.air ? (0.55 * sh).toFixed(3) : '0';
-            shadow.style.transform = `scale(${sh * scale}, 1)`;
+            if (!shown.startsWith('jumpArc')) arts.get(shown).style.clipPath = s.air ? AIR_CLIP : '';
+            const sh = clamp(1 - s.y / 40, 0.4, 1);
+            const showShadow = s.air || s.shadow;
+            shadow.style.opacity = showShadow ? (0.5 * sh).toFixed(3) : '0';
+            shadow.style.transform = `scale(${sh * scale * (s.shadowW || 1)}, 1)`;
 
             // ── blinks ──
             let lid = 0;
@@ -802,13 +868,29 @@ function buildColumn(spec) {
             hopSel.className = 'sel';
             hopSel.innerHTML = 'Thinking hop: ';
             const hs = document.createElement('select');
-            for (const [v, l] of [['procedural', 'Procedural squash & stretch'], ['frames-retimed', 'Drawn frames, retimed'], ['frames-current', 'Drawn frames, as today']]) {
+            for (const [v, l] of [['drawn-arc', 'Drawn frames + eased arc'], ['procedural', 'Blob squash & stretch'], ['frames-retimed', 'Drawn frames, retimed'], ['frames-current', 'Drawn frames, as today']]) {
                 const o = document.createElement('option'); o.value = v; o.textContent = l; hs.appendChild(o);
             }
             hs.value = state.f.hop;
             hs.onchange = () => { state.f.hop = hs.value; rebuild(state); };
             hopSel.appendChild(hs);
             feats.appendChild(hopSel);
+            const slider = (key, label, min, max, step, unit) => {
+                const l = document.createElement('label');
+                l.className = 'sel';
+                const r = document.createElement('input');
+                r.type = 'range'; r.min = min; r.max = max; r.step = step; r.value = state.f[key];
+                r.style.flex = '1';
+                const v = document.createElement('span');
+                v.style.cssText = 'min-width:52px;text-align:right;font-variant-numeric:tabular-nums';
+                v.textContent = `${state.f[key]}${unit}`;
+                r.oninput = () => { state.f[key] = Number(r.value); v.textContent = `${r.value}${unit}`; };
+                l.append(document.createTextNode(label), r, v);
+                feats.appendChild(l);
+            };
+            // Live: the next hop picks these up, no rebuild needed.
+            slider('hopHeight', 'Hop height', 6, 44, 1, 'px');
+            slider('hopRest', 'Rest between hops', 0, 1500, 50, 'ms');
             for (const [key, label] of FEATURES) {
                 const l = document.createElement('label');
                 const cb = document.createElement('input');
