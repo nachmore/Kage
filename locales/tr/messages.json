@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "\"{source}\" mağaza kaynağı devre dışı veya artık mevcut değil ve ana mağaza \"{id}\" öğesini sunmuyor. Yüklemek için kaynağı Ayarlar'dan yeniden etkinleştirin.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Ollama modelleri listelenemedi: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "Bu işlem dosyaları siler ve yetki iznini geri alır. Daha sonra mağazadan yeniden yükleyebilirsiniz.",
+    "message": "Bu işlem dosyalarını ve kayıtlı verilerini (ayarlar, kayıtlı oturum açma bilgileri) siler ve yetki iznini geri alır. Daha sonra mağazadan yeniden yükleyebilirsiniz, ancak verileri geri gelmez.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "Kaldır",

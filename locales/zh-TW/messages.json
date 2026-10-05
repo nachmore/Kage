@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "商店來源「{source}」已停用或已不存在，且主要商店未提供「{id}」。請在設定中重新啟用該來源以進行安裝。",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "無法列出 Ollama 模型：{message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "這會刪除檔案並撤銷其權限授權。你之後可以從商店重新安裝。",
+    "message": "這會刪除檔案及其儲存的資料（設定、已儲存的登入資訊），並撤銷其權限授權。你之後可以從商店重新安裝，但其資料不會復原。",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "解除安裝",

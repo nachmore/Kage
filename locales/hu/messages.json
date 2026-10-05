@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "A(z) „{source}” áruházforrás le van tiltva vagy már nem létezik, és a fő áruház nem kínálja a(z) „{id}” elemet. A telepítéshez engedélyezze újra a forrást a Beállításokban.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Az Ollama modellek listázása sikertelen: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "Ez törli a fájlokat, és visszavonja a hozzá tartozó jogosultságokat. Később újratelepítheti a tárolóból.",
+    "message": "Ez törli a fájljait és a tárolt adatait (beállítások, mentett bejelentkezések), és visszavonja a hozzá tartozó jogosultságokat. Később újratelepítheti a tárolóból, de az adatai nem állnak vissza.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "Eltávolítás",

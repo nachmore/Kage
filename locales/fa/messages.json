@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "منبع فروشگاه «{source}» غیرفعال است یا دیگر وجود ندارد و فروشگاه اصلی «{id}» را ارائه نمی‌کند. برای نصب آن، منبع را در تنظیمات دوباره فعال کنید.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "فهرست‌کردن مدل‌های Ollama ناموفق بود: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "این کار فایل‌ها را حذف و مجوز آن را لغو می‌کند. بعداً می‌توانید آن را دوباره از فروشگاه نصب کنید.",
+    "message": "این کار فایل‌ها و داده‌های ذخیره‌شدهٔ آن (تنظیمات، ورودهای ذخیره‌شده) را حذف و مجوز آن را لغو می‌کند. بعداً می‌توانید آن را دوباره از فروشگاه نصب کنید، اما داده‌های آن بازیابی نمی‌شود.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "حذف نصب",

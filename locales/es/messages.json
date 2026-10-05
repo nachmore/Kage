@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "La fuente de tienda \"{source}\" está desactivada o ya no existe, y la tienda principal no ofrece \"{id}\". Vuelve a activar la fuente en Configuración para instalarla.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "No se pudieron listar los modelos de Ollama: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "Esto elimina los archivos y revoca sus permisos concedidos. Puedes volver a instalarla más tarde desde la tienda.",
+    "message": "Esto elimina sus archivos y datos guardados (configuración, inicios de sesión guardados) y revoca sus permisos concedidos. Puedes volver a instalarla más tarde desde la tienda, pero sus datos no se recuperarán.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "Desinstalar",

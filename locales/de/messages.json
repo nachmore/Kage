@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "Die Store-Quelle „{source}“ ist deaktiviert oder existiert nicht mehr, und der Haupt-Store bietet „{id}“ nicht an. Aktivieren Sie die Quelle in den Einstellungen wieder, um die Erweiterung zu installieren.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Ollama-Modelle konnten nicht aufgelistet werden: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "Dadurch werden die Dateien gelöscht und die erteilten Berechtigungen entzogen. Sie können die Erweiterung später erneut aus dem Store installieren.",
+    "message": "Dadurch werden die Dateien und gespeicherten Daten (Einstellungen, gespeicherte Anmeldungen) gelöscht und die erteilten Berechtigungen entzogen. Sie können die Erweiterung später erneut aus dem Store installieren, ihre Daten werden jedoch nicht wiederhergestellt.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "Deinstallieren",

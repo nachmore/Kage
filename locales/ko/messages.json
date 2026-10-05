@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "스토어 소스 \"{source}\"이(가) 비활성화되었거나 더 이상 존재하지 않으며, 기본 스토어에 \"{id}\"이(가) 없습니다. 설치하려면 설정에서 소스를 다시 활성화하세요.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Ollama 모델 목록을 가져오지 못했습니다: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "파일이 삭제되고 권한 부여가 취소됩니다. 나중에 스토어에서 다시 설치할 수 있습니다.",
+    "message": "파일과 저장된 데이터(설정, 저장된 로그인 정보)가 삭제되고 권한 부여가 취소됩니다. 나중에 스토어에서 다시 설치할 수 있지만 데이터는 복원되지 않습니다.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "제거",

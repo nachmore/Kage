@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "Butikskällan \"{source}\" är inaktiverad eller finns inte längre, och den primära butiken erbjuder inte \"{id}\". Aktivera källan igen i Inställningar för att installera den.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Kunde inte lista Ollama-modeller: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "Detta tar bort filerna och återkallar dess behörigheter. Du kan installera om det senare från butiken.",
+    "message": "Detta tar bort filerna och sparade data (inställningar, sparade inloggningar) och återkallar dess behörigheter. Du kan installera om det senare från butiken, men dess data återställs inte.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "Avinstallera",

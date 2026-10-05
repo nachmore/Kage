@@ -444,17 +444,19 @@ pub async fn store_install<R: tauri::Runtime>(
     ui: State<'_, UiState>,
     app: tauri::AppHandle<R>,
 ) -> Result<extensions::InstalledItem, AppError> {
-    let base_url = {
+    // An empty name carries no source; treat it as the primary store.
+    let source = source.filter(|s| !s.is_empty());
+    let (base_url, primary_url) = {
         let config = features.config.lock_or_recover();
-        resolve_source_url(&config, ui.dev_mode, source.as_deref())
+        (
+            resolve_source_url(&config, ui.dev_mode, source.as_deref()),
+            resolve_source_url(&config, ui.dev_mode, None),
+        )
     };
 
-    let Some(base_url) = base_url else {
-        return Err(AppError::keyed(
-            ErrorKind::Internal,
-            "errors.extensions.no_store_url",
-            &[],
-        ));
+    let base_url = match base_url {
+        Some(url) => url,
+        None => fallback_for_missing_source(source.as_deref(), primary_url, &id).await?,
     };
 
     extensions::validate_store_url(&base_url)?;
@@ -469,6 +471,79 @@ pub async fn store_install<R: tauri::Runtime>(
     )
     .await
     .map_err(AppError::from)
+}
+
+/// Pick a base URL for an install whose `_source` no longer resolves (the
+/// source was disabled or removed after the catalog was loaded). Installs
+/// used to silently go to the primary store; now they only do so when the
+/// primary store publishes the very same id, so we never swap in an
+/// unrelated package. Otherwise the error names the source so the user
+/// knows what to re-enable.
+async fn fallback_for_missing_source(
+    source: Option<&str>,
+    primary_url: Option<String>,
+    id: &str,
+) -> Result<String, AppError> {
+    let name = match source {
+        Some(name) if name != PRIMARY_SOURCE_NAME => name,
+        // The primary store itself has no URL; there is nothing to fall
+        // back to.
+        _ => {
+            return Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.extensions.no_store_url",
+                &[],
+            ))
+        }
+    };
+
+    if let Some(primary) = primary_url {
+        if primary_catalog_lists(&primary, id).await {
+            warn!(
+                "Store source '{}' is unavailable; installing '{}' from the primary store",
+                name, id
+            );
+            return Ok(primary);
+        }
+    }
+
+    warn!(
+        "Store source '{}' is unavailable and the primary store does not list '{}'",
+        name, id
+    );
+    Err(AppError::keyed(
+        ErrorKind::Internal,
+        "errors.extensions.source_unavailable",
+        &[("source", name), ("id", id)],
+    ))
+}
+
+/// Whether the primary store's catalog lists `id`. Any validation, fetch or
+/// parse failure counts as "not listed" so an unreachable store can't
+/// green-light a fallback install.
+async fn primary_catalog_lists(base_url: &str, id: &str) -> bool {
+    if extensions::validate_store_url(base_url).is_err() {
+        return false;
+    }
+    let Ok(client) = store_client() else {
+        return false;
+    };
+    let url = format!("{}/catalog.json", base_url);
+    let catalog: serde_json::Value = match client.get(&url).send().await {
+        Ok(resp) => match resp.json::<serde_json::Value>().await {
+            Ok(v) => v,
+            Err(_) => return false,
+        },
+        Err(_) => return false,
+    };
+    catalog
+        .get("items")
+        .and_then(|v| v.as_array())
+        .is_some_and(|items| {
+            items
+                .iter()
+                .any(|ci| ci.get("id").and_then(|v| v.as_str()) == Some(id))
+        })
 }
 
 /// Check for updates to installed extensions and optionally auto-install them.

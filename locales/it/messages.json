@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "L'origine store \"{source}\" è disattivata o non esiste più e lo store principale non offre \"{id}\". Riattiva l'origine nelle Impostazioni per installarla.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Recupero dei modelli Ollama non riuscito: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "L'operazione elimina i file e revoca la concessione delle capacità. Puoi reinstallarla in seguito dallo store.",
+    "message": "L'operazione elimina i file e i dati salvati (impostazioni, accessi salvati) e revoca la concessione delle capacità. Puoi reinstallarla in seguito dallo store, ma i suoi dati non verranno ripristinati.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "Disinstalla",

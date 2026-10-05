@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "Butikskilden \"{source}\" er deaktiveret eller findes ikke længere, og den primære butik tilbyder ikke \"{id}\". Genaktivér kilden i Indstillinger for at installere den.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Kunne ikke hente Ollama-modeller: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "Dette sletter filerne og tilbagekalder dens tilladelser. Du kan geninstallere den senere fra butikken.",
+    "message": "Dette sletter dens filer og gemte data (indstillinger, gemte logins) og tilbagekalder dens tilladelser. Du kan geninstallere den senere fra butikken, men dens data gendannes ikke.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "Afinstaller",

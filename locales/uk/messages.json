@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "Джерело магазину «{source}» вимкнено або воно більше не існує, а в основному магазині немає «{id}». Щоб установити розширення, знову ввімкніть джерело в налаштуваннях.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Не вдалося отримати список моделей Ollama: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "Це видалить файли й відкличе наданий дозвіл. Ви зможете перевстановити його пізніше зі сховища.",
+    "message": "Це видалить файли й збережені дані (налаштування, збережені входи) та відкличе наданий дозвіл. Ви зможете перевстановити його пізніше зі сховища, але його дані не буде відновлено.",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "Видалити",

@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "ストアソース「{source}」は無効になっているか、存在しません。また、メインストアには「{id}」がありません。インストールするには、設定でソースを再度有効にしてください。",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Ollama モデルの一覧取得に失敗しました: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "ファイルを削除し、付与された権限を取り消します。後でストアから再インストールできます。",
+    "message": "ファイルと保存データ（設定、保存済みのサインイン情報）を削除し、付与された権限を取り消します。後でストアから再インストールできますが、データは復元されません。",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "アンインストール",

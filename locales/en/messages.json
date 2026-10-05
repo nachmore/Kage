@@ -3773,6 +3773,10 @@
     "message": "No store URL configured",
     "description": "Returned when store_install is called but no store URL is set"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "The store source \"{source}\" is disabled or no longer exists, and the primary store doesn't offer \"{id}\". Re-enable the source in Settings to install it.",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id"
+  },
   "errors.ollama.list_failed": {
     "message": "Failed to list Ollama models: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon"
@@ -3990,7 +3994,7 @@
     "description": "Title of the in-app confirm dialog before uninstalling an extension"
   },
   "store.uninstall.confirm.message": {
-    "message": "This deletes the files and revokes its capability grant. You can reinstall it later from the store.",
+    "message": "This deletes its files and stored data (settings, saved sign-ins) and revokes its capability grant. You can reinstall it later from the store, but its data will not be restored.",
     "description": "Body of the in-app uninstall confirm dialog"
   },
   "store.uninstall.confirm.btn": {

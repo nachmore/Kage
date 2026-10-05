@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "แหล่งสโตร์ \"{source}\" ถูกปิดใช้งานหรือไม่มีอยู่แล้ว และสโตร์หลักไม่มี \"{id}\" เปิดใช้งานแหล่งนี้อีกครั้งในการตั้งค่าเพื่อติดตั้ง",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "แสดงรายการโมเดล Ollama ไม่สำเร็จ: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "การดำเนินการนี้จะลบไฟล์และเพิกถอนสิทธิ์ที่ให้ไว้ คุณสามารถติดตั้งใหม่ได้ภายหลังจากสโตร์",
+    "message": "การดำเนินการนี้จะลบไฟล์และข้อมูลที่บันทึกไว้ (การตั้งค่า ข้อมูลการลงชื่อเข้าใช้ที่บันทึกไว้) และเพิกถอนสิทธิ์ที่ให้ไว้ คุณสามารถติดตั้งใหม่ได้ภายหลังจากสโตร์ แต่ข้อมูลจะไม่ถูกกู้คืน",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "ถอนการติดตั้ง",

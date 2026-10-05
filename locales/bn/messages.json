@@ -5519,6 +5519,12 @@
     "_machine_translated": true,
     "_source_hash": "e486a17ec92f99aa"
   },
+  "errors.extensions.source_unavailable": {
+    "message": "স্টোর উৎস \"{source}\" নিষ্ক্রিয় বা আর নেই, এবং প্রধান স্টোরে \"{id}\" পাওয়া যায় না। এটি ইনস্টল করতে সেটিংসে উৎসটি আবার সক্রিয় করুন।",
+    "description": "Returned by store_install when the item's store source was disabled or removed and the primary store does not list the same extension id",
+    "_machine_translated": true,
+    "_source_hash": "7120903ca31dc83e"
+  },
   "errors.ollama.list_failed": {
     "message": "Ollama মডেল তালিকাভুক্ত করতে ব্যর্থ: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
@@ -7602,10 +7608,10 @@
     "_source_hash": "5c2a9de3bec4bab0"
   },
   "store.uninstall.confirm.message": {
-    "message": "এটি ফাইলগুলো মুছে দেয় এবং এর ক্যাপাবিলিটি অনুমতি প্রত্যাহার করে। আপনি পরে স্টোর থেকে এটি আবার ইনস্টল করতে পারবেন।",
+    "message": "এটি এর ফাইল ও সংরক্ষিত ডেটা (সেটিংস, সংরক্ষিত সাইন-ইন) মুছে দেয় এবং এর ক্যাপাবিলিটি অনুমতি প্রত্যাহার করে। আপনি পরে স্টোর থেকে এটি আবার ইনস্টল করতে পারবেন, তবে এর ডেটা ফিরে আসবে না।",
     "description": "Body of the in-app uninstall confirm dialog",
     "_machine_translated": true,
-    "_source_hash": "787ce4357b09fd43"
+    "_source_hash": "367d3b65caa9f9fc"
   },
   "store.uninstall.confirm.btn": {
     "message": "আনইনস্টল",
