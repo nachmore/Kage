@@ -343,23 +343,43 @@ pub fn setup_notification_handler(
                     // tearing down unrelated in-flight answers.
                     let background = session_id
                         .is_some_and(|sid| client_for_handler.is_background_prompt_session(sid));
+                    let ui_state = app_handle.try_state::<UiState>();
                     let originator = session_id.and_then(|sid| {
-                        app_handle
-                            .try_state::<UiState>()?
+                        ui_state
+                            .as_ref()?
                             .pending_prompt_originators
                             .lock()
                             .ok()?
                             .get(sid)
                             .cloned()
                     });
-                    match rate_limit_route(session_id.is_some(), background, originator) {
+                    // Fallback when the originator tag is gone (a recovery
+                    // resend under a migrated id, or a peer's epilogue
+                    // clearing a shared session's tag): the windows pinned
+                    // to the session are the ones waiting on it.
+                    let pinned: Vec<String> = match (session_id, ui_state.as_ref()) {
+                        (Some(sid), Some(ui)) => ui
+                            .window_sessions
+                            .lock()
+                            .map(|m| {
+                                m.iter()
+                                    .filter(|(_, s)| s.as_str() == sid)
+                                    .map(|(label, _)| label.clone())
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        _ => Vec::new(),
+                    };
+                    match rate_limit_route(session_id.is_some(), background, originator, pinned) {
                         RateLimitRoute::LogOnly => {}
-                        RateLimitRoute::Window(label) => {
-                            let _ = app_handle.emit_to(
-                                tauri::EventTarget::webview_window(label.as_str()),
-                                events::MESSAGE_ERROR,
-                                message,
-                            );
+                        RateLimitRoute::Windows(labels) => {
+                            for label in labels {
+                                let _ = app_handle.emit_to(
+                                    tauri::EventTarget::webview_window(label.as_str()),
+                                    events::MESSAGE_ERROR,
+                                    message,
+                                );
+                            }
                         }
                         RateLimitRoute::Broadcast => {
                             crate::event_targets::emit_streaming_audience(
@@ -504,10 +524,12 @@ pub(super) fn flush_session_chunks<R: tauri::Runtime>(
 #[derive(Debug, PartialEq, Eq)]
 enum RateLimitRoute {
     /// Background prompt (titler, auto-steering) or a prompt with no
-    /// owning window: nobody is waiting on it, so don't end anyone's turn.
+    /// owning or pinned window: nobody is waiting on it, so don't end
+    /// anyone's turn.
     LogOnly,
-    /// The window that issued the prompt.
-    Window(String),
+    /// The window that issued the prompt or, when its originator tag is
+    /// gone, the windows pinned to the session.
+    Windows(Vec<String>),
     /// Agent sent no session id — can't tell whose turn it is.
     Broadcast,
 }
@@ -516,6 +538,7 @@ fn rate_limit_route(
     has_session_id: bool,
     background: bool,
     originator: Option<String>,
+    pinned: Vec<String>,
 ) -> RateLimitRoute {
     if !has_session_id {
         return RateLimitRoute::Broadcast;
@@ -524,7 +547,8 @@ fn rate_limit_route(
         return RateLimitRoute::LogOnly;
     }
     match originator {
-        Some(label) => RateLimitRoute::Window(label),
+        Some(label) => RateLimitRoute::Windows(vec![label]),
+        None if !pinned.is_empty() => RateLimitRoute::Windows(pinned),
         None => RateLimitRoute::LogOnly,
     }
 }
@@ -752,7 +776,7 @@ mod tests {
         // A titler/auto-steering prompt hitting the limit must not tear
         // down an unrelated answer streaming in a chat window.
         assert_eq!(
-            rate_limit_route(true, true, Some("main".into())),
+            rate_limit_route(true, true, Some("main".into()), vec!["main".into()]),
             RateLimitRoute::LogOnly
         );
     }
@@ -760,16 +784,35 @@ mod tests {
     #[test]
     fn rate_limit_goes_to_the_originating_window_only() {
         assert_eq!(
-            rate_limit_route(true, false, Some("chat-1".into())),
-            RateLimitRoute::Window("chat-1".into())
+            rate_limit_route(
+                true,
+                false,
+                Some("chat-1".into()),
+                vec!["chat-1".into(), "main".into()]
+            ),
+            RateLimitRoute::Windows(vec!["chat-1".into()])
         );
-        assert_eq!(rate_limit_route(true, false, None), RateLimitRoute::LogOnly);
+    }
+
+    #[test]
+    fn untagged_rate_limit_goes_to_windows_pinned_to_the_session() {
+        // Recovery resends under a migrated id and shared-session epilogues
+        // can leave a visible prompt untagged; its pinned windows still
+        // need to hear about the limit.
+        assert_eq!(
+            rate_limit_route(true, false, None, vec!["main".into()]),
+            RateLimitRoute::Windows(vec!["main".into()])
+        );
+        assert_eq!(
+            rate_limit_route(true, false, None, Vec::new()),
+            RateLimitRoute::LogOnly
+        );
     }
 
     #[test]
     fn rate_limit_without_session_id_falls_back_to_broadcast() {
         assert_eq!(
-            rate_limit_route(false, false, None),
+            rate_limit_route(false, false, None, Vec::new()),
             RateLimitRoute::Broadcast
         );
     }

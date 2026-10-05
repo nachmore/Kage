@@ -352,6 +352,16 @@ pub(super) fn deliver_tool_steering(
         Err(e) => {
             warn!("Failed to send extension tool steering: {}", e);
             state.lock_or_recover().release(session_id, hash);
+            // The idle watchdog only trips after total silence on every
+            // session, so the connection is wedged. It still reads as
+            // connected, though, and a user send queued behind this (the
+            // replay in send_message_streaming) would sit out a second idle
+            // timeout before its recovery ladder respawns the agent. Drop the
+            // connection so that send fails fast straight into recovery.
+            if e.to_string().contains("Timeout waiting for response") {
+                warn!("Tool steering timed out; dropping the wedged ACP connection");
+                client.force_disconnect();
+            }
         }
     }
 }

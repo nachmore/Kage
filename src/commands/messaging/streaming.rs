@@ -55,6 +55,10 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
     // epilogues that clear the originator entry.
     acp.client.set_in_flight_prompt(&session_id, &message);
 
+    // Snapshot before the turn shows as started: a Stop pressed from here
+    // on belongs to this turn (see the tool-steering replay below).
+    let cancel_epoch = acp.client.cancel_epoch(&session_id);
+
     // Tell chat hosts a user turn just started on this session so they
     // can badge it in the sidebar even when they're viewing another
     // session. Fired only for real user prompts — steering/titling
@@ -108,6 +112,35 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
                 hash,
                 &block,
             );
+
+            // Stop pressed while the steering prompt held the session: the
+            // agent's session/cancel ended that prompt, and the user's has
+            // not been sent yet. Honour the Stop by not sending it, and
+            // unclaim the block (it may have been cancelled before it
+            // landed) so the next send replays it.
+            if client.cancel_epoch(&session_id) != cancel_epoch {
+                info!(
+                    "Send on {} cancelled during tool steering; prompt not sent",
+                    session_id
+                );
+                tool_steering.lock_or_recover().release(&session_id, hash);
+                super::notifications::flush_session_chunks(&app_for_send, &client, &session_id);
+                // The originator already finalised on Stop; peers only hear
+                // broadcasts, so clear their activity badge.
+                crate::event_targets::emit_streaming_audience(
+                    &app_for_send,
+                    events::SESSION_ACTIVITY,
+                    &serde_json::json!({
+                        "sessionId": &session_id,
+                        "kind": "failed",
+                    }),
+                );
+                if let Ok(mut m) = originators.lock() {
+                    m.remove(&session_id);
+                }
+                client.clear_in_flight_prompt(&session_id);
+                return;
+            }
         }
 
         // The notification handler (set up at app init) handles all streaming
@@ -311,6 +344,10 @@ pub async fn cancel_generation(
     features
         .automation_plan_cancelled
         .store(true, std::sync::atomic::Ordering::Relaxed);
+
+    // Before the session/cancel: a send still running its hidden tool
+    // steering prompt must see this and not send the user's prompt.
+    acp.client.note_cancel(&session_id);
 
     acp.client.cancel_session(&session_id).map_err(|e| {
         AppError::keyed(

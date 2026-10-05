@@ -99,6 +99,11 @@ pub struct AcpClient {
     /// follow-ups all fire from the message-complete epilogue), so we
     /// gate each on a per-session lock. See `send_prompt`.
     prompt_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
+    /// Per-session count of user cancels (Stop). A user send that runs a
+    /// hidden prompt first (extension tool steering replay) snapshots this
+    /// and drops the user's prompt if it moved meanwhile: the agent's
+    /// `session/cancel` hit the hidden prompt, not the user's turn.
+    cancel_epochs: Arc<Mutex<HashMap<String, u64>>>,
     /// Coalesce guard for `restart_connection`. Holds the instant the last
     /// restart *succeeded*. The mutex is held for the full duration of a
     /// restart, so concurrent callers serialise: the first respawns the
@@ -147,8 +152,29 @@ impl AcpClient {
             chunk_batcher: Arc::new(crate::chunk_batcher::ChunkBatcher::new()),
             vendor_prefix: Arc::new(Mutex::new(None)),
             prompt_locks: Arc::new(Mutex::new(HashMap::new())),
+            cancel_epochs: Arc::new(Mutex::new(HashMap::new())),
             restart_guard: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Record that the user cancelled the turn on `session_id`. See
+    /// `cancel_epochs`.
+    pub fn note_cancel(&self, session_id: &str) {
+        *self
+            .cancel_epochs
+            .lock_or_recover()
+            .entry(session_id.to_string())
+            .or_insert(0) += 1;
+    }
+
+    /// Current cancel count for `session_id`; compare two reads to tell
+    /// whether a cancel landed in between.
+    pub fn cancel_epoch(&self, session_id: &str) -> u64 {
+        self.cancel_epochs
+            .lock_or_recover()
+            .get(session_id)
+            .copied()
+            .unwrap_or(0)
     }
 
     /// Whether a `session/load` replay is currently in flight for
@@ -597,6 +623,18 @@ mod tests {
         assert!(result.is_err());
         assert!(!client.is_background_prompt_session("session-a"));
         assert_eq!(client.peek_session_accumulator("session-a"), "");
+    }
+
+    #[test]
+    fn cancel_epoch_moves_only_for_the_cancelled_session() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let a = client.cancel_epoch("session-a");
+        let b = client.cancel_epoch("session-b");
+        client.note_cancel("session-a");
+        assert_ne!(client.cancel_epoch("session-a"), a);
+        assert_eq!(client.cancel_epoch("session-b"), b);
     }
 
     #[test]
