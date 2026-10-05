@@ -266,6 +266,9 @@ export class WindowManager {
         // Resolve the ceiling BEFORE touching the DOM: the block below must
         // run without an intervening await, or a frame can paint mid-flip.
         const maxPhys = await this.getMaxHeight();
+        // Cached for animateInputResize, which must decide synchronously
+        // (inside the keystroke) whether the window has room to grow.
+        this._maxPhys = maxPhys;
 
         // Measure with our own inline suggestions cap removed. The cap set
         // below shrinks the list; if the next pass measured that shrunken
@@ -419,11 +422,59 @@ export class WindowManager {
      * Observer-driven resizes are gated by `_inputAnimating` so they don't
      * fight the in-flight animation.
      */
+    /**
+     * Where the OS window should end up when the input changes by
+     * `deltaPhys`, given `target` — what `_targetHeight` will settle on once
+     * the input has changed. The window moves in the input's direction, but
+     * never further than the input alone and never past `target`. When the
+     * window is pinned (screen ceiling, or a height the user dragged to),
+     * this returns `fromOS` and the content-area must give up the space
+     * instead. Growing the window anyway is what made the input + bars
+     * jump and snap back: the observer pass would immediately shrink the
+     * window back to its cap.
+     *
+     * Within 2px of the unpinned answer we take the unpinned answer, so
+     * sub-pixel noise between the measured natural height and the live
+     * window can't nudge the content-area on an ordinary auto-fit wrap.
+     *
+     * Pure arithmetic, extracted for unit testing.
+     *
+     * @param {number} fromOS - physical-px current window height
+     * @param {number} deltaPhys - physical-px input height change
+     * @param {number} target - physical-px settled window target
+     * @returns {number} physical-px window height to animate to
+     */
+    _clampInputResizeTarget(fromOS, deltaPhys, target) {
+        const free = fromOS + deltaPhys;
+        const to =
+            deltaPhys > 0
+                ? Math.min(free, Math.max(fromOS, target))
+                : Math.max(free, Math.min(fromOS, target));
+        return Math.abs(to - free) <= 2 ? free : to;
+    }
+
     async animateInputResize(input, fromInput, toInput) {
         const delta = toInput - fromInput;
         if (Math.abs(delta) < 1) {
             input.style.height = toInput + 'px';
             return;
+        }
+
+        const scale = window.devicePixelRatio || 1;
+        const fromOS = Math.round(window.innerHeight * scale);
+        const deltaPhys = Math.round(delta * scale);
+        // Settled target, measured before the input changes. Before the
+        // first observer pass (no cached ceiling) assume the window is free.
+        let toOS = fromOS + deltaPhys;
+        if (this._maxPhys != null) {
+            const naturalPhys = Math.round(this._measureNaturalHeight() * scale) + deltaPhys;
+            const target = this._targetHeight(
+                naturalPhys,
+                Math.round(DEFAULT_HEIGHT * scale),
+                this._maxPhys,
+                this._suggestionsPhys(scale)
+            );
+            toOS = this._clampInputResizeTarget(fromOS, deltaPhys, target);
         }
 
         if (this._animFrame) {
@@ -467,6 +518,22 @@ export class WindowManager {
         tryLock(contentArea);
         tryLock(suggestions);
 
+        // Logical px the window can't take (it's pinned): the content-area
+        // gives them up on the same linear curve, so `bubble = content +
+        // input + others` stays invariant and nothing bounces. Bounded by
+        // the content-area's min-height; any remainder (or no visible
+        // content-area at all) falls back to growing the window.
+        const contentLock = lockedItems.find((item) => item.el === contentArea);
+        const contentFrom = contentLock ? contentArea.offsetHeight : 0;
+        let absorb = delta - (toOS - fromOS) / scale;
+        if (!contentLock || Math.abs(absorb) < 1) {
+            absorb = 0;
+        } else if (absorb > 0) {
+            const minH = parseFloat(getComputedStyle(contentArea).minHeight) || 0;
+            absorb = Math.min(absorb, Math.max(0, contentFrom - minH));
+        }
+        toOS = fromOS + Math.round((delta - absorb) * scale);
+
         // The textarea's own scrollbar flashes during the animation: its
         // content reflows to the wrapped layout instantly, but we're
         // interpolating its `height` over 80ms — so for ~half the animation
@@ -474,12 +541,9 @@ export class WindowManager {
         const inputPrevOverflowY = input.style.overflowY || '';
         input.style.overflowY = 'hidden';
 
-        const scale = window.devicePixelRatio || 1;
-        const fromOS = Math.round(window.innerHeight * scale);
-        const toOS = fromOS + Math.round(delta * scale);
-
         const duration = 80;
         const start = performance.now();
+        let lastOS = fromOS;
 
         // Idempotent — may be invoked either by the animation finishing/aborting
         // OR out-of-band by suspendAutoResize() when a permission modal opens
@@ -513,8 +577,14 @@ export class WindowManager {
                 }
                 const t = Math.min((now - start) / duration, 1);
                 input.style.height = fromInput + delta * t + 'px';
+                if (absorb) contentArea.style.height = contentFrom - absorb * t + 'px';
+                // A pinned window takes no IPC at all: the whole change is
+                // DOM-only, so it lands in a single paint with no OS lag.
                 const osH = Math.round(fromOS + (toOS - fromOS) * t);
-                this.invoke('resize_floating_window', { height: osH }).catch(() => {});
+                if (osH !== lastOS) {
+                    lastOS = osH;
+                    this.invoke('resize_floating_window', { height: osH }).catch(() => {});
+                }
                 if (t < 1 && me === this._animSeq) {
                     this._animFrame = requestAnimationFrame(step);
                 } else {
