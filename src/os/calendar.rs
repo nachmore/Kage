@@ -11,7 +11,10 @@
 // shares the exact wire struct + meeting-URL sniffing; re-exported here
 // so app code keeps using `crate::os::calendar::CalendarEvent`.
 
-pub use kage_core::calendar::{extract_meeting_url, CalendarEvent};
+pub use kage_core::calendar::CalendarEvent;
+// Only the Windows and macOS backends sniff meeting URLs; Linux is a stub.
+#[cfg(not(target_os = "linux"))]
+pub use kage_core::calendar::extract_meeting_url;
 
 /// Get upcoming calendar events within the next `hours` hours.
 ///

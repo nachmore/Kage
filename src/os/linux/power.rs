@@ -7,7 +7,10 @@ pub fn get_power_state_impl() -> PowerState {
     let status_path = "/sys/class/power_supply/BAT0/status";
     let capacity_path = "/sys/class/power_supply/BAT0/capacity";
 
-    let status = std::fs::read_to_string(status_path).unwrap_or_default();
+    // No battery at all: a desktop, so on mains power.
+    let Ok(status) = std::fs::read_to_string(status_path) else {
+        return PowerState::AC;
+    };
     let status = status.trim();
 
     if status == "Charging" || status == "Full" || status == "Not charging" {
@@ -25,6 +28,7 @@ pub fn get_power_state_impl() -> PowerState {
         return PowerState::Battery;
     }
 
-    // No battery found — likely a desktop
-    PowerState::AC
+    // A battery is present but reports something else (the kernel's own
+    // "Unknown", or an empty read): don't claim AC and run full-power work.
+    PowerState::Unknown
 }
