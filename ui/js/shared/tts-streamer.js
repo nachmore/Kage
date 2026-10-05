@@ -272,10 +272,15 @@ export class TtsPlaybackBar {
 // ─── TTS Streamer (Pocket TTS) ───
 
 export class TtsStreamer {
-    constructor({ port, voice, barContainer, onBarChange, onFinished }) {
+    constructor({ port, voice, barContainer, onBarChange, onFinished, onUserStop }) {
         this.port = port;
         this.voice = voice;
         this._onFinished = onFinished || null;
+        // Fired when the user presses Stop on the playback bar. stop() itself
+        // never reports completion (callers that stop programmatically already
+        // know), but the owner must hear about a bar-initiated stop or it stays
+        // in its 'speaking' state with voice mode's mic never resuming.
+        this._onUserStop = onUserStop || null;
         // Raw-text offset of the prefix already split and enqueued. Only text
         // past it is processed, so sent sentences are never re-cleaned or
         // re-indexed when later text (e.g. a closing ``` fence) changes the split.
@@ -303,7 +308,10 @@ export class TtsStreamer {
 
         this._bar = new TtsPlaybackBar(barContainer, onBarChange, {
             onPause: () => this.togglePause(),
-            onStop: () => this.stop(),
+            onStop: () => {
+                this.stop();
+                this._onUserStop?.();
+            },
         });
     }
 

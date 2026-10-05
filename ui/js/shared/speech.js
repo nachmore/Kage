@@ -571,6 +571,11 @@ export class SpeechController {
                 this._ttsStreamer = null;
                 this.onTtsFinished();
             },
+            onUserStop: () => {
+                this._ttsState = 'idle';
+                this._ttsStreamer = null;
+                this.onTtsFinished();
+            },
         });
         this._ttsStreamer.finishText(text);
     }
@@ -637,6 +642,13 @@ export class SpeechController {
                 onFinished: () => {
                     this._ttsState = 'idle';
                     this._ttsStreamer = null;
+                    this.onTtsFinished();
+                },
+                // Keep the stopped streamer (it ignores further feedText):
+                // nulling it would make the next chunk build a fresh one and
+                // resume reading the reply the user just stopped.
+                onUserStop: () => {
+                    this._ttsState = 'idle';
                     this.onTtsFinished();
                 },
             });
