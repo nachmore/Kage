@@ -61,6 +61,21 @@ console.log(
     let actionItems = [];
     let isProcessing = false;
 
+    // Backend inline-assist events carry no run id, so a cancelled/abandoned
+    // run's trailing chunk + complete (or error) would otherwise be credited
+    // to the next run. Every sent run emits exactly one terminal event
+    // (complete or error), and runs on the floating session are serialised
+    // by the backend's per-session prompt lock, so stale terminals always
+    // arrive first: count them and swallow that many.
+    let currentRun = null; // { sent: boolean } for the active replace-mode run
+    let staleRuns = 0;
+    let errorHideTimer = null;
+
+    function abandonCurrentRun() {
+        if (currentRun?.sent) staleRuns++;
+        currentRun = null;
+    }
+
     // --- Icon bubble — click to open full chat ---
     iconBubble.addEventListener('click', async () => {
         try {
@@ -90,7 +105,14 @@ console.log(
         sourceApp = app || '';
         sourceTitle = title || '';
         selectedIndex = -1;
+        // A run still in flight is abandoned by re-summoning; don't let its
+        // late result land in this popup or the 1.5s error hide close it.
+        abandonCurrentRun();
         isProcessing = false;
+        if (errorHideTimer) {
+            clearTimeout(errorHideTimer);
+            errorHideTimer = null;
+        }
 
         await buildActions();
         console.log('[inline-assist] Built actions:', actionItems.length);
@@ -109,13 +131,19 @@ console.log(
     let accumulatedResponse = '';
 
     await listen('inline_assist_chunk', (event) => {
+        if (staleRuns > 0) return;
         accumulatedResponse = event.payload || '';
         statusText.textContent = `Generating... (${accumulatedResponse.length} chars)`;
     });
 
     await listen('inline_assist_complete', async () => {
+        if (staleRuns > 0) {
+            staleRuns--;
+            return;
+        }
         if (!isProcessing) return;
         isProcessing = false;
+        currentRun = null;
         iconBubble.classList.remove('thinking');
 
         if (accumulatedResponse.trim()) {
@@ -130,14 +158,24 @@ console.log(
     });
 
     await listen(EVT.INLINE_ASSIST_ERROR, async (event) => {
+        if (staleRuns > 0) {
+            staleRuns--;
+            return;
+        }
+        if (!isProcessing) return;
         isProcessing = false;
+        currentRun = null;
         iconBubble.classList.remove('thinking');
         // Show error briefly then hide
         panel.style.display = '';
         statusBar.classList.add('visible');
         statusText.textContent = '❌ ' + (event.payload || 'Error');
         await resizeToFit();
-        setTimeout(() => appWindow.hide(), 1500);
+        if (errorHideTimer) clearTimeout(errorHideTimer);
+        errorHideTimer = setTimeout(() => {
+            errorHideTimer = null;
+            appWindow.hide();
+        }, 1500);
     });
 
     // --- Build action items based on selection ---
@@ -231,7 +269,9 @@ console.log(
         // Build the prompt
         let prompt = action.prompt || action.label;
         if (selectedText.trim() && prompt.includes('{text}')) {
-            prompt = prompt.replace('{text}', selectedText.trim());
+            // Replacer fn so `$&`, `$$`, `$'` in the selection stay literal.
+            const sel = selectedText.trim();
+            prompt = prompt.replace('{text}', () => sel);
         } else if (selectedText.trim() && !prompt.includes('{text}')) {
             prompt = `${prompt}\n\nSelected text:\n\`\`\`\n${selectedText.trim()}\n\`\`\``;
         }
@@ -255,6 +295,8 @@ console.log(
         }
 
         // Replace mode — collapse to ghost bubble, send inline, paste back
+        const run = { sent: false };
+        currentRun = run;
         panel.style.display = 'none';
         iconBubble.classList.add('thinking');
         iconBubble.style.margin = '20px auto';
@@ -269,9 +311,19 @@ console.log(
             // Inline-assist runs on the floating session — that's the
             // hotkey-driven path that triggered this overlay.
             const sessionId = await getWindowSessionOrNull(invoke, WINDOW.FLOATING);
+            // Cancelled (Esc / re-summon) before we got here — don't send.
+            if (currentRun !== run) return;
+            run.sent = true;
             await invoke('send_inline_assist', { sessionId, message: prompt });
         } catch (e) {
             console.error('Inline assist failed:', e);
+            if (currentRun !== run) {
+                // Already counted as stale, but a failed invoke never emits
+                // a terminal event — undo the count.
+                if (run.sent && staleRuns > 0) staleRuns--;
+                return;
+            }
+            currentRun = null;
             isProcessing = false;
             await appWindow.hide();
         }
@@ -353,6 +405,7 @@ console.log(
             if (e.key === 'Escape') {
                 // Cancel the in-flight generation via the same
                 // cancel_generation command the chat/floating windows use.
+                abandonCurrentRun();
                 (async () => {
                     try {
                         const sessionId = await getWindowSessionOrNull(invoke, WINDOW.FLOATING);

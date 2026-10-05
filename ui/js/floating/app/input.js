@@ -1,5 +1,6 @@
 import {
     cmdOrCtrlPressed,
+    EVT,
     errLabel,
     getConfig,
     handleEnterAction,
@@ -11,7 +12,102 @@ import {
 } from './dependencies.js';
 import { caretVisualRowInfo } from './helpers.js';
 
+// Upper bound on holding a new turn for a prior turn's terminal event (e.g.
+// a connect failure emits only MESSAGE_ERROR, which carries no session id).
+const PRIOR_TURN_SETTLE_TIMEOUT_MS = 10000;
+
 export const InputMethods = {
+    // Turn tracking. Chunk/complete events carry no turn id, only the session
+    // id, so a cancelled (or Stopped) turn's trailing chunks and its
+    // MESSAGE_COMPLETE would be credited to the next prompt on the same
+    // session. The backend serialises prompts per session, so the prior
+    // turn's terminal always arrives before the next turn's events: hold the
+    // next turn's isWaitingForResponse=true until every earlier send has
+    // settled, and the isWaiting gate drops the stale tail.
+    async _ensureTurnTracking() {
+        if (this._turnTracking) return this._turnTracking;
+        this._pendingTurns = [];
+        this._turnWaiters = [];
+        this._turnTracking = Promise.all([
+            this.listen(EVT.MESSAGE_COMPLETE, (event) => {
+                const p = event?.payload;
+                const sid = p?.oldSessionId || p?.sessionId;
+                if (sid) this._settleTurn(sid);
+            }),
+            this.listen(EVT.SESSION_ACTIVITY, (event) => {
+                const p = event?.payload;
+                if (p?.kind === 'failed' && p.sessionId) this._settleTurn(p.sessionId);
+            }),
+            // The connect-failure path emits only MESSAGE_ERROR (no session
+            // id, no SESSION_ACTIVITY) — settle on it so the next send
+            // doesn't sit out the full timeout. Other MESSAGE_ERRORs (e.g.
+            // rate limit) aren't terminal for the backend turn; ignore them.
+            this.listen(EVT.MESSAGE_ERROR, (event) => {
+                const msg = event?.payload;
+                if (typeof msg === 'string' && msg.startsWith('Unable to connect')) {
+                    const sid = this._pendingTurns[0];
+                    if (sid !== undefined) this._settleTurn(sid);
+                }
+            }),
+        ]);
+        return this._turnTracking;
+    },
+
+    _settleTurn(sid) {
+        let idx = this._pendingTurns.indexOf(sid);
+        if (idx < 0) idx = this._pendingTurns.indexOf(null);
+        if (idx < 0) return;
+        this._pendingTurns.splice(idx, 1);
+        if (this._pendingTurns.length === 0) {
+            const waiters = this._turnWaiters.splice(0);
+            // Defer a tick so the stream listeners handling this same
+            // terminal event see isWaitingForResponse=false first.
+            setTimeout(() => {
+                for (const w of waiters) w();
+            }, 0);
+        }
+    },
+
+    /**
+     * Resolves true when this send may proceed, false when a newer send
+     * arrived while this one was held (the newer one wins, mirroring the
+     * cancel-on-new-send behaviour) — otherwise both would fire once the
+     * prior turn settles and their replies would interleave.
+     */
+    async _awaitPriorTurnsSettled() {
+        this._turnSeq = (this._turnSeq || 0) + 1;
+        const seq = this._turnSeq;
+        if (!this._pendingTurns?.length) return true;
+        let timer;
+        const settled = await Promise.race([
+            new Promise((r) => this._turnWaiters.push(() => r(true))),
+            new Promise((r) => {
+                timer = setTimeout(() => r(false), PRIOR_TURN_SETTLE_TIMEOUT_MS);
+            }),
+        ]);
+        clearTimeout(timer);
+        if (!settled) {
+            console.warn('[floating] prior turn never settled; starting new turn anyway');
+            this._pendingTurns.length = 0;
+        }
+        return seq === this._turnSeq;
+    },
+
+    /** send_message_streaming, tracked so the next turn can wait for it. */
+    async _sendTrackedTurn(args) {
+        await this._ensureTurnTracking();
+        const sid = args.sessionId ?? null;
+        this._pendingTurns.push(sid);
+        try {
+            await this.invoke('send_message_streaming', args);
+        } catch (e) {
+            // Rejected before the backend spawned the turn — no terminal
+            // event will follow.
+            this._settleTurn(sid);
+            throw e;
+        }
+    },
+
     async executeCommandAction(cmd) {
         this._clearInput();
         await cmd.execute(this.invoke, this.appWindow);
@@ -359,6 +455,7 @@ export const InputMethods = {
             this.currentResponse = '';
             this.elements.responseText.textContent = '';
             this.elements.contentArea.classList.add('visible');
+            if (!(await this._awaitPriorTurnsSettled())) return;
             this.isWaitingForResponse = true;
             this._promptGeneration++;
             this.startThinking();
@@ -371,7 +468,7 @@ export const InputMethods = {
                     source: 'floating',
                     length: messageLengthBucket(message),
                 });
-                await this.invoke('send_message_streaming', {
+                await this._sendTrackedTurn({
                     sessionId: this.floatingSessionId,
                     message,
                     attachments: null,
@@ -472,6 +569,12 @@ export const InputMethods = {
                 this.updateDatetimeVisibility();
                 this.elements.expandBtn.classList.remove('visible');
 
+                // A cancelled/Stopped turn may still be draining on this
+                // session; keep isWaitingForResponse false until its tail
+                // and MESSAGE_COMPLETE have passed so they aren't counted
+                // toward this prompt.
+                if (!(await this._awaitPriorTurnsSettled())) return;
+
                 // No actionable match — send to agent
                 this.currentResponse = '';
                 this.elements.responseText.textContent = this.currentResponse;
@@ -519,7 +622,7 @@ export const InputMethods = {
                     length: messageLengthBucket(message),
                     attachments: attachments?.length || 0,
                 });
-                await this.invoke('send_message_streaming', {
+                await this._sendTrackedTurn({
                     sessionId: this.floatingSessionId,
                     message,
                     attachments,

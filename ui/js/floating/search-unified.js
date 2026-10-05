@@ -48,29 +48,88 @@ function _renderItem(r, _index, extMgr) {
         }
     }
 
-    let iconHtml;
-    if (r.type === 'app' && r.data?.icon_base64) {
-        const src = r.data.icon_base64.startsWith('data:')
-            ? r.data.icon_base64
-            : 'data:image/png;base64,' + r.data.icon_base64;
-        iconHtml = `<img src="${src}" class="app-icon-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="app-icon" style="display:none">${r.data.emoji_icon || r.label.charAt(0).toUpperCase()}</div>`;
-    } else if (r.icon?.startsWith('data:')) {
-        const dot = r.type === 'window' ? '<span class="window-indicator"></span>' : '';
-        iconHtml = `<div class="app-icon-wrap"><img src="${r.icon}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">${dot}</div>`;
+    // Result objects (icon, data.icon_base64, data.emoji_icon, label) can come
+    // straight from untrusted extension sandboxes, and this webview has full
+    // Tauri IPC — so the icon is built with DOM APIs (textContent, validated
+    // img.src) rather than interpolated into innerHTML.
+    const label = _str(r.label);
+    const iconAppBase64 = r.type === 'app' ? _str(r.data?.icon_base64) : '';
+    const iconStr = _str(r.icon);
+    const iconParts = [];
+    if (iconAppBase64) {
+        const src = _safeImageDataUrl(
+            iconAppBase64.startsWith('data:')
+                ? iconAppBase64
+                : 'data:image/png;base64,' + iconAppBase64
+        );
+        const fallback = _iconText(_str(r.data?.emoji_icon) || label.charAt(0).toUpperCase());
+        if (src) {
+            const img = _iconImg(src);
+            fallback.style.display = 'none';
+            img.addEventListener('error', () => {
+                img.style.display = 'none';
+                fallback.style.display = 'flex';
+            });
+            iconParts.push(img);
+        }
+        iconParts.push(fallback);
+    } else if (iconStr.startsWith('data:')) {
+        const src = _safeImageDataUrl(iconStr);
+        const wrap = _iconWrap(r, src ? _iconImg(src, true) : _iconText(label.charAt(0)));
+        iconParts.push(wrap);
     } else {
-        const dot = r.type === 'window' ? '<span class="window-indicator"></span>' : '';
-        iconHtml = `<div class="app-icon-wrap"><div class="app-icon">${r.icon || r.label.charAt(0)}</div>${dot}</div>`;
+        iconParts.push(_iconWrap(r, _iconText(iconStr || label.charAt(0))));
     }
 
     item.innerHTML = `
-        ${iconHtml}
         <div class="app-info">
-            <div class="app-name">${escapeHtml(r.label)}</div>
+            <div class="app-name">${escapeHtml(label)}</div>
             ${r.description ? `<div class="app-description">${escapeHtml(r.description)}</div>` : ''}
         </div>
     `;
-    if (r.tooltip) item.title = r.tooltip;
+    item.prepend(...iconParts);
+    if (r.tooltip) item.title = _str(r.tooltip);
     return item;
+}
+
+function _str(v) {
+    return typeof v === 'string' ? v : v == null ? '' : String(v);
+}
+
+// Strict allowlist: base64 raster/SVG image data URLs only. SVG in <img> can't
+// run script, and setting src via the DOM can't break out of the attribute.
+const SAFE_IMAGE_DATA_URL =
+    /^data:image\/(?:png|jpe?g|gif|webp|bmp|x-icon|vnd\.microsoft\.icon|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/i;
+
+function _safeImageDataUrl(src) {
+    return SAFE_IMAGE_DATA_URL.test(src) ? src : null;
+}
+
+function _iconImg(src, sized = false) {
+    const img = document.createElement('img');
+    img.className = 'app-icon-img';
+    if (sized) img.style.cssText = 'width:24px;height:24px;border-radius:4px;object-fit:cover;';
+    img.src = src;
+    return img;
+}
+
+function _iconText(text) {
+    const el = document.createElement('div');
+    el.className = 'app-icon';
+    el.textContent = text;
+    return el;
+}
+
+function _iconWrap(r, child) {
+    const wrap = document.createElement('div');
+    wrap.className = 'app-icon-wrap';
+    wrap.appendChild(child);
+    if (r.type === 'window') {
+        const dot = document.createElement('span');
+        dot.className = 'window-indicator';
+        wrap.appendChild(dot);
+    }
+    return wrap;
 }
 
 /**

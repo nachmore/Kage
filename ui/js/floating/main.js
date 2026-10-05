@@ -107,9 +107,17 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     } catch {}
     setTerminatorMode(isTerminator);
 
+    // Inputs the mascot is built from; config_updated fires for unrelated
+    // saves too, and a rebuild drops the hidden-window pause + thinking anim.
+    let lastMascotKey = null;
+
     async function refreshFloatingMascot() {
         const mascotContainer = document.getElementById('floatingMascot');
         if (!mascotContainer) return;
+        const theme = getMascotThemeSettings();
+        const key = `${isTerminator}|${theme.outlineColor}|${theme.invert}`;
+        if (key === lastMascotKey) return;
+        lastMascotKey = key;
         // Destroy existing mascot controller if any
         if (window._kageMascot) {
             window._kageMascot.destroy();
@@ -127,7 +135,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             mascotContainer.appendChild(svg);
             window._kageMascot = null;
         } else {
-            const { outlineColor, invert } = getMascotThemeSettings();
+            const { outlineColor, invert } = theme;
             const mascotCtrl = createMascotController(mascotContainer, {
                 size: 40,
                 idle: ANIMATIONS.waving,
@@ -139,6 +147,13 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                 preload: [ANIMATIONS.jumping],
             });
             window._kageMascot = mascotCtrl;
+            // Carry over the state the old controller had: the thinking
+            // animation (same size as startThinking) and the hidden-window
+            // pause, so a hidden webview doesn't resume the periodic wave.
+            if (mascotContainer.classList.contains('thinking')) {
+                mascotCtrl.setActive(ANIMATIONS.jumping, 60);
+            }
+            if (window._kageFloatingHidden) mascotCtrl.pause();
         }
     }
     await refreshFloatingMascot();

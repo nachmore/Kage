@@ -76,6 +76,21 @@ export class BannerController {
      * @param {string} actionData - Section name, URL, file path, or ignored
      */
     show(icon, html, actionLabel, actionType, actionData) {
+        this._show(icon, html, true, actionLabel, actionType, actionData);
+    }
+
+    /**
+     * Like `show()`, but the message is rendered as plain text. Use for any
+     * message carrying untrusted data (panic messages, backend error
+     * strings, manifest-derived versions) — this webview has Tauri IPC, so
+     * those must never reach innerHTML. `show()` is reserved for the trusted
+     * backend welcome/keycap banner markup.
+     */
+    showText(icon, text, actionLabel, actionType, actionData) {
+        this._show(icon, text, false, actionLabel, actionType, actionData);
+    }
+
+    _show(icon, message, isHtml, actionLabel, actionType, actionData) {
         this.visible = true;
         this._action = { type: actionType, data: actionData };
         const banner = document.getElementById('floatingBanner');
@@ -85,7 +100,10 @@ export class BannerController {
         const contentArea = document.getElementById('contentArea');
         if (!banner) return;
         if (iconEl) iconEl.textContent = icon || '';
-        if (textEl) textEl.innerHTML = html || '';
+        if (textEl) {
+            if (isHtml) textEl.innerHTML = message || '';
+            else textEl.textContent = message || '';
+        }
         if (actionEl) actionEl.textContent = actionLabel || '';
         banner.onclick = () => this.handleClick();
         banner.style.display = 'flex';
@@ -140,9 +158,9 @@ export class BannerController {
                 // formatError unwraps the AppError shape so we don't show
                 // "[object Object]" when the rejection is a serialised
                 // struct (which it is over the Tauri invoke boundary).
-                this.show('⬇️', t('floating.banner.installing_update'), '', 'dismiss', '');
+                this.showText('⬇️', t('floating.banner.installing_update'), '', 'dismiss', '');
                 this.invoke('download_and_install_update').catch((e) => {
-                    this.show(
+                    this.showText(
                         '❌',
                         formatError(e),
                         t('floating.banner.action.dismiss'),
@@ -191,7 +209,7 @@ export class BannerController {
         try {
             const wasUpdated = await this.invoke('was_just_updated');
             if (wasUpdated) {
-                this.show(
+                this.showText(
                     '🎉',
                     t('floating.banner.update_installed'),
                     t('floating.banner.action.view_changelog'),
@@ -235,7 +253,13 @@ export class BannerController {
             const msg = crash.panic_message
                 ? t('floating.banner.crash_with_message', { message: crash.panic_message })
                 : t('floating.banner.crash_generic');
-            this.show('💥', msg, t('floating.banner.action.view_log'), 'crash_log', crash.log_path);
+            this.showText(
+                '💥',
+                msg,
+                t('floating.banner.action.view_log'),
+                'crash_log',
+                crash.log_path
+            );
             // Mark seen now — we've shown the user once. If they ignore the
             // banner we don't re-show; "View log" / any dismiss completes
             // the lifecycle either way. Failure to persist is non-fatal

@@ -143,7 +143,8 @@ export const LifecycleInitMethods = {
 
         this.listen(EVT.UPDATE_AVAILABLE, (event) => {
             const version = event.payload;
-            this.banner.show(
+            // Plain text: the version comes from the update manifest.
+            this.banner.showText(
                 '⬆️',
                 t('floating.banner.update_available', { version }),
                 t('floating.banner.action.install_now'),

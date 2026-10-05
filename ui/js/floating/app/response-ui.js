@@ -109,7 +109,8 @@ export const ResponseUiMethods = {
                     chip.appendChild(iconSpan);
                     chip.appendChild(labelSpan);
                     chip.addEventListener('click', () => {
-                        const prompt = action.prompt.replace(/\{text\}/g, responseText);
+                        // Replacer fn so `$&`, `$$`, `$'` in the response stay literal.
+                        const prompt = action.prompt.replace(/\{text\}/g, () => responseText);
                         container.style.display = 'none';
                         this.sendChatMessage(prompt, { skipSelection: true });
                     });
