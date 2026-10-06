@@ -504,6 +504,21 @@ const TOOL_ACTIVITY = {
 // Placeholder props, drawn in the rig's coordinate space (the idle art's
 // 40×34 box; the cat's head crown is ~(19.5, 6)). Flat shapes in the art's
 // style — for an artist to replace, not final art.
+// Props drawn BEHIND the cat art, so the cat's arms pass in front of them.
+const PROPS_BACK_SVG = `
+<g data-p="hourglass" style="display:none" transform="translate(-6.5 0) translate(47.5 34.2) scale(.85) translate(-47.5 -34.2)">
+  <g data-p="hgLift">
+    <g data-p="hgSpin">
+      <path d="M43 15.6h9M43 34.2h9" class="p-pen" style="stroke-width:1.1"/>
+      <path d="M44 16q0 4.6 3.5 8.9Q44 29.2 44 33.8h7q0-4.6-3.5-8.9Q51 20.6 51 16z" class="p-paper"/>
+      <g data-p="sandTop"><path d="M45.2 17.4h4.6q-.4 3.2-2.3 5.6-1.9-2.4-2.3-5.6z" style="fill:var(--body)"/></g>
+      <g data-p="sandBottom"><path d="M45 33h5q-.4-3-2.5-4.6-2.1 1.6-2.5 4.6z" style="fill:var(--body)"/></g>
+      <path d="M47.5 23.4v8.8" data-p="stream" class="p-pen" style="stroke-width:.4"/>
+    </g>
+  </g>
+</g>
+`;
+
 const PROPS_SVG = `
 <g data-p="plan" style="display:none" transform="rotate(6 46.5 21.5)">
   <rect x="39.6" y="12.6" width="14.4" height="17.8" rx="1.2" class="p-paper"/>
@@ -577,15 +592,6 @@ const PROPS_SVG = `
   <rect x="34.4" y="6.6" width="4.6" height="7.4" rx="2.1" class="p-paper"/>
   <path d="M2.4 14Q2.8 21.2 11.6 21.2" class="p-pen" style="stroke-width:.8"/>
   <circle cx="12.6" cy="21.2" r="1.25" class="p-paper" style="stroke-width:.6"/>
-</g>
-<g data-p="hourglass" style="display:none" transform="translate(-7 0) translate(47.5 34.2) scale(.62) translate(-47.5 -34.2)">
-  <g data-p="hgSpin">
-    <path d="M43 15.6h9M43 34.2h9" class="p-pen" style="stroke-width:1.1"/>
-    <path d="M44 16q0 4.6 3.5 8.9Q44 29.2 44 33.8h7q0-4.6-3.5-8.9Q51 20.6 51 16z" class="p-paper"/>
-    <g data-p="sandTop"><path d="M45.2 17.4h4.6q-.4 3.2-2.3 5.6-1.9-2.4-2.3-5.6z" style="fill:var(--body)"/></g>
-    <g data-p="sandBottom"><path d="M45 33h5q-.4-3-2.5-4.6-2.1 1.6-2.5 4.6z" style="fill:var(--body)"/></g>
-    <path d="M47.5 23.4v8.8" data-p="stream" class="p-pen" style="stroke-width:.4"/>
-  </g>
 </g>
 <g data-p="drop0" style="display:none"><path d="M0 -1.9C1.15 -.35 1.45 .5 1.45 1A1.45 1.45 0 1 1-1.45 1C-1.45 .5-1.15 -.35 0-1.9Z" class="p-paper" style="stroke-width:.55"/></g>
 <g data-p="drop1" style="display:none"><path d="M0 -1.9C1.15 -.35 1.45 .5 1.45 1A1.45 1.45 0 1 1-1.45 1C-1.45 .5-1.15 -.35 0-1.9Z" class="p-paper" style="stroke-width:.55"/></g>
@@ -675,8 +681,13 @@ function ProposedEngine(view, rng) {
         props.style.setProperty('--inkEdge', light ? 'var(--body)' : 'var(--eyes)');
     };
     rig.appendChild(props);
+    const propsBack = props.cloneNode(false);
+    propsBack.innerHTML = PROPS_BACK_SVG;
+    rig.insertBefore(propsBack, rig.firstChild);
     const P = {};
-    props.querySelectorAll('[data-p]').forEach((g) => (P[g.dataset.p] = g));
+    for (const host of [propsBack, props]) {
+        host.querySelectorAll('[data-p]').forEach((g) => (P[g.dataset.p] = g));
+    }
 
     // Visual size of each art at rig scale 1 (jump frames are drawn smaller).
     const inherent = (key) => (key.startsWith('jumpArc') ? THINK_K : 1);
@@ -1117,13 +1128,19 @@ function ProposedEngine(view, rng) {
         // Sand drains (the real one would follow the timer's remaining
         // fraction), Kage glances over mid-way, then reaches out and turns
         // the glass over when it runs out.
-        const T = { drain: 9000, notice: 380, reach: 240, flip: 440, back: 300 };
-        const dur = T.drain + T.notice + T.reach + T.flip + T.back;
-        const HG = { x: 40.5, y: 20.4 }; // just above the glass, in rig coords
+        // Kage's own arm does the lifting. Measured from the waving frames:
+        // the paw tip sits at about (39.4, 23) in f1 — right at the glass's
+        // top — and sweeps up to (39.5, 15) in f2 and (39.0, 13) in f3. So
+        // f1 reads as a paw resting on the glass and f2/f3 as the arm
+        // carrying it up and over.
+        const T = { drain: 9000, notice: 420, grip: 260, flip: 620, back: 420 };
+        const dur = T.drain + T.notice + T.grip + T.flip + T.back;
+        const LIFT = 5.5;
         return {
             dur, breathe: true, hint: true,
             sample(ms) {
-                let t = ms, u = 0, rot = 0, gaze = 0, lean = 0, paw = null;
+                let t = ms, u = 0, rot = 0, dy = 0, gaze = 0, lean = 0;
+                let frame = 1;
                 if (t < T.drain) {
                     u = t / T.drain;
                     // A glance over at it about halfway through.
@@ -1131,25 +1148,26 @@ function ProposedEngine(view, rng) {
                     lean = 3.5 * look; gaze = 0.8 * look;
                 } else if ((t -= T.drain) < T.notice) {
                     u = 1; gaze = 0.9; lean = 4;
-                } else if ((t -= T.notice) < T.reach) {
-                    // Paw comes in and takes hold of the glass.
-                    const q = easeOut(t / T.reach);
+                } else if ((t -= T.notice) < T.grip) {
+                    // Settle the paw onto the glass before lifting.
                     u = 1; gaze = 0.9; lean = 4;
-                    paw = { x: lerp(34.5, HG.x, q), y: lerp(16.5, HG.y, q), r: -10, o: q, s: 0.72 };
-                } else if ((t -= T.reach) < T.flip) {
-                    // Turn it over. The sand stays "fallen" the whole way, so
-                    // when the glass lands upside down it reads as full on top.
+                    dy = 0.6 * easeOut(t / T.grip);
+                } else if ((t -= T.grip) < T.flip) {
+                    // The arm sweeps up (f2 → f3 → f2) carrying the glass,
+                    // which turns over as it goes. The sand stays "fallen"
+                    // the whole way, so it lands upside down reading as full.
                     const q = easeInOut(t / T.flip);
                     u = 1; rot = 180 * q; gaze = 0.9; lean = 4;
-                    const arc = Math.sin(q * Math.PI);
-                    paw = { x: HG.x + 2.2 * arc, y: HG.y - 3.4 * arc, r: lerp(-10, 14, q), o: 1, s: 0.72 };
+                    dy = 0.6 + LIFT * Math.sin(q * Math.PI);
+                    frame = q < 0.3 ? 2 : q < 0.78 ? 3 : 2;
                 } else {
-                    // Paw withdraws; sand is full at the top again (rot 0).
+                    // Arm back down; sand is full at the top again (rot 0).
                     const q = easeOut(clamp((t - T.flip) / T.back, 0, 1));
                     u = 0; gaze = 0.9 * (1 - q); lean = 4 * (1 - q);
-                    paw = q < 1 ? { x: HG.x, y: HG.y - 4 * q, r: 14, o: 1 - q, s: 0.72 } : null;
+                    dy = 0.6 * (1 - q);
+                    frame = q < 0.45 ? 2 : 1;
                 }
-                return { pose: BASE, rot: lean, gaze, props: { hourglass: { u, rot }, paw } };
+                return { pose: `waving/waving-f${frame}`, rot: lean, gaze, props: { hourglass: { u, rot, dy } } };
             },
         };
     }
@@ -1406,6 +1424,7 @@ function ProposedEngine(view, rng) {
             // 0 at the end of a flip is invisible — which is what lets the
             // sand reset to "full at the top" without a visible jump.
             P.hgSpin.setAttribute('transform', `rotate(${(p.hourglass.rot || 0).toFixed(1)} 47.5 24.9)`);
+            P.hgLift.setAttribute('transform', `translate(0 ${(-(p.hourglass.dy || 0)).toFixed(2)})`);
         }
         P.sign.style.display = p.sign ? '' : 'none';
         if (p.sign) {
