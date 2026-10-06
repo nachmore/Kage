@@ -187,6 +187,7 @@ body.film .col { padding: 8px; border: 0; border-radius: 0; background: transpar
     <button data-fire="copy" title="User copied a response">📋 Copy</button>
     <button data-fire="updated" title="First launch after an update">🎈 Updated</button>
     <button data-fire="summon" title="Window shown by the hotkey">⬆ Summon</button>
+    <button data-fire="reopen" title="Window hidden, then shown again (clears the party hat)">🔄 Reopen</button>
     <label title="Generic activity an extension (or the host timer) declares">Hint
         <select id="sHint"><option value="none">none</option><option value="music">music</option><option value="meeting">meeting</option><option value="timer">timer</option></select>
     </label>
@@ -318,47 +319,56 @@ const asset = (key) => {
 // Registration: draw the poses (their own 36.8×34.6 viewBox, different
 // scale) so their body matches waving-f1's body: same width, same bottom,
 // same centre. Measured once from real layout.
-let POSE_REG = null;
+let POSE_REG = null; // pose name → { widthMul, dx, dyFromBottom }
 function measureRegistration() {
     const host = document.createElement('div');
     host.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden';
     document.body.appendChild(host);
-    const box = (key, w) => {
-        const a = asset(key);
-        const svg = makeArt(a, w, w / aspectOf(a));
+    const SVG_W = 400;
+
+    // Body box of the largest black path, plus which white shapes are small
+    // enough to be eyes (vs props like the magnifying glass's mirror).
+    const measure = (a, forLids) => {
+        const svg = makeArt(forLids ? { ...a, lidMask: [] } : a, SVG_W, SVG_W / aspectOf(a));
         svg.classList.add('show');
         host.appendChild(svg);
         const o = svg.getBoundingClientRect();
-        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-        svg.querySelectorAll('.m-body').forEach((p) => {
-            const r = p.getBoundingClientRect();
-            x0 = Math.min(x0, r.left - o.left); y0 = Math.min(y0, r.top - o.top);
-            x1 = Math.max(x1, r.right - o.left); y1 = Math.max(y1, r.bottom - o.top);
+        let best = null;
+        svg.querySelectorAll('.m-body').forEach((path) => {
+            const r = path.getBoundingClientRect();
+            if (!best || r.width * r.height > best.width * best.height) best = r;
         });
-        return { w: x1 - x0, cx: (x0 + x1) / 2, bottom: y1, svgW: w };
-    };
-    const ref = box('waving/waving-f1', 400);
-    const pose = box('poses/happy', 400);
-    // Which white shapes in each pose are eyes (small) vs props (mirror, heart).
-    for (const a of Object.values(ASSETS.poses)) {
-        const svg = makeArt({ ...a, lidMask: [] }, 400, 400 / aspectOf(a));
-        svg.classList.add('show');
-        host.appendChild(svg);
-        const o = svg.getBoundingClientRect();
-        a.lidMask = [...svg.querySelectorAll('.m-eyes')].map((e) => {
+        const lidMask = [...svg.querySelectorAll('.m-eyes')].map((e) => {
             const r = e.getBoundingClientRect();
             return r.width / o.width < 0.16 && r.height / o.height < 0.22;
         });
+        svg.remove();
+        return {
+            w: best.width,
+            cx: best.left - o.left + best.width / 2,
+            top: best.top - o.top,
+            bottom: best.bottom - o.top,
+            lidMask,
+        };
+    };
+
+    const ref = measure(asset('waving/waving-f1'), false);
+    POSE_REG = {};
+    for (const [name, a] of Object.entries(ASSETS.poses)) {
+        const m = measure(a, true);
+        a.lidMask = m.lidMask;
+        const k = ref.w / m.w;
+        POSE_REG[name] = {
+            widthMul: k,
+            dx: (ref.cx - m.cx * k) / SVG_W,
+            dyFromBottom: (ref.bottom - m.bottom * k) / SVG_W,
+            // How much lower this pose's head sits than the reference's, so a
+            // crown-anchored prop (the party hat) follows it instead of
+            // floating above a shorter head.
+            headDy: (m.top * k - ref.top) / SVG_W,
+        };
     }
     host.remove();
-    const k = ref.w / pose.w;
-    // In units of the reference art's width (scale-free).
-    POSE_REG = {
-        widthMul: k,
-        dx: (ref.cx - pose.cx * k) / ref.svgW,
-        dyFromBottom: (ref.bottom - pose.bottom * k) / ref.svgW,
-        refBottom: ref.bottom / ref.svgW,
-    };
 }
 
 // ─── scheduling helpers ──────────────────────────────────────────────────
@@ -556,6 +566,11 @@ const PROPS_SVG = `
   <rect x="-14.6" y="16.4" width="5" height="9.3" rx="1.3" class="p-ink"/>
   <path d="M-11.6 18.1v5.9" class="p-cut"/>
 </g>
+<g data-p="party" style="display:none">
+  <path d="M16.2 6.1 27.4 4.1 24.4-10.6Z" class="p-paper"/>
+  <path d="M18.3 1.4 26.1.1M20.1-2.7l5.1-.9" class="p-pen" style="stroke-width:.7"/>
+  <circle cx="24" cy="-11.6" r="1.9" class="p-paper" style="stroke-width:.7"/>
+</g>
 <g data-p="hat" style="display:none">
   <path d="M7.8 8.6Q8.2 -1.2 19.5 -1.4Q30.8 -1.2 31.2 8.6Z" class="p-paper"/>
   <path d="M19.5 -1.3V8.6" class="p-pen"/>
@@ -634,12 +649,12 @@ function ProposedEngine(view, rng) {
     }
     for (const name of Object.keys(ASSETS.poses)) {
         const a = ASSETS.poses[name];
-        // Poses share one viewBox, so one registration fits them all.
-        const w = CAT_W * POSE_REG.widthMul;
-        const h = w / aspectOf(a);
-        const svg = makeArt(a, w, h);
-        svg.style.left = `${POSE_REG.dx * CAT_W}px`;
-        svg.style.top = `${POSE_REG.dyFromBottom * CAT_W}px`;
+        // Registered per pose: each one's body lands on the reference body.
+        const reg = POSE_REG[name];
+        const w = CAT_W * reg.widthMul;
+        const svg = makeArt(a, w, w / aspectOf(a));
+        svg.style.left = `${reg.dx * CAT_W}px`;
+        svg.style.top = `${reg.dyFromBottom * CAT_W}px`;
         add(`poses/${name}`, svg);
     }
     // Drawn frames + procedural arc: each jump frame shifted down by its own
@@ -719,6 +734,12 @@ function ProposedEngine(view, rng) {
     // rate limit, compacting) and live inputs (typing, hover, drag).
     const sit = { error: false, ask: false, limit: false, compact: false };
     let hint = null, hintSince = 0; // generic activity hint: music | meeting | timer
+    // Something Kage keeps wearing after an animation ends, until cleared.
+    let wearing = null;
+    // Poses whose head sits somewhere else, so a crown-anchored hat would
+    // float: the hat is simply hidden on these.
+    const NO_HAT = new Set(['poses/sleeping', 'poses/in-cute-box', 'poses/moon', 'poses/looking-down']);
+    const hatFits = (pose) => !NO_HAT.has(pose) && !pose.startsWith('jumpArc') && !pose.startsWith('jumping');
     let typingUntil = -1, caret = 0.5, gazeNow = 0;
     let hover = null; // { x: 0..1 } while the cursor is over the mascot
     const drag = { on: false, vx: 0, lean: 0, vel: 0 };
@@ -1383,9 +1404,15 @@ function ProposedEngine(view, rng) {
         if (queue.length && !clip) next(t);
     }
 
-    function setProps(p, f) {
+    function setProps(p, f, pose) {
         p = p || {};
         setInk(!!f.hammerLight);
+        const party = wearing === 'party' && hatFits(pose);
+        P.party.style.display = party ? '' : 'none';
+        if (party) {
+            const dy = (pose.startsWith('poses/') ? POSE_REG[pose.slice(6)].headDy : 0) * CAT_W;
+            P.party.setAttribute('transform', `translate(0 ${dy.toFixed(2)})`);
+        }
         P.hat.style.display = p.hat ? '' : 'none';
         P.plan.style.display = p.plan ? '' : 'none';
         P.paw.style.display = p.paw ? '' : 'none';
@@ -1458,7 +1485,8 @@ function ProposedEngine(view, rng) {
         event(name, t, f, data) {
             // Live inputs: not recorded in history, never reset idle timers
             // on their own except where noted.
-            if (name === 'type') { typingUntil = t + 1400; caret = data ?? 0.5; lastActivity = t; return; }
+            // Typing a query means the user has moved on: take the hat off.
+            if (name === 'type') { typingUntil = t + 1400; caret = data ?? 0.5; lastActivity = t; wearing = null; return; }
             if (name === 'hover') { hover = { x: data ?? 0.5 }; return; }
             if (name === 'unhover') { hover = null; return; }
             if (name === 'drag') { drag.on = true; drag.vx = data ?? 0; lastActivity = t; return; }
@@ -1500,6 +1528,14 @@ function ProposedEngine(view, rng) {
                 play(list, t);
                 return;
             }
+            // The window was hidden and shown again: a fresh start.
+            if (name === 'reopen') {
+                wearing = null;
+                hover = null;
+                typingUntil = -1;
+                if (f.summon) play([summonClip(mode === 'think' ? 'jumpArc/f1' : BASE)], t);
+                return;
+            }
             if (name === 'summon') {
                 if (!f.summon) return;
                 play([summonClip(mode === 'think' ? 'jumpArc/f1' : BASE)], t);
@@ -1512,6 +1548,7 @@ function ProposedEngine(view, rng) {
             }
             if (name === 'updated') {
                 if (mode === 'think' || Object.values(sit).some(Boolean)) return;
+                wearing = 'party'; // stays on after the celebration
                 play(updateClips(f), t);
                 emit('confetti', t + 240, { x: W / 2, y: GROUND - CAT_H * 0.7 });
                 return;
@@ -1623,7 +1660,7 @@ function ProposedEngine(view, rng) {
             if (f.reduced) { s.y = 0; s.sx = 1; s.sy = 1; s.rot = 0; breathe = false; }
             if (DEBUG_POSE) s.pose = DEBUG_POSE;
             show(s.pose);
-            setProps(s.props, f);
+            setProps(s.props, f, s.pose);
 
             if (breathe && f.breathe) {
                 const period = asleep ? 5200 : 3600;
@@ -1907,7 +1944,7 @@ function startDemo() {
     const steps = [
         ['summon', 1500], ['think', 4000], ['tool:search', 3500], ['permission', 4000], ['permissionDone', 1200],
         ['tool:edit', 4500], ['compact', 3500], ['compactDone', 1500], ['tool:read', 4000], ['tool:none', 2500],
-        ['done', 4500], ['copy', 2200], ['hint:music', 7000], ['hint:none', 1500], ['updated', 5500],
+        ['done', 4500], ['copy', 2200], ['hint:music', 7000], ['hint:none', 1500], ['updated', 7000], ['reopen', 2500],
         ['rateLimit', 4000], ['rateLimitDone', 2000], ['error', 4500], ['recover', 4000], ['poke', 4000],
     ];
     let i = 0, at = clock.t + 1000;
