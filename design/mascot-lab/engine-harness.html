@@ -1,0 +1,141 @@
+<!doctype html>
+<!--
+  Harness for the SHIPPING engine (ui/js/shared/mascot-engine.js) and the real
+  ui/assets SVGs — as opposed to mascot-lab.html, which inlines a generated
+  copy. Use this to confirm the module the app actually loads works: runtime
+  fetch + parse, the measure pass, the controller API, rAF and pausing.
+
+  ES modules can't be imported over file://, so serve the repo root and open
+  http://localhost:8765/design/mascot-lab/engine-harness.html
+
+      python -m http.server 8765        # from the repo root
+
+  ?size=40  cat width   &profile=full|light   &invert=1   &reduced=1
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kage mascot engine harness</title>
+<style>
+body { margin: 0; background: #12161f; color: #e2e8f0; font: 13px system-ui, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px; background: #1a202c; }
+button, select { font: inherit; color: inherit; background: #232a38; border: 1px solid #3a4252; border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+button.on { background: #38b2ac; border-color: #38b2ac; color: #fff; }
+main { display: flex; gap: 20px; padding: 16px; align-items: flex-start; }
+/* Same shape as the app's strip: fixed width, gradient, full height. */
+.strip {
+    width: 60px; background: linear-gradient(135deg, #81e6d9 0%, #319795 100%);
+    border-radius: 12px 0 0 12px; display: flex; align-items: center; justify-content: center;
+}
+.tall { height: 300px; }
+.short { height: 60px; }
+.sidebar { width: 44px; height: 120px; background: #232a38; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.cap { color: #8a94a7; font-size: 12px; margin-bottom: 4px; }
+#log { margin: 0 16px 16px; font: 11px/1.5 ui-monospace, monospace; color: #8a94a7; white-space: pre-wrap; }
+#err { position: fixed; left: 8px; right: 8px; bottom: 8px; padding: 10px; background: #c53030; color: #fff; border-radius: 8px; font: 12px ui-monospace, monospace; white-space: pre-wrap; display: none; }
+</style>
+</head>
+<body>
+<header>
+  <button data-s="think">Think</button>
+  <button data-s="done">Done</button>
+  <button data-s="poke">Poke</button>
+  <button data-s="tool:search">🔍</button>
+  <button data-s="tool:edit">🔨</button>
+  <button data-s="tool:read">📖</button>
+  <button data-s="tool:none">✓</button>
+  <button data-t="permission,permissionDone">✋ Approval</button>
+  <button data-t="error,recover">⚠ Error</button>
+  <button data-t="rateLimit,rateLimitDone">⏳ Limit</button>
+  <button data-t="compact,compactDone">📦 Compact</button>
+  <button data-s="updated">🎈 Updated</button>
+  <button data-s="copy">📋 Copy</button>
+  <button data-s="summon">⬆ Summon</button>
+  <button data-s="reopen">🔄 Reopen</button>
+  <label>Hint <select id="hint"><option value="none">none</option><option>music</option><option>meeting</option><option>timer</option></select></label>
+  <input id="type" placeholder="type…" style="background:#232a38;border:1px solid #3a4252;border-radius:6px;color:inherit;padding:4px 8px">
+  <button id="pause">Pause</button>
+</header>
+<main>
+  <div><div class="cap">full · tall strip</div><div class="strip tall" id="a"></div></div>
+  <div><div class="cap">full · collapsed (hop clamps)</div><div class="strip short" id="b"></div></div>
+  <div><div class="cap">light · 28px sidebar</div><div class="sidebar" id="c"></div></div>
+</main>
+<div id="log"></div>
+<div id="err"></div>
+<script type="module">
+const err = document.getElementById('err');
+const fail = (m) => { err.style.display = 'block'; err.textContent += m + '\n'; };
+window.onerror = (m, s, l, c, e) => fail(`${m} @${l}:${c}\n${e?.stack || ''}`);
+window.onunhandledrejection = (e) => fail('unhandled: ' + (e.reason?.stack || e.reason));
+
+const log = (m) => { document.getElementById('log').textContent = m + '\n' + document.getElementById('log').textContent; };
+
+// Assets resolve relative to the document, and the module expects the app's
+// layout (assets/… next to the page), so pretend to be ui/.
+const base = document.createElement('base');
+base.href = '/ui/';
+document.head.prepend(base);
+
+const { createMascotController } = await import('/ui/js/shared/mascot-engine.js');
+const qs = new URLSearchParams(location.search);
+
+const AT = qs.has('at') ? Number(qs.get('at')) : null;
+const mk = (el, o) =>
+    createMascotController(el, {
+        outline: { color: '#319795', radius: 2 },
+        invert: qs.has('invert'),
+        manualClock: AT !== null,
+        ...o,
+    });
+
+const ctrls = [
+    mk(document.getElementById('a'), { size: Number(qs.get('size') || 40), profile: 'full' }),
+    mk(document.getElementById('b'), { size: 40, profile: 'full' }),
+    mk(document.getElementById('c'), { size: 28, profile: 'light' }),
+];
+await Promise.all(ctrls.map((c) => c.ready));
+log('ready: art loaded, measured, first frame drawn');
+
+const send = (n, d) => { for (const c of ctrls) c.signal(n, d); log('signal ' + n + (d !== undefined ? ' ' + d : '')); };
+document.querySelectorAll('[data-s]').forEach((b) => (b.onclick = () => send(b.dataset.s)));
+document.querySelectorAll('[data-t]').forEach((b) => {
+    const [on, off] = b.dataset.t.split(',');
+    b.onclick = () => send(b.classList.toggle('on') ? on : off);
+});
+document.getElementById('hint').onchange = (e) => send('hint:' + e.target.value);
+document.getElementById('type').addEventListener('input', (e) => send('type', e.target.value.length));
+document.getElementById('pause').onclick = (e) => {
+    const on = e.target.classList.toggle('on');
+    for (const c of ctrls) (on ? c.pause() : c.resume());
+    log(on ? 'paused' : 'resumed');
+};
+window.__ctrls = ctrls;
+
+const script = (qs.get('auto') || '')
+    .split(',')
+    .filter(Boolean)
+    .map((part) => {
+        const [name, rest] = part.split('@');
+        const [at, value] = (rest || '0').split(':');
+        return { name, at: Number(at), value: value === undefined ? undefined : Number(value) };
+    })
+    .sort((a, b) => a.at - b.at);
+
+if (AT === null) {
+    for (const e of script) setTimeout(() => send(e.name, e.value), e.at);
+} else {
+    // Frozen: replay the script against the stepped clock, then stop.
+    let clock = 0;
+    for (const e of script) {
+        if (e.at > AT) break;
+        for (const c of ctrls) c.advance(e.at - clock);
+        clock = e.at;
+        send(e.name, e.value);
+    }
+    for (const c of ctrls) c.advance(AT - clock);
+    log('frozen at ' + AT);
+}
+</script>
+</body>
+</html>

@@ -62,6 +62,15 @@ pub struct UiConfig {
     /// is shipped. See `src/i18n.rs`.
     #[serde(default)]
     pub language: Option<String>,
+    /// Master switch for the animated mascot. Off → a still cat.
+    /// `prefers-reduced-motion` always wins regardless.
+    #[serde(default = "default_true")]
+    pub mascot_animations: bool,
+    /// Whether extensions may hint at the mascot (music, meeting, etc.).
+    /// Off here means the mascot ignores extension hints even if the
+    /// extension holds the capability. Independent of the master above.
+    #[serde(default = "default_true")]
+    pub mascot_extension_hints: bool,
 }
 
 impl Default for UiConfig {
@@ -92,6 +101,8 @@ impl Default for UiConfig {
             time_format: default_time_format(),
             date_format: default_date_format(),
             language: None,
+            mascot_animations: true,
+            mascot_extension_hints: true,
         }
     }
 }

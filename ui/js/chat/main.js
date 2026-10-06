@@ -4,13 +4,9 @@ import { AgentSessionViewer } from './agent-sessions.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
-import {
-    createMascotController,
-    createMascot,
-    getMascotThemeSettings,
-    setTerminatorMode,
-} from '../shared/mascot.js';
-import { ANIMATIONS } from '../shared/mascot-animations.js';
+import { createMascot, getMascotThemeSettings, setTerminatorMode } from '../shared/mascot.js';
+import { createMascotController } from '../shared/mascot-engine.js';
+
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 import { getConfig, onConfigChange } from '../shared/config-cache.js';
@@ -99,10 +95,11 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                 const { outlineColor, invert } = getMascotThemeSettings();
                 sidebarMascotCtrl = createMascotController(mascot, {
                     size: 28,
-                    idle: ANIMATIONS.waving,
-                    periodic: ANIMATIONS.waving,
-                    periodicInterval: 30000,
-                    periodicJitter: 5000,
+                    // At 28px props and situation animations don't read, and
+                    // responses are watched in the floating window anyway.
+                    // Keep breathing, blinks, idle wave/glances/doze and the
+                    // size-safe hop.
+                    profile: 'light',
                     invert,
                     outline: { color: outlineColor, radius: 1.5 },
                 });

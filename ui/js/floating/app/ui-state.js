@@ -61,12 +61,10 @@ export const UiStateMethods = {
         // content-area's overflow:auto comes back for scrollable replies.
         // Cheap no-op if the class wasn't set.
         this.elements.contentArea?.classList.remove('banner-only');
-        // Switch mascot to jumping animation at larger size
-        if (window._kageMascot) {
-            import('../../shared/mascot-animations.js').then((m) =>
-                window._kageMascot.setActive(m.ANIMATIONS.jumping, 60)
-            );
-        }
+        // Signal the mascot engine. It owns picking the thinking animation
+        // (hop + landings + idle breath) and the think-size spring; the old
+        // controller took a size, but the engine computes it from the art.
+        window._kageMascot?.signal('think');
         // Show inline stop button in input area, hide datetime
         this.updateDatetimeVisibility();
         this.elements.floatingStopBtn.style.display = '';
@@ -76,8 +74,8 @@ export const UiStateMethods = {
         this.elements.mascotContainer.classList.remove('thinking');
         this.elements.loadingDots.classList.remove('visible');
         this._stopElapsedTimer();
-        // Return mascot to idle with a wave transition
-        if (window._kageMascot) window._kageMascot.setIdle(true);
+        // Return mascot to idle, with the celebration + wave the engine owns.
+        window._kageMascot?.signal('done');
     },
 
     /**

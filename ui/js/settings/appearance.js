@@ -89,6 +89,26 @@ export class AppearanceSettingsModule extends SettingsModule {
                         false
                     )}
 
+                    <!-- Mascot
+                         Hardcoded strings (no i18n keys): the 31-catalog
+                         drift gate would hard-fail CI on new keys unless
+                         translate.py had run, which isn't gated locally. -->
+                    <div class="setting-section-label">Mascot</div>
+
+                    ${this.createCheckboxRow(
+                        'Animate Kage',
+                        'Breathing, blinks, idle moods and reactions to prompts and tools. Off = still cat. Reduced-motion is always respected.',
+                        'mascotAnimations',
+                        true
+                    )}
+
+                    ${this.createCheckboxRow(
+                        'Let extensions animate Kage',
+                        'Extensions can hint at the mascot (e.g. a music extension can make Kage bop). Independent of the master switch.',
+                        'mascotExtensionHints',
+                        true
+                    )}
+
                     ${this.createCheckboxRow(
                         t('settings.appearance.show_time.label'),
                         t('settings.appearance.show_time.description'),
@@ -188,6 +208,10 @@ export class AppearanceSettingsModule extends SettingsModule {
         if (rememberChat) rememberChat.checked = (config.ui.chat_window_width || 0) > 0;
         const rememberLauncher = document.getElementById('rememberLauncherSize');
         if (rememberLauncher) rememberLauncher.checked = config.ui.remember_launcher_size === true;
+        const mAnim = document.getElementById('mascotAnimations');
+        if (mAnim) mAnim.checked = config.ui.mascot_animations !== false;
+        const mHints = document.getElementById('mascotExtensionHints');
+        if (mHints) mHints.checked = config.ui.mascot_extension_hints !== false;
         if (startPos) startPos.value = config.ui.window_start_position || 'center';
         if (fontSize) {
             fontSize.value = config.ui.font_size || 14;
@@ -239,6 +263,9 @@ export class AppearanceSettingsModule extends SettingsModule {
             document.getElementById('showFloatingToolbar')?.checked ?? false;
         config.ui.remember_launcher_size =
             document.getElementById('rememberLauncherSize')?.checked ?? false;
+        config.ui.mascot_animations = document.getElementById('mascotAnimations')?.checked ?? true;
+        config.ui.mascot_extension_hints =
+            document.getElementById('mascotExtensionHints')?.checked ?? true;
         if (!config.ui.remember_launcher_size) {
             config.ui.launcher_width = null;
             config.ui.launcher_height = null;

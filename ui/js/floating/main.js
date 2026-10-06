@@ -3,12 +3,8 @@ import { FloatingApp } from './app.js';
 import { initMarkdown, setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
-import {
-    createMascotController,
-    getMascotThemeSettings,
-    setTerminatorMode,
-} from '../shared/mascot.js';
-import { ANIMATIONS } from '../shared/mascot-animations.js';
+import { getMascotThemeSettings, setTerminatorMode } from '../shared/mascot.js';
+import { createMascotController } from '../shared/mascot-engine.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 import { getConfig, onConfigChange } from '../shared/config-cache.js';
@@ -111,6 +107,13 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     // saves too, and a rebuild drops the hidden-window pause + thinking anim.
     let lastMascotKey = null;
 
+    // Config snapshot the mascot reads at rebuild time; nothing fatal if the
+    // read fails (defaults are on + hints on).
+    let _mascotCfg = {};
+    try {
+        _mascotCfg = (await getConfig(invoke)) || {};
+    } catch {}
+
     async function refreshFloatingMascot() {
         const mascotContainer = document.getElementById('floatingMascot');
         if (!mascotContainer) return;
@@ -136,22 +139,25 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             window._kageMascot = null;
         } else {
             const { outlineColor, invert } = theme;
+            // New engine: full behaviour set, inline SVG, prefers-reduced-motion
+            // and the signal() API below. The legacy setActive/setIdle methods
+            // are kept as aliases, so ui-state.js and friends work unchanged.
+            const animationsEnabled = _mascotCfg?.ui?.mascot_animations !== false;
+            const extensionHints = _mascotCfg?.ui?.mascot_extension_hints !== false;
             const mascotCtrl = createMascotController(mascotContainer, {
                 size: 40,
-                idle: ANIMATIONS.waving,
-                periodic: ANIMATIONS.waving,
-                periodicInterval: 10000,
-                periodicJitter: 2000,
+                profile: 'full',
                 invert,
                 outline: { color: outlineColor, radius: 2 },
-                preload: [ANIMATIONS.jumping],
+                animations: animationsEnabled,
+                extensionHints,
             });
             window._kageMascot = mascotCtrl;
-            // Carry over the state the old controller had: the thinking
-            // animation (same size as startThinking) and the hidden-window
-            // pause, so a hidden webview doesn't resume the periodic wave.
+            // Carry over state the old controller had: the thinking state if
+            // we rebuilt mid-response, and the hidden-window pause so a
+            // hidden webview doesn't keep driving rAF.
             if (mascotContainer.classList.contains('thinking')) {
-                mascotCtrl.setActive(ANIMATIONS.jumping, 60);
+                mascotCtrl.signal('think');
             }
             if (window._kageFloatingHidden) mascotCtrl.pause();
         }
