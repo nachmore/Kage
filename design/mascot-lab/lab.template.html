@@ -122,6 +122,7 @@ body.invert .art { filter: invert(1); }
 .p-cut-fill { fill: var(--inkEdge, var(--eyes)); }
 .m-body { fill: var(--body); }
 .m-eyes { fill: var(--eyes); }
+.m-gaze { transform: translateX(calc(var(--gaze, 0) * 1px)); }
 .m-lid {
     transform-box: fill-box; transform-origin: 50% 0;
     transform: scaleY(var(--lid, 0));
@@ -269,6 +270,21 @@ function makeArt(asset, w, h) {
         lid.setAttribute('class', 'm-lid-shape');
         g.appendChild(lid);
         eye.after(g);
+        // Pose eyes are separate shapes drawn over the body, so they can
+        // shift on their own (--gaze, in viewBox units) — the face follows
+        // something without swapping to a different, differently-sized pose.
+        if (asset.lidMask) {
+            // The body also has a hole cut under each eye; a body-coloured
+            // copy that stays put plugs it, so a shifted eye doesn't reveal
+            // the background through the socket.
+            const socket = eye.cloneNode(true);
+            socket.setAttribute('class', 'm-lid-shape');
+            eye.before(socket);
+            const gz = document.createElementNS(NS, 'g');
+            gz.setAttribute('class', 'm-gaze');
+            eye.before(gz);
+            gz.append(eye, g);
+        }
     });
     return svg;
 }
@@ -777,21 +793,22 @@ function ProposedEngine(view, rng) {
             sample(ms) {
                 let t = ms;
                 // leaf: 1 = lying right (unturned), -1 = flipped over to the left.
-                let pose = 'poses/looking-down', leaf = 1, rot = 0, paw = null;
+                const pose = 'poses/looking-down';
+                let leaf = 1, rot = 0, paw = null, gaze = 0;
                 if (t < T.read) {
                     rot = 1.2 * Math.sin((t / T.read) * Math.PI * 2);
                 } else if ((t -= T.read) < T.reach) {
                     // Paw comes in and settles on the page's edge.
                     const u = easeOut(t / T.reach);
-                    pose = 'poses/looking-to-the-right';
-                    rot = -1.6 * u;
+                    gaze = 1.1 * u;
+                    rot = -1.2 * u;
                     paw = { x: PAW.x0 + 2.5 * (1 - u), y: PAW.y - 2.5 * (1 - u), r: -12, o: u };
                 } else if ((t -= T.reach) < T.turn) {
                     const u = easeInOut(t / T.turn);
                     leaf = Math.cos(u * Math.PI);
-                    // Gaze follows: still right early, down as it passes.
-                    pose = u < 0.42 ? 'poses/looking-to-the-right' : 'poses/looking-down';
-                    rot = lerp(-1.6, 2.2, u);
+                    // Eyes ride along with the page, right to left.
+                    gaze = lerp(1.1, -1.1, u);
+                    rot = lerp(-1.2, 1.6, u);
                     paw = {
                         x: lerp(PAW.x0, PAW.x1, u),
                         y: PAW.y - Math.sin(u * Math.PI) * PAW.lift,
@@ -802,12 +819,13 @@ function ProposedEngine(view, rng) {
                     // Paw lifts away; head eases back to the page.
                     const u = easeOut(t / T.settle);
                     leaf = -1;
-                    rot = 2.2 * (1 - u);
+                    gaze = -1.1 * (1 - u);
+                    rot = 1.6 * (1 - u);
                     paw = { x: PAW.x1 - 1.5 * u, y: PAW.y - 3.5 * u, r: 12, o: 1 - u };
                 } else {
                     leaf = -1;
                 }
-                return { pose, rot, props: { page: 1, leaf, paw } };
+                return { pose, rot, gaze, props: { page: 1, leaf, paw } };
             },
         };
     }
@@ -1113,6 +1131,7 @@ function ProposedEngine(view, rng) {
             }
             if (DEBUG_LID !== null) lid = DEBUG_LID;
             rig.style.setProperty('--lid', lid.toFixed(3));
+            rig.style.setProperty('--gaze', (s.gaze || 0).toFixed(3));
             drawParticles(t);
         },
     };
