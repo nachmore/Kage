@@ -338,18 +338,26 @@ function measureRegistration() {
             const r = path.getBoundingClientRect();
             if (!best || r.width * r.height > best.width * best.height) best = r;
         });
-        const lidMask = [...svg.querySelectorAll('.m-eyes')].map((e) => {
+        const cands = [...svg.querySelectorAll('.m-eyes')].map((e, i) => {
             const r = e.getBoundingClientRect();
             const cy = (r.top + r.bottom) / 2 - o.top;
             const ratio = r.width / Math.max(r.height, 0.01);
-            return (
+            const ok =
                 r.width / o.width < 0.16 &&
                 r.height / o.height < 0.22 &&
                 cy / o.height < 0.6 &&
                 ratio > 0.45 &&
-                ratio < 2.2
-            );
+                ratio < 2.2;
+            return { i, ok, area: r.width * r.height };
         });
+        const eyes = new Set(
+            cands
+                .filter((c) => c.ok)
+                .sort((a, b) => b.area - a.area)
+                .slice(0, 2)
+                .map((c) => c.i)
+        );
+        const lidMask = cands.map((c) => eyes.has(c.i));
         svg.remove();
         return {
             w: best.width,
@@ -1238,7 +1246,7 @@ function ProposedEngine(view, rng) {
 
     // ── live inputs ──
     function typeLoop() {
-        return { dur: 1e9, breathe: true, live: 'type', sample: () => ({ pose: 'poses/interested', gaze: gazeNow }) };
+        return { dur: 1e9, breathe: true, live: 'type', sample: () => ({ pose: 'poses/looking-to-the-right', gaze: gazeNow }) };
     }
     function hoverLoop() {
         return {
@@ -1247,7 +1255,7 @@ function ProposedEngine(view, rng) {
                 const perk = ms < 260 ? Math.sin((ms / 260) * Math.PI) : 0;
                 // No mirroring: the eyes themselves turn, so flipping the
                 // whole cat would fight the gaze.
-                return { pose: 'poses/interested', sy: 1 + 0.06 * perk, sx: 1 - 0.03 * perk, gaze: gazeNow };
+                return { pose: 'poses/looking-to-the-right', sy: 1 + 0.06 * perk, sx: 1 - 0.03 * perk, gaze: gazeNow };
             },
         };
     }
@@ -1627,7 +1635,7 @@ function ProposedEngine(view, rng) {
             if (!clip) pickNext(t, f);
             const filler = !clip || clip.idle;
             if (free && filler && typing) {
-                play([swapClip('poses/interested', 260, { from: shown }), typeLoop()], t);
+                play([swapClip('poses/looking-to-the-right', 260, { from: shown }), typeLoop()], t);
                 asleep = false;
             } else if (free && filler && hover && f.inputs) {
                 play([hoverLoop()], t);
