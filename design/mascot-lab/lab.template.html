@@ -283,7 +283,20 @@ function makeArt(asset, w, h) {
     // magnifying glass's mirror is white too.
     const lidMax = asset.lidMask ? 1 : 0.86;
     svg.querySelectorAll('.m-eyes').forEach((eye, i) => {
-        if (asset.lidMask && !asset.lidMask[i]) return;
+        const isEye = asset.lidMask && asset.lidMask[i];
+        const inFace = asset.faceParts ? asset.faceParts[i] : isEye;
+        if (!isEye) {
+            if (inFace) {
+                const socket = eye.cloneNode(true);
+                socket.setAttribute('class', 'm-lid-shape');
+                eye.before(socket);
+                const gz = document.createElementNS(NS, 'g');
+                gz.setAttribute('class', 'm-gaze');
+                eye.before(gz);
+                gz.appendChild(eye);
+            }
+            return;
+        }
         const g = document.createElementNS(NS, 'g');
         g.setAttribute('class', 'm-lid');
         g.style.transform = `scaleY(calc(var(--lid, 0) * ${lidMax}))`;
@@ -342,20 +355,23 @@ function measureRegistration() {
             const r = e.getBoundingClientRect();
             const cy = (r.top + r.bottom) / 2 - o.top;
             const ratio = r.width / Math.max(r.height, 0.01);
-            const ok =
-                r.width / o.width < 0.16 &&
-                r.height / o.height < 0.22 &&
-                cy / o.height < 0.6 &&
-                ratio > 0.45 &&
-                ratio < 2.2;
-            return { i, ok, area: r.width * r.height };
+            const small = r.width / o.width < 0.18 && r.height / o.height < 0.22;
+            return { i, cy: cy / o.height, ratio, area: r.width * r.height, small };
         });
         const eyes = new Set(
             cands
-                .filter((c) => c.ok)
+                .filter((c) => c.small && c.cy < 0.6 && c.ratio > 0.45 && c.ratio < 2.2)
                 .sort((a, b) => b.area - a.area)
                 .slice(0, 2)
                 .map((c) => c.i)
+        );
+        // Shapes that aren't eyes but still belong to the face: the mouth
+        // (small, lower, wider than tall) and eye-shadow accents under some
+        // eyes. All ride with --gaze; only eyes close on blinks.
+        const faceParts = cands.map(
+            (c) =>
+                eyes.has(c.i) ||
+                (c.small && c.cy > 0.45 && c.cy < 0.75 && c.ratio > 1.1 && c.ratio < 3.5)
         );
         const lidMask = cands.map((c) => eyes.has(c.i));
         svg.remove();
@@ -365,6 +381,7 @@ function measureRegistration() {
             top: best.top - o.top,
             bottom: best.bottom - o.top,
             lidMask,
+            faceParts,
         };
     };
 
@@ -373,6 +390,7 @@ function measureRegistration() {
     for (const [name, a] of Object.entries(ASSETS.poses)) {
         const m = measure(a, true);
         a.lidMask = m.lidMask;
+        a.faceParts = m.faceParts;
         const k = ref.w / m.w;
         POSE_REG[name] = {
             widthMul: k,
