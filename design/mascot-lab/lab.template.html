@@ -340,7 +340,15 @@ function measureRegistration() {
         });
         const lidMask = [...svg.querySelectorAll('.m-eyes')].map((e) => {
             const r = e.getBoundingClientRect();
-            return r.width / o.width < 0.16 && r.height / o.height < 0.22;
+            const cy = (r.top + r.bottom) / 2 - o.top;
+            const ratio = r.width / Math.max(r.height, 0.01);
+            return (
+                r.width / o.width < 0.16 &&
+                r.height / o.height < 0.22 &&
+                cy / o.height < 0.6 &&
+                ratio > 0.45 &&
+                ratio < 2.2
+            );
         });
         svg.remove();
         return {
@@ -740,7 +748,13 @@ function ProposedEngine(view, rng) {
     // float: the hat is simply hidden on these.
     const NO_HAT = new Set(['poses/sleeping', 'poses/in-cute-box', 'poses/moon', 'poses/looking-down']);
     const hatFits = (pose) => !NO_HAT.has(pose) && !pose.startsWith('jumpArc') && !pose.startsWith('jumping');
-    let typingUntil = -1, caret = 0.5, gazeNow = 0;
+    let typingUntil = -1, typed = 0, gazeNow = 0;
+    // --gaze is in the art's own units (~36.8 across the face), so a couple
+    // of units is a clearly visible shift without leaving the head.
+    const MAX_GAZE = 2.4;
+    // Characters per left-to-right sweep before the eyes flick back, like
+    // following your own text and wrapping to the next line.
+    const SWEEP = 12;
     let hover = null; // { x: 0..1 } while the cursor is over the mascot
     const drag = { on: false, vx: 0, lean: 0, vel: 0 };
     let liveClip = null; // 'type' | 'hover' while one of those loops runs
@@ -1224,14 +1238,16 @@ function ProposedEngine(view, rng) {
 
     // ── live inputs ──
     function typeLoop() {
-        return { dur: 1e9, breathe: true, live: 'type', sample: () => ({ pose: 'poses/looking-to-the-right', gaze: gazeNow }) };
+        return { dur: 1e9, breathe: true, live: 'type', sample: () => ({ pose: 'poses/interested', gaze: gazeNow }) };
     }
     function hoverLoop() {
         return {
             dur: 1e9, breathe: true, live: 'hover',
             sample(ms) {
                 const perk = ms < 260 ? Math.sin((ms / 260) * Math.PI) : 0;
-                return { pose: 'poses/looking-to-the-right', sy: 1 + 0.06 * perk, sx: 1 - 0.03 * perk, mirror: hover && hover.x < 0.5, gaze: gazeNow };
+                // No mirroring: the eyes themselves turn, so flipping the
+                // whole cat would fight the gaze.
+                return { pose: 'poses/interested', sy: 1 + 0.06 * perk, sx: 1 - 0.03 * perk, gaze: gazeNow };
             },
         };
     }
@@ -1486,7 +1502,7 @@ function ProposedEngine(view, rng) {
             // Live inputs: not recorded in history, never reset idle timers
             // on their own except where noted.
             // Typing a query means the user has moved on: take the hat off.
-            if (name === 'type') { typingUntil = t + 1400; caret = data ?? 0.5; lastActivity = t; wearing = null; return; }
+            if (name === 'type') { typingUntil = t + 1400; typed = data ?? 0; lastActivity = t; wearing = null; return; }
             if (name === 'hover') { hover = { x: data ?? 0.5 }; return; }
             if (name === 'unhover') { hover = null; return; }
             if (name === 'drag') { drag.on = true; drag.vx = data ?? 0; lastActivity = t; return; }
@@ -1595,7 +1611,11 @@ function ProposedEngine(view, rng) {
         update(t, f) {
             // ── live inputs ──
             const typing = f.inputs && t < typingUntil;
-            const target = typing ? lerp(-0.5, 1.5, caret) : hover ? Math.abs(hover.x - 0.5) * 3 : 0;
+            const target = typing
+                ? lerp(-MAX_GAZE, MAX_GAZE, (typed % SWEEP) / SWEEP)
+                : hover
+                  ? (hover.x - 0.5) * 2 * MAX_GAZE
+                  : 0;
             gazeNow += (target - gazeNow) * 0.25;
             const free = mode === 'idle' && !Object.values(sit).some(Boolean);
             // End a live loop as soon as its input stops.
@@ -1607,7 +1627,7 @@ function ProposedEngine(view, rng) {
             if (!clip) pickNext(t, f);
             const filler = !clip || clip.idle;
             if (free && filler && typing) {
-                play([swapClip('poses/looking-to-the-right', 260, { from: shown }), typeLoop()], t);
+                play([swapClip('poses/interested', 260, { from: shown }), typeLoop()], t);
                 asleep = false;
             } else if (free && filler && hover && f.inputs) {
                 play([hoverLoop()], t);
@@ -1980,8 +2000,7 @@ document.getElementById('sTod').onchange = (e) => {
     for (const c of columns) if (c.f) c.f.tod = e.target.value;
 };
 const typeBox = document.getElementById('typeBox');
-const caretFrac = () => (typeBox.value.length ? typeBox.selectionStart / Math.max(18, typeBox.value.length) : 0);
-for (const ev of ['input', 'keyup', 'click']) typeBox.addEventListener(ev, () => live('type', clamp(caretFrac(), 0, 1)));
+typeBox.addEventListener('input', () => live('type', typeBox.value.length));
 document.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => fire(`tool:${b.dataset.tool}`)));
 document.getElementById('bDone').onclick = () => fire('done');
 document.getElementById('bPoke').onclick = () => fire('poke');
