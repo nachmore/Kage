@@ -54,6 +54,7 @@ header {
     border-bottom: 1px solid rgba(127,127,127,.25);
 }
 header h1 { font-size: 15px; margin: 0 10px 0 0; }
+.hdr-break { flex-basis: 100%; height: 0; }
 button, select {
     font: inherit; color: var(--text); background: var(--panel2);
     border: 1px solid rgba(127,127,127,.35); border-radius: 6px;
@@ -177,6 +178,23 @@ body.film .col { padding: 8px; border: 0; border-radius: 0; background: transpar
     <button data-tool="read" title="tool_call kind: read">📖 Read</button>
     <button data-tool="none" title="Tool finished (back to thinking)">✓ Tool done</button>
     <button id="bDemo">Auto demo</button>
+    <span class="hdr-break"></span>
+    <span style="color:var(--muted)">Situation:</span>
+    <button data-pair="permission,permissionDone" title="A tool needs your approval">✋ Approval</button>
+    <button data-pair="error,recover" title="Connection lost / agent error">⚠ Error</button>
+    <button data-pair="rateLimit,rateLimitDone" title="Rate limited by the provider">⏳ Rate limit</button>
+    <button data-pair="compact,compactDone" title="Context compaction running">📦 Compact</button>
+    <button data-fire="copy" title="User copied a response">📋 Copy</button>
+    <button data-fire="updated" title="First launch after an update">🎈 Updated</button>
+    <button data-fire="summon" title="Window shown by the hotkey">⬆ Summon</button>
+    <label title="Generic activity an extension (or the host timer) declares">Hint
+        <select id="sHint"><option value="none">none</option><option value="music">music</option><option value="meeting">meeting</option><option value="timer">timer</option></select>
+    </label>
+    <label>Time
+        <select id="sTod"><option value="auto">auto</option><option value="morning">morning</option><option value="day">day</option><option value="evening">evening</option><option value="night">night</option></select>
+    </label>
+    <input id="typeBox" placeholder="Type here… (eyes follow the caret)" style="font:inherit;padding:5px 8px;border-radius:6px;border:1px solid rgba(127,127,127,.35);background:var(--panel2);color:var(--text);width:230px">
+    <span style="color:var(--muted);font-size:12px">Hover or drag a mascot</span>
     <label>Idle timers
         <select id="sIdle"><option value="1">1× (real)</option><option value="3">3× faster</option><option value="10" selected>10× faster</option></select>
     </label>
@@ -221,6 +239,8 @@ const qs = new URLSearchParams(location.search);
 const DEBUG_POSE = qs.get('pose');
 const DEBUG_LID = qs.has('lid') ? Number(qs.get('lid')) : null;
 const atParam = qs.get('at');
+// &tod=morning|day|evening|night overrides the time of day (for screenshots).
+const TOD_PARAM = qs.get('tod');
 // &variant=sweat|glance|spin forces every landing variant (for inspection).
 const DEBUG_VARIANT = qs.get('variant');
 
@@ -425,29 +445,32 @@ const PRESETS = {
     combo: {
         label: 'A · Combo',
         desc: 'Your picks: the drawn-frame hop, continuous, with random landings (sweat wipe, glance, spin); tool-aware reactions; the celebration on done; and a poke that ends in a wave. Breathing, blinks and an eased wave while idle.',
-        f: { breathe: true, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 0, landings: true, activities: true, hammerLight: false, glances: false, doze: false, ponder: false, celebrate: true, poke: true, reduced: false },
+        f: { situations: true, longWait: true, inputs: true, extHints: true, timeOfDay: true, summon: true, tod: 'auto', breathe: true, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 0, landings: true, activities: true, hammerLight: false, glances: false, doze: false, ponder: false, celebrate: true, poke: true, reduced: false },
     },
     personality: {
         label: 'B · Personality',
         desc: 'The combo plus idle moods: glances and winks while idle, a magnifying glass on long tool-free thinks, and dozing off when ignored.',
-        f: { breathe: true, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 0, landings: true, activities: true, hammerLight: false, glances: true, doze: true, ponder: true, celebrate: true, poke: true, reduced: false },
+        f: { situations: true, longWait: true, inputs: true, extHints: true, timeOfDay: true, summon: true, tod: 'auto', breathe: true, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 0, landings: true, activities: true, hammerLight: false, glances: true, doze: true, ponder: true, celebrate: true, poke: true, reduced: false },
     },
     polish: {
         label: 'Polish (minimal)',
         desc: 'Smallest change from today: breathing, blinks, an eased wave and the drawn-frame hop. No tool reactions, landings or celebration.',
-        f: { breathe: true, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 0, landings: false, activities: false, hammerLight: false, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
+        f: { situations: false, longWait: false, inputs: false, extHints: false, timeOfDay: false, summon: false, tod: 'auto', breathe: true, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 0, landings: false, activities: false, hammerLight: false, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
     },
     blob: {
         label: 'Blob hop',
         desc: 'The earlier proposal: a squash-and-stretch hop on the idle art, with no arm movement.',
-        f: { breathe: true, blink: true, waveEase: true, hop: 'procedural', hopHeight: 24, hopRest: 400, landings: false, activities: false, hammerLight: false, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
+        f: { situations: false, longWait: false, inputs: false, extHints: false, timeOfDay: false, summon: false, tod: 'auto', breathe: true, blink: true, waveEase: true, hop: 'procedural', hopHeight: 24, hopRest: 400, landings: false, activities: false, hammerLight: false, glances: false, doze: false, ponder: false, celebrate: false, poke: true, reduced: false },
     },
     reduced: {
         label: 'Reduced motion',
         desc: 'What prefers-reduced-motion users would get: pose and prop changes and blinks only, with no hops, swings, sway or breathing.',
-        f: { breathe: false, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 0, landings: false, activities: true, hammerLight: false, glances: true, doze: true, ponder: false, celebrate: true, poke: true, reduced: true },
+        f: { situations: true, longWait: true, inputs: true, extHints: true, timeOfDay: true, summon: true, tod: 'auto', breathe: false, blink: true, waveEase: true, hop: 'drawn-arc', hopHeight: 24, hopRest: 0, landings: false, activities: true, hammerLight: false, glances: true, doze: true, ponder: false, celebrate: true, poke: true, reduced: true },
     },
 };
+
+// Map a local hour to the time-of-day flavour.
+const todFromHour = (h) => (h >= 5 && h < 10 ? 'morning' : h >= 22 || h < 5 ? 'night' : h >= 18 ? 'evening' : 'day');
 
 const FEATURES = [
     ['breathe', 'Breathing'],
@@ -456,6 +479,12 @@ const FEATURES = [
     ['landings', 'Random landings'],
     ['activities', 'React to tools'],
     ['hammerLight', 'Light hammer & bug'],
+    ['situations', 'Approvals / errors / limits'],
+    ['longWait', 'Impatience on long waits'],
+    ['inputs', 'Typing, hover & drag'],
+    ['extHints', 'Activity hints'],
+    ['timeOfDay', 'Time of day'],
+    ['summon', 'Pop in on summon'],
     ['celebrate', 'Celebrate on done'],
     ['poke', 'React to poke'],
     ['glances', 'Idle glances / winks'],
@@ -516,6 +545,45 @@ const PROPS_SVG = `
   <path d="M7.8 8.6Q8.2 -1.2 19.5 -1.4Q30.8 -1.2 31.2 8.6Z" class="p-paper"/>
   <path d="M19.5 -1.3V8.6" class="p-pen"/>
   <rect x="4.8" y="7.7" width="29.4" height="2.9" rx="1.45" class="p-paper"/>
+</g>
+<g data-p="sign" style="display:none">
+  <path d="M38.4 13.4 35.6 22.6" class="p-pen" style="stroke-width:.9"/>
+  <rect x="33.2" y="1.6" width="12.6" height="11.6" rx="1.4" class="p-paper"/>
+  <path d="M37.3 5.6q0-2.1 2.3-2.1t2.3 1.9q0 1.4-2.1 2.3v1.2" class="p-pen" style="stroke-width:.85"/>
+  <circle cx="39.8" cy="11" r=".55" class="p-cut-fill" style="fill:var(--body)"/>
+</g>
+<g data-p="cord" style="display:none">
+  <path d="M-16 34.4C-10 34.4-9 30.6-4.4 32.2" class="p-pen" style="stroke-width:.9"/>
+  <rect x="-4.6" y="30.4" width="5" height="3.6" rx=".8" class="p-paper" transform="rotate(-8 -2.1 32.2)"/>
+  <path d="M.4 31.2h1.8M.6 33.1h1.8" class="p-pen" style="stroke-width:.6" transform="rotate(-8 -2.1 32.2)"/>
+</g>
+<g data-p="clock" style="display:none">
+  <path d="M45.3 33.6l-1 1.1M50.7 33.6l1 1.1" class="p-pen"/>
+  <circle cx="45.4" cy="25.6" r="1.3" class="p-paper" style="stroke-width:.6"/>
+  <circle cx="50.6" cy="25.6" r="1.3" class="p-paper" style="stroke-width:.6"/>
+  <circle cx="48" cy="29.6" r="4.4" class="p-paper"/>
+  <g data-p="clockHands"><path d="M48 29.6v-2.9M48 29.6h2" class="p-pen" style="stroke-width:.6"/></g>
+</g>
+<g data-p="watch" style="display:none">
+  <circle cx="0" cy="0" r="2.6" class="p-paper" style="stroke-width:.65"/>
+  <path d="M0 0v-1.7M0 0l1.1.6" class="p-pen" style="stroke-width:.5"/>
+</g>
+<g data-p="paper0" style="display:none"><rect x="-2.4" y="-3" width="4.8" height="6" rx=".5" class="p-paper" style="stroke-width:.55"/><path d="M-1.4-1.3h2.8M-1.4.3h2.8M-1.4 1.8h1.8" class="p-pen" style="stroke-width:.4"/></g>
+<g data-p="paper1" style="display:none"><rect x="-2.4" y="-3" width="4.8" height="6" rx=".5" class="p-paper" style="stroke-width:.55"/><path d="M-1.4-1.3h2.8M-1.4.3h2.8M-1.4 1.8h1.8" class="p-pen" style="stroke-width:.4"/></g>
+<g data-p="paper2" style="display:none"><rect x="-2.4" y="-3" width="4.8" height="6" rx=".5" class="p-paper" style="stroke-width:.55"/><path d="M-1.4-1.3h2.8M-1.4.3h2.8M-1.4 1.8h1.8" class="p-pen" style="stroke-width:.4"/></g>
+<g data-p="headset" style="display:none">
+  <path d="M3.4 9.6Q3.2 -.4 19.6 -.6Q36 -.4 35.6 9.6" class="p-pen" style="stroke-width:1.3"/>
+  <rect x="0" y="6.6" width="4.6" height="7.4" rx="2.1" class="p-paper"/>
+  <rect x="34.4" y="6.6" width="4.6" height="7.4" rx="2.1" class="p-paper"/>
+  <path d="M2.4 14Q2.8 21.2 11.6 21.2" class="p-pen" style="stroke-width:.8"/>
+  <circle cx="12.6" cy="21.2" r="1.25" class="p-paper" style="stroke-width:.6"/>
+</g>
+<g data-p="hourglass" style="display:none" transform="translate(-6 0)">
+  <path d="M43 15.6h9M43 34.2h9" class="p-pen" style="stroke-width:1.1"/>
+  <path d="M44 16q0 4.6 3.5 8.9Q44 29.2 44 33.8h7q0-4.6-3.5-8.9Q51 20.6 51 16z" class="p-paper"/>
+  <g data-p="sandTop"><path d="M45.2 17.4h4.6q-.4 3.2-2.3 5.6-1.9-2.4-2.3-5.6z" style="fill:var(--body)"/></g>
+  <g data-p="sandBottom"><path d="M45 33h5q-.4-3-2.5-4.6-2.1 1.6-2.5 4.6z" style="fill:var(--body)"/></g>
+  <path d="M47.5 23.4v8.8" data-p="stream" class="p-pen" style="stroke-width:.4"/>
 </g>
 <g data-p="drop0" style="display:none"><path d="M0 -1.9C1.15 -.35 1.45 .5 1.45 1A1.45 1.45 0 1 1-1.45 1C-1.45 .5-1.15 -.35 0-1.9Z" class="p-paper" style="stroke-width:.55"/></g>
 <g data-p="drop1" style="display:none"><path d="M0 -1.9C1.15 -.35 1.45 .5 1.45 1A1.45 1.45 0 1 1-1.45 1C-1.45 .5-1.15 -.35 0-1.9Z" class="p-paper" style="stroke-width:.55"/></g>
@@ -634,6 +702,14 @@ function ProposedEngine(view, rng) {
     let vis = 1, visVel = 0, lastT = 0; // smoothed visual size
     let hops = 0, nextVariantAt = 3;
     let particles = [];
+    // Situations (persistent until cleared; highest first: error, ask,
+    // rate limit, compacting) and live inputs (typing, hover, drag).
+    const sit = { error: false, ask: false, limit: false, compact: false };
+    let hint = null, hintSince = 0; // generic activity hint: music | meeting | timer
+    let typingUntil = -1, caret = 0.5, gazeNow = 0;
+    let hover = null; // { x: 0..1 } while the cursor is over the mascot
+    const drag = { on: false, vx: 0, lean: 0, vel: 0 };
+    let liveClip = null; // 'type' | 'hover' while one of those loops runs
     const NO_BLINK = new Set(['poses/happy', 'poses/winking', 'poses/sleeping']);
 
     // ── clips ── (sample(ms) → partial pose sample)
@@ -830,6 +906,266 @@ function ProposedEngine(view, rng) {
         };
     }
     function restClip(ms, pose = BASE) { return { dur: ms, breathe: true, sample: () => ({ pose }) }; }
+
+    // ── situations ──
+    // Waiting for approval: look toward the prompt (the bubble is to the
+    // right), sign raised, with a nudge-hop every loop until answered.
+    const ASK = 'poses/looking-to-the-right';
+    function askEnter() {
+        return {
+            dur: 320, breathe: true,
+            sample(ms) {
+                const u = easeOut(clamp(ms / 320, 0, 1));
+                return { pose: ASK, gaze: 0.9, props: { sign: { dy: 9 * (1 - u), r: -10 * (1 - u), o: u } } };
+            },
+        };
+    }
+    function askLoop() {
+        return {
+            dur: 2600, breathe: true,
+            sample(ms) {
+                const n = clamp(ms / 420, 0, 1);
+                const hop = Math.sin(n * Math.PI) * (ms < 420 ? 3.2 : 0);
+                const wig = ms < 520 ? Math.sin((ms / 520) * Math.PI * 3) * 9 * (1 - ms / 520) : 0;
+                return { pose: ASK, y: hop, gaze: 0.9, props: { sign: { dy: -hop * 0.3, r: wig } } };
+            },
+        };
+    }
+    function askExit() {
+        return {
+            dur: 360, breathe: true,
+            sample(ms) {
+                const u = easeIn(clamp(ms / 300, 0, 1));
+                const nod = Math.sin(clamp(ms / 360, 0, 1) * Math.PI);
+                return { pose: ASK, sy: 1 - 0.05 * nod, gaze: 0.9 * (1 - u), props: { sign: { dy: 10 * u, r: 14 * u, o: 1 - u } } };
+            },
+        };
+    }
+    // Error / connection lost: deflate, droop over an unplugged cord, sigh.
+    const SAD = 'poses/looking-down';
+    function errorEnter() {
+        return {
+            dur: 720, breathe: false,
+            sample(ms) {
+                const u = easeInOut(clamp(ms / 720, 0, 1));
+                return { pose: SAD, sy: lerp(1, 0.92, u), sx: lerp(1, 1.04, u), props: { cord: 1 } };
+            },
+        };
+    }
+    function errorLoop() {
+        return {
+            dur: 3200, breathe: true,
+            sample(ms) {
+                // A sigh two-thirds of the way through: a deeper slump and back.
+                const sigh = Math.sin(clamp((ms - 2000) / 700, 0, 1) * Math.PI);
+                return { pose: SAD, sy: 0.92 - 0.04 * sigh, sx: 1.04 + 0.02 * sigh, props: { cord: 1 } };
+            },
+        };
+    }
+    function recoverClip() {
+        // Shake it off, then spring back up.
+        return {
+            dur: 560, breathe: false,
+            sample(ms) {
+                const u = clamp(ms / 560, 0, 1);
+                return { pose: 'poses/interested', rot: 11 * Math.sin(u * Math.PI * 7) * (1 - u),
+                    sy: lerp(0.92, 1, easeOut(u)), sx: lerp(1.04, 1, easeOut(u)) };
+            },
+        };
+    }
+    // Rate limited: panting, sweat beading, glancing at a racing clock.
+    function pantLoop() {
+        const beads = sweatClip();
+        return {
+            dur: 2400, breathe: false,
+            sample(ms) {
+                const pant = Math.sin((ms / 420) * Math.PI * 2);
+                const look = Math.sin(clamp((ms - 1300) / 800, 0, 1) * Math.PI);
+                const drops = beads.sample(clamp(ms, 0, 1400)).props.drops;
+                return { pose: BASE, sy: 1 + 0.045 * pant, sx: 1 - 0.02 * pant, rot: 5 * look,
+                    props: { clock: (ms / 2400) * 720, drops } };
+            },
+        };
+    }
+    // Compacting context: papers fly into the box, Kage sits in it.
+    const BOX = 'poses/in-cute-box';
+    const paperArc = (u, i) => {
+        if (u <= 0 || u >= 1) return null;
+        const x0 = -14 + i * 2, y0 = 6 - i * 3, x1 = 27 + i * 1.5, y1 = 24;
+        return { x: lerp(x0, x1, u), y: lerp(y0, y1, u) - Math.sin(u * Math.PI) * 11, r: lerp(-30, 180 + i * 40, u), s: 1 - 0.35 * u, o: u > 0.75 ? (1 - u) / 0.25 : 1 };
+    };
+    function boxEnter() {
+        return {
+            dur: 1250, breathe: true,
+            sample(ms) {
+                const swap = swapClip(BOX, 1250, { from: shown }).sample(ms);
+                const papers = [0, 1, 2].map((i) => paperArc((ms - 200 - i * 220) / 620, i));
+                return { ...swap, props: { papers } };
+            },
+        };
+    }
+    function boxLoop() {
+        return {
+            dur: 2200, breathe: true,
+            sample(ms) {
+                const p = ms / 2200;
+                return { pose: BOX, y: 0.8 * Math.abs(Math.sin(p * Math.PI * 2)), rot: 2 * Math.sin(p * Math.PI * 2),
+                    props: { papers: [paperArc((ms - 900) / 620, 1)] } };
+            },
+        };
+    }
+    // Long waits: check the watch, tap a foot.
+    function watchClip() {
+        return {
+            dur: 1300, breathe: true,
+            sample(ms) {
+                const up = ms < 1000;
+                const sigh = Math.sin(clamp((ms - 1000) / 300, 0, 1) * Math.PI);
+                return { pose: up ? 'waving/waving-f2' : BASE, sy: 1 - 0.07 * sigh,
+                    props: up ? { watch: { x: 33.6, y: 13.2 } } : null };
+            },
+        };
+    }
+    function tapClip() {
+        return {
+            dur: 1100, breathe: true, taps: true,
+            sample(ms) {
+                const u = (ms % 240) / 240;
+                const down = ms < 960 ? Math.max(0, Math.sin(u * Math.PI)) : 0;
+                return { pose: BASE, rot: -2.2 * down, sy: 1 - 0.015 * down, tapsDone: Math.min(4, Math.floor((ms + 120) / 240)) };
+            },
+        };
+    }
+
+    // ── one-shots ──
+    function summonClip(pose) {
+        // Pop up into view from below, overshoot, land, settle.
+        return {
+            dur: 640, breathe: false,
+            sample(ms) {
+                let y, sx = 1, sy = 1;
+                if (ms < 260) {
+                    const u = easeOut(ms / 260);
+                    y = lerp(-34, 6, u); sy = lerp(1.18, 1.05, u); sx = 2 - sy;
+                } else if (ms < 380) {
+                    const u = (ms - 260) / 120;
+                    y = 6 * Math.cos(u * Math.PI / 2);
+                    sy = lerp(1.05, 0.86, easeIn(u)); sx = 2 - sy;
+                } else {
+                    y = 0;
+                    const d = springDecay((ms - 380) / 260);
+                    sy = 1 - 0.14 * d; sx = 1 + 0.1 * d;
+                }
+                return { pose, y, sx, sy, air: y > 0.4 };
+            },
+        };
+    }
+    function copyWink() { return { ...swapClip('poses/winking', 700, { from: shown }), twinkle: true }; }
+    function updateClips(f) {
+        return [
+            swapClip('poses/balloon-looking-up', 240, { from: shown }),
+            {
+                dur: 1900, breathe: false,
+                sample(ms) {
+                    const u = ms / 1900;
+                    return { pose: 'poses/balloon-looking-up', y: 4 * easeInOut(clamp(u * 1.6, 0, 1)) + 1.2 * Math.sin(u * Math.PI * 4), rot: 3 * Math.sin(u * Math.PI * 3) };
+                },
+            },
+            swapClip('poses/balloon', 700, { from: 'poses/balloon-looking-up' }),
+            waveClip(f),
+        ];
+    }
+
+    // ── extension activity hint: music ──
+    const BEAT = 60000 / 112;
+    function musicClip(kind) {
+        const pose = { bop: BASE, dance: 'poses/dancing-with-bow', conduct: 'poses/conductor', harmonica: 'poses/harmonica' }[kind];
+        return {
+            dur: BEAT * 8, breathe: false, notes: true,
+            sample(ms) {
+                const b = ms / BEAT, i = Math.floor(b), ph = b - i;
+                const hit = (1 - ph) ** 3; // sharp on the beat, relaxing off it
+                const side = i % 2 ? 1 : -1;
+                const notesDone = Math.floor(b / 2);
+                if (kind === 'bop') return { pose, sy: 1 - 0.07 * hit, sx: 1 + 0.04 * hit, rot: side * 3.5 * easeInOut(ph), notesDone };
+                if (kind === 'dance') return { pose, rot: 7 * Math.sin((b / 2) * Math.PI * 2), y: 2.4 * Math.abs(Math.sin(b * Math.PI)), notesDone };
+                if (kind === 'conduct') return { pose, rot: 3 * Math.sin(b * Math.PI), sy: 1 - 0.04 * hit, notesDone };
+                return { pose, x: 1.6 * Math.sin((b / 2) * Math.PI * 2), y: 1.2 * hit, notesDone };
+            },
+        };
+    }
+
+    // ── extension activity hint: meeting (calendar) ──
+    function meetingClip() {
+        // Headset on, nodding along; now and then a glance at the watch.
+        return {
+            dur: 3600, breathe: true, hint: true,
+            sample(ms) {
+                const nod = Math.max(0, Math.sin(((ms % 1200) / 1200) * Math.PI * 2)) * (ms < 2400 ? 1 : 0);
+                if (ms >= 2400) {
+                    const up = ms < 3300;
+                    return { pose: up ? 'waving/waving-f2' : BASE, props: { headset: 1, watch: up ? { x: 33.6, y: 13.2 } : null } };
+                }
+                return { pose: BASE, sy: 1 - 0.035 * nod, rot: 2.5 * nod, props: { headset: 1 } };
+            },
+        };
+    }
+    // ── host-fed hint: timer running ──
+    function timerClip(startedAt, t) {
+        // The hourglass drains over a fixed cycle (the real one would follow
+        // the timer's remaining fraction); Kage glances at it now and then.
+        return {
+            dur: 3000, breathe: true, hint: true,
+            sample(ms) {
+                const u = (((t + ms) - startedAt) % 12000) / 12000;
+                const look = Math.sin(clamp((ms - 1600) / 900, 0, 1) * Math.PI);
+                return { pose: BASE, rot: 4 * look, props: { hourglass: u } };
+            },
+        };
+    }
+
+    // ── time of day ──
+    function coffeeClip() {
+        return {
+            dur: 2600, breathe: true, steam: true,
+            sample(ms) {
+                const sip = Math.sin(clamp((ms - 1100) / 600, 0, 1) * Math.PI);
+                return { pose: 'poses/coffee', rot: -3 * sip, steamDone: Math.floor(ms / 520) };
+            },
+        };
+    }
+    function moonClip() {
+        return {
+            dur: 3000, breathe: true, twinkles: true,
+            sample(ms) {
+                const p = ms / 3000;
+                return { pose: 'poses/moon', rot: 3 * Math.sin(p * Math.PI * 2), y: 1.5 * Math.sin(p * Math.PI * 2), twinklesDone: Math.floor(ms / 900) };
+            },
+        };
+    }
+    function yawnClip() {
+        return {
+            dur: 1100, breathe: false,
+            sample(ms) {
+                const u = Math.sin(clamp(ms / 1100, 0, 1) * Math.PI);
+                return { pose: 'poses/happy', sy: 1 + 0.1 * u, sx: 1 - 0.04 * u };
+            },
+        };
+    }
+
+    // ── live inputs ──
+    function typeLoop() {
+        return { dur: 1e9, breathe: true, live: 'type', sample: () => ({ pose: 'poses/looking-to-the-right', gaze: gazeNow }) };
+    }
+    function hoverLoop() {
+        return {
+            dur: 1e9, breathe: true, live: 'hover',
+            sample(ms) {
+                const perk = ms < 260 ? Math.sin((ms / 260) * Math.PI) : 0;
+                return { pose: 'poses/looking-to-the-right', sy: 1 + 0.06 * perk, sx: 1 - 0.03 * perk, mirror: hover && hover.x < 0.5, gaze: gazeNow };
+            },
+        };
+    }
     function swapClip(pose, hold, opts = {}) {
         // Squash-swap: a quick squash hides the pose change at its lowest point.
         const SW = 200;
@@ -879,8 +1215,22 @@ function ProposedEngine(view, rng) {
             for (let i = 0; i < 3; i++) {
                 particles.push({ kind, t0: t, life: 380, x: at.x, y: at.y, vx: (rng() - 0.6) * 22, vy: -18 - rng() * 14, ch: '✦', size: 3.5 + rng() * 2 });
             }
-        } else if (kind === 'glint') {
-            particles.push({ kind, t0: t, life: 420, x: at.x, y: at.y, ch: '✦', size: 6 });
+        } else if (kind === 'glint' || kind === 'twinkle') {
+            particles.push({ kind: 'glint', t0: t, life: 420, x: at.x, y: at.y, ch: '✦', size: kind === 'twinkle' ? 5 : 6 });
+        } else if (kind === 'note') {
+            const dir = rng() < 0.5 ? -1 : 1;
+            particles.push({ kind, t0: t, life: 1300, x: at.x, y: at.y, dir, ch: rng() < 0.5 ? '♪' : '♫', size: 6 + rng() * 2 });
+        } else if (kind === 'steam') {
+            particles.push({ kind, t0: t, life: 1200, x: at.x + (rng() - 0.5) * 2, y: at.y, ch: '~', size: 5 + rng() * 2 });
+        } else if (kind === 'confetti') {
+            for (let i = 0; i < 10; i++) {
+                const a = -Math.PI / 2 + (rng() - 0.5) * 2.4;
+                const v = 24 + rng() * 18;
+                particles.push({ kind, t0: t, life: 1100, x: at.x, y: at.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+                    ch: ['✦', '•', '▪'][i % 3], size: 3.5 + rng() * 2.5, spin: (rng() - 0.5) * 720 });
+            }
+        } else if (kind === 'tap') {
+            particles.push({ kind, t0: t, life: 300, x: at.x, y: at.y, ch: '\u2034', size: 7 });
         }
     }
     function drawParticles(t) {
@@ -901,6 +1251,22 @@ function ProposedEngine(view, rng) {
             } else if (p.kind === 'chip') {
                 const tt = u * p.life / 1000;
                 x = p.x + p.vx * tt; y = p.y + p.vy * tt + 90 * tt * tt;
+                s = p.size; o = 1 - u;
+            } else if (p.kind === 'note') {
+                x = p.x + p.dir * (u * 9 + Math.sin(u * 7) * 1.6); y = p.y - u * 20;
+                s = p.size; o = u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85;
+            } else if (p.kind === 'steam') {
+                x = p.x + Math.sin(u * 9) * 1.4; y = p.y - u * 12;
+                s = p.size * (0.8 + u * 0.6); o = Math.sin(u * Math.PI) * 0.85;
+            } else if (p.kind === 'confetti') {
+                const tt = u * p.life / 1000;
+                x = p.x + p.vx * tt; y = p.y + p.vy * tt + 46 * tt * tt;
+                s = p.size; o = 1 - u * u;
+                el.textContent = p.ch;
+                el.style.cssText = `left:${x}px;top:${y}px;font-size:${s}px;opacity:${o};transform:translate(-50%,-50%) rotate(${(p.spin * tt).toFixed(0)}deg)`;
+                return;
+            } else if (p.kind === 'tap') {
+                x = p.x; y = p.y - u * 2;
                 s = p.size; o = 1 - u;
             } else {
                 x = p.x; y = p.y;
@@ -934,10 +1300,15 @@ function ProposedEngine(view, rng) {
             queue.push(ponderClip(), ponderClip(), hopClip(6, 'poses/magnifying-glass'), restClip(500, 'poses/magnifying-glass'));
         } else if (f.hop === 'drawn-arc') {
             hops++;
+            // After a long wait, variants come more often and impatience joins in.
+            const longWait = f.longWait && thinkFor > 30000 / f.idleScale;
             if (f.landings && (hops >= nextVariantAt || DEBUG_VARIANT)) {
-                nextVariantAt = hops + 3 + Math.floor(rng() * 4);
-                const r = { sweat: 0.1, glance: 0.5, spin: 0.9 }[DEBUG_VARIANT] ?? rng();
-                if (r < 0.4) queue.push(drawnHop(f.hopHeight), sweatClip());
+                nextVariantAt = hops + (longWait ? 2 + Math.floor(rng() * 2) : 3 + Math.floor(rng() * 4));
+                const forced = { sweat: 0.1, glance: 0.5, spin: 0.9, watch: -1, tap: -2 }[DEBUG_VARIANT];
+                const r = forced ?? (longWait ? (rng() < 0.55 ? -1 - Math.floor(rng() * 2) : rng()) : rng());
+                if (r === -1) queue.push(drawnHop(f.hopHeight), watchClip());
+                else if (r === -2) queue.push(drawnHop(f.hopHeight), tapClip());
+                else if (r < 0.4) queue.push(drawnHop(f.hopHeight), sweatClip());
                 else if (r < 0.7) queue.push(drawnHop(f.hopHeight), swapClip('poses/looking-to-the-right', 750, { from: 'jumpArc/f8', mirror: rng() < 0.5 }));
                 else queue.push(drawnHop(f.hopHeight * 1.2, { spin: rng() < 0.5 ? 1 : -1 }));
             } else {
@@ -951,6 +1322,17 @@ function ProposedEngine(view, rng) {
             if (f.hop === 'frames-retimed') queue.push(restClip(450, 'jumping/jumping-f1'));
         }
         next(t);
+    }
+
+    // Priority: error > approval > rate limit > compacting > thinking > done.
+    function pickNext(t, f) {
+        if (sit.error) queue.push(errorLoop());
+        else if (sit.ask) queue.push(askLoop());
+        else if (sit.limit) queue.push(pantLoop());
+        else if (sit.compact) queue.push(boxLoop());
+        else if (mode === 'think') { thinkNext(t, f); return; }
+        else if (mode === 'done') { goIdle(t); return; }
+        if (queue.length && !clip) next(t);
     }
 
     function setProps(p, f) {
@@ -982,6 +1364,33 @@ function ProposedEngine(view, rng) {
                 `translate(19.8 ${(-lift).toFixed(2)}) rotate(${tilt.toFixed(1)} 19.8 33.8) scale(${lf.toFixed(3)} 1) translate(-19.8 0)`
             );
         }
+        P.headset.style.display = p.headset ? '' : 'none';
+        P.hourglass.style.display = p.hourglass !== undefined ? '' : 'none';
+        if (p.hourglass !== undefined) {
+            // Sand drains top → bottom; each half scales from its narrow end.
+            const u = clamp(p.hourglass, 0, 1);
+            P.sandTop.setAttribute('transform', `translate(47.5 23) scale(${(1 - u * 0.85).toFixed(3)}) translate(-47.5 -23)`);
+            P.sandBottom.setAttribute('transform', `translate(47.5 33) scale(${(0.15 + u * 0.85).toFixed(3)}) translate(-47.5 -33)`);
+            P.stream.style.display = u < 0.98 ? '' : 'none';
+        }
+        P.sign.style.display = p.sign ? '' : 'none';
+        if (p.sign) {
+            P.sign.setAttribute('transform', `translate(0 ${(p.sign.dy || 0).toFixed(2)}) rotate(${(p.sign.r || 0).toFixed(1)} 36 22)`);
+            P.sign.setAttribute('opacity', (p.sign.o ?? 1).toFixed(2));
+        }
+        P.cord.style.display = p.cord ? '' : 'none';
+        P.clock.style.display = p.clock !== undefined ? '' : 'none';
+        if (p.clock !== undefined) P.clockHands.setAttribute('transform', `rotate(${p.clock.toFixed(1)} 48 29.6)`);
+        P.watch.style.display = p.watch ? '' : 'none';
+        if (p.watch) P.watch.setAttribute('transform', `translate(${p.watch.x} ${p.watch.y})`);
+        for (let i = 0; i < 3; i++) {
+            const g = P[`paper${i}`];
+            const d = p.papers && p.papers[i];
+            g.style.display = d ? '' : 'none';
+            if (!d) continue;
+            g.setAttribute('transform', `translate(${d.x.toFixed(2)} ${d.y.toFixed(2)}) rotate(${d.r.toFixed(1)}) scale(${d.s.toFixed(3)})`);
+            g.setAttribute('opacity', d.o.toFixed(3));
+        }
         for (let i = 0; i < 3; i++) {
             const g = P[`drop${i}`];
             const d = p.drops && p.drops[i];
@@ -993,10 +1402,67 @@ function ProposedEngine(view, rng) {
     }
 
     return {
-        event(name, t, f) {
+        event(name, t, f, data) {
+            // Live inputs: not recorded in history, never reset idle timers
+            // on their own except where noted.
+            if (name === 'type') { typingUntil = t + 1400; caret = data ?? 0.5; lastActivity = t; return; }
+            if (name === 'hover') { hover = { x: data ?? 0.5 }; return; }
+            if (name === 'unhover') { hover = null; return; }
+            if (name === 'drag') { drag.on = true; drag.vx = data ?? 0; lastActivity = t; return; }
+            if (name === 'dragEnd') { drag.on = false; drag.vx = 0; return; }
+
             lastActivity = t;
             const wake = asleep;
             asleep = false;
+            if (name === 'hint:none') { hint = null; if (clip && (clip.notes || clip.hint)) play([swapClip(BASE, 240, { from: shown })], t); return; }
+            if (name.startsWith('hint:')) {
+                hint = name.slice(5);
+                hintSince = t;
+                // Interrupt a hint loop (or idle) so the new one starts now.
+                if (!clip || clip.notes || clip.hint) play([swapClip(BASE, 240, { from: shown })], t);
+                return;
+            }
+
+            // Situations: enter/exit transitions; the scheduler loops them.
+            const SIT = {
+                permission: ['ask', true], permissionDone: ['ask', false],
+                error: ['error', true], recover: ['error', false],
+                rateLimit: ['limit', true], rateLimitDone: ['limit', false],
+                compact: ['compact', true], compactDone: ['compact', false],
+            };
+            if (SIT[name]) {
+                if (!f.situations) return;
+                const [key, on] = SIT[name];
+                if (sit[key] === on) return;
+                sit[key] = on;
+                // A situation outranked by an active one just waits its turn:
+                // no transition now; pickNext shows it once it's on top.
+                const RANK = ['error', 'ask', 'limit', 'compact'];
+                if (RANK.slice(0, RANK.indexOf(key)).some((k) => sit[k])) return;
+                if (key === 'error' && on) { mode = 'idle'; activity = null; } // the turn is dead
+                const enter = { ask: askEnter, error: errorEnter, limit: () => swapClip(BASE, 200, { from: shown }), compact: boxEnter };
+                const exit = { ask: askExit, error: recoverClip, limit: () => landRest(320), compact: () => hopClip(8, BASE) };
+                const list = on ? [enter[key]()] : [exit[key]()];
+                if (key === 'error' && !on && !f.reduced) list.push(hopClip(8, 'poses/happy'), waveClip(f));
+                play(list, t);
+                return;
+            }
+            if (name === 'summon') {
+                if (!f.summon) return;
+                play([summonClip(mode === 'think' ? 'jumpArc/f1' : BASE)], t);
+                return;
+            }
+            if (name === 'copy') {
+                if (Object.values(sit).some(Boolean)) return;
+                play([copyWink()], t);
+                return;
+            }
+            if (name === 'updated') {
+                if (mode === 'think' || Object.values(sit).some(Boolean)) return;
+                play(updateClips(f), t);
+                emit('confetti', t + 240, { x: W / 2, y: GROUND - CAT_H * 0.7 });
+                return;
+            }
             if (name === 'think') {
                 mode = 'think'; modeStart = t; hops = 0; nextVariantAt = 3;
                 play(wake && !f.reduced ? [hopClip(6, 'poses/interested')] : [], t);
@@ -1037,22 +1503,52 @@ function ProposedEngine(view, rng) {
             }
         },
         update(t, f) {
-            // ── behaviour scheduling ──
-            if (!clip) {
-                if (mode === 'think') thinkNext(t, f);
-                else if (mode === 'done') goIdle(t);
+            // ── live inputs ──
+            const typing = f.inputs && t < typingUntil;
+            const target = typing ? lerp(-0.5, 1.5, caret) : hover ? Math.abs(hover.x - 0.5) * 3 : 0;
+            gazeNow += (target - gazeNow) * 0.25;
+            const free = mode === 'idle' && !Object.values(sit).some(Boolean);
+            // End a live loop as soon as its input stops.
+            if (clip && clip.live && ((clip.live === 'type' && !typing) || (clip.live === 'hover' && (!hover || typing)) || !free)) {
+                play(free ? [swapClip(BASE, 260, { from: shown })] : [], t);
             }
+
+            // ── behaviour scheduling ──
+            if (!clip) pickNext(t, f);
+            const filler = !clip || clip.idle;
+            if (free && filler && typing) {
+                play([swapClip('poses/looking-to-the-right', 260, { from: shown }), typeLoop()], t);
+                asleep = false;
+            } else if (free && filler && hover && f.inputs) {
+                play([hoverLoop()], t);
+                asleep = false;
+            } else if (free && !clip && hint && f.extHints) {
+                // Any hint keeps Kage awake and replaces the idle loop.
+                asleep = false;
+                lastActivity = t;
+                const loop = hint === 'music' ? musicClip(['bop', 'dance', 'conduct', 'harmonica'][Math.floor(rng() * 4)])
+                    : hint === 'meeting' ? meetingClip() : timerClip(hintSince, t);
+                play([{ ...loop, idle: true }], t);
+            }
+            const tod = f.timeOfDay ? (f.tod === 'auto' ? todFromHour(new Date().getHours()) : f.tod) : 'day';
             if (mode === 'idle' && !clip) {
-                if (f.doze && !asleep && t - lastActivity > 60000 / f.idleScale) {
+                // Night: doze off twice as fast.
+                const dozeAfter = (tod === 'night' ? 30000 : 60000) / f.idleScale;
+                if (f.doze && !asleep && t - lastActivity > dozeAfter) {
                     asleep = true;
-                    play([swapClip('poses/sleeping', 1e9)], t);
+                    play([{ ...swapClip('poses/sleeping', 1e9), idle: true }], t);
                 } else if (!asleep && t >= nextIdle) {
                     const r = rng();
                     const list = [];
-                    if (f.glances && r < 0.35) list.push(swapClip('poses/looking-to-the-right', 1500, { mirror: rng() < 0.5 }));
+                    const r2 = rng();
+                    if (tod === 'morning' && r2 < 0.45) list.push(swapClip('poses/coffee', 220), coffeeClip());
+                    else if (tod === 'night' && r2 < 0.3) list.push(swapClip('poses/moon', 260), moonClip());
+                    else if (tod === 'night' && r2 < 0.55) list.push(yawnClip());
+                    else if (f.glances && r < 0.35) list.push(swapClip('poses/looking-to-the-right', 1500, { mirror: rng() < 0.5 }));
                     else if (f.glances && r < 0.5) list.push(swapClip('poses/winking', 650));
                     else if (f.glances && r < 0.62) list.push(swapClip('poses/interested', 1300));
                     else if (!f.reduced) list.push(waveClip(f));
+                    list.forEach((c) => (c.idle = true));
                     if (list.length) play(list, t);
                     nextIdle = t + (f.glances ? 6000 + rng() * 6000 : 10000 + (rng() * 2 - 1) * 2000) / f.idleScale;
                 }
@@ -1063,7 +1559,9 @@ function ProposedEngine(view, rng) {
             let breathe = true;
             if (clip && t - clipStart >= clip.dur) {
                 next(t);
-                if (!clip && mode === 'think') thinkNext(t, f);
+                // Same frame, same priority order: no gap frame, and a
+                // situation always wins over the think loop.
+                if (!clip) pickNext(t, f);
             }
             if (clip) {
                 s = { ...s, ...clip.sample(t - clipStart) };
@@ -1097,9 +1595,20 @@ function ProposedEngine(view, rng) {
             lastK = k; lastS = s;
 
             const mx = s.mirror ? -1 : 1;
+            // Drag: the body lags the window and leans against the motion,
+            // then wobbles upright on release (a loose spring).
+            const leanTarget = drag.on && !f.reduced ? clamp(-drag.vx * 900, -24, 24) : 0;
+            const dsteps = clamp(Math.round((t - (drag.lastT ?? t)) / 16), 0, 30);
+            drag.lastT = t;
+            for (let i = 0; i < dsteps; i++) {
+                drag.vel += (leanTarget - drag.lean) * 0.07;
+                drag.vel *= drag.on ? 0.8 : 0.9;
+                drag.lean += drag.vel;
+            }
+            const stretch = 1 + Math.min(Math.abs(drag.lean) / 24, 1) * 0.08;
             // A spin turns around the body's middle, not the feet.
             const c = s.spinPivot ? 12 * k : 0;
-            rig.style.transform = `translate(0px, ${-s.y - c}px) rotate(${s.rot || 0}deg) translate(0px, ${c}px) scale(${s.sx * k * mx}, ${s.sy * k})`;
+            rig.style.transform = `translate(${(s.x || 0).toFixed(2)}px, ${-s.y - c}px) rotate(${((s.rot || 0) + drag.lean).toFixed(2)}deg) translate(0px, ${c}px) scale(${s.sx * k * mx / stretch}, ${s.sy * k * stretch})`;
             // Clip the art, not the rig: the rig carries the outline and
             // drop-shadow filter, which a clip on it would cut into a box.
             if (!shown.startsWith('jumpArc')) arts.get(shown).style.clipPath = s.air ? AIR_CLIP : '';
@@ -1116,6 +1625,26 @@ function ProposedEngine(view, rng) {
             if (clip && clip.glints && s.glintsDone > clipHits) {
                 clipHits = s.glintsDone;
                 emit('glint', t, toView(5, 12));
+            }
+            if (clip && clip.notes && s.notesDone > clipHits) {
+                clipHits = s.notesDone;
+                if (!f.reduced) emit('note', t, toView(20, -2));
+            }
+            if (clip && clip.steam && s.steamDone > clipHits) {
+                clipHits = s.steamDone;
+                emit('steam', t, toView(33, 4));
+            }
+            if (clip && clip.twinkles && s.twinklesDone > clipHits) {
+                clipHits = s.twinklesDone;
+                emit('twinkle', t, toView(-2 + rng() * 10, 2 + rng() * 8));
+            }
+            if (clip && clip.taps && s.tapsDone > clipHits) {
+                clipHits = s.tapsDone;
+                emit('tap', t, toView(39.5, 31.5));
+            }
+            if (clip && clip.twinkle && !clipHits && t - clipStart > 150) {
+                clipHits = 1;
+                emit('twinkle', t, toView(26, 8));
             }
 
             // ── blinks ──
@@ -1234,12 +1763,31 @@ function buildColumn(spec) {
             }
         };
         sel.onchange = () => applyPreset(sel.value);
-        state.f = { ...PRESETS[spec.preset].f };
+        state.f = { ...PRESETS[spec.preset].f, ...(TOD_PARAM ? { tod: TOD_PARAM } : {}) };
         title.textContent = PRESETS[spec.preset].label;
         desc.textContent = PRESETS[spec.preset].desc;
         renderFeats();
     }
-    for (const v of [appView, inspView]) v.onclick = () => fire('poke');
+    for (const v of [appView, inspView]) {
+        // Click = poke; press-and-move = drag (lean); move = hover (gaze).
+        let down = null, moved = false, lastX = 0, lastT = 0;
+        v.onpointerdown = (e) => { down = e; moved = false; lastX = e.clientX; lastT = performance.now(); v.setPointerCapture(e.pointerId); };
+        v.onpointermove = (e) => {
+            const r = v.getBoundingClientRect();
+            live('hover', clamp((e.clientX - r.left) / r.width, 0, 1));
+            if (!down) return;
+            const now = performance.now();
+            if (Math.abs(e.clientX - down.clientX) > 3) moved = true;
+            if (moved) live('drag', (e.clientX - lastX) / Math.max(1, now - lastT) / 60);
+            lastX = e.clientX; lastT = now;
+        };
+        v.onpointerup = () => {
+            if (down && !moved) fire('poke');
+            if (moved) live('dragEnd');
+            down = null;
+        };
+        v.onpointerleave = () => { if (!down) live('unhover'); };
+    }
     document.getElementById('cols').appendChild(col);
     columns.push(state);
     rebuild(state);
@@ -1271,16 +1819,22 @@ function simTo(state, tEnd) {
     const tStart = atParam !== null ? 0 : Math.max(0, tEnd - 8000);
     let hi = 0;
     while (hi < history.length && history[hi].t <= tStart) {
-        for (const e of state.engines) e.event(history[hi].name, history[hi].t, cfgFor(state));
+        for (const e of state.engines) e.event(history[hi].name, history[hi].t, cfgFor(state), history[hi].data);
         hi++;
     }
     for (let t = tStart; t <= tEnd; t += 16) {
         while (hi < history.length && history[hi].t <= t) {
-            for (const e of state.engines) e.event(history[hi].name, history[hi].t, cfgFor(state));
+            for (const e of state.engines) e.event(history[hi].name, history[hi].t, cfgFor(state), history[hi].data);
             hi++;
         }
         for (const e of state.engines) e.update(t, cfgFor(state));
     }
+}
+
+// Continuous inputs (typing, hover, drag): broadcast but never recorded, so
+// a rebuild doesn't replay thousands of mouse moves.
+function live(name, data) {
+    for (const c of columns) for (const e of c.engines) e.event(name, clock.t, cfgFor(c), data);
 }
 
 function fire(name) {
@@ -1297,7 +1851,12 @@ function log(msg) {
 // ─── demo script ─────────────────────────────────────────────────────────
 let demo = null;
 function startDemo() {
-    const steps = [['think', 5000], ['tool:search', 4000], ['tool:edit', 5500], ['tool:read', 4000], ['tool:none', 3000], ['done', 5000], ['poke', 4000]];
+    const steps = [
+        ['summon', 1500], ['think', 4000], ['tool:search', 3500], ['permission', 4000], ['permissionDone', 1200],
+        ['tool:edit', 4500], ['compact', 3500], ['compactDone', 1500], ['tool:read', 4000], ['tool:none', 2500],
+        ['done', 4500], ['copy', 2200], ['hint:music', 7000], ['hint:none', 1500], ['updated', 5500],
+        ['rateLimit', 4000], ['rateLimitDone', 2000], ['error', 4500], ['recover', 4000], ['poke', 4000],
+    ];
     let i = 0, at = clock.t + 1000;
     demo = () => {
         if (clock.t >= at) {
@@ -1320,6 +1879,19 @@ buildColumn({ kind: 'proposed', preset: 'combo' });
 buildColumn({ kind: 'proposed', preset: 'personality' });
 
 document.getElementById('bThink').onclick = () => fire('think');
+document.querySelectorAll('[data-fire]').forEach((b) => (b.onclick = () => fire(b.dataset.fire)));
+document.querySelectorAll('[data-pair]').forEach((b) => {
+    // Toggle buttons: first click enters the situation, second clears it.
+    const [on, off] = b.dataset.pair.split(',');
+    b.onclick = () => { const active = b.classList.toggle('on'); fire(active ? on : off); };
+});
+document.getElementById('sHint').onchange = (e) => fire(`hint:${e.target.value}`);
+document.getElementById('sTod').onchange = (e) => {
+    for (const c of columns) if (c.f) c.f.tod = e.target.value;
+};
+const typeBox = document.getElementById('typeBox');
+const caretFrac = () => (typeBox.value.length ? typeBox.selectionStart / Math.max(18, typeBox.value.length) : 0);
+for (const ev of ['input', 'keyup', 'click']) typeBox.addEventListener(ev, () => live('type', clamp(caretFrac(), 0, 1)));
 document.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => fire(`tool:${b.dataset.tool}`)));
 document.getElementById('bDone').onclick = () => fire('done');
 document.getElementById('bPoke').onclick = () => fire('poke');
@@ -1346,8 +1918,9 @@ document.getElementById('bRestart').onclick = () => {
 
 if (qs.get('script')) {
     for (const part of qs.get('script').split(',')) {
-        const [name, t] = part.split('@');
-        history.push({ name, t: Number(t) });
+        const [name, rest] = part.split('@');
+        const [t, v] = rest.split(':');
+        history.push({ name, t: Number(t), data: v === undefined ? undefined : Number(v) });
     }
 }
 if (atParam !== null) {
@@ -1363,7 +1936,11 @@ if (atParam !== null) {
         const dt = Math.min(50, now - last) * clock.speed;
         last = now;
         clock.t += dt;
-        while (pending.length && pending[0].t <= clock.t) fire(pending.shift().name);
+        while (pending.length && pending[0].t <= clock.t) {
+            const ev = pending.shift();
+            if (ev.data !== undefined) live(ev.name, ev.data);
+            else fire(ev.name);
+        }
         if (demo) demo();
         for (const c of columns) for (const e of c.engines) e.update(clock.t, cfgFor(c));
         document.getElementById('clock').textContent = `t = ${(clock.t / 1000).toFixed(1)}s`;
