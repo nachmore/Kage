@@ -578,12 +578,14 @@ const PROPS_SVG = `
   <path d="M2.4 14Q2.8 21.2 11.6 21.2" class="p-pen" style="stroke-width:.8"/>
   <circle cx="12.6" cy="21.2" r="1.25" class="p-paper" style="stroke-width:.6"/>
 </g>
-<g data-p="hourglass" style="display:none" transform="translate(-6 0)">
-  <path d="M43 15.6h9M43 34.2h9" class="p-pen" style="stroke-width:1.1"/>
-  <path d="M44 16q0 4.6 3.5 8.9Q44 29.2 44 33.8h7q0-4.6-3.5-8.9Q51 20.6 51 16z" class="p-paper"/>
-  <g data-p="sandTop"><path d="M45.2 17.4h4.6q-.4 3.2-2.3 5.6-1.9-2.4-2.3-5.6z" style="fill:var(--body)"/></g>
-  <g data-p="sandBottom"><path d="M45 33h5q-.4-3-2.5-4.6-2.1 1.6-2.5 4.6z" style="fill:var(--body)"/></g>
-  <path d="M47.5 23.4v8.8" data-p="stream" class="p-pen" style="stroke-width:.4"/>
+<g data-p="hourglass" style="display:none" transform="translate(-7 0) translate(47.5 34.2) scale(.62) translate(-47.5 -34.2)">
+  <g data-p="hgSpin">
+    <path d="M43 15.6h9M43 34.2h9" class="p-pen" style="stroke-width:1.1"/>
+    <path d="M44 16q0 4.6 3.5 8.9Q44 29.2 44 33.8h7q0-4.6-3.5-8.9Q51 20.6 51 16z" class="p-paper"/>
+    <g data-p="sandTop"><path d="M45.2 17.4h4.6q-.4 3.2-2.3 5.6-1.9-2.4-2.3-5.6z" style="fill:var(--body)"/></g>
+    <g data-p="sandBottom"><path d="M45 33h5q-.4-3-2.5-4.6-2.1 1.6-2.5 4.6z" style="fill:var(--body)"/></g>
+    <path d="M47.5 23.4v8.8" data-p="stream" class="p-pen" style="stroke-width:.4"/>
+  </g>
 </g>
 <g data-p="drop0" style="display:none"><path d="M0 -1.9C1.15 -.35 1.45 .5 1.45 1A1.45 1.45 0 1 1-1.45 1C-1.45 .5-1.15 -.35 0-1.9Z" class="p-paper" style="stroke-width:.55"/></g>
 <g data-p="drop1" style="display:none"><path d="M0 -1.9C1.15 -.35 1.45 .5 1.45 1A1.45 1.45 0 1 1-1.45 1C-1.45 .5-1.15 -.35 0-1.9Z" class="p-paper" style="stroke-width:.55"/></g>
@@ -1111,15 +1113,43 @@ function ProposedEngine(view, rng) {
         };
     }
     // ── host-fed hint: timer running ──
-    function timerClip(startedAt, t) {
-        // The hourglass drains over a fixed cycle (the real one would follow
-        // the timer's remaining fraction); Kage glances at it now and then.
+    function timerClip() {
+        // Sand drains (the real one would follow the timer's remaining
+        // fraction), Kage glances over mid-way, then reaches out and turns
+        // the glass over when it runs out.
+        const T = { drain: 9000, notice: 380, reach: 240, flip: 440, back: 300 };
+        const dur = T.drain + T.notice + T.reach + T.flip + T.back;
+        const HG = { x: 40.5, y: 20.4 }; // just above the glass, in rig coords
         return {
-            dur: 3000, breathe: true, hint: true,
+            dur, breathe: true, hint: true,
             sample(ms) {
-                const u = (((t + ms) - startedAt) % 12000) / 12000;
-                const look = Math.sin(clamp((ms - 1600) / 900, 0, 1) * Math.PI);
-                return { pose: BASE, rot: 4 * look, props: { hourglass: u } };
+                let t = ms, u = 0, rot = 0, gaze = 0, lean = 0, paw = null;
+                if (t < T.drain) {
+                    u = t / T.drain;
+                    // A glance over at it about halfway through.
+                    const look = Math.sin(clamp((t - T.drain * 0.45) / 1000, 0, 1) * Math.PI);
+                    lean = 3.5 * look; gaze = 0.8 * look;
+                } else if ((t -= T.drain) < T.notice) {
+                    u = 1; gaze = 0.9; lean = 4;
+                } else if ((t -= T.notice) < T.reach) {
+                    // Paw comes in and takes hold of the glass.
+                    const q = easeOut(t / T.reach);
+                    u = 1; gaze = 0.9; lean = 4;
+                    paw = { x: lerp(34.5, HG.x, q), y: lerp(16.5, HG.y, q), r: -10, o: q, s: 0.72 };
+                } else if ((t -= T.reach) < T.flip) {
+                    // Turn it over. The sand stays "fallen" the whole way, so
+                    // when the glass lands upside down it reads as full on top.
+                    const q = easeInOut(t / T.flip);
+                    u = 1; rot = 180 * q; gaze = 0.9; lean = 4;
+                    const arc = Math.sin(q * Math.PI);
+                    paw = { x: HG.x + 2.2 * arc, y: HG.y - 3.4 * arc, r: lerp(-10, 14, q), o: 1, s: 0.72 };
+                } else {
+                    // Paw withdraws; sand is full at the top again (rot 0).
+                    const q = easeOut(clamp((t - T.flip) / T.back, 0, 1));
+                    u = 0; gaze = 0.9 * (1 - q); lean = 4 * (1 - q);
+                    paw = q < 1 ? { x: HG.x, y: HG.y - 4 * q, r: 14, o: 1 - q, s: 0.72 } : null;
+                }
+                return { pose: BASE, rot: lean, gaze, props: { hourglass: { u, rot }, paw } };
             },
         };
     }
@@ -1342,7 +1372,7 @@ function ProposedEngine(view, rng) {
         P.plan.style.display = p.plan ? '' : 'none';
         P.paw.style.display = p.paw ? '' : 'none';
         if (p.paw) {
-            P.paw.setAttribute('transform', `translate(${p.paw.x.toFixed(2)} ${p.paw.y.toFixed(2)}) rotate(${p.paw.r.toFixed(1)})`);
+            P.paw.setAttribute('transform', `translate(${p.paw.x.toFixed(2)} ${p.paw.y.toFixed(2)}) rotate(${p.paw.r.toFixed(1)}) scale(${(p.paw.s ?? 1).toFixed(2)})`);
             P.paw.setAttribute('opacity', (p.paw.o ?? 1).toFixed(2));
         }
         P.bug.style.display = p.bug !== undefined ? '' : 'none';
@@ -1365,13 +1395,17 @@ function ProposedEngine(view, rng) {
             );
         }
         P.headset.style.display = p.headset ? '' : 'none';
-        P.hourglass.style.display = p.hourglass !== undefined ? '' : 'none';
-        if (p.hourglass !== undefined) {
+        P.hourglass.style.display = p.hourglass ? '' : 'none';
+        if (p.hourglass) {
             // Sand drains top → bottom; each half scales from its narrow end.
-            const u = clamp(p.hourglass, 0, 1);
+            const u = clamp(p.hourglass.u, 0, 1);
             P.sandTop.setAttribute('transform', `translate(47.5 23) scale(${(1 - u * 0.85).toFixed(3)}) translate(-47.5 -23)`);
             P.sandBottom.setAttribute('transform', `translate(47.5 33) scale(${(0.15 + u * 0.85).toFixed(3)}) translate(-47.5 -33)`);
-            P.stream.style.display = u < 0.98 ? '' : 'none';
+            P.stream.style.display = u > 0.02 && u < 0.98 ? '' : 'none';
+            // The glass is symmetric top-to-bottom, so snapping 180° back to
+            // 0 at the end of a flip is invisible — which is what lets the
+            // sand reset to "full at the top" without a visible jump.
+            P.hgSpin.setAttribute('transform', `rotate(${(p.hourglass.rot || 0).toFixed(1)} 47.5 24.9)`);
         }
         P.sign.style.display = p.sign ? '' : 'none';
         if (p.sign) {
@@ -1527,7 +1561,7 @@ function ProposedEngine(view, rng) {
                 asleep = false;
                 lastActivity = t;
                 const loop = hint === 'music' ? musicClip(['bop', 'dance', 'conduct', 'harmonica'][Math.floor(rng() * 4)])
-                    : hint === 'meeting' ? meetingClip() : timerClip(hintSince, t);
+                    : hint === 'meeting' ? meetingClip() : timerClip();
                 play([{ ...loop, idle: true }], t);
             }
             const tod = f.timeOfDay ? (f.tod === 'auto' ? todFromHour(new Date().getHours()) : f.tod) : 'day';
