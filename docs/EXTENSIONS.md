@@ -107,6 +107,7 @@ Supported types: `"boolean"`, `"string"`, `"number"`.
 | `messageFormatters` | Path to an ES module that default-exports a message formatter. |
 | `toolProvider` | Path to an ES module that default-exports a tool provider (exposes tools to the LLM). |
 | `triggerProvider` | Path to an ES module that default-exports a trigger provider (emits automation signals). |
+| `mascotActivities` | Array of generic mascot activity names the extension may hint — `"music"`, `"meeting"`, `"timer"`. See [Mascot activity hints](#mascot-activity-hints). |
 
 ## Permissions
 
@@ -256,6 +257,9 @@ the remaining gaps.
 - `context.invoke(command, args)` round-trips through a
   MessagePort. The host validates the command against your
   granted capabilities before calling Tauri.
+- `context.mascot` lets you hint what the user is *doing* so the
+  mascot can react. It's not an `invoke` and needs no capability —
+  see [Mascot activity hints](#mascot-activity-hints).
 - `context.log` writes to the main Kage log via the bridge; it's
   a structured logger (`log.info`, `log.warn`, etc.) not a
   `console.log` replacement. Regular `console.log` inside the
@@ -1123,6 +1127,109 @@ These signals are always available (no extension needed):
 | `system:window_focus` | A window gained focus |
 | `system:idle_5m` | System idle for 5 minutes |
 | `system:resume` | System resumed from sleep |
+
+## Mascot activity hints
+
+The Kage mascot can play **activity animations** — bopping along to
+music, wearing a headset for a meeting, watching an hourglass for a
+timer. Extensions tell it *what kind of thing the user is doing*; the
+mascot decides what to do about it.
+
+```js
+// Something is playing → let the mascot bop. Re-assert on every refresh.
+context.mascot.setActivity('music', { ttlMs: 30000 });
+
+// Nothing is playing any more.
+context.mascot.clearActivity();
+```
+
+### The vocabulary is closed and generic
+
+| Activity | Meaning |
+|----------|---------|
+| `music`  | Audio is actively playing. |
+| `meeting`| The user is in (or joining) a call. |
+| `timer`  | A countdown / timer is running. |
+
+The mascot must **never learn about specific extensions**. You say
+`'music'`, not `'spotify'` — any number of extensions can mean the
+same thing, and the mascot maps the generic activity to whatever
+poses it has. Anything outside the table above is dropped with a
+console warning (the same way unknown `permissions` entries are
+dropped), so don't invent names: propose an addition to the
+vocabulary instead.
+
+### Declare it in the manifest
+
+```json
+{
+  "contributes": {
+    "mascotActivities": ["music"]
+  }
+}
+```
+
+The host rejects any activity the manifest didn't declare, even a
+valid one. This keeps the set of things an extension can make the
+mascot do auditable from the manifest alone.
+
+### No capability needed — but the user can turn it off
+
+`context.mascot` carries no data, never reaches Tauri, and comes from
+a closed vocabulary, so it is **not** gated by a capability and does
+not appear in the install-time permission prompt. It is still a
+user-facing feature: **Settings → Appearance → "React to extension
+activity"** (`ui.mascot_extension_hints`) disables it globally, and
+hints are silently dropped while it's off. Never treat a hint as
+having been applied — it is advisory, fire-and-forget, and returns
+nothing.
+
+### Hints are a lease — re-assert, don't set-and-forget
+
+A hint expires. `ttlMs` is clamped into **15s – 10min**, defaulting to
+**30s** when omitted or unusable. When the lease expires the mascot
+drops the activity on its own.
+
+This is deliberate: a crashed, hung, disabled, or hidden extension
+must not be able to pin a pose forever. The correct pattern is to
+re-assert the activity from the loop you already have — a widget's
+`render()`, a poll tick, whatever refresh cycle already tells you the
+state:
+
+```js
+export default class PlayerWidget {
+    initialize(context) {
+        this.ctx = context;
+    }
+    getRefreshInterval() {
+        return 15000; // comfortably inside the 30s default lease
+    }
+    async render() {
+        const state = await this.fetchState();
+        if (state.playing) {
+            this.ctx.mascot.setActivity('music', { ttlMs: 45000 });
+        } else {
+            this.ctx.mascot.clearActivity();
+        }
+        return { html: /* … */ '' };
+    }
+}
+```
+
+Pick a TTL comfortably longer than your refresh interval so a single
+slow tick doesn't make the mascot flicker, but short enough that a
+stale state corrects itself quickly.
+
+The host also withdraws your hint for you when your sandbox is torn
+down (unload, disable, uninstall, window close), when a widget's
+circuit breaker trips, and when the user turns mascot hints off.
+
+### Arbitration
+
+Several extensions can hint at once. The mascot side owns the
+arbiter — it picks a single winner by its own priority rules and
+handles expiry. Your extension can't influence that beyond declaring
+its activity, and shouldn't assume its hint is the one being shown.
 
 ## Theme Format
 

@@ -8,6 +8,8 @@ import {
     renderMarkdown,
     renderQuickActionChips,
     setExtensionManager,
+    signalMascot,
+    signalMascotError,
     updateSelection,
     WINDOW,
 } from './dependencies.js';
@@ -179,7 +181,10 @@ export const LifecycleEventsMethods = {
             if (cmdOrCtrlPressed(e) && e.shiftKey && e.key === 'C') {
                 e.preventDefault();
                 if (this.currentResponse) {
-                    navigator.clipboard.writeText(this.currentResponse).catch(() => {});
+                    navigator.clipboard
+                        .writeText(this.currentResponse)
+                        .then(() => signalMascot('copy'))
+                        .catch(() => {});
                 }
                 return;
             }
@@ -293,8 +298,25 @@ export const LifecycleEventsMethods = {
             }
             this.handleMessageComplete();
         });
-        this.listen(EVT.MESSAGE_ERROR, (event) => this.handleMessageError(event));
-        this.listen(EVT.TOOL_CALL_UPDATE, (event) => this.handleToolCallUpdate(event));
+        this.listen(EVT.MESSAGE_ERROR, (event) => {
+            // message_error is only emitted to the window that owns the turn,
+            // so there's no session filter to apply here (unlike the chunk
+            // path). Rate limit gets its own pose; everything else is `error`.
+            signalMascotError(event?.payload);
+            this.handleMessageError(event);
+        });
+        this.listen(EVT.TOOL_CALL_UPDATE, (event) => {
+            this.handleToolCallUpdate(event);
+            const params = event?.payload?.params;
+            const sid = params?.sessionId;
+            if (sid && sid !== this.floatingSessionId) return;
+            this._mascotTools?.onUpdate(params?.update);
+        });
+        this.listen(EVT.AGENT_DISCONNECTED, () => {
+            // The backend's stream closed while we may have been idle — no
+            // message_error follows, so this is the only chance to show it.
+            signalMascot('error');
+        });
         this.listen('session_migrated', (event) => {
             // The backend died mid-turn and recovery swapped us to a fresh
             // session; the recovered response is about to stream under the
@@ -336,14 +358,20 @@ export const LifecycleEventsMethods = {
             const status = event.payload?.params?.status?.type;
             if (status === 'started') {
                 this._compacting = true;
+                signalMascot('compact');
                 this._showCompactionIndicator();
             } else if (status === 'completed') {
                 this._compacting = false;
+                signalMascot('compactDone');
                 this._hideCompactionIndicator();
                 // Ensure stop button is hidden after compaction — it may have been
                 // left visible if handleMessageComplete was skipped during tool execution.
                 this.elements.floatingStopBtn.style.display = 'none';
                 this.updateDatetimeVisibility();
+            } else if (status) {
+                // failed / cancelled / aborted — terminal for the pose even
+                // though the rest of the UI only cares about 'completed'.
+                signalMascot('compactDone');
             }
         });
 

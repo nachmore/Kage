@@ -346,6 +346,12 @@ export function installExtensionUiMethods(ExtensionManager) {
                 clearInterval(controller.timer);
                 controller.timer = null;
             }
+            // A tripped widget has stopped ticking, so it can no longer
+            // re-assert a mascot activity lease — but it could still be
+            // holding one from its last good render. Withdraw it now instead
+            // of leaving the mascot posed for a dead widget until the TTL
+            // expires.
+            this.extensions.get(controller.extensionId)?.sandbox?.clearMascotActivity?.();
             try {
                 controller.host.style.display = '';
                 controller.host.innerHTML = '';

@@ -5,6 +5,7 @@ import {
     getConfig,
     handleEnterAction,
     messageLengthBucket,
+    signalMascotRecovered,
     submitSelection,
     t,
     trackEvent,
@@ -108,6 +109,10 @@ export const InputMethods = {
         this._pendingTurns.push(sid);
         try {
             await this.invoke('send_message_streaming', args);
+            // The backend accepted the prompt, so the connection is healthy
+            // and we're no longer rate limited. Both are no-ops in the engine
+            // when the corresponding situation wasn't active.
+            signalMascotRecovered();
         } catch (e) {
             // Rejected before the backend spawned the turn — no terminal
             // event will follow.

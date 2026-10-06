@@ -9,6 +9,7 @@ import {
     renderClipboardHistory,
     renderUnifiedResults,
     searchDebounceMs,
+    signalMascot,
     t,
     unifiedSearch,
 } from './dependencies.js';
@@ -113,6 +114,11 @@ export const SearchMethods = {
     async handleInputChange(_event) {
         const rawQuery = this.elements.input.value;
         const query = rawQuery.trim();
+
+        // The mascot's eyes sweep left→right off the prompt's *length*, not
+        // the caret — the gaze should track how much has been written, so it
+        // keeps moving even when the user edits mid-string.
+        signalMascot('type', rawQuery.length);
 
         // Resize the textarea and OS window in lockstep — see animateInputResize.
         this._resizeInputToContent();

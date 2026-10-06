@@ -9,6 +9,8 @@
  *     out-of-capability before the underlying Tauri call)
  *   - Routing RPC calls from the main window to the sandbox
  *     (match/matchAsync/execute/getTools/executeTool/getTriggers/…)
+ *   - Validating and forwarding generic mascot activity hints
+ *     (`context.mascot` → `type: 'mascot-activity'` → `window.__kageMascotHint`)
  *
  * Security:
  *   - iframes are loaded with `sandbox="allow-scripts"` only. No
@@ -22,11 +24,101 @@
  *     iframe; messages arriving on the port inherit that identity.
  */
 
+import { getConfig, onConfigChange } from './config-cache.js';
 import { decideInvoke } from './extension-permissions.js';
 import { validateExtensionInvokeArgs } from './extension-url-policy.js';
 
 const BOOT_TIMEOUT_MS = 10_000;
 const RPC_TIMEOUT_MS = 10_000;
+
+// --- Mascot activity hints --------------------------------------------------
+
+/**
+ * Closed vocabulary of generic mascot activities. The mascot never learns
+ * about individual extensions: an extension declares "music", not "spotify".
+ * Must stay in sync with `MASCOT_ACTIVITIES` in
+ * `js/extension-sandbox/runtime.js` (the sandbox-side convenience check).
+ */
+export const MASCOT_ACTIVITIES = Object.freeze(['music', 'meeting', 'timer']);
+
+/**
+ * Lease bounds for a mascot hint. The TTL is mandatory in spirit: an omitted
+ * or unusable value collapses to the default rather than to "forever", so a
+ * crashed, disabled, or hidden extension can never pin a pose. Extensions are
+ * expected to re-assert from their refresh/render cycle.
+ */
+export const MASCOT_TTL_DEFAULT_MS = 30_000;
+export const MASCOT_TTL_MIN_MS = 15_000;
+export const MASCOT_TTL_MAX_MS = 600_000;
+
+/** Clamp an extension-supplied TTL into the lease window. */
+export function clampMascotTtl(ttlMs) {
+    const n = Number(ttlMs);
+    if (!Number.isFinite(n) || n <= 0) return MASCOT_TTL_DEFAULT_MS;
+    return Math.min(MASCOT_TTL_MAX_MS, Math.max(MASCOT_TTL_MIN_MS, Math.round(n)));
+}
+
+/**
+ * Normalize a manifest's `contributes.mascotActivities` into a deduped set of
+ * known activity names. Unknown entries are dropped with a warning — same
+ * contract as `normalizePermissions` for capabilities.
+ */
+export function normalizeMascotActivities(raw, extensionId) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const entry of raw) {
+        if (typeof entry !== 'string') continue;
+        const name = entry.trim().toLowerCase();
+        if (!name) continue;
+        if (!MASCOT_ACTIVITIES.includes(name)) {
+            console.warn(`Extension '${extensionId}': unknown mascot activity '${name}' — ignored`);
+            continue;
+        }
+        if (out.includes(name)) continue;
+        out.push(name);
+    }
+    return out;
+}
+
+/**
+ * Sandboxes that currently hold a forwarded mascot hint. Used to withdraw
+ * hints the moment the user turns `ui.mascot_extension_hints` off — the
+ * lease would expire on its own, but up to MASCOT_TTL_MAX_MS later.
+ * @type {Set<ExtensionSandbox>}
+ */
+const _mascotHintHolders = new Set();
+let _mascotHintWatcherInstalled = false;
+
+/**
+ * Is the user's mascot-extension-hint setting on? Reads through the shared
+ * config cache (`ui.mascot_extension_hints`, default true), so the first hint
+ * costs one `get_config` and the rest are free until `config_updated` fires.
+ * A failed read defaults to "allowed" — a hint is cosmetic, and failing it
+ * closed would silently break the feature on a transient IPC error.
+ */
+async function _mascotHintsAllowed(rawInvoke) {
+    try {
+        const cfg = await getConfig(rawInvoke);
+        return cfg?.ui?.mascot_extension_hints !== false;
+    } catch {
+        return true;
+    }
+}
+
+/** Install the one-per-module listener that withdraws live hints on opt-out. */
+function _ensureMascotHintWatcher(rawInvoke) {
+    if (_mascotHintWatcherInstalled) return;
+    _mascotHintWatcherInstalled = true;
+    try {
+        onConfigChange(async () => {
+            if (_mascotHintHolders.size === 0) return;
+            if (await _mascotHintsAllowed(rawInvoke)) return;
+            for (const sb of [..._mascotHintHolders]) sb.clearMascotActivity();
+        });
+    } catch {
+        _mascotHintWatcherInstalled = false;
+    }
+}
 
 // Per-extension invoke rate limit. A misbehaving extension calling invoke()
 // in a tight loop (open_url, search_files, get_calendar_events — several of
@@ -129,6 +221,9 @@ const IDENTITY_SCOPED_COMMANDS = Object.freeze({
  * @property {Record<string,string>} [vendorSources] - name → UMD/IIFE source
  *   for allow-listed vendor libs that set globals (e.g. mathjs → window.math).
  *   Injected via `<script>` tag before provider modules are evaluated.
+ * @property {string[]} [mascotActivities] - the manifest's
+ *   `contributes.mascotActivities`. An extension may only hint an activity it
+ *   declared here; anything else is rejected host-side.
  */
 
 /**
@@ -158,6 +253,17 @@ export class ExtensionSandbox {
         this.i18nFallback = spec.i18nFallback || {};
         this.i18nLanguage = spec.i18nLanguage || 'en';
         this.i18nRtl = !!spec.i18nRtl;
+        /**
+         * Generic mascot activities this extension declared in
+         * `contributes.mascotActivities`. Undeclared activities are rejected
+         * even though they're in the global vocabulary.
+         * @type {Set<string>}
+         */
+        this.mascotActivities = new Set(
+            normalizeMascotActivities(spec.mascotActivities, spec.extensionId)
+        );
+        /** The activity we last forwarded and haven't cleared, else null. */
+        this._mascotActivity = null;
         this._rawInvoke = rawInvoke;
         this._container = container;
 
@@ -322,6 +428,10 @@ export class ExtensionSandbox {
         if (this._destroyed) return;
         this._destroyed = true;
 
+        // A hint is a lease on a shared, visible thing — drop it immediately
+        // rather than letting the mascot hold the pose until the TTL expires.
+        this.clearMascotActivity();
+
         // Best-effort: ask the extension to clean up inside the sandbox
         // before we tear the iframe out from under it.
         try {
@@ -440,6 +550,12 @@ export class ExtensionSandbox {
                 this._handleLog(msg);
                 break;
             }
+            case 'mascot-activity': {
+                // Pure-UI hint. No capability, no Tauri, no data — see
+                // _handleMascotActivity for the validation it does go through.
+                this._handleMascotActivity(msg);
+                break;
+            }
             default:
                 // unknown — ignore
                 break;
@@ -549,6 +665,80 @@ export class ExtensionSandbox {
                 id,
                 error: String(e?.message || e),
             });
+        }
+    }
+
+    /**
+     * Handle a `mascot-activity` port message.
+     *
+     * Shape: `{ type: 'mascot-activity', activity: 'music'|'meeting'|'timer'|null, ttlMs?: number }`.
+     * `activity: null` (or a missing activity) means "clear mine".
+     *
+     * Validation ladder, in order:
+     *   1. vocabulary — the activity must be a known generic name;
+     *   2. declaration — the manifest must have declared it in
+     *      `contributes.mascotActivities`;
+     *   3. user setting — `ui.mascot_extension_hints` must not be off;
+     *   4. TTL clamp — the lease is bounded regardless of what was asked for.
+     *
+     * Then it forwards to the mascot consumer's global, which owns the
+     * arbiter (priority between extensions, expiry, picking a winner). Both
+     * globals are optional: the chat window has no mascot, and the floating
+     * window installs them only once the mascot exists.
+     */
+    async _handleMascotActivity(msg) {
+        if (this._destroyed) return;
+
+        const raw = msg?.activity;
+        if (raw === null || raw === undefined) {
+            this.clearMascotActivity();
+            return;
+        }
+        const activity = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+        if (!MASCOT_ACTIVITIES.includes(activity)) {
+            console.warn(
+                `[sandbox ${this.extensionId}] unknown mascot activity '${String(raw)}' — ignored`
+            );
+            return;
+        }
+        if (!this.mascotActivities.has(activity)) {
+            console.warn(
+                `[sandbox ${this.extensionId}] mascot activity '${activity}' is not declared in ` +
+                    `contributes.mascotActivities — ignored`
+            );
+            return;
+        }
+        const ttlMs = clampMascotTtl(msg?.ttlMs);
+
+        if (!(await _mascotHintsAllowed(this._rawInvoke))) return;
+        // The await above yields; the sandbox may have been torn down since.
+        if (this._destroyed) return;
+
+        _ensureMascotHintWatcher(this._rawInvoke);
+        this._mascotActivity = activity;
+        _mascotHintHolders.add(this);
+        try {
+            window.__kageMascotHint?.(this.extensionId, activity, ttlMs);
+        } catch (e) {
+            console.warn(`[sandbox ${this.extensionId}] mascot hint failed:`, e);
+        }
+    }
+
+    /**
+     * Withdraw this extension's mascot hint, if it holds one. Called when the
+     * extension asks (`context.mascot.clearActivity()`), when the sandbox is
+     * destroyed (unload / disable / uninstall / window teardown), when a
+     * widget circuit-breaker trips, and when the user turns mascot extension
+     * hints off. Idempotent.
+     */
+    clearMascotActivity() {
+        _mascotHintHolders.delete(this);
+        if (!this._mascotActivity) return;
+        this._mascotActivity = null;
+        try {
+            window.__kageMascotHintClear?.(this.extensionId);
+        } catch (e) {
+            console.warn(`[sandbox ${this.extensionId}] mascot hint clear failed:`, e);
         }
     }
 

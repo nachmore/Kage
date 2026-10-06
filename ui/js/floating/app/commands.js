@@ -12,6 +12,7 @@ import {
     playTimerSound,
     renderMarkdown,
     sendAppNotification,
+    setHostTimerHint,
     setupTimerBarControls,
     showExtensionBar,
     startStopwatch,
@@ -39,10 +40,22 @@ export const CommandsMethods = {
             durationMs,
             (display, progress) => {
                 updateTimerBar('timer', display, progress, true);
+                // Re-assert the mascot's hourglass hint off the countdown's own
+                // 100ms tick instead of adding a second interval. The lease
+                // outlives one tick only, so pausing (which clears the
+                // interval) lets it lapse without a hook of its own.
+                setHostTimerHint(true);
             },
-            () => this._onTimerComplete()
+            () => {
+                setHostTimerHint(false);
+                this._onTimerComplete();
+            }
         );
-        setupTimerBarControls('timer', null, () => this.windowManager.resizeWindow());
+        setupTimerBarControls(
+            'timer',
+            () => setHostTimerHint(false),
+            () => this.windowManager.resizeWindow()
+        );
         // Force resize after bar is in DOM
         setTimeout(() => this.windowManager.resizeWindow(), 60);
     },

@@ -18,6 +18,7 @@
  */
 
 import { createPermissionHandler } from '../shared/permissions-core.js';
+import { signalMascot } from './mascot-signals.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { WINDOW } from '../shared/window-labels.js';
 import { t } from '../shared/i18n.js';
@@ -26,6 +27,10 @@ waitForTauri(({ invoke, appWindow }) => {
     const handler = createPermissionHandler(invoke, appWindow, {
         // Resize the floating window to fit the permission modal
         async onShow(modal) {
+            // Record the waiting-for-approval situation BEFORE pausing, so the
+            // engine resumes into the right pose once the modal closes (the
+            // modal fills the window, so there's nothing to animate meanwhile).
+            signalMascot('permission');
             // Pause mascot animations while modal is open
             if (window._kageMascot) window._kageMascot.pause();
 
@@ -70,6 +75,8 @@ waitForTauri(({ invoke, appWindow }) => {
         async onHide(_modal, hasQueuedNext) {
             // Resume mascot animations (only when no more queued modals)
             if (!hasQueuedNext && window._kageMascot) window._kageMascot.resume();
+            // A queued modal keeps the ask pose; only the last answer clears it.
+            if (!hasQueuedNext) signalMascot('permissionDone');
 
             if (hasQueuedNext) return; // Next modal will handle sizing
             try {

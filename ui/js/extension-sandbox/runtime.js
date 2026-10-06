@@ -140,8 +140,47 @@ function buildContext() {
             return !!i18nState.rtl;
         },
     };
-    return { invoke, config: extensionConfig, log: extLog, runSandboxed, i18n };
+    return { invoke, config: extensionConfig, log: extLog, runSandboxed, i18n, mascot };
 }
+
+/**
+ * Closed vocabulary of mascot activity names. The mascot deliberately knows
+ * nothing about individual extensions — an extension says "music", never
+ * "spotify" — so the engine can map a generic activity to whatever pose set
+ * it has. Anything outside this list is dropped (with a warning) the same way
+ * `normalizePermissions` drops unknown capabilities.
+ *
+ * Exported so the host-side validator and the tests can share one list.
+ */
+export const MASCOT_ACTIVITIES = ['music', 'meeting', 'timer'];
+
+/**
+ * `context.mascot` — a pure-UI hint channel. It carries no data, has a closed
+ * vocabulary, and never reaches Tauri, so it needs no capability. The host
+ * re-validates everything here (vocabulary + the manifest's declared
+ * `contributes.mascotActivities` + the user's mascot-hint setting), which is
+ * why these checks are only a fast local reject, not the security boundary.
+ *
+ * The hint is a LEASE: the host clamps `ttlMs` into a bounded range and the
+ * mascot drops the activity when it expires. Re-assert from your refresh /
+ * render cycle so a crashed, disabled or hidden extension can never pin a
+ * pose.
+ */
+const mascot = {
+    setActivity(name, opts) {
+        if (typeof name !== 'string' || !MASCOT_ACTIVITIES.includes(name)) {
+            log('warn', `mascot.setActivity: unknown activity '${String(name)}' — ignored`);
+            return;
+        }
+        const payload = { type: 'mascot-activity', activity: name };
+        const ttl = Number(opts?.ttlMs);
+        if (Number.isFinite(ttl) && ttl > 0) payload.ttlMs = ttl;
+        safePost(payload);
+    },
+    clearActivity() {
+        safePost({ type: 'mascot-activity', activity: null });
+    },
+};
 
 const runSandboxed = createSandboxedRunner({
     getVendorSources: () => vendorSourcesCache,

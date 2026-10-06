@@ -1,5 +1,7 @@
 import {
+    createToolActivityTracker,
     EVT,
+    initMascotPointerSignals,
     loadFrecency,
     loadSlashCommands,
     onConfigChange,
@@ -39,11 +41,21 @@ export const LifecycleInitMethods = {
 
     _setupSyncWiring() {
         this.cacheElements();
+        // Before setupStreamingListeners — its tool_call_update handler feeds
+        // this tracker. (It would survive a later assignment, but only because
+        // the handler reads it lazily.)
+        this._mascotTools = createToolActivityTracker();
         this.setupEventListeners();
         this.setupStreamingListeners();
         this.setupVisibilityTracking();
         this.setupNetworkMonitor();
         this.windowManager.setupDragging(this.elements.mascotContainer);
+        // Observational listeners on the same element: purely additive, never
+        // preventDefault, so setupDragging's mousedown keeps working.
+        initMascotPointerSignals(this.elements.mascotContainer, {
+            windowManager: this.windowManager,
+            appWindow: this.appWindow,
+        });
         this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
 
         // Double-click ghost to open full chat window

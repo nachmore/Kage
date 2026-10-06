@@ -75,6 +75,10 @@ export const UiStateMethods = {
         this.elements.loadingDots.classList.remove('visible');
         this._stopElapsedTimer();
         // Return mascot to idle, with the celebration + wave the engine owns.
+        // `done` clears the tool activity inside the engine, so drop our
+        // in-flight bookkeeping with it — an agent that never reports a
+        // terminal tool status would otherwise leak ids across turns.
+        this._mascotTools?.reset();
         window._kageMascot?.signal('done');
     },
 

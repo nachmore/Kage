@@ -136,6 +136,10 @@ export class ExtensionManager {
                     i18nFallback: i18n.fallback,
                     i18nLanguage: i18n.language,
                     i18nRtl: i18n.rtl,
+                    // Generic mascot activities the manifest declared. The
+                    // sandbox host rejects any hint the extension didn't
+                    // declare here.
+                    mascotActivities: manifest.contributes?.mascotActivities,
                 });
             } catch (e) {
                 console.warn(`Sandbox boot failed for extension '${id}':`, e);
@@ -192,6 +196,10 @@ export class ExtensionManager {
         for (const [id, ext] of this.extensions) {
             const config = this._getExtensionConfig(id, ext.manifest);
             if (ext.sandbox) {
+                // A disabled extension keeps its sandbox loaded (so re-enable
+                // is instant) but must not keep a mascot activity lease: its
+                // widgets are unmounted, so nothing would re-assert it.
+                if (!this._isEnabled(id)) ext.sandbox.clearMascotActivity?.();
                 await ext.sandbox.updateConfig(config);
             }
         }

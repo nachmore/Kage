@@ -204,6 +204,12 @@ pub struct ExtensionContributes {
     pub tool_provider: Option<String>,
     #[serde(default)]
     pub trigger_provider: Option<String>,
+    /// Generic mascot activities the extension may hint ("music", "meeting",
+    /// "timer"). Validated and enforced frontend-side by the extension
+    /// sandbox host; modelled here only so the field survives the
+    /// manifest round-trip at install time instead of being silently dropped.
+    #[serde(default)]
+    pub mascot_activities: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -337,6 +343,28 @@ mod tests {
     }
 
     #[test]
+    fn manifest_preserves_mascot_activities_round_trip() {
+        let json = r#"{
+            "id": "player", "name": "Player", "version": "1.0.0",
+            "type": "extension",
+            "contributes": { "mascotActivities": ["music"] }
+        }"#;
+        let manifest: ExtensionManifest = serde_json::from_str(json).expect("parse");
+        assert_eq!(
+            manifest
+                .contributes
+                .as_ref()
+                .and_then(|c| c.mascot_activities.as_deref()),
+            Some(&["music".to_string()][..])
+        );
+        let value = serde_json::to_value(&manifest).expect("serialize");
+        assert_eq!(
+            value["contributes"]["mascotActivities"],
+            serde_json::json!(["music"])
+        );
+    }
+
+    #[test]
     fn manifest_round_trip_drops_no_known_keys() {
         let json = r#"{
             "id": "fixture", "name": "Fixture", "version": "1.0.0",
@@ -350,7 +378,8 @@ mod tests {
                 "widgets": [{"id": "w", "slot": "main", "module": "./w.js"}],
                 "themes": {"dark": "dark.json", "light": "light.json"},
                 "toolbarButtons": "./toolbar.js", "messageFormatters": "./fmt.js",
-                "toolProvider": "./tools.js", "triggerProvider": "./triggers.js"
+                "toolProvider": "./tools.js", "triggerProvider": "./triggers.js",
+                "mascotActivities": ["music"]
             }
         }"#;
         let input: serde_json::Value = serde_json::from_str(json).expect("parse input");

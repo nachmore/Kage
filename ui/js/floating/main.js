@@ -5,6 +5,7 @@ import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { getMascotThemeSettings, setTerminatorMode } from '../shared/mascot.js';
 import { createMascotController } from '../shared/mascot-engine.js';
+import { installMascotHintArbiter } from './mascot-signals.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 import { getConfig, onConfigChange } from '../shared/config-cache.js';
@@ -66,6 +67,13 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
         // Always refresh mascot — theme change may affect outline color
         await refreshFloatingMascot();
     });
+
+    // Publish `window.__kageMascotHint` before the app (and with it the
+    // extension manager) exists, so an extension that declares an activity
+    // hint during its own startup isn't dropped on the floor. The arbiter
+    // doesn't need the mascot controller to exist — signalMascot is a no-op
+    // until refreshFloatingMascot() runs below.
+    installMascotHintArbiter();
 
     const app = new FloatingApp(invoke, appWindow, listen);
     window._floatingApp = app; // Expose for permission modal resize

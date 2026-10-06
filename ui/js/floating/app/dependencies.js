@@ -80,6 +80,14 @@ import { sanitizeExtensionHtml } from '../../shared/extension-html-sanitizer.js'
 import { renderToolbarButtons } from '../../shared/extension-toolbar.js';
 import { runToolbarHostEffect } from '../../shared/toolbar-host-effects.js';
 import { BannerController } from '../banner.js';
+import {
+    createToolActivityTracker,
+    initMascotPointerSignals,
+    setHostTimerHint,
+    signalMascot,
+    signalMascotError,
+    signalMascotRecovered,
+} from '../mascot-signals.js';
 import { t } from '../../shared/i18n.js';
 
 export {
@@ -94,6 +102,7 @@ export {
     checkOnline,
     cmdOrCtrlPressed,
     createTaskPlanElement,
+    createToolActivityTracker,
     drawContextRing,
     errLabel,
     errMessage,
@@ -114,6 +123,7 @@ export {
     handleEnterAction,
     handlePasteEvent,
     hideExtensionBar,
+    initMascotPointerSignals,
     isClipboardTrigger,
     loadFrecency,
     loadSlashCommands,
@@ -144,9 +154,13 @@ export {
     sendAppNotification,
     setAppIconInvoke,
     setExtensionManager,
+    setHostTimerHint,
     setupRtlDetection,
     setupTimerBarControls,
     showExtensionBar,
+    signalMascot,
+    signalMascotError,
+    signalMascotRecovered,
     SpeechController,
     startStopwatch,
     startTimer,

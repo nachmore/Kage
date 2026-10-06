@@ -3,6 +3,7 @@ import {
     getConfig,
     onNetworkChange,
     renderUnifiedResults,
+    signalMascot,
     unifiedSearch,
 } from './dependencies.js';
 
@@ -41,6 +42,11 @@ export const LifecycleVisibilityMethods = {
 
         this.appWindow.listen('tauri://focus', async () => {
             this._windowFocused = true;
+            // Was this a hide→show cycle, or just regaining focus on an
+            // already-visible window? The flag is only ever set to false by
+            // this handler, so `undefined` is the genuinely-hidden startup
+            // state and counts as a reopen too.
+            const wasHidden = window._kageFloatingHidden !== false;
             document.documentElement.classList.remove('animations-paused');
             // First focus this process — show the post-update banner
             // if last_updated_version is still set. Running it here
@@ -59,7 +65,13 @@ export const LifecycleVisibilityMethods = {
                 // taking the banner with it. Suppress the next ~2s of
                 // blur-hides so the user actually sees the celebration.
                 this.banner.checkForUpdateBanner().then((shown) => {
-                    if (shown) this._suppressBlurHideUntil = Date.now() + 2000;
+                    if (!shown) return;
+                    this._suppressBlurHideUntil = Date.now() + 2000;
+                    // First launch after an update: balloons, then a party hat
+                    // that stays on until the user types or reopens. Fires
+                    // after the reopen/summon pair below (this promise resolves
+                    // a tick later), so the hat isn't immediately cleared.
+                    signalMascot('updated');
                 });
             }
             // Resume work that was paused on hide. Mascot animation
@@ -73,6 +85,13 @@ export const LifecycleVisibilityMethods = {
                 } catch (e) {
                     console.warn('mascot.resume failed:', e);
                 }
+            }
+            // After the resume, or the engine would be frozen when these land.
+            // `reopen` is the fresh-start reset (clears the party hat, stale
+            // hover and typing gaze); `summon` is the pop-in that follows it.
+            if (wasHidden) {
+                signalMascot('reopen');
+                signalMascot('summon');
             }
             // Catch up widget renders that were skipped while hidden.
             // _renderWidget no-ops when _kageFloatingHidden is true, so a
