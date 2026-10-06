@@ -32,6 +32,7 @@ SETS = {
         "kage-sleeping.svg",
         "kage-magnifying-glass.svg",
         "kage-love.svg",
+        "kage-looking-down.svg",
     ],
 }
 
