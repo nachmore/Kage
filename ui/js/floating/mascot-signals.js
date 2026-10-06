@@ -21,6 +21,23 @@ export function signalMascot(name, data) {
     }
 }
 
+// The post-update celebration is a one-shot: if it lands while the controller
+// is missing (startup, or a theme-driven rebuild) it must wait, not vanish.
+let _pendingUpdated = false;
+
+/** Play the post-update celebration and put the party hat on. */
+export function signalMascotUpdated() {
+    if (window._kageMascot) signalMascot('updated');
+    else _pendingUpdated = true;
+}
+
+/** Replay a celebration that arrived before the controller existed. */
+export function flushPendingMascotUpdated() {
+    if (!_pendingUpdated || !window._kageMascot) return;
+    _pendingUpdated = false;
+    signalMascot('updated');
+}
+
 // ── generic activity hints (extensions + the host timer) ────────────────────
 
 /** Fixed precedence. Earlier wins; anything not listed is rejected. */

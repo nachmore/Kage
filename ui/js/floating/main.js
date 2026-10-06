@@ -5,7 +5,7 @@ import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { getMascotThemeSettings, setTerminatorMode } from '../shared/mascot.js';
 import { createMascotController } from '../shared/mascot-engine.js';
-import { installMascotHintArbiter } from './mascot-signals.js';
+import { flushPendingMascotUpdated, installMascotHintArbiter } from './mascot-signals.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 import { getConfig, onConfigChange } from '../shared/config-cache.js';
@@ -168,6 +168,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                 mascotCtrl.signal('think');
             }
             if (window._kageFloatingHidden) mascotCtrl.pause();
+            flushPendingMascotUpdated();
         }
     }
     await refreshFloatingMascot();

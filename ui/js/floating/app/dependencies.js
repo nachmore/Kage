@@ -87,6 +87,7 @@ import {
     signalMascot,
     signalMascotError,
     signalMascotRecovered,
+    signalMascotUpdated,
 } from '../mascot-signals.js';
 import { t } from '../../shared/i18n.js';
 
@@ -161,6 +162,7 @@ export {
     signalMascot,
     signalMascotError,
     signalMascotRecovered,
+    signalMascotUpdated,
     SpeechController,
     startStopwatch,
     startTimer,

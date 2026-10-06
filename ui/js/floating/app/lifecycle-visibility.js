@@ -4,10 +4,20 @@ import {
     onNetworkChange,
     renderUnifiedResults,
     signalMascot,
+    signalMascotUpdated,
     unifiedSearch,
 } from './dependencies.js';
 
 export const LifecycleVisibilityMethods = {
+    /** Is the floating window actually on screen? Errors count as visible. */
+    async _isWindowVisible() {
+        try {
+            return await this.appWindow.isVisible();
+        } catch {
+            return true;
+        }
+    },
+
     setupNetworkMonitor() {
         const bar = document.getElementById('offlineBar');
         const update = (online) => {
@@ -56,7 +66,12 @@ export const LifecycleVisibilityMethods = {
             // idle installs trigger it the first time the user summons
             // the floating window manually. Either way the user
             // actually sees it.
-            if (!this._updateBannerChecked) {
+            // Startup also fires focus on the still-hidden window while the
+            // other webviews paint (seconds before the post-update show).
+            // Spending the one-shot check there plays the celebration into
+            // an invisible window, and the real show's `reopen` then clears
+            // the party hat — so only count a focus the user can see.
+            if (!this._updateBannerChecked && (await this._isWindowVisible())) {
                 this._updateBannerChecked = true;
                 // The post-install auto-show races against other windows'
                 // webviews painting for the first time (notably the
@@ -71,7 +86,7 @@ export const LifecycleVisibilityMethods = {
                     // that stays on until the user types or reopens. Fires
                     // after the reopen/summon pair below (this promise resolves
                     // a tick later), so the hat isn't immediately cleared.
-                    signalMascot('updated');
+                    signalMascotUpdated();
                 });
             }
             // Resume work that was paused on hide. Mascot animation
