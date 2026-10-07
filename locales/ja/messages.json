@@ -7800,9 +7800,9 @@
     "_source_hash": "c0ad415c13c09e01"
   },
   "about.name_story_html": {
-    "message": "Kage（影 · かげ、発音は <i>kah-geh</i>）は、<i>影</i>や<i>シルエット</i>を意味します。呼び出されるまでバックグラウンドで静かに待っている Kage にぴったりの名前です。黒猫のようなものですが、ちゃんと役に立ちます。",
+    "message": "Kage（影 · かげ、発音は <i>kah-geh</i>）は、<i>影</i>や<i>シルエット</i>という意味です。呼び出されるまでバックグラウンドで静かに待っている Kage にぴったりの名前です。黒猫のようなものですが、こちらはちゃんと役に立ちます。",
     "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone.",
     "_machine_translated": true,
-    "_source_hash": "388a7e93c6b4c258"
+    "_source_hash": "2014157ddaf3879e"
   }
 }

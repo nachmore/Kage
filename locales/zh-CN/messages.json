@@ -7800,9 +7800,9 @@
     "_source_hash": "c0ad415c13c09e01"
   },
   "about.name_story_html": {
-    "message": "Kage（影 · かげ，读作 <i>kah-geh</i>）意为<i>影子</i>或<i>剪影</i>。这名字很贴切：Kage 会安静地待在后台，等你召唤时才现身，有点像一只黑猫，只不过它真的能帮上忙。",
+    "message": "Kage（影 · かげ，读作 <i>kah-geh</i>）意为<i>影子</i>或<i>剪影</i>。这名字很贴切：Kage 平时安静地待在后台，等你召唤才现身——有点像一只黑猫，只不过真的能帮上忙。",
     "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone.",
     "_machine_translated": true,
-    "_source_hash": "388a7e93c6b4c258"
+    "_source_hash": "2014157ddaf3879e"
   }
 }

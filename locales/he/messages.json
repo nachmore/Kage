@@ -7800,9 +7800,9 @@
     "_source_hash": "c0ad415c13c09e01"
   },
   "about.name_story_html": {
-    "message": "Kage (影 · かげ, נהגה <i>kah-geh</i>) פירושו <i>צל</i> או <i>צללית</i>. מתאים, כי Kage ממתין בשקט ברקע עד שקוראים לו: קצת כמו חתול שחור, רק שהוא באמת עוזר.",
+    "message": "Kage (影 · かげ, נהגה <i>kah-geh</i>) פירושו <i>צל</i> או <i>צללית</i>. מתאים, כי Kage ממתין בשקט ברקע עד שתזמנו אותו: קצת כמו חתול שחור, רק שהוא באמת עוזר.",
     "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone.",
     "_machine_translated": true,
-    "_source_hash": "388a7e93c6b4c258"
+    "_source_hash": "2014157ddaf3879e"
   }
 }
