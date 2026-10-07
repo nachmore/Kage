@@ -345,6 +345,7 @@ function measureRegistration() {
         svg.remove();
         return {
             w: best.width,
+            right: best.right - o.left,
             cx: best.left - o.left + best.width / 2,
             top: best.top - o.top,
             bottom: best.bottom - o.top,
@@ -353,10 +354,19 @@ function measureRegistration() {
         };
     };
 
+    // Poses whose held prop shares the body's black path (the glass's rim and
+    // handle are one shape with the cat): the cat is only the right-hand part
+    // of that box. Measured from a render: 387 of 575 px. Registering on the
+    // whole box drew Kage at ~2/3 size next to a full-size glass.
+    const CAT_FRAC = { 'magnifying-glass': 0.673 };
     const ref = measure(asset('waving/waving-f1'), false);
     POSE_REG = {};
     for (const [name, a] of Object.entries(ASSETS.poses)) {
         const m = measure(a, true);
+        if (CAT_FRAC[name]) {
+            m.w *= CAT_FRAC[name];
+            m.cx = m.right - m.w / 2;
+        }
         a.lidMask = m.lidMask;
         a.faceParts = m.faceParts;
         const k = ref.w / m.w;
@@ -484,6 +494,17 @@ const PROPS_SVG = `
   <path d="M-16 34.4C-10 34.4-9 30.6-4.4 32.2" class="p-pen" style="stroke-width:.9"/>
   <rect x="-4.6" y="30.4" width="5" height="3.6" rx=".8" class="p-paper" transform="rotate(-8 -2.1 32.2)"/>
   <path d="M.4 31.2h1.8M.6 33.1h1.8" class="p-pen" style="stroke-width:.6" transform="rotate(-8 -2.1 32.2)"/>
+</g>
+<g data-p="wifi" style="display:none">
+  <path d="M32-14h12a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-8l-5.5 4.2 1.5-4.2a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3z" class="p-paper"/>
+  <circle data-p="wifi0" cx="38" cy="-3.9" r="1" style="fill:var(--body)"/>
+  <path data-p="wifi1" d="M36.16-6.04A2.6 2.6 0 0 1 39.84-6.04" class="p-pen" style="stroke-width:1.15"/>
+  <path data-p="wifi2" d="M34.61-7.59A4.8 4.8 0 0 1 41.39-7.59" class="p-pen" style="stroke-width:1.15"/>
+  <path data-p="wifi3" d="M33.05-9.15A7 7 0 0 1 42.95-9.15" class="p-pen" style="stroke-width:1.15"/>
+  <g data-p="wifiSlash">
+    <path d="M33.4-12.4 42.6-2.6" style="fill:none;stroke:var(--eyes);stroke-width:2.8;stroke-linecap:round"/>
+    <path d="M33.4-12.4 42.6-2.6" class="p-pen" style="stroke-width:1.2"/>
+  </g>
 </g>
 <g data-p="clock" style="display:none">
   <path d="M45.3 33.6l-1 1.1M50.7 33.6l1 1.1" class="p-pen"/>
@@ -1061,6 +1082,101 @@ function ProposedEngine(view, rng, opts = {}) {
                     rot: 11 * Math.sin(u * Math.PI * 7) * (1 - u),
                     sy: lerp(0.92, 1, easeOut(u)),
                     sx: lerp(1.04, 1, easeOut(u)),
+                };
+            },
+        };
+    }
+    // Offline: a Wi-Fi bubble over Kage's head. The arcs light one by one as
+    // he searches, drop out, a slash stamps across; he shakes his head and
+    // slumps, then tries again. Its own situation, not `error`: a plug on
+    // the floor was too easy to miss for something the user can fix.
+    const LOOK = 'poses/looking-to-the-right';
+    const DIM = 0.18;
+    const backOut = (u) => 1 + 2.7 * (u - 1) ** 3 + 1.7 * (u - 1) ** 2;
+    function offlineEnter() {
+        return {
+            dur: 520,
+            breathe: true,
+            sample(ms) {
+                const sw = swapClip(LOOK, 520, { from: shown }).sample(ms);
+                const u = clamp((ms - 80) / 380, 0, 1);
+                return {
+                    ...sw,
+                    gaze: 0.75 * easeOut(u),
+                    props: { wifi: { s: backOut(u), lit: [1, DIM, DIM, DIM] } },
+                };
+            },
+        };
+    }
+    function offlineLoop() {
+        return {
+            dur: 4400,
+            breathe: true,
+            sample(ms) {
+                const lit = [1, DIM, DIM, DIM];
+                let slash = 0,
+                    slashO = 1,
+                    gaze = 0.75,
+                    lid = 0,
+                    sy = 1,
+                    sx = 1;
+                if (ms < 1600) {
+                    // Searching: one more arc every 320ms, a little perk each.
+                    const k = Math.floor(ms / 320);
+                    for (let i = 1; i <= 3; i++) if (i <= k) lit[i] = 1;
+                    const perk = Math.sin(clamp((ms % 320) / 200, 0, 1) * Math.PI);
+                    sy += 0.025 * perk * (k >= 1 && k <= 3 ? 1 : 0);
+                } else if (ms < 1900) {
+                    // The signal sputters out.
+                    const on = Math.floor((ms - 1600) / 60) % 2 === 0;
+                    for (let i = 1; i <= 3; i++) lit[i] = on ? 1 : DIM;
+                    lit[0] = on ? 1 : 0.45;
+                } else {
+                    lit[0] = 0.45;
+                    const u = clamp((ms - 1900) / 220, 0, 1);
+                    slash = lerp(1.7, 1, backOut(u));
+                    slashO = u * 3;
+                    // Startled by it: a quick squash.
+                    const jolt = Math.sin(clamp((ms - 1900) / 260, 0, 1) * Math.PI);
+                    sy -= 0.07 * jolt;
+                    sx += 0.04 * jolt;
+                    // Head shake: eyes and mouth swing (the head turning "no").
+                    const h = clamp((ms - 2150) / 900, 0, 1);
+                    if (h > 0 && h < 1)
+                        gaze = 0.75 * (1 - easeOut(h)) + 0.65 * Math.sin(h * Math.PI * 5) * (1 - h);
+                    else if (h >= 1) gaze = 0;
+                    // Then the slump and a sigh.
+                    const sl = easeInOut(clamp((ms - 3050) / 450, 0, 1));
+                    const sigh = Math.sin(clamp((ms - 3500) / 600, 0, 1) * Math.PI);
+                    sy -= 0.05 * sl + 0.03 * sigh;
+                    sx += 0.03 * sl + 0.015 * sigh;
+                    lid = 0.25 * clamp((ms - 2150) / 300, 0, 1) + 0.25 * sl;
+                    // Look back up and fade the slash: try again.
+                    const again = clamp((ms - 4100) / 300, 0, 1);
+                    gaze = lerp(gaze, 0.75, easeInOut(again));
+                    lid *= 1 - again;
+                    slashO = Math.min(slashO, 1 - again);
+                }
+                return { pose: LOOK, gaze, lid, sy, sx, props: { wifi: { lit, slash, slashO } } };
+            },
+        };
+    }
+    function onlineClip() {
+        // Back online: every arc lights at once, a happy perk, bubble pops off.
+        return {
+            dur: 760,
+            breathe: false,
+            sample(ms) {
+                const fill = clamp(ms / 240, 0, 1);
+                const lit = [1, fill > 0.2 ? 1 : DIM, fill > 0.55 ? 1 : DIM, fill >= 1 ? 1 : DIM];
+                const perk = Math.sin(clamp(ms / 420, 0, 1) * Math.PI);
+                const out = easeIn(clamp((ms - 480) / 280, 0, 1));
+                return {
+                    pose: LOOK,
+                    gaze: 0.75 * (1 - out),
+                    sy: 1 + 0.07 * perk,
+                    sx: 1 - 0.035 * perk,
+                    props: { wifi: { s: 1 + 0.15 * perk - out, lit } },
                 };
             },
         };
@@ -1695,9 +1811,10 @@ function ProposedEngine(view, rng, opts = {}) {
         next(t);
     }
 
-    // Priority: error > approval > rate limit > compacting > thinking > done.
+    // Priority: offline > error > approval > rate limit > compacting > thinking > done.
     function pickNext(t, f) {
-        if (sit.error) queue.push(errorLoop());
+        if (sit.offline) queue.push(offlineLoop());
+        else if (sit.error) queue.push(errorLoop());
         else if (sit.ask) queue.push(askLoop());
         else if (sit.limit) queue.push(pantLoop());
         else if (sit.compact) queue.push(boxLoop());
@@ -1788,6 +1905,26 @@ function ProposedEngine(view, rng, opts = {}) {
             P.sign.setAttribute('opacity', (p.sign.o ?? 1).toFixed(2));
         }
         P.cord.style.display = p.cord ? '' : 'none';
+        P.wifi.style.display = p.wifi ? '' : 'none';
+        if (p.wifi) {
+            // Pops from the tail, so it reads as coming out of Kage's head.
+            const sc = p.wifi.s ?? 1;
+            P.wifi.setAttribute(
+                'transform',
+                `translate(-3 0) translate(30.5 3.2) scale(${sc.toFixed(3)}) translate(-30.5 -3.2)`
+            );
+            for (let i = 0; i < 4; i++)
+                P[`wifi${i}`].setAttribute('opacity', (p.wifi.lit?.[i] ?? 1).toFixed(2));
+            const sl = p.wifi.slash || 0;
+            P.wifiSlash.style.display = sl > 0 ? '' : 'none';
+            if (sl > 0) {
+                P.wifiSlash.setAttribute(
+                    'transform',
+                    `translate(38 -7.5) scale(${sl.toFixed(3)}) translate(-38 7.5)`
+                );
+                P.wifiSlash.setAttribute('opacity', clamp(p.wifi.slashO ?? 1, 0, 1).toFixed(2));
+            }
+        }
         P.clock.style.display = p.clock !== undefined ? '' : 'none';
         if (p.clock !== undefined)
             P.clockHands.setAttribute('transform', `rotate(${p.clock.toFixed(1)} 48 29.6)`);
@@ -1871,6 +2008,8 @@ function ProposedEngine(view, rng, opts = {}) {
             const SIT = {
                 permission: ['ask', true],
                 permissionDone: ['ask', false],
+                offline: ['offline', true],
+                online: ['offline', false],
                 error: ['error', true],
                 recover: ['error', false],
                 rateLimit: ['limit', true],
@@ -1885,19 +2024,21 @@ function ProposedEngine(view, rng, opts = {}) {
                 sit[key] = on;
                 // A situation outranked by an active one just waits its turn:
                 // no transition now; pickNext shows it once it's on top.
-                const RANK = ['error', 'ask', 'limit', 'compact'];
+                const RANK = ['offline', 'error', 'ask', 'limit', 'compact'];
                 if (RANK.slice(0, RANK.indexOf(key)).some((k) => sit[k])) return;
-                if (key === 'error' && on) {
+                if ((key === 'error' || key === 'offline') && on) {
                     mode = 'idle';
                     activity = null;
                 } // the turn is dead
                 const enter = {
+                    offline: offlineEnter,
                     ask: askEnter,
                     error: errorEnter,
                     limit: () => swapClip(BASE, 200, { from: shown }),
                     compact: boxEnter,
                 };
                 const exit = {
+                    offline: onlineClip,
                     ask: askExit,
                     error: recoverClip,
                     limit: () => landRest(320),
@@ -1906,6 +2047,7 @@ function ProposedEngine(view, rng, opts = {}) {
                 const list = on ? [enter[key]()] : [exit[key]()];
                 if (key === 'error' && !on && !f.reduced)
                     list.push(hopClip(8, 'poses/happy'), waveClip(f));
+                if (key === 'offline' && !on && !f.reduced) list.push(hopClip(8, 'poses/happy'));
                 play(list, t);
                 return;
             }
@@ -2205,6 +2347,7 @@ function ProposedEngine(view, rng, opts = {}) {
                     }
                 }
             }
+            if (s.lid) lid = Math.max(lid, s.lid);
             if (DEBUG_LID !== null) lid = DEBUG_LID;
             rig.style.setProperty('--lid', lid.toFixed(3));
             rig.style.setProperty('--gaze', (s.gaze || 0).toFixed(3));

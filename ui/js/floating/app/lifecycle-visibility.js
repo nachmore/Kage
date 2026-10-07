@@ -23,6 +23,9 @@ export const LifecycleVisibilityMethods = {
         const update = (online) => {
             if (bar) bar.style.display = online ? 'none' : 'flex';
             this.windowManager.resizeWindow();
+            // Kage's Wi-Fi bubble. `online` while not offline is a no-op in
+            // the engine, so the startup check can send it unconditionally.
+            signalMascot(online ? 'online' : 'offline');
         };
         // Do a real connectivity check on startup
         checkOnline().then((online) => update(online));
