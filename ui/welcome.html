@@ -458,6 +458,8 @@
 <script type="module">
     import { HotkeyPicker } from './js/shared/hotkey-picker.js';
     import { createMascotController, getMascotThemeSettings } from './js/shared/mascot.js';
+    import { createMascotController as createEngineMascot } from './js/shared/mascot-engine.js';
+    import { startMascotShowcase } from './js/shared/mascot-showcase.js';
     import { ANIMATIONS } from './js/shared/mascot-animations.js';
     import { escapeHtml } from './js/shared/tool-utils.js';
     import { interceptConsole } from './js/shared/kage-log.js';
@@ -501,16 +503,16 @@
         let mascotReady = Promise.resolve();
         if (mascotEl) {
             const { outlineColor, invert } = getMascotThemeSettings();
-            const ctrl = createMascotController(mascotEl, {
+            // The new engine, touring its cheerful moments: a hello wave,
+            // then a random one every few seconds (see mascot-showcase.js).
+            const ctrl = createEngineMascot(mascotEl, {
                 size: 120,
-                idle: ANIMATIONS.waving,
-                periodic: ANIMATIONS.waving,
-                periodicInterval: 10000,
-                periodicJitter: 2000,
+                profile: 'full',
                 invert,
                 outline: { color: outlineColor, radius: 2 },
             });
             mascotReady = ctrl.ready;
+            ctrl.ready.then(() => startMascotShowcase(ctrl));
         }
 
         // Show the window only after the first mascot frame has loaded

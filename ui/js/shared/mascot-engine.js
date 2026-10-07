@@ -538,6 +538,11 @@ function ProposedEngine(view, rng, opts = {}) {
         H = Math.round(CAT_W * 2.5);
     const ref = asset('waving/waving-f1');
     const CAT_H = CAT_W / aspectOf(ref);
+    // Props are drawn in a fixed 40-unit-wide space (the idle art's box at
+    // the lab's size); PU converts those units to px at whatever size the
+    // cat is actually drawn.
+    const PROP_U = 40;
+    const PU = CAT_W / PROP_U;
     const GROUND = (H + CAT_H) / 2; // same resting spot as the app (centred)
     const RIG_L = (W - CAT_W) / 2,
         RIG_T = GROUND - CAT_H;
@@ -610,9 +615,9 @@ function ProposedEngine(view, rng, opts = {}) {
         svg.style.top = `${CAT_H - JH + 3}px`;
         add(`jumping/jumping-f${i}`, svg);
     }
-    // Props overlay, 1:1 with rig px, drawn above the cat.
+    // Props overlay, drawn above the cat in prop units (see PROP_U).
     const props = document.createElementNS(NS, 'svg');
-    props.setAttribute('viewBox', `0 0 ${CAT_W} ${CAT_H}`);
+    props.setAttribute('viewBox', `0 0 ${PROP_U} ${CAT_H / PU}`);
     props.setAttribute('width', CAT_W);
     props.setAttribute('height', CAT_H);
     props.style.cssText = 'position:absolute;left:0;top:0;overflow:visible';
@@ -1586,8 +1591,8 @@ function ProposedEngine(view, rng, opts = {}) {
     let lastK = 1,
         lastS = { sx: 1, sy: 1, y: 0 };
     const toView = (x, y) => ({
-        x: RIG_L + CAT_W / 2 + (x - CAT_W / 2) * lastK * Math.abs(lastS.sx),
-        y: RIG_T + CAT_H - (CAT_H - y) * lastK * lastS.sy - lastS.y,
+        x: RIG_L + CAT_W / 2 + (x * PU - CAT_W / 2) * lastK * Math.abs(lastS.sx),
+        y: RIG_T + CAT_H - (CAT_H - y * PU) * lastK * lastS.sy - lastS.y,
     });
 
     function emit(kind, t, at) {
@@ -1686,6 +1691,15 @@ function ProposedEngine(view, rng, opts = {}) {
                 return;
             }
             let x, y, s, o;
+            // Motion and sizes below are tuned in prop units (a 40px cat);
+            // `fit` scales them about the particle's origin to the real size.
+            const ox = p.kind === 'sparkle' ? W / 2 : p.x;
+            const oy = p.kind === 'sparkle' ? GROUND - CAT_H * 0.55 : p.y;
+            const fit = () => {
+                x = ox + (x - ox) * PU;
+                y = oy + (y - oy) * PU;
+                s *= PU;
+            };
             if (p.kind === 'sparkle') {
                 // Start at the head's edge, not on the face.
                 const d = 11 + easeOut(u) * p.r;
@@ -1715,6 +1729,7 @@ function ProposedEngine(view, rng, opts = {}) {
                 y = p.y + p.vy * tt + 46 * tt * tt;
                 s = p.size;
                 o = 1 - u * u;
+                fit();
                 el.textContent = p.ch;
                 el.style.cssText = `left:${x}px;top:${y}px;font-size:${s}px;opacity:${o};transform:translate(-50%,-50%) rotate(${(p.spin * tt).toFixed(0)}deg)`;
                 return;
@@ -1729,6 +1744,7 @@ function ProposedEngine(view, rng, opts = {}) {
                 s = p.size * Math.sin(u * Math.PI);
                 o = Math.sin(u * Math.PI);
             }
+            fit();
             el.style.cssText = `left:${x}px;top:${y}px;font-size:${s}px;opacity:${o};transform:translate(-50%,-50%)`;
         });
     }
@@ -1834,7 +1850,7 @@ function ProposedEngine(view, rng, opts = {}) {
         const party = wearing === 'party' && hatFits(pose);
         P.party.style.display = party ? '' : 'none';
         if (party) {
-            const dy = (pose.startsWith('poses/') ? POSE_REG[pose.slice(6)].headDy : 0) * CAT_W;
+            const dy = (pose.startsWith('poses/') ? POSE_REG[pose.slice(6)].headDy : 0) * PROP_U;
             P.party.setAttribute('transform', `translate(0 ${dy.toFixed(2)})`);
         }
         P.hat.style.display = p.hat ? '' : 'none';
@@ -2062,6 +2078,12 @@ function ProposedEngine(view, rng, opts = {}) {
             if (name === 'summon') {
                 if (!f.summon) return;
                 play([summonClip(mode === 'think' ? 'jumpArc/f1' : BASE)], t);
+                return;
+            }
+            // A plain hello: the welcome screen's greeting and showcase.
+            if (name === 'wave') {
+                if (mode === 'think' || Object.values(sit).some(Boolean) || f.reduced) return;
+                play([waveClip(f)], t);
                 return;
             }
             if (name === 'copy') {
