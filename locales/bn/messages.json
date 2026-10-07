@@ -7798,5 +7798,11 @@
     "description": "Note appended under a floating-window response after the user cancels generation mid-stream; warns the shown text is partial",
     "_machine_translated": true,
     "_source_hash": "c0ad415c13c09e01"
+  },
+  "about.name_story_html": {
+    "message": "Kage (影 · かげ, উচ্চারণ <i>kah-geh</i>)-এর অর্থ <i>ছায়া</i> বা <i>অবয়ব</i>। নামটা মানানসই, কারণ আপনি না ডাকা পর্যন্ত Kage চুপচাপ পেছনে অপেক্ষা করে: অনেকটা কালো বিড়ালের মতো, তবে সত্যিই কাজের।",
+    "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone.",
+    "_machine_translated": true,
+    "_source_hash": "388a7e93c6b4c258"
   }
 }

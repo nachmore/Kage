@@ -28,6 +28,7 @@ export class AboutSettingsModule extends SettingsModule {
                             <div class="about-homepage" id="aboutHomepage"></div>
                         </div>
                     </div>
+                    <div class="about-story">${t('about.name_story_html')}</div>
                     <div class="about-description" id="aboutDescription"></div>
                     <div class="about-info" id="aboutInfo">
                         <div class="about-row"><span class="about-label">${t('settings.about.info.loading')}</span></div>

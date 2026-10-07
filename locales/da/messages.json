@@ -7798,5 +7798,11 @@
     "description": "Note appended under a floating-window response after the user cancels generation mid-stream; warns the shown text is partial",
     "_machine_translated": true,
     "_source_hash": "c0ad415c13c09e01"
+  },
+  "about.name_story_html": {
+    "message": "Kage (影 · かげ, udtales <i>kah-geh</i>) betyder <i>skygge</i> eller <i>silhuet</i>. Det passer godt, for Kage venter stille i baggrunden, indtil du kalder på den: lidt ligesom en sort kat, bortset fra at den faktisk er til hjælp.",
+    "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone.",
+    "_machine_translated": true,
+    "_source_hash": "388a7e93c6b4c258"
   }
 }

@@ -5200,5 +5200,9 @@
   "shared.mac_permissions.open_settings": {
     "message": "Open System Settings",
     "description": "Button label that deep-links to System Settings → Privacy"
+  },
+  "about.name_story_html": {
+    "message": "Kage (影 · かげ, said <i>kah-geh</i>) means <i>shadow</i> or <i>silhouette</i>. Fitting, since Kage waits quietly in the background until you summon it: a bit like a black cat, except actually helpful.",
+    "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone."
   }
 }

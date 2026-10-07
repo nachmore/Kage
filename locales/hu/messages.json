@@ -7798,5 +7798,11 @@
     "description": "Note appended under a floating-window response after the user cancels generation mid-stream; warns the shown text is partial",
     "_machine_translated": true,
     "_source_hash": "c0ad415c13c09e01"
+  },
+  "about.name_story_html": {
+    "message": "A Kage (影 · かげ, kiejtése: <i>kah-geh</i>) jelentése <i>árnyék</i> vagy <i>sziluett</i>. Találó név, hiszen a Kage csendben vár a háttérben, amíg elő nem hívja: kicsit olyan, mint egy fekete macska, csak éppen tényleg hasznos.",
+    "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone.",
+    "_machine_translated": true,
+    "_source_hash": "388a7e93c6b4c258"
   }
 }

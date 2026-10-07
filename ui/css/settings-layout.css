@@ -625,6 +625,12 @@ body.light-theme .keycap-sep {
 .about-homepage a:hover {
     text-decoration: underline;
 }
+.about-story {
+    font-size: 13px;
+    color: var(--kage-text, inherit);
+    line-height: 1.55;
+    margin-bottom: 10px;
+}
 .about-description {
     font-size: 13px;
     color: var(--kage-text-muted, #938f9b);
