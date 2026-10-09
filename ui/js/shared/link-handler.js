@@ -89,6 +89,11 @@ export function neutralizeLinks(root) {
         ) {
             a.setAttribute('data-href', href);
             a.setAttribute('href', '#');
+            // The sanitizer forces target=_blank on http(s) links. Left on a
+            // neutralized anchor it turns the click into a native new-window
+            // request for "#", which Tauri hands to the OS browser as
+            // http://tauri.localhost/# — alongside our own open_url.
+            a.removeAttribute('target');
         }
     }
 }

@@ -133,6 +133,20 @@ describe('neutralizeLinks', () => {
         expect(a.getAttribute('data-href')).toBe('https://example.com/x');
     });
 
+    it('strips target=_blank so "#" cannot open a native new window', async () => {
+        // Regression: the sanitizer forces target=_blank on http(s) links; a
+        // neutralized anchor that kept it opened http://tauri.localhost/# in
+        // the browser next to the real URL.
+        const { neutralizeLinks } = await loadFresh();
+        const root = container(
+            '<a href="https://example.com/x" target="_blank" rel="noopener noreferrer">link</a>'
+        );
+        neutralizeLinks(root);
+        const a = root.querySelector('a');
+        expect(a.hasAttribute('target')).toBe(false);
+        expect(a.getAttribute('data-href')).toBe('https://example.com/x');
+    });
+
     it('neutralizes mailto: and kage: too', async () => {
         const { neutralizeLinks } = await loadFresh();
         const root = container(
