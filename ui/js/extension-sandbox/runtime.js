@@ -678,6 +678,67 @@ function handleHostMessage(ev) {
     }
 }
 
+// --- Stall watch ------------------------------------------------------------
+//
+// Chromium deprioritises this frame (cross-origin, 1x1, transparent). It has
+// been seen freezing its timers and fetch callbacks for 10+ seconds while
+// the window was VISIBLE, releasing them the instant the window hid — a
+// Spotify poll's 4s timeout fired after 10s. That's invisible from the
+// host, so the sandbox times its own heartbeat and logs when it runs badly
+// late. Hidden pages are legitimately throttled (up to a minute between
+// wake-ups), so only beats that start and end visible count.
+
+/** Heartbeat period; a beat this many ms late is a stall worth logging. */
+const STALL_BEAT_MS = 2000;
+const STALL_THRESHOLD_MS = 3000;
+/** At most one report per window of this length, so a long stall logs once. */
+const STALL_REPORT_COOLDOWN_MS = 5 * 60 * 1000;
+
+/**
+ * Pure heartbeat bookkeeping. Call `beat()` from a fixed-period timer; it
+ * reports via `report(lateMs)` when a visible-to-visible beat ran more than
+ * `thresholdMs` late, rate-limited to one report per `cooldownMs`.
+ */
+export function createStallWatch({
+    now,
+    isVisible,
+    report,
+    periodMs = STALL_BEAT_MS,
+    thresholdMs = STALL_THRESHOLD_MS,
+    cooldownMs = STALL_REPORT_COOLDOWN_MS,
+}) {
+    let last = now();
+    let lastVisible = isVisible();
+    let lastReport = -Infinity;
+    return {
+        beat() {
+            const t = now();
+            const visible = isVisible();
+            const late = t - last - periodMs;
+            if (late > thresholdMs && visible && lastVisible && t - lastReport >= cooldownMs) {
+                lastReport = t;
+                report(Math.round(late));
+            }
+            last = t;
+            lastVisible = visible;
+        },
+    };
+}
+
+function startStallWatch() {
+    const watch = createStallWatch({
+        now: () => performance.now(),
+        isVisible: () => document.visibilityState === 'visible',
+        report: (late) =>
+            log(
+                'warn',
+                `sandbox stalled: a ${STALL_BEAT_MS}ms timer fired ${late}ms late ` +
+                    'while the window was visible (timers and fetches in this sandbox were frozen)'
+            ),
+    });
+    setInterval(() => watch.beat(), STALL_BEAT_MS);
+}
+
 // The host transfers a MessagePort in the very first message it sends to
 // our window. From that point on, all traffic is over the port.
 window.addEventListener('message', function onHandshake(ev) {
@@ -699,6 +760,7 @@ window.addEventListener('message', function onHandshake(ev) {
     window.removeEventListener('message', onHandshake);
 
     safePost({ type: 'ready' });
+    startStallWatch();
 });
 
 // Surface unhandled errors to the host instead of letting them vanish.
