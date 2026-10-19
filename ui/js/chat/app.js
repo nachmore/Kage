@@ -22,7 +22,7 @@ import {
 } from '../shared/commands.js';
 import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.js';
 import { buildExecCtx } from '../shared/exec-context.js';
-import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
+import { escapeHtml, splitPromptContext, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW, isChatLabel } from '../shared/window-labels.js';
 import { applyMixin } from '../shared/mixin.js';
@@ -144,6 +144,7 @@ const CHAT_APP_DEPENDENCIES = {
     setupRtlDetection,
     SpeechController,
     STREAM,
+    splitPromptContext,
     stripKageTags,
     submitSelection,
     t,

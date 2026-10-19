@@ -4,6 +4,8 @@ import {
     escapeHtml,
     getToolEmoji,
     getToolIcon,
+    splitPromptContext,
+    stripKageTags,
 } from '../../ui/js/shared/tool-utils.js';
 
 describe('getToolIcon', () => {
@@ -134,4 +136,42 @@ describe('escapeAttr', () => {
         expect(escapeAttr(null)).toBe('');
         expect(escapeAttr(undefined)).toBe('');
     });
+});
+
+describe('splitPromptContext', () => {
+  const FLOATING_PROMPT =
+    '<_kage_app_steering app="Email &amp; Co">\nMatch the tone.\nDefault to short replies.\n</_kage_app_steering>\n' +
+    '<_kage_ctx app="OUTLOOK" title="Inbox"/>\n' +
+    'The following text is currently selected in my active window:\n```\nFrom Subject\nissues@amazon.com\n```\n\n' +
+    '>clear';
+
+  it('separates app steering and selection from the typed prompt', () => {
+    const { prompt, steering, selection } = splitPromptContext(FLOATING_PROMPT);
+    expect(prompt).toBe('>clear');
+    expect(steering).toEqual([
+      { app: 'Email & Co', body: 'Match the tone.\nDefault to short replies.' },
+    ]);
+    expect(selection).toBe('From Subject\nissues@amazon.com');
+  });
+
+  it('passes a plain prompt through untouched', () => {
+    expect(splitPromptContext('hello')).toEqual({ prompt: 'hello', steering: [], selection: null });
+  });
+
+  it('handles selection without steering', () => {
+    const r = splitPromptContext(
+      'The following text is currently selected in my active window:\n```\nabc\n```\n\nsummarize'
+    );
+    expect(r).toEqual({ prompt: 'summarize', steering: [], selection: 'abc' });
+  });
+});
+
+describe('stripKageTags', () => {
+  it('removes paired and self-closing kage tags', () => {
+    expect(
+      stripKageTags(
+        '<_kage_app_steering app="X">\nbody\n</_kage_app_steering>\n<_kage_ctx app="a" title="b"/>\nhi'
+      )
+    ).toBe('hi');
+  });
 });

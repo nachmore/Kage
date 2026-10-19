@@ -215,7 +215,7 @@ export function createSessionHistoryMixin(dependencies) {
             // The user's own message isn't on disk until the turn completes —
             // paint it from the in-flight record so switching away and back
             // mid-turn doesn't make the prompt vanish.
-            const promptText = prompt ? stripKageTags(prompt) : '';
+            const promptText = prompt ? this.appendPromptContext(prompt) : '';
             if (promptText) {
                 this.elements.messagesArea.appendChild(
                     this.createMessageElement('user', promptText)
@@ -419,20 +419,9 @@ export function createSessionHistoryMixin(dependencies) {
         _renderQueueItem(item) {
             switch (item.type) {
                 case 'steering': {
-                    const steeringEl = document.createElement('div');
-                    steeringEl.className = 'steering-message collapsed';
-                    steeringEl.innerHTML = `
-                    <div class="steering-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                        <span class="steering-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="14" x2="12" y2="22"/><line x1="10" y1="12" x2="2.5" y2="10.7"/><line x1="14" y1="12" x2="21.5" y2="10.7"/></svg></span>
-                        <span class="steering-label">${t('chat.message.steering_label')}</span>
-                        <span class="steering-toggle">▶</span>
-                    </div>
-                    <div class="steering-body">
-                        <div class="steering-content"></div>
-                    </div>
-                `;
-                    const contentEl = steeringEl.querySelector('.steering-content');
-                    renderMarkdown(item.text, contentEl);
+                    const steeringEl = this.createSteeringSection((contentEl) =>
+                        renderMarkdown(item.text, contentEl)
+                    );
                     this.elements.messagesArea.appendChild(steeringEl);
                     break;
                 }
@@ -458,13 +447,13 @@ export function createSessionHistoryMixin(dependencies) {
         }
 
         addMessageFromHistory(role, text, imageSnapshots, meta) {
+            // Injected context goes in its own section, ahead of the bubble.
+            const displayText = role === 'user' && text ? this.appendPromptContext(text) : text;
             const msgEl = this.createMessageElement(role, '');
             const contentDiv = msgEl.querySelector('.message-content');
             if (role === 'assistant') {
                 renderMarkdown(text, contentDiv);
             } else {
-                // Strip internal Kage tags from display
-                const displayText = text ? stripKageTags(text) : text;
                 if (displayText) contentDiv.textContent = displayText;
             }
             if (imageSnapshots && imageSnapshots.length > 0) {

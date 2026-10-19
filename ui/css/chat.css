@@ -943,6 +943,31 @@ body {
     margin: 8px 0 4px;
 }
 
+.prompt-context-app {
+    font-weight: 600;
+    color: var(--kage-text-secondary, #b0b0b0);
+    margin: 4px 0 2px;
+}
+
+.prompt-context-body {
+    white-space: pre-wrap;
+    margin-bottom: 8px;
+}
+
+.prompt-context-selection {
+    margin: 4px 0;
+    padding: 8px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 11px;
+}
+
+body.light-theme .prompt-context-selection {
+    background: rgba(0, 0, 0, 0.05);
+}
+
 .steering-ack {
     margin-top: 8px;
     padding-top: 8px;

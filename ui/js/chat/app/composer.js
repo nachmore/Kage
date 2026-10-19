@@ -5,7 +5,6 @@ export function createComposerMixin(dependencies) {
         executeCommand,
         getSlashCommandMeta,
         getSlashCommandDispatch,
-        stripKageTags,
         errLabel,
         t,
         loadSelection,
@@ -242,8 +241,9 @@ export function createComposerMixin(dependencies) {
             const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
             if (placeholder) placeholder.remove();
 
-            // Strip internal Kage tags from display (it's metadata for the agent, not for the user)
-            const displayText = stripKageTags(text);
+            // Internal Kage tags are agent metadata; injected steering and
+            // selection get their own section ahead of the bubble.
+            const displayText = this.appendPromptContext(text);
 
             this.messages.push({ role: 'user', content: text });
             const msgEl = this.createMessageElement('user', displayText);

@@ -113,9 +113,55 @@ const HTML_ENTITIES = Object.freeze({
 export function stripKageTags(text) {
     if (!text) return text;
     return text
+        .replace(/<(_kage_[a-z_]+)(?:\s[^>]*)?(?<!\/)>[\s\S]*?<\/\1>\n?/g, '') // <_kage_app_steering ...>...</_kage_app_steering>
         .replace(/<_kage_[^>]*\/>\n?/g, '') // <_kage_ctx app="..." title="..."/>
         .replace(/\[_KAGE_[A-Z_]*\][^\n]*\n?/g, '') // [_KAGE_INLINE] Return ONLY...
         .trim();
+}
+
+// Mirrors the selection preamble the floating window prepends in
+// `floating/app/input.js` when "use selection" is checked.
+const SELECTION_PREAMBLE_RE =
+    /^The following text is currently selected in my active window:\n```\n([\s\S]*?)\n```(?:\n\n|$)/;
+
+const XML_ATTR_ENTITIES = Object.freeze({
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&apos;': "'",
+});
+
+/**
+ * Split a floating-window prompt into what the user typed and the context
+ * the app injected ahead of it: App Mode steering blocks and the selected
+ * text preamble. Used by the chat window to render that context in its own
+ * collapsed section instead of inside the user's bubble.
+ *
+ * Returns `{ prompt, steering: [{ app, body }], selection }` where
+ * `selection` is `null` when no selection was attached.
+ */
+export function splitPromptContext(text) {
+    if (!text) return { prompt: text, steering: [], selection: null };
+    const steering = [];
+    let rest = text.replace(
+        /<_kage_app_steering app="([^"]*)">\n?([\s\S]*?)\n?<\/_kage_app_steering>\n?/g,
+        (_, app, body) => {
+            steering.push({
+                app: app.replace(/&(?:amp|lt|gt|quot|apos);/g, (e) => XML_ATTR_ENTITIES[e]),
+                body: body.trim(),
+            });
+            return '';
+        }
+    );
+    rest = stripKageTags(rest);
+    let selection = null;
+    const m = rest.match(SELECTION_PREAMBLE_RE);
+    if (m) {
+        selection = m[1];
+        rest = rest.slice(m[0].length).trim();
+    }
+    return { prompt: rest, steering, selection };
 }
 
 /**

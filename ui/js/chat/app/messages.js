@@ -15,8 +15,60 @@ export function createMessagesMixin(dependencies) {
         getConfig,
         ExtensionToolController,
         formatErrorShared,
+        splitPromptContext,
     } = dependencies;
     return class {
+        /**
+         * Build a collapsed steering section (header + toggle). `fillBody`
+         * receives the `.steering-content` element to populate.
+         */
+        createSteeringSection(fillBody) {
+            const steeringEl = document.createElement('div');
+            steeringEl.className = 'steering-message collapsed';
+            steeringEl.innerHTML = `
+                    <div class="steering-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <span class="steering-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="14" x2="12" y2="22"/><line x1="10" y1="12" x2="2.5" y2="10.7"/><line x1="14" y1="12" x2="21.5" y2="10.7"/></svg></span>
+                        <span class="steering-label">${t('chat.message.steering_label')}</span>
+                        <span class="steering-toggle">▶</span>
+                    </div>
+                    <div class="steering-body">
+                        <div class="steering-content"></div>
+                    </div>
+                `;
+            fillBody(steeringEl.querySelector('.steering-content'));
+            return steeringEl;
+        }
+
+        /**
+         * Split the context the floating window injects ahead of a prompt
+         * (App Mode steering, selected text) into its own collapsed section,
+         * appended to the transcript just before the user's bubble. Returns
+         * the text the bubble itself should show.
+         */
+        appendPromptContext(text) {
+            const { prompt, steering, selection } = splitPromptContext(text);
+            if (steering.length === 0 && selection === null) return prompt;
+            const section = this.createSteeringSection((contentEl) => {
+                for (const { app, body } of steering) {
+                    const appEl = document.createElement('div');
+                    appEl.className = 'prompt-context-app';
+                    appEl.textContent = app;
+                    const bodyEl = document.createElement('div');
+                    bodyEl.className = 'prompt-context-body';
+                    bodyEl.textContent = body;
+                    contentEl.append(appEl, bodyEl);
+                }
+                if (selection !== null) {
+                    const pre = document.createElement('pre');
+                    pre.className = 'prompt-context-selection';
+                    pre.textContent = selection;
+                    contentEl.appendChild(pre);
+                }
+            });
+            this.elements.messagesArea.appendChild(section);
+            return prompt;
+        }
+
         createMessageElement(role, content) {
             const msg = document.createElement('div');
             msg.className = `message ${role}`;
