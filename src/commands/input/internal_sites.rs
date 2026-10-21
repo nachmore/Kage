@@ -332,6 +332,7 @@ pub async fn internal_sites_draft_rules<R: tauri::Runtime>(
 
 /// Have the agent draft a proxy script for a sample URL. See
 /// [`internal_sites_draft_rules`] for `guidance` / `request_id`.
+#[allow(clippy::too_many_arguments)] // Tauri commands take state via parameters.
 #[tauri::command]
 pub async fn internal_sites_draft_script<R: tauri::Runtime>(
     url: String,
