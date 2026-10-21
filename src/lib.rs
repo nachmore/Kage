@@ -26,6 +26,7 @@ pub mod events;
 pub mod extensions;
 pub mod hotkey_norm;
 pub mod i18n;
+pub mod internal_sites;
 pub mod link_metadata_cache;
 pub mod logger;
 pub mod mcp_registration;

@@ -85,6 +85,18 @@ pub enum RunOutcome {
 /// regardless of outcome. Assumes the call has already been authorised by the
 /// permission system (see module docs) — there is no confirmation here.
 pub fn run_script(lang: ScriptLang, script: &str, timeout_ms: Option<u64>) -> RunOutcome {
+    run_script_with_env(lang, script, timeout_ms, &[])
+}
+
+/// [`run_script`] with extra environment variables set on the child. Callers
+/// hand untrusted inputs (e.g. a URL) to a script this way rather than by
+/// splicing them into the script text, so the input can't inject code.
+pub fn run_script_with_env(
+    lang: ScriptLang,
+    script: &str,
+    timeout_ms: Option<u64>,
+    env: &[(&str, &str)],
+) -> RunOutcome {
     let timeout = Duration::from_millis(
         timeout_ms
             .unwrap_or(DEFAULT_TIMEOUT_MS)
@@ -116,7 +128,7 @@ pub fn run_script(lang: ScriptLang, script: &str, timeout_ms: Option<u64>) -> Ru
     };
 
     pre_args.push(temp_path.to_string_lossy().to_string());
-    let outcome = execute_with_timeout(program, &pre_args, timeout);
+    let outcome = execute_with_timeout(program, &pre_args, timeout, env);
 
     // Best-effort cleanup — a leftover temp script is harmless but untidy.
     let _ = std::fs::remove_file(&temp_path);
@@ -196,9 +208,15 @@ fn next_counter() -> u64 {
 
 /// Spawn the interpreter, capture stdout/stderr, and enforce `timeout`.
 /// On timeout the child is killed and `timed_out` is set.
-fn execute_with_timeout(program: &str, args: &[String], timeout: Duration) -> ScriptResult {
+fn execute_with_timeout(
+    program: &str,
+    args: &[String],
+    timeout: Duration,
+    env: &[(&str, &str)],
+) -> ScriptResult {
     let mut cmd = Command::new(program);
     cmd.args(args)
+        .envs(env.iter().copied())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .stdin(std::process::Stdio::null());

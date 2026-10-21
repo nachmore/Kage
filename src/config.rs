@@ -104,6 +104,11 @@ pub struct Config {
     /// also stay empty across launches and reinstalls.
     #[serde(default)]
     pub context_rules: Vec<crate::context_rules::ContextRule>,
+    /// Internal-site profiles: detection rules + a proxy script for link
+    /// previews of pages that need the user's own auth. Local-only; see
+    /// `src/internal_sites.rs`.
+    #[serde(default)]
+    pub internal_sites: Vec<crate::internal_sites::InternalSiteProfile>,
 }
 
 mod automations;
@@ -172,6 +177,7 @@ impl Default for Config {
             automation_power: AutomationPowerConfig::default(),
             telemetry: TelemetryConfig::default(),
             context_rules: crate::context_rules::default_starter_rules(),
+            internal_sites: Vec::new(),
         }
     }
 }

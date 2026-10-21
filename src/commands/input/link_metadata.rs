@@ -1,5 +1,9 @@
 use crate::error::AppError;
+use crate::internal_sites::{self, InternalSiteProfile, ProxyResponse};
+use crate::state::FeatureServices;
+use kage_core::lock_ext::LockExt;
 use std::sync::LazyLock;
+use tauri::State;
 
 /// Extraction window: every tag we read lives in the document head.
 const MAX_HTML_BYTES: usize = 32 * 1024;
@@ -31,8 +35,15 @@ fn contains_head_close(bytes: &[u8]) -> bool {
 /// shape) without going to the network. Misses do the live fetch and
 /// persist before returning. See `src/link_metadata_cache.rs` for the
 /// TTL + eviction policy.
+///
+/// URLs matching a user-defined internal-site profile are fetched by
+/// that profile's proxy script instead of directly — see
+/// `src/internal_sites.rs`.
 #[tauri::command]
-pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppError> {
+pub async fn fetch_link_metadata(
+    url: String,
+    features: State<'_, FeatureServices>,
+) -> Result<serde_json::Value, AppError> {
     // Validate URL
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err("Invalid URL".into());
@@ -57,21 +68,17 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
             // to special-case "we tried and got nothing." The
             // background TTL guarantees we'll re-fetch in an hour
             // even if this stays in the cache.
-            None => Ok(serde_json::json!({
-                "url": url,
-                "title": null,
-                "description": null,
-                "image": null,
-                "favicon": null,
-            })),
+            None => Ok(empty_metadata(&url)),
         };
     }
+
+    let profiles = features.config.lock_or_recover().internal_sites.clone();
 
     // Cache miss — go to the network. Capture the outcome so we
     // can persist it (negative or positive) before returning. The
     // helper is split out so both arms write through the same cache
     // path without having to thread an Option around.
-    let fetched = fetch_link_metadata_uncached(&url).await;
+    let fetched = fetch_link_metadata_uncached(&url, &profiles).await;
     let to_persist: Option<serde_json::Value> = match &fetched {
         Ok(value) => Some(value.clone()),
         Err(_) => None, // negative cache: short TTL re-tries soon
@@ -84,11 +91,117 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
     fetched
 }
 
-/// Live-network half of `fetch_link_metadata`. Pulled out so the
-/// command wrapper can sit a cache check + cache write around it
-/// without nesting too deeply. Returns the same shape the command
-/// returns.
-async fn fetch_link_metadata_uncached(url: &str) -> Result<serde_json::Value, AppError> {
+fn empty_metadata(url: &str) -> serde_json::Value {
+    serde_json::json!({
+        "url": url,
+        "title": null,
+        "description": null,
+        "image": null,
+        "favicon": null,
+    })
+}
+
+/// Fields extracted from a page head.
+struct PageMeta {
+    title: Option<String>,
+    description: Option<String>,
+    image: Option<String>,
+    favicon: Option<String>,
+}
+
+fn extract_page_meta(html: &str, base_url: &str) -> PageMeta {
+    let title = extract_meta(html, "og:title")
+        .or_else(|| extract_meta(html, "twitter:title"))
+        .or_else(|| extract_tag_content(html, "title"));
+
+    let description = extract_meta(html, "og:description")
+        .or_else(|| extract_meta(html, "description"))
+        .or_else(|| extract_meta(html, "twitter:description"));
+
+    // Hero image (Open Graph / Twitter Card) — separate from the
+    // favicon since the formatter renders them in different places.
+    // Folding both into one field (which previous versions did) meant
+    // the card always showed a 28-px favicon even when the page had a
+    // proper og:image; the result looked half-built next to peer link
+    // previews in Slack / Discord / Notion.
+    let image = extract_meta(html, "og:image")
+        .or_else(|| extract_meta(html, "twitter:image"))
+        .or_else(|| extract_meta(html, "twitter:image:src"))
+        .map(|raw| resolve_url(&raw, base_url));
+
+    // Favicon is a small site-identity glyph. We try the explicit
+    // <link rel="icon"> first, then a /favicon.ico fallback. Never
+    // reuse the hero image — they have different aspect ratios and
+    // CSS treatment.
+    let favicon = extract_link_icon(html, base_url);
+
+    PageMeta {
+        title,
+        description,
+        image,
+        favicon,
+    }
+}
+
+/// Live half of `fetch_link_metadata`. Pulled out so the command
+/// wrapper can sit a cache check + cache write around it without
+/// nesting too deeply. Returns the same shape the command returns.
+///
+/// Routing: a URL-rule match goes straight to the profile's proxy,
+/// before anything leaves the machine. Otherwise the direct fetch runs,
+/// and what it saw (final URL and body — error responses included) is
+/// checked against content rules, which is how login walls are caught.
+async fn fetch_link_metadata_uncached(
+    url: &str,
+    profiles: &[InternalSiteProfile],
+) -> Result<serde_json::Value, AppError> {
+    let parsed = url::Url::parse(url).map_err(|_| AppError::from("Invalid URL"))?;
+    if let Some(profile) = internal_sites::match_url(profiles, &parsed) {
+        return proxy_link_metadata(profile, url).await;
+    }
+
+    let inspect = internal_sites::any_content_rules(profiles);
+    let direct = direct_fetch(url, inspect).await?;
+    if inspect {
+        let obs = internal_sites::DirectObservation {
+            final_url: &direct.final_url,
+            body: &direct.body,
+        };
+        if let Some(profile) = internal_sites::match_content(profiles, &obs) {
+            return proxy_link_metadata(profile, url).await;
+        }
+    }
+
+    if !direct.status.is_success() {
+        return Err(format!("HTTP {}", direct.status).into());
+    }
+    // Only process HTML responses
+    if !direct.is_html {
+        return Ok(empty_metadata(&direct.final_url));
+    }
+
+    let meta = extract_page_meta(&direct.body, &direct.final_url);
+    Ok(serde_json::json!({
+        "url": direct.final_url,
+        "title": meta.title,
+        "description": meta.description,
+        "image": meta.image,
+        "favicon": meta.favicon,
+    }))
+}
+
+/// What the direct fetch saw.
+struct DirectResponse {
+    status: reqwest::StatusCode,
+    final_url: String,
+    is_html: bool,
+    /// Head window of the body. Read for HTML successes, and for error
+    /// responses when `read_error_body` is set (content rules need the
+    /// login / 401 page); empty otherwise.
+    body: String,
+}
+
+async fn direct_fetch(url: &str, read_error_body: bool) -> Result<DirectResponse, AppError> {
     let client = HTTP_CLIENT
         .as_ref()
         .map_err(|e| format!("HTTP client error: {}", e))?;
@@ -101,26 +214,26 @@ async fn fetch_link_metadata_uncached(url: &str) -> Result<serde_json::Value, Ap
 
     let final_url = resp.url().to_string();
     let status = resp.status();
-    if !status.is_success() {
-        return Err(format!("HTTP {}", status).into());
-    }
-
-    // Only process HTML responses
     let content_type = resp
         .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_lowercase();
+    let is_html = content_type.contains("text/html");
 
-    if !content_type.contains("text/html") {
-        return Ok(serde_json::json!({
-            "url": final_url,
-            "title": null,
-            "description": null,
-            "image": null,
-            "favicon": null,
-        }));
+    let wants_body = if status.is_success() {
+        is_html
+    } else {
+        read_error_body
+    };
+    if !wants_body {
+        return Ok(DirectResponse {
+            status,
+            final_url,
+            is_html,
+            body: String::new(),
+        });
     }
 
     // Read only the first 32KB to extract meta tags. Stream it: `bytes()`
@@ -139,43 +252,120 @@ async fn fetch_link_metadata_uncached(url: &str) -> Result<serde_json::Value, Ap
             Ok(None) => break,
             // Timed out or dropped mid-body: a partial head still has the
             // tags we want, so only fail if nothing arrived.
-            Err(e) if buf.is_empty() => return Err(format!("Read error: {}", e).into()),
+            Err(e) if buf.is_empty() && status.is_success() => {
+                return Err(format!("Read error: {}", e).into())
+            }
             Err(_) => break,
         }
     }
     drop(resp);
-    let html = String::from_utf8_lossy(&buf[..buf.len().min(MAX_HTML_BYTES)]);
+    let body = String::from_utf8_lossy(&buf[..buf.len().min(MAX_HTML_BYTES)]).into_owned();
+    Ok(DirectResponse {
+        status,
+        final_url,
+        is_html,
+        body,
+    })
+}
 
-    let title = extract_meta(&html, "og:title")
-        .or_else(|| extract_meta(&html, "twitter:title"))
-        .or_else(|| extract_tag_content(&html, "title"));
+/// Cap on concurrent proxy runs — a chat full of internal links
+/// shouldn't fork a dozen interpreters at once.
+static PROXY_SLOTS: LazyLock<tokio::sync::Semaphore> =
+    LazyLock::new(|| tokio::sync::Semaphore::new(2));
 
-    let description = extract_meta(&html, "og:description")
-        .or_else(|| extract_meta(&html, "description"))
-        .or_else(|| extract_meta(&html, "twitter:description"));
+/// Cap on how much proxy stdout is handed to the HTML extractors.
+const MAX_PROXY_HTML_BYTES: usize = 256 * 1024;
 
-    // Hero image (Open Graph / Twitter Card) — separate from the
-    // favicon since the formatter renders them in different places.
-    // Folding both into one field (which previous versions did) meant
-    // the card always showed a 28-px favicon even when the page had a
-    // proper og:image; the result looked half-built next to peer link
-    // previews in Slack / Discord / Notion.
-    let image = extract_meta(&html, "og:image")
-        .or_else(|| extract_meta(&html, "twitter:image"))
-        .or_else(|| extract_meta(&html, "twitter:image:src"))
-        .map(|raw| resolve_url(&raw, &final_url));
+/// Run one proxy request on the blocking pool while holding a slot.
+async fn run_proxy_limited(
+    profile: &InternalSiteProfile,
+    url: &str,
+    response: ProxyResponse,
+) -> internal_sites::ProxyRun {
+    let _permit = PROXY_SLOTS.acquire().await;
+    let profile = profile.clone();
+    let url = url.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        internal_sites::run_proxy(&profile, &url, response)
+    })
+    .await
+    .unwrap_or_else(|e| internal_sites::ProxyRun {
+        ok: false,
+        exit_code: None,
+        timed_out: false,
+        stdout: String::new(),
+        stderr: format!("proxy task failed: {}", e),
+    })
+}
 
-    // Favicon is a small site-identity glyph. We try the explicit
-    // <link rel="icon"> first, then a /favicon.ico fallback. Never
-    // reuse the hero image — they have different aspect ratios and
-    // CSS treatment.
-    let favicon = extract_link_icon(&html, &final_url);
+/// Head window of proxy HTML output: through `</head>`, capped, cut on
+/// a char boundary.
+fn proxy_head_window(stdout: &str) -> &str {
+    let mut end = stdout
+        .as_bytes()
+        .windows(HEAD_CLOSE.len())
+        .position(|w| w.eq_ignore_ascii_case(HEAD_CLOSE))
+        .map(|i| i + HEAD_CLOSE.len())
+        .unwrap_or(stdout.len())
+        .min(MAX_PROXY_HTML_BYTES);
+    while !stdout.is_char_boundary(end) {
+        end -= 1;
+    }
+    &stdout[..end]
+}
+
+/// Link metadata via an internal-site profile's proxy script. The
+/// favicon is fetched through the proxy too and inlined as a data URI
+/// (the webview can't authenticate to the host itself); the hero image
+/// is dropped for the same reason.
+///
+/// Logging here records the profile name and exit status only — never
+/// the URL, stdout or stderr, which can all carry internal details.
+pub(crate) async fn proxy_link_metadata(
+    profile: &InternalSiteProfile,
+    url: &str,
+) -> Result<serde_json::Value, AppError> {
+    let run = run_proxy_limited(profile, url, ProxyResponse::Text).await;
+    if !run.ok {
+        log::warn!(
+            "Internal-site proxy '{}' failed (exit {:?}, timed out: {})",
+            profile.name,
+            run.exit_code,
+            run.timed_out
+        );
+        return Err(AppError::from("Internal-site proxy failed"));
+    }
+
+    let (title, description, favicon) = match internal_sites::parse_json_output(&run.stdout) {
+        Some(md) => (
+            md.title,
+            md.description,
+            md.favicon.or_else(|| extract_link_icon("", url)),
+        ),
+        None => {
+            let meta = extract_page_meta(proxy_head_window(&run.stdout), url);
+            (meta.title, meta.description, meta.favicon)
+        }
+    };
+
+    let favicon = match favicon {
+        Some(f) if f.starts_with("data:") => internal_sites::sanitize_data_icon(&f),
+        Some(f) if f.starts_with("http://") || f.starts_with("https://") => {
+            let icon = run_proxy_limited(profile, &f, ProxyResponse::Base64).await;
+            if icon.ok {
+                internal_sites::icon_data_uri(&icon.stdout)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
 
     Ok(serde_json::json!({
-        "url": final_url,
+        "url": url,
         "title": title,
         "description": description,
-        "image": image,
+        "image": null,
         "favicon": favicon,
     }))
 }
@@ -355,6 +545,28 @@ mod tests {
             extract_link_icon(html, "https://example.com/page").as_deref(),
             Some("https://example.com/i.png")
         );
+    }
+
+    #[test]
+    fn proxy_head_window_stops_after_head_on_a_char_boundary() {
+        assert_eq!(
+            proxy_head_window("<head><title>x</title></HEAD><body>secret"),
+            "<head><title>x</title></HEAD>"
+        );
+        let long = "é".repeat(MAX_PROXY_HTML_BYTES);
+        let w = proxy_head_window(&long);
+        assert!(w.len() <= MAX_PROXY_HTML_BYTES && !w.is_empty());
+    }
+
+    #[test]
+    fn page_meta_falls_back_to_title_and_favicon_ico() {
+        let meta = extract_page_meta("<title>Doc</title>", "https://wiki.example.test/a/b");
+        assert_eq!(meta.title.as_deref(), Some("Doc"));
+        assert_eq!(
+            meta.favicon.as_deref(),
+            Some("https://wiki.example.test/favicon.ico")
+        );
+        assert!(meta.image.is_none());
     }
 
     #[test]
