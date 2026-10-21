@@ -429,7 +429,7 @@ describe('renderSourceChipsHtml — no inline JS, attribute injection neutralize
     // escaping, both characters become attribute-safe.
     const malicious = "https://x.com/?q=a\\')+alert(1)+(';";
     const html = renderSourceChipsHtml([
-      { url: malicious, domain: 'x', title: 't', initials: 'X', color: 'red', favicon: '' },
+      { url: malicious, domain: 'x', title: 't', initials: 'X', color: 'red', favicon: 'fav' },
     ]);
     const root = parseHtml(html);
     const link = root.querySelector('.source-chip');

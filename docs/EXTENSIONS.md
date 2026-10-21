@@ -260,6 +260,8 @@ the remaining gaps.
 - `context.mascot` lets you hint what the user is *doing* so the
   mascot can react. It's not an `invoke` and needs no capability —
   see [Mascot activity hints](#mascot-activity-hints).
+- `context.formatter.requestReformat()` asks the host to re-run your
+  message formatter — see [Progressive formatting](#progressive-formatting).
 - `context.log` writes to the main Kage log via the bridge; it's
   a structured logger (`log.info`, `log.warn`, etc.) not a
   `console.log` replacement. Regular `console.log` inside the
@@ -911,6 +913,22 @@ export default class MyFormatter {
 Parse with `DOMParser` — the resulting document is inert (no scripts
 run) and lives entirely inside the sandbox. The host re-sanitizes
 the returned string before inserting it into the live DOM.
+
+### Progressive formatting
+
+A formatter that needs slow data (e.g. fetching link metadata) doesn't
+have to block the message on it. Return placeholder markup right away,
+then call `context.formatter.requestReformat()` once the data arrives.
+The host coalesces bursts and calls `format()` again on every
+still-attached message it already formatted, passing the message's
+*current* HTML — including your placeholders — so `format()` must be
+idempotent: upgrade placeholders in place and never insert a second
+copy. Like `context.mascot`, it carries no data and needs no capability.
+`context.formatter` is absent on older hosts; fall back to awaiting the
+data there.
+
+Image `src` accepts `http(s)` URLs and base64 raster `data:` URIs
+(PNG, GIF, JPEG, WebP, ICO; no SVG).
 
 ## Custom `renderResult`
 

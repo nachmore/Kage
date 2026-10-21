@@ -25,6 +25,29 @@ function withRealHrefs(container) {
 // without bumping it, so they don't invalidate an in-flight formatter.
 const _formatGeneration = new WeakMap();
 
+// Messages a formatter has run on (non-streaming), so a formatter that
+// returned placeholder content can ask to be re-run once its data arrives
+// (`context.formatter.requestReformat`). WeakRefs so a removed message can be
+// collected; pruned of dead and detached entries on every pass.
+const _formattedContainers = new Set();
+const _formatContext = new WeakMap();
+const MAX_TRACKED_CONTAINERS = 200;
+// Reformat requests are coalesced per extension so a burst of finished
+// fetches costs one pass.
+const REFORMAT_DEBOUNCE_MS = 100;
+
+function trackFormattedContainer(container, ctx) {
+    _formatContext.set(container, ctx);
+    for (const ref of _formattedContainers) {
+        if (ref.deref() === container) return;
+    }
+    _formattedContainers.add(new WeakRef(container));
+    if (_formattedContainers.size > MAX_TRACKED_CONTAINERS) {
+        // Sets iterate in insertion order: drop the oldest.
+        _formattedContainers.delete(_formattedContainers.values().next().value);
+    }
+}
+
 const WIDGET_MIN_INTERVAL_MS = 1_000;
 const WIDGET_MAX_INTERVAL_MS = 24 * 3_600 * 1_000;
 const WIDGET_SLOW_RENDER_MS = 5_000;
@@ -556,6 +579,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                 streaming: !!context?.streaming,
                 role: String(context?.role || ''),
             };
+            if (!ctx.streaming) trackFormattedContainer(container, ctx);
             for (const [id, ext] of this.extensions) {
                 if (!ext.sandbox?.hasFormatter) continue;
                 if (!this._isEnabled(id)) continue;
@@ -563,34 +587,80 @@ export function installExtensionUiMethods(ExtensionManager) {
                 // opted in. Most formatters return null during streaming,
                 // so round-tripping per chunk is wasted work.
                 if (ctx.streaming && !ext.sandbox.formatterOptsInStreaming) continue;
-                try {
-                    // renderMarkdown doesn't await us, so newer chunks can
-                    // land while the RPC is in flight. Drop the result if the
-                    // message was re-rendered (or cleared) meanwhile —
-                    // otherwise a slow formatter rolls the message back.
-                    const out = await ext.sandbox.call('formatMessage', {
-                        html: withRealHrefs(container),
-                        context: ctx,
-                    });
-                    if (out && typeof out.html === 'string') {
-                        if (_formatGeneration.get(container) !== generation) continue;
-                        if (!container.hasChildNodes()) continue;
-                        const frag = sanitizeExtensionHtml(out.html, 'rich');
-                        // Replace the container's children with the sanitized
-                        // fragment. We use replaceChildren so existing
-                        // listeners on the container itself are preserved.
-                        container.replaceChildren();
-                        container.appendChild(frag);
-                        // The sanitizer keeps real http(s) hrefs; re-neutralize
-                        // so WebView2 can't natively open them (double-open)
-                        // and the host click handler sees data-href again.
-                        neutralizeLinks(container);
-                        // Wire any declared extension actions in the new DOM.
-                        this._wireExtActionsFor(id, container);
-                    }
-                } catch (e) {
-                    console.warn(`message formatter in '${id}' failed:`, e);
+                await this._applyFormatter(id, ext, container, ctx, generation);
+            }
+        },
+
+        /**
+         * Run one extension's formatter on `container` and swap in its
+         * sanitized output, unless the message was re-rendered (generation
+         * bumped) or cleared while the RPC was in flight.
+         */
+        async _applyFormatter(id, ext, container, ctx, generation) {
+            try {
+                // renderMarkdown doesn't await us, so newer chunks can
+                // land while the RPC is in flight. Drop the result if the
+                // message was re-rendered (or cleared) meanwhile —
+                // otherwise a slow formatter rolls the message back.
+                const out = await ext.sandbox.call('formatMessage', {
+                    html: withRealHrefs(container),
+                    context: ctx,
+                });
+                if (out && typeof out.html === 'string') {
+                    if (_formatGeneration.get(container) !== generation) return;
+                    if (!container.hasChildNodes()) return;
+                    const frag = sanitizeExtensionHtml(out.html, 'rich');
+                    // Replace the container's children with the sanitized
+                    // fragment. We use replaceChildren so existing
+                    // listeners on the container itself are preserved.
+                    container.replaceChildren();
+                    container.appendChild(frag);
+                    // The sanitizer keeps real http(s) hrefs; re-neutralize
+                    // so WebView2 can't natively open them (double-open)
+                    // and the host click handler sees data-href again.
+                    neutralizeLinks(container);
+                    // Wire any declared extension actions in the new DOM.
+                    this._wireExtActionsFor(id, container);
                 }
+            } catch (e) {
+                console.warn(`message formatter in '${id}' failed:`, e);
+            }
+        },
+
+        /**
+         * An extension's formatter asked to be re-run (it returned loading
+         * placeholders and its data has arrived). Coalesced per extension;
+         * re-runs only that formatter, on the still-attached messages it
+         * already formatted, against their current HTML.
+         */
+        requestReformat(id) {
+            if (!this._reformatTimers) this._reformatTimers = new Map();
+            if (this._reformatTimers.has(id)) return;
+            this._reformatTimers.set(
+                id,
+                setTimeout(() => {
+                    this._reformatTimers.delete(id);
+                    this._reformatNow(id);
+                }, REFORMAT_DEBOUNCE_MS)
+            );
+        },
+
+        async _reformatNow(id) {
+            const ext = this.extensions?.get(id);
+            if (!ext?.sandbox?.hasFormatter || !this._isEnabled(id)) return;
+            const live = [];
+            for (const ref of _formattedContainers) {
+                const container = ref.deref();
+                if (!container || !container.isConnected) {
+                    _formattedContainers.delete(ref);
+                    continue;
+                }
+                live.push(container);
+            }
+            for (const container of live) {
+                const ctx = _formatContext.get(container) || { streaming: false, role: '' };
+                const generation = _formatGeneration.get(container) || 0;
+                await this._applyFormatter(id, ext, container, ctx, generation);
             }
         },
 

@@ -264,6 +264,12 @@ export class ExtensionSandbox {
         );
         /** The activity we last forwarded and haven't cleared, else null. */
         this._mascotActivity = null;
+        /**
+         * Set by the extension manager: called when the extension's
+         * formatter asks to be re-run (`context.formatter.requestReformat`).
+         * @type {(() => void) | null}
+         */
+        this.onReformatRequest = null;
         this._rawInvoke = rawInvoke;
         this._container = container;
 
@@ -548,6 +554,12 @@ export class ExtensionSandbox {
             }
             case 'log': {
                 this._handleLog(msg);
+                break;
+            }
+            case 'reformat-request': {
+                // Pure-UI hint: no data, no capability. The extension
+                // manager decides what (if anything) to re-run.
+                if (!this._destroyed) this.onReformatRequest?.();
                 break;
             }
             case 'mascot-activity': {

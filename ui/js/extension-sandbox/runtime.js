@@ -140,8 +140,30 @@ function buildContext() {
             return !!i18nState.rtl;
         },
     };
-    return { invoke, config: extensionConfig, log: extLog, runSandboxed, i18n, mascot };
+    return {
+        invoke,
+        config: extensionConfig,
+        log: extLog,
+        runSandboxed,
+        i18n,
+        mascot,
+        formatter,
+    };
 }
+
+/**
+ * `context.formatter` — lets a message formatter that returned placeholder
+ * content (e.g. loading cards) ask the host to run it again once its data
+ * has arrived. Like `context.mascot` it carries no data and never reaches
+ * Tauri, so it needs no capability. The host coalesces bursts and re-runs
+ * the formatter on the messages it already formatted, passing their
+ * current HTML, so formatters that use this must be idempotent.
+ */
+const formatter = {
+    requestReformat() {
+        safePost({ type: 'reformat-request' });
+    },
+};
 
 /**
  * Closed vocabulary of mascot activity names. The mascot deliberately knows

@@ -141,6 +141,7 @@ export class ExtensionManager {
                     // declare here.
                     mascotActivities: manifest.contributes?.mascotActivities,
                 });
+                ext.sandbox.onReformatRequest = () => this.requestReformat(id);
             } catch (e) {
                 console.warn(`Sandbox boot failed for extension '${id}':`, e);
             }

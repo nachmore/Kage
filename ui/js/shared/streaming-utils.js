@@ -6,6 +6,7 @@
 
 import { tHtml } from './i18n.js';
 import { escapeAttr, escapeHtml, getToolIcon } from './tool-utils.js';
+import { isInternalHost } from './internal-hosts.js';
 
 // `escapeAttr` is re-exported here so existing call sites that import
 // it from this module keep working. Canonical home is `tool-utils.js`.
@@ -115,12 +116,21 @@ export function addSource(url, title, domainHint, state) {
                 title: title || domain,
                 initials,
                 color: `hsl(${hue}, 55%, 45%)`,
-                favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
+                // Internal hostnames must not be sent to a third-party
+                // favicon service; those chips keep their initials.
+                favicon: isInternalHost(parsed.hostname)
+                    ? ''
+                    : `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
             });
         }
     } catch {
         /* invalid URL */
     }
+}
+
+function faviconImgHtml(favicon) {
+    if (!favicon) return '';
+    return `<img class="source-favicon" src="${escapeAttr(favicon)}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">`;
 }
 
 /**
@@ -183,7 +193,7 @@ export function renderSourceChipsHtml(toolSources) {
         <a class="source-chip" href="#" data-url="${escapeAttr(s.url)}" title="${escapeAttr(s.title)}">
             <span class="source-icon-wrapper">
                 <span class="source-initials" style="background:${escapeAttr(s.color)}">${escapeHtml(s.initials)}</span>
-                <img class="source-favicon" src="${escapeAttr(s.favicon)}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+                ${faviconImgHtml(s.favicon)}
             </span>
             <span class="source-domain">${escapeHtml(s.domain)}</span>
         </a>
@@ -223,7 +233,7 @@ export function renderSourceBubblesHtml(toolUsages, toolSources) {
         <a class="source-bubble" href="#" data-url="${escapeAttr(s.url)}" title="${escapeAttr(s.title)}" style="animation-delay: ${(offset + i) * 0.08}s">
             <span class="source-icon-wrapper">
                 <span class="source-initials" style="background:${escapeAttr(s.color)}">${escapeHtml(s.initials)}</span>
-                <img class="source-favicon" src="${escapeAttr(s.favicon)}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+                ${faviconImgHtml(s.favicon)}
             </span>
         </a>
     `
