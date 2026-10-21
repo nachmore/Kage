@@ -40,10 +40,11 @@ pub async fn save_config<R: tauri::Runtime>(
     let new_log_buffer_size = config.system.log_buffer_size;
     let new_language = config.ui.language.clone();
     let new_acp_mode = config.acp.active_mode();
-    let (prior_terminator, prior_acp_mode) = {
+    let (prior_terminator, prior_acp_mode, sites_changed) = {
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
         let prior_acp = state_config.acp.active_mode();
+        let sites_changed = state_config.internal_sites != config.internal_sites;
         let mut config = config;
         preserve_backend_owned_fields(&mut config, &state_config);
         *state_config = config;
@@ -55,8 +56,19 @@ pub async fn save_config<R: tauri::Runtime>(
             error!("Failed to save config: {}", e);
             format!("Failed to save configuration: {}", e)
         })?;
-        (prior, prior_acp)
+        (prior, prior_acp, sites_changed)
     };
+
+    // Cached previews were resolved under the old internal-site profiles
+    // (e.g. a login page cached as a successful preview); drop them so
+    // the new rules apply to links already on screen.
+    if sites_changed {
+        tauri::async_runtime::spawn_blocking(|| {
+            if let Err(e) = crate::link_metadata_cache::clear() {
+                log::warn!("Failed to clear link metadata cache: {}", e);
+            }
+        });
+    }
 
     apply_runtime_config(&app, &acp, &prior_acp_mode, &new_acp_mode, new_language);
 

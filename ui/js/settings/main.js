@@ -39,6 +39,7 @@ import { AssistantSettingsModule } from './assistant.js';
 import { ConnectionSettingsModule } from './connection.js';
 import { ModelSettingsModule } from './model.js';
 import { McpSettingsModule } from './mcp.js';
+import { InternalSitesSettingsModule } from './internal-sites.js';
 import { ToolPermissionsSettingsModule } from './tool-permissions.js';
 import { IntegrationSettingsModule } from './integration.js';
 import { ShortcutsSettingsModule } from './shortcuts.js';
@@ -206,6 +207,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new ModelSettingsModule());
     settingsManager.registerModule(new McpSettingsModule());
+    settingsManager.registerModule(new InternalSitesSettingsModule());
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
     settingsManager.registerModule(new IntegrationSettingsModule());
     settingsManager.registerModule(new ShortcutsSettingsModule());

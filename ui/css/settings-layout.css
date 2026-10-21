@@ -1069,3 +1069,119 @@ body.light-theme .mcp-server-delete-btn {
     background: var(--kage-accent);
     color: white;
 }
+
+/* Internal Sites */
+.internal-site-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid var(--kage-border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.internal-site-row-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.internal-site-row-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.internal-site-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.internal-site-rule,
+.internal-site-script-bar {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.internal-site-rule select {
+    width: auto;
+    flex-shrink: 0;
+}
+
+.internal-site-pattern {
+    flex: 1;
+    min-width: 0;
+}
+
+.internal-site-script-bar {
+    margin: 6px 0;
+}
+
+.internal-site-script-bar select {
+    width: auto;
+}
+
+.internal-site-script,
+.internal-site-pattern,
+.internal-site-stderr {
+    font-family: var(--kage-font-mono, ui-monospace, Consolas, monospace);
+    font-size: 12px;
+}
+
+.internal-site-script {
+    width: 100%;
+    resize: vertical;
+    tab-size: 4;
+}
+
+.internal-site-status.error {
+    color: var(--kage-error);
+}
+
+.internal-site-status.success {
+    color: var(--kage-accent);
+}
+
+.internal-site-test {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid var(--kage-border);
+    border-radius: 6px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.internal-site-test-key {
+    color: var(--kage-text-secondary);
+}
+
+.internal-site-stderr {
+    max-height: 160px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 4px 0;
+    padding: 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.internal-site-preview {
+    margin-top: 6px;
+    padding: 8px;
+    border-radius: 6px;
+    background: var(--kage-surface-2, rgba(127, 127, 127, 0.08));
+}
+
+.internal-site-preview-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}

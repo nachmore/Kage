@@ -5204,5 +5204,265 @@
   "about.name_story_html": {
     "message": "Kage (影 · かげ, pronounced <i>kah-geh</i>) means <i>shadow</i> or <i>silhouette</i>. Fitting, since Kage waits quietly in the background until you summon it: kind of like a black cat, except actually helpful.",
     "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone."
+  },
+  "settings.sidebar.internal_sites": {
+    "message": "Internal Sites",
+    "description": "Sidebar label for the Internal Sites settings section (link previews for sign-in-protected websites)"
+  },
+  "settings.internal_sites.title": {
+    "message": "Internal Sites",
+    "description": "Settings → Internal Sites: section title"
+  },
+  "settings.internal_sites.intro": {
+    "message": "Preview links to internal websites that need your own sign-in. Each profile recognises a group of sites and fetches their pages with a script that runs on this computer, using your credentials, instead of a direct request.",
+    "description": "Settings → Internal Sites: intro paragraph"
+  },
+  "settings.internal_sites.script_warning": {
+    "message": "Proxy scripts run on this computer with your permissions whenever a matching link is previewed. Only keep scripts you have read and understand.",
+    "description": "Settings → Internal Sites: security note under the intro"
+  },
+  "settings.internal_sites.enabled": {
+    "message": "Enabled",
+    "description": "Settings → Internal Sites: checkbox that turns a profile on or off"
+  },
+  "settings.internal_sites.list.unnamed": {
+    "message": "Untitled profile",
+    "description": "Settings → Internal Sites: name shown for a profile with no name yet"
+  },
+  "settings.internal_sites.list.summary": {
+    "message": "{url} URL rules · {content} content rules",
+    "description": "Settings → Internal Sites: profile list subtitle; {url} and {content} are rule counts"
+  },
+  "settings.internal_sites.list.no_script": {
+    "message": "No proxy script yet",
+    "description": "Settings → Internal Sites: profile list subtitle when the profile has no script"
+  },
+  "settings.internal_sites.list.edit": {
+    "message": "Edit",
+    "description": "Settings → Internal Sites: button to edit a profile"
+  },
+  "settings.internal_sites.list.delete": {
+    "message": "Delete",
+    "description": "Settings → Internal Sites: button to delete a profile"
+  },
+  "settings.internal_sites.list.empty": {
+    "message": "No profiles yet.",
+    "description": "Settings → Internal Sites: shown when the profile list is empty"
+  },
+  "settings.internal_sites.list.add": {
+    "message": "Add profile",
+    "description": "Settings → Internal Sites: button to create a new profile"
+  },
+  "settings.internal_sites.delete_confirm": {
+    "message": "Delete the profile “{name}”?",
+    "description": "Settings → Internal Sites: confirmation dialog; {name} is the profile name"
+  },
+  "settings.internal_sites.validate.name_required": {
+    "message": "Every internal-site profile needs a name.",
+    "description": "Settings → Internal Sites: validation error on save"
+  },
+  "settings.internal_sites.validate.sample_url_required": {
+    "message": "Enter a sample URL starting with http:// or https:// first.",
+    "description": "Settings → Internal Sites: error when drafting/testing without a sample URL"
+  },
+  "settings.internal_sites.drafting": {
+    "message": "Asking the agent… it may ask for permission to use its tools.",
+    "description": "Settings → Internal Sites: status while the AI drafts rules or a script"
+  },
+  "settings.internal_sites.testing": {
+    "message": "Testing…",
+    "description": "Settings → Internal Sites: status while a test runs"
+  },
+  "settings.internal_sites.working": {
+    "message": "Working…",
+    "description": "Settings → Internal Sites: label on a button while its request runs"
+  },
+  "settings.internal_sites.draft_rules.done": {
+    "message": "Rules drafted. Review them before saving.",
+    "description": "Settings → Internal Sites: status after the AI drafted detection rules"
+  },
+  "settings.internal_sites.draft_script.done": {
+    "message": "Script drafted. Read it and run Test before saving.",
+    "description": "Settings → Internal Sites: status after the AI drafted a proxy script"
+  },
+  "settings.internal_sites.draft_script.replace_confirm": {
+    "message": "Replace the current script with a new draft?",
+    "description": "Settings → Internal Sites: confirmation before overwriting an existing script"
+  },
+  "settings.internal_sites.error.draft_failed": {
+    "message": "Drafting failed",
+    "description": "Settings → Internal Sites: error label prefix when AI drafting fails"
+  },
+  "settings.internal_sites.error.test_failed": {
+    "message": "Test failed",
+    "description": "Settings → Internal Sites: error label prefix when a test cannot run"
+  },
+  "settings.internal_sites.editor.back": {
+    "message": "Back",
+    "description": "Settings → Internal Sites: button returning from the profile editor to the list"
+  },
+  "settings.internal_sites.editor.name": {
+    "message": "Name",
+    "description": "Settings → Internal Sites: profile name field label"
+  },
+  "settings.internal_sites.editor.name_placeholder": {
+    "message": "e.g. Team wiki",
+    "description": "Settings → Internal Sites: placeholder for the profile name"
+  },
+  "settings.internal_sites.editor.sample_url": {
+    "message": "Sample URL",
+    "description": "Settings → Internal Sites: field label for an example link"
+  },
+  "settings.internal_sites.editor.sample_url_description": {
+    "message": "A link to one of these sites. Used to draft the rules and the script, and by Test.",
+    "description": "Settings → Internal Sites: help text for the sample URL"
+  },
+  "settings.internal_sites.editor.test_btn": {
+    "message": "Test",
+    "description": "Settings → Internal Sites: button that runs detection and the proxy script on the sample URL"
+  },
+  "settings.internal_sites.editor.rules": {
+    "message": "Detection",
+    "description": "Settings → Internal Sites: heading for the detection rules area"
+  },
+  "settings.internal_sites.editor.rules_description": {
+    "message": "Rules decide which links use this profile. The agent can draft them from the sample URL and what a direct request to it returns.",
+    "description": "Settings → Internal Sites: help text for detection rules"
+  },
+  "settings.internal_sites.editor.draft_rules_btn": {
+    "message": "Draft rules with AI",
+    "description": "Settings → Internal Sites: button asking the agent to draft detection rules"
+  },
+  "settings.internal_sites.editor.url_rules": {
+    "message": "URL rules",
+    "description": "Settings → Internal Sites: heading for URL rules"
+  },
+  "settings.internal_sites.editor.url_rules_description": {
+    "message": "Checked before anything leaves this computer. A match skips the direct request entirely.",
+    "description": "Settings → Internal Sites: help text for URL rules"
+  },
+  "settings.internal_sites.editor.add_url_rule": {
+    "message": "Add URL rule",
+    "description": "Settings → Internal Sites: button adding a URL rule"
+  },
+  "settings.internal_sites.editor.content_rules": {
+    "message": "Content rules",
+    "description": "Settings → Internal Sites: heading for content rules"
+  },
+  "settings.internal_sites.editor.content_rules_description": {
+    "message": "Checked against what a direct request returns, including sign-in pages and error responses. Catches sites the URL rules miss.",
+    "description": "Settings → Internal Sites: help text for content rules"
+  },
+  "settings.internal_sites.editor.add_content_rule": {
+    "message": "Add content rule",
+    "description": "Settings → Internal Sites: button adding a content rule"
+  },
+  "settings.internal_sites.editor.script": {
+    "message": "Proxy script",
+    "description": "Settings → Internal Sites: heading for the proxy script editor"
+  },
+  "settings.internal_sites.editor.script_description_html": {
+    "message": "Runs with the link in the <code>KAGE_URL</code> environment variable. Print the page HTML to stdout, or a JSON object with <code>title</code> and <code>description</code>. When <code>KAGE_RESPONSE</code> is <code>base64</code> (favicons), print the response base64-encoded. Exit non-zero on failure.",
+    "description": "Settings → Internal Sites: proxy script contract (HTML allowed). Keep KAGE_URL, KAGE_RESPONSE, base64, title, description, stdout and JSON exactly as written"
+  },
+  "settings.internal_sites.editor.timeout": {
+    "message": "Timeout (seconds)",
+    "description": "Settings → Internal Sites: label for the script timeout"
+  },
+  "settings.internal_sites.editor.draft_script_btn": {
+    "message": "Draft script with AI",
+    "description": "Settings → Internal Sites: button asking the agent to write the proxy script"
+  },
+  "settings.internal_sites.editor.lang.powershell": {
+    "message": "PowerShell",
+    "description": "Settings → Internal Sites: script language option (product name, do not translate)"
+  },
+  "settings.internal_sites.editor.lang.bash": {
+    "message": "Bash",
+    "description": "Settings → Internal Sites: script language option (product name, do not translate)"
+  },
+  "settings.internal_sites.rule.url_kind.domain_suffix": {
+    "message": "Domain suffix",
+    "description": "Settings → Internal Sites: URL rule type matching a host and its subdomains"
+  },
+  "settings.internal_sites.rule.url_kind.regex": {
+    "message": "Regex",
+    "description": "Settings → Internal Sites: URL rule type using a regular expression"
+  },
+  "settings.internal_sites.rule.target.body": {
+    "message": "Page body",
+    "description": "Settings → Internal Sites: content rule target: the fetched page"
+  },
+  "settings.internal_sites.rule.target.final_url": {
+    "message": "Final URL",
+    "description": "Settings → Internal Sites: content rule target: the URL after redirects"
+  },
+  "settings.internal_sites.rule.match_kind.contains": {
+    "message": "Contains",
+    "description": "Settings → Internal Sites: content rule match type: substring"
+  },
+  "settings.internal_sites.rule.match_kind.regex": {
+    "message": "Regex",
+    "description": "Settings → Internal Sites: content rule match type: regular expression"
+  },
+  "settings.internal_sites.rule.pattern_placeholder": {
+    "message": "Pattern",
+    "description": "Settings → Internal Sites: placeholder for a rule pattern"
+  },
+  "settings.internal_sites.rule.remove": {
+    "message": "Remove rule",
+    "description": "Settings → Internal Sites: tooltip for the remove-rule button"
+  },
+  "settings.internal_sites.test.url_rules": {
+    "message": "URL rules:",
+    "description": "Settings → Internal Sites: test result row label"
+  },
+  "settings.internal_sites.test.content_rules": {
+    "message": "Content rules:",
+    "description": "Settings → Internal Sites: test result row label"
+  },
+  "settings.internal_sites.test.direct": {
+    "message": "Direct request:",
+    "description": "Settings → Internal Sites: test result row label"
+  },
+  "settings.internal_sites.test.proxy": {
+    "message": "Proxy script:",
+    "description": "Settings → Internal Sites: test result row label"
+  },
+  "settings.internal_sites.test.matched": {
+    "message": "match",
+    "description": "Settings → Internal Sites: test result: rules matched"
+  },
+  "settings.internal_sites.test.not_matched": {
+    "message": "no match",
+    "description": "Settings → Internal Sites: test result: rules did not match"
+  },
+  "settings.internal_sites.test.not_checked": {
+    "message": "not checked",
+    "description": "Settings → Internal Sites: test result: could not be evaluated"
+  },
+  "settings.internal_sites.test.direct_status": {
+    "message": "HTTP {status}, ended at {url}",
+    "description": "Settings → Internal Sites: test result for the direct request; {status} is the HTTP status code, {url} the final URL"
+  },
+  "settings.internal_sites.test.direct_failed": {
+    "message": "failed ({error})",
+    "description": "Settings → Internal Sites: test result when the direct request failed; {error} is the error"
+  },
+  "settings.internal_sites.test.proxy_ok": {
+    "message": "succeeded, {bytes} bytes of output",
+    "description": "Settings → Internal Sites: test result when the script succeeded; {bytes} is the output size"
+  },
+  "settings.internal_sites.test.proxy_failed": {
+    "message": "failed with exit code {code}",
+    "description": "Settings → Internal Sites: test result when the script failed; {code} is the exit code"
+  },
+  "settings.internal_sites.test.proxy_timed_out": {
+    "message": "timed out",
+    "description": "Settings → Internal Sites: test result when the script timed out"
+  },
+  "settings.internal_sites.test.no_preview": {
+    "message": "The script's output didn't produce a preview.",
+    "description": "Settings → Internal Sites: test result when no title or description was found"
   }
 }

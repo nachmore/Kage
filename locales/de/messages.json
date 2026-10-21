@@ -7804,5 +7804,395 @@
     "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone.",
     "_machine_translated": true,
     "_source_hash": "2014157ddaf3879e"
+  },
+  "settings.sidebar.internal_sites": {
+    "message": "Interne Websites",
+    "description": "Sidebar label for the Internal Sites settings section (link previews for sign-in-protected websites)",
+    "_machine_translated": true,
+    "_source_hash": "cc991130d9bf6cc3"
+  },
+  "settings.internal_sites.title": {
+    "message": "Interne Websites",
+    "description": "Settings → Internal Sites: section title",
+    "_machine_translated": true,
+    "_source_hash": "3a22b48a1feda5f2"
+  },
+  "settings.internal_sites.intro": {
+    "message": "Zeigen Sie Vorschauen für Links zu internen Websites an, für die Sie sich selbst anmelden müssen. Jedes Profil erkennt eine Gruppe von Websites und ruft deren Seiten statt über eine direkte Anfrage mit einem Skript ab, das auf diesem Computer mit Ihren Anmeldedaten ausgeführt wird.",
+    "description": "Settings → Internal Sites: intro paragraph",
+    "_machine_translated": true,
+    "_source_hash": "96edf6fbd986597f"
+  },
+  "settings.internal_sites.script_warning": {
+    "message": "Proxy-Skripte werden mit Ihren Berechtigungen auf diesem Computer ausgeführt, sobald für einen passenden Link eine Vorschau erstellt wird. Behalten Sie nur Skripte, die Sie gelesen und verstanden haben.",
+    "description": "Settings → Internal Sites: security note under the intro",
+    "_machine_translated": true,
+    "_source_hash": "b9e07fddd9e15179"
+  },
+  "settings.internal_sites.enabled": {
+    "message": "Aktiviert",
+    "description": "Settings → Internal Sites: checkbox that turns a profile on or off",
+    "_machine_translated": true,
+    "_source_hash": "d79d2062bda2c735"
+  },
+  "settings.internal_sites.list.unnamed": {
+    "message": "Unbenanntes Profil",
+    "description": "Settings → Internal Sites: name shown for a profile with no name yet",
+    "_machine_translated": true,
+    "_source_hash": "f26e9985dc6f177b"
+  },
+  "settings.internal_sites.list.summary": {
+    "message": "{url} URL-Regeln · {content} Inhaltsregeln",
+    "description": "Settings → Internal Sites: profile list subtitle; {url} and {content} are rule counts",
+    "_machine_translated": true,
+    "_source_hash": "a4043f559996320c"
+  },
+  "settings.internal_sites.list.no_script": {
+    "message": "Noch kein Proxy-Skript",
+    "description": "Settings → Internal Sites: profile list subtitle when the profile has no script",
+    "_machine_translated": true,
+    "_source_hash": "c864f3adf797b0df"
+  },
+  "settings.internal_sites.list.edit": {
+    "message": "Bearbeiten",
+    "description": "Settings → Internal Sites: button to edit a profile",
+    "_machine_translated": true,
+    "_source_hash": "31971113e386920c"
+  },
+  "settings.internal_sites.list.delete": {
+    "message": "Löschen",
+    "description": "Settings → Internal Sites: button to delete a profile",
+    "_machine_translated": true,
+    "_source_hash": "3c92a69543b3df91"
+  },
+  "settings.internal_sites.list.empty": {
+    "message": "Noch keine Profile.",
+    "description": "Settings → Internal Sites: shown when the profile list is empty",
+    "_machine_translated": true,
+    "_source_hash": "acf0cdfa80ae30b6"
+  },
+  "settings.internal_sites.list.add": {
+    "message": "Profil hinzufügen",
+    "description": "Settings → Internal Sites: button to create a new profile",
+    "_machine_translated": true,
+    "_source_hash": "b36c52a2dd81d942"
+  },
+  "settings.internal_sites.delete_confirm": {
+    "message": "Profil „{name}“ löschen?",
+    "description": "Settings → Internal Sites: confirmation dialog; {name} is the profile name",
+    "_machine_translated": true,
+    "_source_hash": "07c1ebcca9dd9efc"
+  },
+  "settings.internal_sites.validate.name_required": {
+    "message": "Jedes Profil für interne Websites benötigt einen Namen.",
+    "description": "Settings → Internal Sites: validation error on save",
+    "_machine_translated": true,
+    "_source_hash": "69f6b968d9ce26f4"
+  },
+  "settings.internal_sites.validate.sample_url_required": {
+    "message": "Geben Sie zuerst eine Beispiel-URL ein, die mit http:// oder https:// beginnt.",
+    "description": "Settings → Internal Sites: error when drafting/testing without a sample URL",
+    "_machine_translated": true,
+    "_source_hash": "b1fd6dfaadb841e3"
+  },
+  "settings.internal_sites.drafting": {
+    "message": "Agent wird gefragt … möglicherweise bittet er um die Berechtigung, seine Tools zu verwenden.",
+    "description": "Settings → Internal Sites: status while the AI drafts rules or a script",
+    "_machine_translated": true,
+    "_source_hash": "e59c2b81bb8f885c"
+  },
+  "settings.internal_sites.testing": {
+    "message": "Wird getestet …",
+    "description": "Settings → Internal Sites: status while a test runs",
+    "_machine_translated": true,
+    "_source_hash": "925322d5d95174dd"
+  },
+  "settings.internal_sites.working": {
+    "message": "Wird ausgeführt …",
+    "description": "Settings → Internal Sites: label on a button while its request runs",
+    "_machine_translated": true,
+    "_source_hash": "7b237c715acce363"
+  },
+  "settings.internal_sites.draft_rules.done": {
+    "message": "Regeln entworfen. Überprüfen Sie sie vor dem Speichern.",
+    "description": "Settings → Internal Sites: status after the AI drafted detection rules",
+    "_machine_translated": true,
+    "_source_hash": "4314807f3c6afd4f"
+  },
+  "settings.internal_sites.draft_script.done": {
+    "message": "Skript entworfen. Lesen Sie es und führen Sie vor dem Speichern „Testen“ aus.",
+    "description": "Settings → Internal Sites: status after the AI drafted a proxy script",
+    "_machine_translated": true,
+    "_source_hash": "8c4b6245bab4b680"
+  },
+  "settings.internal_sites.draft_script.replace_confirm": {
+    "message": "Aktuelles Skript durch einen neuen Entwurf ersetzen?",
+    "description": "Settings → Internal Sites: confirmation before overwriting an existing script",
+    "_machine_translated": true,
+    "_source_hash": "451af86ca1fcd035"
+  },
+  "settings.internal_sites.error.draft_failed": {
+    "message": "Entwurf fehlgeschlagen",
+    "description": "Settings → Internal Sites: error label prefix when AI drafting fails",
+    "_machine_translated": true,
+    "_source_hash": "a51bc5619dc9b849"
+  },
+  "settings.internal_sites.error.test_failed": {
+    "message": "Test fehlgeschlagen",
+    "description": "Settings → Internal Sites: error label prefix when a test cannot run",
+    "_machine_translated": true,
+    "_source_hash": "c02c6605157c675a"
+  },
+  "settings.internal_sites.editor.back": {
+    "message": "Zurück",
+    "description": "Settings → Internal Sites: button returning from the profile editor to the list",
+    "_machine_translated": true,
+    "_source_hash": "08085785f7f8a091"
+  },
+  "settings.internal_sites.editor.name": {
+    "message": "Name",
+    "description": "Settings → Internal Sites: profile name field label",
+    "_machine_translated": true,
+    "_source_hash": "8f6d3c9809cfe5bf"
+  },
+  "settings.internal_sites.editor.name_placeholder": {
+    "message": "z. B. Team-Wiki",
+    "description": "Settings → Internal Sites: placeholder for the profile name",
+    "_machine_translated": true,
+    "_source_hash": "92ba24021022e94f"
+  },
+  "settings.internal_sites.editor.sample_url": {
+    "message": "Beispiel-URL",
+    "description": "Settings → Internal Sites: field label for an example link",
+    "_machine_translated": true,
+    "_source_hash": "e727991ae9eab910"
+  },
+  "settings.internal_sites.editor.sample_url_description": {
+    "message": "Ein Link zu einer dieser Websites. Wird zum Entwerfen der Regeln und des Skripts sowie von „Testen“ verwendet.",
+    "description": "Settings → Internal Sites: help text for the sample URL",
+    "_machine_translated": true,
+    "_source_hash": "1bc98775f561c34c"
+  },
+  "settings.internal_sites.editor.test_btn": {
+    "message": "Testen",
+    "description": "Settings → Internal Sites: button that runs detection and the proxy script on the sample URL",
+    "_machine_translated": true,
+    "_source_hash": "1520119362694e2e"
+  },
+  "settings.internal_sites.editor.rules": {
+    "message": "Erkennung",
+    "description": "Settings → Internal Sites: heading for the detection rules area",
+    "_machine_translated": true,
+    "_source_hash": "1fb8cee52dca37b1"
+  },
+  "settings.internal_sites.editor.rules_description": {
+    "message": "Regeln legen fest, welche Links dieses Profil verwenden. Der Agent kann sie anhand der Beispiel-URL und der Antwort auf eine direkte Anfrage entwerfen.",
+    "description": "Settings → Internal Sites: help text for detection rules",
+    "_machine_translated": true,
+    "_source_hash": "69cc9dc8aa786f57"
+  },
+  "settings.internal_sites.editor.draft_rules_btn": {
+    "message": "Regeln mit KI entwerfen",
+    "description": "Settings → Internal Sites: button asking the agent to draft detection rules",
+    "_machine_translated": true,
+    "_source_hash": "7a8b95d533913297"
+  },
+  "settings.internal_sites.editor.url_rules": {
+    "message": "URL-Regeln",
+    "description": "Settings → Internal Sites: heading for URL rules",
+    "_machine_translated": true,
+    "_source_hash": "f5d51db5b70126f6"
+  },
+  "settings.internal_sites.editor.url_rules_description": {
+    "message": "Werden geprüft, bevor etwas diesen Computer verlässt. Bei einer Übereinstimmung entfällt die direkte Anfrage vollständig.",
+    "description": "Settings → Internal Sites: help text for URL rules",
+    "_machine_translated": true,
+    "_source_hash": "d93583262f93df07"
+  },
+  "settings.internal_sites.editor.add_url_rule": {
+    "message": "URL-Regel hinzufügen",
+    "description": "Settings → Internal Sites: button adding a URL rule",
+    "_machine_translated": true,
+    "_source_hash": "441d67b32fc52472"
+  },
+  "settings.internal_sites.editor.content_rules": {
+    "message": "Inhaltsregeln",
+    "description": "Settings → Internal Sites: heading for content rules",
+    "_machine_translated": true,
+    "_source_hash": "89cd20d8842b4f06"
+  },
+  "settings.internal_sites.editor.content_rules_description": {
+    "message": "Werden mit der Antwort auf eine direkte Anfrage abgeglichen, einschließlich Anmeldeseiten und Fehlerantworten. Erfasst Websites, die die URL-Regeln übersehen.",
+    "description": "Settings → Internal Sites: help text for content rules",
+    "_machine_translated": true,
+    "_source_hash": "371b162fac7cd3e3"
+  },
+  "settings.internal_sites.editor.add_content_rule": {
+    "message": "Inhaltsregel hinzufügen",
+    "description": "Settings → Internal Sites: button adding a content rule",
+    "_machine_translated": true,
+    "_source_hash": "2fb0a55a320c646b"
+  },
+  "settings.internal_sites.editor.script": {
+    "message": "Proxy-Skript",
+    "description": "Settings → Internal Sites: heading for the proxy script editor",
+    "_machine_translated": true,
+    "_source_hash": "048289a2be7cad84"
+  },
+  "settings.internal_sites.editor.script_description_html": {
+    "message": "Wird mit dem Link in der Umgebungsvariablen <code>KAGE_URL</code> ausgeführt. Geben Sie das HTML der Seite auf stdout aus oder ein JSON-Objekt mit <code>title</code> und <code>description</code>. Wenn <code>KAGE_RESPONSE</code> den Wert <code>base64</code> hat (Favicons), geben Sie die Antwort base64-codiert aus. Beenden Sie das Skript bei einem Fehler mit einem Exit-Code ungleich null.",
+    "description": "Settings → Internal Sites: proxy script contract (HTML allowed). Keep KAGE_URL, KAGE_RESPONSE, base64, title, description, stdout and JSON exactly as written",
+    "_machine_translated": true,
+    "_source_hash": "16f35859ab1cbe91"
+  },
+  "settings.internal_sites.editor.timeout": {
+    "message": "Zeitlimit (Sekunden)",
+    "description": "Settings → Internal Sites: label for the script timeout",
+    "_machine_translated": true,
+    "_source_hash": "13818f7c6ae547f5"
+  },
+  "settings.internal_sites.editor.draft_script_btn": {
+    "message": "Skript mit KI entwerfen",
+    "description": "Settings → Internal Sites: button asking the agent to write the proxy script",
+    "_machine_translated": true,
+    "_source_hash": "0f7ce02f6f0dea58"
+  },
+  "settings.internal_sites.editor.lang.powershell": {
+    "message": "PowerShell",
+    "description": "Settings → Internal Sites: script language option (product name, do not translate)",
+    "_machine_translated": true,
+    "_source_hash": "603918adc1690e91"
+  },
+  "settings.internal_sites.editor.lang.bash": {
+    "message": "Bash",
+    "description": "Settings → Internal Sites: script language option (product name, do not translate)",
+    "_machine_translated": true,
+    "_source_hash": "3054dcce15a85c71"
+  },
+  "settings.internal_sites.rule.url_kind.domain_suffix": {
+    "message": "Domain-Suffix",
+    "description": "Settings → Internal Sites: URL rule type matching a host and its subdomains",
+    "_machine_translated": true,
+    "_source_hash": "b8aeb7448c1a2737"
+  },
+  "settings.internal_sites.rule.url_kind.regex": {
+    "message": "Regex",
+    "description": "Settings → Internal Sites: URL rule type using a regular expression",
+    "_machine_translated": true,
+    "_source_hash": "d2a191924b34851f"
+  },
+  "settings.internal_sites.rule.target.body": {
+    "message": "Seiteninhalt",
+    "description": "Settings → Internal Sites: content rule target: the fetched page",
+    "_machine_translated": true,
+    "_source_hash": "500baac5ed023d30"
+  },
+  "settings.internal_sites.rule.target.final_url": {
+    "message": "Finale URL",
+    "description": "Settings → Internal Sites: content rule target: the URL after redirects",
+    "_machine_translated": true,
+    "_source_hash": "5468fb43aa74a7ce"
+  },
+  "settings.internal_sites.rule.match_kind.contains": {
+    "message": "Enthält",
+    "description": "Settings → Internal Sites: content rule match type: substring",
+    "_machine_translated": true,
+    "_source_hash": "824004b4c4c9fe7a"
+  },
+  "settings.internal_sites.rule.match_kind.regex": {
+    "message": "Regex",
+    "description": "Settings → Internal Sites: content rule match type: regular expression",
+    "_machine_translated": true,
+    "_source_hash": "3c3e1e0a6d059f1d"
+  },
+  "settings.internal_sites.rule.pattern_placeholder": {
+    "message": "Muster",
+    "description": "Settings → Internal Sites: placeholder for a rule pattern",
+    "_machine_translated": true,
+    "_source_hash": "4c56ae0cda88a75e"
+  },
+  "settings.internal_sites.rule.remove": {
+    "message": "Regel entfernen",
+    "description": "Settings → Internal Sites: tooltip for the remove-rule button",
+    "_machine_translated": true,
+    "_source_hash": "7e8ac1c12cc43790"
+  },
+  "settings.internal_sites.test.url_rules": {
+    "message": "URL-Regeln:",
+    "description": "Settings → Internal Sites: test result row label",
+    "_machine_translated": true,
+    "_source_hash": "24ec4bd445c9c628"
+  },
+  "settings.internal_sites.test.content_rules": {
+    "message": "Inhaltsregeln:",
+    "description": "Settings → Internal Sites: test result row label",
+    "_machine_translated": true,
+    "_source_hash": "4aac5cb18afef75d"
+  },
+  "settings.internal_sites.test.direct": {
+    "message": "Direkte Anfrage:",
+    "description": "Settings → Internal Sites: test result row label",
+    "_machine_translated": true,
+    "_source_hash": "1bf9e11f568993c4"
+  },
+  "settings.internal_sites.test.proxy": {
+    "message": "Proxy-Skript:",
+    "description": "Settings → Internal Sites: test result row label",
+    "_machine_translated": true,
+    "_source_hash": "909d7663a841a87d"
+  },
+  "settings.internal_sites.test.matched": {
+    "message": "Treffer",
+    "description": "Settings → Internal Sites: test result: rules matched",
+    "_machine_translated": true,
+    "_source_hash": "488120d3b3369e65"
+  },
+  "settings.internal_sites.test.not_matched": {
+    "message": "kein Treffer",
+    "description": "Settings → Internal Sites: test result: rules did not match",
+    "_machine_translated": true,
+    "_source_hash": "cee1d741660ef42b"
+  },
+  "settings.internal_sites.test.not_checked": {
+    "message": "nicht geprüft",
+    "description": "Settings → Internal Sites: test result: could not be evaluated",
+    "_machine_translated": true,
+    "_source_hash": "4ecea75f0e592761"
+  },
+  "settings.internal_sites.test.direct_status": {
+    "message": "HTTP {status}, endete bei {url}",
+    "description": "Settings → Internal Sites: test result for the direct request; {status} is the HTTP status code, {url} the final URL",
+    "_machine_translated": true,
+    "_source_hash": "879cf3c9fc203715"
+  },
+  "settings.internal_sites.test.direct_failed": {
+    "message": "fehlgeschlagen ({error})",
+    "description": "Settings → Internal Sites: test result when the direct request failed; {error} is the error",
+    "_machine_translated": true,
+    "_source_hash": "e06474c3471c6ece"
+  },
+  "settings.internal_sites.test.proxy_ok": {
+    "message": "erfolgreich, {bytes} Byte Ausgabe",
+    "description": "Settings → Internal Sites: test result when the script succeeded; {bytes} is the output size",
+    "_machine_translated": true,
+    "_source_hash": "c1b45f079e5c5040"
+  },
+  "settings.internal_sites.test.proxy_failed": {
+    "message": "fehlgeschlagen mit Exit-Code {code}",
+    "description": "Settings → Internal Sites: test result when the script failed; {code} is the exit code",
+    "_machine_translated": true,
+    "_source_hash": "a220790e1422f12c"
+  },
+  "settings.internal_sites.test.proxy_timed_out": {
+    "message": "Zeitüberschreitung",
+    "description": "Settings → Internal Sites: test result when the script timed out",
+    "_machine_translated": true,
+    "_source_hash": "26d0c3c0fed4429d"
+  },
+  "settings.internal_sites.test.no_preview": {
+    "message": "Aus der Ausgabe des Skripts konnte keine Vorschau erstellt werden.",
+    "description": "Settings → Internal Sites: test result when no title or description was found",
+    "_machine_translated": true,
+    "_source_hash": "d4d1d6ff3f986d30"
   }
 }

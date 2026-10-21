@@ -7804,5 +7804,395 @@
     "description": "Where the name comes from; shown on the About page and the first welcome step (HTML allowed). Keep 'Kage', '影 · かげ' and 'kah-geh' exactly as written — they are the name and its pronunciation, not words to translate. Keep the playful tone.",
     "_machine_translated": true,
     "_source_hash": "2014157ddaf3879e"
+  },
+  "settings.sidebar.internal_sites": {
+    "message": "অভ্যন্তরীণ সাইট",
+    "description": "Sidebar label for the Internal Sites settings section (link previews for sign-in-protected websites)",
+    "_machine_translated": true,
+    "_source_hash": "cc991130d9bf6cc3"
+  },
+  "settings.internal_sites.title": {
+    "message": "অভ্যন্তরীণ সাইট",
+    "description": "Settings → Internal Sites: section title",
+    "_machine_translated": true,
+    "_source_hash": "3a22b48a1feda5f2"
+  },
+  "settings.internal_sites.intro": {
+    "message": "যেসব অভ্যন্তরীণ ওয়েবসাইটে আপনার নিজের সাইন-ইন প্রয়োজন, সেগুলোর লিংকের প্রিভিউ দেখুন। প্রতিটি প্রোফাইল একগুচ্ছ সাইট শনাক্ত করে এবং সরাসরি অনুরোধের বদলে এই কম্পিউটারে চলা একটি স্ক্রিপ্টের মাধ্যমে আপনার ক্রেডেনশিয়াল ব্যবহার করে সেগুলোর পেজ আনে।",
+    "description": "Settings → Internal Sites: intro paragraph",
+    "_machine_translated": true,
+    "_source_hash": "96edf6fbd986597f"
+  },
+  "settings.internal_sites.script_warning": {
+    "message": "মিলে যাওয়া কোনো লিংকের প্রিভিউ দেখানো হলেই প্রক্সি স্ক্রিপ্টগুলো আপনার অনুমতি নিয়ে এই কম্পিউটারে চলে। শুধু সেই স্ক্রিপ্টগুলোই রাখুন যেগুলো আপনি পড়েছেন এবং বোঝেন।",
+    "description": "Settings → Internal Sites: security note under the intro",
+    "_machine_translated": true,
+    "_source_hash": "b9e07fddd9e15179"
+  },
+  "settings.internal_sites.enabled": {
+    "message": "সক্রিয়",
+    "description": "Settings → Internal Sites: checkbox that turns a profile on or off",
+    "_machine_translated": true,
+    "_source_hash": "d79d2062bda2c735"
+  },
+  "settings.internal_sites.list.unnamed": {
+    "message": "নামহীন প্রোফাইল",
+    "description": "Settings → Internal Sites: name shown for a profile with no name yet",
+    "_machine_translated": true,
+    "_source_hash": "f26e9985dc6f177b"
+  },
+  "settings.internal_sites.list.summary": {
+    "message": "{url}টি URL নিয়ম · {content}টি কনটেন্ট নিয়ম",
+    "description": "Settings → Internal Sites: profile list subtitle; {url} and {content} are rule counts",
+    "_machine_translated": true,
+    "_source_hash": "a4043f559996320c"
+  },
+  "settings.internal_sites.list.no_script": {
+    "message": "এখনো কোনো প্রক্সি স্ক্রিপ্ট নেই",
+    "description": "Settings → Internal Sites: profile list subtitle when the profile has no script",
+    "_machine_translated": true,
+    "_source_hash": "c864f3adf797b0df"
+  },
+  "settings.internal_sites.list.edit": {
+    "message": "সম্পাদনা",
+    "description": "Settings → Internal Sites: button to edit a profile",
+    "_machine_translated": true,
+    "_source_hash": "31971113e386920c"
+  },
+  "settings.internal_sites.list.delete": {
+    "message": "মুছুন",
+    "description": "Settings → Internal Sites: button to delete a profile",
+    "_machine_translated": true,
+    "_source_hash": "3c92a69543b3df91"
+  },
+  "settings.internal_sites.list.empty": {
+    "message": "এখনো কোনো প্রোফাইল নেই।",
+    "description": "Settings → Internal Sites: shown when the profile list is empty",
+    "_machine_translated": true,
+    "_source_hash": "acf0cdfa80ae30b6"
+  },
+  "settings.internal_sites.list.add": {
+    "message": "প্রোফাইল যোগ করুন",
+    "description": "Settings → Internal Sites: button to create a new profile",
+    "_machine_translated": true,
+    "_source_hash": "b36c52a2dd81d942"
+  },
+  "settings.internal_sites.delete_confirm": {
+    "message": "“{name}” প্রোফাইলটি মুছবেন?",
+    "description": "Settings → Internal Sites: confirmation dialog; {name} is the profile name",
+    "_machine_translated": true,
+    "_source_hash": "07c1ebcca9dd9efc"
+  },
+  "settings.internal_sites.validate.name_required": {
+    "message": "প্রতিটি অভ্যন্তরীণ সাইট প্রোফাইলের একটি নাম থাকা প্রয়োজন।",
+    "description": "Settings → Internal Sites: validation error on save",
+    "_machine_translated": true,
+    "_source_hash": "69f6b968d9ce26f4"
+  },
+  "settings.internal_sites.validate.sample_url_required": {
+    "message": "প্রথমে http:// বা https:// দিয়ে শুরু হওয়া একটি নমুনা URL লিখুন।",
+    "description": "Settings → Internal Sites: error when drafting/testing without a sample URL",
+    "_machine_translated": true,
+    "_source_hash": "b1fd6dfaadb841e3"
+  },
+  "settings.internal_sites.drafting": {
+    "message": "এজেন্টকে জিজ্ঞাসা করা হচ্ছে… এটি টুল ব্যবহারের অনুমতি চাইতে পারে।",
+    "description": "Settings → Internal Sites: status while the AI drafts rules or a script",
+    "_machine_translated": true,
+    "_source_hash": "e59c2b81bb8f885c"
+  },
+  "settings.internal_sites.testing": {
+    "message": "পরীক্ষা করা হচ্ছে…",
+    "description": "Settings → Internal Sites: status while a test runs",
+    "_machine_translated": true,
+    "_source_hash": "925322d5d95174dd"
+  },
+  "settings.internal_sites.working": {
+    "message": "কাজ চলছে…",
+    "description": "Settings → Internal Sites: label on a button while its request runs",
+    "_machine_translated": true,
+    "_source_hash": "7b237c715acce363"
+  },
+  "settings.internal_sites.draft_rules.done": {
+    "message": "নিয়মের খসড়া তৈরি হয়েছে। সংরক্ষণের আগে সেগুলো পর্যালোচনা করুন।",
+    "description": "Settings → Internal Sites: status after the AI drafted detection rules",
+    "_machine_translated": true,
+    "_source_hash": "4314807f3c6afd4f"
+  },
+  "settings.internal_sites.draft_script.done": {
+    "message": "স্ক্রিপ্টের খসড়া তৈরি হয়েছে। সংরক্ষণের আগে এটি পড়ুন এবং পরীক্ষা চালান।",
+    "description": "Settings → Internal Sites: status after the AI drafted a proxy script",
+    "_machine_translated": true,
+    "_source_hash": "8c4b6245bab4b680"
+  },
+  "settings.internal_sites.draft_script.replace_confirm": {
+    "message": "বর্তমান স্ক্রিপ্টটি নতুন খসড়া দিয়ে প্রতিস্থাপন করবেন?",
+    "description": "Settings → Internal Sites: confirmation before overwriting an existing script",
+    "_machine_translated": true,
+    "_source_hash": "451af86ca1fcd035"
+  },
+  "settings.internal_sites.error.draft_failed": {
+    "message": "খসড়া তৈরি ব্যর্থ হয়েছে",
+    "description": "Settings → Internal Sites: error label prefix when AI drafting fails",
+    "_machine_translated": true,
+    "_source_hash": "a51bc5619dc9b849"
+  },
+  "settings.internal_sites.error.test_failed": {
+    "message": "পরীক্ষা ব্যর্থ হয়েছে",
+    "description": "Settings → Internal Sites: error label prefix when a test cannot run",
+    "_machine_translated": true,
+    "_source_hash": "c02c6605157c675a"
+  },
+  "settings.internal_sites.editor.back": {
+    "message": "ফিরে যান",
+    "description": "Settings → Internal Sites: button returning from the profile editor to the list",
+    "_machine_translated": true,
+    "_source_hash": "08085785f7f8a091"
+  },
+  "settings.internal_sites.editor.name": {
+    "message": "নাম",
+    "description": "Settings → Internal Sites: profile name field label",
+    "_machine_translated": true,
+    "_source_hash": "8f6d3c9809cfe5bf"
+  },
+  "settings.internal_sites.editor.name_placeholder": {
+    "message": "যেমন টিম উইকি",
+    "description": "Settings → Internal Sites: placeholder for the profile name",
+    "_machine_translated": true,
+    "_source_hash": "92ba24021022e94f"
+  },
+  "settings.internal_sites.editor.sample_url": {
+    "message": "নমুনা URL",
+    "description": "Settings → Internal Sites: field label for an example link",
+    "_machine_translated": true,
+    "_source_hash": "e727991ae9eab910"
+  },
+  "settings.internal_sites.editor.sample_url_description": {
+    "message": "এই সাইটগুলোর যেকোনো একটির লিঙ্ক। নিয়ম ও স্ক্রিপ্টের খসড়া তৈরিতে এবং পরীক্ষায় এটি ব্যবহার করা হয়।",
+    "description": "Settings → Internal Sites: help text for the sample URL",
+    "_machine_translated": true,
+    "_source_hash": "1bc98775f561c34c"
+  },
+  "settings.internal_sites.editor.test_btn": {
+    "message": "পরীক্ষা করুন",
+    "description": "Settings → Internal Sites: button that runs detection and the proxy script on the sample URL",
+    "_machine_translated": true,
+    "_source_hash": "1520119362694e2e"
+  },
+  "settings.internal_sites.editor.rules": {
+    "message": "শনাক্তকরণ",
+    "description": "Settings → Internal Sites: heading for the detection rules area",
+    "_machine_translated": true,
+    "_source_hash": "1fb8cee52dca37b1"
+  },
+  "settings.internal_sites.editor.rules_description": {
+    "message": "কোন লিঙ্কগুলো এই প্রোফাইল ব্যবহার করবে, তা নিয়মগুলো ঠিক করে। নমুনা URL এবং সেটিতে সরাসরি অনুরোধ পাঠালে যা ফেরত আসে, তা থেকে এজেন্ট নিয়মগুলোর খসড়া তৈরি করতে পারে।",
+    "description": "Settings → Internal Sites: help text for detection rules",
+    "_machine_translated": true,
+    "_source_hash": "69cc9dc8aa786f57"
+  },
+  "settings.internal_sites.editor.draft_rules_btn": {
+    "message": "AI দিয়ে নিয়মের খসড়া তৈরি করুন",
+    "description": "Settings → Internal Sites: button asking the agent to draft detection rules",
+    "_machine_translated": true,
+    "_source_hash": "7a8b95d533913297"
+  },
+  "settings.internal_sites.editor.url_rules": {
+    "message": "URL নিয়ম",
+    "description": "Settings → Internal Sites: heading for URL rules",
+    "_machine_translated": true,
+    "_source_hash": "f5d51db5b70126f6"
+  },
+  "settings.internal_sites.editor.url_rules_description": {
+    "message": "এই কম্পিউটার থেকে কিছু পাঠানোর আগেই যাচাই করা হয়। মিলে গেলে সরাসরি অনুরোধ পুরোপুরি বাদ দেওয়া হয়।",
+    "description": "Settings → Internal Sites: help text for URL rules",
+    "_machine_translated": true,
+    "_source_hash": "d93583262f93df07"
+  },
+  "settings.internal_sites.editor.add_url_rule": {
+    "message": "URL নিয়ম যোগ করুন",
+    "description": "Settings → Internal Sites: button adding a URL rule",
+    "_machine_translated": true,
+    "_source_hash": "441d67b32fc52472"
+  },
+  "settings.internal_sites.editor.content_rules": {
+    "message": "কনটেন্ট নিয়ম",
+    "description": "Settings → Internal Sites: heading for content rules",
+    "_machine_translated": true,
+    "_source_hash": "89cd20d8842b4f06"
+  },
+  "settings.internal_sites.editor.content_rules_description": {
+    "message": "সরাসরি অনুরোধে যা ফেরত আসে, সাইন-ইন পেজ ও ত্রুটির রেসপন্সসহ, তার সঙ্গে মিলিয়ে যাচাই করা হয়। URL নিয়মে যেসব সাইট ধরা পড়ে না, সেগুলো এতে ধরা পড়ে।",
+    "description": "Settings → Internal Sites: help text for content rules",
+    "_machine_translated": true,
+    "_source_hash": "371b162fac7cd3e3"
+  },
+  "settings.internal_sites.editor.add_content_rule": {
+    "message": "কনটেন্ট নিয়ম যোগ করুন",
+    "description": "Settings → Internal Sites: button adding a content rule",
+    "_machine_translated": true,
+    "_source_hash": "2fb0a55a320c646b"
+  },
+  "settings.internal_sites.editor.script": {
+    "message": "প্রক্সি স্ক্রিপ্ট",
+    "description": "Settings → Internal Sites: heading for the proxy script editor",
+    "_machine_translated": true,
+    "_source_hash": "048289a2be7cad84"
+  },
+  "settings.internal_sites.editor.script_description_html": {
+    "message": "<code>KAGE_URL</code> এনভায়রনমেন্ট ভেরিয়েবলে লিঙ্কটি দিয়ে চালানো হয়। পেজের HTML stdout-এ প্রিন্ট করুন, অথবা <code>title</code> ও <code>description</code> সহ একটি JSON অবজেক্ট প্রিন্ট করুন। <code>KAGE_RESPONSE</code> যখন <code>base64</code> হয় (ফেভিকন), তখন রেসপন্সটি base64-এনকোড করে প্রিন্ট করুন। ব্যর্থ হলে শূন্য নয় এমন কোড দিয়ে প্রস্থান করুন।",
+    "description": "Settings → Internal Sites: proxy script contract (HTML allowed). Keep KAGE_URL, KAGE_RESPONSE, base64, title, description, stdout and JSON exactly as written",
+    "_machine_translated": true,
+    "_source_hash": "16f35859ab1cbe91"
+  },
+  "settings.internal_sites.editor.timeout": {
+    "message": "টাইমআউট (সেকেন্ড)",
+    "description": "Settings → Internal Sites: label for the script timeout",
+    "_machine_translated": true,
+    "_source_hash": "13818f7c6ae547f5"
+  },
+  "settings.internal_sites.editor.draft_script_btn": {
+    "message": "AI দিয়ে স্ক্রিপ্টের খসড়া তৈরি করুন",
+    "description": "Settings → Internal Sites: button asking the agent to write the proxy script",
+    "_machine_translated": true,
+    "_source_hash": "0f7ce02f6f0dea58"
+  },
+  "settings.internal_sites.editor.lang.powershell": {
+    "message": "PowerShell",
+    "description": "Settings → Internal Sites: script language option (product name, do not translate)",
+    "_machine_translated": true,
+    "_source_hash": "603918adc1690e91"
+  },
+  "settings.internal_sites.editor.lang.bash": {
+    "message": "Bash",
+    "description": "Settings → Internal Sites: script language option (product name, do not translate)",
+    "_machine_translated": true,
+    "_source_hash": "3054dcce15a85c71"
+  },
+  "settings.internal_sites.rule.url_kind.domain_suffix": {
+    "message": "ডোমেইন সাফিক্স",
+    "description": "Settings → Internal Sites: URL rule type matching a host and its subdomains",
+    "_machine_translated": true,
+    "_source_hash": "b8aeb7448c1a2737"
+  },
+  "settings.internal_sites.rule.url_kind.regex": {
+    "message": "Regex",
+    "description": "Settings → Internal Sites: URL rule type using a regular expression",
+    "_machine_translated": true,
+    "_source_hash": "d2a191924b34851f"
+  },
+  "settings.internal_sites.rule.target.body": {
+    "message": "পেজের বডি",
+    "description": "Settings → Internal Sites: content rule target: the fetched page",
+    "_machine_translated": true,
+    "_source_hash": "500baac5ed023d30"
+  },
+  "settings.internal_sites.rule.target.final_url": {
+    "message": "চূড়ান্ত URL",
+    "description": "Settings → Internal Sites: content rule target: the URL after redirects",
+    "_machine_translated": true,
+    "_source_hash": "5468fb43aa74a7ce"
+  },
+  "settings.internal_sites.rule.match_kind.contains": {
+    "message": "ধারণ করে",
+    "description": "Settings → Internal Sites: content rule match type: substring",
+    "_machine_translated": true,
+    "_source_hash": "824004b4c4c9fe7a"
+  },
+  "settings.internal_sites.rule.match_kind.regex": {
+    "message": "Regex",
+    "description": "Settings → Internal Sites: content rule match type: regular expression",
+    "_machine_translated": true,
+    "_source_hash": "3c3e1e0a6d059f1d"
+  },
+  "settings.internal_sites.rule.pattern_placeholder": {
+    "message": "প্যাটার্ন",
+    "description": "Settings → Internal Sites: placeholder for a rule pattern",
+    "_machine_translated": true,
+    "_source_hash": "4c56ae0cda88a75e"
+  },
+  "settings.internal_sites.rule.remove": {
+    "message": "নিয়ম সরান",
+    "description": "Settings → Internal Sites: tooltip for the remove-rule button",
+    "_machine_translated": true,
+    "_source_hash": "7e8ac1c12cc43790"
+  },
+  "settings.internal_sites.test.url_rules": {
+    "message": "URL নিয়ম:",
+    "description": "Settings → Internal Sites: test result row label",
+    "_machine_translated": true,
+    "_source_hash": "24ec4bd445c9c628"
+  },
+  "settings.internal_sites.test.content_rules": {
+    "message": "কনটেন্ট নিয়ম:",
+    "description": "Settings → Internal Sites: test result row label",
+    "_machine_translated": true,
+    "_source_hash": "4aac5cb18afef75d"
+  },
+  "settings.internal_sites.test.direct": {
+    "message": "সরাসরি অনুরোধ:",
+    "description": "Settings → Internal Sites: test result row label",
+    "_machine_translated": true,
+    "_source_hash": "1bf9e11f568993c4"
+  },
+  "settings.internal_sites.test.proxy": {
+    "message": "প্রক্সি স্ক্রিপ্ট:",
+    "description": "Settings → Internal Sites: test result row label",
+    "_machine_translated": true,
+    "_source_hash": "909d7663a841a87d"
+  },
+  "settings.internal_sites.test.matched": {
+    "message": "মিলেছে",
+    "description": "Settings → Internal Sites: test result: rules matched",
+    "_machine_translated": true,
+    "_source_hash": "488120d3b3369e65"
+  },
+  "settings.internal_sites.test.not_matched": {
+    "message": "মেলেনি",
+    "description": "Settings → Internal Sites: test result: rules did not match",
+    "_machine_translated": true,
+    "_source_hash": "cee1d741660ef42b"
+  },
+  "settings.internal_sites.test.not_checked": {
+    "message": "যাচাই করা হয়নি",
+    "description": "Settings → Internal Sites: test result: could not be evaluated",
+    "_machine_translated": true,
+    "_source_hash": "4ecea75f0e592761"
+  },
+  "settings.internal_sites.test.direct_status": {
+    "message": "HTTP {status}, {url}-এ শেষ হয়েছে",
+    "description": "Settings → Internal Sites: test result for the direct request; {status} is the HTTP status code, {url} the final URL",
+    "_machine_translated": true,
+    "_source_hash": "879cf3c9fc203715"
+  },
+  "settings.internal_sites.test.direct_failed": {
+    "message": "ব্যর্থ ({error})",
+    "description": "Settings → Internal Sites: test result when the direct request failed; {error} is the error",
+    "_machine_translated": true,
+    "_source_hash": "e06474c3471c6ece"
+  },
+  "settings.internal_sites.test.proxy_ok": {
+    "message": "সফল, {bytes} বাইট আউটপুট",
+    "description": "Settings → Internal Sites: test result when the script succeeded; {bytes} is the output size",
+    "_machine_translated": true,
+    "_source_hash": "c1b45f079e5c5040"
+  },
+  "settings.internal_sites.test.proxy_failed": {
+    "message": "এক্সিট কোড {code} সহ ব্যর্থ হয়েছে",
+    "description": "Settings → Internal Sites: test result when the script failed; {code} is the exit code",
+    "_machine_translated": true,
+    "_source_hash": "a220790e1422f12c"
+  },
+  "settings.internal_sites.test.proxy_timed_out": {
+    "message": "সময় শেষ হয়ে গেছে",
+    "description": "Settings → Internal Sites: test result when the script timed out",
+    "_machine_translated": true,
+    "_source_hash": "26d0c3c0fed4429d"
+  },
+  "settings.internal_sites.test.no_preview": {
+    "message": "স্ক্রিপ্টের আউটপুট থেকে কোনো প্রিভিউ তৈরি হয়নি।",
+    "description": "Settings → Internal Sites: test result when no title or description was found",
+    "_machine_translated": true,
+    "_source_hash": "d4d1d6ff3f986d30"
   }
 }

@@ -488,4 +488,5 @@ pub async fn execute_system_command<R: tauri::Runtime>(
     }
 }
 
+pub mod internal_sites;
 pub mod link_metadata;

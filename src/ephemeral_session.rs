@@ -27,11 +27,22 @@
 
 use anyhow::{Context, Result};
 use log::warn;
-use std::sync::{Arc, Mutex};
+use std::collections::HashSet;
+use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::acp_client::AcpClient;
 use crate::config::Config;
 use crate::lock_ext::LockExt;
+
+/// Ids of ephemeral sessions currently alive. The session scanner skips
+/// these, so a throwaway session never flashes into the sidebar between
+/// the agent writing its files and the cleanup guard deleting them.
+static ACTIVE: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// True while `session_id` is an ephemeral session owned by [`run`].
+pub fn is_active(session_id: &str) -> bool {
+    ACTIVE.lock_or_recover().contains(session_id)
+}
 
 /// Deletes an ephemeral session's on-disk files when dropped. Best-effort:
 /// a failure leaves a stray file the user can delete manually, so we log
@@ -45,6 +56,16 @@ struct SessionCleanup {
 
 impl Drop for SessionCleanup {
     fn drop(&mut self) {
+        // Unregister only after the files are gone (end of this fn), so the
+        // scanner can't list them in between.
+        struct Unregister<'a>(&'a str);
+        impl Drop for Unregister<'_> {
+            fn drop(&mut self) {
+                ACTIVE.lock_or_recover().remove(self.0);
+            }
+        }
+        let _unregister = Unregister(&self.session_id);
+
         let sessions_dir = {
             let cfg = self.config.lock_or_recover();
             crate::agent_presets::resolve_sessions_dir(&cfg)
@@ -79,7 +100,7 @@ impl Drop for SessionCleanup {
 ///
 /// ```ignore
 /// let reply = ephemeral_session::run(&client, &config, |sid| {
-///     client.send_chat_streaming(sid, &prompt, None)?;
+///     client.send_chat_streaming_background(sid, &prompt, true)?;
 ///     Ok(client.take_session_accumulator(sid))
 /// })?;
 /// ```
@@ -104,6 +125,7 @@ where
 
     // Arm cleanup before running the work so an error or panic in `work`
     // still removes the session files.
+    ACTIVE.lock_or_recover().insert(session_id.clone());
     let _cleanup = SessionCleanup {
         config: config.clone(),
         session_id: session_id.clone(),
@@ -121,10 +143,11 @@ pub fn prompt_once(
     prompt: &str,
 ) -> Result<String> {
     run(client, config, |session_id| {
-        // send_chat_streaming resets this session's accumulator on entry
-        // and blocks until the prompt completes; the full reply is then
-        // sitting in the accumulator for us to take.
-        client.send_chat_streaming(session_id, prompt, None)?;
+        // The background sender keeps the reply out of every window's
+        // stream (no chunks or tool-call updates are emitted) while still
+        // accumulating it; it blocks until the prompt completes, leaving
+        // the full reply in the accumulator for us to take.
+        client.send_chat_streaming_background(session_id, prompt, true)?;
         Ok(client.take_session_accumulator(session_id))
     })
 }
@@ -158,6 +181,23 @@ mod tests {
         ["json", "jsonl", "lock"]
             .iter()
             .any(|ext| dir.join(format!("{id}.{ext}")).exists())
+    }
+
+    #[test]
+    fn active_registration_ends_when_the_guard_drops() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_sessions_dir(tmp.path());
+        ACTIVE
+            .lock_or_recover()
+            .insert("ephemeral-live".to_string());
+        assert!(is_active("ephemeral-live"));
+        {
+            let _guard = SessionCleanup {
+                config,
+                session_id: "ephemeral-live".to_string(),
+            };
+        }
+        assert!(!is_active("ephemeral-live"));
     }
 
     #[test]

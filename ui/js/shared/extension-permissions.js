@@ -87,6 +87,12 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // wipe a shared cache or probe its size out of band.
     link_metadata_clear_cache: null,
     link_metadata_cache_stats: null,
+    // Internal-site profiles run user scripts and return internal page
+    // content — settings window only.
+    internal_sites_probe: null,
+    internal_sites_test: null,
+    internal_sites_draft_rules: null,
+    internal_sites_draft_script: null,
 
     // --- filesystem: folder/file discovery ---------------------------------
     pick_folder: 'filesystem',

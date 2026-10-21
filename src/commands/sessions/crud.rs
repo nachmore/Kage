@@ -482,6 +482,12 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
             continue;
         }
 
+        // Throwaway sessions (script generation, internal-site drafting)
+        // are deleted as soon as their one prompt completes.
+        if crate::ephemeral_session::is_active(&session_id) {
+            continue;
+        }
+
         // Get dates from file metadata (fast)
         let (created_at, updated_at) = match fs::metadata(&path) {
             Ok(meta) => {

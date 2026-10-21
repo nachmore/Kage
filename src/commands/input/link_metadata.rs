@@ -191,17 +191,20 @@ async fn fetch_link_metadata_uncached(
 }
 
 /// What the direct fetch saw.
-struct DirectResponse {
-    status: reqwest::StatusCode,
-    final_url: String,
+pub(crate) struct DirectResponse {
+    pub(crate) status: reqwest::StatusCode,
+    pub(crate) final_url: String,
     is_html: bool,
     /// Head window of the body. Read for HTML successes, and for error
     /// responses when `read_error_body` is set (content rules need the
     /// login / 401 page); empty otherwise.
-    body: String,
+    pub(crate) body: String,
 }
 
-async fn direct_fetch(url: &str, read_error_body: bool) -> Result<DirectResponse, AppError> {
+pub(crate) async fn direct_fetch(
+    url: &str,
+    read_error_body: bool,
+) -> Result<DirectResponse, AppError> {
     let client = HTTP_CLIENT
         .as_ref()
         .map_err(|e| format!("HTTP client error: {}", e))?;
@@ -277,7 +280,7 @@ static PROXY_SLOTS: LazyLock<tokio::sync::Semaphore> =
 const MAX_PROXY_HTML_BYTES: usize = 256 * 1024;
 
 /// Run one proxy request on the blocking pool while holding a slot.
-async fn run_proxy_limited(
+pub(crate) async fn run_proxy_limited(
     profile: &InternalSiteProfile,
     url: &str,
     response: ProxyResponse,
@@ -321,11 +324,21 @@ fn proxy_head_window(stdout: &str) -> &str {
 ///
 /// Logging here records the profile name and exit status only — never
 /// the URL, stdout or stderr, which can all carry internal details.
-pub(crate) async fn proxy_link_metadata(
+async fn proxy_link_metadata(
     profile: &InternalSiteProfile,
     url: &str,
 ) -> Result<serde_json::Value, AppError> {
     let run = run_proxy_limited(profile, url, ProxyResponse::Text).await;
+    metadata_from_proxy_run(profile, url, &run).await
+}
+
+/// Second half of [`proxy_link_metadata`], split out so the settings Test
+/// button can show the raw run and the resulting card from one execution.
+pub(crate) async fn metadata_from_proxy_run(
+    profile: &InternalSiteProfile,
+    url: &str,
+    run: &internal_sites::ProxyRun,
+) -> Result<serde_json::Value, AppError> {
     if !run.ok {
         log::warn!(
             "Internal-site proxy '{}' failed (exit {:?}, timed out: {})",
@@ -419,6 +432,11 @@ fn extract_meta(html: &str, name: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// The page `<title>`, for the settings probe.
+pub(crate) fn page_title(html: &str) -> Option<String> {
+    extract_tag_content(html, "title")
 }
 
 /// Extract text content from <tag>...</tag>
