@@ -651,7 +651,7 @@ export function installExtensionUiMethods(ExtensionManager) {
             const live = [];
             for (const ref of _formattedContainers) {
                 const container = ref.deref();
-                if (!container || !container.isConnected) {
+                if (!container?.isConnected) {
                     _formattedContainers.delete(ref);
                     continue;
                 }
