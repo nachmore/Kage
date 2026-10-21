@@ -38,7 +38,10 @@ waitForTauri(({ invoke, appWindow }) => {
         // the throttled streaming path was mid-debounce when the request
         // arrived.
         async onRequestReceived(event) {
-            const { auto_approve } = event.payload;
+            const { auto_approve, source } = event.payload;
+            // Prompts issued from Settings (e.g. Internal Sites drafting)
+            // are answered in the Settings window.
+            if (source === 'settings') return { handle: false };
             if (!auto_approve) {
                 window._chatApp?.flushStreamingRender();
             }

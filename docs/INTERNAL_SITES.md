@@ -47,9 +47,14 @@ pages.
 
 ## Drafting with the agent
 
-The editor's **Draft rules with AI** and **Draft script with AI** buttons run
-a one-shot prompt on a throwaway agent session (`ephemeral_session`): muted,
-hidden from the session list, deleted afterwards. Rule drafting includes what
+The editor's **Draft rules with AI** and **Draft script with AI** buttons open
+a dialog that takes optional guidance for the agent, then runs a one-shot
+prompt on a throwaway agent session (`ephemeral_session::run`), hidden from
+the session list and deleted afterwards. The backend announces the session id
+to the settings window (`internal_sites_draft_session`), which follows its
+streamed text and tool calls live, answers its permission prompts (routed to
+`settings` via `pending_prompt_originators`; chat windows ignore them), and
+can cancel it (`dismiss_pending_permission` + `cancel_generation`). Rule drafting includes what
 an unauthenticated direct fetch of the sample URL returned, so the agent can
 write content rules for the sign-in page. Script drafting asks the agent to
 reuse whatever mechanism its own tools use to read the site. **Test** runs

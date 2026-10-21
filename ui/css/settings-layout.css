@@ -1185,3 +1185,101 @@ body.light-theme .mcp-server-delete-btn {
     gap: 6px;
     font-weight: 600;
 }
+
+/* Internal Sites — agent draft dialog */
+.isd-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.isd-panel {
+    width: min(560px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--kage-border);
+    background: var(--kage-bg, #1e1e24);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.isd-title {
+    margin: 0 0 4px;
+    font-size: 15px;
+}
+
+.isd-guidance {
+    width: 100%;
+    resize: vertical;
+}
+
+.isd-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.isd-live {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.isd-elapsed {
+    font-size: 11px;
+    color: var(--kage-text-secondary);
+}
+
+.isd-tools {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 12px;
+    max-height: 160px;
+    overflow: auto;
+}
+
+.isd-tool {
+    padding: 2px 0;
+}
+
+.isd-tool-icon {
+    display: inline-block;
+    width: 14px;
+    text-align: center;
+}
+
+.isd-tool-completed .isd-tool-icon {
+    color: var(--kage-accent);
+}
+
+.isd-tool-failed .isd-tool-icon {
+    color: var(--kage-error);
+}
+
+.isd-text {
+    margin: 0;
+    max-height: 180px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 11px;
+    padding: 8px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.isd-permission {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--kage-accent);
+}

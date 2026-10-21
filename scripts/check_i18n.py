@@ -93,6 +93,7 @@ KNOWN_DYNAMIC_KEYS: set[str] = {
     # Internal Sites settings render option labels, editor labels and test
     # rows via template literals (`settings.internal_sites.<group>.${v}`).
     "settings.internal_sites.editor.**",
+    "settings.internal_sites.draft.**",
     "settings.internal_sites.rule.**",
     "settings.internal_sites.test.**",
     # All `errors.passthrough` invocations come from AppError::raw and the

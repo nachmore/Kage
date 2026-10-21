@@ -3,6 +3,7 @@ import { t } from '../shared/i18n.js';
 import { errLabel } from '../shared/error-message.js';
 import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 import { isWindows } from '../shared/shortcuts.js';
+import { DraftDialog } from './internal-sites-draft.js';
 
 /**
  * Internal Sites — link previews for pages that need the user's own
@@ -20,6 +21,27 @@ const CONTENT_TARGETS = ['body', 'final_url'];
 const MATCH_KINDS = ['contains', 'regex'];
 const DEFAULT_TIMEOUT_SECS = 15;
 
+/** The one script language this platform runs. */
+function platformLang() {
+    return isWindows() ? 'powershell' : 'bash';
+}
+
+/**
+ * Sample URL as typed → absolute http(s) URL, assuming https:// when no
+ * scheme was given. `null` when it can't be a web URL.
+ */
+export function normalizeSampleUrl(raw) {
+    const v = String(raw || '').trim();
+    if (!v) return null;
+    const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`;
+    try {
+        const u = new URL(withScheme);
+        return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
+    } catch {
+        return null;
+    }
+}
+
 function newProfile() {
     return {
         id: globalThis.crypto?.randomUUID?.() || `site-${Date.now()}`,
@@ -27,7 +49,7 @@ function newProfile() {
         enabled: true,
         url_rules: [],
         content_rules: [],
-        proxy: { lang: isWindows() ? 'powershell' : 'bash', script: '', timeout_ms: 0 },
+        proxy: { lang: platformLang(), script: '', timeout_ms: 0 },
         sample_url: '',
     };
 }
@@ -73,7 +95,7 @@ export class InternalSitesSettingsModule extends SettingsModule {
         this._profiles = [];
         this._editing = null; // index into _profiles, or null for the list
         this._busy = null; // 'rules' | 'script' | 'test' while a request runs
-        this._status = null; // { text, kind }
+        this._status = null; // { slot, text, kind } — shown beside the button that set it
         this._testResult = null;
     }
 
@@ -244,11 +266,19 @@ export class InternalSitesSettingsModule extends SettingsModule {
 
     // --- agent drafting + test ---------------------------------------------
 
-    _requireSampleUrl(p) {
-        const url = p.sample_url.trim();
-        if (!/^https?:\/\//i.test(url)) {
-            this._setStatus(t('settings.internal_sites.validate.sample_url_required'), 'error');
+    _requireSampleUrl(p, slot) {
+        const url = normalizeSampleUrl(p.sample_url);
+        if (!url) {
+            this._setStatus(
+                slot,
+                t('settings.internal_sites.validate.sample_url_required'),
+                'error'
+            );
             return null;
+        }
+        if (url !== p.sample_url) {
+            p.sample_url = url;
+            this.markDirty();
         }
         return url;
     }
@@ -265,33 +295,52 @@ export class InternalSitesSettingsModule extends SettingsModule {
         }
     }
 
+    /**
+     * Run an agent draft through the modal (guidance → live progress →
+     * result). Returns the command's result, or null if the user
+     * cancelled or it failed (the slot status says which).
+     */
+    async _runDraft(slot, title, call) {
+        let outcome;
+        await this._withBusy(slot, async () => {
+            this._setStatus(slot, null, null, false);
+            outcome = await new DraftDialog({ title, run: call }).open();
+        });
+        if (outcome?.status === 'done') return outcome.result;
+        if (outcome?.status === 'cancelled') {
+            this._setStatus(slot, t('settings.internal_sites.draft.cancelled'), null);
+        } else if (outcome?.status === 'failed') {
+            this._setStatus(
+                slot,
+                errLabel(t('settings.internal_sites.error.draft_failed'), outcome.error),
+                'error'
+            );
+        }
+        return null;
+    }
+
     async _draftRules() {
         const p = this._current();
-        const url = p && this._requireSampleUrl(p);
+        const url = p && this._requireSampleUrl(p, 'rules');
         if (!url) return;
         const invoke = window.__TAURI__.core.invoke;
-        this._setStatus(t('settings.internal_sites.drafting'), null, false);
-        await this._withBusy('rules', async () => {
-            try {
-                const draft = await invoke('internal_sites_draft_rules', { url });
-                if (!p.name.trim() && draft.name) p.name = draft.name;
-                if (draft.url_rules?.length) p.url_rules = draft.url_rules;
-                if (draft.content_rules?.length) p.content_rules = draft.content_rules;
-                this.markDirty();
-                this._setStatus(t('settings.internal_sites.draft_rules.done'), 'success', false);
-            } catch (e) {
-                this._setStatus(
-                    errLabel(t('settings.internal_sites.error.draft_failed'), e),
-                    'error',
-                    false
-                );
-            }
-        });
+        const draft = await this._runDraft(
+            'rules',
+            t('settings.internal_sites.draft.title_rules'),
+            ({ guidance, requestId }) =>
+                invoke('internal_sites_draft_rules', { url, guidance, requestId })
+        );
+        if (!draft) return;
+        if (!p.name.trim() && draft.name) p.name = draft.name;
+        if (draft.url_rules?.length) p.url_rules = draft.url_rules;
+        if (draft.content_rules?.length) p.content_rules = draft.content_rules;
+        this.markDirty();
+        this._setStatus('rules', t('settings.internal_sites.draft_rules.done'), 'success');
     }
 
     async _draftScript() {
         const p = this._current();
-        const url = p && this._requireSampleUrl(p);
+        const url = p && this._requireSampleUrl(p, 'script');
         if (!url) return;
         if (
             p.proxy.script.trim() &&
@@ -300,32 +349,30 @@ export class InternalSitesSettingsModule extends SettingsModule {
             return;
         }
         const invoke = window.__TAURI__.core.invoke;
-        this._setStatus(t('settings.internal_sites.drafting'), null, false);
-        await this._withBusy('script', async () => {
-            try {
-                p.proxy.script = await invoke('internal_sites_draft_script', {
+        const script = await this._runDraft(
+            'script',
+            t('settings.internal_sites.draft.title_script'),
+            ({ guidance, requestId }) =>
+                invoke('internal_sites_draft_script', {
                     url,
                     lang: p.proxy.lang,
-                });
-                this.markDirty();
-                this._setStatus(t('settings.internal_sites.draft_script.done'), 'success', false);
-            } catch (e) {
-                this._setStatus(
-                    errLabel(t('settings.internal_sites.error.draft_failed'), e),
-                    'error',
-                    false
-                );
-            }
-        });
+                    guidance,
+                    requestId,
+                })
+        );
+        if (!script) return;
+        p.proxy.script = script;
+        this.markDirty();
+        this._setStatus('script', t('settings.internal_sites.draft_script.done'), 'success');
     }
 
     async _runTest() {
         const p = this._current();
-        const url = p && this._requireSampleUrl(p);
+        const url = p && this._requireSampleUrl(p, 'test');
         if (!url) return;
         const invoke = window.__TAURI__.core.invoke;
         this._testResult = null;
-        this._setStatus(t('settings.internal_sites.testing'), null, false);
+        this._setStatus('test', t('settings.internal_sites.testing'), null, false);
         await this._withBusy('test', async () => {
             try {
                 const profile = cleanProfile(p);
@@ -333,6 +380,7 @@ export class InternalSitesSettingsModule extends SettingsModule {
                 this._status = null;
             } catch (e) {
                 this._setStatus(
+                    'test',
                     errLabel(t('settings.internal_sites.error.test_failed'), e),
                     'error',
                     false
@@ -341,9 +389,16 @@ export class InternalSitesSettingsModule extends SettingsModule {
         });
     }
 
-    _setStatus(text, kind, render = true) {
-        this._status = text ? { text, kind } : null;
+    _setStatus(slot, text, kind, render = true) {
+        this._status = text ? { slot, text, kind } : null;
         if (render) this._renderView();
+    }
+
+    /** Status line for `slot`, rendered right under the button that owns it. */
+    _statusHtml(slot) {
+        const s = this._status;
+        if (!s || s.slot !== slot) return '';
+        return `<div class="setting-description internal-site-status ${s.kind || ''}" role="status">${escapeHtml(s.text)}</div>`;
     }
 
     // --- rendering ----------------------------------------------------------
@@ -416,9 +471,12 @@ export class InternalSitesSettingsModule extends SettingsModule {
             .join('');
 
         const timeoutSecs = p.proxy.timeout_ms ? p.proxy.timeout_ms / 1000 : DEFAULT_TIMEOUT_SECS;
-        const status = this._status
-            ? `<div class="setting-description internal-site-status ${this._status.kind || ''}">${escapeHtml(this._status.text)}</div>`
-            : '';
+        // One language per platform; a picker only appears for a profile
+        // written on another OS (e.g. a config copied across machines).
+        const langPicker =
+            p.proxy.lang === platformLang()
+                ? ''
+                : `<select class="setting-input" data-is-field="lang">${options(['powershell', 'bash'], p.proxy.lang, 'settings.internal_sites.editor.lang')}</select>`;
 
         return `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
@@ -438,9 +496,11 @@ export class InternalSitesSettingsModule extends SettingsModule {
             ${this.createControlWithActionRow(
                 label('sample_url'),
                 escapeHtml(t('settings.internal_sites.editor.sample_url_description')),
-                `<input type="url" class="setting-input" data-is-field="sample_url" value="${escapeAttr(p.sample_url)}" placeholder="https://" dir="ltr">`,
+                `<input type="text" class="setting-input" data-is-field="sample_url" value="${escapeAttr(p.sample_url)}" placeholder="wiki.example.com/page" dir="ltr" inputmode="url" spellcheck="false">`,
                 `<button class="setting-button" data-is-action="test"${dis}>${btnLabel('test', 'test_btn')}</button>`
             )}
+            ${this._statusHtml('test')}
+            ${this._renderTestResult()}
 
             <div class="setting-row">
                 <div class="setting-label">${label('rules')}</div>
@@ -448,6 +508,7 @@ export class InternalSitesSettingsModule extends SettingsModule {
                 <div class="setting-control" style="margin-top:6px;">
                     <button class="setting-button" data-is-action="draft-rules"${dis}>${btnLabel('rules', 'draft_rules_btn')}</button>
                 </div>
+                ${this._statusHtml('rules')}
             </div>
 
             <div class="setting-row">
@@ -468,18 +529,16 @@ export class InternalSitesSettingsModule extends SettingsModule {
                 <div class="setting-label">${label('script')}</div>
                 <div class="setting-description">${t('settings.internal_sites.editor.script_description_html')}</div>
                 <div class="internal-site-script-bar">
-                    <select class="setting-input" data-is-field="lang">${options(['powershell', 'bash'], p.proxy.lang, 'settings.internal_sites.editor.lang')}</select>
+                    ${langPicker}
                     <label class="setting-description" style="margin:0;display:flex;align-items:center;gap:6px;">
                         ${label('timeout')}
                         <input type="number" class="setting-input" data-is-field="timeout" min="1" max="60" value="${timeoutSecs}" style="width:70px;">
                     </label>
                     <button class="setting-button" data-is-action="draft-script" style="margin-left:auto;"${dis}>${btnLabel('script', 'draft_script_btn')}</button>
                 </div>
+                ${this._statusHtml('script')}
                 <textarea class="setting-input internal-site-script" data-is-field="script" rows="12" spellcheck="false" dir="ltr">${escapeHtml(p.proxy.script)}</textarea>
             </div>
-
-            ${status}
-            ${this._renderTestResult()}
         `;
     }
 

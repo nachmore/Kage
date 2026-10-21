@@ -12,9 +12,10 @@ use crate::commands::input::link_metadata::{
 };
 use crate::error::AppError;
 use crate::internal_sites::{self, InternalSiteProfile, ProxyLang, ProxyResponse};
-use crate::state::{AcpHandles, FeatureServices};
+use crate::state::{AcpHandles, FeatureServices, UiState};
+use crate::window_labels;
 use serde::Serialize;
-use tauri::State;
+use tauri::{Emitter, State};
 
 /// How much of the probed body the settings UI (and the drafting
 /// prompt) gets to see.
@@ -191,7 +192,7 @@ sites, and never one that would match public websites.\n\
 example the sign-in page or redirect above), so internal hosts the url_rules miss are \
 still caught. Use stable markers such as the sign-in host or form, never text that is \
 specific to this one page. Use an empty list if the response has nothing distinctive.\n\
-- Do not use tools; answer from the information above."
+- Use tools only if the information above isn't enough."
     )
 }
 
@@ -244,16 +245,61 @@ fn extract_code_block(reply: &str) -> Option<String> {
     (!script.trim().is_empty()).then(|| script.to_string())
 }
 
-async fn prompt_agent(
+/// Cap on user guidance appended to a drafting prompt.
+const MAX_GUIDANCE_CHARS: usize = 4000;
+
+/// Append the user's optional guidance to a drafting prompt.
+fn with_guidance(prompt: String, guidance: Option<&str>) -> String {
+    match guidance.map(str::trim).filter(|g| !g.is_empty()) {
+        Some(g) => format!(
+            "{prompt}\n\nGuidance from the user (follow it where it applies):\n<guidance>\n{}\n</guidance>",
+            head_chars(g, MAX_GUIDANCE_CHARS)
+        ),
+        None => prompt,
+    }
+}
+
+/// Emitted to the settings window once a draft's throwaway session
+/// exists, so it can follow the session's streamed output and tool calls,
+/// answer its permission prompts, and cancel it.
+const DRAFT_SESSION_EVENT: &str = "internal_sites_draft_session";
+
+/// Run a drafting prompt on a throwaway agent session the settings
+/// window can watch. Unlike `ephemeral_session::prompt_once` the prompt
+/// is not muted: its chunks and tool-call updates stream (tagged with the
+/// session id, which no other window views), and its permission prompts
+/// are routed to the settings window. The session is still kept out of
+/// the session list and deleted afterwards.
+async fn prompt_agent_observed<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     acp: &State<'_, AcpHandles>,
     features: &State<'_, FeatureServices>,
+    ui: &State<'_, UiState>,
+    request_id: String,
     prompt: String,
 ) -> Result<String, AppError> {
     let client = acp.client.clone();
     let config = features.config.clone();
+    let originators = ui.pending_prompt_originators.clone();
+    let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        crate::ephemeral_session::prompt_once(&client, &config, &prompt)
-            .map_err(|e| AppError::internal(format!("Agent request failed: {}", e)))
+        crate::ephemeral_session::run(&client, &config, |session_id| {
+            if let Ok(mut m) = originators.lock() {
+                m.insert(session_id.to_string(), window_labels::SETTINGS.to_string());
+            }
+            let _ = app.emit_to(
+                window_labels::SETTINGS,
+                DRAFT_SESSION_EVENT,
+                serde_json::json!({ "requestId": request_id, "sessionId": session_id }),
+            );
+            let sent = client.send_chat_streaming(session_id, &prompt, None);
+            if let Ok(mut m) = originators.lock() {
+                m.remove(session_id);
+            }
+            sent?;
+            Ok(client.take_session_accumulator(session_id))
+        })
+        .map_err(|e| AppError::internal(format!("Agent request failed: {}", e)))
     })
     .await
     .map_err(|e| AppError::internal(format!("Draft task failed: {}", e)))?
@@ -262,30 +308,44 @@ async fn prompt_agent(
 /// Have the agent draft detection rules from a sample URL. The direct
 /// fetch is probed first so the agent can see what an unauthenticated
 /// request gets back (the basis for content rules).
+///
+/// `request_id` is echoed in the `internal_sites_draft_session` event so
+/// the caller can match the session to its request.
 #[tauri::command]
-pub async fn internal_sites_draft_rules(
+pub async fn internal_sites_draft_rules<R: tauri::Runtime>(
     url: String,
+    guidance: Option<String>,
+    request_id: String,
+    app: tauri::AppHandle<R>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
 ) -> Result<DraftRules, AppError> {
     let url = require_http_url(&url)?.to_string();
     let (probe, _) = probe_with_body(&url).await;
-    let reply = prompt_agent(&acp, &features, rules_prompt(&url, &probe)).await?;
+    let prompt = with_guidance(rules_prompt(&url, &probe), guidance.as_deref());
+    let reply = prompt_agent_observed(&app, &acp, &features, &ui, request_id, prompt).await?;
     extract_json_object(&reply)
         .and_then(|json| serde_json::from_str::<DraftRules>(json).ok())
         .ok_or_else(|| AppError::internal("The agent's reply did not contain usable rules"))
 }
 
-/// Have the agent draft a proxy script for a sample URL.
+/// Have the agent draft a proxy script for a sample URL. See
+/// [`internal_sites_draft_rules`] for `guidance` / `request_id`.
 #[tauri::command]
-pub async fn internal_sites_draft_script(
+pub async fn internal_sites_draft_script<R: tauri::Runtime>(
     url: String,
     lang: ProxyLang,
+    guidance: Option<String>,
+    request_id: String,
+    app: tauri::AppHandle<R>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
 ) -> Result<String, AppError> {
     let url = require_http_url(&url)?.to_string();
-    let reply = prompt_agent(&acp, &features, script_prompt(&url, lang)).await?;
+    let prompt = with_guidance(script_prompt(&url, lang), guidance.as_deref());
+    let reply = prompt_agent_observed(&app, &acp, &features, &ui, request_id, prompt).await?;
     extract_code_block(&reply)
         .ok_or_else(|| AppError::internal("The agent's reply did not contain a script"))
 }
@@ -342,6 +402,15 @@ mod tests {
         assert!(p.contains("<form id=login>"));
         let s = script_prompt("https://wiki.example.test/page", ProxyLang::Bash);
         assert!(s.contains("KAGE_URL") && s.contains("Bash"));
+    }
+
+    #[test]
+    fn guidance_is_appended_only_when_present() {
+        assert_eq!(with_guidance("P".into(), None), "P");
+        assert_eq!(with_guidance("P".into(), Some("   ")), "P");
+        let g = with_guidance("P".into(), Some(" use the wiki CLI "));
+        assert!(g.starts_with("P\n\n"));
+        assert!(g.contains("<guidance>\nuse the wiki CLI\n</guidance>"));
     }
 
     #[test]

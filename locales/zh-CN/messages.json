@@ -8194,5 +8194,83 @@
     "description": "Settings → Internal Sites: test result when no title or description was found",
     "_machine_translated": true,
     "_source_hash": "d4d1d6ff3f986d30"
+  },
+  "settings.internal_sites.draft.title_rules": {
+    "message": "起草检测规则",
+    "description": "Settings → Internal Sites draft dialog: title when drafting rules",
+    "_machine_translated": true,
+    "_source_hash": "eeb253af68bfbe8a"
+  },
+  "settings.internal_sites.draft.title_script": {
+    "message": "起草代理脚本",
+    "description": "Settings → Internal Sites draft dialog: title when drafting the script",
+    "_machine_translated": true,
+    "_source_hash": "724b34e60beaaa2a"
+  },
+  "settings.internal_sites.draft.guidance_label": {
+    "message": "给智能体的指引（可选）",
+    "description": "Settings → Internal Sites draft dialog: label for the guidance text box",
+    "_machine_translated": true,
+    "_source_hash": "cde20aa398edcb7c"
+  },
+  "settings.internal_sites.draft.guidance_description": {
+    "message": "如有需要，可为智能体指明方向，例如应复用哪个工具或登录凭据。留空则由其自行判断。",
+    "description": "Settings → Internal Sites draft dialog: help text under the guidance label",
+    "_machine_translated": true,
+    "_source_hash": "3a930d8dda20e9b2"
+  },
+  "settings.internal_sites.draft.guidance_placeholder": {
+    "message": "例如：复用我的文档工具所用的登录",
+    "description": "Settings → Internal Sites draft dialog: placeholder in the guidance box",
+    "_machine_translated": true,
+    "_source_hash": "a07ebda03996b86e"
+  },
+  "settings.internal_sites.draft.start": {
+    "message": "开始",
+    "description": "Settings → Internal Sites draft dialog: button that starts the agent",
+    "_machine_translated": true,
+    "_source_hash": "3a3a5d7db9bd2f4f"
+  },
+  "settings.internal_sites.draft.cancel": {
+    "message": "取消",
+    "description": "Settings → Internal Sites draft dialog: button that cancels the draft",
+    "_machine_translated": true,
+    "_source_hash": "be757f335bdf6c73"
+  },
+  "settings.internal_sites.draft.close": {
+    "message": "关闭",
+    "description": "Settings → Internal Sites draft dialog: button closing the dialog after an error",
+    "_machine_translated": true,
+    "_source_hash": "0dead5598236c2ec"
+  },
+  "settings.internal_sites.draft.elapsed": {
+    "message": "已运行 {seconds} 秒",
+    "description": "Settings → Internal Sites draft dialog: elapsed time; {seconds} is a number",
+    "_machine_translated": true,
+    "_source_hash": "9a7e36cf56d70619"
+  },
+  "settings.internal_sites.draft.waiting": {
+    "message": "正在等待智能体…",
+    "description": "Settings → Internal Sites draft dialog: shown before any activity arrives",
+    "_machine_translated": true,
+    "_source_hash": "49de431ecfc58ebb"
+  },
+  "settings.internal_sites.draft.tool": {
+    "message": "工具",
+    "description": "Settings → Internal Sites draft dialog: fallback name for a tool call without a title",
+    "_machine_translated": true,
+    "_source_hash": "c5a9a0e72fde5dc7"
+  },
+  "settings.internal_sites.draft.permission_title": {
+    "message": "智能体请求使用：{tool}",
+    "description": "Settings → Internal Sites draft dialog: permission prompt heading; {tool} is the tool name",
+    "_machine_translated": true,
+    "_source_hash": "22e554e6e313fd20"
+  },
+  "settings.internal_sites.draft.cancelled": {
+    "message": "已取消起草。",
+    "description": "Settings → Internal Sites draft dialog: status after the user cancelled",
+    "_machine_translated": true,
+    "_source_hash": "d333d02bbeb97a17"
   }
 }

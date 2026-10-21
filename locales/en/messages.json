@@ -5464,5 +5464,57 @@
   "settings.internal_sites.test.no_preview": {
     "message": "The script's output didn't produce a preview.",
     "description": "Settings → Internal Sites: test result when no title or description was found"
+  },
+  "settings.internal_sites.draft.title_rules": {
+    "message": "Draft detection rules",
+    "description": "Settings → Internal Sites draft dialog: title when drafting rules"
+  },
+  "settings.internal_sites.draft.title_script": {
+    "message": "Draft proxy script",
+    "description": "Settings → Internal Sites draft dialog: title when drafting the script"
+  },
+  "settings.internal_sites.draft.guidance_label": {
+    "message": "Guidance for the agent (optional)",
+    "description": "Settings → Internal Sites draft dialog: label for the guidance text box"
+  },
+  "settings.internal_sites.draft.guidance_description": {
+    "message": "Point the agent in the right direction if it needs it — for example which tool or sign-in it should reuse. Leave empty to let it work it out.",
+    "description": "Settings → Internal Sites draft dialog: help text under the guidance label"
+  },
+  "settings.internal_sites.draft.guidance_placeholder": {
+    "message": "e.g. Reuse the sign-in that my documentation tool uses",
+    "description": "Settings → Internal Sites draft dialog: placeholder in the guidance box"
+  },
+  "settings.internal_sites.draft.start": {
+    "message": "Start",
+    "description": "Settings → Internal Sites draft dialog: button that starts the agent"
+  },
+  "settings.internal_sites.draft.cancel": {
+    "message": "Cancel",
+    "description": "Settings → Internal Sites draft dialog: button that cancels the draft"
+  },
+  "settings.internal_sites.draft.close": {
+    "message": "Close",
+    "description": "Settings → Internal Sites draft dialog: button closing the dialog after an error"
+  },
+  "settings.internal_sites.draft.elapsed": {
+    "message": "Working for {seconds}s",
+    "description": "Settings → Internal Sites draft dialog: elapsed time; {seconds} is a number"
+  },
+  "settings.internal_sites.draft.waiting": {
+    "message": "Waiting for the agent…",
+    "description": "Settings → Internal Sites draft dialog: shown before any activity arrives"
+  },
+  "settings.internal_sites.draft.tool": {
+    "message": "Tool",
+    "description": "Settings → Internal Sites draft dialog: fallback name for a tool call without a title"
+  },
+  "settings.internal_sites.draft.permission_title": {
+    "message": "The agent wants to use: {tool}",
+    "description": "Settings → Internal Sites draft dialog: permission prompt heading; {tool} is the tool name"
+  },
+  "settings.internal_sites.draft.cancelled": {
+    "message": "Drafting cancelled.",
+    "description": "Settings → Internal Sites draft dialog: status after the user cancelled"
   }
 }

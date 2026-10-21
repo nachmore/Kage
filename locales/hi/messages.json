@@ -8194,5 +8194,83 @@
     "description": "Settings → Internal Sites: test result when no title or description was found",
     "_machine_translated": true,
     "_source_hash": "d4d1d6ff3f986d30"
+  },
+  "settings.internal_sites.draft.title_rules": {
+    "message": "पहचान नियमों का ड्राफ़्ट बनाएँ",
+    "description": "Settings → Internal Sites draft dialog: title when drafting rules",
+    "_machine_translated": true,
+    "_source_hash": "eeb253af68bfbe8a"
+  },
+  "settings.internal_sites.draft.title_script": {
+    "message": "प्रॉक्सी स्क्रिप्ट का ड्राफ़्ट बनाएँ",
+    "description": "Settings → Internal Sites draft dialog: title when drafting the script",
+    "_machine_translated": true,
+    "_source_hash": "724b34e60beaaa2a"
+  },
+  "settings.internal_sites.draft.guidance_label": {
+    "message": "एजेंट के लिए मार्गदर्शन (वैकल्पिक)",
+    "description": "Settings → Internal Sites draft dialog: label for the guidance text box",
+    "_machine_translated": true,
+    "_source_hash": "cde20aa398edcb7c"
+  },
+  "settings.internal_sites.draft.guidance_description": {
+    "message": "ज़रूरत हो तो एजेंट को सही दिशा दिखाएँ — उदाहरण के लिए, उसे कौन-सा टूल या साइन-इन दोबारा इस्तेमाल करना चाहिए। एजेंट को खुद पता लगाने देने के लिए इसे खाली छोड़ दें।",
+    "description": "Settings → Internal Sites draft dialog: help text under the guidance label",
+    "_machine_translated": true,
+    "_source_hash": "3a930d8dda20e9b2"
+  },
+  "settings.internal_sites.draft.guidance_placeholder": {
+    "message": "उदा. वही साइन-इन दोबारा इस्तेमाल करें जो मेरा दस्तावेज़ीकरण टूल इस्तेमाल करता है",
+    "description": "Settings → Internal Sites draft dialog: placeholder in the guidance box",
+    "_machine_translated": true,
+    "_source_hash": "a07ebda03996b86e"
+  },
+  "settings.internal_sites.draft.start": {
+    "message": "शुरू करें",
+    "description": "Settings → Internal Sites draft dialog: button that starts the agent",
+    "_machine_translated": true,
+    "_source_hash": "3a3a5d7db9bd2f4f"
+  },
+  "settings.internal_sites.draft.cancel": {
+    "message": "रद्द करें",
+    "description": "Settings → Internal Sites draft dialog: button that cancels the draft",
+    "_machine_translated": true,
+    "_source_hash": "be757f335bdf6c73"
+  },
+  "settings.internal_sites.draft.close": {
+    "message": "बंद करें",
+    "description": "Settings → Internal Sites draft dialog: button closing the dialog after an error",
+    "_machine_translated": true,
+    "_source_hash": "0dead5598236c2ec"
+  },
+  "settings.internal_sites.draft.elapsed": {
+    "message": "{seconds} सेकंड से काम जारी है",
+    "description": "Settings → Internal Sites draft dialog: elapsed time; {seconds} is a number",
+    "_machine_translated": true,
+    "_source_hash": "9a7e36cf56d70619"
+  },
+  "settings.internal_sites.draft.waiting": {
+    "message": "एजेंट की प्रतीक्षा की जा रही है…",
+    "description": "Settings → Internal Sites draft dialog: shown before any activity arrives",
+    "_machine_translated": true,
+    "_source_hash": "49de431ecfc58ebb"
+  },
+  "settings.internal_sites.draft.tool": {
+    "message": "टूल",
+    "description": "Settings → Internal Sites draft dialog: fallback name for a tool call without a title",
+    "_machine_translated": true,
+    "_source_hash": "c5a9a0e72fde5dc7"
+  },
+  "settings.internal_sites.draft.permission_title": {
+    "message": "एजेंट इसका उपयोग करना चाहता है: {tool}",
+    "description": "Settings → Internal Sites draft dialog: permission prompt heading; {tool} is the tool name",
+    "_machine_translated": true,
+    "_source_hash": "22e554e6e313fd20"
+  },
+  "settings.internal_sites.draft.cancelled": {
+    "message": "ड्राफ़्ट बनाना रद्द कर दिया गया।",
+    "description": "Settings → Internal Sites draft dialog: status after the user cancelled",
+    "_machine_translated": true,
+    "_source_hash": "d333d02bbeb97a17"
   }
 }
