@@ -8272,5 +8272,53 @@
     "description": "Settings → Internal Sites draft dialog: status after the user cancelled",
     "_machine_translated": true,
     "_source_hash": "d333d02bbeb97a17"
+  },
+  "settings.internal_sites.test.favicon": {
+    "message": "Favicon:",
+    "description": "Settings → Internal Sites test result: row label for the favicon",
+    "_machine_translated": true,
+    "_source_hash": "74f85af633128148"
+  },
+  "settings.internal_sites.test.icon.found": {
+    "message": "đã tải",
+    "description": "Settings → Internal Sites test result: the favicon was fetched",
+    "_machine_translated": true,
+    "_source_hash": "18bb61e7b13a2a37"
+  },
+  "settings.internal_sites.test.icon.none": {
+    "message": "không tìm thấy — từng địa chỉ đã thử được liệt kê bên dưới",
+    "description": "Settings → Internal Sites test result: no favicon; the attempts follow",
+    "_machine_translated": true,
+    "_source_hash": "535b4874c3d1d8c6"
+  },
+  "settings.internal_sites.test.icon.ok": {
+    "message": "đã tải hình ảnh",
+    "description": "Settings → Internal Sites test result: this favicon address worked",
+    "_machine_translated": true,
+    "_source_hash": "606702eab76a8916"
+  },
+  "settings.internal_sites.test.icon.empty": {
+    "message": "script không in ra gì",
+    "description": "Settings → Internal Sites test result: favicon attempt failed: no output",
+    "_machine_translated": true,
+    "_source_hash": "b30a4c60962a5b91"
+  },
+  "settings.internal_sites.test.icon.not_base64": {
+    "message": "đầu ra của script không phải base64 (script phải in hình ảnh dưới dạng mã hóa base64 khi KAGE_RESPONSE là base64)",
+    "description": "Settings → Internal Sites test result: favicon attempt failed. Keep KAGE_RESPONSE and base64 as written",
+    "_machine_translated": true,
+    "_source_hash": "96679441611c3fd8"
+  },
+  "settings.internal_sites.test.icon.not_image": {
+    "message": "không phải hình ảnh (thường là dấu hiệu của trang đăng nhập)",
+    "description": "Settings → Internal Sites test result: favicon attempt returned something that isn't an image",
+    "_machine_translated": true,
+    "_source_hash": "2cd06012b35ddd8d"
+  },
+  "settings.internal_sites.test.icon.too_large": {
+    "message": "hình ảnh quá lớn",
+    "description": "Settings → Internal Sites test result: favicon attempt returned an image over the size limit",
+    "_machine_translated": true,
+    "_source_hash": "21376468b2149f95"
   }
 }

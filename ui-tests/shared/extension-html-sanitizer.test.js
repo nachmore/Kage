@@ -63,14 +63,16 @@ describe('sanitizeExtensionHtml', () => {
             expect(html).not.toContain('data:');
         });
 
-        it('keeps base64 raster data: img src but not SVG or non-base64', () => {
+        it('keeps base64 image data: img src, including SVG, but not non-base64', () => {
             const png = sanitizeExtensionHtmlToString('<img src="data:image/png;base64,iVBORw0KGgo=" alt="">');
             expect(png).toContain('src="data:image/png;base64,iVBORw0KGgo="');
             const svg = sanitizeExtensionHtmlToString('<img src="data:image/svg+xml;base64,PHN2Zz4=">');
-            expect(svg).not.toContain('data:');
+            expect(svg).toContain('src="data:image/svg+xml;base64,PHN2Zz4="');
+            const html = sanitizeExtensionHtmlToString('<img src="data:text/html;base64,PHN2Zz4=">');
+            expect(html).not.toContain('data:');
             const plain = sanitizeExtensionHtmlToString('<img src="data:image/png,raw">');
             expect(plain).not.toContain('data:');
-            const huge = `data:image/png;base64,${'A'.repeat(200 * 1024)}`;
+            const huge = `data:image/png;base64,${'A'.repeat(500 * 1024)}`;
             expect(sanitizeExtensionHtmlToString(`<img src="${huge}">`)).not.toContain('data:');
         });
 

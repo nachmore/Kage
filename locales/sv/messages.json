@@ -8272,5 +8272,53 @@
     "description": "Settings → Internal Sites draft dialog: status after the user cancelled",
     "_machine_translated": true,
     "_source_hash": "d333d02bbeb97a17"
+  },
+  "settings.internal_sites.test.favicon": {
+    "message": "Favicon:",
+    "description": "Settings → Internal Sites test result: row label for the favicon",
+    "_machine_translated": true,
+    "_source_hash": "74f85af633128148"
+  },
+  "settings.internal_sites.test.icon.found": {
+    "message": "inläst",
+    "description": "Settings → Internal Sites test result: the favicon was fetched",
+    "_machine_translated": true,
+    "_source_hash": "18bb61e7b13a2a37"
+  },
+  "settings.internal_sites.test.icon.none": {
+    "message": "hittades inte – varje adress som provades visas nedan",
+    "description": "Settings → Internal Sites test result: no favicon; the attempts follow",
+    "_machine_translated": true,
+    "_source_hash": "535b4874c3d1d8c6"
+  },
+  "settings.internal_sites.test.icon.ok": {
+    "message": "bilden lästes in",
+    "description": "Settings → Internal Sites test result: this favicon address worked",
+    "_machine_translated": true,
+    "_source_hash": "606702eab76a8916"
+  },
+  "settings.internal_sites.test.icon.empty": {
+    "message": "skriptet skrev inte ut något",
+    "description": "Settings → Internal Sites test result: favicon attempt failed: no output",
+    "_machine_translated": true,
+    "_source_hash": "b30a4c60962a5b91"
+  },
+  "settings.internal_sites.test.icon.not_base64": {
+    "message": "skriptets utdata är inte base64 (det måste skriva ut bilden base64-kodad när KAGE_RESPONSE är base64)",
+    "description": "Settings → Internal Sites test result: favicon attempt failed. Keep KAGE_RESPONSE and base64 as written",
+    "_machine_translated": true,
+    "_source_hash": "96679441611c3fd8"
+  },
+  "settings.internal_sites.test.icon.not_image": {
+    "message": "inte en bild (ofta ett tecken på en inloggningssida)",
+    "description": "Settings → Internal Sites test result: favicon attempt returned something that isn't an image",
+    "_machine_translated": true,
+    "_source_hash": "2cd06012b35ddd8d"
+  },
+  "settings.internal_sites.test.icon.too_large": {
+    "message": "bilden är för stor",
+    "description": "Settings → Internal Sites test result: favicon attempt returned an image over the size limit",
+    "_machine_translated": true,
+    "_source_hash": "21376468b2149f95"
   }
 }

@@ -339,6 +339,21 @@ pub(crate) async fn metadata_from_proxy_run(
     url: &str,
     run: &internal_sites::ProxyRun,
 ) -> Result<serde_json::Value, AppError> {
+    metadata_from_proxy_run_traced(profile, url, run)
+        .await
+        .map(|(meta, _)| meta)
+}
+
+/// Most favicon candidates tried through the proxy per page.
+const MAX_ICON_CANDIDATES: usize = 4;
+
+/// [`metadata_from_proxy_run`], also returning each favicon candidate it
+/// tried and why it failed (for the settings Test).
+pub(crate) async fn metadata_from_proxy_run_traced(
+    profile: &InternalSiteProfile,
+    url: &str,
+    run: &internal_sites::ProxyRun,
+) -> Result<(serde_json::Value, Vec<internal_sites::IconAttempt>), AppError> {
     if !run.ok {
         log::warn!(
             "Internal-site proxy '{}' failed (exit {:?}, timed out: {})",
@@ -349,38 +364,64 @@ pub(crate) async fn metadata_from_proxy_run(
         return Err(AppError::from("Internal-site proxy failed"));
     }
 
-    let (title, description, favicon) = match internal_sites::parse_json_output(&run.stdout) {
-        Some(md) => (
-            md.title,
-            md.description,
-            md.favicon.or_else(|| extract_link_icon("", url)),
-        ),
+    let (title, description, mut candidates) = match internal_sites::parse_json_output(&run.stdout)
+    {
+        Some(md) => {
+            let mut c: Vec<String> = md.favicon.into_iter().collect();
+            c.extend(icon_candidates("", url));
+            (md.title, md.description, c)
+        }
         None => {
-            let meta = extract_page_meta(proxy_head_window(&run.stdout), url);
-            (meta.title, meta.description, meta.favicon)
+            let head = proxy_head_window(&run.stdout);
+            let meta = extract_page_meta(head, url);
+            (meta.title, meta.description, icon_candidates(head, url))
         }
     };
+    dedup_in_order(&mut candidates);
 
-    let favicon = match favicon {
-        Some(f) if f.starts_with("data:") => internal_sites::sanitize_data_icon(&f),
-        Some(f) if f.starts_with("http://") || f.starts_with("https://") => {
-            let icon = run_proxy_limited(profile, &f, ProxyResponse::Base64).await;
-            if icon.ok {
-                internal_sites::icon_data_uri(&icon.stdout)
-            } else {
-                None
+    let mut attempts = Vec::new();
+    let mut favicon = None;
+    for candidate in candidates.into_iter().take(MAX_ICON_CANDIDATES) {
+        if candidate.starts_with("data:") {
+            favicon = internal_sites::sanitize_data_icon(&candidate);
+            if favicon.is_some() {
+                break;
             }
+            continue;
         }
-        _ => None,
-    };
+        if !candidate.starts_with("http://") && !candidate.starts_with("https://") {
+            continue;
+        }
+        let icon = run_proxy_limited(profile, &candidate, ProxyResponse::Base64).await;
+        let decoded = icon.ok.then(|| internal_sites::decode_icon(&icon.stdout));
+        attempts.push(internal_sites::IconAttempt {
+            url: candidate,
+            ok: matches!(decoded, Some(Ok(_))),
+            exit_code: icon.exit_code,
+            timed_out: icon.timed_out,
+            rejection: decoded.as_ref().and_then(|d| d.as_ref().err().copied()),
+        });
+        if let Some(Ok(uri)) = decoded {
+            favicon = Some(uri);
+            break;
+        }
+    }
 
-    Ok(serde_json::json!({
-        "url": url,
-        "title": title,
-        "description": description,
-        "image": null,
-        "favicon": favicon,
-    }))
+    Ok((
+        serde_json::json!({
+            "url": url,
+            "title": title,
+            "description": description,
+            "image": null,
+            "favicon": favicon,
+        }),
+        attempts,
+    ))
+}
+
+fn dedup_in_order(items: &mut Vec<String>) {
+    let mut seen = std::collections::HashSet::new();
+    items.retain(|i| seen.insert(i.clone()));
 }
 
 /// Wipe the on-disk link-metadata cache. Surfaced from the Link
@@ -458,49 +499,83 @@ fn extract_tag_content(html: &str, tag: &str) -> Option<String> {
     None
 }
 
-/// Extract <link rel="icon" href="..."> or <link rel="shortcut icon" href="...">
+/// The page's favicon: its first declared icon, else `/favicon.ico`.
 fn extract_link_icon(html: &str, base_url: &str) -> Option<String> {
+    icon_candidates(html, base_url).into_iter().next()
+}
+
+/// Favicon URLs to try, best first: `<link>` tags whose `rel` has the
+/// `icon` token (`icon`, `shortcut icon`, …) in document order, then
+/// `apple-touch-icon` ones, then `/favicon.ico`. `mask-icon` (a
+/// monochrome Safari pin glyph) is skipped.
+fn icon_candidates(html: &str, base_url: &str) -> Vec<String> {
     let lower = html.to_ascii_lowercase();
-    for pattern in &["rel=\"icon\"", "rel=\"shortcut icon\""] {
-        if let Some(pos) = lower.find(pattern) {
-            let tag_start = lower[..pos].rfind('<').unwrap_or(0);
-            let tag_end = lower[pos..]
-                .find('>')
-                .map(|i| pos + i)
-                .unwrap_or(lower.len());
-            let tag = &html[tag_start..tag_end];
-            if let Some(href) = extract_attr(tag, "href") {
-                return Some(resolve_url(href.trim(), base_url));
-            }
+    let mut icons = Vec::new();
+    let mut touch = Vec::new();
+    let mut from = 0;
+    while let Some(i) = lower[from..].find("<link") {
+        let start = from + i;
+        let end = lower[start..]
+            .find('>')
+            .map(|j| start + j)
+            .unwrap_or(lower.len());
+        let tag = &html[start..end];
+        from = end;
+        let (Some(rel), Some(href)) = (extract_attr(tag, "rel"), extract_attr(tag, "href")) else {
+            continue;
+        };
+        let rel = rel.to_ascii_lowercase();
+        let href = href.trim();
+        if href.is_empty() {
+            continue;
+        }
+        let tokens: Vec<&str> = rel.split_whitespace().collect();
+        if tokens.contains(&"icon") {
+            icons.push(resolve_url(href, base_url));
+        } else if tokens
+            .iter()
+            .any(|t| *t == "apple-touch-icon" || *t == "apple-touch-icon-precomposed")
+        {
+            touch.push(resolve_url(href, base_url));
         }
     }
-    // Fallback: /favicon.ico
+    icons.extend(touch);
     if let Ok(parsed) = url::Url::parse(base_url) {
-        return Some(format!(
+        icons.push(format!(
             "{}://{}/favicon.ico",
             parsed.scheme(),
             parsed.host_str().unwrap_or("")
         ));
     }
-    None
+    dedup_in_order(&mut icons);
+    icons
 }
 
 /// Extract an attribute value from an HTML tag string
 fn extract_attr(tag: &str, attr: &str) -> Option<String> {
     let lower = tag.to_ascii_lowercase();
     let needle = format!("{}=", attr);
-    if let Some(pos) = lower.find(&needle) {
-        let after = &tag[pos + needle.len()..];
-        let after = after.trim_start();
-        if let Some(content) = after.strip_prefix('"') {
-            if let Some(end) = content.find('"') {
-                return Some(content[..end].to_string());
-            }
-        } else if let Some(content) = after.strip_prefix('\'') {
-            if let Some(end) = content.find('\'') {
-                return Some(content[..end].to_string());
-            }
+    let mut from = 0;
+    while let Some(i) = lower[from..].find(&needle) {
+        let pos = from + i;
+        from = pos + needle.len();
+        // Whole attribute name only: `rel=` must not match inside `data-rel=`.
+        let prev = lower[..pos].chars().next_back();
+        if prev.is_some_and(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            continue;
         }
+        let after = tag[pos + needle.len()..].trim_start();
+        if let Some(content) = after.strip_prefix('"') {
+            return content.find('"').map(|end| content[..end].to_string());
+        } else if let Some(content) = after.strip_prefix('\'') {
+            return content.find('\'').map(|end| content[..end].to_string());
+        }
+        // Unquoted: up to whitespace or the end of the tag.
+        let end = after
+            .find(|c: char| c.is_whitespace() || c == '>')
+            .unwrap_or(after.len());
+        let value = after[..end].trim_end_matches('/');
+        return (!value.is_empty()).then(|| value.to_string());
     }
     None
 }
@@ -585,6 +660,31 @@ mod tests {
             Some("https://wiki.example.test/favicon.ico")
         );
         assert!(meta.image.is_none());
+    }
+
+    #[test]
+    fn icon_candidates_cover_rel_variants_in_priority_order() {
+        let html = r#"<head>
+            <link rel="mask-icon" href="/mask.svg">
+            <link href="/touch.png" rel="apple-touch-icon">
+            <link rel='shortcut icon' href='/a.ico'>
+            <link rel=icon href=/b.svg type=image/svg+xml>
+            <link data-rel="icon" rel="stylesheet" href="/s.css">
+            <link rel="icon" href="/a.ico">
+        </head>"#;
+        assert_eq!(
+            icon_candidates(html, "https://wiki.example.test/x/y"),
+            vec![
+                "https://wiki.example.test/a.ico",
+                "https://wiki.example.test/b.svg",
+                "https://wiki.example.test/touch.png",
+                "https://wiki.example.test/favicon.ico",
+            ]
+        );
+        assert_eq!(
+            icon_candidates("", "https://wiki.example.test/p"),
+            vec!["https://wiki.example.test/favicon.ico"]
+        );
     }
 
     #[test]

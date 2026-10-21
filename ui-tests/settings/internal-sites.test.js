@@ -308,6 +308,33 @@ describe('InternalSitesSettingsModule', () => {
         expect(document.querySelector('.internal-site-test').innerHTML).not.toContain('<home>');
     });
 
+    it('lists each favicon attempt and why it failed', async () => {
+        tauri = setupTauriMock({
+            internal_sites_test: async () => ({
+                url_match: true,
+                content_match: null,
+                probe: { ok: true, status: 302, final_url: 'https://login.example.test/' },
+                proxy: { ok: true, exit_code: 0, timed_out: false, stdout_bytes: 10, stderr_tail: '' },
+                metadata: { title: 'Wiki', description: '', favicon: null },
+                favicon_attempts: [
+                    { url: 'https://wiki.example.test/a.svg', ok: false, exit_code: 0, timed_out: false, rejection: 'not_base64' },
+                    { url: 'https://wiki.example.test/favicon.ico', ok: false, exit_code: 3, timed_out: false, rejection: null },
+                ],
+            }),
+        });
+        mount({});
+        click('[data-is-action="add"]');
+        type('[data-is-field="sample_url"]', 'wiki.example.test');
+        click('[data-is-action="test"]');
+        await flush();
+        await flush();
+        const items = [...document.querySelectorAll('.internal-site-icon-attempts li')];
+        expect(items).toHaveLength(2);
+        expect(items[0].textContent).toContain('a.svg');
+        expect(items[0].textContent).toContain('settings.internal_sites.test.icon.not_base64');
+        expect(items[1].classList.contains('failed')).toBe(true);
+    });
+
     it('deletes a profile after confirmation', () => {
         mount({ internal_sites: [{ id: 'x', name: 'X' }] });
         click('[data-is-action="delete"]');

@@ -181,12 +181,14 @@ function isSafeHref(value) {
     return /^(https?:|mailto:|#)/i.test(v);
 }
 
-// Raster image data URIs only (no SVG — it's markup). The host inlines
-// favicons for pages fetched through an internal-site proxy this way,
-// since the webview can't authenticate to those hosts itself.
-const RASTER_DATA_URI =
-    /^data:image\/(?:png|gif|jpeg|webp|x-icon|vnd\.microsoft\.icon);base64,[a-z0-9+/=]+$/i;
-const MAX_DATA_URI_LENGTH = 128 * 1024;
+// Base64 image data URIs. The host inlines favicons for pages fetched
+// through an internal-site proxy this way, since the webview can't
+// authenticate to those hosts itself. SVG is safe here: this only ever
+// gates `<img src>`, where SVG renders as a static image (no script, no
+// external loads).
+const IMAGE_DATA_URI =
+    /^data:image\/(?:png|gif|jpeg|webp|x-icon|vnd\.microsoft\.icon|svg\+xml);base64,[a-z0-9+/=]+$/i;
+const MAX_DATA_URI_LENGTH = 400 * 1024;
 
 function isSafeImgSrc(value) {
     const v = String(value).trim();
@@ -194,7 +196,7 @@ function isSafeImgSrc(value) {
     // Other data: types, blob: and file: are blocked — extensions should
     // use controlled URLs or host endpoints like fetch_favicon.
     if (/^https?:/i.test(v)) return true;
-    return v.length <= MAX_DATA_URI_LENGTH && RASTER_DATA_URI.test(v);
+    return v.length <= MAX_DATA_URI_LENGTH && IMAGE_DATA_URI.test(v);
 }
 
 // --- Style filtering --------------------------------------------------------

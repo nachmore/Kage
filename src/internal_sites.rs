@@ -36,7 +36,7 @@ pub const DEFAULT_PROXY_TIMEOUT_MS: u64 = 15_000;
 /// Upper bound accepted from config.
 pub const MAX_PROXY_TIMEOUT_MS: u64 = 60_000;
 /// Largest decoded favicon we'll inline as a data URI.
-pub const MAX_ICON_BYTES: usize = 64 * 1024;
+pub const MAX_ICON_BYTES: usize = 256 * 1024;
 
 /// One user-defined internal-site profile. Persisted in
 /// `Config::internal_sites`; fields mirror the settings UI 1:1.
@@ -332,8 +332,9 @@ pub fn parse_json_output(stdout: &str) -> Option<DirectMetadata> {
     })
 }
 
-/// Image types we'll inline. SVG is deliberately absent: it's markup,
-/// and the extension HTML sanitizer only admits raster data URIs.
+/// Image types we'll inline. SVG is included: these URIs are only ever
+/// used as `<img src>`, where a browser renders SVG as a static image (no
+/// script, no external loads).
 fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         Some("image/png")
@@ -345,39 +346,91 @@ fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
         Some("image/jpeg")
     } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
         Some("image/webp")
+    } else if looks_like_svg(bytes) {
+        Some("image/svg+xml")
     } else {
         None
     }
 }
 
-/// Turn base64 proxy output into a `data:` URI, or `None` if it isn't a
-/// small raster image. The MIME type comes from the bytes, never from
-/// the script, so a misbehaving script can't smuggle markup through.
-pub fn icon_data_uri(base64_stdout: &str) -> Option<String> {
+fn looks_like_svg(bytes: &[u8]) -> bool {
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(1024)]).to_ascii_lowercase();
+    let head = head.trim_start_matches('\u{feff}').trim_start();
+    head.starts_with("<svg") || (head.starts_with("<?xml") && head.contains("<svg"))
+}
+
+/// Why a favicon candidate produced no icon — surfaced by the settings
+/// Test button so the user can see which step failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IconRejection {
+    /// No output at all.
+    Empty,
+    /// Output was neither base64 nor a `data:` URI.
+    NotBase64,
+    /// Decoded fine but isn't an image — usually a sign-in page.
+    NotImage,
+    /// Larger than [`MAX_ICON_BYTES`].
+    TooLarge,
+}
+
+/// Turn proxy favicon output into a `data:` URI. Accepts base64 (any
+/// whitespace) or a ready-made `data:<type>;base64,…` URI. The MIME type
+/// always comes from the decoded bytes, never from the script.
+pub fn decode_icon(stdout: &str) -> Result<String, IconRejection> {
     use base64::Engine;
-    let cleaned: String = base64_stdout
-        .chars()
-        .filter(|c| !c.is_whitespace() && *c != '\u{feff}')
-        .collect();
-    if cleaned.is_empty() || cleaned.len() > MAX_ICON_BYTES * 4 / 3 + 4 {
-        return None;
+    let trimmed = stdout.trim_start_matches('\u{feff}').trim();
+    let payload = match trimmed.strip_prefix("data:") {
+        Some(rest) => rest
+            .split_once(";base64,")
+            .map(|(_, b64)| b64)
+            .ok_or(IconRejection::NotBase64)?,
+        None => trimmed,
+    };
+    let cleaned: String = payload.chars().filter(|c| !c.is_whitespace()).collect();
+    if cleaned.is_empty() {
+        return Err(IconRejection::Empty);
+    }
+    if cleaned.len() > MAX_ICON_BYTES * 4 / 3 + 4 {
+        return Err(IconRejection::TooLarge);
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(cleaned.as_bytes())
-        .ok()?;
-    let mime = sniff_image_mime(&bytes)?;
-    Some(format!(
+        .map_err(|_| IconRejection::NotBase64)?;
+    if bytes.len() > MAX_ICON_BYTES {
+        return Err(IconRejection::TooLarge);
+    }
+    let mime = sniff_image_mime(&bytes).ok_or(IconRejection::NotImage)?;
+    Ok(format!(
         "data:{};base64,{}",
         mime,
         base64::engine::general_purpose::STANDARD.encode(&bytes)
     ))
 }
 
+/// [`decode_icon`] without the reason.
+pub fn icon_data_uri(stdout: &str) -> Option<String> {
+    decode_icon(stdout).ok()
+}
+
 /// Accept a `data:` favicon a JSON-mode proxy returned only if it
-/// re-validates as a small raster image.
+/// re-validates as a small image.
 pub fn sanitize_data_icon(uri: &str) -> Option<String> {
-    let (_, b64) = uri.strip_prefix("data:")?.split_once(";base64,")?;
-    icon_data_uri(b64)
+    uri.starts_with("data:")
+        .then(|| icon_data_uri(uri))
+        .flatten()
+}
+
+/// One favicon candidate tried through the proxy, for the settings Test.
+#[derive(Debug, Clone, Serialize)]
+pub struct IconAttempt {
+    pub url: String,
+    pub ok: bool,
+    /// Script exit code when the script itself failed.
+    pub exit_code: Option<i32>,
+    pub timed_out: bool,
+    /// Why its output was rejected, when the script succeeded.
+    pub rejection: Option<IconRejection>,
 }
 
 #[cfg(test)]
@@ -503,19 +556,34 @@ mod tests {
     }
 
     #[test]
-    fn icon_data_uri_sniffs_raster_and_rejects_markup() {
+    fn decode_icon_sniffs_types_and_explains_rejections() {
         use base64::Engine;
+        let enc = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
         let png = b"\x89PNG\r\n\x1a\n rest";
-        let b64 = base64::engine::general_purpose::STANDARD.encode(png);
-        let uri = icon_data_uri(&format!("{}\r\n", b64)).unwrap();
+        let uri = decode_icon(&format!("{}\r\n", enc(png))).unwrap();
         assert!(uri.starts_with("data:image/png;base64,"));
-        let svg = base64::engine::general_purpose::STANDARD.encode(b"<svg onload=x>");
-        assert!(icon_data_uri(&svg).is_none());
-        assert!(icon_data_uri("not base64!!").is_none());
+        // A ready-made data URI is accepted, and its declared type ignored.
+        let relabelled = format!("data:text/html;base64,{}", enc(png));
+        assert!(decode_icon(&relabelled)
+            .unwrap()
+            .starts_with("data:image/png;"));
+        let svg = enc(b"\xef\xbb\xbf <?xml version=\"1.0\"?><svg xmlns=\"x\"/>");
+        assert!(decode_icon(&svg)
+            .unwrap()
+            .starts_with("data:image/svg+xml;base64,"));
+        assert_eq!(decode_icon("  "), Err(IconRejection::Empty));
+        assert_eq!(
+            decode_icon("<html>sign in</html>"),
+            Err(IconRejection::NotBase64)
+        );
+        assert_eq!(
+            decode_icon(&enc(b"<html><title>Sign in</title>")),
+            Err(IconRejection::NotImage)
+        );
         let big = base64::engine::general_purpose::STANDARD.encode(vec![0u8; MAX_ICON_BYTES + 10]);
-        assert!(icon_data_uri(&big).is_none());
+        assert_eq!(decode_icon(&big), Err(IconRejection::TooLarge));
         assert!(sanitize_data_icon(&uri).is_some());
-        assert!(sanitize_data_icon(&format!("data:image/svg+xml;base64,{svg}")).is_none());
+        assert!(sanitize_data_icon("https://a.test/x.png").is_none());
     }
 
     #[test]

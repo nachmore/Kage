@@ -1283,3 +1283,18 @@ body.light-theme .mcp-server-delete-btn {
     border-radius: 6px;
     border: 1px solid var(--kage-accent);
 }
+
+.internal-site-icon-attempts {
+    margin: 0 0 4px;
+    padding-left: 18px;
+    font-size: 11px;
+    word-break: break-all;
+}
+
+.internal-site-icon-attempts .ok {
+    color: var(--kage-accent);
+}
+
+.internal-site-icon-attempts .failed {
+    color: var(--kage-text-secondary);
+}

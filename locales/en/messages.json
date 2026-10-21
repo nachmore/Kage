@@ -5516,5 +5516,37 @@
   "settings.internal_sites.draft.cancelled": {
     "message": "Drafting cancelled.",
     "description": "Settings → Internal Sites draft dialog: status after the user cancelled"
+  },
+  "settings.internal_sites.test.favicon": {
+    "message": "Favicon:",
+    "description": "Settings → Internal Sites test result: row label for the favicon"
+  },
+  "settings.internal_sites.test.icon.found": {
+    "message": "loaded",
+    "description": "Settings → Internal Sites test result: the favicon was fetched"
+  },
+  "settings.internal_sites.test.icon.none": {
+    "message": "not found — each address tried is listed below",
+    "description": "Settings → Internal Sites test result: no favicon; the attempts follow"
+  },
+  "settings.internal_sites.test.icon.ok": {
+    "message": "image loaded",
+    "description": "Settings → Internal Sites test result: this favicon address worked"
+  },
+  "settings.internal_sites.test.icon.empty": {
+    "message": "the script printed nothing",
+    "description": "Settings → Internal Sites test result: favicon attempt failed: no output"
+  },
+  "settings.internal_sites.test.icon.not_base64": {
+    "message": "the script's output isn't base64 (it must print the image base64-encoded when KAGE_RESPONSE is base64)",
+    "description": "Settings → Internal Sites test result: favicon attempt failed. Keep KAGE_RESPONSE and base64 as written"
+  },
+  "settings.internal_sites.test.icon.not_image": {
+    "message": "not an image (often a sign-in page)",
+    "description": "Settings → Internal Sites test result: favicon attempt returned something that isn't an image"
+  },
+  "settings.internal_sites.test.icon.too_large": {
+    "message": "image is too large",
+    "description": "Settings → Internal Sites test result: favicon attempt returned an image over the size limit"
   }
 }

@@ -8,7 +8,7 @@
 //! return internal page content, so no extension may reach them.
 
 use crate::commands::input::link_metadata::{
-    direct_fetch, metadata_from_proxy_run, page_title, run_proxy_limited,
+    direct_fetch, metadata_from_proxy_run_traced, page_title, run_proxy_limited,
 };
 use crate::error::AppError;
 use crate::internal_sites::{self, InternalSiteProfile, ProxyLang, ProxyResponse};
@@ -105,6 +105,8 @@ pub struct TestResult {
     pub proxy: ProxyReport,
     /// The card the proxy path would produce.
     pub metadata: Option<serde_json::Value>,
+    /// Each favicon candidate fetched through the proxy, in order.
+    pub favicon_attempts: Vec<internal_sites::IconAttempt>,
 }
 
 /// Run a (possibly unsaved) profile against `url`: report which rules
@@ -129,7 +131,11 @@ pub async fn internal_sites_test(
     });
 
     let run = run_proxy_limited(&profile, &url, ProxyResponse::Text).await;
-    let metadata = metadata_from_proxy_run(&profile, &url, &run).await.ok();
+    let (metadata, favicon_attempts) =
+        match metadata_from_proxy_run_traced(&profile, &url, &run).await {
+            Ok((meta, attempts)) => (Some(meta), attempts),
+            Err(_) => (None, Vec::new()),
+        };
     Ok(TestResult {
         url_match,
         content_match,
@@ -142,6 +148,7 @@ pub async fn internal_sites_test(
             stderr_tail: tail_chars(&run.stderr, STDERR_TAIL_CHARS),
         },
         metadata,
+        favicon_attempts,
     })
 }
 
@@ -209,8 +216,12 @@ Contract:\n\
 - The URL is in the environment variable KAGE_URL. Never hardcode it and never \
 evaluate it as code.\n\
 - KAGE_RESPONSE is \"text\" or \"base64\". For \"text\", print the response body (the \
-page HTML) to stdout. For \"base64\", print the raw response bytes base64-encoded \
-(used for favicons).\n\
+page HTML) to stdout. For \"base64\" (used for favicons, which usually need the same \
+authentication as the page), fetch the response as raw bytes - never as text, which \
+corrupts binary data - and print only their base64 encoding on a single line; for \
+example write the response to a temporary file and print \
+[Convert]::ToBase64String([IO.File]::ReadAllBytes($tmp)) in PowerShell, or pipe it \
+through `base64 -w0` in Bash.\n\
 - For \"text\" you may instead print a JSON object {{\"title\": \"...\", \
 \"description\": \"...\"}} if the site is better read through an API.\n\
 - Exit 0 on success and non-zero on failure. Write diagnostics to stderr only.\n\

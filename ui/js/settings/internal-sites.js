@@ -577,6 +577,26 @@ export class InternalSitesSettingsModule extends SettingsModule {
         const stderr = r.proxy.stderr_tail?.trim()
             ? `<pre class="internal-site-stderr" dir="ltr">${escapeHtml(r.proxy.stderr_tail)}</pre>`
             : '';
+        const iconReason = (a) =>
+            a.ok
+                ? t('settings.internal_sites.test.icon.ok')
+                : a.timed_out
+                  ? t('settings.internal_sites.test.proxy_timed_out')
+                  : a.rejection
+                    ? t(`settings.internal_sites.test.icon.${a.rejection}`)
+                    : t('settings.internal_sites.test.proxy_failed', { code: a.exit_code ?? '?' });
+        const attempts = Array.isArray(r.favicon_attempts) ? r.favicon_attempts : [];
+        const faviconSummary = md?.favicon
+            ? t('settings.internal_sites.test.icon.found')
+            : t('settings.internal_sites.test.icon.none');
+        const faviconList = attempts.length
+            ? `<ul class="internal-site-icon-attempts">${attempts
+                  .map(
+                      (a) =>
+                          `<li class="${a.ok ? 'ok' : 'failed'}"><span dir="ltr">${escapeHtml(a.url)}</span> — ${escapeHtml(iconReason(a))}</li>`
+                  )
+                  .join('')}</ul>`
+            : '';
         const line = (key, value) =>
             `<div><span class="internal-site-test-key">${escapeHtml(t(`settings.internal_sites.test.${key}`))}</span> ${escapeHtml(String(value))}</div>`;
 
@@ -587,6 +607,7 @@ export class InternalSitesSettingsModule extends SettingsModule {
                 ${line('direct', direct)}
                 ${line('proxy', proxy)}
                 ${stderr}
+                ${md ? `${line('favicon', faviconSummary)}${faviconList}` : ''}
                 ${preview}
             </div>
         `;

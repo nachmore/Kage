@@ -37,9 +37,12 @@ Output on stdout:
 - `text`: the page HTML (Kage extracts title / description / favicon with the
   same parser as the direct path), or a JSON object
   `{"title": "...", "description": "...", "favicon": "..."}`.
-- `base64`: the raw response bytes, base64-encoded. Kage sniffs the bytes and
-  only accepts small raster images (PNG, ICO, GIF, JPEG, WebP, ≤ 64 KB),
-  inlined as a `data:` URI — the webview can't authenticate to the host.
+- `base64`: the raw response bytes, base64-encoded (or a ready-made
+  `data:image/...;base64,` URI). Kage sniffs the bytes and only accepts images
+  (PNG, ICO, GIF, JPEG, WebP, SVG; ≤ 256 KB), inlined as a `data:` URI — the
+  webview can't authenticate to the host. Candidates are tried in order: the
+  page's `rel~="icon"` links, then `apple-touch-icon`, then `/favicon.ico`
+  (at most four); Test lists each attempt and why it failed.
 
 Exit 0 on success, non-zero on failure; diagnostics go to stderr. At most two
 proxy runs execute at once. Hero images (`og:image`) are dropped for proxied
