@@ -64,6 +64,11 @@ The complete list of features we track is visible in [`ui/js/shared/telemetry.js
 - Aptabase stores events on servers located in the **European Union**.
 - No events are forwarded to any other third party. Aptabase is the only processor.
 - Their own privacy policy is at <https://aptabase.com/legal/privacy>.
+- Separately from analytics, Kage checks whether you're online by sending
+  empty requests (no data, no identifiers) to well-known connectivity-check
+  addresses: `www.msftconnecttest.com`, `www.cloudflare.com` and
+  `www.google.com`. This happens at startup, when you summon Kage, and while
+  it believes you're offline.
 
 ## Retention
 

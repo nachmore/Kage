@@ -12,8 +12,29 @@
 
 let _online = navigator.onLine;
 let _lastCheck = 0;
+let _inflight = null;
+let _failures = 0;
+let _retryTimer = null;
 const _listeners = [];
 const CHECK_INTERVAL = 30_000; // don't re-ping more than once per 30s
+const PROBE_TIMEOUT_MS = 5_000;
+// While the OS reports a connection, one failed probe isn't enough to
+// say "offline": at login the network is often still coming up, and a
+// single slow request would otherwise stick the banner on.
+const FAILURES_BEFORE_OFFLINE = 2;
+const CONFIRM_DELAY_MS = 3_000;
+// While offline, keep re-checking so the banner clears on its own once the
+// connection is back (previously only an agent reply cleared it).
+const RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000];
+
+// Probed in parallel; any response counts. Several unrelated hosts so one
+// being blocked, slow, or filtered on a given network doesn't read as
+// "no internet". `no-cors` resolves for any HTTP response (opaque).
+const PROBE_URLS = [
+    'https://www.msftconnecttest.com/connecttest.txt',
+    'https://www.cloudflare.com/cdn-cgi/trace',
+    'https://www.google.com/generate_204',
+];
 
 window.addEventListener('online', () => _handleBrowserEvent(true));
 window.addEventListener('offline', () => _handleBrowserEvent(false));
@@ -21,9 +42,12 @@ window.addEventListener('offline', () => _handleBrowserEvent(false));
 function _handleBrowserEvent(browserOnline) {
     if (!browserOnline) {
         // Browser says offline — trust it immediately
+        _failures = FAILURES_BEFORE_OFFLINE;
         _setOnline(false);
+        _scheduleRetry();
     } else {
         // Browser says online — verify with a real ping
+        _lastCheck = 0;
         checkOnline();
     }
 }
@@ -41,35 +65,70 @@ function _setOnline(value) {
     }
 }
 
-/**
- * Perform a real connectivity check by fetching a small resource.
- * Updates the internal state and notifies listeners.
- * Returns the result.
- */
-export async function checkOnline() {
-    const now = Date.now();
-    if (now - _lastCheck < CHECK_INTERVAL) return _online;
-    _lastCheck = now;
+function _clearRetry() {
+    clearTimeout(_retryTimer);
+    _retryTimer = null;
+}
 
+function _scheduleRetry(delay) {
+    _clearRetry();
+    const step = Math.max(0, _failures - FAILURES_BEFORE_OFFLINE);
+    const wait = delay ?? RETRY_DELAYS_MS[Math.min(step, RETRY_DELAYS_MS.length - 1)];
+    _retryTimer = setTimeout(() => {
+        _retryTimer = null;
+        _lastCheck = 0;
+        checkOnline();
+    }, wait);
+}
+
+async function _probe(url) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     try {
-        // Use a tiny fetch with a short timeout to test real connectivity.
-        // Cloudflare's connectivity-check endpoint is the standard choice —
-        // tiny payload, globally CDN-served, and Cloudflare is robust about
-        // not blocking unauthenticated HEADs from any origin.
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2000);
-        await fetch('https://www.cloudflare.com/cdn-cgi/trace', {
+        await fetch(url, {
             method: 'HEAD',
             mode: 'no-cors',
             cache: 'no-store',
             signal: controller.signal,
         });
+    } finally {
         clearTimeout(timeout);
+    }
+}
+
+async function _runCheck() {
+    try {
+        await Promise.any(PROBE_URLS.map(_probe));
+        _failures = 0;
+        _clearRetry();
         _setOnline(true);
     } catch {
-        _setOnline(false);
+        _failures += 1;
+        if (navigator.onLine === false || _failures >= FAILURES_BEFORE_OFFLINE) {
+            _setOnline(false);
+            _scheduleRetry();
+        } else {
+            // Unconfirmed: keep the current state and look again shortly.
+            _scheduleRetry(CONFIRM_DELAY_MS);
+        }
     }
     return _online;
+}
+
+/**
+ * Perform a real connectivity check by probing a few well-known
+ * endpoints. Updates the internal state and notifies listeners.
+ * Concurrent callers share one check. Returns the result.
+ */
+export function checkOnline() {
+    if (_inflight) return _inflight;
+    const now = Date.now();
+    if (now - _lastCheck < CHECK_INTERVAL) return Promise.resolve(_online);
+    _lastCheck = now;
+    _inflight = _runCheck().finally(() => {
+        _inflight = null;
+    });
+    return _inflight;
 }
 
 /** Returns the last known online status (may be stale — use checkOnline() for a fresh check). */
@@ -100,6 +159,8 @@ export async function checkOnError() {
  * Marks us as online without needing a ping.
  */
 export function markOnline() {
+    _failures = 0;
+    _clearRetry();
     _setOnline(true);
 }
 

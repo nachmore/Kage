@@ -98,3 +98,71 @@ describe('OFFLINE_MESSAGE', () => {
     expect(OFFLINE_MESSAGE.length).toBeGreaterThan(0);
   });
 });
+
+describe('checkOnline', () => {
+  async function freshModule({ onLine = true, fetchImpl } = {}) {
+    vi.resetModules();
+    Object.defineProperty(navigator, 'onLine', { value: onLine, writable: true, configurable: true });
+    vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
+    globalThis.fetch = vi.fn(fetchImpl);
+    return import('../../ui/js/shared/network.js');
+  }
+
+  afterEach(() => vi.useRealTimers());
+
+  it('counts any one reachable probe as online', async () => {
+    const mod = await freshModule({
+      fetchImpl: async (url) => {
+        if (url.includes('cloudflare')) throw new Error('blocked');
+        return {};
+      },
+    });
+    expect(await mod.checkOnline()).toBe(true);
+    expect(globalThis.fetch.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('needs two failed checks before reporting offline, then recovers by itself', async () => {
+    vi.useFakeTimers();
+    let up = false;
+    const mod = await freshModule({
+      fetchImpl: async () => {
+        if (!up) throw new Error('no network yet');
+        return {};
+      },
+    });
+    const listener = vi.fn();
+    mod.onNetworkChange(listener);
+
+    // First failure at launch: not confirmed yet, no banner.
+    expect(await mod.checkOnline()).toBe(true);
+    expect(listener).not.toHaveBeenCalled();
+
+    // The confirmation re-check also fails → offline.
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(mod.isOnline()).toBe(false);
+    expect(listener).toHaveBeenLastCalledWith(false);
+
+    // Network comes up; the scheduled retry clears it without an agent reply.
+    up = true;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(mod.isOnline()).toBe(true);
+    expect(listener).toHaveBeenLastCalledWith(true);
+  });
+
+  it('trusts the OS saying offline immediately', async () => {
+    const mod = await freshModule({
+      onLine: false,
+      fetchImpl: async () => {
+        throw new Error('down');
+      },
+    });
+    expect(await mod.checkOnline()).toBe(false);
+  });
+
+  it('shares one in-flight check between concurrent callers', async () => {
+    const mod = await freshModule({ fetchImpl: async () => ({}) });
+    const [a, b] = await Promise.all([mod.checkOnline(), mod.checkOnline()]);
+    expect(a && b).toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3); // one round of probes
+  });
+});
