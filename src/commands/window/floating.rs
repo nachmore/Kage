@@ -168,6 +168,9 @@ pub fn show_floating_at_mouse<R: tauri::Runtime>(window: &WebviewWindow<R>) {
     // Position before showing so the window appears in its final spot —
     // showing first and snapping creates a visible jump.
     position_floating_window_with_height(window, "mouse", None, None, Some(500));
+    if fit_floating_to_monitor(window, None) {
+        position_floating_window_with_height(window, "mouse", None, None, Some(500));
+    }
     if let Err(e) = window.show() {
         error!("[show_at_mouse] show() failed: {}", e);
         notify_show_failed(app, &e);
@@ -257,27 +260,23 @@ pub fn toggle_floating_window<R: tauri::Runtime>(window: &WebviewWindow<R>) {
                     *sw = None;
                 }
             } else {
-                // Restore saved launcher size if enabled
-                {
+                let remembered = {
                     let config = features.config.lock_or_recover();
                     if config.ui.remember_launcher_size {
-                        if let (Some(w), Some(h)) =
-                            (config.ui.launcher_width, config.ui.launcher_height)
-                        {
-                            let scale = window.scale_factor().unwrap_or(1.0);
-                            let phys_w = (w as f64 * scale) as u32;
-                            let phys_h = (h as f64 * scale) as u32;
-                            let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                                width: phys_w,
-                                height: phys_h,
-                            }));
-                        }
+                        config.ui.launcher_width.zip(config.ui.launcher_height)
+                    } else {
+                        None
                     }
-                }
+                };
                 // Position the window before showing so it appears at
                 // its final location — showing first and then moving
-                // produces a visible jump.
+                // produces a visible jump. Position first to learn which
+                // monitor it lands on, size it for THAT monitor's scale,
+                // then position again so the clamping uses the new size.
                 position_floating_window(window, &start_pos, last_x, last_y);
+                if fit_floating_to_monitor(window, remembered) {
+                    position_floating_window(window, &start_pos, last_x, last_y);
+                }
                 let show_res = window.show();
                 let focus_res = window.set_focus();
                 info!(
@@ -334,6 +333,75 @@ pub fn toggle_floating_window<R: tauri::Runtime>(window: &WebviewWindow<R>) {
             crate::webview_recovery::note_window_error(window.label(), &e);
         }
     }
+}
+
+/// Floor on the floating window's width, in logical pixels. Mirrors
+/// `MIN_WIDTH_LOGICAL` in `ui/js/floating/window.js`; the layout's
+/// `min-width` (ui/css/floating-base.css) assumes at least this much.
+const FLOATING_MIN_LOGICAL_WIDTH: f64 = 570.0;
+
+/// Size the (hidden) floating window for the scale of the monitor it now
+/// sits on. A window's size is physical, so moving it between monitors
+/// with different scales — undocking a laptop, say — leaves it too small
+/// (or too large) in logical terms, and the webview then lays out wider
+/// than the window, with page scrollbars and clipped content. Windows
+/// rescales a window only on interactive moves (WM_DPICHANGED), not for
+/// a hidden window moved programmatically, so we do it here.
+///
+/// With `remembered` (logical width/height), that size is applied at the
+/// target scale; otherwise only the minimum width is enforced. Returns
+/// true when the size changed.
+fn fit_floating_to_monitor<R: tauri::Runtime>(
+    window: &WebviewWindow<R>,
+    remembered: Option<(u32, u32)>,
+) -> bool {
+    let monitor = window.current_monitor().ok().flatten();
+    let scale = monitor
+        .as_ref()
+        .map(|m| m.scale_factor())
+        .or_else(|| window.scale_factor().ok())
+        .unwrap_or(1.0);
+    let Ok(current) = window.inner_size() else {
+        return false;
+    };
+    let target = floating_size_for_scale(
+        current,
+        scale,
+        remembered,
+        monitor.as_ref().map(|m| m.size().width),
+    );
+    if target == current {
+        return false;
+    }
+    info!(
+        "Fitting floating window to monitor scale {}: {}x{} -> {}x{}",
+        scale, current.width, current.height, target.width, target.height
+    );
+    window.set_size(tauri::Size::Physical(target)).is_ok()
+}
+
+/// Pure sizing rule behind [`fit_floating_to_monitor`]: the remembered
+/// logical size (if any) at `scale`, with the width floored at the
+/// layout minimum and capped at 95% of the monitor.
+fn floating_size_for_scale(
+    current: tauri::PhysicalSize<u32>,
+    scale: f64,
+    remembered: Option<(u32, u32)>,
+    monitor_width: Option<u32>,
+) -> tauri::PhysicalSize<u32> {
+    let (mut width, height) = match remembered {
+        Some((w, h)) => (
+            (w as f64 * scale).round() as u32,
+            (h as f64 * scale).round() as u32,
+        ),
+        None => (current.width, current.height),
+    };
+    let min_width = (FLOATING_MIN_LOGICAL_WIDTH * scale).ceil() as u32;
+    width = width.max(min_width);
+    if let Some(mw) = monitor_width {
+        width = width.min((mw as f64 * 0.95) as u32);
+    }
+    tauri::PhysicalSize { width, height }
 }
 
 /// Position the floating window based on the configured strategy
@@ -433,16 +501,23 @@ pub fn center_on_active_monitor<R: tauri::Runtime>(
     }
 }
 
-/// Center the floating window horizontally on the active monitor, 1/3 down
+/// Center the floating window horizontally on the active monitor, 1/3 down,
+/// sized for that monitor's scale (see [`fit_floating_to_monitor`]).
 pub fn center_floating_on_active_monitor<R: tauri::Runtime>(window: &WebviewWindow<R>) {
-    center_on_active_monitor(
-        window,
-        0.33,
-        tauri::PhysicalSize {
-            width: 500,
-            height: 60,
-        },
-    );
+    let center = || {
+        center_on_active_monitor(
+            window,
+            0.33,
+            tauri::PhysicalSize {
+                width: 500,
+                height: 60,
+            },
+        )
+    };
+    center();
+    if fit_floating_to_monitor(window, None) {
+        center();
+    }
 }
 
 pub async fn test_floating_window<R: tauri::Runtime>(
@@ -501,4 +576,40 @@ pub fn center_window_on_active_monitor<R: tauri::Runtime>(window: &WebviewWindow
             height: 600,
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn size(width: u32, height: u32) -> tauri::PhysicalSize<u32> {
+        tauri::PhysicalSize { width, height }
+    }
+
+    #[test]
+    fn floating_width_is_floored_for_the_target_scale() {
+        // Sized on a 100% monitor, shown on a 150% laptop screen.
+        assert_eq!(
+            floating_size_for_scale(size(570, 200), 1.5, None, Some(2880)),
+            size(855, 200)
+        );
+        // Already wide enough: untouched.
+        assert_eq!(
+            floating_size_for_scale(size(900, 200), 1.5, None, Some(2880)),
+            size(900, 200)
+        );
+    }
+
+    #[test]
+    fn remembered_size_is_applied_at_the_target_scale_and_capped() {
+        assert_eq!(
+            floating_size_for_scale(size(570, 200), 1.25, Some((700, 300)), Some(2560)),
+            size(875, 375)
+        );
+        // Never wider than 95% of the monitor.
+        assert_eq!(
+            floating_size_for_scale(size(570, 200), 2.0, Some((900, 300)), Some(1000)),
+            size(950, 600)
+        );
+    }
 }

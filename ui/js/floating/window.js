@@ -17,7 +17,12 @@
 // preserved so the many explicit call sites in app.js / suggestions / timers
 // keep working as nudges — they coalesce with observer-driven reflows.
 
-import { BODY_PADDING, DEFAULT_HEIGHT, MAX_HEIGHT_PERCENT } from './window-sizing-config.js';
+import {
+    BODY_PADDING,
+    DEFAULT_HEIGHT,
+    MAX_HEIGHT_PERCENT,
+    MIN_WIDTH_LOGICAL,
+} from './window-sizing-config.js';
 
 export class WindowManager {
     constructor(invoke) {
@@ -781,13 +786,25 @@ export class WindowManager {
         const appWindow = window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow?.();
         if (!appWindow) return;
 
+        // Safety net for scale changes that never reach onScaleChanged — a
+        // hidden window moved to a monitor with a different scale (e.g. the
+        // laptop screen after undocking) keeps its physical size, so the
+        // viewport shrinks below the layout's min-width and the page grows
+        // scrollbars with the right edge clipped. A DPI change always fires
+        // a viewport resize, so restore the minimum width from there.
+        let widthCheck = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(widthCheck);
+            widthCheck = setTimeout(() => this.ensureMinWidth(), 150);
+        });
+
         appWindow.onScaleChanged(async ({ payload }) => {
             const { scaleFactor } = payload;
             console.log(`[WindowManager] Scale changed: factor=${scaleFactor}`);
             this.userSetHeight = null;
             this._lastTarget = 0;
             try {
-                const newWidth = Math.round(570 * scaleFactor);
+                const newWidth = Math.round(MIN_WIDTH_LOGICAL * scaleFactor);
                 const newHeight = Math.round(DEFAULT_HEIGHT * scaleFactor);
                 await this.invoke('resize_floating_window', { width: newWidth, height: newHeight });
                 setTimeout(() => this.resizeWindow(), 200);
@@ -795,6 +812,28 @@ export class WindowManager {
                 console.warn('[WindowManager] DPI resize failed:', e);
             }
         });
+    }
+
+    /**
+     * Widen the OS window back to MIN_WIDTH_LOGICAL if the viewport has
+     * dropped below it (keeping the current height). No-op while the user
+     * drags the resize handle, whose own floor is the same width.
+     */
+    async ensureMinWidth() {
+        if (this.isResizing) return;
+        if (window.innerWidth >= MIN_WIDTH_LOGICAL - 1) return;
+        const scale = window.devicePixelRatio || 1;
+        console.log(
+            `[WindowManager] Viewport ${window.innerWidth}px < ${MIN_WIDTH_LOGICAL}px at scale ${scale}; restoring width`
+        );
+        try {
+            await this.invoke('resize_floating_window', {
+                width: Math.ceil(MIN_WIDTH_LOGICAL * scale),
+            });
+            this.resizeWindow();
+        } catch (e) {
+            console.warn('[WindowManager] min-width restore failed:', e);
+        }
     }
 
     setupResizeHandle(resizeHandle) {
@@ -820,7 +859,7 @@ export class WindowManager {
             }
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
-            const minWidth = Math.floor(570 * scaleFactor);
+            const minWidth = Math.floor(MIN_WIDTH_LOGICAL * scaleFactor);
             // Floor the drag at [input + floating bars] plus one line of
             // response when a response is showing. Content taller than that
             // scrolls inside .content-area, and _targetHeight honours
