@@ -19,6 +19,29 @@ function withRealHrefs(container) {
     return clone.innerHTML;
 }
 
+/**
+ * Drop images in formatter output that fail to load, instead of leaving a
+ * broken-image box (e.g. a link-preview hero the publisher's CDN answers with
+ * a 429). Formatters can't do this themselves: the sanitizer strips event
+ * handlers. A wrapper the image leaves empty is hidden too, so a fixed
+ * aspect-ratio frame doesn't stay behind as a blank panel.
+ */
+function dropBrokenImages(root) {
+    for (const img of root.querySelectorAll('img')) {
+        img.addEventListener('error', () => removeBrokenImage(img), { once: true });
+    }
+}
+
+function removeBrokenImage(img) {
+    const parent = img.parentElement;
+    img.remove();
+    if (parent && parent.childElementCount === 0 && !parent.textContent.trim()) {
+        // Inline style, not `hidden`: extension CSS like `display: block`
+        // outranks the UA's [hidden] rule.
+        parent.style.display = 'none';
+    }
+}
+
 // Per-container count of formatMessage calls. renderMarkdown calls
 // formatMessage on every render, so a bump means the content was re-rendered.
 // Async decorators (Prism lazy-load, diagrams, app icons) change innerHTML
@@ -615,6 +638,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                     // listeners on the container itself are preserved.
                     container.replaceChildren();
                     container.appendChild(frag);
+                    dropBrokenImages(container);
                     // The sanitizer keeps real http(s) hrefs; re-neutralize
                     // so WebView2 can't natively open them (double-open)
                     // and the host click handler sees data-href again.

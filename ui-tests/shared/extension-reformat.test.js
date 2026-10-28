@@ -62,6 +62,29 @@ describe('extension formatter reformat', () => {
         expect(other.sandbox.call.mock.calls.length).toBe(otherBefore);
     });
 
+    it('drops formatter images that fail to load, hiding a wrapper left empty', async () => {
+        const cards = formatterExt(() => ({
+            html:
+                '<a class="card" href="https://x.test/"><span class="hero">' +
+                '<img src="https://img.test/hero.png"></span>' +
+                '<span class="icon"><img src="https://img.test/i.png">X</span></a>',
+        }));
+        const mgr = new FakeManager([['cards', cards]]);
+        const el = document.createElement('div');
+        document.body.appendChild(el);
+        el.innerHTML = '<p>hi</p>';
+        await mgr.formatMessage(el, { streaming: false });
+
+        const [hero, icon] = el.querySelectorAll('img');
+        hero.dispatchEvent(new Event('error'));
+        icon.dispatchEvent(new Event('error'));
+
+        expect(el.querySelectorAll('img').length).toBe(0);
+        expect(el.querySelector('.hero').style.display).toBe('none');
+        // Still has text, so it stays visible.
+        expect(el.querySelector('.icon').style.display).toBe('');
+    });
+
     it('does not track streaming renders', async () => {
         const cards = formatterExt(() => ({ html: '<p>x</p>' }));
         cards.sandbox.formatterOptsInStreaming = true;
