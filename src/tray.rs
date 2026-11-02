@@ -166,8 +166,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                     if let Some(floating) =
                         app_handle_inner.get_webview_window(window_labels::FLOATING)
                     {
-                        let _ = floating.show();
-                        let _ = floating.set_focus();
+                        let _ = crate::overlay_windows::present(&floating);
                     }
                     crate::event_targets::emit_update_audience(
                         app_handle_inner,

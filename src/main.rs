@@ -39,6 +39,7 @@ mod logger;
 mod mcp_registration;
 mod ollama;
 mod os;
+mod overlay_windows;
 mod panic_handler;
 mod permission_audit;
 mod process_manager;

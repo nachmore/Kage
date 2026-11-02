@@ -1,6 +1,8 @@
 //! macOS: opt an overlay window into every Space, including full-screen ones.
 
-use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+use objc2::ClassType;
+use objc2_app_kit::{NSPanel, NSWindow, NSWindowCollectionBehavior};
+use objc2_foundation::NSObjectProtocol;
 
 pub fn make_overlay_window_impl(ns_window: *mut std::ffi::c_void) {
     if ns_window.is_null() {
@@ -20,4 +22,24 @@ pub fn make_overlay_window_impl(ns_window: *mut std::ffi::c_void) {
         "[spaces] overlay window collectionBehavior = {:#x}",
         window.collectionBehavior().0
     );
+}
+
+pub fn is_panel_impl(ns_window: *mut std::ffi::c_void) -> bool {
+    if ns_window.is_null() {
+        return false;
+    }
+    // SAFETY: live NSWindow* from Tauri; isKindOfClass: is a read-only
+    // runtime query.
+    let window: &NSWindow = unsafe { &*(ns_window as *const NSWindow) };
+    window.isKindOfClass(NSPanel::class())
+}
+
+pub fn present_without_activating_impl(ns_window: *mut std::ffi::c_void) {
+    if ns_window.is_null() {
+        return;
+    }
+    // SAFETY: live NSWindow* from Tauri, called on the main thread.
+    let window: &NSWindow = unsafe { &*(ns_window as *const NSWindow) };
+    window.orderFrontRegardless();
+    window.makeKeyWindow();
 }

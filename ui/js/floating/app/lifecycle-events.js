@@ -13,6 +13,7 @@ import {
     updateSelection,
     WINDOW,
 } from './dependencies.js';
+import { presentOverlayWindow } from '../../shared/overlay-window.js';
 
 export const LifecycleEventsMethods = {
     _initializeExtensionsInBackground(_ts) {
@@ -227,8 +228,7 @@ export const LifecycleEventsMethods = {
                 this.attachmentManager.addFile(path, file.name, file.type || 'text/plain');
             }
             e.target.value = '';
-            this.appWindow.show();
-            this.appWindow.setFocus();
+            presentOverlayWindow(this.appWindow);
         });
         this.elements.floatingImageInput?.addEventListener('change', async (e) => {
             this._filePickerOpen = false;
@@ -247,15 +247,13 @@ export const LifecycleEventsMethods = {
                 }
             }
             e.target.value = '';
-            this.appWindow.show();
-            this.appWindow.setFocus();
+            presentOverlayWindow(this.appWindow);
         });
         // Handle file picker cancel (no change event fires)
         window.addEventListener('focus', () => {
             if (this._filePickerOpen) {
                 this._filePickerOpen = false;
-                this.appWindow.show();
-                this.appWindow.setFocus();
+                presentOverlayWindow(this.appWindow);
             }
         });
 

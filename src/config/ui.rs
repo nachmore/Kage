@@ -71,6 +71,12 @@ pub struct UiConfig {
     /// extension holds the capability. Independent of the master above.
     #[serde(default = "default_true")]
     pub mascot_extension_hints: bool,
+    /// macOS: turn the launcher / inline-assist / context-menu windows into
+    /// non-activating panels so they can appear over other apps' full-screen
+    /// Spaces. Escape hatch: set false in config.json (restart required) to
+    /// fall back to plain windows if a macOS release misbehaves with panels.
+    #[serde(default = "default_true")]
+    pub macos_overlay_panels: bool,
 }
 
 impl Default for UiConfig {
@@ -103,6 +109,7 @@ impl Default for UiConfig {
             language: None,
             mascot_animations: true,
             mascot_extension_hints: true,
+            macos_overlay_panels: true,
         }
     }
 }

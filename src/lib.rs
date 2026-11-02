@@ -47,6 +47,7 @@ pub mod window_labels;
 pub mod automation;
 pub mod commands;
 pub mod event_targets;
+pub mod overlay_windows;
 pub mod setup;
 pub mod state;
 pub mod telemetry;

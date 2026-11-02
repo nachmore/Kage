@@ -94,8 +94,7 @@ pub async fn show_inline_assist_with_context<R: tauri::Runtime>(
         }
 
         let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
-        let _ = window.show();
-        let _ = window.set_focus();
+        let _ = crate::overlay_windows::present(&window);
 
         // Send the context to the frontend (delay to ensure JS module is loaded)
         let (app_name, title) = source_info.unwrap_or_default();

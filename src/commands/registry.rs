@@ -57,6 +57,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::open_devtools,
         crate::commands::capture_hotkey_combo,
         crate::commands::cancel_hotkey_capture,
+        crate::overlay_windows::present_overlay_window,
         crate::commands::begin_hotkey_recording,
         crate::commands::end_hotkey_recording,
         crate::commands::check_system_shortcut_conflicts,

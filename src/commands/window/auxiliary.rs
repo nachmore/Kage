@@ -191,7 +191,7 @@ pub async fn show_context_menu<R: tauri::Runtime>(
         let _ = w.set_shadow(false);
         // Right-clicking the launcher over a full-screen app must show the
         // menu there too, not on the desktop Space.
-        crate::setup::configure_overlay_window(&w);
+        crate::overlay_windows::configure(&w);
         w
     };
 
@@ -230,12 +230,8 @@ pub async fn show_context_menu<R: tauri::Runtime>(
             y: final_y,
         }))
         .map_err(|e| format!("Failed to position context menu: {}", e))?;
-    window
-        .show()
+    crate::overlay_windows::present(&window)
         .map_err(|e| format!("Failed to show context menu: {}", e))?;
-    window
-        .set_focus()
-        .map_err(|e| format!("Failed to focus context menu: {}", e))?;
     Ok(())
 }
 

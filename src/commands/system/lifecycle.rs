@@ -365,8 +365,7 @@ pub fn show_welcome_banner<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 
     if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         crate::commands::window::center_floating_on_active_monitor(&floating);
-        let _ = floating.show();
-        let _ = floating.set_focus();
+        let _ = crate::overlay_windows::present(&floating);
     }
     crate::event_targets::emit_to_floating(
         app,
@@ -395,8 +394,7 @@ pub fn simulate_update_complete(app: &tauri::AppHandle) {
 /// Show the floating window with an update celebration banner.
 pub fn show_update_banner(app: &tauri::AppHandle) {
     if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
-        let _ = floating.show();
-        let _ = floating.set_focus();
+        let _ = crate::overlay_windows::present(&floating);
     }
     crate::event_targets::emit_to_floating(
         app,

@@ -44,38 +44,6 @@ pub fn configure_transparent_windows(app: &App) {
     }
 }
 
-/// Let a window appear over full-screen apps and on every Space (macOS;
-/// no-op elsewhere). Safe to call from any thread — hops to the main
-/// thread, which NSWindow requires.
-pub fn configure_overlay_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
-    #[cfg(target_os = "macos")]
-    {
-        // Look the NSWindow up inside the main-thread closure, against a
-        // clone of the window, so both the AppKit access and the mutation
-        // happen on the main thread while the window is alive.
-        let target = window.clone();
-        if let Err(e) = window.run_on_main_thread(move || match target.ns_window() {
-            Ok(ptr) => crate::os::window_spaces::make_overlay_window(ptr),
-            Err(e) => error!("[spaces] no NSWindow for {}: {}", target.label(), e),
-        }) {
-            error!("[spaces] failed to configure {}: {}", window.label(), e);
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    let _ = window;
-}
-
-/// The preloaded overlay windows (floating launcher, inline assist) —
-/// see `configure_overlay_window`. The on-demand context menu is handled
-/// where it's built.
-pub fn configure_overlay_windows<R: tauri::Runtime>(app: &App<R>) {
-    for label in [window_labels::FLOATING, window_labels::INLINE_ASSIST] {
-        if let Some(window) = app.get_webview_window(label) {
-            configure_overlay_window(&window);
-        }
-    }
-}
-
 /// Listen on `config_updated` and re-register all global hotkeys when
 /// any of the three hotkey fields (main, clipboard, inline-assist)
 /// actually changes. Snapshots the prior values so unrelated config

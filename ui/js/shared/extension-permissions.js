@@ -217,6 +217,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     trigger_welcome_banner: null,
     capture_hotkey_combo: null,
     cancel_hotkey_capture: null,
+    present_overlay_window: null,
     begin_hotkey_recording: null,
     end_hotkey_recording: null,
     check_system_shortcut_conflicts: null,

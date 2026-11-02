@@ -17,3 +17,19 @@
 pub fn make_overlay_window(ns_window: *mut std::ffi::c_void) {
     crate::os::platform::window_spaces::make_overlay_window_impl(ns_window)
 }
+
+/// True when the native window is an `NSPanel` (i.e. it was converted by
+/// `crate::overlay_windows`). Always false off macOS.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn is_panel(ns_window: *mut std::ffi::c_void) -> bool {
+    crate::os::platform::window_spaces::is_panel_impl(ns_window)
+}
+
+/// Bring the window to the front and make it key **without activating the
+/// app** (`orderFrontRegardless` + `makeKeyWindow`). For a non-activating
+/// panel this is what lets it take keyboard input over a full-screen app
+/// without macOS switching Spaces. Main thread only.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn present_without_activating(ns_window: *mut std::ffi::c_void) {
+    crate::os::platform::window_spaces::present_without_activating_impl(ns_window)
+}

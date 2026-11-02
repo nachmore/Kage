@@ -112,8 +112,7 @@ pub fn maybe_show_floating_after_interactive_install(app: &App) {
                  console.log('[floating] post-update blur-hide suppression armed by Rust');",
             );
             crate::commands::window::center_floating_on_active_monitor(&floating);
-            let _ = floating.show();
-            let _ = floating.set_focus();
+            let _ = crate::overlay_windows::present(&floating);
         }
     });
 }

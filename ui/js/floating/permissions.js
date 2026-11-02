@@ -22,6 +22,7 @@ import { signalMascot } from './mascot-signals.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { WINDOW } from '../shared/window-labels.js';
 import { t } from '../shared/i18n.js';
+import { presentOverlayWindow } from '../shared/overlay-window.js';
 
 waitForTauri(({ invoke, appWindow }) => {
     const handler = createPermissionHandler(invoke, appWindow, {
@@ -38,7 +39,7 @@ waitForTauri(({ invoke, appWindow }) => {
             window._floatingApp?.windowManager?.suspendAutoResize();
 
             try {
-                await appWindow.setFocus();
+                await presentOverlayWindow(appWindow);
                 await appWindow.setAlwaysOnTop(true);
             } catch (error) {
                 console.error('Failed to set window focus:', error);
@@ -170,8 +171,7 @@ waitForTauri(({ invoke, appWindow }) => {
                 } catch {
                     /* ignore */
                 }
-                await win.show();
-                await win.setFocus();
+                await presentOverlayWindow(win);
             }
 
             const nowVisible = await win.isVisible();

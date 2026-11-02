@@ -171,12 +171,11 @@ pub fn show_floating_at_mouse<R: tauri::Runtime>(window: &WebviewWindow<R>) {
     if fit_floating_to_monitor(window, None) {
         position_floating_window_with_height(window, "mouse", None, None, Some(500));
     }
-    if let Err(e) = window.show() {
-        error!("[show_at_mouse] show() failed: {}", e);
+    if let Err(e) = crate::overlay_windows::present(window) {
+        error!("[show_at_mouse] present() failed: {}", e);
         notify_show_failed(app, &e);
         return;
     }
-    let _ = window.set_focus();
     features.updater.touch_activity();
 
     // Clear selection — clipboard mode doesn't use it
@@ -277,12 +276,8 @@ pub fn toggle_floating_window<R: tauri::Runtime>(window: &WebviewWindow<R>) {
                 if fit_floating_to_monitor(window, remembered) {
                     position_floating_window(window, &start_pos, last_x, last_y);
                 }
-                let show_res = window.show();
-                let focus_res = window.set_focus();
-                info!(
-                    "[toggle] show() result: {:?}, set_focus() result: {:?}",
-                    show_res, focus_res
-                );
+                let show_res = crate::overlay_windows::present(window);
+                info!("[toggle] present() result: {:?}", show_res);
                 if let Err(e) = show_res {
                     notify_show_failed(app, &e);
                     return;
@@ -534,12 +529,8 @@ pub async fn test_floating_window<R: tauri::Runtime>(
                 .map_err(|e| format!("Failed to hide: {}", e))?;
             Ok("Window was visible, now hidden".to_string())
         } else {
-            window
-                .show()
+            crate::overlay_windows::present(&window)
                 .map_err(|e| format!("Failed to show: {}", e))?;
-            window
-                .set_focus()
-                .map_err(|e| format!("Failed to focus: {}", e))?;
             center_floating_on_active_monitor(&window);
             Ok("Window was hidden, now visible and positioned".to_string())
         }

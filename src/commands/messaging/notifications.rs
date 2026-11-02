@@ -759,8 +759,7 @@ fn handle_permission_notification(
             // If originated from floating and it's hidden, show it (case 3: background permission)
             if source == window_labels::FLOATING {
                 if let Some(floating) = app_handle.get_webview_window(window_labels::FLOATING) {
-                    let _ = floating.show();
-                    let _ = floating.set_focus();
+                    let _ = crate::overlay_windows::present(&floating);
                 }
             }
         }

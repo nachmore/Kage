@@ -22,6 +22,7 @@ import {
     updateTimerBar,
     WINDOW,
 } from './dependencies.js';
+import { presentOverlayWindow } from '../../shared/overlay-window.js';
 
 export const CommandsMethods = {
     async loadShortcuts() {
@@ -81,8 +82,7 @@ export const CommandsMethods = {
             try {
                 const isVisible = await this.appWindow.isVisible();
                 if (!isVisible) {
-                    await this.appWindow.show();
-                    await this.appWindow.setFocus();
+                    await presentOverlayWindow(this.appWindow);
                 }
             } catch {}
         }
