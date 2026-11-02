@@ -1,18 +1,52 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Kage macOS entitlements — embedded into the signed .app by tauri-bundler.
+  Kage macOS entitlements, embedded into the signed .app by tauri-bundler.
   Wired via `bundle.macOS.entitlements` in ../../tauri.conf.json.
 
-  Only add entitlements we actually use; hardened runtime rejects anything
-  not whitelisted here at runtime.
+  Only used when the build is code-signed (APPLE_SIGNING_IDENTITY set, see
+  docs/RELEASE.md, "macOS code signing"). Unsigned builds carry no
+  entitlements. tauri-bundler applies this SAME file to every target it signs:
+  each externalBin sidecar (kage-computer-control-mcp, kage-calendar-helper),
+  the main binary and the .app.
+
+  Hardened runtime is ON (bundle.macOS.hardenedRuntime = true). Why:
+    * Notarization requires it, so leaving it on keeps the Developer ID +
+      notarization path open with no further changes.
+    * Nothing Kage does in-process needs a runtime exception:
+      - Agent CLIs, the MCP/calendar sidecars, python (pocket-tts), osascript
+        and the pip installer are separate executables started via
+        std::process::Command. Hardened runtime limits only the signed process
+        itself, never its children.
+      - No in-process JIT: WKWebView runs JavaScript (including the extension
+        sandbox and graphviz wasm) in Apple's WebContent XPC process, so no
+        allow-jit / allow-unsigned-executable-memory.
+      - No third-party dylibs: the Rust binaries are statically linked and link
+        only system frameworks (AppKit, EventKit, CoreGraphics, Accessibility),
+        and nothing dlopen()s at runtime. Library validation therefore never
+        triggers, so no disable-library-validation. That one would also let
+        injected code run with Kage's TCC grants, so keep it off.
+      - No DYLD_* variables are needed, so no allow-dyld-environment-variables.
+    * What hardened runtime DOES gate are the TCC-protected resources below.
+      Each needs its entitlement or TCC denies access silently, with no
+      prompt. Accessibility, Input Monitoring and Screen Recording are
+      TCC-only (no entitlement exists for them).
+  Add an entitlement here only when Kage actually uses it. Hardened runtime
+  denies anything not listed.
 -->
 <plist version="1.0">
 <dict>
+    <!-- osascript / System Events: window list, focus, selected-text capture. -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
 
+    <!-- Voice input: getUserMedia in the webviews (ui/js/shared/echo-canceller.js). -->
     <key>com.apple.security.device.audio-input</key>
+    <true/>
+
+    <!-- EventKit in the kage-calendar-helper sidecar (requestFullAccessToEvents).
+         Pairs with NSCalendars*UsageDescription in Info.plist. -->
+    <key>com.apple.security.personal-information.calendars</key>
     <true/>
 
     <key>com.apple.security.files.user-selected.read-write</key>

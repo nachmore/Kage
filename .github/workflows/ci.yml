@@ -197,6 +197,16 @@ jobs:
       # otherwise swallowed and reported as a useless "exit code 1".
       # We've seen intermittent dmg failures with no error context;
       # this turns the next failure into something diagnosable.
+      #
+      # macOS code signing is deliberately release.yml-only, so this
+      # bundle stays unsigned (linker-signed ad-hoc). The signing
+      # certificate is what macOS TCC trusts: anything signed with it
+      # inherits every user's Accessibility / Input Monitoring / Screen
+      # Recording grants. This job builds unreviewed PR code, so it must
+      # not hold that identity. Fork PRs get no secrets anyway, and the
+      # smoke test runs the raw target/debug/kage, not the bundle, so
+      # signing here would not exercise anything extra. Keep APPLE_* and
+      # MACOS_* secrets out of this job.
       - name: cargo tauri build --debug
         # APTABASE_KEY comes from job-level env (see the note there — it's a
         # compile fingerprint input shared with clippy/test). These three are

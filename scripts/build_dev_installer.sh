@@ -26,6 +26,23 @@
 #   ./scripts/build_dev_installer.sh --replace      # kill running kage and
 #                                                   # swap the installed exe
 #                                                   # (implies --no-bundle)
+#
+# macOS: optional stable code signature (keeps TCC grants across rebuilds)
+#   KAGE_MACOS_SIGNING_IDENTITY=<sha1 or exact cert name> ./scripts/build_dev_installer.sh
+#
+#   Unsigned builds are only linker-signed ad-hoc, so macOS TCC
+#   (Accessibility, Input Monitoring, Screen Recording, ...) sees every
+#   rebuild as a new app and silently stops honouring your grants. When
+#   KAGE_MACOS_SIGNING_IDENTITY is set, it is passed to tauri as
+#   APPLE_SIGNING_IDENTITY, so the bundle (sidecars, .app, .dmg) is signed
+#   with that identity, hardened runtime and src-tauri/macos/entitlements.plist,
+#   exactly like CI's signed releases. With --replace, the swapped binaries
+#   and the installed .app are re-signed the same way, so the installed
+#   app keeps its designated requirement. Make the identity with
+#   scripts/macos/create_signing_cert.sh --import-keychain ... (see its
+#   output for the one-time trust step). Unset means no signing, same as
+#   before. Note: hardened runtime also blocks attaching lldb to these
+#   bundles; use `cargo tauri dev` for debugger sessions.
 
 set -euo pipefail
 
@@ -66,6 +83,24 @@ export KAGE_LOCAL_DEV_BUILD=1
 # on Unix where the default stack is already large; setting it
 # unconditionally keeps the script symmetric.
 export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
+
+macos_signing_identity=""
+if [[ "$(uname -s)" == "Darwin" && -n "${KAGE_MACOS_SIGNING_IDENTITY:-}" ]]; then
+    macos_signing_identity="$KAGE_MACOS_SIGNING_IDENTITY"
+    echo "[build_dev_installer] macOS code signing with identity: $macos_signing_identity"
+    # tauri-cli reads APPLE_SIGNING_IDENTITY (overrides bundle.macOS.signingIdentity).
+    export APPLE_SIGNING_IDENTITY="$macos_signing_identity"
+    if [[ "$no_bundle" -eq 1 && "$replace" -eq 0 ]]; then
+        echo "[build_dev_installer] note: --no-bundle skips tauri's bundling step, which is where signing happens; target/$profile_dir/kage stays unsigned"
+    fi
+fi
+
+# Re-sign one path with the same flags tauri-bundler uses
+# (codesign --force -s <id> --options runtime --entitlements <plist>).
+macos_resign() {
+    codesign --force -s "$macos_signing_identity" --options runtime \
+        --entitlements "$repo_root/src-tauri/macos/entitlements.plist" "$1"
+}
 
 cargo_args=(tauri build)
 if [[ "$release_profile" -eq 0 ]]; then
@@ -134,6 +169,21 @@ if [[ "$status" -eq 0 && "$replace" -eq 1 ]]; then
         mcp_target="$(dirname "$target_exe")/kage-computer-control-mcp"
         echo "[build_dev_installer] --replace: $mcp_source -> $mcp_target"
         cp -f "$mcp_source" "$mcp_target"
+    fi
+
+    # The copied binaries are only linker-signed, which breaks the installed
+    # bundle's signature (and with it the TCC grants). Re-sign inside-out like
+    # tauri-bundler: the sidecar first, then the .app. Signing the .app re-signs
+    # the main executable and reseals Contents/.
+    if [[ -n "$macos_signing_identity" && "$target_exe" == */Contents/MacOS/* ]]; then
+        app_bundle="${target_exe%/Contents/MacOS/*}"
+        echo "[build_dev_installer] --replace: re-signing $app_bundle"
+        if [[ -n "${mcp_target:-}" && -f "$mcp_target" ]]; then
+            macos_resign "$mcp_target"
+        fi
+        macos_resign "$app_bundle"
+        codesign --verify --deep --strict "$app_bundle"
+        codesign -d -r- "$app_bundle" 2>&1 | grep 'designated =>' || true
     fi
 
     echo "[build_dev_installer] --replace: done. Launch via Spotlight / Dock to test."

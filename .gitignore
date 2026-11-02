@@ -40,6 +40,12 @@ config.json
 !.env.example
 # Aptabase analytics key — read by build.rs, never commit the real key
 .aptabase-key
+# macOS code-signing identity from scripts/macos/create_signing_cert.sh.
+# It writes to ~/kage-signing-cert by default; these patterns catch an
+# --out-dir that points inside the repo.
+*.p12
+*.p12.base64
+*.p12.password
 
 # Root-level local-only directories
 node_modules/

@@ -12,7 +12,11 @@
 #              own header for why.
 #
 # Each run:
-#   1. Builds the app on Windows + macOS.
+#   1. Builds the app on Windows + macOS. On macOS, when the
+#      MACOS_CERTIFICATE secret is set, tauri code-signs the sidecars,
+#      the .app and the .dmg during bundling, so the updater artefact
+#      and the dmg contain the same signed app. See "macOS code
+#      signing" in the build job and docs/RELEASE.md.
 #   2. Signs the update artefacts with the Tauri updater private key
 #      (sourced from the TAURI_SIGNING_PRIVATE_KEY repo secret). The
 #      matching public key is baked into every binary via build.rs.
@@ -49,10 +53,14 @@
 #     2026-05-31, when Intel was dropped — Apple has retired x86_64
 #     and the GitHub `macos-15-intel` runner is much slower than the
 #     arm64 image. Restore the matrix entry if demand re-emerges.
-#   - Code-signing certificates for Windows/macOS OS-level trust (the
-#     updater plugin signature is cryptographically strong, but Windows
-#     SmartScreen and macOS notarization are separate, orthogonal
-#     topics that this workflow doesn't attempt to address yet).
+#   - Windows Authenticode signing (SmartScreen). The updater plugin's
+#     signature is cryptographically strong, but OS-level trust is a
+#     separate topic.
+#   - macOS signing is opt-in through secrets. A self-signed certificate
+#     gives a stable TCC identity. Gatekeeper trust needs a Developer ID
+#     certificate plus notarization credentials, which the same steps
+#     support once those secrets exist. With no secrets, macOS builds
+#     stay unsigned, exactly as before.
 
 name: Release
 
@@ -389,6 +397,52 @@ jobs:
         with:
           tool: tauri-cli@2.11.2
 
+      # ----- macOS code signing (optional) -----------------------------
+      #
+      # Why: macOS TCC (Accessibility, Input Monitoring, Screen Recording,
+      # Automation, Calendars, Microphone) stores each grant together with
+      # the app's designated requirement (DR). An unsigned bundle is only
+      # linker-signed ad-hoc, and its DR is the binary's cdhash, so every
+      # update looks like a new app. The grants silently stop working
+      # while System Settings still shows Kage switched on. Signing every
+      # build with one long-lived certificate makes the DR
+      #   identifier "com.kage.launcher" and certificate leaf = H"<sha1>"
+      # (or Apple's anchor + team id for Developer ID), which stays the
+      # same across updates.
+      #
+      # Opt-in: if the MACOS_CERTIFICATE secret is absent (forks, or
+      # before the owner sets it up), the import step logs one line and
+      # exports nothing. The build then runs exactly as before, with no
+      # codesign call. Supports a Developer ID Application certificate
+      # (optionally notarized) and a self-signed certificate from
+      # scripts/macos/create_signing_cert.sh.
+      #
+      # The secrets are deliberately NOT mapped into the build step's
+      # env:. tauri reads APPLE_* with var_os(), so the empty string
+      # GitHub substitutes for an unset secret counts as set: an empty
+      # APPLE_SIGNING_IDENTITY becomes `codesign -s ""`, and empty
+      # APPLE_ID/APPLE_PASSWORD start a notarization with blank
+      # credentials. The script also imports the .p12 itself, because
+      # tauri's APPLE_CERTIFICATE import only accepts Apple-issued
+      # identities. It writes only the APPLE_* values it has real values
+      # for to $GITHUB_ENV. Full rationale is in the script header.
+      - name: Import macOS signing certificate (optional)
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          # Notarization: Developer ID only. Either an App Store Connect
+          # API key (preferred) or Apple ID + app-specific password.
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/macos/ci_signing_keychain.sh import
+
       - name: Build signed release
         env:
           # The Tauri bundler reads these to sign the updater artefacts
@@ -432,6 +486,32 @@ jobs:
           else
             echo "(no bundle_dmg.sh staged — failure happened before bundling)"
           fi
+
+      # Prove the shipped artefacts carry the stable signature: the .app
+      # and every Contents/MacOS executable verify, every DR pins the
+      # certificate (not a cdhash), hardened runtime is on, the app inside
+      # the updater tarball has the same DR, and the dmg is signed. Runs
+      # only when the import step exported an identity, so unsigned
+      # builds are untouched.
+      - name: Verify macOS code signature
+        if: startsWith(matrix.os, 'macos') && env.APPLE_SIGNING_IDENTITY != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE=target/${{ matrix.target }}/release/bundle
+          DMG=$(find "$BUNDLE/dmg" -maxdepth 1 -name '*.dmg' | head -n 1)
+          bash scripts/macos/verify_signature.sh "$BUNDLE/macos/Kage.app" \
+            --tarball "$BUNDLE/macos/Kage.app.tar.gz" \
+            --dmg "$DMG" \
+            --identity "$APPLE_SIGNING_IDENTITY"
+
+      # Remove the temp keychain, its search-list entry and (self-signed
+      # only) the admin trust setting. Hosted runners are discarded
+      # anyway; this matters for self-hosted ones.
+      - name: Remove macOS signing keychain
+        if: always() && startsWith(matrix.os, 'macos')
+        shell: bash
+        run: bash scripts/macos/ci_signing_keychain.sh cleanup
 
       # `overwrite: true` because manual reruns of the same channel
       # against the same SHA otherwise collide with artefacts left
