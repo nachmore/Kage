@@ -125,10 +125,12 @@ function ensureCSS() {
  * @param {number} [radius=2]  Outline thickness in px
  * @returns {string} The filter ID to use in `filter: url(#id)`
  */
-export function ensureOutlineFilter(color, radius = 2) {
+export function ensureOutlineFilter(color, radius = 2, instance = 0) {
     // Reuse one filter per (color, radius): callers run per avatar render, and
     // a fresh <filter> each time piled up identical nodes for the window's life.
-    const key = `${color}|${radius}`;
+    // `instance` gives an animated caller a second, identical filter to
+    // alternate with (see mascot-engine.js).
+    const key = `${color}|${radius}|${instance}`;
     const cachedId = _outlineFilterIds.get(key);
     if (cachedId && document.getElementById(cachedId)) return cachedId;
     const id = `kage-outline-${++_filterCounter}`;

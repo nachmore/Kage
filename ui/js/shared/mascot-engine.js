@@ -2514,12 +2514,30 @@ export function createMascotController(container, opts = {}) {
 
     const rng = mulberry32(((Math.random() * 1e9) | 0) >>> 0);
 
+    // Outline via an SVG feMorphology filter. WebKit doesn't add that
+    // filter's outset to repaint rects, so when only part of the cat
+    // repaints (a prop moving, a hop) the dilated halo is clipped to the
+    // dirty rect (hard-edged boxes beside the cat) and the old halo outside
+    // it is never cleared (outline-coloured smudges, e.g. above the party
+    // hat after the celebration jump). Alternating each frame between two
+    // identical filters changes `filter`, which invalidates the whole
+    // filtered area, so every frame repaints cleanly. ~60×100 px, cheap.
+    let filterFrames = null;
+    let filterFrame = 0;
     if (outline) {
         const color = typeof outline === 'string' ? outline : outline.color || '#38B2AC';
         const radius = (typeof outline === 'object' && outline.radius) || 2;
-        const id = ensureOutlineFilter(color, radius);
-        view.style.filter = `url(#${id}) drop-shadow(0 2px 4px rgba(0,0,0,.2))`;
+        filterFrames = [0, 1].map(
+            (i) =>
+                `url(#${ensureOutlineFilter(color, radius, i)}) drop-shadow(0 2px 4px rgba(0,0,0,.2))`
+        );
+        view.style.filter = filterFrames[0];
     }
+    const repaintWholeView = () => {
+        if (!filterFrames) return;
+        filterFrame ^= 1;
+        view.style.filter = filterFrames[filterFrame];
+    };
 
     const step = (now) => {
         frame = null;
@@ -2528,6 +2546,7 @@ export function createMascotController(container, opts = {}) {
         last = now;
         t += dt;
         engine.update(t, features);
+        repaintWholeView();
         schedule();
     };
     const schedule = () => {
@@ -2576,6 +2595,7 @@ export function createMascotController(container, opts = {}) {
                 t += 16;
                 engine.update(t, features);
             }
+            repaintWholeView();
         },
         /** @deprecated kept for existing call sites — maps to the think state. */
         setActive() {
