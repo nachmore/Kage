@@ -49,6 +49,7 @@ pub mod startup;
 pub mod system_shortcuts;
 pub mod user;
 pub mod window_list;
+pub mod window_spaces;
 
 // Re-export common functionality
 #[allow(unused)]

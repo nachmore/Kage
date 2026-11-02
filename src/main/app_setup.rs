@@ -77,6 +77,7 @@ pub fn configure(
         pending_permissions,
     );
     setup::configure_transparent_windows(app);
+    setup::configure_overlay_windows(app);
     commands::system::register_all_hotkeys(app.handle());
     setup::install_hotkey_hot_reload(app, config);
     info!("=== Setup Complete ===");

@@ -189,6 +189,9 @@ pub async fn show_context_menu<R: tauri::Runtime>(
         let _ = w.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
         #[cfg(target_os = "windows")]
         let _ = w.set_shadow(false);
+        // Right-clicking the launcher over a full-screen app must show the
+        // menu there too, not on the desktop Space.
+        crate::setup::configure_overlay_window(&w);
         w
     };
 
