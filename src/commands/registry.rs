@@ -65,6 +65,8 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::get_hotkey_registration_failures,
         crate::commands::get_app_info,
         crate::commands::get_os_dark_mode,
+        crate::commands::get_privacy_permissions,
+        crate::commands::repair_privacy_permission,
         crate::commands::open_welcome_window,
         crate::commands::complete_first_run,
         crate::commands::trigger_welcome_banner,

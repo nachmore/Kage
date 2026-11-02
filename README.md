@@ -72,13 +72,14 @@ For details, see [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md).
 
 ### macOS permissions
 
-Kage requires three macOS privacy permissions, prompted on first use and also surfaceable from **Settings → macOS Permissions**:
+Kage uses two macOS privacy permissions, prompted on first use and also surfaceable from **Settings → macOS Permissions**:
 
-- **Accessibility** — UI automation tools and the "paste captured text" flow
-- **Input Monitoring** — global hotkey
-- **Screen Recording** — reading foreground window titles
+- **Accessibility** — copying the selected text, pasting results back, raising a specific window, and Computer Control's UI automation
+- **Screen Recording** — reading window titles (Kage doesn't capture screen contents)
 
-These live in System Settings → Privacy & Security. The Welcome wizard walks through each on first launch.
+Global hotkeys need no permission (they're registered through Carbon `RegisterEventHotKey`), so Kage doesn't ask for Input Monitoring.
+
+These live in System Settings → Privacy & Security. The Welcome wizard walks through each on first launch, and the settings pane shows whether each one is currently granted. Because macOS ties a grant to one exact build of an ad-hoc-signed app, an update can leave Kage looking enabled in System Settings while macOS no longer applies it; **Repair** on the settings card clears that stale grant (`tccutil reset`) so you can switch Kage on again.
 
 ## Documentation
 
