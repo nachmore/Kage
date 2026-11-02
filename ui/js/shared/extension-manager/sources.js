@@ -552,27 +552,41 @@ export function installExtensionSourceMethods(ExtensionManager) {
          *
          * @returns {string[]}
          */ _resolveGrantedCapabilities(manifest) {
-            const id = manifest.id;
-            const requested = normalizePermissions(manifest.permissions, id);
-
-            const grants = this._configCache?.extension_grants || {};
-            const record = grants[id];
-            if (!record) {
+            const { capabilities, hasGrant } = this._computeGrantedCapabilities(manifest);
+            if (!hasGrant) {
                 // Extension without a grant record. This shouldn't happen if
                 // install went through the permission prompt, but handle it
                 // defensively: grant nothing and log loudly.
                 console.warn(
-                    `Extension '${id}': no user grant recorded, running with no capabilities. ` +
+                    `Extension '${manifest.id}': no user grant recorded, running with no capabilities. ` +
                         `The extension may be broken until it is reinstalled.`
                 );
-                return [];
             }
+            return capabilities;
+        },
 
+        /**
+         * Side-effect-free half of `_resolveGrantedCapabilities`, against the
+         * current `_configCache`. `reload()` uses it to notice a grant that
+         * changed while the extension stayed at the same version (e.g. the
+         * welcome flow committing a grant for an already-installed
+         * extension) without logging a warning per extension per reload.
+         *
+         * @returns {{ capabilities: string[], hasGrant: boolean }}
+         */
+        _computeGrantedCapabilities(manifest) {
+            const id = manifest.id;
+            const requested = normalizePermissions(manifest.permissions, id);
+            const record = this._configCache?.extension_grants?.[id];
+            if (!record) return { capabilities: [], hasGrant: false };
             // Intersect: the user's grant is authoritative. If the extension
             // is updated to request new capabilities, we drop the extras
             // until the user approves them.
             const grantedSet = new Set(normalizePermissions(record.granted, id));
-            return requested.filter((cap) => grantedSet.has(cap));
+            return {
+                capabilities: requested.filter((cap) => grantedSet.has(cap)),
+                hasGrant: true,
+            };
         },
 
         async _loadExtensionCss(id, manifest) {

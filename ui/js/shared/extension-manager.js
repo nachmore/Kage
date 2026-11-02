@@ -31,6 +31,13 @@ export {
     resolveExtensionMessage,
 } from './extension-manager/i18n.js';
 
+/** Same capabilities regardless of order (both are already normalised). */
+function sameCapabilitySet(a, b) {
+    const x = [...(a || [])].sort();
+    const y = [...(b || [])].sort();
+    return x.length === y.length && x.every((cap, i) => cap === y[i]);
+}
+
 export class ExtensionManager {
     /**
      * @param {Function} invoke - the raw Tauri invoke (the host, not the
@@ -494,9 +501,21 @@ export class ExtensionManager {
                 if (!item.enabled) continue;
                 const existing = this.extensions.get(item.manifest.id);
                 if (existing) {
-                    if (existing.manifest?.version === item.manifest.version) continue;
+                    const sameVersion = existing.manifest?.version === item.manifest.version;
+                    // Capabilities are baked into the sandbox at load, so a
+                    // grant that changed at the same version (welcome flow,
+                    // re-approval) needs a reload too — otherwise the window
+                    // keeps blocking calls the user has since approved until
+                    // the app restarts.
+                    const sameCaps = sameCapabilitySet(
+                        existing.capabilities,
+                        this._computeGrantedCapabilities(item.manifest).capabilities
+                    );
+                    if (sameVersion && sameCaps) continue;
                     console.log(
-                        `ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`
+                        sameVersion
+                            ? `ExtensionManager: capabilities changed for '${item.manifest.id}', reloading`
+                            : `ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`
                     );
                     this._unloadExtension(item.manifest.id);
                 }

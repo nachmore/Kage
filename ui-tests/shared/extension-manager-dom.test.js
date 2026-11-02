@@ -169,6 +169,90 @@ describe('ExtensionManager.reload serialization', () => {
     });
 });
 
+describe('ExtensionManager.reload picks up grant changes', () => {
+    // Regression: the welcome flow committed a grant for an
+    // already-installed extension and emitted extensions_changed, but
+    // reload() skipped every already-loaded extension at the same version —
+    // so open windows kept blocking calls with "missing capability" until
+    // the app restarted.
+    const manifest = { id: 'calendar', version: '1.0.8', permissions: ['calendar', 'urls'] };
+
+    function harness({ grants, loadedCaps = [], loadedVersion = '1.0.8' }) {
+        const invoke = async (cmd) => {
+            if (cmd === 'get_config') {
+                return { extension_states: { calendar: true }, extension_grants: grants, extensions: {} };
+            }
+            if (cmd === 'list_extensions') return [{ manifest, enabled: true }];
+            return undefined;
+        };
+        const mgr = new ExtensionManager(invoke);
+        mgr.extensions.set('calendar', {
+            manifest: { ...manifest, version: loadedVersion },
+            capabilities: loadedCaps,
+            sandbox: stubSandbox(),
+        });
+        const unload = vi.spyOn(mgr, '_unloadExtension').mockImplementation((id) => {
+            mgr.extensions.delete(id);
+        });
+        const load = vi.spyOn(mgr, '_loadExtension').mockImplementation(async (item) => {
+            mgr.extensions.set(item.manifest.id, {
+                manifest: item.manifest,
+                capabilities: mgr._resolveGrantedCapabilities(item.manifest),
+                sandbox: stubSandbox(),
+            });
+        });
+        return { mgr, unload, load };
+    }
+
+    it('reloads an extension whose grant was committed after it loaded', async () => {
+        const grantNow = { calendar: { granted: ['calendar', 'urls'], approved_version: '1.0.8' } };
+        const { mgr, unload, load } = harness({ grants: grantNow, loadedCaps: [] });
+        await mgr.reload();
+        expect(unload).toHaveBeenCalledWith('calendar');
+        expect(load).toHaveBeenCalledTimes(1);
+        expect(mgr.extensions.get('calendar').capabilities.sort()).toEqual(['calendar', 'urls']);
+    });
+
+    it('leaves an extension alone when version and capabilities are unchanged', async () => {
+        const grant = { calendar: { granted: ['urls', 'calendar'], approved_version: '1.0.8' } };
+        // Same set, different order — must not count as a change.
+        const { mgr, unload, load } = harness({ grants: grant, loadedCaps: ['calendar', 'urls'] });
+        await mgr.reload();
+        expect(unload).not.toHaveBeenCalled();
+        expect(load).not.toHaveBeenCalled();
+    });
+
+    it('drops capabilities when a grant is revoked', async () => {
+        const narrowed = { calendar: { granted: ['urls'], approved_version: '1.0.8' } };
+        const { mgr, load } = harness({ grants: narrowed, loadedCaps: ['calendar', 'urls'] });
+        await mgr.reload();
+        expect(load).toHaveBeenCalledTimes(1);
+        expect(mgr.extensions.get('calendar').capabilities).toEqual(['urls']);
+    });
+
+    it('still reloads on a version change', async () => {
+        const grant = { calendar: { granted: ['calendar', 'urls'], approved_version: '1.0.8' } };
+        const { mgr, unload, load } = harness({
+            grants: grant,
+            loadedCaps: ['calendar', 'urls'],
+            loadedVersion: '1.0.7',
+        });
+        await mgr.reload();
+        expect(unload).toHaveBeenCalledWith('calendar');
+        expect(load).toHaveBeenCalledTimes(1);
+        expect(mgr.extensions.get('calendar').manifest.version).toBe('1.0.8');
+    });
+
+    it('does not warn about missing grants while merely comparing', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const mgr = new ExtensionManager(async () => undefined);
+        mgr._configCache = { extension_grants: {} };
+        expect(mgr._computeGrantedCapabilities(manifest)).toEqual({ capabilities: [], hasGrant: false });
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
+    });
+});
+
 describe('ExtensionManager keyword gate (matchAll / matchAllAsync)', () => {
     // Build a manager holding several search extensions at once. Each spec
     // entry: { id, keywords?: [{keyword,...}], matchRows?: [...] }.
