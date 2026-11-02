@@ -11,6 +11,9 @@
 /// Let the native window identified by `ns_window` (an `NSWindow*` on
 /// macOS; ignored elsewhere) appear on every Space, including over
 /// full-screen apps. Must be called on the main thread.
+// Only the macOS cfg branch of `setup::configure_overlay_window` calls this;
+// keep the cross-platform surface without tripping dead_code elsewhere.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn make_overlay_window(ns_window: *mut std::ffi::c_void) {
     crate::os::platform::window_spaces::make_overlay_window_impl(ns_window)
 }

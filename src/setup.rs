@@ -50,18 +50,15 @@ pub fn configure_transparent_windows(app: &App) {
 pub fn configure_overlay_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     #[cfg(target_os = "macos")]
     {
-        let ns_window = match window.ns_window() {
-            Ok(ptr) => ptr as usize,
-            Err(e) => {
-                error!("[spaces] no NSWindow for {}: {}", window.label(), e);
-                return;
-            }
-        };
-        let label = window.label().to_string();
-        if let Err(e) = window.run_on_main_thread(move || {
-            crate::os::window_spaces::make_overlay_window(ns_window as *mut std::ffi::c_void);
+        // Look the NSWindow up inside the main-thread closure, against a
+        // clone of the window, so both the AppKit access and the mutation
+        // happen on the main thread while the window is alive.
+        let target = window.clone();
+        if let Err(e) = window.run_on_main_thread(move || match target.ns_window() {
+            Ok(ptr) => crate::os::window_spaces::make_overlay_window(ptr),
+            Err(e) => error!("[spaces] no NSWindow for {}: {}", target.label(), e),
         }) {
-            error!("[spaces] failed to configure {}: {}", label, e);
+            error!("[spaces] failed to configure {}: {}", window.label(), e);
         }
     }
     #[cfg(not(target_os = "macos"))]

@@ -112,12 +112,16 @@ installGlobalErrorCapture('settings');
 
 // --- Window-level keyboard shortcuts ---------------------------------------
 //
-// Ctrl/⌘+W hides the settings window (matches the floating + chat windows).
+// Ctrl/⌘+W closes the settings window (matches the chat window). close(),
+// not hide(): the backend intercepts CloseRequested, hides the window AND
+// re-evaluates the macOS activation policy. A bare hide() skipped that and
+// left Kage in Regular policy with no windows open, which (among other
+// things) stops the launcher from appearing over full-screen apps.
 document.addEventListener('keydown', (e) => {
     if (cmdOrCtrlPressed(e) && e.key === 'w') {
         e.preventDefault();
         if (window.__TAURI__) {
-            window.__TAURI__.webviewWindow.getCurrentWebviewWindow().hide();
+            window.__TAURI__.webviewWindow.getCurrentWebviewWindow().close();
         }
     }
 });
