@@ -99,6 +99,7 @@
     "publisher": "Oren Nachman",
     "macOS": {
       "minimumSystemVersion": "11.0",
+      "hardenedRuntime": true,
       "entitlements": "./src-tauri/macos/entitlements.plist",
       "infoPlist": "./src-tauri/macos/Info.plist",
       "exceptionDomain": "",
