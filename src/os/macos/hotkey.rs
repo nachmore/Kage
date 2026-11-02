@@ -1,5 +1,12 @@
 //! CGEventTap-based hotkey capture on macOS.
 //!
+//! **The Settings / welcome hotkey picker does not use this on macOS.** It
+//! records combos from DOM `keydown` events in its own (focused) webview —
+//! see `ui/js/shared/hotkey-capture.js` and `begin_hotkey_recording` — which
+//! needs no TCC permission at all. This tap is kept for the
+//! `capture_hotkey_combo` command (cross-platform API surface), and is only
+//! attempted when Kage is *already* trusted for Accessibility.
+//!
 //! The Windows implementation uses a separate helper process because
 //! WebView2's raw-input registration disables WH_KEYBOARD_LL hooks in
 //! the same process. macOS has no such constraint — a CGEventTap on a
@@ -7,19 +14,20 @@
 //! the main thread.
 //!
 //! The tap runs in **listen-only** mode: events pass through to the
-//! focused app unchanged. That means a user's captured key combo also
-//! lands in whatever window had focus when they pressed it — fine in
-//! practice because they're looking at the Settings "Record Hotkey"
-//! dialog, which is modal-ish and the combo is momentary. Consuming
-//! the event would require a non-listen-only tap plus Accessibility
-//! permission; we intentionally avoid that trade.
+//! focused app unchanged.
 //!
-//! # Permissions
+//! # Permissions — never prompt from here
 //!
-//! Passive CGEventTaps require **Input Monitoring** (macOS 10.15+).
-//! Without it, `CGEventTapCreate` returns NULL and we log a warn_once
-//! and return `None`. The user must grant the permission via
-//! System Settings → Privacy & Security → Input Monitoring → Kage.
+//! A keyboard CGEventTap needs Accessibility or Input Monitoring. This
+//! module used to call `AXIsProcessTrustedWithOptions(prompt: true)` on
+//! every capture, which is what produced the "approve Kage in System
+//! Settings" dialog even for users who had approved it: TCC pins grants
+//! for ad-hoc-signed builds to the exact binary hash, so after an update
+//! the old grant still *shows* as enabled while the new binary is
+//! untrusted. Prompting is now the job of the explicit Permissions pane
+//! in Settings; capture only checks (`AXIsProcessTrusted`, no prompt) and
+//! returns `None` straight away when untrusted, instead of opening a tap
+//! that would silently see no events until the 10 s timeout.
 //!
 //! # Cancellation & timeout
 //!
@@ -27,12 +35,10 @@
 //! `cancel_capture_impl` can call `CFRunLoopStop` from another thread.
 //! A short timer thread stops the run loop when the timeout expires.
 
+use super::keycodes::{keycode_to_name, KEYCODE_ESCAPE};
 use crate::os::hotkey::CapturedHotkey;
 use accessibility_sys as ax;
-use core_foundation::boolean::CFBoolean;
-use core_foundation::dictionary::CFDictionary;
 use core_foundation::runloop::{CFRunLoop, CFRunLoopRef};
-use core_foundation::string::CFString;
 use core_graphics::event::{
     CGEventFlags, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
     CGEventType, CallbackResult, EventField,
@@ -71,21 +77,12 @@ static GENERATION: AtomicU64 = AtomicU64::new(0);
 // ---------------------------------------------------------------------------
 
 pub fn capture_hotkey_impl(timeout_ms: u64) -> Option<CapturedHotkey> {
-    // Prompt for Accessibility if not already granted. Accessibility subsumes
-    // Input Monitoring for passive CGEventTaps — once granted, the tap works
-    // without a separate Input Monitoring entry. The prompt also ensures the
-    // app appears in the Accessibility list in System Settings.
-    //
-    // NOTE: This only works when running as a proper .app bundle (i.e.
-    // `cargo tauri build`). During `cargo tauri dev` the bare binary won't
-    // appear in System Settings TCC lists — this is a macOS limitation for
-    // non-bundled executables.
-    let ax_trusted = ensure_accessibility_for_capture();
-    if !ax_trusted {
-        info!(
-            "[HOTKEY_CAPTURE] Accessibility not yet granted — event tap may fail. \
-             Grant Accessibility in System Settings and restart the app."
-        );
+    // Check — never prompt. See the module docs for why prompting here was
+    // wrong. Without trust the tap would be created but receive no key
+    // events, so bail immediately rather than hanging for `timeout_ms`.
+    if !unsafe { ax::AXIsProcessTrusted() } {
+        warn_permission_once();
+        return None;
     }
 
     // Refuse concurrent capture so two callers can't race on the shared
@@ -276,30 +273,11 @@ fn warn_permission_once() {
     static WARNED: OnceLock<()> = OnceLock::new();
     WARNED.get_or_init(|| {
         log::warn!(
-            "hotkey capture: CGEventTapCreate failed — Accessibility permission likely not granted. \
-             Go to System Settings → Privacy & Security → Accessibility and enable Kage."
+            "[HOTKEY_CAPTURE] Kage is not trusted for Accessibility (or the event tap failed), \
+             so the CGEventTap capture path is unavailable. The Settings hotkey picker records \
+             in-webview on macOS and does not need this; see Settings → Permissions to repair."
         );
     });
-}
-
-/// Check (and prompt for) Accessibility permission. Returns true if granted.
-///
-/// Accessibility permission subsumes Input Monitoring for passive CGEventTaps,
-/// so granting Accessibility is sufficient — the user doesn't need to separately
-/// find and enable the app in the Input Monitoring list.
-///
-/// The prompt option (`kAXTrustedCheckOptionPrompt = true`) causes macOS to show
-/// the native "Kage would like to control this computer" dialog if permission
-/// hasn't been granted yet, and adds the app to the Accessibility list in System
-/// Settings. This works even for ad-hoc signed development builds.
-fn ensure_accessibility_for_capture() -> bool {
-    use core_foundation::base::TCFType;
-
-    let dict: CFDictionary<CFString, CFBoolean> = CFDictionary::from_CFType_pairs(&[(
-        unsafe { CFString::wrap_under_get_rule(ax::kAXTrustedCheckOptionPrompt) },
-        CFBoolean::true_value(),
-    )]);
-    unsafe { ax::AXIsProcessTrustedWithOptions(dict.as_concrete_TypeRef()) }
 }
 
 /// Access the raw `CFRunLoopRef` inside the `CFRunLoop` newtype. The crate
@@ -319,158 +297,9 @@ unsafe fn cf_run_loop_stop(rl: CFRunLoopRef) {
     CFRunLoopStop(rl);
 }
 
-// ---------------------------------------------------------------------------
-// Keycode → name mapping (kVK_* from HIToolbox/Events.h)
-// ---------------------------------------------------------------------------
-
-const KEYCODE_ESCAPE: u16 = 0x35;
-
-fn keycode_to_name(code: u16) -> String {
-    // Values from <HIToolbox/Events.h>. The layout groups non-contiguously
-    // (letters aren't alphabetic in keycode order) so a flat match is the
-    // clearest way to express it.
-    match code {
-        0x00 => "A".into(),
-        0x01 => "S".into(),
-        0x02 => "D".into(),
-        0x03 => "F".into(),
-        0x04 => "H".into(),
-        0x05 => "G".into(),
-        0x06 => "Z".into(),
-        0x07 => "X".into(),
-        0x08 => "C".into(),
-        0x09 => "V".into(),
-        0x0B => "B".into(),
-        0x0C => "Q".into(),
-        0x0D => "W".into(),
-        0x0E => "E".into(),
-        0x0F => "R".into(),
-        0x10 => "Y".into(),
-        0x11 => "T".into(),
-        0x1F => "O".into(),
-        0x20 => "U".into(),
-        0x22 => "I".into(),
-        0x23 => "P".into(),
-        0x25 => "L".into(),
-        0x26 => "J".into(),
-        0x28 => "K".into(),
-        0x2D => "N".into(),
-        0x2E => "M".into(),
-
-        // Digits (0x12-0x1D, non-alphabetic order too)
-        0x12 => "1".into(),
-        0x13 => "2".into(),
-        0x14 => "3".into(),
-        0x15 => "4".into(),
-        0x16 => "6".into(),
-        0x17 => "5".into(),
-        0x19 => "9".into(),
-        0x1A => "7".into(),
-        0x1C => "8".into(),
-        0x1D => "0".into(),
-
-        // Editing / layout
-        0x18 => "=".into(),
-        0x1B => "-".into(),
-        0x1E => "]".into(),
-        0x21 => "[".into(),
-        0x24 => "Enter".into(),
-        0x27 => "'".into(),
-        0x29 => ";".into(),
-        0x2A => "\\".into(),
-        0x2B => ",".into(),
-        0x2C => "/".into(),
-        0x2F => ".".into(),
-        0x30 => "Tab".into(),
-        0x31 => "Space".into(),
-        0x32 => "`".into(),
-        0x33 => "Backspace".into(),
-        0x35 => "Escape".into(),
-
-        // Arrows / navigation
-        0x73 => "Home".into(),
-        0x74 => "PageUp".into(),
-        0x75 => "Delete".into(),
-        0x77 => "End".into(),
-        0x79 => "PageDown".into(),
-        0x7B => "Left".into(),
-        0x7C => "Right".into(),
-        0x7D => "Down".into(),
-        0x7E => "Up".into(),
-
-        // Function keys (non-contiguous — painful but stable)
-        0x7A => "F1".into(),
-        0x78 => "F2".into(),
-        0x63 => "F3".into(),
-        0x76 => "F4".into(),
-        0x60 => "F5".into(),
-        0x61 => "F6".into(),
-        0x62 => "F7".into(),
-        0x64 => "F8".into(),
-        0x65 => "F9".into(),
-        0x6D => "F10".into(),
-        0x67 => "F11".into(),
-        0x6F => "F12".into(),
-
-        // Numpad
-        0x41 => "NumDecimal".into(),
-        0x43 => "NumMultiply".into(),
-        0x45 => "NumAdd".into(),
-        0x4B => "NumDivide".into(),
-        0x4E => "NumSubtract".into(),
-        0x51 => "NumEquals".into(),
-        0x52 => "Num0".into(),
-        0x53 => "Num1".into(),
-        0x54 => "Num2".into(),
-        0x55 => "Num3".into(),
-        0x56 => "Num4".into(),
-        0x57 => "Num5".into(),
-        0x58 => "Num6".into(),
-        0x59 => "Num7".into(),
-        0x5B => "Num8".into(),
-        0x5C => "Num9".into(),
-
-        // Unknown — surface the raw code so the user sees something meaningful
-        // rather than a silent drop.
-        other => format!("VK_{:02X}", other),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn keycode_letters_map_correctly() {
-        assert_eq!(keycode_to_name(0x00), "A");
-        assert_eq!(keycode_to_name(0x09), "V");
-        assert_eq!(keycode_to_name(0x2E), "M");
-    }
-
-    #[test]
-    fn keycode_digits_map_correctly() {
-        assert_eq!(keycode_to_name(0x12), "1");
-        assert_eq!(keycode_to_name(0x1D), "0");
-    }
-
-    #[test]
-    fn keycode_arrows_map_correctly() {
-        assert_eq!(keycode_to_name(0x7B), "Left");
-        assert_eq!(keycode_to_name(0x7E), "Up");
-    }
-
-    #[test]
-    fn keycode_function_keys_map_correctly() {
-        assert_eq!(keycode_to_name(0x7A), "F1");
-        assert_eq!(keycode_to_name(0x6F), "F12");
-    }
-
-    #[test]
-    fn unknown_keycode_falls_back_to_vk_hex() {
-        // 0xFF isn't a real kVK_* — the fallback should expose it verbatim
-        // so the user sees something rather than a silent drop.
-        assert_eq!(keycode_to_name(0xFF), "VK_FF");
-    }
 
     #[test]
     fn has_any_modifier_detects_each_flag() {

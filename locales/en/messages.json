@@ -669,6 +669,14 @@
     "message": "The shortcut to summon Kage from anywhere.",
     "description": "Helper text for the global hotkey"
   },
+  "settings.hotkey.global.use_cmd_space": {
+    "message": "Use ⌘Space (replace Spotlight)",
+    "description": "macOS-only button under the global hotkey picker that sets the hotkey to Command+Space"
+  },
+  "settings.hotkey.global.use_cmd_space_title": {
+    "message": "Open Kage with ⌘Space instead of Spotlight. Spotlight gets its shortcut back when Kage quits.",
+    "description": "Tooltip for the 'Use ⌘Space' button"
+  },
   "settings.hotkey.voice.label": {
     "message": "Voice Input Hotkey",
     "description": "Label for the voice-input hotkey picker"
@@ -4669,6 +4677,26 @@
     "message": "Failed to register: {message}",
     "description": "Fallback error when hotkey registration fails for an unrecognised reason"
   },
+  "shared.hotkey_picker.unsupported_key": {
+    "message": "That key can't be used in a hotkey — try another combo.",
+    "description": "Shown while recording a hotkey when the user presses a key Kage cannot bind (e.g. a media key)"
+  },
+  "shared.hotkey_picker.system_conflict": {
+    "message": "{combo} is used by macOS for {name}.",
+    "description": "Warning when a recorded hotkey matches a built-in macOS keyboard shortcut. {combo} is the key combo such as ⌘Space; {name} is the macOS feature such as 'Spotlight search'"
+  },
+  "shared.hotkey_picker.system_conflict_hint": {
+    "message": "Kage can turn that macOS shortcut off while Kage is running and give it back when you quit.",
+    "description": "Explains what choosing 'Use for Kage' does to the conflicting macOS shortcut"
+  },
+  "shared.hotkey_picker.system_conflict_replace": {
+    "message": "Use for Kage",
+    "description": "Button: let Kage take over the conflicting macOS shortcut"
+  },
+  "shared.hotkey_picker.system_conflict_keep": {
+    "message": "Keep macOS shortcut",
+    "description": "Button: dismiss the conflict and keep the current Kage hotkey"
+  },
   "ext_perm.empty": {
     "message": "🔒 This extension does not request any capabilities. It cannot access your clipboard, files, calendar, or the AI agent.",
     "description": "Shown when an extension requests no permissions"
@@ -5548,5 +5576,49 @@
   "settings.internal_sites.test.icon.too_large": {
     "message": "image is too large",
     "description": "Settings → Internal Sites test result: favicon attempt returned an image over the size limit"
+  },
+  "system_shortcuts.name.spotlight": {
+    "message": "Spotlight search",
+    "description": "Name of the macOS feature bound to ⌘Space"
+  },
+  "system_shortcuts.name.finder_search": {
+    "message": "the Finder search window",
+    "description": "Name of the macOS feature bound to ⌥⌘Space"
+  },
+  "system_shortcuts.name.input_source_previous": {
+    "message": "switching to the previous input source",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Space)"
+  },
+  "system_shortcuts.name.input_source_next": {
+    "message": "switching to the next input source",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Option+Space)"
+  },
+  "system_shortcuts.name.app_switcher": {
+    "message": "the app switcher",
+    "description": "Name of the macOS ⌘Tab app switcher"
+  },
+  "system_shortcuts.name.screenshot": {
+    "message": "screenshots",
+    "description": "Name of the macOS screenshot shortcuts (⌘⇧3/4/5)"
+  },
+  "system_shortcuts.name.mission_control": {
+    "message": "Mission Control",
+    "description": "Name of the macOS Mission Control feature"
+  },
+  "system_shortcuts.name.app_windows": {
+    "message": "showing an app's windows",
+    "description": "Name of the macOS 'Application windows' shortcut"
+  },
+  "system_shortcuts.name.show_desktop": {
+    "message": "Show Desktop",
+    "description": "Name of the macOS Show Desktop shortcut"
+  },
+  "system_shortcuts.name.switch_space": {
+    "message": "moving between Spaces",
+    "description": "Name of the macOS shortcut that moves left/right a Space"
+  },
+  "system_shortcuts.name.generic": {
+    "message": "a built-in keyboard shortcut",
+    "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for"
   }
 }

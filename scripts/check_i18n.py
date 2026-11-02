@@ -119,6 +119,11 @@ KNOWN_DYNAMIC_KEYS: set[str] = {
     "settings.assistant.editor.row_placeholder.*",
     # Theme-options dropdown selects via `settings.appearance.theme.${value}`.
     "settings.appearance.theme.*",
+    # macOS system-shortcut names: `system_shortcut_takeover::display_name_key`
+    # maps a symbolic-hotkey id to one of these, then calls translate() with
+    # the variable (the `every_display_name_key_exists_in_en_catalog` Rust
+    # test guards the other direction).
+    "system_shortcuts.name.*",
     # Welcome window's extension picker has data-i18n attributes on a few
     # rows the JS swaps in dynamically. `**` matches both
     # welcome.extensions.cap.none and welcome.extensions.cap.none.title.

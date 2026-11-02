@@ -50,6 +50,7 @@ mod slash_format;
 mod startup;
 mod state;
 mod steering_io;
+mod system_shortcut_takeover;
 mod telemetry;
 mod tray;
 mod updater;
@@ -255,6 +256,10 @@ async fn run() {
             }
         });
     }
+    // SIGTERM / SIGINT: give ⌘Space (or any other taken-over system
+    // shortcut) back to macOS before the process dies. A SIGKILL / crash is
+    // covered by the next launch's reconcile of the persisted owned set.
+    process_manager::register_child_killer(system_shortcut_takeover::release_all);
     // Capture a clone of config for the parts of setup() that still
     // need it (hotkey hot-reload installer, autostart pocket TTS, etc.).
     let config_for_setup = config.clone();

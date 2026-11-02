@@ -45,6 +45,7 @@ pub mod power;
 pub mod process;
 pub mod shell;
 pub mod startup;
+pub mod system_shortcuts;
 pub mod user;
 pub mod window_list;
 

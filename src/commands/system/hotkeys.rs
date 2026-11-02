@@ -4,6 +4,11 @@
 //! save / app startup / capture-completion calls it. `try_register_hotkey`
 //! probes a candidate combo without persisting; `capture_hotkey_combo`
 //! drives the OS-level capture (Windows uses a low-level keyboard hook).
+//! On macOS the picker records in its own webview instead, bracketed by
+//! `begin_hotkey_recording` / `end_hotkey_recording`; collisions with macOS
+//! system shortcuts (⌘Space → Spotlight) are surfaced by
+//! `check_system_shortcut_conflicts` and resolved through
+//! `crate::system_shortcut_takeover`.
 
 use crate::error::AppError;
 use crate::events;
@@ -39,6 +44,19 @@ pub fn register_all_hotkeys<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let voice_hk = config.get_voice_hotkey_string();
     drop(config);
 
+    // Free any approved system shortcut (⌘Space → Spotlight) BEFORE
+    // registering, mirroring the manual "untick Spotlight, then bind the
+    // launcher" flow; re-applied below with only the combos that actually
+    // registered so a failed registration never leaves Spotlight disabled
+    // with nothing in its place.
+    let configured: Vec<String> = std::iter::once(main_hk.clone())
+        .chain(cb_hk.iter().cloned())
+        .chain(ia_hk.iter().cloned())
+        .chain(voice_hk.iter().cloned())
+        .collect();
+    crate::system_shortcut_takeover::apply_for_hotkeys(&configured);
+    let mut registered: Vec<String> = Vec::new();
+
     // --- Main hotkey: toggle floating window (unique behavior) ---
     if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         match app
@@ -50,7 +68,10 @@ pub fn register_all_hotkeys<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
                 info!("Hotkey triggered: main ({})", _shortcut);
                 crate::commands::window::toggle_floating_window(&floating);
             }) {
-            Ok(_) => info!("✅ Registered main hotkey: {}", main_hk),
+            Ok(_) => {
+                info!("✅ Registered main hotkey: {}", main_hk);
+                registered.push(main_hk.clone());
+            }
             Err(e) => {
                 error!("❌ Failed to register main hotkey {}: {}", main_hk, e);
                 failures.push(("main", main_hk.clone()));
@@ -106,7 +127,10 @@ pub fn register_all_hotkeys<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
                     }
                 });
             }) {
-            Ok(_) => info!("✅ Registered inline-assist hotkey: {}", ia),
+            Ok(_) => {
+                info!("✅ Registered inline-assist hotkey: {}", ia);
+                registered.push(ia.clone());
+            }
             Err(e) => {
                 warn!("❌ Failed to register inline-assist hotkey {}: {}", ia, e);
                 failures.push(("inline-assist", ia.clone()));
@@ -150,7 +174,10 @@ pub fn register_all_hotkeys<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
                             });
                         },
                     ) {
-                        Ok(_) => info!("✅ Registered {} hotkey: {}", name, hk),
+                        Ok(_) => {
+                            info!("✅ Registered {} hotkey: {}", name, hk);
+                            registered.push(hk.clone());
+                        }
                         Err(e) => {
                             warn!("❌ Failed to register {} hotkey {}: {}", name, hk, e);
                             failures.push((name, hk.clone()));
@@ -160,6 +187,10 @@ pub fn register_all_hotkeys<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
             }
             None => info!("ℹ️ No {} hotkey configured", name),
         }
+    }
+
+    if registered.len() != configured.len() {
+        crate::system_shortcut_takeover::apply_for_hotkeys(&registered);
     }
 
     // Stash the failures in state so Settings → Hotkeys can read them on open
@@ -322,4 +353,127 @@ pub async fn capture_hotkey_combo<R: tauri::Runtime>(
 pub async fn cancel_hotkey_capture() -> Result<(), AppError> {
     crate::os::cancel_hotkey_capture();
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// In-webview recording (macOS) + system-shortcut takeover
+// ---------------------------------------------------------------------------
+
+/// Bumped by every begin/end so a stale safety timer can tell it has been
+/// superseded.
+static RECORDING_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static RECORDING_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Upper bound on a recording session. The picker gives up after 10 s; this
+/// covers a webview that never calls `end_hotkey_recording` (window closed
+/// or reloaded mid-capture, JS error) so Kage's hotkeys and the paused
+/// system shortcuts always come back.
+const RECORDING_SAFETY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Prepare for the picker to record a combo from DOM key events in its own
+/// webview — the macOS path, which needs no Accessibility / Input
+/// Monitoring permission. Unregisters Kage's global hotkeys (so pressing
+/// the current one reaches the webview) and pauses Space-bound system
+/// shortcuts (so ⌘Space reaches it instead of opening Spotlight).
+#[tauri::command]
+pub async fn begin_hotkey_recording<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
+    use std::sync::atomic::Ordering;
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    let generation = RECORDING_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    RECORDING_ACTIVE.store(true, Ordering::SeqCst);
+    let _ = app.global_shortcut().unregister_all();
+    tauri::async_runtime::spawn_blocking(crate::system_shortcut_takeover::begin_recording)
+        .await
+        .map_err(|e| AppError::internal(format!("begin_hotkey_recording task: {}", e)))?;
+    if !RECORDING_ACTIVE.load(Ordering::SeqCst) {
+        // `end_hotkey_recording` landed while we were still pausing system
+        // shortcuts; its end_recording() may have run before our
+        // begin_recording(), so undo the late pause. (Hotkeys were already
+        // re-registered by the end call.)
+        let _ =
+            tauri::async_runtime::spawn_blocking(crate::system_shortcut_takeover::end_recording)
+                .await;
+        return Ok(());
+    }
+    info!("[HOTKEY_RECORDING] started (generation {})", generation);
+
+    let app_for_timer = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(RECORDING_SAFETY_TIMEOUT).await;
+        if RECORDING_GENERATION.load(Ordering::SeqCst) == generation
+            && RECORDING_ACTIVE.load(Ordering::SeqCst)
+        {
+            warn!(
+                "[HOTKEY_RECORDING] generation {} never ended — restoring hotkeys",
+                generation
+            );
+            finish_recording(&app_for_timer).await;
+        }
+    });
+    Ok(())
+}
+
+/// Undo `begin_hotkey_recording`: resume paused system shortcuts and
+/// re-register every configured hotkey. Safe to call more than once.
+#[tauri::command]
+pub async fn end_hotkey_recording<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
+    use std::sync::atomic::Ordering;
+    RECORDING_GENERATION.fetch_add(1, Ordering::SeqCst);
+    finish_recording(&app).await;
+    Ok(())
+}
+
+async fn finish_recording<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    use std::sync::atomic::Ordering;
+    RECORDING_ACTIVE.store(false, Ordering::SeqCst);
+    let app = app.clone();
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        crate::system_shortcut_takeover::end_recording();
+        register_all_hotkeys(&app);
+    })
+    .await;
+    info!("[HOTKEY_RECORDING] ended");
+}
+
+/// System shortcuts (macOS symbolic hotkeys) bound to the same combo as
+/// `modifiers+key`. Empty on Windows/Linux. The picker uses this to offer
+/// "Use for Kage" before saving a combo the OS would otherwise swallow.
+#[tauri::command]
+pub async fn check_system_shortcut_conflicts(
+    modifiers: Vec<String>,
+    key: String,
+) -> Result<Vec<crate::system_shortcut_takeover::Conflict>, AppError> {
+    let combo = if modifiers.is_empty() {
+        key
+    } else {
+        format!("{}+{}", modifiers.join("+"), key)
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::system_shortcut_takeover::conflicts_for(&combo)
+    })
+    .await
+    .map_err(|e| AppError::internal(format!("check_system_shortcut_conflicts task: {}", e)))
+}
+
+/// Record the user's consent for Kage to take over the given system
+/// shortcuts while it runs, then re-register so a combo that is *already*
+/// Kage's saved hotkey (e.g. an existing ⌘Space binding Spotlight was
+/// swallowing) takes effect immediately. For a new combo the takeover
+/// happens when the picker saves it and `config_updated` re-registers.
+#[tauri::command]
+pub async fn allow_system_shortcut_override<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    ids: Vec<u32>,
+) -> Result<(), AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::system_shortcut_takeover::approve(&ids);
+        register_all_hotkeys(&app);
+    })
+    .await
+    .map_err(|e| AppError::internal(format!("allow_system_shortcut_override task: {}", e)))
 }

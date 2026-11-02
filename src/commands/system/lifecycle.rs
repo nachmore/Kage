@@ -50,6 +50,12 @@ pub fn graceful_shutdown<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         }
     }
 
+    // Hand any system shortcut Kage took over (⌘Space → Spotlight) back to
+    // macOS. Must run on every exit path — the disabled state outlives our
+    // process. RunEvent::Exit and the signal handler call it too; it's
+    // idempotent.
+    crate::system_shortcut_takeover::release_all();
+
     // Flush app log to disk
     crate::app_log::flush();
 }

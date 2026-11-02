@@ -1,5 +1,5 @@
 import { SettingsModule } from './base.js';
-import { isWindows, platformKeyLabel } from '../shared/shortcuts.js';
+import { isMac, isWindows, platformKeyLabel } from '../shared/shortcuts.js';
 import { t } from '../shared/i18n.js';
 /**
  * Hotkey & Shortcuts Settings Module - uses shared HotkeyPicker component
@@ -46,7 +46,12 @@ export class HotkeySettingsModule extends SettingsModule {
             this.createControlRow(
                 t('settings.hotkey.global.label'),
                 t('settings.hotkey.global.description'),
-                '<div id="settingsHotkeyPicker"></div>'
+                '<div id="settingsHotkeyPicker"></div>' +
+                    // macOS: one-click "replace Spotlight" — the picker's
+                    // system-shortcut prompt explains and asks first.
+                    (isMac()
+                        ? '<div class="hk-picker-presets" id="settingsHotkeyPresets"></div>'
+                        : '')
             ) +
             this.createControlRow(
                 t('settings.hotkey.voice.label'),
@@ -137,6 +142,19 @@ export class HotkeySettingsModule extends SettingsModule {
                 console.error('Failed to save hotkey:', e);
             }
         });
+
+        const presets = document.getElementById('settingsHotkeyPresets');
+        if (presets) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'setting-btn-secondary';
+            btn.textContent = t('settings.hotkey.global.use_cmd_space');
+            btn.title = t('settings.hotkey.global.use_cmd_space_title');
+            btn.addEventListener('click', () =>
+                this._picker.applyCombo({ modifiers: ['Super'], key: 'Space' })
+            );
+            presets.appendChild(btn);
+        }
 
         // Clipboard history hotkey picker
         const cbContainer = document.getElementById('settingsClipboardHotkeyPicker');

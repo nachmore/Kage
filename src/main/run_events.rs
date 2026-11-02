@@ -8,6 +8,10 @@ pub fn run(
 ) {
     app.run(move |handler, event| {
         if let tauri::RunEvent::Exit = event {
+            // Hand ⌘Space (or any other taken-over system shortcut) back to
+            // macOS first — the disabled state outlives our process.
+            // Idempotent; run_all_killers below calls it again.
+            crate::system_shortcut_takeover::release_all();
             if let Ok(mut slot) = session_watcher.lock() {
                 slot.take();
             }

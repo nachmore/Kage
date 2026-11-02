@@ -784,6 +784,34 @@ body.dark-theme .attachment-remove-btn {
 .hk-status-error {
     color: #ef4444;
 }
+.hk-status-warning {
+    color: var(--kage-text-primary, #e5e7eb);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.08);
+    border-radius: 8px;
+}
+.hk-picker-conflict-hint {
+    color: var(--kage-text-secondary, #938f9b);
+    font-size: 11px;
+}
+.hk-picker-conflict-actions {
+    display: flex;
+    gap: 8px;
+}
+.hk-picker-presets {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+body.light-theme .hk-status-warning {
+    color: #333;
+    border-color: rgba(217, 119, 6, 0.4);
+    background: rgba(245, 158, 11, 0.1);
+}
 
 /* Light theme overrides */
 body.light-theme .hk-picker-display {

@@ -39,6 +39,7 @@ pub mod session_titler;
 pub mod slash_format;
 pub mod startup;
 pub mod steering_io;
+pub mod system_shortcut_takeover;
 pub mod webview_recovery;
 pub mod window_labels;
 
