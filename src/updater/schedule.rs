@@ -138,7 +138,7 @@ fn spawn_idle_loop(
             match plugin_download_and_install(&app, update).await {
                 Ok(()) => {
                     info!("Update installed; relaunching");
-                    relaunch_and_exit(&app);
+                    relaunch_and_exit(&app, false);
                 }
                 Err(error) => {
                     error!("Failed to install update: {error}");

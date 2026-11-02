@@ -265,12 +265,24 @@ fn format_install_error(error: &tauri_plugin_updater::Error, reason: &str) -> an
 ///
 /// So we spawn a small detached `/bin/sh` helper that waits for our PID to
 /// disappear (bounded), then launches the bundle through LaunchServices.
+///
+/// `foreground`: true for a user-clicked install (the post-update floating
+/// window should take focus); false for a silent idle install, which
+/// relaunches with `open -g` so it doesn't steal focus from whatever the
+/// user is typing in.
 #[cfg(target_os = "macos")]
-pub fn relaunch_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+pub fn relaunch_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>, foreground: bool) {
     match std::env::current_exe() {
         Ok(executable) => {
             let target = relaunch_target(&executable);
-            match relaunch_helper_command(std::process::id(), &target, OPEN_BIN).spawn() {
+            let mut cmd =
+                relaunch_helper_command(std::process::id(), &target, OPEN_BIN, foreground);
+            // The helper outlives our log writer; give it its own file so a
+            // failed relaunch is diagnosable instead of silent.
+            if let Some(log) = open_relaunch_log() {
+                cmd.stderr(log);
+            }
+            match cmd.spawn() {
                 Ok(child) => info!(
                     "Relaunch helper spawned (pid {}) — will start {:?} once pid {} exits",
                     child.id(),
@@ -288,6 +300,18 @@ pub fn relaunch_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 
 #[cfg(target_os = "macos")]
 const OPEN_BIN: &str = "/usr/bin/open";
+
+/// `<logs>/relaunch.log` (next to app.jsonl), append mode.
+#[cfg(target_os = "macos")]
+fn open_relaunch_log() -> Option<std::fs::File> {
+    let dir = dirs::data_local_dir()?.join("kage").join("logs");
+    let _ = std::fs::create_dir_all(&dir);
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("relaunch.log"))
+        .ok()
+}
 
 /// What to start after we exit: the enclosing `.app` bundle when there is
 /// one (so LaunchServices launches it properly), else the bare executable
@@ -317,20 +341,35 @@ fn relaunch_target(executable: &std::path::Path) -> RelaunchTarget {
 
 /// Wait-for-exit-then-launch helper. PID and paths are passed as
 /// positional parameters (never interpolated into the script), so bundle
-/// paths with spaces or quotes are safe. Waits at most 15 s, then launches
-/// anyway. Runs in its own process group with null stdio so a SIGTERM to
-/// our group, or our stdout closing, can't take it down with us.
+/// paths with spaces or quotes are safe. Waits up to 60 s — exit can block
+/// on telemetry flushes with 10 s network timeouts — then SIGKILLs the old
+/// process (teardown already ran; only the flush is lost) so the new
+/// instance can't hand off to a wedged one via the single-instance socket.
+/// Runs in its own process group with null stdin/stdout so a SIGTERM to
+/// our group, or our stdout closing, can't take it down with us; stderr
+/// carries one status line (the caller points it at relaunch.log).
 #[cfg(target_os = "macos")]
 fn relaunch_helper_command(
     pid: u32,
     target: &RelaunchTarget,
     open_bin: &str,
+    foreground: bool,
 ) -> std::process::Command {
     use std::os::unix::process::CommandExt;
-    const SCRIPT: &str = r#"pid=$1; mode=$2; target=$3; open_bin=$4; i=0
-while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 150 ]; do sleep 0.1; i=$((i+1)); done
-if [ "$mode" = bundle ]; then exec "$open_bin" -n -a "$target" --args --restart; fi
-exec "$target" --restart"#;
+    const SCRIPT: &str = r#"pid=$1; mode=$2; target=$3; open_bin=$4; bg=$5; i=0
+while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 600 ]; do sleep 0.1; i=$((i+1)); done
+note=""
+if kill -0 "$pid" 2>/dev/null; then
+  kill -KILL "$pid" 2>/dev/null; note=" (timed out; killed old pid)"; j=0
+  while kill -0 "$pid" 2>/dev/null && [ "$j" -lt 20 ]; do sleep 0.1; j=$((j+1)); done
+fi
+if [ "$mode" = bundle ]; then
+  if [ "$bg" = 1 ]; then "$open_bin" -g -n -a "$target" --args --restart; else "$open_bin" -n -a "$target" --args --restart; fi
+else
+  "$target" --restart </dev/null >/dev/null 2>&1 &
+fi
+rc=$?
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) relaunch $mode '$target' after ${i}x100ms$note: exit=$rc" >&2"#;
     let (mode, path) = match target {
         RelaunchTarget::Bundle(p) => ("bundle", p),
         RelaunchTarget::Executable(p) => ("exe", p),
@@ -343,6 +382,7 @@ exec "$target" --restart"#;
         .arg(mode)
         .arg(path)
         .arg(open_bin)
+        .arg(if foreground { "0" } else { "1" })
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -423,7 +463,7 @@ mod relaunch_tests {
             .spawn()
             .unwrap();
         let bundle = RelaunchTarget::Bundle(PathBuf::from("/Applications/Kage Test.app"));
-        let mut helper = relaunch_helper_command(old.id(), &bundle, opener.to_str().unwrap())
+        let mut helper = relaunch_helper_command(old.id(), &bundle, opener.to_str().unwrap(), true)
             .spawn()
             .unwrap();
 
@@ -442,6 +482,36 @@ mod relaunch_tests {
         assert_eq!(
             argv,
             "-n\n-a\n/Applications/Kage Test.app\n--args\n--restart\n"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn background_relaunch_does_not_take_focus() {
+        let dir = std::env::temp_dir().join(format!("kage-relaunch-bg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join("launched");
+        let opener = dir.join("open");
+        std::fs::write(
+            &opener,
+            format!("#!/bin/sh\nprintf '%s ' \"$@\" > '{}'\n", marker.display()),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&opener, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut gone = std::process::Command::new("/usr/bin/true").spawn().unwrap();
+        let pid = gone.id();
+        gone.wait().unwrap();
+        let bundle = RelaunchTarget::Bundle(PathBuf::from("/Applications/Kage.app"));
+        let mut helper = relaunch_helper_command(pid, &bundle, opener.to_str().unwrap(), false)
+            .spawn()
+            .unwrap();
+        assert!(wait_for(&marker, Duration::from_secs(5)));
+        let _ = helper.wait();
+        assert_eq!(
+            std::fs::read_to_string(&marker).unwrap(),
+            "-g -n -a /Applications/Kage.app --args --restart "
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -469,6 +539,7 @@ mod relaunch_tests {
             gone_pid,
             &RelaunchTarget::Executable(exe.clone()),
             "/nonexistent-open",
+            true,
         )
         .spawn()
         .unwrap();
@@ -480,6 +551,6 @@ mod relaunch_tests {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn relaunch_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+pub fn relaunch_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>, _foreground: bool) {
     app.exit(0);
 }

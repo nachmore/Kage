@@ -147,7 +147,7 @@ pub async fn download_and_install_update<R: tauri::Runtime>(
     // download_and_install and we never reached this line. On macOS
     // it returned cleanly after swapping the .app on disk; relaunch
     // into the new binary seamlessly.
-    crate::updater::relaunch_and_exit(&app);
+    crate::updater::relaunch_and_exit(&app, true);
     Ok(())
 }
 
