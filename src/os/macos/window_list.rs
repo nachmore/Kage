@@ -386,7 +386,7 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
 
 /// Ask NSWorkspace for the currently-frontmost running application.
 /// Returns (pid, localizedName). Permissionless — no TCC prompt.
-fn frontmost_app_info() -> Option<(i32, String)> {
+pub(crate) fn frontmost_app_info() -> Option<(i32, String)> {
     use objc2::rc::autoreleasepool;
     use objc2_app_kit::NSWorkspace;
 

@@ -615,6 +615,24 @@ pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi)
     }
 }
 
+/// Make Kage the active app (macOS `activateIgnoringOtherApps`), e.g. before
+/// a modal picker. No-op elsewhere. Safe from any thread.
+pub fn activate_app<R: tauri::Runtime>(app: &AppHandle<R>) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app.run_on_main_thread(|| {
+            use objc2::MainThreadMarker;
+            use objc2_app_kit::NSApplication;
+            if let Some(mtm) = MainThreadMarker::new() {
+                #[allow(deprecated)]
+                NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
 /// Hide the macOS app (NSApp.hide), returning focus to the previous application.
 /// This is the equivalent of Cmd+H — the app stays running but yields focus.
 #[cfg(target_os = "macos")]

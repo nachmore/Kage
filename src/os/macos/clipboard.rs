@@ -25,7 +25,16 @@ pub struct SelectionCaptureToken {
 pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
     let original_clipboard = read_clipboard_impl();
     let change_count_before = pasteboard::change_count();
-    if let Err(reason) = post_command_keystroke(KEYCODE_C) {
+    // Deliver the copy straight to the frontmost app's event queue. The
+    // launcher is a non-activating panel that becomes key the moment it's
+    // presented (no activation round-trip any more), so a Cmd+C posted to
+    // the global HID stream could be routed to Kage's own panel instead of
+    // the app the user selected text in. Fall back to the HID stream when
+    // Kage itself is frontmost or the lookup fails.
+    let target = super::window_list::frontmost_app_info()
+        .map(|(pid, _)| pid)
+        .filter(|&pid| pid > 0 && pid != std::process::id() as i32);
+    if let Err(reason) = post_command_keystroke_to(KEYCODE_C, target) {
         info!("[selection] Cmd+C synthesis failed: {reason}");
     }
     SelectionCaptureToken {
@@ -362,7 +371,7 @@ fn decode_html_entity(name: &str) -> Option<char> {
 /// nothing is pasted. We still warn once so a missing permission is
 /// visible in the logs.
 pub fn simulate_paste_impl() {
-    if let Err(reason) = post_command_keystroke(KEYCODE_V) {
+    if let Err(reason) = post_command_keystroke_to(KEYCODE_V, None) {
         warn_paste_once(reason);
     }
 }
@@ -370,7 +379,9 @@ pub fn simulate_paste_impl() {
 /// Post a Cmd+<key> down/up pair via CGEvent. We modify only with the
 /// Command flag — set explicitly so modifiers still physically held from
 /// the hotkey (e.g. Shift) don't turn it into a different shortcut.
-fn post_command_keystroke(keycode: u16) -> Result<(), &'static str> {
+/// `target_pid`: deliver to that process's event queue (`CGEventPostToPid`,
+/// independent of which window is key) instead of the HID stream.
+fn post_command_keystroke_to(keycode: u16, target_pid: Option<i32>) -> Result<(), &'static str> {
     use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
     use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 
@@ -394,8 +405,16 @@ fn post_command_keystroke(keycode: u16) -> Result<(), &'static str> {
     // to a real keystroke. Without Accessibility permission these calls
     // complete successfully but the OS drops the events; there's no API
     // to detect that case at post time.
-    down.post(CGEventTapLocation::HID);
-    up.post(CGEventTapLocation::HID);
+    match target_pid {
+        Some(pid) => {
+            down.post_to_pid(pid);
+            up.post_to_pid(pid);
+        }
+        None => {
+            down.post(CGEventTapLocation::HID);
+            up.post(CGEventTapLocation::HID);
+        }
+    }
     Ok(())
 }
 

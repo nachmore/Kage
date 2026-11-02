@@ -14,6 +14,7 @@ import {
     WINDOW,
 } from './dependencies.js';
 import { presentOverlayWindow } from '../../shared/overlay-window.js';
+import { isMac } from '../../shared/shortcuts.js';
 
 export const LifecycleEventsMethods = {
     _initializeExtensionsInBackground(_ts) {
@@ -212,7 +213,17 @@ export const LifecycleEventsMethods = {
             this.windowManager.resizeWindow();
         });
 
-        // Floating toolbar: attach file/image buttons
+        // Floating toolbar: attach file/image buttons.
+        // macOS: the launcher is a non-activating panel, and a file picker
+        // opened from an inactive app comes up without keyboard focus (and
+        // may not appear over a full-screen app at all). Activate Kage on
+        // mousedown — the picker itself must open synchronously inside the
+        // click's user gesture, so the activation can't be awaited there.
+        const activateForPicker = () => {
+            if (isMac()) this.appWindow.setFocus().catch(() => {});
+        };
+        this.elements.floatingAttachFileBtn?.addEventListener('mousedown', activateForPicker);
+        this.elements.floatingAttachImageBtn?.addEventListener('mousedown', activateForPicker);
         this.elements.floatingAttachFileBtn?.addEventListener('click', () => {
             this._filePickerOpen = true;
             this.elements.floatingFileInput?.click();

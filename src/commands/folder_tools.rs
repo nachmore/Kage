@@ -31,6 +31,11 @@ pub async fn pick_folder<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<Option<String>, AppError> {
     info!("Opening native folder picker dialog");
+    // macOS: the launcher is a non-activating panel, so Kage may not be the
+    // active app; a modal picker from an inactive app comes up without
+    // keyboard focus. Activate first (queued ahead of the dialog on the
+    // main thread).
+    crate::setup::activate_app(&app);
 
     // Use blocking_pick_folder on a blocking thread to avoid blocking the async runtime
     let result = tauri::async_runtime::spawn_blocking(move || {

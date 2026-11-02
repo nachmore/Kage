@@ -78,6 +78,7 @@ pub fn configure(
     );
     setup::configure_transparent_windows(app);
     crate::overlay_windows::configure_all(app);
+    crate::commands::window::preload_context_menu(app.handle());
     commands::system::register_all_hotkeys(app.handle());
     setup::install_hotkey_hot_reload(app, config);
     info!("=== Setup Complete ===");
@@ -123,7 +124,26 @@ fn configure_macos_menu(app: &mut tauri::App) -> tauri::Result<()> {
         .separator()
         .item(&quit_item)
         .build()?;
-    app.set_menu(MenuBuilder::new(app).item(&app_submenu).build()?)?;
+    // WKWebView's ⌘C/⌘V/⌘X/⌘A/⌘Z come from the Edit menu's key
+    // equivalents (copy:, paste:, …). Replacing Tauri's default menu with
+    // only the Kage submenu silently disabled them in every input — they
+    // still work this way while an overlay panel is key and Kage isn't
+    // the active app.
+    let edit_submenu = SubmenuBuilder::new(app, "Edit")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
+    app.set_menu(
+        MenuBuilder::new(app)
+            .item(&app_submenu)
+            .item(&edit_submenu)
+            .build()?,
+    )?;
 
     let app_handle = app.handle().clone();
     app.on_menu_event(move |app, event| match event.id().as_ref() {

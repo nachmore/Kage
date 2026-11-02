@@ -147,53 +147,72 @@ pub async fn open_settings_window<R: tauri::Runtime>(
 const CONTEXT_MENU_LOGICAL_W: f64 = 160.0;
 const CONTEXT_MENU_LOGICAL_H: f64 = 220.0;
 
+/// Get the context-menu window, building it if needed. Excluded from
+/// tauri.conf.json's initial windows so Windows doesn't pay for a WebView2
+/// process at every launch. On macOS it's preloaded during setup instead
+/// (`preload_context_menu`): wry activates the app whenever a WKWebView is
+/// created, and doing that on the first right-click over a full-screen app
+/// would pull the user back to the desktop Space.
+pub fn ensure_context_menu_window<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<tauri::WebviewWindow<R>, AppError> {
+    use tauri::WebviewWindowBuilder;
+    if let Some(w) = app.get_webview_window(window_labels::CONTEXT_MENU) {
+        return Ok(w);
+    }
+    let w = WebviewWindowBuilder::new(
+        app,
+        window_labels::CONTEXT_MENU,
+        tauri::WebviewUrl::App("context-menu.html".into()),
+    )
+    .title("")
+    .inner_size(CONTEXT_MENU_LOGICAL_W, CONTEXT_MENU_LOGICAL_H)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .shadow(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(false)
+    .visible(false)
+    .build()
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.window.create_failed",
+            &[("reason", &e.to_string())],
+        )
+    })?;
+    // Match what configure_transparent_windows did for the preloaded
+    // overlays. set_shadow is Windows-only on the trait.
+    let _ = w.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+    #[cfg(target_os = "windows")]
+    let _ = w.set_shadow(false);
+    // Right-clicking the launcher over a full-screen app must show the
+    // menu there too, not on the desktop Space.
+    crate::overlay_windows::configure(&w);
+    Ok(w)
+}
+
+/// macOS: build the context menu at startup (see
+/// `ensure_context_menu_window`). No-op elsewhere.
+pub fn preload_context_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    #[cfg(target_os = "macos")]
+    if let Err(e) = ensure_context_menu_window(app) {
+        log::warn!("[overlay] context menu preload failed: {}", e);
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
 pub async fn show_context_menu<R: tauri::Runtime>(
     x: i32,
     y: i32,
     app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
-    use tauri::WebviewWindowBuilder;
     crate::telemetry::track(&app, "context_menu_shown", None);
 
-    // Build the window on first show. Excluded from tauri.conf.json's
-    // initial windows so we don't pay for a WebView2 process at every
-    // launch — the menu is opened rarely and via explicit user action.
-    let window = if let Some(w) = app.get_webview_window(window_labels::CONTEXT_MENU) {
-        w
-    } else {
-        let w = WebviewWindowBuilder::new(
-            &app,
-            window_labels::CONTEXT_MENU,
-            tauri::WebviewUrl::App("context-menu.html".into()),
-        )
-        .title("")
-        .inner_size(CONTEXT_MENU_LOGICAL_W, CONTEXT_MENU_LOGICAL_H)
-        .resizable(false)
-        .decorations(false)
-        .transparent(true)
-        .shadow(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .focused(false)
-        .visible(false)
-        .build()
-        .map_err(|e| {
-            AppError::keyed(
-                ErrorKind::Internal,
-                "errors.window.create_failed",
-                &[("reason", &e.to_string())],
-            )
-        })?;
-        // Match what configure_transparent_windows did for the
-        // preloaded version. set_shadow is Windows-only on the trait.
-        let _ = w.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
-        #[cfg(target_os = "windows")]
-        let _ = w.set_shadow(false);
-        // Right-clicking the launcher over a full-screen app must show the
-        // menu there too, not on the desktop Space.
-        crate::overlay_windows::configure(&w);
-        w
-    };
+    let window = ensure_context_menu_window(&app)?;
 
     let mut final_x = x;
     let mut final_y = y;

@@ -10,8 +10,8 @@ use tauri::WebviewWindow;
 
 pub use implementation::{
     center_floating_on_active_monitor, center_window_on_active_monitor, mark_focused_chat,
-    schedule_chat_shutdown_check_public, show_floating_at_mouse, show_inline_assist_with_context,
-    toggle_floating_window, ChatWindowInfo,
+    preload_context_menu, schedule_chat_shutdown_check_public, show_floating_at_mouse,
+    show_inline_assist_with_context, toggle_floating_window, ChatWindowInfo,
 };
 
 #[tauri::command]
