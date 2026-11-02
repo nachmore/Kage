@@ -253,35 +253,230 @@ fn format_install_error(error: &tauri_plugin_updater::Error, reason: &str) -> an
     anyhow::anyhow!("{message} ({detail})")
 }
 
+/// Relaunch into the freshly installed bundle, then exit.
+///
+/// The relaunch must happen *after* this process is gone. Running
+/// `open -a Kage.app` while we're still alive (the previous approach) makes
+/// LaunchServices merely re-activate the running instance — dropping
+/// `--args` — and then we exit, leaving nothing running ("updated but
+/// didn't relaunch"). Launching a second copy straight away doesn't work
+/// either: tauri-plugin-single-instance in the new process would find the
+/// dying one, hand it the argv and quit.
+///
+/// So we spawn a small detached `/bin/sh` helper that waits for our PID to
+/// disappear (bounded), then launches the bundle through LaunchServices.
 #[cfg(target_os = "macos")]
 pub fn relaunch_and_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    let executable = match std::env::current_exe() {
-        Ok(path) => path,
-        Err(error) => {
-            error!("Cannot resolve exe path for relaunch: {error}");
-            app.exit(0);
-            return;
+    match std::env::current_exe() {
+        Ok(executable) => {
+            let target = relaunch_target(&executable);
+            match relaunch_helper_command(std::process::id(), &target, OPEN_BIN).spawn() {
+                Ok(child) => info!(
+                    "Relaunch helper spawned (pid {}) — will start {:?} once pid {} exits",
+                    child.id(),
+                    target,
+                    std::process::id()
+                ),
+                Err(error) => error!("Failed to spawn relaunch helper: {error}"),
+            }
         }
-    };
+        Err(error) => error!("Cannot resolve exe path for relaunch: {error}"),
+    }
+    crate::app_log::flush();
+    app.exit(0);
+}
+
+#[cfg(target_os = "macos")]
+const OPEN_BIN: &str = "/usr/bin/open";
+
+/// What to start after we exit: the enclosing `.app` bundle when there is
+/// one (so LaunchServices launches it properly), else the bare executable
+/// (`cargo run` / dev builds).
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RelaunchTarget {
+    Bundle(std::path::PathBuf),
+    Executable(std::path::PathBuf),
+}
+
+#[cfg(target_os = "macos")]
+fn relaunch_target(executable: &std::path::Path) -> RelaunchTarget {
+    // <bundle>.app/Contents/MacOS/<exe>
     let bundle = executable
         .parent()
-        .and_then(|path| path.parent())
-        .and_then(|path| path.parent());
-    if let Some(bundle) = bundle {
-        info!("Relaunching from bundle: {bundle:?}");
-        let _ = std::process::Command::new("open")
-            .arg("-a")
-            .arg(bundle)
-            .arg("--args")
-            .arg("--restart")
-            .spawn();
-    } else {
-        warn!("Could not resolve .app bundle path; spawning exe directly");
-        let _ = std::process::Command::new(&executable)
-            .arg("--restart")
-            .spawn();
+        .filter(|p| p.file_name().is_some_and(|n| n == "MacOS"))
+        .and_then(|p| p.parent())
+        .filter(|p| p.file_name().is_some_and(|n| n == "Contents"))
+        .and_then(|p| p.parent())
+        .filter(|p| p.extension().is_some_and(|e| e == "app"));
+    match bundle {
+        Some(b) => RelaunchTarget::Bundle(b.to_path_buf()),
+        None => RelaunchTarget::Executable(executable.to_path_buf()),
     }
-    app.exit(0);
+}
+
+/// Wait-for-exit-then-launch helper. PID and paths are passed as
+/// positional parameters (never interpolated into the script), so bundle
+/// paths with spaces or quotes are safe. Waits at most 15 s, then launches
+/// anyway. Runs in its own process group with null stdio so a SIGTERM to
+/// our group, or our stdout closing, can't take it down with us.
+#[cfg(target_os = "macos")]
+fn relaunch_helper_command(
+    pid: u32,
+    target: &RelaunchTarget,
+    open_bin: &str,
+) -> std::process::Command {
+    use std::os::unix::process::CommandExt;
+    const SCRIPT: &str = r#"pid=$1; mode=$2; target=$3; open_bin=$4; i=0
+while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 150 ]; do sleep 0.1; i=$((i+1)); done
+if [ "$mode" = bundle ]; then exec "$open_bin" -n -a "$target" --args --restart; fi
+exec "$target" --restart"#;
+    let (mode, path) = match target {
+        RelaunchTarget::Bundle(p) => ("bundle", p),
+        RelaunchTarget::Executable(p) => ("exe", p),
+    };
+    let mut cmd = std::process::Command::new("/bin/sh");
+    cmd.arg("-c")
+        .arg(SCRIPT)
+        .arg("kage-relaunch") // $0
+        .arg(pid.to_string())
+        .arg(mode)
+        .arg(path)
+        .arg(open_bin)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .process_group(0);
+    cmd
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod relaunch_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn target_is_the_enclosing_app_bundle() {
+        assert_eq!(
+            relaunch_target(Path::new("/Applications/Kage.app/Contents/MacOS/kage")),
+            RelaunchTarget::Bundle(PathBuf::from("/Applications/Kage.app"))
+        );
+        assert_eq!(
+            relaunch_target(Path::new(
+                "/Users/me/My Apps/Kage Dev.app/Contents/MacOS/kage"
+            )),
+            RelaunchTarget::Bundle(PathBuf::from("/Users/me/My Apps/Kage Dev.app"))
+        );
+    }
+
+    #[test]
+    fn bare_executables_relaunch_directly() {
+        // cargo run / target/debug — no bundle around the binary.
+        let exe = Path::new("/Users/me/Kage/target/debug/kage");
+        assert_eq!(
+            relaunch_target(exe),
+            RelaunchTarget::Executable(exe.to_path_buf())
+        );
+        // Looks bundle-ish but isn't one.
+        let odd = Path::new("/tmp/Contents/MacOS/kage");
+        assert_eq!(
+            relaunch_target(odd),
+            RelaunchTarget::Executable(odd.to_path_buf())
+        );
+    }
+
+    fn wait_for(path: &Path, timeout: Duration) -> bool {
+        let start = Instant::now();
+        while start.elapsed() < timeout {
+            if path.exists() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        false
+    }
+
+    /// End-to-end on the real /bin/sh: the helper must not launch anything
+    /// until the "old Kage" process is gone, then launch exactly once with
+    /// `--restart`. A fake opener records its argv instead of opening an app.
+    #[test]
+    fn helper_waits_for_old_process_then_launches_bundle() {
+        let dir = std::env::temp_dir().join(format!("kage-relaunch-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join("launched");
+        let opener = dir.join("fake open");
+        std::fs::write(
+            &opener,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n",
+                marker.display()
+            ),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&opener, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let mut old = std::process::Command::new("/bin/sleep")
+            .arg("1")
+            .spawn()
+            .unwrap();
+        let bundle = RelaunchTarget::Bundle(PathBuf::from("/Applications/Kage Test.app"));
+        let mut helper = relaunch_helper_command(old.id(), &bundle, opener.to_str().unwrap())
+            .spawn()
+            .unwrap();
+
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(
+            !marker.exists(),
+            "launched while the old process was still alive"
+        );
+        old.wait().unwrap();
+        assert!(
+            wait_for(&marker, Duration::from_secs(5)),
+            "never launched after exit"
+        );
+        let _ = helper.wait();
+        let argv = std::fs::read_to_string(&marker).unwrap();
+        assert_eq!(
+            argv,
+            "-n\n-a\n/Applications/Kage Test.app\n--args\n--restart\n"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn helper_runs_bare_executable_with_restart_flag() {
+        let dir = std::env::temp_dir().join(format!("kage-relaunch-exe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join("ran");
+        let exe = dir.join("kage");
+        std::fs::write(
+            &exe,
+            format!("#!/bin/sh\nprintf '%s' \"$*\" > '{}'\n", marker.display()),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        // PID of a process that has already exited → launches immediately.
+        let mut gone = std::process::Command::new("/usr/bin/true").spawn().unwrap();
+        let gone_pid = gone.id();
+        gone.wait().unwrap();
+        let mut helper = relaunch_helper_command(
+            gone_pid,
+            &RelaunchTarget::Executable(exe.clone()),
+            "/nonexistent-open",
+        )
+        .spawn()
+        .unwrap();
+        assert!(wait_for(&marker, Duration::from_secs(5)));
+        let _ = helper.wait();
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "--restart");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
