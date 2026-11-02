@@ -1807,7 +1807,7 @@ body.light-theme .ext-ephemeral-header {
    on macOS only. Keep in sync with js/shared/mac-permissions.js. */
 .mac-perm-card {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 14px;
     padding: 14px;
     background: var(--kage-surface, rgba(255, 255, 255, 0.04));
@@ -1833,11 +1833,80 @@ body.light-theme .ext-ephemeral-header {
     min-width: 0;
 }
 
+.mac-perm-card [hidden] {
+    display: none !important;
+}
+
+.mac-perm-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
 .mac-perm-name {
     font-size: 14px;
     font-weight: 600;
     color: var(--kage-text-primary, #e5e7eb);
-    margin-bottom: 4px;
+}
+
+/* Live status pill. Colour is never the only signal — the text says it. */
+.mac-perm-status {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    color: var(--kage-text-muted, #938f9b);
+    white-space: nowrap;
+}
+.mac-perm-status[data-status="granted"] {
+    color: var(--kage-success, #48bb78);
+}
+.mac-perm-status[data-status="not_granted"] {
+    color: var(--kage-warning, #ed8936);
+}
+
+.mac-perm-repair-hint,
+.mac-perm-message {
+    font-size: 12px;
+    line-height: 1.5;
+    margin-top: 6px;
+}
+.mac-perm-repair-hint {
+    color: var(--kage-text-muted, #938f9b);
+}
+.mac-perm-message {
+    color: var(--kage-text, #e2e8f0);
+}
+.mac-perm-message:empty {
+    display: none;
+}
+.mac-perm-message.error {
+    color: var(--kage-error, #f56565);
+}
+
+.mac-perm-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Text for screen readers only (status pill context). */
+.mac-perm-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .mac-perm-why {
@@ -1861,9 +1930,29 @@ body.light-theme .ext-ephemeral-header {
         transform 0.1s;
 }
 
-.mac-perm-btn:hover {
+.mac-perm-btn:hover:not(:disabled) {
     background: var(--kage-accent-hover, #8e47ff);
     transform: translateY(-1px);
+}
+
+.mac-perm-btn:focus-visible {
+    outline: 2px solid var(--kage-accent-light, #81e6d9);
+    outline-offset: 2px;
+}
+
+.mac-perm-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.mac-perm-btn-secondary {
+    background: transparent;
+    color: var(--kage-text, #e2e8f0);
+    border: 1px solid var(--kage-border, rgba(255, 255, 255, 0.2));
+}
+
+.mac-perm-btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .mac-perm-note {
@@ -1884,6 +1973,15 @@ body.light-theme .mac-perm-card {
 
 body.light-theme .mac-perm-name {
     color: #1a1a1a;
+}
+
+body.light-theme .mac-perm-btn-secondary {
+    color: #1a1a1a;
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+body.light-theme .mac-perm-btn-secondary:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.06);
 }
 
 /* ---------------------------------------------------------------- */

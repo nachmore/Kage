@@ -236,6 +236,12 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     get_app_info: null,
     get_os_dark_mode: null,
 
+    // --- OS privacy permissions (macOS TCC) — Settings/welcome chrome only.
+    // Repair resets Kage's own grant in the OS, so it must never be
+    // reachable from an extension; status leaks which grants Kage holds.
+    get_privacy_permissions: null,
+    repair_privacy_permission: null,
+
     // --- i18n (host-managed; the extension's own i18n flows through the
     // sandbox runtime's `context.i18n.t()` proxy, not these commands) ------
     get_i18n_catalog: null,

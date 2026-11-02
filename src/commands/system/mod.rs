@@ -11,6 +11,7 @@ pub mod diagnostics;
 pub mod hotkeys;
 pub mod integrations;
 pub mod lifecycle;
+pub mod privacy_permissions;
 pub mod steering;
 pub mod updates;
 
@@ -20,5 +21,6 @@ pub use diagnostics::*;
 pub use hotkeys::*;
 pub use integrations::*;
 pub use lifecycle::*;
+pub use privacy_permissions::*;
 pub use steering::*;
 pub use updates::*;

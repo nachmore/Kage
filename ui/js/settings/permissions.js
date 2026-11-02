@@ -4,21 +4,23 @@ import { t } from '../shared/i18n.js';
 /**
  * macOS Permissions Settings Module.
  *
- * Shows the three TCC permissions Kage needs (Accessibility, Input Monitoring,
- * Screen Recording) with deep-link buttons into the right pane of System
- * Settings. The macOS privacy model prompts the user at runtime the first
- * time a restricted API is called, so this section is a discoverable way
- * to grant (or revisit) the permissions before they are triggered.
+ * Shows the TCC permissions Kage uses (Accessibility, Screen Recording)
+ * with their live status, a deep link into the right pane of System
+ * Settings, and a Repair action for a grant macOS holds for an older
+ * build (see shared/mac-permissions.js). Status refreshes whenever the
+ * section is shown and whenever the window regains focus, so it is
+ * current when the user comes back from System Settings.
  *
- * Only registered on macOS — see manager.js for the conditional registration.
+ * Only registered on macOS — see main.js for the conditional registration.
  * All rendering/behavior delegates to shared/mac-permissions.js so the same
  * logic is reused by the Welcome wizard.
  */
 export class MacPermissionsSettingsModule extends SettingsModule {
     constructor() {
-        super('mac-permissions', t('settings.mac_permissions.title'), '');
+        super('mac-permissions', t('settings.mac_permissions.title'), '');
         // Read-only status pane; save() is a no-op.
         this.persistsImmediately = true;
+        this._cards = null;
     }
 
     render() {
@@ -44,18 +46,24 @@ export class MacPermissionsSettingsModule extends SettingsModule {
         if (!container) return;
         const invoke = window.__TAURI__?.core?.invoke;
         if (!invoke) return;
-        renderAllInto(container, invoke, 'macPermSetting');
+        this._cards = renderAllInto(container, invoke, 'macPermSetting');
     }
 
-    // This module has no persisted settings — the TCC state lives in the OS,
-    // not in Kage's config. load/save are no-ops.
+    // The TCC state lives in the OS, not in Kage's config, so there is
+    // nothing to load or save. The manager calls load() each time this
+    // (never-dirty) section is shown, which is the cue to re-read status.
     load(_config) {
-        /* noop */
+        this._cards?.refresh();
     }
     save(_config) {
         /* noop */
     }
     validate() {
         return { valid: true };
+    }
+
+    destroy() {
+        this._cards?.dispose();
+        this._cards = null;
     }
 }

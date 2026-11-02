@@ -23,6 +23,7 @@ src/os/
 ├── hotkey.rs
 ├── icon.rs
 ├── launcher.rs
+├── permissions.rs  ← macOS TCC status + repair; "not applicable" elsewhere
 ├── power.rs
 ├── process.rs
 ├── shell.rs
