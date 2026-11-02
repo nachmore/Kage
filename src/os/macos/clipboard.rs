@@ -242,12 +242,11 @@ fn html_to_text(html: &str) -> String {
                 }
                 start_new_line(&mut out);
             }
-            "td" | "th" if !closing => {
-                // Cells on the same row read best tab-separated.
-                if !out.is_empty() && !out.ends_with(['\n', '\t']) {
-                    out.truncate(out.trim_end_matches(' ').len());
-                    out.push('\t');
-                }
+            // Cells on the same row read best tab-separated. (A failed guard
+            // falls through to `_ => {}` — no later arm matches td/th.)
+            "td" | "th" if !closing && !out.is_empty() && !out.ends_with(['\n', '\t']) => {
+                out.truncate(out.trim_end_matches(' ').len());
+                out.push('\t');
             }
             "p" | "div" | "li" | "tr" | "ul" | "ol" | "table" | "blockquote" | "hr" | "h1"
             | "h2" | "h3" | "h4" | "h5" | "h6" | "dt" | "dd" | "section" | "article" | "header"
