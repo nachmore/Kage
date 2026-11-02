@@ -1212,10 +1212,10 @@
     "_source_hash": "f206c674359a01db"
   },
   "settings.mac_permissions.description": {
-    "message": "Το Kage χρησιμοποιεί τρεις άδειες απορρήτου του macOS για να λειτουργήσει. Το macOS ζητά κάθε μία την πρώτη φορά που τη χρειάζεται το Kage — κάντε κλικ στα παρακάτω κουμπιά για να ανοίξετε το αντίστοιχο τμήμα στις Ρυθμίσεις Συστήματος και να παραχωρήσετε πρόσβαση.",
+    "message": "Το Kage χρησιμοποιεί αυτές τις άδειες απορρήτου του macOS για να λειτουργεί. Κάθε κάρτα δείχνει αν το macOS παραχωρεί τη συγκεκριμένη άδεια σε αυτό το αντίγραφο του Kage αυτή τη στιγμή. Το macOS ζητά την καθεμία την πρώτη φορά που τη χρειάζεται το Kage. Εναλλακτικά, χρησιμοποιήστε τα παρακάτω κουμπιά για να ανοίξετε την κατάλληλη ενότητα στις Ρυθμίσεις συστήματος.",
     "description": "Section description for the mac-permissions pane",
     "_machine_translated": true,
-    "_source_hash": "02c73decdf72615a"
+    "_source_hash": "5c1809658b706981"
   },
   "settings.mac_permissions.restart_note": {
     "message": "Μετά την εναλλαγή μιας άδειας, ίσως χρειαστεί να κάνετε επανεκκίνηση του Kage για να εφαρμοστεί η αλλαγή.",
@@ -8320,5 +8320,233 @@
     "description": "Settings → Internal Sites test result: favicon attempt returned an image over the size limit",
     "_machine_translated": true,
     "_source_hash": "21376468b2149f95"
+  },
+  "errors.privacy_permissions.unknown": {
+    "message": "Άγνωστη άδεια: {id}",
+    "description": "Repair was requested for a privacy permission id Kage doesn't recognise. {id} is the internal id; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "5f8cf56fe8ffd581"
+  },
+  "errors.privacy_permissions.unsupported": {
+    "message": "Η επιδιόρθωση αδειών είναι διαθέσιμη μόνο στο macOS.",
+    "description": "Repair was requested on Windows/Linux, which have no per-app privacy grants to reset",
+    "_machine_translated": true,
+    "_source_hash": "08b353f0c47e079d"
+  },
+  "errors.privacy_permissions.invalid_bundle_id": {
+    "message": "Το αναγνωριστικό πακέτου του Kage ({id}) δεν είναι έγκυρο, οπότε δεν είναι δυνατή η επαναφορά των αδειών του.",
+    "description": "The app's bundle identifier failed validation before running tccutil. {id} is a technical identifier like com.kage.launcher; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "485a323a64b6336d"
+  },
+  "errors.privacy_permissions.not_bundled": {
+    "message": "Η επιδιόρθωση λειτουργεί μόνο στην εγκατεστημένη εφαρμογή Kage, όχι σε έκδοση ανάπτυξης που εκτελείται από τερματικό.",
+    "description": "Repair was requested from a bare development binary (not inside Kage.app), where macOS attributes permissions to the terminal instead",
+    "_machine_translated": true,
+    "_source_hash": "b9a0bd3d5a1425c9"
+  },
+  "errors.privacy_permissions.reset_failed": {
+    "message": "Δεν ήταν δυνατή η επαναφορά της άδειας: {reason}",
+    "description": "macOS's tccutil failed to clear Kage's stale privacy grant. {reason} is the (English) system message.",
+    "_machine_translated": true,
+    "_source_hash": "c8bcc6663109ced6"
+  },
+  "settings.hotkey.global.use_cmd_space": {
+    "message": "Χρήση ⌘Space (αντικατάσταση του Spotlight)",
+    "description": "macOS-only button under the global hotkey picker that sets the hotkey to Command+Space",
+    "_machine_translated": true,
+    "_source_hash": "d86bfb3832533ed6"
+  },
+  "settings.hotkey.global.use_cmd_space_title": {
+    "message": "Ανοίξτε το Kage με ⌘Space αντί για το Spotlight. Το Spotlight παίρνει πίσω τη συντόμευσή του όταν τερματίζεται το Kage.",
+    "description": "Tooltip for the 'Use ⌘Space' button",
+    "_machine_translated": true,
+    "_source_hash": "ad4df3c0700edc65"
+  },
+  "shared.hotkey_picker.unsupported_key": {
+    "message": "Αυτό το πλήκτρο δεν μπορεί να χρησιμοποιηθεί σε συντόμευση — δοκιμάστε άλλο συνδυασμό.",
+    "description": "Shown while recording a hotkey when the user presses a key Kage cannot bind (e.g. a media key)",
+    "_machine_translated": true,
+    "_source_hash": "d5487e7db75c6afc"
+  },
+  "shared.hotkey_picker.system_conflict": {
+    "message": "Το {combo} χρησιμοποιείται από το macOS για {name}.",
+    "description": "Warning when a recorded hotkey matches a built-in macOS keyboard shortcut. {combo} is the key combo such as ⌘Space; {name} is the macOS feature such as 'Spotlight search'",
+    "_machine_translated": true,
+    "_source_hash": "c60a9dbb43ce1c76"
+  },
+  "shared.hotkey_picker.system_conflict_hint": {
+    "message": "Το Kage μπορεί να απενεργοποιήσει αυτή τη συντόμευση του macOS όσο εκτελείται και να την επαναφέρει όταν το τερματίσετε.",
+    "description": "Explains what choosing 'Use for Kage' does to the conflicting macOS shortcut",
+    "_machine_translated": true,
+    "_source_hash": "3e73239b403fbd8e"
+  },
+  "shared.hotkey_picker.system_conflict_replace": {
+    "message": "Χρήση για το Kage",
+    "description": "Button: let Kage take over the conflicting macOS shortcut",
+    "_machine_translated": true,
+    "_source_hash": "8283c2fb5dcefeb8"
+  },
+  "shared.hotkey_picker.system_conflict_keep": {
+    "message": "Διατήρηση συντόμευσης macOS",
+    "description": "Button: dismiss the conflict and keep the current Kage hotkey",
+    "_machine_translated": true,
+    "_source_hash": "d17efd6830f9ed3d"
+  },
+  "shared.mac_permissions.open_settings_aria_label": {
+    "message": "Άνοιγμα Ρυθμίσεων συστήματος για {name}",
+    "description": "Screen-reader label for the Open System Settings button on one permission card. {name} is the permission name, e.g. Accessibility.",
+    "_machine_translated": true,
+    "_source_hash": "1331437031234382"
+  },
+  "shared.mac_permissions.accessibility.name": {
+    "message": "Προσβασιμότητα",
+    "description": "macOS privacy permission name; use the name macOS shows in System Settings → Privacy & Security in this language",
+    "_machine_translated": true,
+    "_source_hash": "3af0ae3b76479ae4"
+  },
+  "shared.mac_permissions.accessibility.why": {
+    "message": "Επιτρέπει στο Kage να αντιγράφει το κείμενο που έχετε επιλέξει, να επικολλά αποτελέσματα στην ενεργή εφαρμογή και να φέρνει ένα συγκεκριμένο παράθυρο στο προσκήνιο. Το Computer Control τη χρησιμοποιεί επίσης για να χειρίζεται εφαρμογές για εσάς.",
+    "description": "Why Kage needs macOS Accessibility permission. 'Computer Control' is the name of a Kage feature.",
+    "_machine_translated": true,
+    "_source_hash": "223f41893c281427"
+  },
+  "shared.mac_permissions.screen_recording.name": {
+    "message": "Εγγραφή οθόνης",
+    "description": "macOS privacy permission name; use the name macOS shows in System Settings → Privacy & Security in this language",
+    "_machine_translated": true,
+    "_source_hash": "03f9df7ea0a9b0e4"
+  },
+  "shared.mac_permissions.screen_recording.why": {
+    "message": "Επιτρέπει στο Kage να διαβάζει τους τίτλους των παραθύρων, ώστε να γνωρίζει σε ποιο παράθυρο εργάζεστε και να εμφανίζει τα ανοιχτά παράθυρά σας με το όνομά τους. Το Kage δεν εγγράφει ούτε καταγράφει την οθόνη σας για αυτόν τον σκοπό.",
+    "description": "Why Kage needs macOS Screen Recording permission (it only reads window titles)",
+    "_machine_translated": true,
+    "_source_hash": "44b41b114c366fb1"
+  },
+  "shared.mac_permissions.status.checking": {
+    "message": "Έλεγχος…",
+    "description": "Status pill on a permission card while Kage asks macOS for the current status",
+    "_machine_translated": true,
+    "_source_hash": "0b246893be76bb29"
+  },
+  "shared.mac_permissions.status.granted": {
+    "message": "Παραχωρήθηκε",
+    "description": "Status pill: macOS currently grants this permission to Kage",
+    "_machine_translated": true,
+    "_source_hash": "b3843ea2efae0c48"
+  },
+  "shared.mac_permissions.status.not_granted": {
+    "message": "Δεν παραχωρήθηκε",
+    "description": "Status pill: macOS does not currently grant this permission to this copy of Kage",
+    "_machine_translated": true,
+    "_source_hash": "af3244a27037f3c2"
+  },
+  "shared.mac_permissions.status.unknown": {
+    "message": "Άγνωστο",
+    "description": "Status pill: Kage could not determine whether the permission is granted",
+    "_machine_translated": true,
+    "_source_hash": "1c2f880ba4732c08"
+  },
+  "shared.mac_permissions.repair": {
+    "message": "Επιδιόρθωση",
+    "description": "Button that clears a stale macOS privacy grant so the user can re-enable Kage",
+    "_machine_translated": true,
+    "_source_hash": "9290aee4ac3f76a7"
+  },
+  "shared.mac_permissions.repair_aria_label": {
+    "message": "Επιδιόρθωση άδειας {name}",
+    "description": "Screen-reader label for the Repair button. {name} is the permission name, e.g. Accessibility.",
+    "_machine_translated": true,
+    "_source_hash": "93459277634cadf5"
+  },
+  "shared.mac_permissions.repairing": {
+    "message": "Επιδιόρθωση…",
+    "description": "Repair button label while the reset is in progress",
+    "_machine_translated": true,
+    "_source_hash": "7db46245e2d0317d"
+  },
+  "shared.mac_permissions.repair_hint": {
+    "message": "Αν το Kage εμφανίζεται ήδη ενεργοποιημένο στις Ρυθμίσεις συστήματος, το macOS διατηρεί μια άδεια για παλαιότερη έκδοση του Kage. Η Επιδιόρθωση την καταργεί, ώστε να μπορείτε να ενεργοποιήσετε ξανά το Kage.",
+    "description": "One-line explanation under a permission that isn't granted. Updates replace the Kage binary, and macOS keeps the old build's approval, so the switch looks on but doesn't apply.",
+    "_machine_translated": true,
+    "_source_hash": "4b8e7153a92109e5"
+  },
+  "shared.mac_permissions.repair_done": {
+    "message": "Η παλιά άδεια καταργήθηκε. Ενεργοποιήστε το Kage στις Ρυθμίσεις συστήματος (το macOS ίσως ζητήσει πρώτα επιβεβαίωση) και, στη συνέχεια, επιστρέψτε εδώ.",
+    "description": "Shown after Repair succeeds; System Settings opens on the matching pane",
+    "_machine_translated": true,
+    "_source_hash": "914bd94d516e4859"
+  },
+  "shared.mac_permissions.repair_failed": {
+    "message": "Η επιδιόρθωση απέτυχε: {reason}",
+    "description": "Shown when Repair fails. {reason} is the error message.",
+    "_machine_translated": true,
+    "_source_hash": "5c686bde8b5ad17c"
+  },
+  "system_shortcuts.name.spotlight": {
+    "message": "Αναζήτηση Spotlight",
+    "description": "Name of the macOS feature bound to ⌘Space",
+    "_machine_translated": true,
+    "_source_hash": "97062da77e387d5c"
+  },
+  "system_shortcuts.name.finder_search": {
+    "message": "το παράθυρο αναζήτησης του Finder",
+    "description": "Name of the macOS feature bound to ⌥⌘Space",
+    "_machine_translated": true,
+    "_source_hash": "38f35214ea151f74"
+  },
+  "system_shortcuts.name.input_source_previous": {
+    "message": "η εναλλαγή στην προηγούμενη πηγή εισόδου",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Space)",
+    "_machine_translated": true,
+    "_source_hash": "7b4c628b25ce5d68"
+  },
+  "system_shortcuts.name.input_source_next": {
+    "message": "η εναλλαγή στην επόμενη πηγή εισόδου",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Option+Space)",
+    "_machine_translated": true,
+    "_source_hash": "284cab670b19a137"
+  },
+  "system_shortcuts.name.app_switcher": {
+    "message": "η εναλλαγή εφαρμογών",
+    "description": "Name of the macOS ⌘Tab app switcher",
+    "_machine_translated": true,
+    "_source_hash": "60d4ce9325f44fda"
+  },
+  "system_shortcuts.name.screenshot": {
+    "message": "τα στιγμιότυπα οθόνης",
+    "description": "Name of the macOS screenshot shortcuts (⌘⇧3/4/5)",
+    "_machine_translated": true,
+    "_source_hash": "a022ef38d919c01b"
+  },
+  "system_shortcuts.name.mission_control": {
+    "message": "Mission Control",
+    "description": "Name of the macOS Mission Control feature",
+    "_machine_translated": true,
+    "_source_hash": "6d9d7e3c982888ab"
+  },
+  "system_shortcuts.name.app_windows": {
+    "message": "η εμφάνιση των παραθύρων μιας εφαρμογής",
+    "description": "Name of the macOS 'Application windows' shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d93500c2cf42624b"
+  },
+  "system_shortcuts.name.show_desktop": {
+    "message": "Εμφάνιση γραφείου εργασίας",
+    "description": "Name of the macOS Show Desktop shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d5fcd2ebc47c7f34"
+  },
+  "system_shortcuts.name.switch_space": {
+    "message": "η μετακίνηση μεταξύ των Spaces",
+    "description": "Name of the macOS shortcut that moves left/right a Space",
+    "_machine_translated": true,
+    "_source_hash": "b1bf53e248b0395b"
+  },
+  "system_shortcuts.name.generic": {
+    "message": "μια ενσωματωμένη συντόμευση πληκτρολογίου",
+    "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for",
+    "_machine_translated": true,
+    "_source_hash": "1be98949c62b9654"
   }
 }

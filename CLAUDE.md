@@ -85,6 +85,12 @@ All modules compile under `--test`, including Tauri-dependent ones (`automation`
 
 Cross-platform API lives in `src/os/<module>.rs`. Per-platform impls are in `src/os/windows/`, `src/os/macos/`, `src/os/linux/`. Selection is compile-time via `#[cfg(target_os = "...")]` in `mod.rs`. **Never import a platform-specific module directly from app code** — always go through the abstraction layer. Windows is fully implemented; macOS/Linux cover only common paths.
 
+### Hotkeys on macOS (`src/commands/system/hotkeys.rs`, `src/system_shortcut_takeover.rs`)
+
+Global hotkeys are Carbon `RegisterEventHotKey` (via `tauri-plugin-global-shortcut`) and need no TCC permission. **Never prompt for Accessibility from the hotkey path.** Kage's macOS builds have historically been ad-hoc signed, and TCC pins those grants to the binary's cdhash, so after every update System Settings still shows Kage approved while the new binary is untrusted. The Settings/welcome picker therefore records combos from DOM `keydown` in its own webview (`ui/js/shared/hotkey-capture.js`), bracketed by `begin_hotkey_recording` / `end_hotkey_recording` (generation-tokened; a 15 s backend timer self-heals if the page vanishes).
+
+A Kage hotkey that equals an enabled macOS symbolic hotkey (⌘Space → Spotlight) registers but never fires. With the user's explicit approval in the picker, `system_shortcut_takeover` disables the colliding symbolic hotkey via the CGS SPI in `src/os/macos/system_shortcuts.rs`. That state is session-scoped and **outlives our process**, so the invariants are: write the `owned` id to `system-shortcuts.json` *before* disabling; release on every exit path (`graceful_shutdown`, `RunEvent::Exit`, the signal killer); call `resume()` if a shutdown is aborted (failed update install); and never re-enable a shortcut the user switched off in System Settings (`user_preference`).
+
 ### Frontend (`ui/`)
 
 Three Tauri windows preloaded via `tauri.conf.json`: `main` (chat sessions), `floating`, `inline-assist`. `settings` and `context-menu` are built on demand via `WebviewWindowBuilder` from `commands::window` — kept out of the initial windows array so we don't pay for their WebView2 process at every launch. `welcome` and `store` are also on-demand. Each window loads its own HTML and JS entry point.

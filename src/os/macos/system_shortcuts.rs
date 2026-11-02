@@ -107,6 +107,53 @@ pub fn is_enabled_impl(id: u32) -> Option<bool> {
     Some(unsafe { CGSIsSymbolicHotKeyEnabled(raw_id) })
 }
 
+/// Read `AppleSymbolicHotKeys[<id>].enabled` from the user's
+/// `com.apple.symbolichotkeys` preferences — the value System Settings
+/// writes when the user ticks/unticks a shortcut. Kage's own toggling goes
+/// through the session-only SPI above and never touches this, so it tells
+/// us what the *user* chose.
+pub fn user_preference_impl(id: u32) -> Option<bool> {
+    use core_foundation::base::{CFType, CFTypeRef, TCFType};
+    use core_foundation::boolean::CFBoolean;
+    use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
+    use core_foundation::number::CFNumber;
+    use core_foundation::string::{CFString, CFStringRef};
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFPreferencesCopyAppValue(key: CFStringRef, application_id: CFStringRef) -> CFTypeRef;
+    }
+
+    fn as_dict(v: &CFType) -> Option<CFDictionary<CFString, CFType>> {
+        if !v.instance_of::<CFDictionary>() {
+            return None;
+        }
+        // SAFETY: type-checked above; get-rule retains for the wrapper's life.
+        Some(unsafe { CFDictionary::wrap_under_get_rule(v.as_CFTypeRef() as CFDictionaryRef) })
+    }
+
+    let key = CFString::from_static_string("AppleSymbolicHotKeys");
+    let app = CFString::from_static_string("com.apple.symbolichotkeys");
+    // SAFETY: copy-rule return (or NULL) — owned by the wrapper below.
+    let raw =
+        unsafe { CFPreferencesCopyAppValue(key.as_concrete_TypeRef(), app.as_concrete_TypeRef()) };
+    if raw.is_null() {
+        return None;
+    }
+    let all = unsafe { CFType::wrap_under_create_rule(raw) };
+    let all = as_dict(&all)?;
+    let entry = all.find(CFString::new(&id.to_string()))?;
+    let entry = as_dict(&entry)?;
+    let enabled = entry.find(CFString::from_static_string("enabled"))?;
+    if let Some(b) = enabled.downcast::<CFBoolean>() {
+        return Some(b.into());
+    }
+    enabled
+        .downcast::<CFNumber>()
+        .and_then(|n| n.to_i64())
+        .map(|n| n != 0)
+}
+
 /// Turn a raw (keycode, modifier-flags) binding into Kage's
 /// (modifiers, key) vocabulary. `None` when the entry is unbound or uses
 /// something Kage can't register (an unknown keycode, or Fn as a genuine
@@ -241,6 +288,16 @@ mod tests {
         assert!(set_enabled_impl(64, before));
         assert_eq!(flipped, Some(!before));
         assert_eq!(is_enabled_impl(64), Some(before));
+    }
+
+    /// Live, read-only: the preference reader must not crash on the real
+    /// plist, and whatever it returns must be a plain bool.
+    #[test]
+    fn live_user_preference_reads_without_crashing() {
+        for id in [1, 32, 60, 64, 65, 9999] {
+            let v = user_preference_impl(id);
+            eprintln!("user_preference({}) = {:?}", id, v);
+        }
     }
 
     #[test]

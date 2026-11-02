@@ -66,7 +66,16 @@ const MODIFIER_CODES = new Set([
     'FnLock',
 ]);
 
-const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'OS', 'CapsLock', 'Fn', 'FnLock']);
+const MODIFIER_KEYS = new Set([
+    'Shift',
+    'Control',
+    'Alt',
+    'Meta',
+    'OS',
+    'CapsLock',
+    'Fn',
+    'FnLock',
+]);
 
 /**
  * Map a `KeyboardEvent.code` to Kage's key name, or `null` if Kage can't
@@ -83,7 +92,7 @@ export function codeToKeyName(code) {
     m = /^Numpad([0-9])$/.exec(code);
     if (m) return 'Num' + m[1];
     if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
-    return Object.prototype.hasOwnProperty.call(CODE_TO_KEY, code) ? CODE_TO_KEY[code] : null;
+    return Object.hasOwn(CODE_TO_KEY, code) ? CODE_TO_KEY[code] : null;
 }
 
 /** Modifier names held during `e`, in Ctrl, Alt, Shift, Super order. */
@@ -108,7 +117,9 @@ export function classifyKeyEvent(e) {
     if (MODIFIER_CODES.has(e.code) || MODIFIER_KEYS.has(e.key)) return { kind: 'ignore' };
     const modifiers = modifiersFromEvent(e);
     if (e.code === 'Escape') {
-        return modifiers.length === 0 ? { kind: 'cancel' } : { kind: 'combo', modifiers, key: 'Escape' };
+        return modifiers.length === 0
+            ? { kind: 'cancel' }
+            : { kind: 'combo', modifiers, key: 'Escape' };
     }
     const key = codeToKeyName(e.code);
     if (!key) return { kind: 'unsupported', code: e.code || e.key || '' };

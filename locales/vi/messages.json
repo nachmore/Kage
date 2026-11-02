@@ -1212,10 +1212,10 @@
     "_source_hash": "f206c674359a01db"
   },
   "settings.mac_permissions.description": {
-    "message": "Kage cần ba quyền riêng tư của macOS để hoạt động. macOS sẽ hỏi từng quyền vào lần đầu Kage cần — hãy nhấn các nút bên dưới để mở đúng mục trong System Settings và cấp quyền.",
+    "message": "Kage dùng các quyền riêng tư sau của macOS để hoạt động. Mỗi thẻ cho biết macOS hiện có cấp quyền đó cho bản Kage này hay không. macOS sẽ hỏi từng quyền vào lần đầu Kage cần đến, hoặc bạn có thể dùng các nút bên dưới để mở đúng mục trong Cài đặt hệ thống.",
     "description": "Section description for the mac-permissions pane",
     "_machine_translated": true,
-    "_source_hash": "02c73decdf72615a"
+    "_source_hash": "5c1809658b706981"
   },
   "settings.mac_permissions.restart_note": {
     "message": "Sau khi bật/tắt một quyền, có thể bạn cần khởi động lại Kage để thay đổi có hiệu lực.",
@@ -8320,5 +8320,233 @@
     "description": "Settings → Internal Sites test result: favicon attempt returned an image over the size limit",
     "_machine_translated": true,
     "_source_hash": "21376468b2149f95"
+  },
+  "errors.privacy_permissions.unknown": {
+    "message": "Quyền không xác định: {id}",
+    "description": "Repair was requested for a privacy permission id Kage doesn't recognise. {id} is the internal id; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "5f8cf56fe8ffd581"
+  },
+  "errors.privacy_permissions.unsupported": {
+    "message": "Tính năng sửa quyền chỉ có trên macOS.",
+    "description": "Repair was requested on Windows/Linux, which have no per-app privacy grants to reset",
+    "_machine_translated": true,
+    "_source_hash": "08b353f0c47e079d"
+  },
+  "errors.privacy_permissions.invalid_bundle_id": {
+    "message": "Mã định danh gói của Kage ({id}) không hợp lệ nên không thể đặt lại quyền.",
+    "description": "The app's bundle identifier failed validation before running tccutil. {id} is a technical identifier like com.kage.launcher; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "485a323a64b6336d"
+  },
+  "errors.privacy_permissions.not_bundled": {
+    "message": "Tính năng sửa quyền chỉ hoạt động trong ứng dụng Kage đã cài đặt, không hoạt động trong bản dựng phát triển chạy từ terminal.",
+    "description": "Repair was requested from a bare development binary (not inside Kage.app), where macOS attributes permissions to the terminal instead",
+    "_machine_translated": true,
+    "_source_hash": "b9a0bd3d5a1425c9"
+  },
+  "errors.privacy_permissions.reset_failed": {
+    "message": "Không thể đặt lại quyền: {reason}",
+    "description": "macOS's tccutil failed to clear Kage's stale privacy grant. {reason} is the (English) system message.",
+    "_machine_translated": true,
+    "_source_hash": "c8bcc6663109ced6"
+  },
+  "settings.hotkey.global.use_cmd_space": {
+    "message": "Dùng ⌘Space (thay cho Spotlight)",
+    "description": "macOS-only button under the global hotkey picker that sets the hotkey to Command+Space",
+    "_machine_translated": true,
+    "_source_hash": "d86bfb3832533ed6"
+  },
+  "settings.hotkey.global.use_cmd_space_title": {
+    "message": "Mở Kage bằng ⌘Space thay cho Spotlight. Spotlight sẽ được trả lại phím tắt khi Kage thoát.",
+    "description": "Tooltip for the 'Use ⌘Space' button",
+    "_machine_translated": true,
+    "_source_hash": "ad4df3c0700edc65"
+  },
+  "shared.hotkey_picker.unsupported_key": {
+    "message": "Không thể dùng phím này trong phím tắt — hãy thử tổ hợp khác.",
+    "description": "Shown while recording a hotkey when the user presses a key Kage cannot bind (e.g. a media key)",
+    "_machine_translated": true,
+    "_source_hash": "d5487e7db75c6afc"
+  },
+  "shared.hotkey_picker.system_conflict": {
+    "message": "{combo} đang được macOS dùng cho {name}.",
+    "description": "Warning when a recorded hotkey matches a built-in macOS keyboard shortcut. {combo} is the key combo such as ⌘Space; {name} is the macOS feature such as 'Spotlight search'",
+    "_machine_translated": true,
+    "_source_hash": "c60a9dbb43ce1c76"
+  },
+  "shared.hotkey_picker.system_conflict_hint": {
+    "message": "Kage có thể tắt phím tắt macOS đó trong khi Kage đang chạy và trả lại khi bạn thoát.",
+    "description": "Explains what choosing 'Use for Kage' does to the conflicting macOS shortcut",
+    "_machine_translated": true,
+    "_source_hash": "3e73239b403fbd8e"
+  },
+  "shared.hotkey_picker.system_conflict_replace": {
+    "message": "Dùng cho Kage",
+    "description": "Button: let Kage take over the conflicting macOS shortcut",
+    "_machine_translated": true,
+    "_source_hash": "8283c2fb5dcefeb8"
+  },
+  "shared.hotkey_picker.system_conflict_keep": {
+    "message": "Giữ phím tắt macOS",
+    "description": "Button: dismiss the conflict and keep the current Kage hotkey",
+    "_machine_translated": true,
+    "_source_hash": "d17efd6830f9ed3d"
+  },
+  "shared.mac_permissions.open_settings_aria_label": {
+    "message": "Mở Cài đặt hệ thống cho {name}",
+    "description": "Screen-reader label for the Open System Settings button on one permission card. {name} is the permission name, e.g. Accessibility.",
+    "_machine_translated": true,
+    "_source_hash": "1331437031234382"
+  },
+  "shared.mac_permissions.accessibility.name": {
+    "message": "Trợ năng",
+    "description": "macOS privacy permission name; use the name macOS shows in System Settings → Privacy & Security in this language",
+    "_machine_translated": true,
+    "_source_hash": "3af0ae3b76479ae4"
+  },
+  "shared.mac_permissions.accessibility.why": {
+    "message": "Cho phép Kage sao chép văn bản bạn đã chọn, dán kết quả vào ứng dụng đang hoạt động và đưa một cửa sổ cụ thể lên trước. Tính năng Computer Control cũng dùng quyền này để thao tác ứng dụng thay bạn.",
+    "description": "Why Kage needs macOS Accessibility permission. 'Computer Control' is the name of a Kage feature.",
+    "_machine_translated": true,
+    "_source_hash": "223f41893c281427"
+  },
+  "shared.mac_permissions.screen_recording.name": {
+    "message": "Ghi màn hình",
+    "description": "macOS privacy permission name; use the name macOS shows in System Settings → Privacy & Security in this language",
+    "_machine_translated": true,
+    "_source_hash": "03f9df7ea0a9b0e4"
+  },
+  "shared.mac_permissions.screen_recording.why": {
+    "message": "Cho phép Kage đọc tiêu đề cửa sổ để biết bạn đang làm việc trong cửa sổ nào và liệt kê các cửa sổ đang mở theo tên. Kage không ghi hay chụp màn hình của bạn cho việc này.",
+    "description": "Why Kage needs macOS Screen Recording permission (it only reads window titles)",
+    "_machine_translated": true,
+    "_source_hash": "44b41b114c366fb1"
+  },
+  "shared.mac_permissions.status.checking": {
+    "message": "Đang kiểm tra…",
+    "description": "Status pill on a permission card while Kage asks macOS for the current status",
+    "_machine_translated": true,
+    "_source_hash": "0b246893be76bb29"
+  },
+  "shared.mac_permissions.status.granted": {
+    "message": "Đã cấp",
+    "description": "Status pill: macOS currently grants this permission to Kage",
+    "_machine_translated": true,
+    "_source_hash": "b3843ea2efae0c48"
+  },
+  "shared.mac_permissions.status.not_granted": {
+    "message": "Chưa cấp",
+    "description": "Status pill: macOS does not currently grant this permission to this copy of Kage",
+    "_machine_translated": true,
+    "_source_hash": "af3244a27037f3c2"
+  },
+  "shared.mac_permissions.status.unknown": {
+    "message": "Không xác định",
+    "description": "Status pill: Kage could not determine whether the permission is granted",
+    "_machine_translated": true,
+    "_source_hash": "1c2f880ba4732c08"
+  },
+  "shared.mac_permissions.repair": {
+    "message": "Sửa",
+    "description": "Button that clears a stale macOS privacy grant so the user can re-enable Kage",
+    "_machine_translated": true,
+    "_source_hash": "9290aee4ac3f76a7"
+  },
+  "shared.mac_permissions.repair_aria_label": {
+    "message": "Sửa quyền {name}",
+    "description": "Screen-reader label for the Repair button. {name} is the permission name, e.g. Accessibility.",
+    "_machine_translated": true,
+    "_source_hash": "93459277634cadf5"
+  },
+  "shared.mac_permissions.repairing": {
+    "message": "Đang sửa…",
+    "description": "Repair button label while the reset is in progress",
+    "_machine_translated": true,
+    "_source_hash": "7db46245e2d0317d"
+  },
+  "shared.mac_permissions.repair_hint": {
+    "message": "Nếu Kage đã hiển thị là được bật trong Cài đặt hệ thống, macOS đang giữ quyền cấp cho một bản dựng cũ của Kage. Sửa chữa sẽ xóa quyền đó để bạn có thể bật lại Kage.",
+    "description": "One-line explanation under a permission that isn't granted. Updates replace the Kage binary, and macOS keeps the old build's approval, so the switch looks on but doesn't apply.",
+    "_machine_translated": true,
+    "_source_hash": "4b8e7153a92109e5"
+  },
+  "shared.mac_permissions.repair_done": {
+    "message": "Đã xóa quyền cũ. Hãy bật Kage trong Cài đặt hệ thống (macOS có thể hỏi trước), rồi quay lại đây.",
+    "description": "Shown after Repair succeeds; System Settings opens on the matching pane",
+    "_machine_translated": true,
+    "_source_hash": "914bd94d516e4859"
+  },
+  "shared.mac_permissions.repair_failed": {
+    "message": "Sửa chữa thất bại: {reason}",
+    "description": "Shown when Repair fails. {reason} is the error message.",
+    "_machine_translated": true,
+    "_source_hash": "5c686bde8b5ad17c"
+  },
+  "system_shortcuts.name.spotlight": {
+    "message": "tìm kiếm Spotlight",
+    "description": "Name of the macOS feature bound to ⌘Space",
+    "_machine_translated": true,
+    "_source_hash": "97062da77e387d5c"
+  },
+  "system_shortcuts.name.finder_search": {
+    "message": "cửa sổ tìm kiếm của Finder",
+    "description": "Name of the macOS feature bound to ⌥⌘Space",
+    "_machine_translated": true,
+    "_source_hash": "38f35214ea151f74"
+  },
+  "system_shortcuts.name.input_source_previous": {
+    "message": "chuyển sang nguồn nhập trước",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Space)",
+    "_machine_translated": true,
+    "_source_hash": "7b4c628b25ce5d68"
+  },
+  "system_shortcuts.name.input_source_next": {
+    "message": "chuyển sang nguồn nhập tiếp theo",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Option+Space)",
+    "_machine_translated": true,
+    "_source_hash": "284cab670b19a137"
+  },
+  "system_shortcuts.name.app_switcher": {
+    "message": "trình chuyển đổi ứng dụng",
+    "description": "Name of the macOS ⌘Tab app switcher",
+    "_machine_translated": true,
+    "_source_hash": "60d4ce9325f44fda"
+  },
+  "system_shortcuts.name.screenshot": {
+    "message": "chụp màn hình",
+    "description": "Name of the macOS screenshot shortcuts (⌘⇧3/4/5)",
+    "_machine_translated": true,
+    "_source_hash": "a022ef38d919c01b"
+  },
+  "system_shortcuts.name.mission_control": {
+    "message": "Mission Control",
+    "description": "Name of the macOS Mission Control feature",
+    "_machine_translated": true,
+    "_source_hash": "6d9d7e3c982888ab"
+  },
+  "system_shortcuts.name.app_windows": {
+    "message": "hiển thị các cửa sổ của ứng dụng",
+    "description": "Name of the macOS 'Application windows' shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d93500c2cf42624b"
+  },
+  "system_shortcuts.name.show_desktop": {
+    "message": "Hiển thị màn hình nền",
+    "description": "Name of the macOS Show Desktop shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d5fcd2ebc47c7f34"
+  },
+  "system_shortcuts.name.switch_space": {
+    "message": "di chuyển giữa các Spaces",
+    "description": "Name of the macOS shortcut that moves left/right a Space",
+    "_machine_translated": true,
+    "_source_hash": "b1bf53e248b0395b"
+  },
+  "system_shortcuts.name.generic": {
+    "message": "một phím tắt tích hợp sẵn",
+    "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for",
+    "_machine_translated": true,
+    "_source_hash": "1be98949c62b9654"
   }
 }

@@ -60,3 +60,11 @@ pub fn set_enabled(id: u32, enabled: bool) -> bool {
 pub fn is_enabled(id: u32) -> Option<bool> {
     crate::os::platform::system_shortcuts::is_enabled_impl(id)
 }
+
+/// The user's *saved* preference for a shortcut — what System Settings
+/// shows — independent of the live session state Kage toggles. `Some(false)`
+/// means they switched it off themselves; `None` means no explicit setting
+/// (the OS default applies) or the platform has no such store.
+pub fn user_preference(id: u32) -> Option<bool> {
+    crate::os::platform::system_shortcuts::user_preference_impl(id)
+}

@@ -1212,10 +1212,10 @@
     "_source_hash": "f206c674359a01db"
   },
   "settings.mac_permissions.description": {
-    "message": "Kage 需要三项 macOS 隐私权限才能正常工作。每项权限首次使用时，macOS 会弹出请求——点击下方按钮可在系统设置中打开对应面板并授予访问权限。",
+    "message": "Kage 需要以下 macOS 隐私权限才能正常工作。每张卡片显示 macOS 当前是否已向此 Kage 副本授予该权限。macOS 会在 Kage 首次需要某项权限时请求授权，你也可以使用下方按钮打开“系统设置”中的相应面板。",
     "description": "Section description for the mac-permissions pane",
     "_machine_translated": true,
-    "_source_hash": "02c73decdf72615a"
+    "_source_hash": "5c1809658b706981"
   },
   "settings.mac_permissions.restart_note": {
     "message": "切换权限后，可能需要重启 Kage 才能使更改生效。",
@@ -8320,5 +8320,233 @@
     "description": "Settings → Internal Sites test result: favicon attempt returned an image over the size limit",
     "_machine_translated": true,
     "_source_hash": "21376468b2149f95"
+  },
+  "errors.privacy_permissions.unknown": {
+    "message": "未知权限：{id}",
+    "description": "Repair was requested for a privacy permission id Kage doesn't recognise. {id} is the internal id; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "5f8cf56fe8ffd581"
+  },
+  "errors.privacy_permissions.unsupported": {
+    "message": "权限修复仅适用于 macOS。",
+    "description": "Repair was requested on Windows/Linux, which have no per-app privacy grants to reset",
+    "_machine_translated": true,
+    "_source_hash": "08b353f0c47e079d"
+  },
+  "errors.privacy_permissions.invalid_bundle_id": {
+    "message": "Kage 的 bundle 标识符（{id}）无效，因此无法重置其权限。",
+    "description": "The app's bundle identifier failed validation before running tccutil. {id} is a technical identifier like com.kage.launcher; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "485a323a64b6336d"
+  },
+  "errors.privacy_permissions.not_bundled": {
+    "message": "修复仅适用于已安装的 Kage 应用，不适用于从终端运行的开发版本。",
+    "description": "Repair was requested from a bare development binary (not inside Kage.app), where macOS attributes permissions to the terminal instead",
+    "_machine_translated": true,
+    "_source_hash": "b9a0bd3d5a1425c9"
+  },
+  "errors.privacy_permissions.reset_failed": {
+    "message": "无法重置权限：{reason}",
+    "description": "macOS's tccutil failed to clear Kage's stale privacy grant. {reason} is the (English) system message.",
+    "_machine_translated": true,
+    "_source_hash": "c8bcc6663109ced6"
+  },
+  "settings.hotkey.global.use_cmd_space": {
+    "message": "使用 ⌘空格（替换聚焦）",
+    "description": "macOS-only button under the global hotkey picker that sets the hotkey to Command+Space",
+    "_machine_translated": true,
+    "_source_hash": "d86bfb3832533ed6"
+  },
+  "settings.hotkey.global.use_cmd_space_title": {
+    "message": "使用 ⌘空格 代替聚焦来打开 Kage。Kage 退出后，聚焦将恢复其快捷键。",
+    "description": "Tooltip for the 'Use ⌘Space' button",
+    "_machine_translated": true,
+    "_source_hash": "ad4df3c0700edc65"
+  },
+  "shared.hotkey_picker.unsupported_key": {
+    "message": "该按键无法用于快捷键，请尝试其他组合。",
+    "description": "Shown while recording a hotkey when the user presses a key Kage cannot bind (e.g. a media key)",
+    "_machine_translated": true,
+    "_source_hash": "d5487e7db75c6afc"
+  },
+  "shared.hotkey_picker.system_conflict": {
+    "message": "{combo} 已被 macOS 用于{name}。",
+    "description": "Warning when a recorded hotkey matches a built-in macOS keyboard shortcut. {combo} is the key combo such as ⌘Space; {name} is the macOS feature such as 'Spotlight search'",
+    "_machine_translated": true,
+    "_source_hash": "c60a9dbb43ce1c76"
+  },
+  "shared.hotkey_picker.system_conflict_hint": {
+    "message": "Kage 可以在运行期间关闭该 macOS 快捷键，并在你退出时将其恢复。",
+    "description": "Explains what choosing 'Use for Kage' does to the conflicting macOS shortcut",
+    "_machine_translated": true,
+    "_source_hash": "3e73239b403fbd8e"
+  },
+  "shared.hotkey_picker.system_conflict_replace": {
+    "message": "用于 Kage",
+    "description": "Button: let Kage take over the conflicting macOS shortcut",
+    "_machine_translated": true,
+    "_source_hash": "8283c2fb5dcefeb8"
+  },
+  "shared.hotkey_picker.system_conflict_keep": {
+    "message": "保留 macOS 快捷键",
+    "description": "Button: dismiss the conflict and keep the current Kage hotkey",
+    "_machine_translated": true,
+    "_source_hash": "d17efd6830f9ed3d"
+  },
+  "shared.mac_permissions.open_settings_aria_label": {
+    "message": "打开“{name}”的系统设置",
+    "description": "Screen-reader label for the Open System Settings button on one permission card. {name} is the permission name, e.g. Accessibility.",
+    "_machine_translated": true,
+    "_source_hash": "1331437031234382"
+  },
+  "shared.mac_permissions.accessibility.name": {
+    "message": "辅助功能",
+    "description": "macOS privacy permission name; use the name macOS shows in System Settings → Privacy & Security in this language",
+    "_machine_translated": true,
+    "_source_hash": "3af0ae3b76479ae4"
+  },
+  "shared.mac_permissions.accessibility.why": {
+    "message": "允许 Kage 复制你选中的文本、将结果粘贴到当前应用，以及将特定窗口置于前台。“电脑控制”功能也会使用此权限代你操作应用。",
+    "description": "Why Kage needs macOS Accessibility permission. 'Computer Control' is the name of a Kage feature.",
+    "_machine_translated": true,
+    "_source_hash": "223f41893c281427"
+  },
+  "shared.mac_permissions.screen_recording.name": {
+    "message": "屏幕录制",
+    "description": "macOS privacy permission name; use the name macOS shows in System Settings → Privacy & Security in this language",
+    "_machine_translated": true,
+    "_source_hash": "03f9df7ea0a9b0e4"
+  },
+  "shared.mac_permissions.screen_recording.why": {
+    "message": "允许 Kage 读取窗口标题，以便了解你正在使用哪个窗口，并按名称列出你打开的窗口。Kage 不会因此录制或截取你的屏幕。",
+    "description": "Why Kage needs macOS Screen Recording permission (it only reads window titles)",
+    "_machine_translated": true,
+    "_source_hash": "44b41b114c366fb1"
+  },
+  "shared.mac_permissions.status.checking": {
+    "message": "正在检查…",
+    "description": "Status pill on a permission card while Kage asks macOS for the current status",
+    "_machine_translated": true,
+    "_source_hash": "0b246893be76bb29"
+  },
+  "shared.mac_permissions.status.granted": {
+    "message": "已授权",
+    "description": "Status pill: macOS currently grants this permission to Kage",
+    "_machine_translated": true,
+    "_source_hash": "b3843ea2efae0c48"
+  },
+  "shared.mac_permissions.status.not_granted": {
+    "message": "未授权",
+    "description": "Status pill: macOS does not currently grant this permission to this copy of Kage",
+    "_machine_translated": true,
+    "_source_hash": "af3244a27037f3c2"
+  },
+  "shared.mac_permissions.status.unknown": {
+    "message": "未知",
+    "description": "Status pill: Kage could not determine whether the permission is granted",
+    "_machine_translated": true,
+    "_source_hash": "1c2f880ba4732c08"
+  },
+  "shared.mac_permissions.repair": {
+    "message": "修复",
+    "description": "Button that clears a stale macOS privacy grant so the user can re-enable Kage",
+    "_machine_translated": true,
+    "_source_hash": "9290aee4ac3f76a7"
+  },
+  "shared.mac_permissions.repair_aria_label": {
+    "message": "修复“{name}”权限",
+    "description": "Screen-reader label for the Repair button. {name} is the permission name, e.g. Accessibility.",
+    "_machine_translated": true,
+    "_source_hash": "93459277634cadf5"
+  },
+  "shared.mac_permissions.repairing": {
+    "message": "正在修复…",
+    "description": "Repair button label while the reset is in progress",
+    "_machine_translated": true,
+    "_source_hash": "7db46245e2d0317d"
+  },
+  "shared.mac_permissions.repair_hint": {
+    "message": "如果 Kage 在系统设置中已显示为启用，说明 macOS 保留的是旧版 Kage 的授权。修复会清除该授权，以便你重新启用 Kage。",
+    "description": "One-line explanation under a permission that isn't granted. Updates replace the Kage binary, and macOS keeps the old build's approval, so the switch looks on but doesn't apply.",
+    "_machine_translated": true,
+    "_source_hash": "4b8e7153a92109e5"
+  },
+  "shared.mac_permissions.repair_done": {
+    "message": "旧授权已清除。请在系统设置中打开 Kage（macOS 可能会先询问），然后返回此处。",
+    "description": "Shown after Repair succeeds; System Settings opens on the matching pane",
+    "_machine_translated": true,
+    "_source_hash": "914bd94d516e4859"
+  },
+  "shared.mac_permissions.repair_failed": {
+    "message": "修复失败：{reason}",
+    "description": "Shown when Repair fails. {reason} is the error message.",
+    "_machine_translated": true,
+    "_source_hash": "5c686bde8b5ad17c"
+  },
+  "system_shortcuts.name.spotlight": {
+    "message": "聚焦搜索",
+    "description": "Name of the macOS feature bound to ⌘Space",
+    "_machine_translated": true,
+    "_source_hash": "97062da77e387d5c"
+  },
+  "system_shortcuts.name.finder_search": {
+    "message": "访达搜索窗口",
+    "description": "Name of the macOS feature bound to ⌥⌘Space",
+    "_machine_translated": true,
+    "_source_hash": "38f35214ea151f74"
+  },
+  "system_shortcuts.name.input_source_previous": {
+    "message": "切换到上一个输入法",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Space)",
+    "_machine_translated": true,
+    "_source_hash": "7b4c628b25ce5d68"
+  },
+  "system_shortcuts.name.input_source_next": {
+    "message": "切换到下一个输入法",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Option+Space)",
+    "_machine_translated": true,
+    "_source_hash": "284cab670b19a137"
+  },
+  "system_shortcuts.name.app_switcher": {
+    "message": "应用切换器",
+    "description": "Name of the macOS ⌘Tab app switcher",
+    "_machine_translated": true,
+    "_source_hash": "60d4ce9325f44fda"
+  },
+  "system_shortcuts.name.screenshot": {
+    "message": "截屏",
+    "description": "Name of the macOS screenshot shortcuts (⌘⇧3/4/5)",
+    "_machine_translated": true,
+    "_source_hash": "a022ef38d919c01b"
+  },
+  "system_shortcuts.name.mission_control": {
+    "message": "调度中心",
+    "description": "Name of the macOS Mission Control feature",
+    "_machine_translated": true,
+    "_source_hash": "6d9d7e3c982888ab"
+  },
+  "system_shortcuts.name.app_windows": {
+    "message": "显示应用程序窗口",
+    "description": "Name of the macOS 'Application windows' shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d93500c2cf42624b"
+  },
+  "system_shortcuts.name.show_desktop": {
+    "message": "显示桌面",
+    "description": "Name of the macOS Show Desktop shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d5fcd2ebc47c7f34"
+  },
+  "system_shortcuts.name.switch_space": {
+    "message": "在空间之间切换",
+    "description": "Name of the macOS shortcut that moves left/right a Space",
+    "_machine_translated": true,
+    "_source_hash": "b1bf53e248b0395b"
+  },
+  "system_shortcuts.name.generic": {
+    "message": "系统内置键盘快捷键",
+    "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for",
+    "_machine_translated": true,
+    "_source_hash": "1be98949c62b9654"
   }
 }

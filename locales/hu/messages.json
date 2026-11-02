@@ -1212,10 +1212,10 @@
     "_source_hash": "f206c674359a01db"
   },
   "settings.mac_permissions.description": {
-    "message": "A Kage három macOS adatvédelmi engedélyt használ a működéséhez. A macOS az első használatkor mindegyiknél engedélyt kér – kattints az alábbi gombokra a megfelelő panel megnyitásához a Rendszerbeállításokban, és add meg a hozzáférést.",
+    "message": "A Kage ezeket a macOS adatvédelmi engedélyeket használja a működéséhez. Minden kártyán látható, hogy a macOS jelenleg megadja-e az engedélyt a Kage ezen példányának. A macOS mindegyiket akkor kéri, amikor a Kage-nek először szüksége van rá, de az alábbi gombokkal is megnyithatja a megfelelő panelt a Rendszerbeállításokban.",
     "description": "Section description for the mac-permissions pane",
     "_machine_translated": true,
-    "_source_hash": "02c73decdf72615a"
+    "_source_hash": "5c1809658b706981"
   },
   "settings.mac_permissions.restart_note": {
     "message": "Egy engedély átkapcsolása után előfordulhat, hogy újra kell indítanod a Kage-t a változás érvénybe lépéséhez.",
@@ -8320,5 +8320,233 @@
     "description": "Settings → Internal Sites test result: favicon attempt returned an image over the size limit",
     "_machine_translated": true,
     "_source_hash": "21376468b2149f95"
+  },
+  "errors.privacy_permissions.unknown": {
+    "message": "Ismeretlen engedély: {id}",
+    "description": "Repair was requested for a privacy permission id Kage doesn't recognise. {id} is the internal id; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "5f8cf56fe8ffd581"
+  },
+  "errors.privacy_permissions.unsupported": {
+    "message": "Az engedélyek javítása csak macOS rendszeren érhető el.",
+    "description": "Repair was requested on Windows/Linux, which have no per-app privacy grants to reset",
+    "_machine_translated": true,
+    "_source_hash": "08b353f0c47e079d"
+  },
+  "errors.privacy_permissions.invalid_bundle_id": {
+    "message": "A Kage csomagazonosítója ({id}) érvénytelen, ezért az engedélyei nem állíthatók vissza.",
+    "description": "The app's bundle identifier failed validation before running tccutil. {id} is a technical identifier like com.kage.launcher; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "485a323a64b6336d"
+  },
+  "errors.privacy_permissions.not_bundled": {
+    "message": "A javítás csak a telepített Kage alkalmazásban működik, terminálból futtatott fejlesztői buildben nem.",
+    "description": "Repair was requested from a bare development binary (not inside Kage.app), where macOS attributes permissions to the terminal instead",
+    "_machine_translated": true,
+    "_source_hash": "b9a0bd3d5a1425c9"
+  },
+  "errors.privacy_permissions.reset_failed": {
+    "message": "Nem sikerült visszaállítani az engedélyt: {reason}",
+    "description": "macOS's tccutil failed to clear Kage's stale privacy grant. {reason} is the (English) system message.",
+    "_machine_translated": true,
+    "_source_hash": "c8bcc6663109ced6"
+  },
+  "settings.hotkey.global.use_cmd_space": {
+    "message": "⌘Space használata (a Spotlight helyett)",
+    "description": "macOS-only button under the global hotkey picker that sets the hotkey to Command+Space",
+    "_machine_translated": true,
+    "_source_hash": "d86bfb3832533ed6"
+  },
+  "settings.hotkey.global.use_cmd_space_title": {
+    "message": "A Kage megnyitása ⌘Space billentyűkombinációval a Spotlight helyett. A Spotlight visszakapja a billentyűparancsát, amikor a Kage kilép.",
+    "description": "Tooltip for the 'Use ⌘Space' button",
+    "_machine_translated": true,
+    "_source_hash": "ad4df3c0700edc65"
+  },
+  "shared.hotkey_picker.unsupported_key": {
+    "message": "Ez a billentyű nem használható gyorsbillentyűben – próbáljon másik kombinációt.",
+    "description": "Shown while recording a hotkey when the user presses a key Kage cannot bind (e.g. a media key)",
+    "_machine_translated": true,
+    "_source_hash": "d5487e7db75c6afc"
+  },
+  "shared.hotkey_picker.system_conflict": {
+    "message": "A(z) {combo} billentyűkombinációt a macOS a következőhöz használja: {name}.",
+    "description": "Warning when a recorded hotkey matches a built-in macOS keyboard shortcut. {combo} is the key combo such as ⌘Space; {name} is the macOS feature such as 'Spotlight search'",
+    "_machine_translated": true,
+    "_source_hash": "c60a9dbb43ce1c76"
+  },
+  "shared.hotkey_picker.system_conflict_hint": {
+    "message": "A Kage kikapcsolhatja ezt a macOS billentyűparancsot, amíg fut, és kilépéskor visszaállítja.",
+    "description": "Explains what choosing 'Use for Kage' does to the conflicting macOS shortcut",
+    "_machine_translated": true,
+    "_source_hash": "3e73239b403fbd8e"
+  },
+  "shared.hotkey_picker.system_conflict_replace": {
+    "message": "Használat a Kage-hez",
+    "description": "Button: let Kage take over the conflicting macOS shortcut",
+    "_machine_translated": true,
+    "_source_hash": "8283c2fb5dcefeb8"
+  },
+  "shared.hotkey_picker.system_conflict_keep": {
+    "message": "macOS billentyűparancs megtartása",
+    "description": "Button: dismiss the conflict and keep the current Kage hotkey",
+    "_machine_translated": true,
+    "_source_hash": "d17efd6830f9ed3d"
+  },
+  "shared.mac_permissions.open_settings_aria_label": {
+    "message": "Rendszerbeállítások megnyitása: {name}",
+    "description": "Screen-reader label for the Open System Settings button on one permission card. {name} is the permission name, e.g. Accessibility.",
+    "_machine_translated": true,
+    "_source_hash": "1331437031234382"
+  },
+  "shared.mac_permissions.accessibility.name": {
+    "message": "Kisegítő lehetőségek",
+    "description": "macOS privacy permission name; use the name macOS shows in System Settings → Privacy & Security in this language",
+    "_machine_translated": true,
+    "_source_hash": "3af0ae3b76479ae4"
+  },
+  "shared.mac_permissions.accessibility.why": {
+    "message": "Lehetővé teszi, hogy a Kage kimásolja a kijelölt szöveget, beillessze az eredményeket az aktív alkalmazásba, és előtérbe hozzon egy adott ablakot. A Computer Control funkció is ezt használja az alkalmazások kezeléséhez az Ön helyett.",
+    "description": "Why Kage needs macOS Accessibility permission. 'Computer Control' is the name of a Kage feature.",
+    "_machine_translated": true,
+    "_source_hash": "223f41893c281427"
+  },
+  "shared.mac_permissions.screen_recording.name": {
+    "message": "Képernyőfelvétel",
+    "description": "macOS privacy permission name; use the name macOS shows in System Settings → Privacy & Security in this language",
+    "_machine_translated": true,
+    "_source_hash": "03f9df7ea0a9b0e4"
+  },
+  "shared.mac_permissions.screen_recording.why": {
+    "message": "Lehetővé teszi, hogy a Kage beolvassa az ablakok címét, így tudja, melyik ablakban dolgozik, és név szerint listázhatja a megnyitott ablakait. A Kage ehhez nem rögzíti és nem készít felvételt a képernyőjéről.",
+    "description": "Why Kage needs macOS Screen Recording permission (it only reads window titles)",
+    "_machine_translated": true,
+    "_source_hash": "44b41b114c366fb1"
+  },
+  "shared.mac_permissions.status.checking": {
+    "message": "Ellenőrzés…",
+    "description": "Status pill on a permission card while Kage asks macOS for the current status",
+    "_machine_translated": true,
+    "_source_hash": "0b246893be76bb29"
+  },
+  "shared.mac_permissions.status.granted": {
+    "message": "Megadva",
+    "description": "Status pill: macOS currently grants this permission to Kage",
+    "_machine_translated": true,
+    "_source_hash": "b3843ea2efae0c48"
+  },
+  "shared.mac_permissions.status.not_granted": {
+    "message": "Nincs megadva",
+    "description": "Status pill: macOS does not currently grant this permission to this copy of Kage",
+    "_machine_translated": true,
+    "_source_hash": "af3244a27037f3c2"
+  },
+  "shared.mac_permissions.status.unknown": {
+    "message": "Ismeretlen",
+    "description": "Status pill: Kage could not determine whether the permission is granted",
+    "_machine_translated": true,
+    "_source_hash": "1c2f880ba4732c08"
+  },
+  "shared.mac_permissions.repair": {
+    "message": "Javítás",
+    "description": "Button that clears a stale macOS privacy grant so the user can re-enable Kage",
+    "_machine_translated": true,
+    "_source_hash": "9290aee4ac3f76a7"
+  },
+  "shared.mac_permissions.repair_aria_label": {
+    "message": "{name} engedély javítása",
+    "description": "Screen-reader label for the Repair button. {name} is the permission name, e.g. Accessibility.",
+    "_machine_translated": true,
+    "_source_hash": "93459277634cadf5"
+  },
+  "shared.mac_permissions.repairing": {
+    "message": "Javítás…",
+    "description": "Repair button label while the reset is in progress",
+    "_machine_translated": true,
+    "_source_hash": "7db46245e2d0317d"
+  },
+  "shared.mac_permissions.repair_hint": {
+    "message": "Ha a Kage már engedélyezettnek látszik a Rendszerbeállításokban, a macOS a Kage egy régebbi buildjéhez tartozó engedélyt őriz. A Javítás törli ezt, így újra engedélyezheti a Kage-et.",
+    "description": "One-line explanation under a permission that isn't granted. Updates replace the Kage binary, and macOS keeps the old build's approval, so the switch looks on but doesn't apply.",
+    "_machine_translated": true,
+    "_source_hash": "4b8e7153a92109e5"
+  },
+  "shared.mac_permissions.repair_done": {
+    "message": "A régi engedély törölve. Kapcsolja be a Kage-et a Rendszerbeállításokban (a macOS előbb rákérdezhet), majd térjen vissza ide.",
+    "description": "Shown after Repair succeeds; System Settings opens on the matching pane",
+    "_machine_translated": true,
+    "_source_hash": "914bd94d516e4859"
+  },
+  "shared.mac_permissions.repair_failed": {
+    "message": "A javítás sikertelen: {reason}",
+    "description": "Shown when Repair fails. {reason} is the error message.",
+    "_machine_translated": true,
+    "_source_hash": "5c686bde8b5ad17c"
+  },
+  "system_shortcuts.name.spotlight": {
+    "message": "Spotlight-keresés",
+    "description": "Name of the macOS feature bound to ⌘Space",
+    "_machine_translated": true,
+    "_source_hash": "97062da77e387d5c"
+  },
+  "system_shortcuts.name.finder_search": {
+    "message": "a Finder keresőablaka",
+    "description": "Name of the macOS feature bound to ⌥⌘Space",
+    "_machine_translated": true,
+    "_source_hash": "38f35214ea151f74"
+  },
+  "system_shortcuts.name.input_source_previous": {
+    "message": "váltás az előző beviteli forrásra",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Space)",
+    "_machine_translated": true,
+    "_source_hash": "7b4c628b25ce5d68"
+  },
+  "system_shortcuts.name.input_source_next": {
+    "message": "váltás a következő beviteli forrásra",
+    "description": "Name of the macOS keyboard-input-source shortcut (Ctrl+Option+Space)",
+    "_machine_translated": true,
+    "_source_hash": "284cab670b19a137"
+  },
+  "system_shortcuts.name.app_switcher": {
+    "message": "az alkalmazásváltó",
+    "description": "Name of the macOS ⌘Tab app switcher",
+    "_machine_translated": true,
+    "_source_hash": "60d4ce9325f44fda"
+  },
+  "system_shortcuts.name.screenshot": {
+    "message": "képernyőképek",
+    "description": "Name of the macOS screenshot shortcuts (⌘⇧3/4/5)",
+    "_machine_translated": true,
+    "_source_hash": "a022ef38d919c01b"
+  },
+  "system_shortcuts.name.mission_control": {
+    "message": "Mission Control",
+    "description": "Name of the macOS Mission Control feature",
+    "_machine_translated": true,
+    "_source_hash": "6d9d7e3c982888ab"
+  },
+  "system_shortcuts.name.app_windows": {
+    "message": "egy alkalmazás ablakainak megjelenítése",
+    "description": "Name of the macOS 'Application windows' shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d93500c2cf42624b"
+  },
+  "system_shortcuts.name.show_desktop": {
+    "message": "Íróasztal megjelenítése",
+    "description": "Name of the macOS Show Desktop shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d5fcd2ebc47c7f34"
+  },
+  "system_shortcuts.name.switch_space": {
+    "message": "mozgás a Space-ek között",
+    "description": "Name of the macOS shortcut that moves left/right a Space",
+    "_machine_translated": true,
+    "_source_hash": "b1bf53e248b0395b"
+  },
+  "system_shortcuts.name.generic": {
+    "message": "egy beépített billentyűparancs",
+    "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for",
+    "_machine_translated": true,
+    "_source_hash": "1be98949c62b9654"
   }
 }

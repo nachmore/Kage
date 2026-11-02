@@ -364,6 +364,25 @@ pub async fn cancel_hotkey_capture() -> Result<(), AppError> {
 static RECORDING_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static RECORDING_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Refuse to run the recording / takeover commands when the global-shortcut
+/// plugin isn't registered (the headless mock-app harness skips it).
+/// Returning early also guarantees the harness's empty-args sweep can never
+/// reach `system_shortcut_takeover` and pause the test machine's real
+/// Spotlight shortcut. The message matches the sweep's allowlist for this
+/// plugin's state.
+fn require_global_shortcut<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<(), AppError> {
+    use tauri::Manager;
+    if app
+        .try_state::<tauri_plugin_global_shortcut::GlobalShortcut<R>>()
+        .is_none()
+    {
+        return Err(AppError::internal(
+            "state not managed: GlobalShortcut (global-shortcut plugin not registered)",
+        ));
+    }
+    Ok(())
+}
+
 /// Upper bound on a recording session. The picker gives up after 10 s; this
 /// covers a webview that never calls `end_hotkey_recording` (window closed
 /// or reloaded mid-capture, JS error) so Kage's hotkeys and the paused
@@ -375,13 +394,19 @@ const RECORDING_SAFETY_TIMEOUT: std::time::Duration = std::time::Duration::from_
 /// Monitoring permission. Unregisters Kage's global hotkeys (so pressing
 /// the current one reaches the webview) and pauses Space-bound system
 /// shortcuts (so ⌘Space reaches it instead of opening Spotlight).
+///
+/// Returns a generation token the picker hands back to
+/// `end_hotkey_recording`, so a late `end` from a recording that was
+/// superseded by a newer one (user clicked a second picker) is ignored
+/// instead of tearing down the newer recording.
 #[tauri::command]
 pub async fn begin_hotkey_recording<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-) -> Result<(), AppError> {
+) -> Result<u64, AppError> {
     use std::sync::atomic::Ordering;
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
+    require_global_shortcut(&app)?;
     let generation = RECORDING_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     RECORDING_ACTIVE.store(true, Ordering::SeqCst);
     let _ = app.global_shortcut().unregister_all();
@@ -396,7 +421,7 @@ pub async fn begin_hotkey_recording<R: tauri::Runtime>(
         let _ =
             tauri::async_runtime::spawn_blocking(crate::system_shortcut_takeover::end_recording)
                 .await;
-        return Ok(());
+        return Ok(generation);
     }
     info!("[HOTKEY_RECORDING] started (generation {})", generation);
 
@@ -413,17 +438,31 @@ pub async fn begin_hotkey_recording<R: tauri::Runtime>(
             finish_recording(&app_for_timer).await;
         }
     });
-    Ok(())
+    Ok(generation)
 }
 
 /// Undo `begin_hotkey_recording`: resume paused system shortcuts and
-/// re-register every configured hotkey. Safe to call more than once.
+/// re-register every configured hotkey. `generation` is the token `begin`
+/// returned; an `end` for a superseded recording is a no-op (the newer
+/// recording ends itself, and the safety timer backs both up). `None`
+/// ends whatever is active.
 #[tauri::command]
 pub async fn end_hotkey_recording<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
+    generation: Option<u64>,
 ) -> Result<(), AppError> {
     use std::sync::atomic::Ordering;
-    RECORDING_GENERATION.fetch_add(1, Ordering::SeqCst);
+    require_global_shortcut(&app)?;
+    if let Some(g) = generation {
+        let current = RECORDING_GENERATION.load(Ordering::SeqCst);
+        if g != current {
+            info!(
+                "[HOTKEY_RECORDING] ignoring end for superseded generation {} (current {})",
+                g, current
+            );
+            return Ok(());
+        }
+    }
     finish_recording(&app).await;
     Ok(())
 }
@@ -470,6 +509,7 @@ pub async fn allow_system_shortcut_override<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     ids: Vec<u32>,
 ) -> Result<(), AppError> {
+    require_global_shortcut(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         crate::system_shortcut_takeover::approve(&ids);
         register_all_hotkeys(&app);

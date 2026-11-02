@@ -25,6 +25,18 @@ import { classifyKeyEvent, formatCombo } from './hotkey-capture.js';
 /** Matches the native capture paths' 10 s window. */
 const RECORD_TIMEOUT_MS = 10000;
 
+/**
+ * Cancel function of the recording in progress on this page, if any. Settings
+ * shows several pickers in one webview; each recording installs a
+ * capture-phase keydown listener that swallows the key, so two at once would
+ * let the first picker steal (and save) the combo meant for the second.
+ * Starting a recording cancels the previous one.
+ */
+let activeRecordingCancel = null;
+
+/** LTR-isolate a combo so ⌘Space doesn't render as "Space⌘" inside RTL text. */
+const ltrIsolate = (s) => `\u2066${s}\u2069`;
+
 export class HotkeyPicker {
     constructor(container, invoke, initialHotkey, slot) {
         this.container = container;
@@ -170,7 +182,7 @@ export class HotkeyPicker {
         const msg = document.createElement('div');
         msg.className = 'hk-picker-conflict-msg';
         msg.textContent = t('shared.hotkey_picker.system_conflict', {
-            combo: formatCombo(hk, { mac: true }),
+            combo: ltrIsolate(formatCombo(hk, { mac: true })),
             name: names,
         });
         const hint = document.createElement('div');
@@ -214,28 +226,39 @@ export class HotkeyPicker {
      * (the backend also self-heals after 15 s if this page goes away).
      */
     _recordInWebview() {
+        activeRecordingCancel?.();
         return new Promise((resolve) => {
             let done = false;
+            // Resolves to the backend's generation token (or null if begin
+            // failed); handed back to `end` so a late end from this
+            // recording can't tear down a newer one.
             const begun = Promise.resolve()
                 .then(() => this.invoke('begin_hotkey_recording'))
-                .catch((e) => console.warn('[hotkey-picker] begin_hotkey_recording failed:', e));
+                .catch((e) => {
+                    console.warn('[hotkey-picker] begin_hotkey_recording failed:', e);
+                    return null;
+                });
 
             const finish = async (value) => {
                 if (done) return;
                 done = true;
+                if (activeRecordingCancel === cancel) activeRecordingCancel = null;
                 window.removeEventListener('keydown', onKey, true);
                 window.removeEventListener('blur', onBlur);
                 clearTimeout(timer);
                 // Serialise with begin so an instant cancel can't leave
                 // system shortcuts paused.
-                await begun;
+                const generation = await begun;
                 try {
-                    await this.invoke('end_hotkey_recording');
+                    await this.invoke('end_hotkey_recording', {
+                        generation: typeof generation === 'number' ? generation : null,
+                    });
                 } catch (e) {
                     console.warn('[hotkey-picker] end_hotkey_recording failed:', e);
                 }
                 resolve(value);
             };
+            const cancel = () => finish(null);
             const onKey = (e) => {
                 const r = classifyKeyEvent(e);
                 if (r.kind === 'ignore') return;
@@ -254,6 +277,7 @@ export class HotkeyPicker {
             const onBlur = () => finish(null);
             const timer = setTimeout(() => finish(null), RECORD_TIMEOUT_MS);
 
+            activeRecordingCancel = cancel;
             window.addEventListener('keydown', onKey, true);
             window.addEventListener('blur', onBlur);
         });

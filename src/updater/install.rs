@@ -133,6 +133,11 @@ fn restore_after_failed_install<R: tauri::Runtime>(app: &tauri::AppHandle<R>, te
     if let Some(tray) = app.tray_by_id("main-tray") {
         let _ = tray.set_visible(true);
     }
+    // graceful_shutdown handed any taken-over system shortcut (⌘Space) back
+    // to macOS and latched the takeover off; we're staying up, so take it
+    // again — otherwise Kage's ⌘Space would go to Spotlight until restart.
+    crate::system_shortcut_takeover::resume();
+    crate::commands::system::register_all_hotkeys(app);
     for label in &teardown.windows {
         if let Some(window) = app.get_webview_window(label) {
             let _ = window.show();

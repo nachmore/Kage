@@ -52,9 +52,10 @@ pub fn install_hotkey_hot_reload<R: tauri::Runtime>(
     app: &App<R>,
     initial_config: &crate::config::Config,
 ) {
-    /// Snapshot of the three hotkey strings (main, clipboard, inline-assist).
-    /// Aliased so the type doesn't bloat the local declaration.
-    type HotkeySnapshot = (String, Option<String>, Option<String>);
+    /// Snapshot of every hotkey string (main, clipboard, inline-assist,
+    /// voice). Voice was missing, so changing only the voice hotkey never
+    /// re-registered — and never released a ⌘Space takeover it held.
+    type HotkeySnapshot = (String, Option<String>, Option<String>, Option<String>);
 
     let hotkey_app = app.handle().clone();
     let hotkey_config = app.state::<FeatureServices>().config.clone();
@@ -62,7 +63,8 @@ pub fn install_hotkey_hot_reload<R: tauri::Runtime>(
         let main = initial_config.get_hotkey_string();
         let cb = initial_config.get_clipboard_hotkey_string();
         let ia = initial_config.get_inline_assist_hotkey_string();
-        Arc::new(std::sync::Mutex::new((main, cb, ia)))
+        let voice = initial_config.get_voice_hotkey_string();
+        Arc::new(std::sync::Mutex::new((main, cb, ia, voice)))
     };
     app.listen(events::CONFIG_UPDATED, move |_| {
         // Read the new hotkey strings out under a brief lock, then drop the
@@ -71,17 +73,18 @@ pub fn install_hotkey_hot_reload<R: tauri::Runtime>(
         // than silently dropping the change. Pre-fix this listener used
         // try_lock and a single concurrent save of any config field would
         // make the user's hotkey edit go nowhere with no log line.
-        let (new_main, new_cb, new_ia) = {
+        let new_snapshot: HotkeySnapshot = {
             let config = hotkey_config.lock_or_recover();
             (
                 config.get_hotkey_string(),
                 config.get_clipboard_hotkey_string(),
                 config.get_inline_assist_hotkey_string(),
+                config.get_voice_hotkey_string(),
             )
         };
 
         let snapshot = last_hotkey_snapshot.lock_or_recover();
-        if snapshot.0 == new_main && snapshot.1 == new_cb && snapshot.2 == new_ia {
+        if *snapshot == new_snapshot {
             return;
         }
 
@@ -89,7 +92,7 @@ pub fn install_hotkey_hot_reload<R: tauri::Runtime>(
         // Drop the snapshot guard before calling register_all_hotkeys — that
         // path takes its own config lock and we don't want to hold an
         // unrelated mutex across it.
-        let to_store = (new_main, new_cb, new_ia);
+        let to_store = new_snapshot;
         drop(snapshot);
         crate::commands::system::register_all_hotkeys(&hotkey_app);
         *last_hotkey_snapshot.lock_or_recover() = to_store;

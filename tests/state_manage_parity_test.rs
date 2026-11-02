@@ -26,6 +26,19 @@ use std::path::{Path, PathBuf};
 /// snake_case instances of exactly these types).
 const MANAGED_TYPES: &[&str] = &["AcpHandles", "UiState", "ChildProcesses", "FeatureServices"];
 
+/// State owned by a Tauri plugin (managed by the plugin's own init, not by
+/// main.rs). Allowed ONLY through `try_state::<…>()`, which returns `None`
+/// instead of panicking when the plugin isn't registered — used to detect
+/// the headless mock harness, which skips global-shortcut.
+const PLUGIN_STATE_TYPES_VIA_TRY_STATE: &[&str] = &["GlobalShortcut"];
+
+fn is_plugin_state(type_param: &str) -> bool {
+    let t: String = type_param.split_whitespace().collect();
+    let no_generics = t.split('<').next().unwrap_or(&t);
+    let base = no_generics.rsplit("::").next().unwrap_or(no_generics);
+    PLUGIN_STATE_TYPES_VIA_TRY_STATE.contains(&base)
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -88,7 +101,16 @@ fn line_of(source: &str, byte_idx: usize) -> usize {
 
 /// Collect every state-access type parameter in a file:
 /// `State<'_, T>`, `.state::<T>()`, `.try_state::<T>()`.
+/// `(line, type, via_try_state)` for every state access in `source`.
 fn scan_file(source: &str) -> Vec<(usize, String)> {
+    scan_file_tagged(source)
+        .into_iter()
+        .filter(|(_, ty, via_try)| !(*via_try && is_plugin_state(ty)))
+        .map(|(line, ty, _)| (line, ty))
+        .collect()
+}
+
+fn scan_file_tagged(source: &str) -> Vec<(usize, String, bool)> {
     let mut found = Vec::new();
 
     // `State<'_, T>` — command args and let-binding annotations.
@@ -103,7 +125,7 @@ fn scan_file(source: &str) -> Vec<(usize, String)> {
             if standalone {
                 // Drop the lifetime: `'_, T` / `'r, T` → `T`.
                 if let Some((_, ty)) = inner.split_once(',') {
-                    found.push((line_of(source, idx), ty.trim().to_string()));
+                    found.push((line_of(source, idx), ty.trim().to_string(), false));
                 }
             }
             from = open + 1;
@@ -122,7 +144,10 @@ fn scan_file(source: &str) -> Vec<(usize, String)> {
             // once per pattern (dedup below handles the overlap).
             let open = idx + needle.len() - 1;
             if let Some(inner) = balanced_angle(source, open) {
-                found.push((line_of(source, idx), inner.trim().to_string()));
+                // `state::<` is a suffix of `try_state::<`; tag by what
+                // precedes it so the plugin allowance can't leak to state::<.
+                let via_try = needle == "try_state::<" || source[..idx].ends_with("try_");
+                found.push((line_of(source, idx), inner.trim().to_string(), via_try));
                 from = open + 1;
             } else {
                 break;
@@ -198,6 +223,24 @@ mod parser_self_test {
         for (_, ty) in scan_file(src) {
             assert!(is_managed(&ty), "expected managed: {ty}");
         }
+    }
+
+    #[test]
+    fn plugin_state_allowed_only_via_try_state() {
+        let ok = "fn a(app: &AppHandle<R>) { app.try_state::<tauri_plugin_global_shortcut::GlobalShortcut<R>>(); }";
+        assert!(
+            scan_file(ok).is_empty(),
+            "try_state on plugin state is safe"
+        );
+        // state::<…>() panics when the plugin is missing — still flagged.
+        let bad = "fn a(app: &AppHandle<R>) { app.state::<GlobalShortcut<R>>(); }";
+        assert_eq!(scan_file(bad).len(), 1);
+        // As a command arg it fails every invoke — still flagged.
+        let bad_arg = "fn a(s: State<'_, GlobalShortcut<R>>) {}";
+        assert_eq!(scan_file(bad_arg).len(), 1);
+        // The allowance is by name: other plugin-ish types stay flagged.
+        let other = "fn a(app: &AppHandle) { app.try_state::<SomethingElse>(); }";
+        assert_eq!(scan_file(other).len(), 1);
     }
 
     #[test]

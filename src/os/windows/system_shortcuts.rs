@@ -19,3 +19,7 @@ pub fn set_enabled_impl(_id: u32, _enabled: bool) -> bool {
 pub fn is_enabled_impl(_id: u32) -> Option<bool> {
     None
 }
+
+pub fn user_preference_impl(_id: u32) -> Option<bool> {
+    None
+}
