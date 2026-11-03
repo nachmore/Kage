@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::os::launcher::AppInfo;
+use crate::os::launcher::{AppInfo, WatchRoot};
 
 /// `applications/` dirs to scan, highest priority first: XDG_DATA_HOME
 /// (user overrides win), then XDG_DATA_DIRS, then the flatpak/snap export
@@ -48,6 +48,16 @@ fn desktop_dirs() -> Vec<PathBuf> {
         }
     }
     out
+}
+
+pub fn watch_roots_impl() -> Vec<WatchRoot> {
+    desktop_dirs()
+        .into_iter()
+        .map(|path| WatchRoot {
+            path,
+            recursive: false,
+        })
+        .collect()
 }
 
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {

@@ -449,44 +449,81 @@ fn spawn_pipe_relay<P: std::io::Read + Send + 'static>(
     });
 }
 
-/// Kick off the background app-registry scan: one scan now, then a
-/// periodic refresh every hour so discovered apps stay fresh. Both
-/// scans run on blocking threads so the async runtime isn't tied up
-/// during Windows registry walks.
+/// Quiet period after the last install signal before rescanning.
+/// Installers write in bursts (bundle copy, shortcuts, registry), and
+/// rescanning mid-burst would just schedule another one.
+const APP_INSTALL_SETTLE: std::time::Duration = std::time::Duration::from_millis(1500);
+/// Upper bound on how long a continuous stream of signals (a big copy
+/// into /Applications) can postpone the rescan.
+const APP_INSTALL_MAX_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+/// Safety-net rescan for sources the watchers miss (a folder created
+/// after startup, a watcher that failed to start).
+const APP_RESCAN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// Kick off the background app-registry scan: one scan now, a rescan
+/// shortly after the OS reports an app install or removal
+/// (`os::app_install_watch`), and an hourly safety-net refresh. Scans run
+/// on blocking threads so the async runtime isn't tied up during Windows
+/// registry walks.
 pub fn spawn_app_registry_scan(app: &App) {
     let features: tauri::State<'_, FeatureServices> = app.state();
     let launcher = features.app_launcher.clone();
     tauri::async_runtime::spawn(async move {
         crate::os::set_current_thread_name("app-launcher");
 
-        match tauri::async_runtime::spawn_blocking(crate::app_launcher::AppLauncher::build_registry)
-            .await
-        {
-            Ok(Ok(registry)) => {
-                launcher.lock().await.apply_registry(registry);
-            }
-            Ok(Err(e)) => log::error!("Background app scan failed: {}", e),
-            Err(e) => log::error!("Background app scan task failed: {}", e),
-        }
+        // Start listening before the first scan so an install that lands
+        // mid-scan still triggers a follow-up. `notify_one` stores a permit
+        // when nobody is waiting, so no signal is lost between scans.
+        let changed = std::sync::Arc::new(tokio::sync::Notify::new());
+        let signal = changed.clone();
+        let _watch =
+            crate::os::app_install_watch::start(std::sync::Arc::new(move || signal.notify_one()));
 
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+        rescan_apps(&launcher, "Initial").await;
+
+        let mut interval = tokio::time::interval(APP_RESCAN_INTERVAL);
         interval.tick().await; // skip immediate first tick
         loop {
-            interval.tick().await;
-            log::info!("Periodic app registry refresh");
-            match tauri::async_runtime::spawn_blocking(
-                crate::app_launcher::AppLauncher::build_registry,
-            )
-            .await
-            {
-                Ok(Ok(registry)) => {
-                    launcher.lock().await.apply_registry(registry);
+            let reason = tokio::select! {
+                _ = interval.tick() => "Periodic",
+                _ = changed.notified() => {
+                    settle(&changed, APP_INSTALL_SETTLE, APP_INSTALL_MAX_WAIT).await;
+                    "Install-triggered"
                 }
-                Ok(Err(e)) => log::error!("Periodic app scan failed: {}", e),
-                Err(e) => log::error!("Periodic app scan task failed: {}", e),
-            }
+            };
+            rescan_apps(&launcher, reason).await;
         }
     });
+}
+
+/// Wait until `changed` has been quiet for `quiet`, or `max` has elapsed.
+async fn settle(
+    changed: &tokio::sync::Notify,
+    quiet: std::time::Duration,
+    max: std::time::Duration,
+) {
+    let deadline = tokio::time::Instant::now() + max;
+    loop {
+        let wake = (tokio::time::Instant::now() + quiet).min(deadline);
+        match tokio::time::timeout_at(wake, changed.notified()).await {
+            Ok(()) if tokio::time::Instant::now() < deadline => continue,
+            _ => return,
+        }
+    }
+}
+
+async fn rescan_apps(
+    launcher: &std::sync::Arc<tokio::sync::Mutex<crate::app_launcher::AppLauncher>>,
+    reason: &str,
+) {
+    log::info!("{} app registry scan", reason);
+    match tauri::async_runtime::spawn_blocking(crate::app_launcher::AppLauncher::build_registry)
+        .await
+    {
+        Ok(Ok(registry)) => launcher.lock().await.apply_registry(registry),
+        Ok(Err(e)) => log::error!("{} app scan failed: {}", reason, e),
+        Err(e) => log::error!("{} app scan task failed: {}", reason, e),
+    }
 }
 
 /// Self-heal the computer-control MCP registration on every launch.
@@ -783,4 +820,66 @@ pub fn start_session_watcher(app: &App) -> Option<crate::commands::sessions::Ses
         features.session_cache.clone(),
         app.handle().clone(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::settle;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::Notify;
+    use tokio::time::Instant;
+
+    #[tokio::test]
+    async fn settle_returns_after_the_quiet_period() {
+        let changed = Notify::new();
+        let started = Instant::now();
+        settle(&changed, Duration::from_millis(50), Duration::from_secs(5)).await;
+        let took = started.elapsed();
+        assert!(took >= Duration::from_millis(50), "{took:?}");
+        assert!(took < Duration::from_secs(2), "{took:?}");
+    }
+
+    #[tokio::test]
+    async fn settle_waits_out_a_burst() {
+        let changed = Arc::new(Notify::new());
+        let burst = changed.clone();
+        tokio::spawn(async move {
+            for _ in 0..5 {
+                tokio::time::sleep(Duration::from_millis(30)).await;
+                burst.notify_one();
+            }
+        });
+        let started = Instant::now();
+        settle(&changed, Duration::from_millis(100), Duration::from_secs(5)).await;
+        // Last signal at ~150 ms, then 100 ms of quiet.
+        assert!(
+            started.elapsed() >= Duration::from_millis(220),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[tokio::test]
+    async fn settle_gives_up_at_the_deadline_under_constant_signals() {
+        let changed = Arc::new(Notify::new());
+        let stream = changed.clone();
+        let feeder = tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                stream.notify_one();
+            }
+        });
+        let started = Instant::now();
+        settle(
+            &changed,
+            Duration::from_millis(100),
+            Duration::from_millis(300),
+        )
+        .await;
+        let took = started.elapsed();
+        feeder.abort();
+        assert!(took >= Duration::from_millis(300), "{took:?}");
+        assert!(took < Duration::from_secs(2), "{took:?}");
+    }
 }

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use winreg::enums::*;
 use winreg::RegKey;
 
-use crate::os::launcher::AppInfo;
+use crate::os::launcher::{AppInfo, WatchRoot};
 
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     scan_applications_with(true)
@@ -22,20 +22,41 @@ pub fn scan_applications_without_icons_impl() -> Result<Vec<AppInfo>> {
     scan_applications_with(false)
 }
 
+/// The per-user and all-users Start Menu `Programs` folders, per-user
+/// first so its shortcuts win name collisions.
+fn start_menu_dirs() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Some(data) = dirs::data_dir() {
+        out.push(data.join("Microsoft\\Windows\\Start Menu\\Programs"));
+    }
+    out.push(PathBuf::from(
+        "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs",
+    ));
+    out
+}
+
+/// Installers drop their Start Menu shortcuts (often in a vendor
+/// subfolder) the moment they finish, so these folders are the earliest
+/// filesystem signal. The registry and package-catalog sources have their
+/// own watchers in the main crate.
+pub fn watch_roots_impl() -> Vec<WatchRoot> {
+    start_menu_dirs()
+        .into_iter()
+        .map(|path| WatchRoot {
+            path,
+            recursive: true,
+        })
+        .collect()
+}
+
 fn scan_applications_with(include_icons: bool) -> Result<Vec<AppInfo>> {
     let mut apps = HashMap::new();
 
     // Scan Start Menu shortcuts (.lnk files)
-    if let Some(start_menu) = dirs::data_dir() {
-        let start_menu_path = start_menu.join("Microsoft\\Windows\\Start Menu\\Programs");
-        if start_menu_path.exists() {
-            scan_directory_for_shortcuts(&start_menu_path, &mut apps)?;
+    for dir in start_menu_dirs() {
+        if dir.exists() {
+            scan_directory_for_shortcuts(&dir, &mut apps)?;
         }
-    }
-    let common_start_menu =
-        PathBuf::from("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs");
-    if common_start_menu.exists() {
-        scan_directory_for_shortcuts(&common_start_menu, &mut apps)?;
     }
 
     // Scan registry for installed desktop applications

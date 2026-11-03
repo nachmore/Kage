@@ -198,12 +198,12 @@ signal-hook = "0.4"
 # app-icon extraction, running-app enumeration. Already transitively pulled in
 # by Tauri so pinning to the same major versions keeps the graph unified.
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication", "NSImage", "NSBitmapImageRep", "NSResponder", "NSWindow", "NSPanel"] }
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSResponder", "NSWindow", "NSPanel", "objc2-core-graphics"] }
 # Turns the launcher / inline-assist / context-menu windows into
 # non-activating NSPanels so they can appear over other apps' full-screen
 # Spaces (a plain NSWindow can't — see src/overlay_windows.rs).
 tauri-nspanel = "2.1"
-objc2-foundation = { version = "0.3", features = ["NSString", "NSArray", "NSData", "NSDictionary"] }
+objc2-foundation = { version = "0.3", features = ["NSString", "NSArray", "NSData", "NSDictionary", "NSGeometry"] }
 # Core Foundation + Core Graphics for CGWindowListCopyWindowInfo (per-window
 # title lookup). Title extraction requires the Screen Recording TCC permission
 # at runtime — without it we fall back to empty title (process-level tracking

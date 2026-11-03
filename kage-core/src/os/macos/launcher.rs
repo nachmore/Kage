@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::os::launcher::AppInfo;
+use crate::os::launcher::{AppInfo, WatchRoot};
 
 /// Directories scanned (non-recursively) for `.app` bundles, in priority
 /// order: a user-installed copy in /Applications wins over the built-in
@@ -23,6 +23,16 @@ fn application_dirs() -> Vec<PathBuf> {
         out.push(home.join("Applications"));
     }
     out
+}
+
+pub fn watch_roots_impl() -> Vec<WatchRoot> {
+    application_dirs()
+        .into_iter()
+        .map(|path| WatchRoot {
+            path,
+            recursive: false,
+        })
+        .collect()
 }
 
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {

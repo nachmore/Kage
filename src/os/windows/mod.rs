@@ -1,5 +1,6 @@
 // Windows-specific implementations
 
+pub mod app_install_watch;
 pub mod calendar;
 pub mod clipboard;
 pub mod clipboard_history;

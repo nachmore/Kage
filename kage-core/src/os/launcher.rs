@@ -20,6 +20,23 @@ pub fn scan_applications() -> Result<Vec<AppInfo>> {
     crate::os::platform::launcher::scan_applications_impl()
 }
 
+/// A directory whose contents feed `scan_applications`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WatchRoot {
+    pub path: PathBuf,
+    /// Whether the scan descends into subdirectories (so a watcher must too).
+    pub recursive: bool,
+}
+
+/// The directories `scan_applications` reads, so a filesystem watcher can
+/// trigger a rescan as soon as an app is installed or removed instead of
+/// waiting for the next periodic scan. Directories that don't exist yet
+/// are included; callers skip what they can't watch. Non-filesystem
+/// sources (the Windows registry and package catalog) aren't listed here.
+pub fn watch_roots() -> Vec<WatchRoot> {
+    crate::os::platform::launcher::watch_roots_impl()
+}
+
 /// Launch an application at the given path
 pub fn launch_application(path: &PathBuf) -> Result<()> {
     crate::os::platform::launcher::launch_application_impl(path)

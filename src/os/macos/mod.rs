@@ -5,6 +5,7 @@
 // `clipboard_history` is the only stub (descoped — macOS users rely on
 // Paste/Maccy/Alfred); everything else has a native-API implementation.
 
+pub mod app_install_watch;
 pub mod calendar;
 pub mod clipboard;
 pub mod clipboard_history;
