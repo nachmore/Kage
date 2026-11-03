@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "Käytä komentotulkkini ympäristöä agentin työkaluille",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "Suorittaa komentotulkin käynnistystiedostot (kuten .zshrc tai .bash_profile) kerran taustalla, jotta agentti ja sen käynnistämät MCP-palvelimet löytävät samat työkalut (PATH) ja asetukset kuin päätteessä. Poista tämä käytöstä, jos käynnistystiedostosi ovat hitaita tai tekevät käynnistyksessä asioita, joita et halua. Muutos tulee voimaan, kun agentti käynnistyy seuraavan kerran.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

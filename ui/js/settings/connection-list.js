@@ -1,4 +1,5 @@
 import { t, tHtml } from '../shared/i18n.js';
+import { isWindows } from '../shared/shortcuts.js';
 
 // Lucide-style inline SVGs for the icon-only row actions. Matches the
 // chat session list (`kd-action-btn`) so users see one consistent
@@ -36,6 +37,18 @@ class ConnectionListMethods {
                     </div>
                 </div>
             </div>
+            ${
+                // macOS/Linux only: Windows GUI apps already get the full
+                // user environment, so the backend never probes there.
+                isWindows()
+                    ? ''
+                    : this.createCheckboxRow(
+                          t('settings.connection.session.login_shell_env.label'),
+                          t('settings.connection.session.login_shell_env.description'),
+                          'importLoginShellEnv',
+                          this._importLoginShellEnv !== false
+                      )
+            }
             <div class="setting-row">
                 <div class="setting-label">${t('settings.connection.workspace.label')}</div>
                 <div class="setting-description">
@@ -199,6 +212,9 @@ class ConnectionListMethods {
     }
 
     _wireListHandlers() {
+        document.getElementById('importLoginShellEnv')?.addEventListener('change', (e) => {
+            this._importLoginShellEnv = e.target.checked;
+        });
         document.getElementById('connRescanBtn')?.addEventListener('click', () => {
             this._detectLoading = true;
             this._renderRoot();

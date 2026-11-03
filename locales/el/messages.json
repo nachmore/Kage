@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "Χρήση του περιβάλλοντος του κελύφους μου για τα εργαλεία του πράκτορα",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "Εκτελεί μία φορά στο παρασκήνιο τα αρχεία εκκίνησης του κελύφους σας (όπως .zshrc ή .bash_profile), ώστε ο πράκτορας και οι διακομιστές MCP που ξεκινά να βρίσκουν τα ίδια εργαλεία (PATH) και τις ίδιες ρυθμίσεις με ένα τερματικό. Απενεργοποιήστε το αν τα αρχεία εκκίνησής σας είναι αργά ή κάνουν ενέργειες που δεν θέλετε κατά την εκκίνηση. Εφαρμόζεται την επόμενη φορά που θα ξεκινήσει ο πράκτορας.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

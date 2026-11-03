@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "A saját shell környezetem használata az ügynök eszközeihez",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "A háttérben egyszer lefuttatja a shell indítófájljait (például .zshrc vagy .bash_profile), így az ügynök és az általa indított MCP-szerverek ugyanazokat az eszközöket (PATH) és beállításokat találják meg, mint egy terminálban. Kapcsolja ki, ha az indítófájljai lassúak, vagy olyasmit végeznek, amit nem szeretne indításkor. Az ügynök következő indításakor lép érvénybe.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

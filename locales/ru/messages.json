@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "Использовать окружение моей оболочки для инструментов агента",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "Однократно выполняет в фоне файлы запуска вашей оболочки (например, .zshrc или .bash_profile), чтобы агент и запускаемые им MCP-серверы находили те же инструменты (PATH) и настройки, что и в терминале. Отключите этот параметр, если ваши файлы запуска работают медленно или выполняют действия, которые не нужны при запуске. Изменение вступит в силу при следующем запуске агента.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

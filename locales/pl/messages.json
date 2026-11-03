@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "Używaj środowiska mojej powłoki dla narzędzi agenta",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "Uruchamia raz w tle pliki startowe powłoki (takie jak .zshrc lub .bash_profile), aby agent i uruchamiane przez niego serwery MCP znajdowały te same narzędzia (PATH) i ustawienia co w terminalu. Wyłącz tę opcję, jeśli pliki startowe działają wolno lub wykonują przy uruchomieniu niepożądane czynności. Zmiana zostanie zastosowana przy następnym uruchomieniu agenta.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

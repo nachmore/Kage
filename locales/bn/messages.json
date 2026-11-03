@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "এজেন্ট টুলের জন্য আমার শেলের এনভায়রনমেন্ট ব্যবহার করুন",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "আপনার শেলের স্টার্টআপ ফাইলগুলো (যেমন .zshrc বা .bash_profile) ব্যাকগ্রাউন্ডে একবার চালায়, যাতে এজেন্ট এবং এটি যে MCP সার্ভারগুলো চালু করে সেগুলো টার্মিনালের মতোই একই টুল (PATH) ও সেটিংস খুঁজে পায়। আপনার স্টার্টআপ ফাইলগুলো ধীর হলে বা চালু হওয়ার সময় অনাকাঙ্ক্ষিত কিছু করলে এটি বন্ধ করুন। এজেন্ট পরের বার চালু হলে কার্যকর হবে।",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

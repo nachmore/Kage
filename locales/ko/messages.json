@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "에이전트 도구에 내 셸 환경 사용",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "셸의 시작 파일(.zshrc 또는 .bash_profile 등)을 백그라운드에서 한 번 실행하여 에이전트와 에이전트가 시작하는 MCP 서버가 터미널에서와 동일한 도구(PATH)와 설정을 찾을 수 있도록 합니다. 시작 파일이 느리거나 실행 시 원하지 않는 작업을 수행하는 경우 이 옵션을 끄십시오. 다음에 에이전트가 시작될 때 적용됩니다.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

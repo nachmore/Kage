@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "استفاده از محیط شل من برای ابزارهای عامل",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "فایل‌های راه‌اندازی شل شما (مانند ‎.zshrc یا ‎.bash_profile) را یک بار در پس‌زمینه اجرا می‌کند تا عامل و سرورهای MCP که راه‌اندازی می‌کند همان ابزارها (PATH) و تنظیمات ترمینال را پیدا کنند. اگر فایل‌های راه‌اندازی شما کند هستند یا هنگام شروع کارهایی انجام می‌دهند که نمی‌خواهید، این گزینه را خاموش کنید. از دفعهٔ بعدی که عامل شروع به کار کند اعمال می‌شود.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

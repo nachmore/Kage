@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "为智能体工具使用我的 shell 环境",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "在后台运行一次您的 shell 启动文件（如 .zshrc 或 .bash_profile），使智能体及其启动的 MCP 服务器能找到与终端中相同的工具（PATH）和设置。如果您的启动文件运行缓慢，或会在启动时执行您不希望的操作，请关闭此选项。将在智能体下次启动时生效。",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

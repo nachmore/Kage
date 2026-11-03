@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "एजेंट टूल के लिए मेरे शेल का एनवायरनमेंट इस्तेमाल करें",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "आपके शेल की स्टार्टअप फ़ाइलें (जैसे .zshrc या .bash_profile) बैकग्राउंड में एक बार चलाता है, ताकि एजेंट और उसके द्वारा शुरू किए गए MCP सर्वर को वही टूल (PATH) और सेटिंग मिलें जो टर्मिनल में मिलती हैं। अगर आपकी स्टार्टअप फ़ाइलें धीमी हैं या लॉन्च के समय ऐसे काम करती हैं जो आप नहीं चाहते, तो इसे बंद करें। यह बदलाव एजेंट के अगली बार शुरू होने पर लागू होगा।",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

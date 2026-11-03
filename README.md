@@ -87,6 +87,7 @@ These live in System Settings → Privacy & Security. The Welcome wizard walks t
 - [Extension Development Guide](docs/EXTENSIONS.md)
 - [Security Model](docs/SECURITY_MODEL.md)
 - [Debug Mode Guide](docs/DEBUG_MODE.md)
+- [Agent tools and your shell environment (macOS / Linux)](docs/AGENT_ENVIRONMENT.md)
 - [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md)
 - [OS Abstraction Layer](docs/OS_ABSTRACTION_GUIDE.md)
 - [Tool Permissions](docs/TOOL_PERMISSIONS.md)

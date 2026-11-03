@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "Dùng môi trường shell của tôi cho công cụ của tác tử",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "Chạy các tệp khởi động của shell (như .zshrc hoặc .bash_profile) một lần ở chế độ nền để tác tử và các máy chủ MCP mà nó khởi chạy tìm thấy cùng các công cụ (PATH) và thiết lập như trong terminal. Hãy tắt tùy chọn này nếu các tệp khởi động của bạn chạy chậm hoặc thực hiện những việc bạn không muốn khi khởi chạy. Có hiệu lực từ lần tiếp theo tác tử khởi động.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }

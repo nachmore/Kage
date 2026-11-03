@@ -106,6 +106,7 @@ export class ConnectionSettingsModule extends SettingsModule {
 
         // Stash the agent-config bits we own for save() to flush back.
         this._startSessionOnLaunch = agentCfg.start_session_on_launch !== false;
+        this._importLoginShellEnv = agentCfg.import_login_shell_env !== false;
         this._workingDirectory = agentCfg.working_directory || '';
 
         this._view = 'list';
@@ -131,6 +132,10 @@ export class ConnectionSettingsModule extends SettingsModule {
             document.getElementById('startSessionOnLaunch')?.checked ??
             this._startSessionOnLaunch ??
             true;
+        // Tracked on change (the list view may not be in the DOM while a
+        // connection is being edited). Takes effect on the next agent
+        // (re)spawn, so it doesn't count towards _needsRestart.
+        existingAgent.import_login_shell_env = this._importLoginShellEnv !== false;
         existingAgent.working_directory =
             document.getElementById('workingDirectory')?.value?.trim() ||
             this._workingDirectory?.trim() ||

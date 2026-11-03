@@ -8614,5 +8614,17 @@
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
     "_machine_translated": true,
     "_source_hash": "69b149becd78bcba"
+  },
+  "settings.connection.session.login_shell_env.label": {
+    "message": "Omgeving van mijn shell gebruiken voor agenttools",
+    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "_machine_translated": true,
+    "_source_hash": "00c2c1d74447685c"
+  },
+  "settings.connection.session.login_shell_env.description": {
+    "message": "Voert de opstartbestanden van je shell (zoals .zshrc of .bash_profile) eenmaal op de achtergrond uit, zodat de agent en de MCP-servers die hij start dezelfde tools (PATH) en instellingen vinden als in een terminal. Schakel dit uit als je opstartbestanden traag zijn of dingen doen die je niet wilt bij het starten. Wordt toegepast wanneer de agent de volgende keer start.",
+    "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
+    "_machine_translated": true,
+    "_source_hash": "effa13fc46511df5"
   }
 }
