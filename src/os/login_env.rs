@@ -111,6 +111,7 @@ pub const SLOW_PROBE: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Environment variable that forces the feature off (`0`) or on (`1`),
 /// overriding both the Settings toggle and the terminal check.
+#[cfg(unix)]
 pub const OVERRIDE_ENV: &str = "KAGE_LOGIN_SHELL_ENV";
 
 /// Start resolving the login environment in the background so the first
