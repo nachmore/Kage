@@ -224,9 +224,7 @@ fn is_housekeeping_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use notify::event::{
-        AccessKind, CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind, RenameMode,
-    };
+    use notify::event::{AccessKind, CreateKind, MetadataKind, ModifyKind, RemoveKind};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
@@ -264,6 +262,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn macos_counts_bundle_and_folder_level_changes_only() {
+        use notify::event::{DataChange, RenameMode};
         let create_dir = EventKind::Create(CreateKind::Folder);
         let rename = EventKind::Modify(ModifyKind::Name(RenameMode::Any));
         // Installs, removals and moves of apps — including Finder's
