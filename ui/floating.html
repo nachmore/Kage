@@ -174,7 +174,16 @@
                     <div class="permission-allow-dropdown" id="permissionAllowDropdown" style="display:none;">
                         <button class="permission-dropdown-item" id="permissionAllow24h" data-i18n="permission.dialog.allow_24h">Allow for 24 hours</button>
                         <button class="permission-dropdown-item" id="permissionAllowAlways" data-i18n="permission.dialog.allow_always">Always allow</button>
+                        <button class="permission-dropdown-item permission-dropdown-danger" id="permissionTrustCommands" style="display:none;" data-i18n="permission.dialog.trust_commands">Trust all commands…</button>
                     </div>
+                </div>
+            </div>
+            <div class="permission-trust-confirm" id="permissionTrustConfirm" style="display:none;" role="alertdialog" aria-labelledby="permissionTrustConfirmTitle" aria-describedby="permissionTrustConfirmBody">
+                <p class="permission-trust-title" id="permissionTrustConfirmTitle" data-i18n="permission.dialog.trust_commands_title">Trust all commands?</p>
+                <p class="permission-trust-body" id="permissionTrustConfirmBody" data-i18n="permission.dialog.trust_commands_body">From now on the agent can run any command on this computer without asking — including commands that delete files or send data elsewhere. You can turn this off in Settings → Tool Permissions.</p>
+                <div class="permission-trust-actions">
+                    <button class="permission-btn permission-btn-deny" id="permissionTrustCancel" data-i18n="permission.dialog.trust_commands_cancel">Cancel</button>
+                    <button class="permission-btn permission-btn-trust" id="permissionTrustConfirmBtn" data-i18n="permission.dialog.trust_commands_confirm">Trust all commands</button>
                 </div>
             </div>
         </div>

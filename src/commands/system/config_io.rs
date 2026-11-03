@@ -160,6 +160,17 @@ pub(crate) fn preserve_backend_owned_fields(incoming: &mut Config, authoritative
         );
         incoming.extension_grants = authoritative.extension_grants.clone();
     }
+    // Category-wide tool trust ("trust all CLI commands") is changed only
+    // through the audited `set_tool_kind_trusted`; a stale or buggy window
+    // snapshot must not grant or revoke it.
+    if incoming.tool_permissions.trusted_kinds != authoritative.tool_permissions.trusted_kinds {
+        log::warn!(
+            "save_config: ignoring a trusted_kinds change in the incoming snapshot \
+             (backend-owned; use set_tool_kind_trusted)"
+        );
+        incoming.tool_permissions.trusted_kinds =
+            authoritative.tool_permissions.trusted_kinds.clone();
+    }
 }
 
 /// Replace an imported config's grants with the local map, then fill in
@@ -558,6 +569,10 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
         // capabilities without the user consenting here. Backup grants
         // only fill gaps the local install consent would have covered.
         merge_imported_grants(&mut new_config, &state_config.extension_grants, &installed);
+        // Like grants: a backup file must not switch on "trust all
+        // commands" on this machine without consent here.
+        new_config.tool_permissions.trusted_kinds =
+            state_config.tool_permissions.trusted_kinds.clone();
         *state_config = new_config;
         // Channel is a typed enum — unknown values from a hand-edited
         // backup collapsed to Stable at deserialise time.
@@ -730,6 +745,25 @@ mod tests {
 
         preserve_backend_owned_fields(&mut incoming, &authoritative);
         assert_eq!(incoming.extension_grants, authoritative.extension_grants);
+    }
+
+    #[test]
+    fn snapshot_cannot_grant_or_revoke_command_trust() {
+        // "Trust all commands" changes only through set_tool_kind_trusted.
+        let authoritative = Config::default();
+        let mut incoming = Config::default();
+        incoming.tool_permissions.trusted_kinds = vec!["execute".into()];
+        preserve_backend_owned_fields(&mut incoming, &authoritative);
+        assert!(incoming.tool_permissions.trusted_kinds.is_empty());
+
+        let mut trusted = Config::default();
+        trusted.tool_permissions.trusted_kinds = vec!["execute".into()];
+        let mut stale = Config::default(); // fetched before the user trusted
+        preserve_backend_owned_fields(&mut stale, &trusted);
+        assert_eq!(
+            stale.tool_permissions.trusted_kinds,
+            vec!["execute".to_string()]
+        );
     }
 
     fn manifest(id: &str, version: &str, perms: &[&str]) -> crate::extensions::ExtensionManifest {

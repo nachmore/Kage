@@ -601,8 +601,9 @@ mod resolve_policy_tests {
             trust_all: true,
             terminator_mode: false,
             tools: vec![tool("rm_rf", PolicyKind::Deny)],
+            ..Default::default()
         };
-        assert_eq!(cfg.resolve_policy("rm_rf"), PolicyKind::Deny);
+        assert_eq!(cfg.resolve_policy_for("rm_rf", None), PolicyKind::Deny);
     }
 
     #[test]
@@ -611,8 +612,9 @@ mod resolve_policy_tests {
             trust_all: false,
             terminator_mode: true,
             tools: vec![tool("rm_rf", PolicyKind::Deny)],
+            ..Default::default()
         };
-        assert_eq!(cfg.resolve_policy("rm_rf"), PolicyKind::Deny);
+        assert_eq!(cfg.resolve_policy_for("rm_rf", None), PolicyKind::Deny);
     }
 
     #[test]
@@ -621,9 +623,13 @@ mod resolve_policy_tests {
             trust_all: true,
             terminator_mode: false,
             tools: vec![tool("known", PolicyKind::Ask)],
+            ..Default::default()
         };
-        assert_eq!(cfg.resolve_policy("known"), PolicyKind::Allow);
-        assert_eq!(cfg.resolve_policy("never_seen"), PolicyKind::Allow);
+        assert_eq!(cfg.resolve_policy_for("known", None), PolicyKind::Allow);
+        assert_eq!(
+            cfg.resolve_policy_for("never_seen", None),
+            PolicyKind::Allow
+        );
     }
 
     #[test]
@@ -632,11 +638,77 @@ mod resolve_policy_tests {
             trust_all: false,
             terminator_mode: false,
             tools: vec![tool("a", PolicyKind::Allow), tool("d", PolicyKind::Deny)],
+            ..Default::default()
         };
-        assert_eq!(cfg.resolve_policy("a"), PolicyKind::Allow);
-        assert_eq!(cfg.resolve_policy("d"), PolicyKind::Deny);
+        assert_eq!(cfg.resolve_policy_for("a", None), PolicyKind::Allow);
+        assert_eq!(cfg.resolve_policy_for("d", None), PolicyKind::Deny);
         // Unknown tool with no blanket mode → Ask.
-        assert_eq!(cfg.resolve_policy("unknown"), PolicyKind::Ask);
+        assert_eq!(cfg.resolve_policy_for("unknown", None), PolicyKind::Ask);
+    }
+
+    #[test]
+    fn trusted_execute_kind_allows_every_command_but_not_other_kinds() {
+        let mut cfg = ToolPermissionsConfig::default();
+        assert_eq!(cfg.set_kind_trusted(TOOL_KIND_EXECUTE, true), Some(true));
+        // Each command is its own title; the kind covers all of them.
+        assert_eq!(
+            cfg.resolve_policy_for("Running: git status", Some("execute")),
+            PolicyKind::Allow
+        );
+        assert_eq!(
+            cfg.resolve_policy_for("Running: rm -rf build", Some("execute")),
+            PolicyKind::Allow
+        );
+        // Other kinds (edits, deletes, fetches) still prompt.
+        assert_eq!(
+            cfg.resolve_policy_for("Editing main.rs", Some("edit")),
+            PolicyKind::Ask
+        );
+        assert_eq!(cfg.resolve_policy_for("Mystery", None), PolicyKind::Ask);
+        // Without a kind, the trust doesn't apply.
+        assert_eq!(
+            cfg.resolve_policy_for("Running: git status", None),
+            PolicyKind::Ask
+        );
+    }
+
+    #[test]
+    fn explicit_deny_wins_over_trusted_kind() {
+        let mut cfg = ToolPermissionsConfig {
+            tools: vec![tool("Running: rm -rf ~", PolicyKind::Deny)],
+            ..Default::default()
+        };
+        cfg.set_kind_trusted(TOOL_KIND_EXECUTE, true).unwrap();
+        assert_eq!(
+            cfg.resolve_policy_for("Running: rm -rf ~", Some("execute")),
+            PolicyKind::Deny
+        );
+    }
+
+    #[test]
+    fn kind_trust_toggles_and_refuses_unknown_kinds() {
+        let mut cfg = ToolPermissionsConfig::default();
+        assert_eq!(cfg.set_kind_trusted("execute", true), Some(true));
+        assert_eq!(cfg.set_kind_trusted("execute", true), Some(false));
+        assert_eq!(cfg.trusted_kinds, vec!["execute".to_string()]);
+        assert_eq!(cfg.set_kind_trusted("execute", false), Some(true));
+        assert!(cfg.trusted_kinds.is_empty());
+        assert_eq!(cfg.set_kind_trusted("delete", true), None);
+        assert_eq!(cfg.set_kind_trusted("", true), None);
+    }
+
+    #[test]
+    fn hand_edited_untrustable_kind_is_ignored() {
+        // A config.json edited to trust "edit" (not offered in the UI) must
+        // not widen trust.
+        let cfg: ToolPermissionsConfig =
+            serde_json::from_str(r#"{"trusted_kinds":["edit","execute"]}"#).unwrap();
+        assert!(!cfg.is_kind_trusted(Some("edit")));
+        assert!(cfg.is_kind_trusted(Some("execute")));
+        // Old configs without the field still load.
+        let old: ToolPermissionsConfig =
+            serde_json::from_str(r#"{"trust_all":false,"tools":[]}"#).unwrap();
+        assert!(old.trusted_kinds.is_empty());
     }
 }
 

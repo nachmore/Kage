@@ -8548,5 +8548,65 @@
     "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for",
     "_machine_translated": true,
     "_source_hash": "1be98949c62b9654"
+  },
+  "errors.permission.unknown_tool_kind": {
+    "message": "不明なツールの種類です: {kind}",
+    "description": "Error when asked to trust a tool category Kage doesn't support. {kind} is the raw identifier",
+    "_machine_translated": true,
+    "_source_hash": "42b76d97d48af1b4"
+  },
+  "permission.dialog.trust_commands": {
+    "message": "すべてのコマンドを信頼…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the agent wants to run a shell/CLI command. Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "536f44c3fbb84582"
+  },
+  "permission.dialog.trust_commands_title": {
+    "message": "すべてのコマンドを信頼しますか？",
+    "description": "Heading of the inline confirmation for trusting every CLI command",
+    "_machine_translated": true,
+    "_source_hash": "7c0e9ba5c4acf1d5"
+  },
+  "permission.dialog.trust_commands_body": {
+    "message": "今後、エージェントはこのコンピューター上で確認なしにあらゆるコマンドを実行できるようになります。これにはファイルを削除するコマンドや、データを外部に送信するコマンドも含まれます。この設定は「設定 → ツールの権限」でオフにできます。",
+    "description": "Warning shown before the user trusts every CLI command the agent runs",
+    "_machine_translated": true,
+    "_source_hash": "b47cc0da77760071"
+  },
+  "permission.dialog.trust_commands_cancel": {
+    "message": "キャンセル",
+    "description": "Button that backs out of the trust-all-commands confirmation",
+    "_machine_translated": true,
+    "_source_hash": "04223c46823219ba"
+  },
+  "permission.dialog.trust_commands_confirm": {
+    "message": "すべてのコマンドを信頼",
+    "description": "Button that confirms trusting every CLI command the agent runs",
+    "_machine_translated": true,
+    "_source_hash": "2459d9ba1e0db41a"
+  },
+  "settings.tool_permissions.trust_commands.label": {
+    "message": "すべての CLI コマンドを信頼",
+    "description": "Settings → Tool Permissions: checkbox label",
+    "_machine_translated": true,
+    "_source_hash": "a1cacb2f9262bf9e"
+  },
+  "settings.tool_permissions.trust_commands.description": {
+    "message": "エージェントが確認なしでシェルコマンドを実行できるようにします。ファイルの編集、Web リクエスト、その他のツールについては引き続き確認が求められます。また、「常に拒否」に設定したコマンドは引き続き拒否されます。",
+    "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
+    "_machine_translated": true,
+    "_source_hash": "d3aeb2ae7bfa32e2"
+  },
+  "settings.tool_permissions.trust_commands.dialog_title": {
+    "message": "すべての CLI コマンドを信頼しますか？",
+    "description": "Title of the confirmation dialog when enabling trust for all CLI commands",
+    "_machine_translated": true,
+    "_source_hash": "320d9d2b0c0e622c"
+  },
+  "settings.tool_permissions.trust_commands.confirm": {
+    "message": "エージェントはこのコンピューター上で確認なしにあらゆるコマンドを実行できるようになります。これにはファイルを削除するコマンドや、データを外部に送信するコマンドも含まれます。エージェントとエージェントに任せるタスクを信頼できる場合にのみオンにしてください。",
+    "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
+    "_machine_translated": true,
+    "_source_hash": "94a8b450e4074b0e"
   }
 }

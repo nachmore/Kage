@@ -20,6 +20,14 @@ import { getToolEmoji, escapeHtml } from './tool-utils.js';
 import { EVT } from './events.js';
 import { t } from './i18n.js';
 
+/** ACP tool kind for shell / CLI commands (see src/config/permissions.rs). */
+export const TOOL_KIND_EXECUTE = 'execute';
+
+/** The ACP tool kind of a permission notification, as resolved by the backend. */
+export function toolKindOf(notification) {
+    return notification?._kageToolKind || notification?.params?.toolCall?.kind || null;
+}
+
 export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     let currentPermissionRequest = null;
     let _permissionQueue = [];
@@ -80,10 +88,21 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             toolCall: toolCall,
             options: params.options || [],
             toolName: toolName || null,
+            toolKind: toolKindOf(notification),
             isExtension: !!notification.extCallback,
             extCallback: notification.extCallback || null,
             notification,
         };
+
+        // "Trust all commands…" only makes sense for an agent's shell run.
+        const trustItem = document.getElementById('permissionTrustCommands');
+        if (trustItem) {
+            const offer =
+                !currentPermissionRequest.isExtension &&
+                currentPermissionRequest.toolKind === TOOL_KIND_EXECUTE;
+            trustItem.style.display = offer ? '' : 'none';
+        }
+        setTrustConfirmVisible(false);
 
         toolTitleEl.textContent = toolCall.title || t('shared.permission.unknown_tool');
 
@@ -127,6 +146,53 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
 
         // Window-specific hide behavior (e.g. resize back)
         if (hooks.onHide) await hooks.onHide(modal, false);
+    }
+
+    function setTrustConfirmVisible(visible) {
+        const panel = document.getElementById('permissionTrustConfirm');
+        const actions = document.querySelector('#permissionModal .permission-actions');
+        if (!panel) return;
+        panel.style.display = visible ? 'block' : 'none';
+        if (actions) actions.style.display = visible ? 'none' : '';
+        // Focus the safe choice so a stray Enter can't trust everything.
+        if (visible) document.getElementById('permissionTrustCancel')?.focus();
+    }
+
+    function trustConfirmVisible() {
+        return document.getElementById('permissionTrustConfirm')?.style.display === 'block';
+    }
+
+    /**
+     * The user confirmed "Trust all commands": record the category grant,
+     * approve this request, and approve any command prompts already queued
+     * in this window (they were asked before the trust existed — the backend
+     * auto-approves only new ones).
+     */
+    async function trustAllCommandsAndAllow() {
+        const req = currentPermissionRequest;
+        if (!req || req.isExtension || req.toolKind !== TOOL_KIND_EXECUTE || req.answering) return;
+        try {
+            await invoke('set_tool_kind_trusted', { kind: TOOL_KIND_EXECUTE, trusted: true });
+        } catch (e) {
+            console.error('Failed to trust all commands:', e);
+            setTrustConfirmVisible(false);
+            return;
+        }
+        const queuedCommands = _permissionQueue.filter(
+            (q) => !q.notification?.extCallback && toolKindOf(q.notification) === TOOL_KIND_EXECUTE
+        );
+        _permissionQueue = _permissionQueue.filter((q) => !queuedCommands.includes(q));
+        for (const q of queuedCommands) {
+            const n = q.notification;
+            invoke('send_permission_response', {
+                sessionId: n.params?.sessionId || null,
+                requestId: n.id,
+                optionId: 'allow_once',
+                toolTitle:
+                    q.toolName || n.params?.toolCall?.title || t('shared.permission.unknown'),
+            }).catch((e) => console.error('Failed to approve queued command:', e));
+        }
+        await handlePermissionResponse('allow_once');
     }
 
     async function handlePermissionResponse(optionId, policyOverride, grantType) {
@@ -263,6 +329,19 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             ?.addEventListener('click', () =>
                 handlePermissionResponse('allow_once', 'allow', 'always')
             );
+
+        // Trust all commands: confirm inline first (dangerous, category-wide).
+        document.getElementById('permissionTrustCommands')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (dropdown) dropdown.style.display = 'none';
+            setTrustConfirmVisible(true);
+        });
+        document
+            .getElementById('permissionTrustCancel')
+            ?.addEventListener('click', () => setTrustConfirmVisible(false));
+        document
+            .getElementById('permissionTrustConfirmBtn')
+            ?.addEventListener('click', () => trustAllCommandsAndAllow());
     }
 
     function wireOverlayDismiss() {
@@ -287,7 +366,14 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     e.stopPropagation();
-                    handlePermissionResponse('reject_once');
+                    if (trustConfirmVisible()) setTrustConfirmVisible(false);
+                    else handlePermissionResponse('reject_once');
+                } else if (
+                    (e.key === 'Enter' || e.key === ' ' || e.key === 'Tab') &&
+                    e.target instanceof HTMLButtonElement &&
+                    e.target.closest('#permissionTrustConfirm')
+                ) {
+                    // Keyboard use of the trust confirmation's own buttons.
                 } else {
                     // Block typing from reaching the input behind the modal
                     e.preventDefault();
@@ -307,6 +393,10 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 const decision = await hooks.onRequestReceived(event, invoke, appWindow);
                 if (!decision?.handle) return;
             }
+
+            // Ride on the notification so it survives queueing.
+            notification._kageToolKind =
+                event.payload.toolKind || notification.params?.toolCall?.kind || null;
 
             if (auto_approve) {
                 invoke('send_permission_response', {

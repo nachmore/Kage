@@ -9,9 +9,53 @@ pub struct ToolPermissionsConfig {
     /// Terminator mode: auto-approve all tool requests without any prompts
     #[serde(default)]
     pub terminator_mode: bool,
+    /// ACP tool *kinds* the user trusts as a whole category (today only
+    /// `"execute"` — "trust all CLI commands"). Per-tool policies are keyed
+    /// by title, and an agent's shell tool titles every call with the
+    /// command itself ("Running: git status"), so a per-tool "Always allow"
+    /// only ever covered one exact command string.
+    #[serde(default)]
+    pub trusted_kinds: Vec<String>,
 }
 
+/// ACP `ToolKind` for running shell / CLI commands.
+pub const TOOL_KIND_EXECUTE: &str = "execute";
+
+/// Kinds a user may trust as a category (see `trusted_kinds`). Anything
+/// else is rejected so a hand-edited or hostile value can't widen trust.
+pub const TRUSTABLE_TOOL_KINDS: &[&str] = &[TOOL_KIND_EXECUTE];
+
 impl ToolPermissionsConfig {
+    /// Whether every request of this ACP tool kind is trusted.
+    pub fn is_kind_trusted(&self, kind: Option<&str>) -> bool {
+        match kind {
+            Some(k) => {
+                TRUSTABLE_TOOL_KINDS.contains(&k) && self.trusted_kinds.iter().any(|t| t == k)
+            }
+            None => false,
+        }
+    }
+
+    /// Trust or untrust a kind. `Some(changed)`, or `None` for a kind that
+    /// can't be trusted (refused).
+    pub fn set_kind_trusted(&mut self, kind: &str, trusted: bool) -> Option<bool> {
+        if !TRUSTABLE_TOOL_KINDS.contains(&kind) {
+            return None;
+        }
+        let has = self.trusted_kinds.iter().any(|t| t == kind);
+        match (trusted, has) {
+            (true, false) => {
+                self.trusted_kinds.push(kind.to_string());
+                Some(true)
+            }
+            (false, true) => {
+                self.trusted_kinds.retain(|t| t != kind);
+                Some(true)
+            }
+            _ => Some(false),
+        }
+    }
+
     /// Resolve the effective policy for a tool by title.
     ///
     /// An explicit per-tool policy is consulted FIRST and always wins — in
@@ -20,13 +64,17 @@ impl ToolPermissionsConfig {
     /// would otherwise be `Ask` (or has no recorded policy). This matches the
     /// contract in docs/TOOL_PERMISSIONS.md: "allow everything except explicit
     /// deny" — not "allow everything, period".
-    pub fn resolve_policy(&self, tool_title: &str) -> PolicyKind {
+    ///
+    /// `kind` is the request's ACP tool kind, if known: a trusted kind (see
+    /// `trusted_kinds`) acts like a blanket allow for that category, and an
+    /// explicit per-tool `Deny` still wins over it.
+    pub fn resolve_policy_for(&self, tool_title: &str, kind: Option<&str>) -> PolicyKind {
         let explicit = self
             .tools
             .iter()
             .find(|t| t.title == tool_title)
             .map(|t| t.effective_policy());
-        let blanket_allow = self.terminator_mode || self.trust_all;
+        let blanket_allow = self.terminator_mode || self.trust_all || self.is_kind_trusted(kind);
         match explicit {
             Some(PolicyKind::Deny) => PolicyKind::Deny,
             Some(PolicyKind::Allow) => PolicyKind::Allow,

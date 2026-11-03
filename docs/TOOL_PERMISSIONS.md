@@ -14,7 +14,19 @@ with four options:
 - **Always** — auto-approve indefinitely, with a 30-day staleness check.
 - **Deny** — reject this call.
 
-Two settings change this prompt flow:
+Per-tool policies are keyed by the tool call's title. An agent's shell
+tool titles every call with the command itself (kiro-cli:
+`Running: git status`), so for CLI commands **Always** only covers that
+exact command string. For those prompts the Allow menu also offers:
+
+- **Trust all commands…** — after an inline danger confirmation, trusts
+  the whole ACP tool kind `execute` (`trusted_kinds`), approves the
+  current request and any command prompts already queued in that window.
+  Every later shell command is auto-approved; edits, deletes, web
+  fetches and other tools still prompt. Toggle it in Settings → Tool
+  Permissions ("Trust all CLI commands").
+
+Three settings change this prompt flow:
 
 - **Trust mode (`trust_all`)** — auto-approves every tool call without
   prompting, except those with an explicit `deny` policy.
@@ -22,12 +34,20 @@ Two settings change this prompt flow:
   intended as a temporary "leave me alone" toggle. Toggling it on/off
   is recorded in the audit log.
 
-Both default to off. Both surface a warning in Settings when enabled.
+- **Trusted tool kinds (`trusted_kinds`)** — category-wide trust; today
+  only `"execute"` (CLI commands). An explicit per-tool `deny` still
+  wins. Backend-owned: `save_config` ignores changes to it and a config
+  import keeps this machine's value — it changes only through the
+  audited `set_tool_kind_trusted` command.
+
+All default to off. All surface a warning in Settings when enabled.
 
 ## Where it lives in the code
 
-- **Config** (`src/config.rs`) — `ToolPermissionsConfig` carries
-  `trust_all`, `terminator_mode`, and `tools: Vec<ToolPolicy>`.
+- **Config** (`src/config/permissions.rs`) — `ToolPermissionsConfig`
+  carries `trust_all`, `terminator_mode`, `trusted_kinds`, and
+  `tools: Vec<ToolPolicy>`; `resolve_policy_for(title, kind)` applies the
+  precedence below.
 - **Per-tool policy** (`ToolPolicy`) — `policy` is `"ask" | "allow" |
   "deny"`; `grant_type` is `"once" | "24h" | "always"`; `granted_at` and
   `last_seen` are ISO 8601 timestamps. `effective_policy()` resolves the
@@ -53,10 +73,14 @@ Both default to off. Both surface a warning in Settings when enabled.
 ## Permission flow
 
 1. Agent calls a tool; ACP sends `session/request_permission`.
-2. The notification handler reads `ToolPolicy::effective_policy()` for
-   the tool title.
-3. If `trust_all` or `terminator_mode` is on, the handler returns
-   `allow_once` immediately and writes a `Granted` audit entry.
+2. The notification handler resolves the tool's title and ACP kind
+   (the request's `toolCall.kind`, else the kind from that call's earlier
+   `tool_call` update, else `execute` if `rawInput.command` is a string)
+   and reads `ToolPolicy::effective_policy()` for the title.
+3. An explicit `deny` wins. Otherwise, if `trust_all` or
+   `terminator_mode` is on, or the kind is in `trusted_kinds`, the
+   handler returns `allow_once` immediately and writes a `Granted` audit
+   entry. (Trusted-kind calls don't add a per-command row to `tools`.)
 4. If the policy resolves to `allow`, the handler returns `allow_once`
    immediately. The grant_type is preserved for the next call.
 5. If the policy resolves to `deny`, the handler returns `reject_once`.

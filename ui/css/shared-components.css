@@ -313,6 +313,56 @@ body.dark-theme .message-content th:hover {
     color: #ff5252;
 }
 
+/* "Trust all commands…" — a category-wide grant, styled as dangerous. */
+.permission-dropdown-danger {
+    color: #ffb74d;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.permission-dropdown-danger:hover {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ffa726;
+}
+
+/* Inline confirmation that replaces the action row (a separate dialog
+   would be clipped by the small launcher window). */
+.permission-trust-confirm {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 152, 0, 0.45);
+    background: rgba(255, 152, 0, 0.08);
+    border-radius: 8px;
+}
+.permission-trust-title {
+    margin: 0 0 4px;
+    font-weight: 600;
+    color: #ffb74d;
+}
+.permission-trust-body {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.permission-trust-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+.permission-btn-trust {
+    background: #e65100;
+    color: #fff;
+    border: none;
+}
+.permission-btn-trust:hover {
+    background: #ef6c00;
+}
+body.light-theme .permission-dropdown-danger {
+    color: #b45309;
+    border-top-color: rgba(0, 0, 0, 0.08);
+}
+body.light-theme .permission-trust-title {
+    color: #b45309;
+}
+
 /* Allow button group: main button + dropdown trigger */
 .permission-allow-group {
     display: flex;

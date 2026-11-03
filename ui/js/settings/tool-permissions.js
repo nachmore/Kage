@@ -11,6 +11,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
     constructor() {
         super('tool-permissions', t('settings.sidebar.tool_permissions'), '🔧');
         this.trustAll = false;
+        this.trustCommands = false;
         this.tools = [];
     }
 
@@ -54,6 +55,12 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             </div>
 
             <div class="setting-section-label" style="color: var(--kage-error); margin-top: 32px;">${t('settings.tool_permissions.danger.section')}</div>
+            ${this.createCheckboxRow(
+                t('settings.tool_permissions.trust_commands.label'),
+                t('settings.tool_permissions.trust_commands.description'),
+                'trustAllCommands',
+                false
+            )}
             <div class="setting-row terminator-row">
                 <div class="terminator-header">
                     <div class="terminator-mascot" id="terminatorMascot"></div>
@@ -113,14 +120,49 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             });
         }
 
+        // Trust all CLI commands (ACP kind "execute"). Applied immediately
+        // through the backend, which also audits it — not via save().
+        const trustCommandsCheckbox = document.getElementById('trustAllCommands');
+        if (trustCommandsCheckbox) {
+            trustCommandsCheckbox.addEventListener('change', async (e) => {
+                const enable = e.target.checked;
+                if (enable) {
+                    const { ask } = window.__TAURI__?.dialog || {};
+                    const confirmed = ask
+                        ? await ask(t('settings.tool_permissions.trust_commands.confirm'), {
+                              title: t('settings.tool_permissions.trust_commands.dialog_title'),
+                              kind: 'warning',
+                          })
+                        : confirm(t('settings.tool_permissions.trust_commands.confirm'));
+                    if (!confirmed) {
+                        e.target.checked = false;
+                        return;
+                    }
+                }
+                try {
+                    await window.__TAURI__.core.invoke('set_tool_kind_trusted', {
+                        kind: 'execute',
+                        trusted: enable,
+                    });
+                    this.trustCommands = enable;
+                } catch (err) {
+                    console.error('Failed to update command trust:', err);
+                    e.target.checked = this.trustCommands;
+                }
+            });
+        }
+
         const resetBtn = document.getElementById('resetPermissionsBtn');
         if (resetBtn) {
             resetBtn.addEventListener('click', async () => {
                 if (!confirm(t('settings.tool_permissions.reset_confirm'))) return;
                 this.tools = [];
                 this.terminatorMode = false;
+                this.trustCommands = false;
                 const terminatorCheckbox = document.getElementById('terminatorMode');
                 if (terminatorCheckbox) terminatorCheckbox.checked = false;
+                const trustBox = document.getElementById('trustAllCommands');
+                if (trustBox) trustBox.checked = false;
                 this.renderToolsList();
                 // Save immediately
                 try {
@@ -128,9 +170,16 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                     config.tool_permissions = {
                         trust_all: false,
                         terminator_mode: false,
+                        trusted_kinds: config.tool_permissions?.trusted_kinds ?? [],
                         tools: [],
                     };
                     await window.__TAURI__.core.invoke('save_config', { config });
+                    // trusted_kinds is backend-owned (save_config ignores it);
+                    // revoke through the audited command.
+                    await window.__TAURI__.core.invoke('set_tool_kind_trusted', {
+                        kind: 'execute',
+                        trusted: false,
+                    });
                 } catch (e) {
                     console.error('Failed to reset permissions:', e);
                 }
@@ -177,7 +226,10 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
 
     load(config) {
         this.terminatorMode = config.tool_permissions?.terminator_mode || false;
+        this.trustCommands = (config.tool_permissions?.trusted_kinds || []).includes('execute');
         this.tools = config.tool_permissions?.tools || [];
+        const trustBox = document.getElementById('trustAllCommands');
+        if (trustBox) trustBox.checked = this.trustCommands;
 
         const terminatorCheckbox = document.getElementById('terminatorMode');
         if (terminatorCheckbox) {
@@ -204,6 +256,9 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         config.tool_permissions = {
             trust_all: false, // deprecated, kept for compat
             terminator_mode: this.terminatorMode,
+            // Owned by set_tool_kind_trusted (applied immediately); keep the
+            // backend's current value — config is fresh from get_config.
+            trusted_kinds: config.tool_permissions?.trusted_kinds ?? [],
             // Every per-tool edit (policy, remove, reset) is persisted
             // immediately, so keep the backend's current list (config is
             // fresh from get_config) rather than this window's snapshot —

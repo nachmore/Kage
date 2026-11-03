@@ -33,6 +33,10 @@
     "message": "Could not send permission response: {reason}",
     "description": "Frontend permission decision failed to round-trip to the agent"
   },
+  "errors.permission.unknown_tool_kind": {
+    "message": "Unknown tool kind: {kind}",
+    "description": "Error when asked to trust a tool category Kage doesn't support. {kind} is the raw identifier"
+  },
   "errors.command.failed": {
     "message": "Command failed: {reason}",
     "description": "Generic command execution failure shown to the user"
@@ -1048,6 +1052,26 @@
   "permission.dialog.allow_always": {
     "message": "Always allow",
     "description": "Persistent allow option in the allow dropdown"
+  },
+  "permission.dialog.trust_commands": {
+    "message": "Trust all commands…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the agent wants to run a shell/CLI command. Opens a confirmation."
+  },
+  "permission.dialog.trust_commands_title": {
+    "message": "Trust all commands?",
+    "description": "Heading of the inline confirmation for trusting every CLI command"
+  },
+  "permission.dialog.trust_commands_body": {
+    "message": "From now on the agent can run any command on this computer without asking — including commands that delete files or send data elsewhere. You can turn this off in Settings → Tool Permissions.",
+    "description": "Warning shown before the user trusts every CLI command the agent runs"
+  },
+  "permission.dialog.trust_commands_cancel": {
+    "message": "Cancel",
+    "description": "Button that backs out of the trust-all-commands confirmation"
+  },
+  "permission.dialog.trust_commands_confirm": {
+    "message": "Trust all commands",
+    "description": "Button that confirms trusting every CLI command the agent runs"
   },
   "inline_assist.window_title": {
     "message": "Inline Assist",
@@ -2132,6 +2156,22 @@
   "settings.tool_permissions.danger.section": {
     "message": "⚠️ Danger Zone",
     "description": "Subsection header for the terminator-mode toggle"
+  },
+  "settings.tool_permissions.trust_commands.label": {
+    "message": "Trust all CLI commands",
+    "description": "Settings → Tool Permissions: checkbox label"
+  },
+  "settings.tool_permissions.trust_commands.description": {
+    "message": "Let the agent run shell commands without asking. Editing files, web requests and other tools still ask, and a command you've set to Always deny stays denied.",
+    "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox"
+  },
+  "settings.tool_permissions.trust_commands.dialog_title": {
+    "message": "Trust all CLI commands?",
+    "description": "Title of the confirmation dialog when enabling trust for all CLI commands"
+  },
+  "settings.tool_permissions.trust_commands.confirm": {
+    "message": "The agent will be able to run any command on this computer without asking — including commands that delete files or send data elsewhere. Only turn this on if you trust the agent and the tasks you give it.",
+    "description": "Body of the confirmation dialog when enabling trust for all CLI commands"
   },
   "settings.tool_permissions.terminator.label": {
     "message": "Terminator Mode",

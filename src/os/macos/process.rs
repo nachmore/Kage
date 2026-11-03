@@ -63,6 +63,12 @@ pub fn configure_spawn_impl(cmd: &mut Command) {
             Ok(())
         });
     }
+    // Apps launched from Finder/Dock get launchd's minimal PATH; without
+    // the login-shell PATH, bare-name MCP servers (e.g. `builder-mcp`)
+    // the agent spawns can't be found.
+    if let Some(path) = crate::os::login_env::agent_path() {
+        cmd.env("PATH", path);
+    }
     info!("macOS: Setting up process detachment");
 }
 

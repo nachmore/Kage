@@ -8548,5 +8548,65 @@
     "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for",
     "_machine_translated": true,
     "_source_hash": "1be98949c62b9654"
+  },
+  "errors.permission.unknown_tool_kind": {
+    "message": "不明的工具類型：{kind}",
+    "description": "Error when asked to trust a tool category Kage doesn't support. {kind} is the raw identifier",
+    "_machine_translated": true,
+    "_source_hash": "42b76d97d48af1b4"
+  },
+  "permission.dialog.trust_commands": {
+    "message": "信任所有指令…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the agent wants to run a shell/CLI command. Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "536f44c3fbb84582"
+  },
+  "permission.dialog.trust_commands_title": {
+    "message": "要信任所有指令嗎？",
+    "description": "Heading of the inline confirmation for trusting every CLI command",
+    "_machine_translated": true,
+    "_source_hash": "7c0e9ba5c4acf1d5"
+  },
+  "permission.dialog.trust_commands_body": {
+    "message": "從現在起，代理程式可以在這台電腦上執行任何指令而不需詢問，包括刪除檔案或將資料傳送到其他地方的指令。您可以在「設定 → 工具權限」中關閉此功能。",
+    "description": "Warning shown before the user trusts every CLI command the agent runs",
+    "_machine_translated": true,
+    "_source_hash": "b47cc0da77760071"
+  },
+  "permission.dialog.trust_commands_cancel": {
+    "message": "取消",
+    "description": "Button that backs out of the trust-all-commands confirmation",
+    "_machine_translated": true,
+    "_source_hash": "04223c46823219ba"
+  },
+  "permission.dialog.trust_commands_confirm": {
+    "message": "信任所有指令",
+    "description": "Button that confirms trusting every CLI command the agent runs",
+    "_machine_translated": true,
+    "_source_hash": "2459d9ba1e0db41a"
+  },
+  "settings.tool_permissions.trust_commands.label": {
+    "message": "信任所有 CLI 指令",
+    "description": "Settings → Tool Permissions: checkbox label",
+    "_machine_translated": true,
+    "_source_hash": "a1cacb2f9262bf9e"
+  },
+  "settings.tool_permissions.trust_commands.description": {
+    "message": "讓代理程式執行 shell 指令而不需詢問。編輯檔案、網路請求和其他工具仍會詢問，而您設為「一律拒絕」的指令仍會被拒絕。",
+    "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
+    "_machine_translated": true,
+    "_source_hash": "d3aeb2ae7bfa32e2"
+  },
+  "settings.tool_permissions.trust_commands.dialog_title": {
+    "message": "要信任所有 CLI 指令嗎？",
+    "description": "Title of the confirmation dialog when enabling trust for all CLI commands",
+    "_machine_translated": true,
+    "_source_hash": "320d9d2b0c0e622c"
+  },
+  "settings.tool_permissions.trust_commands.confirm": {
+    "message": "代理程式將能在這台電腦上執行任何指令而不需詢問，包括刪除檔案或將資料傳送到其他地方的指令。請僅在您信任代理程式及您交付的任務時才開啟此功能。",
+    "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
+    "_machine_translated": true,
+    "_source_hash": "94a8b450e4074b0e"
   }
 }

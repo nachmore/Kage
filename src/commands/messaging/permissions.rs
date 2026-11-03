@@ -101,6 +101,66 @@ pub async fn send_permission_response<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Trust (or stop trusting) every tool request of an ACP tool kind — today
+/// only `"execute"`, i.e. "trust all CLI commands". Recorded in the audit
+/// log as a standing grant / revoke, and broadcast as `config_updated` so
+/// an open Settings window reflects it.
+#[tauri::command]
+pub async fn set_tool_kind_trusted<R: tauri::Runtime>(
+    kind: String,
+    trusted: bool,
+    features: State<'_, FeatureServices>,
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
+    let (changed, snapshot) = {
+        let mut config = features.config.lock().map_err(|_| {
+            AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
+        })?;
+        let changed = config
+            .tool_permissions
+            .set_kind_trusted(&kind, trusted)
+            .ok_or_else(|| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.permission.unknown_tool_kind",
+                    &[("kind", &kind)],
+                )
+            })?;
+        (changed, config.clone())
+    };
+    if !changed {
+        return Ok(());
+    }
+    snapshot.save().map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.save_failed",
+            &[("reason", &e.to_string())],
+        )
+    })?;
+    info!("Tool kind '{}' trusted={}", kind, trusted);
+    let label = format!("All tools of kind '{}'", kind);
+    let event = if trusted {
+        crate::permission_audit::AuditEvent::Granted {
+            tool: label,
+            grant_type: crate::config::GrantType::Always,
+            session_id: None,
+            args_preview: None,
+        }
+    } else {
+        crate::permission_audit::AuditEvent::Revoked {
+            tool: label,
+            prior_policy: crate::config::PolicyKind::Allow,
+            prior_grant_type: Some(crate::config::GrantType::Always),
+        }
+    };
+    crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(event));
+    if let Err(e) = app.emit(events::CONFIG_UPDATED, ()) {
+        warn!("Failed to emit config_updated: {}", e);
+    }
+    Ok(())
+}
+
 /// Dismiss pending permission requests. With `session_id`, only requests
 /// belonging to that session (or carrying no session) are dismissed —
 /// another window's blocked prompt is left alone. Without it, everything

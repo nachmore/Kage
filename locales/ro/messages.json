@@ -8548,5 +8548,65 @@
     "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for",
     "_machine_translated": true,
     "_source_hash": "1be98949c62b9654"
+  },
+  "errors.permission.unknown_tool_kind": {
+    "message": "Tip de instrument necunoscut: {kind}",
+    "description": "Error when asked to trust a tool category Kage doesn't support. {kind} is the raw identifier",
+    "_machine_translated": true,
+    "_source_hash": "42b76d97d48af1b4"
+  },
+  "permission.dialog.trust_commands": {
+    "message": "Permite toate comenzile…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the agent wants to run a shell/CLI command. Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "536f44c3fbb84582"
+  },
+  "permission.dialog.trust_commands_title": {
+    "message": "Permiteți toate comenzile?",
+    "description": "Heading of the inline confirmation for trusting every CLI command",
+    "_machine_translated": true,
+    "_source_hash": "7c0e9ba5c4acf1d5"
+  },
+  "permission.dialog.trust_commands_body": {
+    "message": "De acum înainte, agentul poate rula orice comandă pe acest computer fără să vă întrebe — inclusiv comenzi care șterg fișiere sau trimit date în altă parte. Puteți dezactiva această opțiune din Setări → Permisiuni instrumente.",
+    "description": "Warning shown before the user trusts every CLI command the agent runs",
+    "_machine_translated": true,
+    "_source_hash": "b47cc0da77760071"
+  },
+  "permission.dialog.trust_commands_cancel": {
+    "message": "Anulează",
+    "description": "Button that backs out of the trust-all-commands confirmation",
+    "_machine_translated": true,
+    "_source_hash": "04223c46823219ba"
+  },
+  "permission.dialog.trust_commands_confirm": {
+    "message": "Permite toate comenzile",
+    "description": "Button that confirms trusting every CLI command the agent runs",
+    "_machine_translated": true,
+    "_source_hash": "2459d9ba1e0db41a"
+  },
+  "settings.tool_permissions.trust_commands.label": {
+    "message": "Permite toate comenzile CLI",
+    "description": "Settings → Tool Permissions: checkbox label",
+    "_machine_translated": true,
+    "_source_hash": "a1cacb2f9262bf9e"
+  },
+  "settings.tool_permissions.trust_commands.description": {
+    "message": "Permiteți agentului să ruleze comenzi shell fără să vă întrebe. Editarea fișierelor, solicitările web și celelalte instrumente vor cere în continuare permisiunea, iar o comandă setată pe Refuză întotdeauna rămâne refuzată.",
+    "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
+    "_machine_translated": true,
+    "_source_hash": "d3aeb2ae7bfa32e2"
+  },
+  "settings.tool_permissions.trust_commands.dialog_title": {
+    "message": "Permiteți toate comenzile CLI?",
+    "description": "Title of the confirmation dialog when enabling trust for all CLI commands",
+    "_machine_translated": true,
+    "_source_hash": "320d9d2b0c0e622c"
+  },
+  "settings.tool_permissions.trust_commands.confirm": {
+    "message": "Agentul va putea rula orice comandă pe acest computer fără să vă întrebe — inclusiv comenzi care șterg fișiere sau trimit date în altă parte. Activați această opțiune doar dacă aveți încredere în agent și în sarcinile pe care i le dați.",
+    "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
+    "_machine_translated": true,
+    "_source_hash": "94a8b450e4074b0e"
   }
 }

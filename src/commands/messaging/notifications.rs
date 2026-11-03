@@ -26,7 +26,9 @@ pub fn setup_notification_handler(
     // Map toolCallId → first tool name (e.g. "write") from the initial tool_call update.
     // The permission request arrives later with a descriptive title (e.g. "Creating hello.txt")
     // but we want to track policies by the actual tool name.
-    let tool_names: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>> =
+    // Also remembers each call's ACP tool kind ("execute" for shell
+    // commands) so a permission request can be matched to a trusted kind.
+    let tool_names: ToolNameMap =
         std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
     // Per-session pending deltas waiting to be flushed to the UI as
@@ -204,9 +206,21 @@ pub fn setup_notification_handler(
                             update.get("toolCallId").and_then(|v| v.as_str()),
                             update.get("title").and_then(|v| v.as_str()),
                         ) {
+                            let update_kind = update
+                                .get("kind")
+                                .and_then(|v| v.as_str())
+                                .filter(|k| !k.is_empty())
+                                .map(str::to_string);
                             if let Ok(mut names) = tool_names.lock() {
                                 let was_new = !names.contains_key(call_id);
-                                names.entry(call_id.to_string()).or_insert_with(|| title.to_string());
+                                let entry = names
+                                    .entry(call_id.to_string())
+                                    .or_insert_with(|| (title.to_string(), None));
+                                // Title is fixed by the first update; the kind
+                                // may only arrive on a later one.
+                                if entry.1.is_none() {
+                                    entry.1 = update_kind;
+                                }
                                 // Cap memory: tool call IDs are UUID-ish and we
                                 // never prune on session-end. A long-running
                                 // session can leak megabytes here. Keep the
@@ -554,6 +568,32 @@ fn rate_limit_route(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// toolCallId → (first title, ACP tool kind if the agent sent one).
+type ToolNameMap =
+    std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, (String, Option<String>)>>>;
+
+/// The ACP tool kind of a permission request: the request's own
+/// `toolCall.kind`, else the kind recorded from that call's earlier
+/// `tool_call` update, else `"execute"` when the raw input is a shell
+/// command (`rawInput.command` is a string) for agents that omit kinds.
+fn classify_tool_kind(
+    tool_call: Option<&serde_json::Value>,
+    recorded: Option<&str>,
+) -> Option<String> {
+    let from_request = tool_call
+        .and_then(|tc| tc.get("kind"))
+        .and_then(|k| k.as_str())
+        .filter(|k| !k.is_empty());
+    if let Some(kind) = from_request.or(recorded.filter(|k| !k.is_empty())) {
+        return Some(kind.to_string());
+    }
+    let looks_like_shell = tool_call
+        .and_then(|tc| tc.get("rawInput"))
+        .and_then(|ri| ri.get("command"))
+        .is_some_and(|c| c.is_string());
+    looks_like_shell.then(|| crate::config::TOOL_KIND_EXECUTE.to_string())
+}
+
 fn handle_permission_notification(
     notification: &serde_json::Value,
     app_handle: &tauri::AppHandle,
@@ -562,7 +602,7 @@ fn handle_permission_notification(
     pending_perm: &std::sync::Arc<
         std::sync::Mutex<std::collections::HashMap<String, crate::state::PendingPermission>>,
     >,
-    tool_names: &std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    tool_names: &ToolNameMap,
     last_config_save: &std::sync::Arc<std::sync::Mutex<std::time::Instant>>,
 ) {
     // The permission request has a descriptive title (e.g. "Creating hello.txt")
@@ -581,16 +621,23 @@ fn handle_permission_notification(
         .and_then(|t| t.as_str())
         .unwrap_or("unknown");
 
-    // Look up the real tool name from the first tool_call update
-    let tool_title = if !tool_call_id.is_empty() {
+    // Look up the real tool name (and kind) from the first tool_call update
+    let recorded = if !tool_call_id.is_empty() {
         tool_names
             .lock()
             .ok()
             .and_then(|names| names.get(tool_call_id).cloned())
-            .unwrap_or_else(|| fallback_title.to_string())
     } else {
-        fallback_title.to_string()
+        None
     };
+    let tool_title = recorded
+        .as_ref()
+        .map(|(title, _)| title.clone())
+        .unwrap_or_else(|| fallback_title.to_string());
+    let tool_kind = classify_tool_kind(
+        notification.get("params").and_then(|p| p.get("toolCall")),
+        recorded.as_ref().and_then(|(_, kind)| kind.as_deref()),
+    );
 
     let timestamp = chrono::Utc::now().to_rfc3339();
 
@@ -602,6 +649,9 @@ fn handle_permission_notification(
     // long enough for in-flight prompts to time out.
     let (policy, save_snapshot) = {
         let mut config_guard = config.lock_or_recover();
+        let kind_trusted = config_guard
+            .tool_permissions
+            .is_kind_trusted(tool_kind.as_deref());
         let existing = config_guard
             .tool_permissions
             .tools
@@ -616,6 +666,11 @@ fn handle_permission_notification(
             if needs_save {
                 *last_save = std::time::Instant::now();
             }
+        } else if kind_trusted {
+            // A trusted category (every CLI command) is auto-allowed; one
+            // policy row per distinct command string would only bloat the
+            // config and the Settings list.
+            needs_save = false;
         } else {
             config_guard
                 .tool_permissions
@@ -634,7 +689,9 @@ fn handle_permission_notification(
 
         // An explicit per-tool Deny wins even under trust_all / terminator_mode
         // — see ToolPermissionsConfig::resolve_policy.
-        let p = config_guard.tool_permissions.resolve_policy(&tool_title);
+        let p = config_guard
+            .tool_permissions
+            .resolve_policy_for(&tool_title, tool_kind.as_deref());
         // Snapshot the config for an off-thread save if one is due.
         // The clone happens inside the lock so the snapshot is
         // consistent — but the Mutex is released as the guard drops
@@ -745,6 +802,8 @@ fn handle_permission_notification(
                 "notification": notification,
                 "auto_approve": false,
                 "toolName": tool_title,
+                // Lets the prompt offer "Trust all commands" for shell runs.
+                "toolKind": tool_kind,
                 "source": source,
             });
 
@@ -763,6 +822,55 @@ fn handle_permission_notification(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tool_kind_tests {
+    use super::classify_tool_kind;
+    use serde_json::json;
+
+    #[test]
+    fn request_kind_wins() {
+        let tc = json!({ "kind": "execute", "title": "Running: ls" });
+        assert_eq!(
+            classify_tool_kind(Some(&tc), Some("other")).as_deref(),
+            Some("execute")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_the_recorded_tool_call_kind() {
+        let tc = json!({ "title": "Running: ls" });
+        assert_eq!(
+            classify_tool_kind(Some(&tc), Some("execute")).as_deref(),
+            Some("execute")
+        );
+        // Empty strings count as missing.
+        let tc = json!({ "kind": "" });
+        assert_eq!(
+            classify_tool_kind(Some(&tc), Some("edit")).as_deref(),
+            Some("edit")
+        );
+    }
+
+    #[test]
+    fn shell_shaped_raw_input_is_execute_when_no_kind_is_sent() {
+        let tc = json!({ "rawInput": { "command": "git status" } });
+        assert_eq!(
+            classify_tool_kind(Some(&tc), None).as_deref(),
+            Some("execute")
+        );
+        // A non-string `command` (e.g. an MCP tool's structured arg) is not a shell.
+        let tc = json!({ "rawInput": { "command": { "op": "x" } } });
+        assert_eq!(classify_tool_kind(Some(&tc), None), None);
+    }
+
+    #[test]
+    fn unknown_without_any_signal() {
+        assert_eq!(classify_tool_kind(None, None), None);
+        let tc = json!({ "title": "Editing main.rs", "rawInput": { "path": "main.rs" } });
+        assert_eq!(classify_tool_kind(Some(&tc), None), None);
     }
 }
 

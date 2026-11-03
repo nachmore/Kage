@@ -63,6 +63,12 @@ pub fn configure_spawn_impl(cmd: &mut Command) {
             Ok(())
         });
     }
+    // Desktop-launched apps may not see PATH additions from the user's
+    // shell rc files; inherit the login-shell PATH so bare-name MCP
+    // servers the agent spawns resolve.
+    if let Some(path) = crate::os::login_env::agent_path() {
+        cmd.env("PATH", path);
+    }
     info!("Linux: Setting up process detachment");
 }
 

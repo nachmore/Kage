@@ -8548,5 +8548,65 @@
     "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for",
     "_machine_translated": true,
     "_source_hash": "1be98949c62b9654"
+  },
+  "errors.permission.unknown_tool_kind": {
+    "message": "अज्ञात टूल प्रकार: {kind}",
+    "description": "Error when asked to trust a tool category Kage doesn't support. {kind} is the raw identifier",
+    "_machine_translated": true,
+    "_source_hash": "42b76d97d48af1b4"
+  },
+  "permission.dialog.trust_commands": {
+    "message": "सभी कमांड पर भरोसा करें…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the agent wants to run a shell/CLI command. Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "536f44c3fbb84582"
+  },
+  "permission.dialog.trust_commands_title": {
+    "message": "सभी कमांड पर भरोसा करें?",
+    "description": "Heading of the inline confirmation for trusting every CLI command",
+    "_machine_translated": true,
+    "_source_hash": "7c0e9ba5c4acf1d5"
+  },
+  "permission.dialog.trust_commands_body": {
+    "message": "अब से एजेंट बिना पूछे इस कंप्यूटर पर कोई भी कमांड चला सकेगा — इनमें फ़ाइलें मिटाने वाली या डेटा कहीं और भेजने वाली कमांड भी शामिल हैं। आप इसे सेटिंग्स → टूल अनुमतियाँ में बंद कर सकते हैं।",
+    "description": "Warning shown before the user trusts every CLI command the agent runs",
+    "_machine_translated": true,
+    "_source_hash": "b47cc0da77760071"
+  },
+  "permission.dialog.trust_commands_cancel": {
+    "message": "रद्द करें",
+    "description": "Button that backs out of the trust-all-commands confirmation",
+    "_machine_translated": true,
+    "_source_hash": "04223c46823219ba"
+  },
+  "permission.dialog.trust_commands_confirm": {
+    "message": "सभी कमांड पर भरोसा करें",
+    "description": "Button that confirms trusting every CLI command the agent runs",
+    "_machine_translated": true,
+    "_source_hash": "2459d9ba1e0db41a"
+  },
+  "settings.tool_permissions.trust_commands.label": {
+    "message": "सभी CLI कमांड पर भरोसा करें",
+    "description": "Settings → Tool Permissions: checkbox label",
+    "_machine_translated": true,
+    "_source_hash": "a1cacb2f9262bf9e"
+  },
+  "settings.tool_permissions.trust_commands.description": {
+    "message": "एजेंट को बिना पूछे shell कमांड चलाने दें। फ़ाइलें संपादित करने, वेब अनुरोधों और अन्य टूल के लिए अब भी पूछा जाएगा, और जिस कमांड को आपने हमेशा अस्वीकार करें पर सेट किया है, वह अस्वीकृत ही रहेगी।",
+    "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
+    "_machine_translated": true,
+    "_source_hash": "d3aeb2ae7bfa32e2"
+  },
+  "settings.tool_permissions.trust_commands.dialog_title": {
+    "message": "सभी CLI कमांड पर भरोसा करें?",
+    "description": "Title of the confirmation dialog when enabling trust for all CLI commands",
+    "_machine_translated": true,
+    "_source_hash": "320d9d2b0c0e622c"
+  },
+  "settings.tool_permissions.trust_commands.confirm": {
+    "message": "एजेंट बिना पूछे इस कंप्यूटर पर कोई भी कमांड चला सकेगा — इनमें फ़ाइलें मिटाने वाली या डेटा कहीं और भेजने वाली कमांड भी शामिल हैं। इसे केवल तभी चालू करें जब आपको एजेंट और उसे दिए जाने वाले कार्यों पर भरोसा हो।",
+    "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
+    "_machine_translated": true,
+    "_source_hash": "94a8b450e4074b0e"
   }
 }
