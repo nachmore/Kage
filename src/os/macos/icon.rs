@@ -78,15 +78,15 @@ mod tests {
 
     /// Finder is on every macOS install. Its icon must come back as a PNG
     /// data URI small enough that a full launcher scan stays cheap — the
-    /// old full-resolution path produced ~1 MB per app.
+    /// old full-resolution path produced ~1 MB per app. (No timing
+    /// assertion: the first NSWorkspace call on a cold CI runner can take
+    /// many seconds; the size bound is what catches a regression.)
     #[test]
     fn app_icon_is_a_small_png() {
-        let started = std::time::Instant::now();
         let uri = extract_icon_base64_impl("/System/Library/CoreServices/Finder.app")
             .expect("Finder has an icon");
         assert!(uri.starts_with("data:image/png;base64,"));
         assert!(uri.len() < 200_000, "icon data URI is {} bytes", uri.len());
-        assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 
     #[test]
