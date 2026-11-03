@@ -61,9 +61,6 @@ pub fn configure(
     // legacy Run-key autostart needs upgrading to the Scheduled Task).
     std::thread::spawn(os::migrate_startup_mechanism);
     os::install_kill_on_exit_job();
-    // Resolve the login-shell PATH now so the first agent spawn doesn't
-    // wait on the user's shell rc files.
-    os::login_env::prewarm();
     webview_recovery::set_app_handle(app.handle().clone());
 
     if let Err(e) = tray::setup_tray(app, dev_mode) {
