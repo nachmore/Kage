@@ -2910,6 +2910,7 @@ dependencies = [
  "objc2-foundation",
  "serde",
  "serde_json",
+ "tempfile",
  "uiautomation",
  "windows 0.62.2",
  "windows-collections 0.3.2",

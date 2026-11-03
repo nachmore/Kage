@@ -39,6 +39,11 @@ fn start_menu_dirs() -> Vec<PathBuf> {
 /// subfolder) the moment they finish, so these folders are the earliest
 /// filesystem signal. The registry and package-catalog sources have their
 /// own watchers in the main crate.
+/// Every change under a watched folder can matter here.
+pub fn affects_app_list_impl(_path: &std::path::Path) -> bool {
+    true
+}
+
 pub fn watch_roots_impl() -> Vec<WatchRoot> {
     start_menu_dirs()
         .into_iter()

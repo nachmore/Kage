@@ -7,7 +7,7 @@
 //! - **Every platform:** filesystem events (FSEvents / ReadDirectoryChangesW
 //!   / inotify via `notify`) on the directories the launcher scans, from
 //!   `kage_core::os::launcher::watch_roots` — `/Applications` and friends on
-//!   macOS, the two Start Menu `Programs` trees on Windows, the XDG
+//!   macOS (recursively, for vendor folders), the two Start Menu `Programs` trees on Windows, the XDG
 //!   `applications/` dirs on Linux.
 //! - **Windows extras** (`os::windows::app_install_watch`): registry change
 //!   notifications on the `Uninstall` key the scanner reads, and the
@@ -97,7 +97,9 @@ pub fn watch_roots(
 /// permission/xattr/timestamp changes can't, and neither can hidden
 /// housekeeping files (Finder's `.DS_Store`, `.localized`, Explorer's
 /// `desktop.ini`) — Finder rewrites `.DS_Store` just from browsing
-/// `/Applications`.
+/// `/Applications`. On macOS the folders are watched recursively (vendor
+/// folders), so changes inside a bundle — an app auto-updating its own
+/// `Contents/` — are dropped too.
 pub fn is_relevant(event: &Event) -> bool {
     if matches!(
         event.kind,
@@ -108,7 +110,10 @@ pub fn is_relevant(event: &Event) -> bool {
     if event.need_rescan() || event.paths.is_empty() {
         return true;
     }
-    event.paths.iter().any(|p| !is_housekeeping_file(p))
+    event
+        .paths
+        .iter()
+        .any(|p| !is_housekeeping_file(p) && kage_core::os::launcher::affects_app_list(p))
 }
 
 fn is_housekeeping_file(path: &Path) -> bool {
@@ -167,6 +172,19 @@ mod tests {
         assert!(!is_relevant(&event(
             EventKind::Modify(ModifyKind::Any),
             "Start Menu/Programs/Desktop.ini"
+        )));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn changes_inside_a_bundle_are_ignored() {
+        assert!(!is_relevant(&event(
+            EventKind::Create(CreateKind::File),
+            "/Applications/Google Chrome.app/Contents/Frameworks/new.dylib"
+        )));
+        assert!(is_relevant(&event(
+            EventKind::Create(CreateKind::Folder),
+            "/Applications/Cisco/Cisco Secure Client.app"
         )));
     }
 

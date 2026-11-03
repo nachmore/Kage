@@ -50,6 +50,11 @@ fn desktop_dirs() -> Vec<PathBuf> {
     out
 }
 
+/// Every change under a watched folder can matter here.
+pub fn affects_app_list_impl(_path: &std::path::Path) -> bool {
+    true
+}
+
 pub fn watch_roots_impl() -> Vec<WatchRoot> {
     desktop_dirs()
         .into_iter()
