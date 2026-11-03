@@ -35,6 +35,9 @@ fn find_python() -> Option<String> {
         cmd.arg("--version")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        // Find the python the user's shell would (brew / pyenv / conda),
+        // not just /usr/bin's.
+        crate::os::login_env::apply(&mut cmd);
         configure_no_window(&mut cmd);
 
         if let Ok(child) = cmd.spawn() {
@@ -70,6 +73,7 @@ fn check_pocket_tts_installed(python: &str) -> bool {
     cmd.args(["-c", "import pocket_tts; print('ok')"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    crate::os::login_env::apply(&mut cmd);
     configure_no_window(&mut cmd);
 
     if let Ok(child) = cmd.spawn() {
@@ -187,6 +191,8 @@ pub async fn pocket_tts_install<R: tauri::Runtime>(
     cmd.args(["-m", "pip", "install", "pocket-tts"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // pip honours the user's proxy / CA / index settings from their rc.
+    crate::os::login_env::apply(&mut cmd);
     configure_no_window(&mut cmd);
 
     let mut child = cmd
@@ -371,6 +377,7 @@ pub async fn pocket_tts_start(
         cmd.arg("--debug");
     }
 
+    crate::os::login_env::apply(&mut cmd);
     configure_no_window(&mut cmd);
 
     let mut child = cmd

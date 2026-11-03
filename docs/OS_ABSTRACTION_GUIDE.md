@@ -23,6 +23,7 @@ src/os/
 ├── hotkey.rs
 ├── icon.rs
 ├── launcher.rs
+├── login_env.rs    ← login-shell environment for user-tool spawns (see below)
 ├── permissions.rs  ← macOS TCC status + repair; "not applicable" elsewhere
 ├── power.rs
 ├── process.rs
@@ -91,6 +92,55 @@ stay independently testable and easy to grep.
    format converters) get unit tests without going through the whole
    stack — see `is_strict_iso_date` in `os/windows/calendar.rs` as a
    reference.
+
+## Spawning user-installed tools (`login_env`)
+
+A Kage launched from Finder / Dock / `open` (including the post-update
+relaunch) inherits launchd's minimal environment —
+`PATH=/usr/bin:/bin:/usr/sbin:/sbin`, nothing from `.zshrc`. Linux desktop
+sessions are often similar. Anything Kage spawns inherits that, and so does
+everything the agent spawns: an `mcp.json` entry like
+`"command": "builder-mcp"` (in `~/.toolbox/bin`) fails to start even though
+it works in a terminal.
+
+`os::login_env` fixes this the way VS Code's "resolve shell environment"
+does, but more conservatively:
+
+- `prewarm()` (called first thing in `app_setup::configure`) runs
+  `$SHELL -i -l` once on a background thread — falling back to the passwd
+  record's shell, then `/bin/sh` — and captures `/usr/bin/env -0` between
+  per-run markers. 10 s hard timeout that SIGKILLs the shell's whole
+  process group; own session (no controlling terminal); stdin `/dev/null`;
+  retries as a non-interactive login shell if an interactive rc `exec`s
+  away. bash/zsh/sh/dash/ksh/fish/nu/csh/tcsh/pwsh are handled.
+- `apply(&mut cmd)` overlays the result onto one child: **PATH merged**
+  (login entries first, then inherited extras), **other variables
+  add-missing only** (nothing Kage or launchd set is overridden), an
+  **explicit denylist** (`HOME`, `TMPDIR`, `USER`, `SSH_*`, `__CF*`,
+  `XPC_*`, `KAGE_*`, terminal and shell-session state, …), size caps, and
+  anything already set on the `Command` wins. It waits up to 5 s for an
+  in-flight probe — never on the main thread — else the child gets the
+  inherited PATH plus well-known user bin dirs. `overlay(&[..])` returns the
+  same pairs for env-list APIs (the kage-core script runner).
+- Bare program names resolve too: `std::process::Command` looks the program
+  up in the PATH set *on the Command* on Unix.
+
+Call `apply` for every spawn of a user tool — the agent, `which` lookups
+that mirror it, version probes, npm, python, icalBuddy, shortcuts, proxy
+scripts — after the caller's own `cmd.env(...)`. Don't call it for OS
+binaries (`osascript`, `open`, `tccutil`, `codesign`, …).
+
+Launched from a terminal (any stdio stream is a TTY) nothing is probed or
+changed: Kage already has the user's real environment. Override with
+`KAGE_LOGIN_SHELL_ENV=0` (never) or `=1` (always). rc files can test
+`KAGE_RESOLVING_ENVIRONMENT=1` to skip terminal-only work (`exec tmux`).
+The log records the shell, timing, PATH, and the *names* of imported
+variables (never their values). Manual end-to-end check:
+`tests/login_env_e2e_test.rs`.
+
+macOS and Linux share one POSIX implementation (`src/os/login_env/`);
+Windows is a no-op — Explorer-launched processes already get the full
+user + system environment.
 
 ## Things that aren't in `os/` and shouldn't be
 

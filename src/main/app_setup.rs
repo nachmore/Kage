@@ -27,6 +27,11 @@ pub fn configure(
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!("Setting up application");
     info!("=== Kage Setup ===");
+    // First thing: probe the user's login-shell environment on a
+    // background thread, so the launch-time agent spawn (and the MCP
+    // servers it starts) rarely has to wait for it. Setup only runs in the
+    // primary instance, so a forwarded second launch never probes.
+    os::login_env::prewarm();
 
     #[cfg(target_os = "macos")]
     configure_macos_menu(app)?;

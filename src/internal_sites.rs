@@ -278,7 +278,16 @@ pub fn run_proxy(profile: &InternalSiteProfile, url: &str, response: ProxyRespon
         0 => DEFAULT_PROXY_TIMEOUT_MS,
         t => t.min(MAX_PROXY_TIMEOUT_MS),
     };
-    let env = [("KAGE_URL", url), ("KAGE_RESPONSE", response.env_value())];
+    let own = [("KAGE_URL", url), ("KAGE_RESPONSE", response.env_value())];
+    // Proxy scripts (often drafted by the agent to "reuse whatever its own
+    // tools use") call user-installed CLIs; give them the same login
+    // environment the agent and its MCP servers get.
+    let login = crate::os::login_env::overlay(&own.map(|(k, _)| k));
+    let env: Vec<(&str, &str)> = login
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .chain(own)
+        .collect();
     match run_script_with_env(
         profile.proxy.lang.script_lang(),
         &profile.proxy.script,

@@ -286,6 +286,10 @@ impl AcpTransport {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
 
+        // The user's login-shell PATH and exports: a bare `kiro-cli` must
+        // resolve (std looks it up in the PATH set here, not ours), and
+        // the MCP servers the agent spawns from mcp.json inherit this.
+        os::login_env::apply(&mut cmd);
         os::configure_process_spawn(&mut cmd);
 
         let mut child = cmd

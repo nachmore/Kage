@@ -401,6 +401,7 @@ pub fn spawn_pocket_tts_server<R: tauri::Runtime>(app: &AppHandle<R>) {
         if debug_mode {
             cmd.arg("--debug");
         }
+        crate::os::login_env::apply(&mut cmd);
         crate::commands::pocket_tts::configure_no_window(&mut cmd);
 
         match cmd.spawn() {

@@ -428,6 +428,9 @@ pub async fn execute_shortcut<R: tauri::Runtime>(
         command.current_dir(work_dir);
     }
 
+    // Shortcuts name user tools (`code`, scripts with `#!/usr/bin/env
+    // node`, …): resolve and run them as a terminal would.
+    crate::os::login_env::apply(&mut command);
     crate::os::configure_breakaway_from_job(&mut command);
 
     command

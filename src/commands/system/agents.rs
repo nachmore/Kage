@@ -128,6 +128,8 @@ fn resolve_binary_path(token: &str) -> Option<String> {
     let cmd = if cfg!(windows) { "where" } else { "which" };
     let mut command = std::process::Command::new(cmd);
     command.arg(token);
+    // `which` searches its own PATH: give it the one the agent spawn gets.
+    crate::os::login_env::apply(&mut command);
     // CREATE_NO_WINDOW: GUI subsystem processes spawning console
     // children inherit no console — Windows allocates a fresh one for
     // the child unless we suppress it, which flashes a DOS window.
@@ -220,6 +222,7 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
             let where_or_which = if cfg!(windows) { "where" } else { "which" };
             let mut where_cmd = std::process::Command::new(where_or_which);
             where_cmd.arg(bin_name);
+            crate::os::login_env::apply(&mut where_cmd);
             crate::os::configure_no_window(&mut where_cmd);
             if let Ok(output) = where_cmd.output() {
                 if output.status.success() {
@@ -391,6 +394,9 @@ fn dedupe_shim_candidates(paths: Vec<std::path::PathBuf>) -> Vec<std::path::Path
 fn run_version_probe(binary: &std::ffi::OsStr, args: &[&str]) -> Option<String> {
     let mut cmd = std::process::Command::new(binary);
     cmd.args(args);
+    // Node-based CLIs (`#!/usr/bin/env node`) need the login PATH even
+    // when `binary` is absolute.
+    crate::os::login_env::apply(&mut cmd);
     // CREATE_NO_WINDOW: GUI subsystem processes spawning console
     // children inherit no console — Windows allocates a fresh one for
     // the child unless we suppress it, which flashes a DOS window.
@@ -468,6 +474,7 @@ fn check_npm_available_sync() -> NpmStatus {
         if let Some(ref p) = resolved {
             let mut version_cmd = std::process::Command::new(p);
             version_cmd.arg("--version");
+            crate::os::login_env::apply(&mut version_cmd);
             crate::os::configure_no_window(&mut version_cmd);
             let version = version_cmd.output().ok().and_then(|o| {
                 if o.status.success() {
@@ -527,6 +534,9 @@ fn install_acp_wrapper_sync(package: &str) -> Result<String, AppError> {
 
     let mut cmd = std::process::Command::new(npm_path);
     cmd.arg("install").arg("-g").arg(package);
+    // npm is `#!/usr/bin/env node`, and its install scripts expect the
+    // user's node / proxy / CA settings.
+    crate::os::login_env::apply(&mut cmd);
     crate::os::configure_no_window(&mut cmd);
 
     let out = cmd.output().map_err(|e| {

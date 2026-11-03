@@ -238,11 +238,11 @@ fn overlaps_window(
 fn icalbuddy_is_available() -> bool {
     static AVAILABLE: OnceLock<bool> = OnceLock::new();
     *AVAILABLE.get_or_init(|| {
-        Command::new("which")
-            .arg("icalBuddy")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+        // Homebrew's bin dir isn't on a Finder-launched app's PATH.
+        let mut which = Command::new("which");
+        which.arg("icalBuddy");
+        crate::os::login_env::apply(&mut which);
+        which.output().map(|o| o.status.success()).unwrap_or(false)
     })
 }
 
@@ -259,7 +259,10 @@ fn warn_unavailable_once() {
 }
 
 fn run_icalbuddy(args: &[&str]) -> Vec<CalendarEvent> {
-    let output = match Command::new("icalBuddy").args(args).output() {
+    let mut cmd = Command::new("icalBuddy");
+    cmd.args(args);
+    crate::os::login_env::apply(&mut cmd);
+    let output = match cmd.output() {
         Ok(o) => o,
         Err(e) => {
             warn!("icalBuddy failed to launch: {e}");
