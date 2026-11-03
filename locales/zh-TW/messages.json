@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "從現在起，代理程式可以在這台電腦上執行任何指令而不需詢問，包括刪除檔案或將資料傳送到其他地方的指令。您可以在「設定 → 工具權限」中關閉此功能。",
+    "message": "從現在起，代理程式可以不經詢問執行任何指令。指令能執行您帳戶可做的任何操作，例如刪除或變更檔案、透過網路傳送資料，因此請只對您信任的代理程式和任務啟用此設定。您可以在「設定 → 工具權限」中關閉此功能。",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "取消",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "讓代理程式執行 shell 指令而不需詢問。編輯檔案、網路請求和其他工具仍會詢問，而您設為「一律拒絕」的指令仍會被拒絕。",
+    "message": "允許代理程式不經詢問執行 shell 指令。指令能執行您帳戶可做的任何操作，包括編輯檔案和使用網路，因此其餘提示僅適用於代理程式的其他工具。由背景功能（內嵌輔助、巨集）啟動的指令仍會詢問，而您設為「一律拒絕」的指令仍會遭到拒絕。",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "要信任所有 CLI 指令嗎？",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "代理程式將能在這台電腦上執行任何指令而不需詢問，包括刪除檔案或將資料傳送到其他地方的指令。請僅在您信任代理程式及您交付的任務時才開啟此功能。",
+    "message": "代理程式將能在這台電腦上不經詢問執行任何指令。指令能執行您帳戶可做的任何操作，例如刪除或變更檔案、將資料傳送到其他地方。請只在您信任代理程式及您交付的任務時才開啟此功能。",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "無法儲存該設定，因此未做任何變更。請再試一次，或單獨核准此指令。",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

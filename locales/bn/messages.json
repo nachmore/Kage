@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "এখন থেকে এজেন্ট জিজ্ঞাসা না করেই এই কম্পিউটারে যেকোনো কমান্ড চালাতে পারবে — ফাইল মুছে ফেলা বা অন্য কোথাও ডেটা পাঠানোর কমান্ডসহ। আপনি সেটিংস → টুলের অনুমতি থেকে এটি বন্ধ করতে পারবেন।",
+    "message": "এখন থেকে এজেন্ট জিজ্ঞাসা না করেই যেকোনো কমান্ড চালাতে পারবে। আপনার অ্যাকাউন্ট যা করতে পারে, একটি কমান্ডও তা-ই করতে পারে — ফাইল মুছে ফেলা বা পরিবর্তন করা, নেটওয়ার্কের মাধ্যমে ডেটা পাঠানো — তাই কেবল বিশ্বস্ত এজেন্ট ও কাজের জন্যই এটি করুন। আপনি সেটিংস → টুল অনুমতি থেকে এটি বন্ধ করতে পারেন।",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "বাতিল করুন",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "এজেন্টকে জিজ্ঞাসা না করেই শেল কমান্ড চালাতে দিন। ফাইল সম্পাদনা, ওয়েব অনুরোধ এবং অন্যান্য টুলের জন্য তবুও জিজ্ঞাসা করা হবে, এবং যে কমান্ড আপনি সর্বদা প্রত্যাখ্যান হিসেবে সেট করেছেন সেটি প্রত্যাখ্যাতই থাকবে।",
+    "message": "এজেন্টকে জিজ্ঞাসা না করেই শেল কমান্ড চালাতে দিন। আপনার অ্যাকাউন্ট যা করতে পারে, একটি কমান্ডও তা-ই করতে পারে — ফাইল সম্পাদনা ও নেটওয়ার্ক ব্যবহারসহ — তাই বাকি প্রম্পটগুলো কেবল এজেন্টের অন্যান্য টুলের জন্য প্রযোজ্য। ব্যাকগ্রাউন্ড ফিচার (ইনলাইন সহায়তা, ম্যাক্রো) থেকে শুরু হওয়া কমান্ড তখনও জিজ্ঞাসা করবে, এবং যে কমান্ড আপনি সবসময় অস্বীকার করুন-এ সেট করেছেন সেটি অস্বীকৃতই থাকবে।",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "সব CLI কমান্ডে আস্থা রাখবেন?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "এজেন্ট জিজ্ঞাসা না করেই এই কম্পিউটারে যেকোনো কমান্ড চালাতে পারবে — ফাইল মুছে ফেলা বা অন্য কোথাও ডেটা পাঠানোর কমান্ডসহ। কেবল তখনই এটি চালু করুন যদি আপনি এজেন্ট এবং তাকে দেওয়া কাজগুলোর উপর আস্থা রাখেন।",
+    "message": "এজেন্ট জিজ্ঞাসা না করেই এই কম্পিউটারে যেকোনো কমান্ড চালাতে পারবে। আপনার অ্যাকাউন্ট যা করতে পারে, একটি কমান্ডও তা-ই করতে পারে — ফাইল মুছে ফেলা বা পরিবর্তন করা, অন্য কোথাও ডেটা পাঠানো। কেবল তখনই এটি চালু করুন যদি আপনি এজেন্ট এবং তাকে দেওয়া কাজগুলোকে বিশ্বাস করেন।",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "সেটিংটি সংরক্ষণ করা যায়নি, তাই কিছুই পরিবর্তন হয়নি। আবার চেষ্টা করুন, অথবা শুধু এই কমান্ডটি অনুমোদন করুন।",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

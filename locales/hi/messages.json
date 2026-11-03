@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "अब से एजेंट बिना पूछे इस कंप्यूटर पर कोई भी कमांड चला सकेगा — इनमें फ़ाइलें मिटाने वाली या डेटा कहीं और भेजने वाली कमांड भी शामिल हैं। आप इसे सेटिंग्स → टूल अनुमतियाँ में बंद कर सकते हैं।",
+    "message": "अब से एजेंट बिना पूछे कोई भी कमांड चला सकता है। एक कमांड वह सब कुछ कर सकती है जो आपका खाता कर सकता है — फ़ाइलें हटाना या बदलना, नेटवर्क पर डेटा भेजना — इसलिए ऐसा केवल उन्हीं एजेंट और कार्यों के लिए करें जिन पर आप भरोसा करते हैं। आप इसे सेटिंग्स → टूल अनुमतियाँ में बंद कर सकते हैं।",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "रद्द करें",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "एजेंट को बिना पूछे shell कमांड चलाने दें। फ़ाइलें संपादित करने, वेब अनुरोधों और अन्य टूल के लिए अब भी पूछा जाएगा, और जिस कमांड को आपने हमेशा अस्वीकार करें पर सेट किया है, वह अस्वीकृत ही रहेगी।",
+    "message": "एजेंट को बिना पूछे शेल कमांड चलाने दें। एक कमांड वह सब कुछ कर सकती है जो आपका खाता कर सकता है — जिसमें फ़ाइलें संपादित करना और नेटवर्क का उपयोग करना शामिल है — इसलिए बाकी संकेत केवल एजेंट के अन्य टूल पर लागू होते हैं। बैकग्राउंड सुविधाओं (इनलाइन सहायता, मैक्रो) द्वारा शुरू की गई कमांड अब भी पूछेंगी, और जिस कमांड को आपने हमेशा अस्वीकार करें पर सेट किया है वह अस्वीकृत ही रहेगी।",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "सभी CLI कमांड पर भरोसा करें?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "एजेंट बिना पूछे इस कंप्यूटर पर कोई भी कमांड चला सकेगा — इनमें फ़ाइलें मिटाने वाली या डेटा कहीं और भेजने वाली कमांड भी शामिल हैं। इसे केवल तभी चालू करें जब आपको एजेंट और उसे दिए जाने वाले कार्यों पर भरोसा हो।",
+    "message": "एजेंट इस कंप्यूटर पर बिना पूछे कोई भी कमांड चला सकेगा। एक कमांड वह सब कुछ कर सकती है जो आपका खाता कर सकता है — फ़ाइलें हटाना या बदलना, डेटा कहीं और भेजना। इसे केवल तभी चालू करें जब आप एजेंट और उसे दिए जाने वाले कार्यों पर भरोसा करते हों।",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "यह सेटिंग सहेजी नहीं जा सकी, इसलिए कुछ भी नहीं बदला गया। फिर से कोशिश करें, या केवल इस कमांड को अनुमति दें।",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

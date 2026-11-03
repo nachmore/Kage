@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Od teraz agent będzie mógł uruchamiać dowolne polecenia na tym komputerze bez pytania — w tym polecenia usuwające pliki lub wysyłające dane na zewnątrz. Możesz to wyłączyć w Ustawienia → Uprawnienia narzędzi.",
+    "message": "Od teraz agent może uruchamiać dowolne polecenia bez pytania. Polecenie może zrobić wszystko, na co pozwala Twoje konto — usunąć lub zmienić pliki, wysłać dane przez sieć — więc rób to tylko dla agentów i zadań, którym ufasz. Możesz to wyłączyć w Ustawienia → Uprawnienia narzędzi.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Anuluj",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Pozwól agentowi uruchamiać polecenia powłoki bez pytania. Edycja plików, żądania sieciowe i inne narzędzia nadal będą wymagać zgody, a polecenie ustawione na Zawsze odmawiaj pozostanie zablokowane.",
+    "message": "Pozwól agentowi uruchamiać polecenia powłoki bez pytania. Polecenie może zrobić wszystko, na co pozwala Twoje konto — w tym edytować pliki i korzystać z sieci — więc pozostałe monity dotyczą tylko innych narzędzi agenta. Polecenia uruchamiane przez funkcje działające w tle (asystent w tekście, makra) nadal wymagają zgody, a polecenie ustawione na Zawsze odmawiaj pozostaje zablokowane.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Ufać wszystkim poleceniom CLI?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Agent będzie mógł uruchamiać dowolne polecenia na tym komputerze bez pytania — w tym polecenia usuwające pliki lub wysyłające dane na zewnątrz. Włącz tę opcję tylko wtedy, gdy ufasz agentowi i zadaniom, które mu zlecasz.",
+    "message": "Agent będzie mógł uruchamiać dowolne polecenia na tym komputerze bez pytania. Polecenie może zrobić wszystko, na co pozwala Twoje konto — usunąć lub zmienić pliki, wysłać dane gdzie indziej. Włącz tę opcję tylko wtedy, gdy ufasz agentowi i zadaniom, które mu powierzasz.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Nie udało się zapisać tego ustawienia, więc nic nie zostało zmienione. Spróbuj ponownie lub zatwierdź tylko to polecenie.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

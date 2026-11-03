@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Ab sofort kann der Agent ohne Nachfrage jeden Befehl auf diesem Computer ausführen – auch Befehle, die Dateien löschen oder Daten an andere Orte senden. Sie können dies unter Einstellungen → Tool-Berechtigungen deaktivieren.",
+    "message": "Ab jetzt kann der Agent jeden Befehl ohne Nachfrage ausführen. Ein Befehl kann alles tun, was Ihr Konto kann – Dateien löschen oder ändern, Daten über das Netzwerk senden –, tun Sie dies daher nur für Agenten und Aufgaben, denen Sie vertrauen. Sie können dies unter Einstellungen → Tool-Berechtigungen wieder deaktivieren.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Abbrechen",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Der Agent darf Shell-Befehle ohne Nachfrage ausführen. Für das Bearbeiten von Dateien, Webanfragen und andere Tools wird weiterhin nachgefragt, und ein Befehl, den Sie auf „Immer ablehnen“ gesetzt haben, bleibt abgelehnt.",
+    "message": "Der Agent darf Shell-Befehle ohne Nachfrage ausführen. Ein Befehl kann alles tun, was Ihr Konto kann – einschließlich Dateien bearbeiten und das Netzwerk nutzen –, daher betreffen die verbleibenden Nachfragen nur die anderen Tools des Agenten. Befehle, die von Hintergrundfunktionen (Inline-Assistenz, Makros) gestartet werden, erfordern weiterhin eine Bestätigung, und ein Befehl, den Sie auf „Immer ablehnen“ gesetzt haben, bleibt abgelehnt.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Allen CLI-Befehlen vertrauen?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Der Agent kann dann ohne Nachfrage jeden Befehl auf diesem Computer ausführen – auch Befehle, die Dateien löschen oder Daten an andere Orte senden. Aktivieren Sie dies nur, wenn Sie dem Agenten und den Aufgaben, die Sie ihm geben, vertrauen.",
+    "message": "Der Agent kann dann jeden Befehl auf diesem Computer ohne Nachfrage ausführen. Ein Befehl kann alles tun, was Ihr Konto kann – Dateien löschen oder ändern, Daten an andere Orte senden. Aktivieren Sie dies nur, wenn Sie dem Agenten und den Aufgaben, die Sie ihm geben, vertrauen.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Die Einstellung konnte nicht gespeichert werden, daher wurde nichts geändert. Versuchen Sie es erneut oder genehmigen Sie nur diesen Befehl.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

@@ -112,10 +112,14 @@ pub async fn set_tool_kind_trusted<R: tauri::Runtime>(
     features: State<'_, FeatureServices>,
     app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
-    let (changed, snapshot) = {
-        let mut config = features.config.lock().map_err(|_| {
-            AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
-        })?;
+    {
+        // lock_or_recover: revoking must work even if another thread
+        // poisoned the mutex — the permission handler keeps running.
+        // Save under the lock (like save_config / update_tool_policy) so it
+        // orders against the other lock-holding savers, and roll the
+        // in-memory change back if it can't be persisted, so the setting is
+        // never on in memory but off on disk (or vice versa).
+        let mut config = features.config.lock_or_recover();
         let changed = config
             .tool_permissions
             .set_kind_trusted(&kind, trusted)
@@ -126,18 +130,18 @@ pub async fn set_tool_kind_trusted<R: tauri::Runtime>(
                     &[("kind", &kind)],
                 )
             })?;
-        (changed, config.clone())
-    };
-    if !changed {
-        return Ok(());
+        if !changed {
+            return Ok(());
+        }
+        if let Err(e) = config.save() {
+            let _ = config.tool_permissions.set_kind_trusted(&kind, !trusted);
+            return Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.config.save_failed",
+                &[("reason", &e.to_string())],
+            ));
+        }
     }
-    snapshot.save().map_err(|e| {
-        AppError::keyed(
-            ErrorKind::Internal,
-            "errors.config.save_failed",
-            &[("reason", &e.to_string())],
-        )
-    })?;
     info!("Tool kind '{}' trusted={}", kind, trusted);
     let label = format!("All tools of kind '{}'", kind);
     let event = if trusted {

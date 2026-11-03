@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Відтепер агент зможе виконувати будь-які команди на цьому комп’ютері без запиту — зокрема команди, які видаляють файли або надсилають дані деінде. Це можна вимкнути в розділі «Налаштування → Дозволи інструментів».",
+    "message": "Відтепер агент може виконувати будь-які команди без запиту. Команда може робити все, що дозволено вашому обліковому запису, — видаляти чи змінювати файли, надсилати дані мережею, — тож вмикайте це лише для агентів і завдань, яким ви довіряєте. Вимкнути це можна в розділі «Налаштування → Дозволи інструментів».",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Скасувати",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Дозволити агенту виконувати команди оболонки без запиту. Редагування файлів, вебзапити та інші інструменти й надалі потребуватимуть дозволу, а команда, для якої ви встановили «Завжди забороняти», залишиться забороненою.",
+    "message": "Дозволити агенту виконувати команди оболонки без запиту. Команда може робити все, що дозволено вашому обліковому запису, — зокрема редагувати файли й користуватися мережею, — тому решта запитів стосуватиметься лише інших інструментів агента. Команди, запущені фоновими функціями (вбудована допомога, макроси), і далі потребуватимуть підтвердження, а команда, для якої встановлено «Завжди забороняти», залишиться забороненою.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Довіряти всім командам CLI?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Агент зможе виконувати будь-які команди на цьому комп’ютері без запиту — зокрема команди, які видаляють файли або надсилають дані деінде. Увімкніть це, лише якщо ви довіряєте агенту та завданням, які йому даєте.",
+    "message": "Агент зможе виконувати будь-які команди на цьому комп’ютері без запиту. Команда може робити все, що дозволено вашому обліковому запису, — видаляти чи змінювати файли, надсилати дані деінде. Вмикайте це, лише якщо довіряєте агенту й завданням, які йому даєте.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Не вдалося зберегти це налаштування, тому нічого не змінено. Спробуйте ще раз або схваліть лише цю команду.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

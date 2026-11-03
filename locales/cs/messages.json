@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Od této chvíle může agent na tomto počítači spouštět jakýkoli příkaz bez ptaní – včetně příkazů, které mažou soubory nebo odesílají data jinam. Tuto možnost můžete vypnout v Nastavení → Oprávnění nástrojů.",
+    "message": "Od této chvíle může agent spouštět libovolné příkazy bez ptaní. Příkaz může udělat cokoli, co může váš účet – smazat nebo změnit soubory, odeslat data přes síť –, proto to povolte jen u agentů a úloh, kterým důvěřujete. Vypnout to můžete v Nastavení → Oprávnění nástrojů.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Zrušit",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Umožní agentovi spouštět příkazy shellu bez ptaní. Úpravy souborů, webové požadavky a další nástroje se budou stále ptát a příkaz, který jste nastavili na Vždy zamítnout, zůstane zamítnutý.",
+    "message": "Umožní agentovi spouštět příkazy shellu bez ptaní. Příkaz může udělat cokoli, co může váš účet – včetně úprav souborů a používání sítě –, takže zbývající dotazy se týkají jen ostatních nástrojů agenta. Příkazy spuštěné funkcemi na pozadí (inline asistence, makra) se stále ptají a příkaz nastavený na Vždy zamítnout zůstane zamítnutý.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Důvěřovat všem příkazům CLI?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Agent bude moci na tomto počítači spouštět jakýkoli příkaz bez ptaní – včetně příkazů, které mažou soubory nebo odesílají data jinam. Zapněte tuto možnost, pouze pokud agentovi a úkolům, které mu zadáváte, důvěřujete.",
+    "message": "Agent bude moci na tomto počítači spouštět libovolné příkazy bez ptaní. Příkaz může udělat cokoli, co může váš účet – smazat nebo změnit soubory, odeslat data jinam. Zapněte to jen v případě, že agentovi a úlohám, které mu zadáváte, důvěřujete.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Nastavení se nepodařilo uložit, takže se nic nezměnilo. Zkuste to znovu, nebo schvalte jen tento příkaz.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

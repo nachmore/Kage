@@ -22,8 +22,12 @@ exact command string. For those prompts the Allow menu also offers:
 - **Trust all commands…** — after an inline danger confirmation, trusts
   the whole ACP tool kind `execute` (`trusted_kinds`), approves the
   current request and any command prompts already queued in that window.
-  Every later shell command is auto-approved; edits, deletes, web
-  fetches and other tools still prompt. Toggle it in Settings → Tool
+  Every later shell command is auto-approved. Note what that means: a
+  command can do anything the user's account can (edit or delete files,
+  use the network), so the prompts that remain only cover the agent's
+  *other* tools. Prompts from background features (inline assist,
+  macros, script generation — sessions whose tool calls are never shown)
+  never use the trust and still ask. Toggle it in Settings → Tool
   Permissions ("Trust all CLI commands").
 
 Three settings change this prompt flow:
@@ -75,12 +79,16 @@ All default to off. All surface a warning in Settings when enabled.
 1. Agent calls a tool; ACP sends `session/request_permission`.
 2. The notification handler resolves the tool's title and ACP kind
    (the request's `toolCall.kind`, else the kind from that call's earlier
-   `tool_call` update, else `execute` if `rawInput.command` is a string)
-   and reads `ToolPolicy::effective_policy()` for the title.
+   `tool_call` / `tool_call_update`). Only an explicit kind counts — ACP
+   treats a missing kind as "other", and argument-sniffing is unsafe
+   (kiro-cli's file-write tool sends `{"command": "create"}`). It then
+   reads `ToolPolicy::effective_policy()` for the title.
 3. An explicit `deny` wins. Otherwise, if `trust_all` or
    `terminator_mode` is on, or the kind is in `trusted_kinds`, the
    handler returns `allow_once` immediately and writes a `Granted` audit
-   entry. (Trusted-kind calls don't add a per-command row to `tools`.)
+   entry (with the command in `args_preview` for shell runs). Trusted-kind
+   calls don't add a per-command row to `tools`, and `trusted_kinds` is
+   ignored for background / ephemeral prompt sessions.
 4. If the policy resolves to `allow`, the handler returns `allow_once`
    immediately. The grant_type is preserved for the next call.
 5. If the policy resolves to `deny`, the handler returns `reject_once`.

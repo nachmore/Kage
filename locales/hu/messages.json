@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Mostantól az ügynök bármilyen parancsot futtathat ezen a számítógépen kérdezés nélkül – beleértve a fájlokat törlő vagy adatokat máshová küldő parancsokat is. Ezt a Beállítások → Eszközengedélyek menüpontban kapcsolhatja ki.",
+    "message": "Mostantól az ügynök engedélykérés nélkül bármilyen parancsot futtathat. Egy parancs bármire képes, amire az Ön fiókja – fájlokat törölhet vagy módosíthat, adatokat küldhet a hálózaton –, ezért csak megbízható ügynökök és feladatok esetén engedélyezze. A Beállítások → Eszközengedélyek menüpontban kikapcsolhatja.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Mégse",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Az ügynök kérdezés nélkül futtathat shell-parancsokat. A fájlszerkesztés, a webes kérések és más eszközök továbbra is engedélyt kérnek, és a Mindig tiltva beállítású parancsok tiltva maradnak.",
+    "message": "Az ügynök engedélykérés nélkül futtathat shell-parancsokat. Egy parancs bármire képes, amire az Ön fiókja – például fájlokat szerkeszthet és használhatja a hálózatot –, így a további engedélykérések már csak az ügynök többi eszközére vonatkoznak. A háttérfunkciók (beágyazott segítség, makrók) által indított parancsok továbbra is engedélyt kérnek, a „Mindig elutasít” beállítású parancsok pedig tiltva maradnak.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Engedélyezi az összes CLI-parancsot?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Az ügynök bármilyen parancsot futtathat majd ezen a számítógépen kérdezés nélkül – beleértve a fájlokat törlő vagy adatokat máshová küldő parancsokat is. Csak akkor kapcsolja be, ha megbízik az ügynökben és a neki adott feladatokban.",
+    "message": "Az ügynök engedélykérés nélkül bármilyen parancsot futtathat ezen a számítógépen. Egy parancs bármire képes, amire az Ön fiókja – fájlokat törölhet vagy módosíthat, adatokat küldhet máshová. Csak akkor kapcsolja be, ha megbízik az ügynökben és a neki adott feladatokban.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Nem sikerült menteni a beállítást, így semmi sem változott. Próbálja újra, vagy hagyja jóvá csak ezt az egy parancsot.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

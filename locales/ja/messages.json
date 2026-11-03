@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "今後、エージェントはこのコンピューター上で確認なしにあらゆるコマンドを実行できるようになります。これにはファイルを削除するコマンドや、データを外部に送信するコマンドも含まれます。この設定は「設定 → ツールの権限」でオフにできます。",
+    "message": "今後、エージェントは確認なしで任意のコマンドを実行できるようになります。コマンドはお使いのアカウントで可能なあらゆる操作（ファイルの削除や変更、ネットワーク経由でのデータ送信など）を実行できるため、信頼できるエージェントとタスクに対してのみ有効にしてください。この設定は［設定］→［ツールの権限］でオフにできます。",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "キャンセル",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "エージェントが確認なしでシェルコマンドを実行できるようにします。ファイルの編集、Web リクエスト、その他のツールについては引き続き確認が求められます。また、「常に拒否」に設定したコマンドは引き続き拒否されます。",
+    "message": "エージェントが確認なしでシェルコマンドを実行できるようにします。コマンドはお使いのアカウントで可能なあらゆる操作（ファイルの編集やネットワークの利用を含む）を実行できるため、残りの確認はエージェントのその他のツールにのみ適用されます。バックグラウンド機能（インラインアシスト、マクロ）によって開始されたコマンドは引き続き確認が求められ、「常に拒否」に設定したコマンドは拒否されたままになります。",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "すべての CLI コマンドを信頼しますか？",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "エージェントはこのコンピューター上で確認なしにあらゆるコマンドを実行できるようになります。これにはファイルを削除するコマンドや、データを外部に送信するコマンドも含まれます。エージェントとエージェントに任せるタスクを信頼できる場合にのみオンにしてください。",
+    "message": "エージェントは、このコンピューター上で確認なしに任意のコマンドを実行できるようになります。コマンドはお使いのアカウントで可能なあらゆる操作（ファイルの削除や変更、外部へのデータ送信など）を実行できます。エージェントと、エージェントに任せるタスクを信頼できる場合にのみオンにしてください。",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "設定を保存できなかったため、何も変更されていません。もう一度お試しいただくか、このコマンドのみを個別に承認してください。",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

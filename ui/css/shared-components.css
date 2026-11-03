@@ -324,13 +324,16 @@ body.dark-theme .message-content th:hover {
 }
 
 /* Inline confirmation that replaces the action row (a separate dialog
-   would be clipped by the small launcher window). */
+   would be clipped by the small launcher window). The modal card is always
+   dark (#1e1e1e) whatever the theme, so colours are explicit here rather
+   than inherited from the (possibly light-theme) body. */
 .permission-trust-confirm {
-    margin-top: 12px;
-    padding: 10px 12px;
+    margin: 0 24px 20px;
+    padding: 12px 14px;
     border: 1px solid rgba(255, 152, 0, 0.45);
     background: rgba(255, 152, 0, 0.08);
     border-radius: 8px;
+    flex-shrink: 0;
 }
 .permission-trust-title {
     margin: 0 0 4px;
@@ -338,9 +341,21 @@ body.dark-theme .message-content th:hover {
     color: #ffb74d;
 }
 .permission-trust-body {
-    margin: 0 0 10px;
-    font-size: 12px;
-    line-height: 1.4;
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #d0d0d0;
+}
+.permission-trust-body.permission-trust-error {
+    color: #ff8a80;
+}
+.permission-trust-actions .permission-btn {
+    border-radius: 8px;
+    border-right-width: 1px;
+}
+.permission-trust-actions .permission-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 .permission-trust-actions {
     display: flex;
@@ -358,9 +373,6 @@ body.dark-theme .message-content th:hover {
 body.light-theme .permission-dropdown-danger {
     color: #b45309;
     border-top-color: rgba(0, 0, 0, 0.08);
-}
-body.light-theme .permission-trust-title {
-    color: #b45309;
 }
 
 /* Allow button group: main button + dropdown trigger */

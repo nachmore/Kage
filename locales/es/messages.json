@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "A partir de ahora, el agente podrá ejecutar cualquier comando en este ordenador sin preguntar, incluidos comandos que eliminan archivos o envían datos a otros lugares. Puedes desactivarlo en Ajustes → Permisos de herramientas.",
+    "message": "A partir de ahora, el agente podrá ejecutar cualquier comando sin preguntar. Un comando puede hacer todo lo que puede hacer tu cuenta (eliminar o modificar archivos, enviar datos por la red), así que hazlo solo con agentes y tareas de confianza. Puedes desactivarlo en Configuración → Permisos de herramientas.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Cancelar",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Permite que el agente ejecute comandos de shell sin preguntar. La edición de archivos, las solicitudes web y otras herramientas seguirán pidiendo permiso, y un comando configurado como Denegar siempre seguirá denegado.",
+    "message": "Permite que el agente ejecute comandos de shell sin preguntar. Un comando puede hacer todo lo que puede hacer tu cuenta (incluido editar archivos y usar la red), así que las solicitudes restantes solo afectan a las demás herramientas del agente. Los comandos iniciados por funciones en segundo plano (asistencia en línea, macros) seguirán preguntando, y un comando configurado como Denegar siempre seguirá denegado.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "¿Confiar en todos los comandos de CLI?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "El agente podrá ejecutar cualquier comando en este ordenador sin preguntar, incluidos comandos que eliminan archivos o envían datos a otros lugares. Actívalo solo si confías en el agente y en las tareas que le encargas.",
+    "message": "El agente podrá ejecutar cualquier comando en este equipo sin preguntar. Un comando puede hacer todo lo que puede hacer tu cuenta: eliminar o modificar archivos, enviar datos a otros lugares. Actívalo solo si confías en el agente y en las tareas que le encargas.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "No se pudo guardar la configuración, así que no se ha cambiado nada. Inténtalo de nuevo o aprueba solo este comando.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

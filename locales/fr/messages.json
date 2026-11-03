@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Désormais, l’agent pourra exécuter n’importe quelle commande sur cet ordinateur sans vous demander — y compris des commandes qui suppriment des fichiers ou envoient des données ailleurs. Vous pouvez désactiver cette option dans Paramètres → Autorisations des outils.",
+    "message": "Désormais, l'agent peut exécuter n'importe quelle commande sans vous demander. Une commande peut faire tout ce que votre compte peut faire — supprimer ou modifier des fichiers, envoyer des données sur le réseau — alors ne le faites que pour des agents et des tâches de confiance. Vous pouvez désactiver cette option dans Paramètres → Autorisations des outils.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Annuler",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Autoriser l’agent à exécuter des commandes shell sans vous demander. La modification de fichiers, les requêtes web et les autres outils restent soumis à confirmation, et une commande définie sur Toujours refuser reste refusée.",
+    "message": "Autoriser l'agent à exécuter des commandes shell sans demander. Une commande peut faire tout ce que votre compte peut faire — y compris modifier des fichiers et utiliser le réseau — les demandes restantes ne concernent donc que les autres outils de l'agent. Les commandes lancées par des fonctionnalités en arrière-plan (assistance intégrée, macros) demandent toujours une autorisation, et une commande que vous avez définie sur Toujours refuser reste refusée.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Faire confiance à toutes les commandes CLI ?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "L’agent pourra exécuter n’importe quelle commande sur cet ordinateur sans vous demander — y compris des commandes qui suppriment des fichiers ou envoient des données ailleurs. N’activez cette option que si vous faites confiance à l’agent et aux tâches que vous lui confiez.",
+    "message": "L'agent pourra exécuter n'importe quelle commande sur cet ordinateur sans vous demander. Une commande peut faire tout ce que votre compte peut faire — supprimer ou modifier des fichiers, envoyer des données ailleurs. N'activez cette option que si vous faites confiance à l'agent et aux tâches que vous lui confiez.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Impossible d'enregistrer ce paramètre, aucune modification n'a donc été apportée. Réessayez ou approuvez uniquement cette commande.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

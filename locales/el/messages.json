@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Από εδώ και πέρα ο πράκτορας θα μπορεί να εκτελεί οποιαδήποτε εντολή σε αυτόν τον υπολογιστή χωρίς να ρωτά, ακόμη και εντολές που διαγράφουν αρχεία ή στέλνουν δεδομένα αλλού. Μπορείτε να το απενεργοποιήσετε στις Ρυθμίσεις → Δικαιώματα εργαλείων.",
+    "message": "Από εδώ και στο εξής ο agent μπορεί να εκτελεί οποιαδήποτε εντολή χωρίς να ρωτά. Μια εντολή μπορεί να κάνει ό,τι μπορεί και ο λογαριασμός σας — να διαγράψει ή να αλλάξει αρχεία, να στείλει δεδομένα μέσω δικτύου — γι' αυτό κάντε το μόνο για agents και εργασίες που εμπιστεύεστε. Μπορείτε να το απενεργοποιήσετε στις Ρυθμίσεις → Δικαιώματα εργαλείων.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Ακύρωση",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Επιτρέψτε στον πράκτορα να εκτελεί εντολές shell χωρίς να ρωτά. Η επεξεργασία αρχείων, τα αιτήματα στο διαδίκτυο και τα άλλα εργαλεία θα εξακολουθούν να ζητούν άδεια, και μια εντολή που έχετε ορίσει σε «Πάντα άρνηση» θα παραμένει απορριφθείσα.",
+    "message": "Επιτρέψτε στον agent να εκτελεί εντολές shell χωρίς να ρωτά. Μια εντολή μπορεί να κάνει ό,τι μπορεί και ο λογαριασμός σας — όπως επεξεργασία αρχείων και χρήση δικτύου — οπότε οι υπόλοιπες ερωτήσεις αφορούν μόνο τα άλλα εργαλεία του agent. Οι εντολές που ξεκινούν από λειτουργίες παρασκηνίου (ενσωματωμένη βοήθεια, μακροεντολές) εξακολουθούν να ρωτούν, και μια εντολή που έχετε ορίσει σε Πάντα άρνηση παραμένει απορριπτόμενη.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Εμπιστοσύνη σε όλες τις εντολές CLI;",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Ο πράκτορας θα μπορεί να εκτελεί οποιαδήποτε εντολή σε αυτόν τον υπολογιστή χωρίς να ρωτά, ακόμη και εντολές που διαγράφουν αρχεία ή στέλνουν δεδομένα αλλού. Ενεργοποιήστε το μόνο αν εμπιστεύεστε τον πράκτορα και τις εργασίες που του αναθέτετε.",
+    "message": "Ο agent θα μπορεί να εκτελεί οποιαδήποτε εντολή σε αυτόν τον υπολογιστή χωρίς να ρωτά. Μια εντολή μπορεί να κάνει ό,τι μπορεί και ο λογαριασμός σας — να διαγράψει ή να αλλάξει αρχεία, να στείλει δεδομένα αλλού. Ενεργοποιήστε το μόνο αν εμπιστεύεστε τον agent και τις εργασίες που του αναθέτετε.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Δεν ήταν δυνατή η αποθήκευση της ρύθμισης, οπότε δεν άλλαξε τίποτα. Δοκιμάστε ξανά ή εγκρίνετε μόνο αυτή την εντολή.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

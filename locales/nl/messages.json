@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Vanaf nu kan de agent elke opdracht op deze computer uitvoeren zonder het te vragen, ook opdrachten die bestanden verwijderen of gegevens naar elders verzenden. U kunt dit uitschakelen via Instellingen → Toolmachtigingen.",
+    "message": "Vanaf nu kan de agent elke opdracht uitvoeren zonder het te vragen. Een opdracht kan alles wat uw account kan: bestanden verwijderen of wijzigen, gegevens via het netwerk verzenden. Doe dit dus alleen voor agents en taken die u vertrouwt. U kunt dit uitschakelen via Instellingen → Toolmachtigingen.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Annuleren",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Laat de agent shell-opdrachten uitvoeren zonder het te vragen. Voor het bewerken van bestanden, webverzoeken en andere tools wordt nog steeds toestemming gevraagd, en een opdracht die u op Altijd weigeren hebt gezet, blijft geweigerd.",
+    "message": "Laat de agent shell-opdrachten uitvoeren zonder het te vragen. Een opdracht kan alles wat uw account kan, inclusief bestanden bewerken en het netwerk gebruiken. De overige vragen gelden dus alleen nog voor de andere tools van de agent. Opdrachten die door achtergrondfuncties (inline assist, macro's) worden gestart, vragen nog steeds om toestemming, en een opdracht die u op Altijd weigeren hebt ingesteld, blijft geweigerd.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Alle CLI-opdrachten vertrouwen?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "De agent kan dan elke opdracht op deze computer uitvoeren zonder het te vragen, ook opdrachten die bestanden verwijderen of gegevens naar elders verzenden. Schakel dit alleen in als u de agent en de taken die u eraan geeft vertrouwt.",
+    "message": "De agent kan dan elke opdracht op deze computer uitvoeren zonder het te vragen. Een opdracht kan alles wat uw account kan: bestanden verwijderen of wijzigen, gegevens naar elders verzenden. Schakel dit alleen in als u de agent en de taken die u eraan geeft vertrouwt.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Kan die instelling niet opslaan, dus er is niets gewijzigd. Probeer het opnieuw of keur alleen deze opdracht goed.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

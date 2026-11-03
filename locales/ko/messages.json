@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "이제부터 에이전트가 묻지 않고 이 컴퓨터에서 모든 명령을 실행할 수 있습니다. 파일을 삭제하거나 데이터를 외부로 전송하는 명령도 포함됩니다. 설정 → 도구 권한에서 이 기능을 끌 수 있습니다.",
+    "message": "이제부터 에이전트가 묻지 않고 모든 명령을 실행할 수 있습니다. 명령은 사용자 계정이 할 수 있는 모든 작업을 수행할 수 있으므로(파일 삭제 또는 변경, 네트워크를 통한 데이터 전송 등) 신뢰하는 에이전트와 작업에만 이 기능을 사용하십시오. 설정 → 도구 권한에서 끌 수 있습니다.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "취소",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "에이전트가 묻지 않고 셸 명령을 실행하도록 허용합니다. 파일 편집, 웹 요청 및 기타 도구는 계속 확인을 요청하며, 항상 거부로 설정한 명령은 계속 거부됩니다.",
+    "message": "에이전트가 묻지 않고 셸 명령을 실행하도록 허용합니다. 명령은 사용자 계정이 할 수 있는 모든 작업(파일 편집, 네트워크 사용 등)을 수행할 수 있으므로, 이후 표시되는 확인 요청은 에이전트의 다른 도구에만 적용됩니다. 백그라운드 기능(인라인 지원, 매크로)이 시작한 명령은 계속 확인을 요청하며, 항상 거부로 설정한 명령은 계속 거부됩니다.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "모든 CLI 명령을 신뢰하시겠습니까?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "에이전트가 묻지 않고 이 컴퓨터에서 모든 명령을 실행할 수 있게 됩니다. 파일을 삭제하거나 데이터를 외부로 전송하는 명령도 포함됩니다. 에이전트와 에이전트에게 맡기는 작업을 신뢰하는 경우에만 이 기능을 켜십시오.",
+    "message": "에이전트가 묻지 않고 이 컴퓨터에서 모든 명령을 실행할 수 있게 됩니다. 명령은 사용자 계정이 할 수 있는 모든 작업(파일 삭제 또는 변경, 외부로 데이터 전송 등)을 수행할 수 있습니다. 에이전트와 에이전트에게 맡기는 작업을 신뢰하는 경우에만 켜십시오.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "설정을 저장하지 못해 아무것도 변경되지 않았습니다. 다시 시도하거나 이 명령만 개별적으로 승인하십시오.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

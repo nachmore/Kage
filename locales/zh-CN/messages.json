@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "从现在起，智能体可以在这台计算机上运行任何命令而无需询问，包括删除文件或向外部发送数据的命令。你可以在“设置 → 工具权限”中关闭此选项。",
+    "message": "从现在起，智能体可以无需询问直接运行任何命令。命令可以执行你的账户能做的任何操作——删除或修改文件、通过网络发送数据——因此请仅对你信任的智能体和任务启用此功能。你可以在“设置 → 工具权限”中关闭它。",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "取消",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "允许智能体无需询问即可运行 shell 命令。编辑文件、网络请求和其他工具仍会询问，已设为“始终拒绝”的命令仍会被拒绝。",
+    "message": "允许智能体无需询问直接运行 shell 命令。命令可以执行你的账户能做的任何操作——包括编辑文件和使用网络——因此其余提示仅针对智能体的其他工具。由后台功能（内联辅助、宏）启动的命令仍会询问，已设为“始终拒绝”的命令仍会被拒绝。",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "信任所有 CLI 命令？",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "智能体将能够在这台计算机上运行任何命令而无需询问，包括删除文件或向外部发送数据的命令。仅在你信任该智能体及你交给它的任务时才开启此选项。",
+    "message": "智能体将可以无需询问在此电脑上运行任何命令。命令可以执行你的账户能做的任何操作——删除或修改文件、将数据发送到其他地方。请仅在你信任该智能体及你交给它的任务时启用此功能。",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "无法保存该设置，因此未做任何更改。请重试，或单独批准此命令。",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

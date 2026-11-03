@@ -154,8 +154,29 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         if (!panel) return;
         panel.style.display = visible ? 'block' : 'none';
         if (actions) actions.style.display = visible ? 'none' : '';
+        setTrustBusy(false);
+        const body = document.getElementById('permissionTrustConfirmBody');
+        if (body?.dataset.defaultText) {
+            body.textContent = body.dataset.defaultText;
+            body.classList.remove('permission-trust-error');
+        }
         // Focus the safe choice so a stray Enter can't trust everything.
         if (visible) document.getElementById('permissionTrustCancel')?.focus();
+    }
+
+    function setTrustBusy(busy) {
+        for (const id of ['permissionTrustCancel', 'permissionTrustConfirmBtn']) {
+            const b = document.getElementById(id);
+            if (b) b.disabled = busy;
+        }
+    }
+
+    function showTrustError() {
+        const body = document.getElementById('permissionTrustConfirmBody');
+        if (!body) return;
+        body.dataset.defaultText ||= body.textContent;
+        body.textContent = t('permission.dialog.trust_commands_failed');
+        body.classList.add('permission-trust-error');
     }
 
     function trustConfirmVisible() {
@@ -170,14 +191,25 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
      */
     async function trustAllCommandsAndAllow() {
         const req = currentPermissionRequest;
-        if (!req || req.isExtension || req.toolKind !== TOOL_KIND_EXECUTE || req.answering) return;
+        if (!req || req.isExtension || req.toolKind !== TOOL_KIND_EXECUTE) return;
+        if (req.answering || req.trusting) return; // double-click / key repeat
+        req.trusting = true;
+        setTrustBusy(true);
         try {
             await invoke('set_tool_kind_trusted', { kind: TOOL_KIND_EXECUTE, trusted: true });
         } catch (e) {
             console.error('Failed to trust all commands:', e);
-            setTrustConfirmVisible(false);
+            req.trusting = false;
+            if (currentPermissionRequest === req) {
+                setTrustBusy(false);
+                showTrustError();
+            }
             return;
         }
+        // The prompt may have moved on while we waited (answered elsewhere,
+        // dismissed): never approve whatever request happens to be current
+        // now — it could be an edit, an extension tool or another session's.
+        if (currentPermissionRequest !== req) return;
         const queuedCommands = _permissionQueue.filter(
             (q) => !q.notification?.extCallback && toolKindOf(q.notification) === TOOL_KIND_EXECUTE
         );
@@ -350,7 +382,10 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 e.target.id === 'permissionModal' ||
                 e.target === document.getElementById('permissionModal')
             ) {
-                handlePermissionResponse('reject_once');
+                // Like Escape: an outside click backs out of the trust
+                // confirmation rather than denying the request.
+                if (trustConfirmVisible()) setTrustConfirmVisible(false);
+                else handlePermissionResponse('reject_once');
             }
         });
     }
@@ -368,8 +403,15 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                     e.stopPropagation();
                     if (trustConfirmVisible()) setTrustConfirmVisible(false);
                     else handlePermissionResponse('reject_once');
+                } else if (e.key === 'Tab' && trustConfirmVisible()) {
+                    // Keep focus inside the confirmation (two buttons).
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const cancel = document.getElementById('permissionTrustCancel');
+                    const confirmBtn = document.getElementById('permissionTrustConfirmBtn');
+                    (document.activeElement === cancel ? confirmBtn : cancel)?.focus();
                 } else if (
-                    (e.key === 'Enter' || e.key === ' ' || e.key === 'Tab') &&
+                    (e.key === 'Enter' || e.key === ' ') &&
                     e.target instanceof HTMLButtonElement &&
                     e.target.closest('#permissionTrustConfirm')
                 ) {

@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "מעכשיו הסוכן יוכל להריץ כל פקודה במחשב הזה בלי לשאול – כולל פקודות שמוחקות קבצים או שולחות נתונים למקום אחר. אפשר לבטל זאת בהגדרות ← הרשאות כלים.",
+    "message": "מעכשיו הסוכן יוכל להריץ כל פקודה בלי לבקש אישור. פקודה יכולה לעשות כל מה שהחשבון שלך יכול — למחוק או לשנות קבצים, לשלוח נתונים ברשת — לכן כדאי לעשות זאת רק עבור סוכנים ומשימות שבהם יש לך אמון. אפשר לבטל זאת בהגדרות ← הרשאות כלים.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "ביטול",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "הסוכן יוכל להריץ פקודות מעטפת בלי לשאול. עריכת קבצים, בקשות רשת וכלים אחרים עדיין ידרשו אישור, ופקודה שהוגדרה כ„לדחות תמיד” תמשיך להידחות.",
+    "message": "לאפשר לסוכן להריץ פקודות מעטפת בלי לבקש אישור. פקודה יכולה לעשות כל מה שהחשבון שלך יכול — כולל עריכת קבצים ושימוש ברשת — כך שבקשות האישור שנותרו חלות רק על הכלים האחרים של הסוכן. פקודות שמופעלות על ידי תכונות רקע (סיוע מוטמע, מאקרו) עדיין יבקשו אישור, ופקודה שהוגדרה כ„תמיד לדחות” תמשיך להידחות.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "לסמוך על כל פקודות ה-CLI?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "הסוכן יוכל להריץ כל פקודה במחשב הזה בלי לשאול – כולל פקודות שמוחקות קבצים או שולחות נתונים למקום אחר. כדאי להפעיל זאת רק אם הסוכן והמשימות שנותנים לו אמינים בעיניך.",
+    "message": "הסוכן יוכל להריץ כל פקודה במחשב הזה בלי לבקש אישור. פקודה יכולה לעשות כל מה שהחשבון שלך יכול — למחוק או לשנות קבצים, לשלוח נתונים למקום אחר. יש להפעיל זאת רק אם יש לך אמון בסוכן ובמשימות שניתנות לו.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "לא ניתן היה לשמור את ההגדרה, ולכן שום דבר לא השתנה. אפשר לנסות שוב או לאשר רק את הפקודה הזו.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

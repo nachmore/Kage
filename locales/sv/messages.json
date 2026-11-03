@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Från och med nu kan agenten köra alla kommandon på den här datorn utan att fråga – även kommandon som raderar filer eller skickar data någon annanstans. Du kan stänga av detta i Inställningar → Verktygsbehörigheter.",
+    "message": "Från och med nu kan agenten köra vilket kommando som helst utan att fråga. Ett kommando kan göra allt som ditt konto kan – ta bort eller ändra filer, skicka data över nätverket – så gör detta bara för agenter och uppgifter du litar på. Du kan stänga av det i Inställningar → Verktygsbehörigheter.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Avbryt",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Låt agenten köra skalkommandon utan att fråga. Filredigering, webbförfrågningar och andra verktyg frågar fortfarande, och ett kommando som du har ställt in på Neka alltid förblir nekat.",
+    "message": "Låt agenten köra skalkommandon utan att fråga. Ett kommando kan göra allt som ditt konto kan – inklusive att redigera filer och använda nätverket – så de återstående frågorna gäller bara agentens övriga verktyg. Kommandon som startas av bakgrundsfunktioner (inline-assistans, makron) frågar fortfarande, och ett kommando som du har ställt in på Neka alltid förblir nekat.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Lita på alla CLI-kommandon?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Agenten kommer att kunna köra alla kommandon på den här datorn utan att fråga – även kommandon som raderar filer eller skickar data någon annanstans. Aktivera detta bara om du litar på agenten och de uppgifter du ger den.",
+    "message": "Agenten kommer att kunna köra vilket kommando som helst på den här datorn utan att fråga. Ett kommando kan göra allt som ditt konto kan – ta bort eller ändra filer, skicka data någon annanstans. Aktivera detta bara om du litar på agenten och de uppgifter du ger den.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Det gick inte att spara inställningen, så inget har ändrats. Försök igen eller godkänn bara det här kommandot.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

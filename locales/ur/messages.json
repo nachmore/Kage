@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "اب سے ایجنٹ پوچھے بغیر اس کمپیوٹر پر کوئی بھی کمانڈ چلا سکے گا، بشمول وہ کمانڈز جو فائلیں حذف کرتی ہیں یا ڈیٹا کہیں اور بھیجتی ہیں۔ آپ اسے ترتیبات → ٹول کی اجازتیں میں بند کر سکتے ہیں۔",
+    "message": "اب سے ایجنٹ پوچھے بغیر کوئی بھی کمانڈ چلا سکے گا۔ کمانڈ وہ سب کچھ کر سکتی ہے جو آپ کا اکاؤنٹ کر سکتا ہے — فائلیں حذف یا تبدیل کرنا، نیٹ ورک پر ڈیٹا بھیجنا — لہٰذا ایسا صرف ان ایجنٹس اور کاموں کے لیے کریں جن پر آپ کو بھروسا ہو۔ آپ اسے ترتیبات ← ٹول کی اجازتیں میں بند کر سکتے ہیں۔",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "منسوخ کریں",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "ایجنٹ کو پوچھے بغیر شیل کمانڈز چلانے دیں۔ فائلوں میں ترمیم، ویب درخواستیں اور دیگر ٹولز اب بھی اجازت مانگیں گے، اور جس کمانڈ کو آپ نے ہمیشہ مسترد کریں پر سیٹ کیا ہے وہ مسترد ہی رہے گی۔",
+    "message": "ایجنٹ کو پوچھے بغیر shell کمانڈز چلانے دیں۔ کمانڈ وہ سب کچھ کر سکتی ہے جو آپ کا اکاؤنٹ کر سکتا ہے — بشمول فائلوں میں ترمیم اور نیٹ ورک کا استعمال — لہٰذا باقی اجازت کے سوالات صرف ایجنٹ کے دیگر ٹولز پر لاگو ہوں گے۔ پس منظر کی خصوصیات (inline assist، میکروز) سے شروع ہونے والی کمانڈز اب بھی اجازت مانگیں گی، اور جس کمانڈ کو آپ نے ہمیشہ مسترد کریں پر سیٹ کیا ہے وہ مسترد ہی رہے گی۔",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "تمام CLI کمانڈز پر اعتماد کریں؟",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "ایجنٹ پوچھے بغیر اس کمپیوٹر پر کوئی بھی کمانڈ چلا سکے گا، بشمول وہ کمانڈز جو فائلیں حذف کرتی ہیں یا ڈیٹا کہیں اور بھیجتی ہیں۔ اسے صرف اسی صورت میں آن کریں جب آپ ایجنٹ اور اسے دیے گئے کاموں پر اعتماد کرتے ہوں۔",
+    "message": "ایجنٹ اس کمپیوٹر پر پوچھے بغیر کوئی بھی کمانڈ چلا سکے گا۔ کمانڈ وہ سب کچھ کر سکتی ہے جو آپ کا اکاؤنٹ کر سکتا ہے — فائلیں حذف یا تبدیل کرنا، ڈیٹا کہیں اور بھیجنا۔ اسے صرف اسی صورت میں آن کریں اگر آپ کو ایجنٹ پر اور اسے دیے جانے والے کاموں پر بھروسا ہو۔",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "یہ ترتیب محفوظ نہیں ہو سکی، اس لیے کچھ بھی تبدیل نہیں ہوا۔ دوبارہ کوشش کریں، یا صرف اس کمانڈ کو منظور کریں۔",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

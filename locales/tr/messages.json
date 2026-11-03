@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Bundan sonra ajan, dosya silen veya verileri başka bir yere gönderen komutlar da dahil olmak üzere bu bilgisayarda herhangi bir komutu sormadan çalıştırabilir. Bunu Ayarlar → Araç İzinleri bölümünden kapatabilirsiniz.",
+    "message": "Bundan sonra ajan, size sormadan herhangi bir komutu çalıştırabilir. Bir komut, hesabınızın yapabildiği her şeyi yapabilir: dosyaları silebilir veya değiştirebilir, ağ üzerinden veri gönderebilir. Bu nedenle bunu yalnızca güvendiğiniz ajanlar ve görevler için yapın. Bu özelliği Ayarlar → Araç izinleri bölümünden kapatabilirsiniz.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "İptal",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Ajanın kabuk komutlarını sormadan çalıştırmasına izin verin. Dosya düzenleme, web istekleri ve diğer araçlar yine onay ister; Her zaman reddet olarak ayarladığınız bir komut da reddedilmeye devam eder.",
+    "message": "Ajanın kabuk komutlarını size sormadan çalıştırmasına izin verin. Bir komut, hesabınızın yapabildiği her şeyi yapabilir (dosyaları düzenlemek ve ağı kullanmak dahil). Bu nedenle kalan onay istekleri yalnızca ajanın diğer araçlarını kapsar. Arka plan özelliklerinin (satır içi yardım, makrolar) başlattığı komutlar yine onay ister ve Her zaman reddet olarak ayarladığınız komutlar reddedilmeye devam eder.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Tüm CLI komutlarına güvenilsin mi?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Ajan, dosya silen veya verileri başka bir yere gönderen komutlar da dahil olmak üzere bu bilgisayarda herhangi bir komutu sormadan çalıştırabilecek. Bunu yalnızca ajana ve ona verdiğiniz görevlere güveniyorsanız açın.",
+    "message": "Ajan, bu bilgisayarda size sormadan herhangi bir komutu çalıştırabilecek. Bir komut, hesabınızın yapabildiği her şeyi yapabilir: dosyaları silebilir veya değiştirebilir, verileri başka yerlere gönderebilir. Bunu yalnızca ajana ve ona verdiğiniz görevlere güveniyorsanız açın.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Bu ayar kaydedilemedi, bu nedenle hiçbir şey değiştirilmedi. Tekrar deneyin veya yalnızca bu komutu onaylayın.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

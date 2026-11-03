@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Từ giờ trở đi, agent có thể chạy bất kỳ lệnh nào trên máy tính này mà không cần hỏi — kể cả các lệnh xóa tệp hoặc gửi dữ liệu ra bên ngoài. Bạn có thể tắt tính năng này trong Cài đặt → Quyền công cụ.",
+    "message": "Từ giờ, tác nhân có thể chạy bất kỳ lệnh nào mà không cần hỏi. Một lệnh có thể làm mọi việc mà tài khoản của bạn làm được — xóa hoặc thay đổi tệp, gửi dữ liệu qua mạng — vì vậy chỉ bật tùy chọn này cho những tác nhân và tác vụ bạn tin tưởng. Bạn có thể tắt tùy chọn này trong Cài đặt → Quyền công cụ.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Hủy",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Cho phép agent chạy lệnh shell mà không cần hỏi. Việc chỉnh sửa tệp, yêu cầu web và các công cụ khác vẫn sẽ hỏi, và lệnh bạn đã đặt là Luôn từ chối vẫn bị từ chối.",
+    "message": "Cho phép tác nhân chạy lệnh shell mà không cần hỏi. Một lệnh có thể làm mọi việc mà tài khoản của bạn làm được — kể cả chỉnh sửa tệp và sử dụng mạng — vì vậy các lời nhắc còn lại chỉ áp dụng cho những công cụ khác của tác nhân. Các lệnh do tính năng chạy nền (hỗ trợ nội tuyến, macro) khởi chạy vẫn sẽ hỏi, và lệnh bạn đã đặt là Luôn từ chối vẫn bị từ chối.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Tin cậy tất cả lệnh CLI?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Agent sẽ có thể chạy bất kỳ lệnh nào trên máy tính này mà không cần hỏi — kể cả các lệnh xóa tệp hoặc gửi dữ liệu ra bên ngoài. Chỉ bật tính năng này nếu bạn tin cậy agent và các tác vụ bạn giao cho nó.",
+    "message": "Tác nhân sẽ có thể chạy bất kỳ lệnh nào trên máy tính này mà không cần hỏi. Một lệnh có thể làm mọi việc mà tài khoản của bạn làm được — xóa hoặc thay đổi tệp, gửi dữ liệu ra nơi khác. Chỉ bật tùy chọn này nếu bạn tin tưởng tác nhân và các tác vụ bạn giao cho nó.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Không thể lưu cài đặt đó nên chưa có gì thay đổi. Hãy thử lại hoặc chỉ phê duyệt riêng lệnh này.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

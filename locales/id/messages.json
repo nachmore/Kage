@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Mulai sekarang, agen dapat menjalankan perintah apa pun di komputer ini tanpa bertanya — termasuk perintah yang menghapus file atau mengirim data ke tempat lain. Anda dapat menonaktifkannya di Pengaturan → Izin Alat.",
+    "message": "Mulai sekarang, agen dapat menjalankan perintah apa pun tanpa meminta izin. Perintah dapat melakukan apa saja yang bisa dilakukan akun Anda — menghapus atau mengubah file, mengirim data melalui jaringan — jadi lakukan ini hanya untuk agen dan tugas yang Anda percayai. Anda dapat menonaktifkannya di Pengaturan → Izin Alat.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Batal",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Izinkan agen menjalankan perintah shell tanpa bertanya. Pengeditan file, permintaan web, dan alat lainnya tetap akan meminta izin, dan perintah yang telah Anda atur ke Selalu tolak akan tetap ditolak.",
+    "message": "Izinkan agen menjalankan perintah shell tanpa meminta izin. Perintah dapat melakukan apa saja yang bisa dilakukan akun Anda — termasuk mengedit file dan menggunakan jaringan — jadi permintaan izin yang tersisa hanya berlaku untuk alat agen lainnya. Perintah yang dimulai oleh fitur latar belakang (bantuan inline, makro) tetap meminta izin, dan perintah yang Anda setel ke Selalu tolak tetap ditolak.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Percayai semua perintah CLI?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Agen akan dapat menjalankan perintah apa pun di komputer ini tanpa bertanya — termasuk perintah yang menghapus file atau mengirim data ke tempat lain. Aktifkan ini hanya jika Anda memercayai agen dan tugas yang Anda berikan kepadanya.",
+    "message": "Agen akan dapat menjalankan perintah apa pun di komputer ini tanpa meminta izin. Perintah dapat melakukan apa saja yang bisa dilakukan akun Anda — menghapus atau mengubah file, mengirim data ke tempat lain. Aktifkan ini hanya jika Anda memercayai agen dan tugas yang Anda berikan kepadanya.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Tidak dapat menyimpan pengaturan tersebut, jadi tidak ada yang diubah. Coba lagi, atau setujui perintah ini secara terpisah.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

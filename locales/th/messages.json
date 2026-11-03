@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "นับจากนี้ เอเจนต์จะเรียกใช้คำสั่งใดก็ได้บนคอมพิวเตอร์เครื่องนี้โดยไม่ต้องถาม รวมถึงคำสั่งที่ลบไฟล์หรือส่งข้อมูลไปที่อื่น คุณสามารถปิดได้ใน การตั้งค่า → สิทธิ์ของเครื่องมือ",
+    "message": "นับจากนี้ เอเจนต์จะเรียกใช้คำสั่งใดก็ได้โดยไม่ต้องถาม คำสั่งสามารถทำทุกอย่างที่บัญชีของคุณทำได้ เช่น ลบหรือแก้ไขไฟล์ หรือส่งข้อมูลผ่านเครือข่าย ดังนั้นควรเปิดใช้เฉพาะกับเอเจนต์และงานที่คุณไว้วางใจเท่านั้น คุณสามารถปิดได้ที่ การตั้งค่า → สิทธิ์ของเครื่องมือ",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "ยกเลิก",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "อนุญาตให้เอเจนต์เรียกใช้คำสั่ง shell โดยไม่ต้องถาม การแก้ไขไฟล์ คำขอเว็บ และเครื่องมืออื่นๆ จะยังคงถามอยู่ และคำสั่งที่คุณตั้งค่าเป็น ปฏิเสธเสมอ จะยังคงถูกปฏิเสธ",
+    "message": "อนุญาตให้เอเจนต์เรียกใช้คำสั่ง shell โดยไม่ต้องถาม คำสั่งสามารถทำทุกอย่างที่บัญชีของคุณทำได้ รวมถึงการแก้ไขไฟล์และการใช้เครือข่าย ดังนั้นการขออนุญาตที่เหลือจะครอบคลุมเฉพาะเครื่องมืออื่นๆ ของเอเจนต์ คำสั่งที่เริ่มจากฟีเจอร์เบื้องหลัง (inline assist, มาโคร) จะยังคงถามอยู่ และคำสั่งที่คุณตั้งค่าเป็น ปฏิเสธเสมอ จะยังคงถูกปฏิเสธ",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "เชื่อถือคำสั่ง CLI ทั้งหมดหรือไม่",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "เอเจนต์จะสามารถเรียกใช้คำสั่งใดก็ได้บนคอมพิวเตอร์เครื่องนี้โดยไม่ต้องถาม รวมถึงคำสั่งที่ลบไฟล์หรือส่งข้อมูลไปที่อื่น โปรดเปิดใช้งานเฉพาะเมื่อคุณเชื่อถือเอเจนต์และงานที่คุณมอบหมายให้เท่านั้น",
+    "message": "เอเจนต์จะสามารถเรียกใช้คำสั่งใดก็ได้บนคอมพิวเตอร์เครื่องนี้โดยไม่ต้องถาม คำสั่งสามารถทำทุกอย่างที่บัญชีของคุณทำได้ เช่น ลบหรือแก้ไขไฟล์ หรือส่งข้อมูลไปที่อื่น เปิดใช้ตัวเลือกนี้เฉพาะเมื่อคุณไว้วางใจเอเจนต์และงานที่คุณมอบหมายให้เท่านั้น",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "ไม่สามารถบันทึกการตั้งค่านั้นได้ จึงไม่มีการเปลี่ยนแปลงใดๆ โปรดลองอีกครั้ง หรืออนุมัติเฉพาะคำสั่งนี้",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

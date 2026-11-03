@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "De acum înainte, agentul poate rula orice comandă pe acest computer fără să vă întrebe — inclusiv comenzi care șterg fișiere sau trimit date în altă parte. Puteți dezactiva această opțiune din Setări → Permisiuni instrumente.",
+    "message": "De acum înainte, agentul poate rula orice comandă fără să vă mai întrebe. O comandă poate face tot ce poate face contul dvs. — să șteargă sau să modifice fișiere, să trimită date prin rețea — așa că faceți acest lucru doar pentru agenții și sarcinile în care aveți încredere. Puteți dezactiva opțiunea din Setări → Permisiuni instrumente.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Anulează",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Permiteți agentului să ruleze comenzi shell fără să vă întrebe. Editarea fișierelor, solicitările web și celelalte instrumente vor cere în continuare permisiunea, iar o comandă setată pe Refuză întotdeauna rămâne refuzată.",
+    "message": "Permiteți agentului să ruleze comenzi shell fără să vă mai întrebe. O comandă poate face tot ce poate face contul dvs. — inclusiv să editeze fișiere și să folosească rețeaua — așa că solicitările rămase se aplică doar celorlalte instrumente ale agentului. Comenzile pornite de funcțiile din fundal (asistență inline, macrocomenzi) vor cere în continuare aprobarea, iar o comandă setată pe Refuză întotdeauna rămâne refuzată.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Permiteți toate comenzile CLI?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Agentul va putea rula orice comandă pe acest computer fără să vă întrebe — inclusiv comenzi care șterg fișiere sau trimit date în altă parte. Activați această opțiune doar dacă aveți încredere în agent și în sarcinile pe care i le dați.",
+    "message": "Agentul va putea rula orice comandă pe acest computer fără să vă mai întrebe. O comandă poate face tot ce poate face contul dvs. — să șteargă sau să modifice fișiere, să trimită date în altă parte. Activați această opțiune doar dacă aveți încredere în agent și în sarcinile pe care i le dați.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Setarea nu a putut fi salvată, așa că nu s-a modificat nimic. Încercați din nou sau aprobați doar această comandă.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

@@ -164,22 +164,23 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 const trustBox = document.getElementById('trustAllCommands');
                 if (trustBox) trustBox.checked = false;
                 this.renderToolsList();
-                // Save immediately
+                // Save immediately. Command trust is backend-owned (save_config
+                // ignores it), so revoke it through its own audited command,
+                // independently of the rest of the reset.
+                const { invoke } = window.__TAURI__.core;
+                await invoke('set_tool_kind_trusted', { kind: 'execute', trusted: false }).catch(
+                    (e) => console.error('Failed to revoke command trust:', e)
+                );
                 try {
-                    const config = await window.__TAURI__.core.invoke('get_config');
+                    const config = await invoke('get_config');
                     config.tool_permissions = {
                         trust_all: false,
                         terminator_mode: false,
                         trusted_kinds: config.tool_permissions?.trusted_kinds ?? [],
                         tools: [],
                     };
-                    await window.__TAURI__.core.invoke('save_config', { config });
-                    // trusted_kinds is backend-owned (save_config ignores it);
-                    // revoke through the audited command.
-                    await window.__TAURI__.core.invoke('set_tool_kind_trusted', {
-                        kind: 'execute',
-                        trusted: false,
-                    });
+                    await invoke('save_config', { config });
+                    this._syncTrustCommands(config);
                 } catch (e) {
                     console.error('Failed to reset permissions:', e);
                 }
@@ -226,10 +227,8 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
 
     load(config) {
         this.terminatorMode = config.tool_permissions?.terminator_mode || false;
-        this.trustCommands = (config.tool_permissions?.trusted_kinds || []).includes('execute');
         this.tools = config.tool_permissions?.tools || [];
-        const trustBox = document.getElementById('trustAllCommands');
-        if (trustBox) trustBox.checked = this.trustCommands;
+        this._syncTrustCommands(config);
 
         const terminatorCheckbox = document.getElementById('terminatorMode');
         if (terminatorCheckbox) {
@@ -247,9 +246,18 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             const config = await window.__TAURI__.core.invoke('get_config');
             this.tools = config.tool_permissions?.tools || [];
             this.renderToolsList();
+            // Command trust is backend-owned and can change from a prompt in
+            // another window ("Trust all commands…") — always reflect it.
+            this._syncTrustCommands(config);
         } catch (e) {
             console.warn('Failed to refresh tool permissions:', e);
         }
+    }
+
+    _syncTrustCommands(config) {
+        this.trustCommands = (config?.tool_permissions?.trusted_kinds || []).includes('execute');
+        const box = document.getElementById('trustAllCommands');
+        if (box) box.checked = this.trustCommands;
     }
 
     save(config) {

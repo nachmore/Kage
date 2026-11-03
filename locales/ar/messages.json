@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "من الآن فصاعدًا، سيتمكن الوكيل من تشغيل أي أمر على هذا الكمبيوتر دون أن يطلب الإذن، بما في ذلك الأوامر التي تحذف الملفات أو ترسل البيانات إلى جهات أخرى. يمكنك إيقاف ذلك من الإعدادات ← أذونات الأدوات.",
+    "message": "من الآن فصاعدًا، يمكن للوكيل تشغيل أي أمر دون أن يطلب الإذن. يستطيع الأمر فعل أي شيء يستطيعه حسابك، مثل حذف الملفات أو تغييرها أو إرسال البيانات عبر الشبكة، لذا لا تفعل ذلك إلا مع الوكلاء والمهام التي تثق بها. يمكنك إيقاف ذلك من الإعدادات ← أذونات الأدوات.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "إلغاء",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "السماح للوكيل بتشغيل أوامر shell دون طلب الإذن. سيظل تعديل الملفات وطلبات الويب والأدوات الأخرى يتطلب الإذن، وسيبقى أي أمر عيّنته على «الرفض دائمًا» مرفوضًا.",
+    "message": "السماح للوكيل بتشغيل أوامر الطرفية دون أن يطلب الإذن. يستطيع الأمر فعل أي شيء يستطيعه حسابك، بما في ذلك تعديل الملفات واستخدام الشبكة، لذا ستقتصر طلبات الإذن المتبقية على أدوات الوكيل الأخرى. ستظل الأوامر التي تبدأها الميزات الخلفية (المساعدة المضمّنة ووحدات الماكرو) تطلب الإذن، وسيظل الأمر الذي ضبطته على «الرفض دائمًا» مرفوضًا.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "هل تريد الوثوق بجميع أوامر CLI؟",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "سيتمكن الوكيل من تشغيل أي أمر على هذا الكمبيوتر دون أن يطلب الإذن، بما في ذلك الأوامر التي تحذف الملفات أو ترسل البيانات إلى جهات أخرى. لا تفعّل هذا الخيار إلا إذا كنت تثق بالوكيل وبالمهام التي تكلّفه بها.",
+    "message": "سيتمكن الوكيل من تشغيل أي أمر على هذا الكمبيوتر دون أن يطلب الإذن. يستطيع الأمر فعل أي شيء يستطيعه حسابك، مثل حذف الملفات أو تغييرها أو إرسال البيانات إلى جهات أخرى. لا تفعّل هذا الخيار إلا إذا كنت تثق بالوكيل وبالمهام التي تكلّفه بها.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "تعذّر حفظ هذا الإعداد، لذا لم يتغيّر شيء. حاول مرة أخرى، أو وافق على هذا الأمر وحده.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

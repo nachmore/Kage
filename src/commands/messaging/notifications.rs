@@ -201,6 +201,24 @@ pub fn setup_notification_handler(
                         return;
                     }
                     if kind == "tool_call" || kind == "tool_call_update" {
+                        // A kind can arrive on an update that carries no
+                        // title; attach it to the call's existing entry.
+                        if let (Some(call_id), None, Some(k)) = (
+                            update.get("toolCallId").and_then(|v| v.as_str()),
+                            update.get("title").and_then(|v| v.as_str()),
+                            update
+                                .get("kind")
+                                .and_then(|v| v.as_str())
+                                .filter(|k| !k.is_empty()),
+                        ) {
+                            if let Ok(mut names) = tool_names.lock() {
+                                if let Some(entry) = names.get_mut(call_id) {
+                                    if entry.1.is_none() {
+                                        entry.1 = Some(k.to_string());
+                                    }
+                                }
+                            }
+                        }
                         // Track the first title for each toolCallId — that's the real tool name
                         if let (Some(call_id), Some(title)) = (
                             update.get("toolCallId").and_then(|v| v.as_str()),
@@ -567,33 +585,30 @@ fn rate_limit_route(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 /// toolCallId → (first title, ACP tool kind if the agent sent one).
 type ToolNameMap =
     std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, (String, Option<String>)>>>;
 
 /// The ACP tool kind of a permission request: the request's own
 /// `toolCall.kind`, else the kind recorded from that call's earlier
-/// `tool_call` update, else `"execute"` when the raw input is a shell
-/// command (`rawInput.command` is a string) for agents that omit kinds.
+/// `tool_call` / `tool_call_update`. Only an explicit kind counts — ACP
+/// defines a missing kind as "other", and guessing from the arguments is
+/// unsafe: kiro-cli's own file-write tool sends `{"command": "create"}`,
+/// so a `rawInput.command` heuristic would have let command trust approve
+/// file writes.
 fn classify_tool_kind(
     tool_call: Option<&serde_json::Value>,
     recorded: Option<&str>,
 ) -> Option<String> {
-    let from_request = tool_call
+    tool_call
         .and_then(|tc| tc.get("kind"))
         .and_then(|k| k.as_str())
-        .filter(|k| !k.is_empty());
-    if let Some(kind) = from_request.or(recorded.filter(|k| !k.is_empty())) {
-        return Some(kind.to_string());
-    }
-    let looks_like_shell = tool_call
-        .and_then(|tc| tc.get("rawInput"))
-        .and_then(|ri| ri.get("command"))
-        .is_some_and(|c| c.is_string());
-    looks_like_shell.then(|| crate::config::TOOL_KIND_EXECUTE.to_string())
+        .filter(|k| !k.is_empty())
+        .or(recorded.filter(|k| !k.is_empty()))
+        .map(str::to_string)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_permission_notification(
     notification: &serde_json::Value,
     app_handle: &tauri::AppHandle,
@@ -647,11 +662,26 @@ fn handle_permission_notification(
     // this notification handler is never blocked on disk I/O — pre-fix
     // a slow disk could stall ACP message parsing for tens of ms,
     // long enough for in-flight prompts to time out.
+    // Category trust applies only to prompts the user can see. Background
+    // prompts (inline assist, macros, script generation, titler, auto-
+    // steering) run on text from other apps and their tool calls are never
+    // shown — a prompt-injected selection must not get commands run silently.
+    let request_session = notification
+        .get("params")
+        .and_then(|p| p.get("sessionId"))
+        .and_then(|s| s.as_str());
+    let hidden_session = request_session.is_some_and(|sid| {
+        client.is_background_prompt_session(sid) || crate::ephemeral_session::is_active(sid)
+    });
+    let trust_kind = if hidden_session {
+        None
+    } else {
+        tool_kind.as_deref()
+    };
+
     let (policy, save_snapshot) = {
         let mut config_guard = config.lock_or_recover();
-        let kind_trusted = config_guard
-            .tool_permissions
-            .is_kind_trusted(tool_kind.as_deref());
+        let kind_trusted = config_guard.tool_permissions.is_kind_trusted(trust_kind);
         let existing = config_guard
             .tool_permissions
             .tools
@@ -691,7 +721,7 @@ fn handle_permission_notification(
         // — see ToolPermissionsConfig::resolve_policy.
         let p = config_guard
             .tool_permissions
-            .resolve_policy_for(&tool_title, tool_kind.as_deref());
+            .resolve_policy_for(&tool_title, trust_kind);
         // Snapshot the config for an off-thread save if one is due.
         // The clone happens inside the lock so the snapshot is
         // consistent — but the Mutex is released as the guard drops
@@ -739,12 +769,24 @@ fn handle_permission_notification(
         .map(|s| s.to_string());
     match policy {
         crate::config::PolicyKind::Allow => {
+            // Auto-approved commands: record what actually ran.
+            let args_preview = (tool_kind.as_deref() == Some(crate::config::TOOL_KIND_EXECUTE))
+                .then(|| {
+                    notification
+                        .get("params")
+                        .and_then(|p| p.get("toolCall"))
+                        .and_then(|tc| tc.get("rawInput"))
+                        .and_then(|ri| ri.get("command"))
+                        .and_then(|c| c.as_str())
+                        .map(|c| c.chars().take(2048).collect::<String>())
+                })
+                .flatten();
             crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
                 crate::permission_audit::AuditEvent::Granted {
                     tool: tool_title.to_string(),
                     grant_type: crate::config::GrantType::Once,
                     session_id: audit_session_id.clone(),
-                    args_preview: None,
+                    args_preview,
                 },
             ));
             send_response("allow_once");
@@ -855,14 +897,12 @@ mod tool_kind_tests {
     }
 
     #[test]
-    fn shell_shaped_raw_input_is_execute_when_no_kind_is_sent() {
+    fn arguments_never_promote_a_tool_to_execute() {
+        // kiro-cli's file-write tool: `command` names a sub-operation, and
+        // ACP defines a missing kind as "other". Must not count as a shell.
+        let tc = json!({ "rawInput": { "command": "create", "path": "a.rs" } });
+        assert_eq!(classify_tool_kind(Some(&tc), None), None);
         let tc = json!({ "rawInput": { "command": "git status" } });
-        assert_eq!(
-            classify_tool_kind(Some(&tc), None).as_deref(),
-            Some("execute")
-        );
-        // A non-string `command` (e.g. an MCP tool's structured arg) is not a shell.
-        let tc = json!({ "rawInput": { "command": { "op": "x" } } });
         assert_eq!(classify_tool_kind(Some(&tc), None), None);
     }
 

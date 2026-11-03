@@ -26,6 +26,7 @@ function mountModal() {
                     </div>
                 </div>
                 <div id="permissionTrustConfirm" style="display:none">
+                    <p id="permissionTrustConfirmBody">warning</p>
                     <button id="permissionTrustCancel"></button>
                     <button id="permissionTrustConfirmBtn"></button>
                 </div>
@@ -131,6 +132,58 @@ describe('Trust all commands', () => {
         expect(el('permissionToolTitle').textContent).toBe('Editing a.rs');
     });
 
+    it('never approves a different request that became current during the save', async () => {
+        const { request, invoke, handler } = setup();
+        let release;
+        invoke.mockImplementation(async (cmd) => {
+            if (cmd === 'set_tool_kind_trusted') await new Promise((r) => { release = r; });
+        });
+        await request(1, { kind: 'execute' });
+        await request(2, { kind: 'edit', title: 'Editing a.rs' }); // queued
+        el('permissionTrustCommands').click();
+        el('permissionTrustConfirmBtn').click();
+        await tick();
+        // Request 1 is answered elsewhere while the save is in flight.
+        await handler.hide();
+        await tick(200); // the edit request is now current
+        release();
+        await tick(250);
+        const answered = invoke.mock.calls.filter(([c]) => c === 'send_permission_response');
+        expect(answered).toEqual([]);
+        expect(el('permissionToolTitle').textContent).toBe('Editing a.rs');
+    });
+
+    it('a double click trusts and answers once', async () => {
+        const { request, invoke } = setup();
+        await request(1, { kind: 'execute' });
+        el('permissionTrustCommands').click();
+        el('permissionTrustConfirmBtn').click();
+        el('permissionTrustConfirmBtn').click();
+        await tick(250);
+        expect(invoke.mock.calls.filter(([c]) => c === 'set_tool_kind_trusted')).toHaveLength(1);
+        expect(invoke.mock.calls.filter(([c]) => c === 'send_permission_response')).toHaveLength(1);
+    });
+
+    it('an outside click backs out of the confirmation instead of denying', async () => {
+        const { request, invoke } = setup();
+        await request(1, { kind: 'execute' });
+        el('permissionTrustCommands').click();
+        el('permissionModal').click();
+        expect(el('permissionTrustConfirm').style.display).toBe('none');
+        expect(invoke).not.toHaveBeenCalledWith('send_permission_response', expect.anything());
+    });
+
+    it('Tab keeps focus inside the confirmation', async () => {
+        const { request } = setup();
+        await request(1, { kind: 'execute' });
+        el('permissionTrustCommands').click();
+        expect(document.activeElement).toBe(el('permissionTrustCancel'));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+        expect(document.activeElement).toBe(el('permissionTrustConfirmBtn'));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+        expect(document.activeElement).toBe(el('permissionTrustCancel'));
+    });
+
     it('does not answer the request if saving the trust fails', async () => {
         const { request, invoke } = setup();
         invoke.mockImplementation(async (cmd) => {
@@ -143,5 +196,12 @@ describe('Trust all commands', () => {
         await tick(150);
         expect(invoke).not.toHaveBeenCalledWith('send_permission_response', expect.anything());
         expect(el('permissionModal').style.display).toBe('flex');
+        // The confirmation stays up with an error and usable buttons.
+        expect(el('permissionTrustConfirm').style.display).toBe('block');
+        expect(el('permissionTrustConfirmBody').classList.contains('permission-trust-error')).toBe(true);
+        expect(el('permissionTrustConfirmBtn').disabled).toBe(false);
+        // Backing out restores the original warning text.
+        el('permissionTrustCancel').click();
+        expect(el('permissionTrustConfirmBody').textContent).toBe('warning');
     });
 });

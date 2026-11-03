@@ -8568,10 +8568,10 @@
     "_source_hash": "7c0e9ba5c4acf1d5"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "Fra nå av kan agenten kjøre hvilken som helst kommando på denne datamaskinen uten å spørre – inkludert kommandoer som sletter filer eller sender data andre steder. Du kan slå dette av i Innstillinger → Verktøytillatelser.",
+    "message": "Fra nå av kan agenten kjøre hvilken som helst kommando uten å spørre. En kommando kan gjøre alt kontoen din kan – slette eller endre filer, sende data over nettverket – så gjør dette bare for agenter og oppgaver du stoler på. Du kan slå det av i Innstillinger → Verktøytillatelser.",
     "description": "Warning shown before the user trusts every CLI command the agent runs",
     "_machine_translated": true,
-    "_source_hash": "b47cc0da77760071"
+    "_source_hash": "7293467ae70132a5"
   },
   "permission.dialog.trust_commands_cancel": {
     "message": "Avbryt",
@@ -8592,10 +8592,10 @@
     "_source_hash": "a1cacb2f9262bf9e"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "La agenten kjøre skallkommandoer uten å spørre. Filredigering, nettforespørsler og andre verktøy spør fortsatt, og en kommando du har satt til Avslå alltid, forblir avslått.",
+    "message": "La agenten kjøre skallkommandoer uten å spørre. En kommando kan gjøre alt kontoen din kan – inkludert å redigere filer og bruke nettverket – så de gjenværende forespørslene gjelder bare agentens andre verktøy. Kommandoer som startes av bakgrunnsfunksjoner (innebygd assistanse, makroer) spør fortsatt, og en kommando du har satt til Avslå alltid, forblir avslått.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox",
     "_machine_translated": true,
-    "_source_hash": "d3aeb2ae7bfa32e2"
+    "_source_hash": "f262e696e6e9bb56"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
     "message": "Stol på alle CLI-kommandoer?",
@@ -8604,9 +8604,15 @@
     "_source_hash": "320d9d2b0c0e622c"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "Agenten vil kunne kjøre hvilken som helst kommando på denne datamaskinen uten å spørre – inkludert kommandoer som sletter filer eller sender data andre steder. Slå bare på dette hvis du stoler på agenten og oppgavene du gir den.",
+    "message": "Agenten vil kunne kjøre hvilken som helst kommando på denne datamaskinen uten å spørre. En kommando kan gjøre alt kontoen din kan – slette eller endre filer, sende data andre steder. Slå dette på bare hvis du stoler på agenten og oppgavene du gir den.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands",
     "_machine_translated": true,
-    "_source_hash": "94a8b450e4074b0e"
+    "_source_hash": "c9de23e257c93c22"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Kunne ikke lagre innstillingen, så ingenting ble endret. Prøv igjen, eller godkjenn bare denne kommandoen.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "69b149becd78bcba"
   }
 }

@@ -1062,7 +1062,7 @@
     "description": "Heading of the inline confirmation for trusting every CLI command"
   },
   "permission.dialog.trust_commands_body": {
-    "message": "From now on the agent can run any command on this computer without asking — including commands that delete files or send data elsewhere. You can turn this off in Settings → Tool Permissions.",
+    "message": "From now on the agent can run any command without asking. A command can do anything your account can — delete or change files, send data over the network — so only do this for agents and tasks you trust. You can turn it off in Settings → Tool Permissions.",
     "description": "Warning shown before the user trusts every CLI command the agent runs"
   },
   "permission.dialog.trust_commands_cancel": {
@@ -1072,6 +1072,10 @@
   "permission.dialog.trust_commands_confirm": {
     "message": "Trust all commands",
     "description": "Button that confirms trusting every CLI command the agent runs"
+  },
+  "permission.dialog.trust_commands_failed": {
+    "message": "Couldn't save that setting, so nothing was changed. Try again, or approve this command on its own.",
+    "description": "Shown in the trust-all-commands confirmation when saving the setting fails"
   },
   "inline_assist.window_title": {
     "message": "Inline Assist",
@@ -2162,7 +2166,7 @@
     "description": "Settings → Tool Permissions: checkbox label"
   },
   "settings.tool_permissions.trust_commands.description": {
-    "message": "Let the agent run shell commands without asking. Editing files, web requests and other tools still ask, and a command you've set to Always deny stays denied.",
+    "message": "Let the agent run shell commands without asking. A command can do anything your account can — including editing files and using the network — so the remaining prompts only cover the agent's other tools. Commands started by background features (inline assist, macros) still ask, and a command you've set to Always deny stays denied.",
     "description": "Settings → Tool Permissions: help text under the trust-all-commands checkbox"
   },
   "settings.tool_permissions.trust_commands.dialog_title": {
@@ -2170,7 +2174,7 @@
     "description": "Title of the confirmation dialog when enabling trust for all CLI commands"
   },
   "settings.tool_permissions.trust_commands.confirm": {
-    "message": "The agent will be able to run any command on this computer without asking — including commands that delete files or send data elsewhere. Only turn this on if you trust the agent and the tasks you give it.",
+    "message": "The agent will be able to run any command on this computer without asking. A command can do anything your account can — delete or change files, send data elsewhere. Only turn this on if you trust the agent and the tasks you give it.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands"
   },
   "settings.tool_permissions.terminator.label": {
