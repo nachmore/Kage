@@ -40,6 +40,7 @@ pub async fn save_config<R: tauri::Runtime>(
     let new_log_buffer_size = config.system.log_buffer_size;
     let new_language = config.ui.language.clone();
     let new_acp_mode = config.acp.active_mode();
+    let new_login_env = config.acp.agent.import_login_shell_env;
     let (prior_terminator, prior_acp_mode, sites_changed) = {
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
@@ -70,7 +71,14 @@ pub async fn save_config<R: tauri::Runtime>(
         });
     }
 
-    apply_runtime_config(&app, &acp, &prior_acp_mode, &new_acp_mode, new_language);
+    apply_runtime_config(
+        &app,
+        &acp,
+        &prior_acp_mode,
+        &new_acp_mode,
+        new_language,
+        new_login_env,
+    );
 
     // Update app log buffer size if changed
     crate::app_log::set_max_size(new_log_buffer_size);
@@ -105,23 +113,36 @@ fn apply_runtime_config<R: tauri::Runtime>(
     prior_acp_mode: &crate::config::AcpMode,
     new_acp_mode: &crate::config::AcpMode,
     new_language: Option<String>,
+    import_login_shell_env: bool,
 ) {
+    // Before any respawn below: the next agent spawn (this reconnect, or
+    // the next lazy one) picks the toggle up without a restart.
+    crate::os::login_env::set_enabled(import_login_shell_env);
+
     // If the active agent connection changed, hot-swap the transport mode
-    // and reconnect so the user doesn't have to restart the app.
+    // and reconnect so the user doesn't have to restart the app. On the
+    // blocking pool: `set_mode` waits for an in-flight connect to finish
+    // (the transport serialises them), and `connect` spawns the agent —
+    // which can wait for the login-shell probe — or dials it (Remote: up to
+    // six 5 s attempts). None of that may park this async worker.
     if new_acp_mode != prior_acp_mode {
         info!("Active ACP connection changed, reconnecting");
         let (new_connection_mode, _) = crate::startup::acp_mode_for(new_acp_mode);
-        acp.client.set_mode(new_connection_mode);
-        if let Err(e) = acp.client.connect() {
-            log::warn!("ACP reconnect after config change failed: {}", e);
-            // set_mode tore down the old connection, and its reader was
-            // superseded, so nothing else reports the drop. Tell windows
-            // now rather than leaving a stale "connected" header. Only on
-            // failure: a successful swap must not flip headers.
-            if let Err(e) = app.emit(crate::events::AGENT_DISCONNECTED, ()) {
-                error!("Failed to emit agent_disconnected event: {}", e);
+        let client = acp.client.clone();
+        let app = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            client.set_mode(new_connection_mode);
+            if let Err(e) = client.connect() {
+                log::warn!("ACP reconnect after config change failed: {}", e);
+                // set_mode tore down the old connection, and its reader was
+                // superseded, so nothing else reports the drop. Tell windows
+                // now rather than leaving a stale "connected" header. Only on
+                // failure: a successful swap must not flip headers.
+                if let Err(e) = app.emit(crate::events::AGENT_DISCONNECTED, ()) {
+                    error!("Failed to emit agent_disconnected event: {}", e);
+                }
             }
-        }
+        });
     }
 
     // Apply the language override before `config_updated` goes out: every
@@ -558,6 +579,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
     let new_terminator = new_config.tool_permissions.terminator_mode;
     let new_language = new_config.ui.language.clone();
     let new_acp_mode = new_config.acp.active_mode();
+    let new_login_env = new_config.acp.agent.import_login_shell_env;
     let (prior_terminator, prior_acp_mode) = {
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
@@ -586,7 +608,14 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
         (prior, prior_acp)
     };
 
-    apply_runtime_config(&app, &acp, &prior_acp_mode, &new_acp_mode, new_language);
+    apply_runtime_config(
+        &app,
+        &acp,
+        &prior_acp_mode,
+        &new_acp_mode,
+        new_language,
+        new_login_env,
+    );
 
     crate::app_log::set_max_size(new_log_buffer);
     if prior_terminator != new_terminator {

@@ -67,6 +67,19 @@ async fn resolve_python(configured: Option<String>) -> Option<String> {
         .flatten()
 }
 
+/// Spawn a python / pip command with the login environment, on the
+/// blocking pool: `login_env::apply` can wait for the launch-time shell
+/// probe, and that must not park a Tokio worker.
+async fn spawn_user_tool(mut cmd: Command) -> std::io::Result<std::process::Child> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::os::login_env::apply(&mut cmd);
+        configure_no_window(&mut cmd);
+        cmd.spawn()
+    })
+    .await
+    .map_err(std::io::Error::other)?
+}
+
 /// Check if pocket-tts pip package is installed
 fn check_pocket_tts_installed(python: &str) -> bool {
     let mut cmd = Command::new(python);
@@ -192,11 +205,8 @@ pub async fn pocket_tts_install<R: tauri::Runtime>(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     // pip honours the user's proxy / CA / index settings from their rc.
-    crate::os::login_env::apply(&mut cmd);
-    configure_no_window(&mut cmd);
-
-    let mut child = cmd
-        .spawn()
+    let mut child = spawn_user_tool(cmd)
+        .await
         .map_err(|e| format!("Failed to run pip: {}", e))?;
 
     // Take stdout and stderr for streaming
@@ -377,11 +387,8 @@ pub async fn pocket_tts_start(
         cmd.arg("--debug");
     }
 
-    crate::os::login_env::apply(&mut cmd);
-    configure_no_window(&mut cmd);
-
-    let mut child = cmd
-        .spawn()
+    let mut child = spawn_user_tool(cmd)
+        .await
         .map_err(|e| format!("Failed to start server: {}", e))?;
 
     // Read stderr in a background thread so errors are visible

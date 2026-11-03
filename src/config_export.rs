@@ -564,6 +564,16 @@ mod tests {
     }
 
     #[test]
+    fn sanitise_imports_the_login_shell_env_preference() {
+        // A preference, not device state: it travels with the backup.
+        let local = fake_config();
+        let mut imported = fake_config();
+        imported.acp.agent.import_login_shell_env = false;
+        let out = sanitise_imported_config(imported, &local);
+        assert!(!out.acp.agent.import_login_shell_env);
+    }
+
+    #[test]
     fn sanitise_keeps_local_auto_start_flag() {
         let mut imported = fake_config();
         imported.system.auto_start = true;

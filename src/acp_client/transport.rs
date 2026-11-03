@@ -65,6 +65,15 @@ pub struct AcpTransport {
     generation: Arc<AtomicU64>,
     /// Notification handler called by the background reader thread
     notification_handler: NotificationHandler,
+    /// Serialises `connect()` (and the teardown half of `set_mode`). Without
+    /// it, two callers that both saw `is_connected() == false` — the
+    /// launch-time session init racing a window's first send — would both
+    /// spawn an agent, and the second `store_process` would orphan the
+    /// first `Child`. Held only for the spawn / dial itself: `connect`
+    /// waits for the login-shell probe *before* taking it. Never taken by
+    /// `disconnect`, the reader thread, or anything `connect` calls, so it
+    /// can't deadlock (see `connect`).
+    connect_lock: Mutex<()>,
     pub max_retries: u32,
     pub initial_retry_delay_ms: u64,
     pub process_manager: Arc<Mutex<ProcessManager>>,
@@ -86,6 +95,7 @@ impl AcpTransport {
             pending: Arc::new(Mutex::new(HashMap::new())),
             generation: Arc::new(AtomicU64::new(0)),
             notification_handler: Arc::new(Mutex::new(None)),
+            connect_lock: Mutex::new(()),
             max_retries: 5,
             initial_retry_delay_ms: 100,
             process_manager: Arc::new(Mutex::new(ProcessManager::new())),
@@ -170,32 +180,77 @@ impl AcpTransport {
     // --- Connection ---
 
     pub fn connect(&self) -> Result<()> {
+        self.connect_then(|| {})
+    }
+
+    /// [`connect`](Self::connect), running `on_fresh` — still under the
+    /// connect lock — only when this call established a new connection
+    /// (so a caller can reset per-connection state before any other
+    /// connect caller can proceed onto the new agent).
+    ///
+    /// Concurrent callers are serialised: the first spawns/dials, the rest
+    /// wait on `connect_lock`, re-check `is_connected()`, and return `Ok`
+    /// without spawning a second agent.
+    ///
+    /// Deadlock-freedom: while holding `connect_lock` this only takes the
+    /// transport's leaf mutexes (`mode`, `connected`, `pipe_stdin`,
+    /// `tcp_writer`, `pending`, `process_manager`), the login-env state
+    /// (whose probe thread takes nothing else), and whatever `on_fresh`
+    /// takes (`AcpClient::initialized`, a leaf). None of their holders ever
+    /// waits for `connect_lock`, and nothing called here calls back into
+    /// `connect`. Callers may hold `AcpClient::restart_guard` (recovery),
+    /// which nothing under `connect_lock` takes. Every caller runs on a
+    /// blocking thread (`spawn_blocking` / std threads), never the main
+    /// thread, so a queued connect can't freeze the UI.
+    pub fn connect_then(&self, on_fresh: impl FnOnce()) -> Result<()> {
+        if self.is_connected() {
+            info!("Already connected");
+            return Ok(());
+        }
+        // Wait for the startup login-shell probe (bounded, usually a no-op)
+        // before taking the lock, so the lock is only ever held for the
+        // spawn itself and `set_mode` / other connects never queue behind
+        // a user's slow rc files.
+        if matches!(
+            *self.mode.lock_or_recover(),
+            AcpConnectionMode::Local { .. }
+        ) {
+            os::login_env::wait_ready();
+        }
+        let _serial = self.connect_lock.lock_or_recover();
+        if self.is_connected() {
+            info!("Already connected (a concurrent connect won the race)");
+            return Ok(());
+        }
+        // Read the mode under the lock: a `set_mode` that ran while we
+        // waited must not be undone by spawning the old command.
         let mode = self.mode.lock_or_recover().clone();
         match mode {
             AcpConnectionMode::Local { ref spawn_command } => {
-                if self.is_connected() {
-                    info!("Already connected via pipes");
-                    return Ok(());
-                }
                 info!("Local mode: spawning process");
                 self.spawn_backend_process(spawn_command)?;
-                Ok(())
             }
             AcpConnectionMode::Remote { .. } => {
-                if self.is_connected() {
-                    info!("Already connected via TCP");
-                    return Ok(());
-                }
                 info!("Remote mode: establishing TCP connection");
-                self.connect_with_retry(0)
+                self.connect_with_retry(0)?;
             }
         }
+        on_fresh();
+        Ok(())
     }
 
-    /// Replace the connection mode. Disconnects the current transport first.
+    /// Replace the connection mode and tear down the current connection.
+    ///
+    /// The mode is swapped first, so an in-flight TCP retry loop (which
+    /// re-reads it every attempt) moves to the new target or bails at once
+    /// instead of finishing its whole backoff. The teardown then waits on
+    /// `connect_lock` for any in-flight connect, so a spawn that already
+    /// read the *old* mode is torn down here rather than surviving as the
+    /// "connected" agent the caller's next `connect()` would keep.
     pub fn set_mode(&self, mode: AcpConnectionMode) {
-        self.disconnect();
         *self.mode.lock_or_recover() = mode;
+        let _serial = self.connect_lock.lock_or_recover();
+        self.disconnect();
     }
 
     fn connect_with_retry(&self, attempt: u32) -> Result<()> {
@@ -289,7 +344,9 @@ impl AcpTransport {
         // The user's login-shell PATH and exports: a bare `kiro-cli` must
         // resolve (std looks it up in the PATH set here, not ours), and
         // the MCP servers the agent spawns from mcp.json inherit this.
-        os::login_env::apply(&mut cmd);
+        // `connect_then` already waited for the first probe, so this
+        // doesn't block; it may start a background refresh of a stale one.
+        os::login_env::apply_agent(&mut cmd);
         os::configure_process_spawn(&mut cmd);
 
         let mut child = cmd

@@ -353,20 +353,20 @@ impl AcpClient {
     }
 
     pub fn connect(&self) -> Result<()> {
-        // If the transport wasn't connected, this call spawns/reconnects a
-        // *fresh* agent process that has never seen our `initialize`
-        // handshake. Clear `initialized` so the next `create_session` /
+        // If this call spawns/reconnects a *fresh* agent process, that
+        // process has never seen our `initialize` handshake. Clear
+        // `initialized` so the next `create_session` /
         // `load_existing_session` re-runs `initialize` before issuing a
         // session op. Without this, a lazy reconnect after the agent died
         // (reader thread flipped `connected=false` on EOF) would leave
         // `initialized=true` from the *previous* process and we'd send
-        // `session/load` straight at an un-initialized agent.
-        let was_connected = self.transport.is_connected();
-        self.transport.connect()?;
-        if !was_connected {
-            *self.initialized.lock_or_recover() = false;
-        }
-        Ok(())
+        // `session/load` straight at an un-initialized agent. Done inside
+        // the transport's connect lock, and only by the caller that
+        // actually connected: a concurrent caller that found the fresh
+        // connection already up must not clear the flag after the winner
+        // has re-initialized.
+        self.transport
+            .connect_then(|| *self.initialized.lock_or_recover() = false)
     }
 
     pub fn disconnect(&self) {

@@ -77,21 +77,31 @@ pub async fn list_agent_presets() -> Result<Vec<AgentPresetInfo>, AppError> {
 }
 
 /// Validate a saved connection. For local connections, parses the
-/// spawn_command, resolves the binary against PATH, and checks that it
-/// exists. For remote connections, sanity-checks host/port. Cheap (no
-/// process spawn) so it's safe to call on every render of the settings
-/// page.
+/// spawn_command, resolves the binary against the PATH the agent spawn
+/// would get, and checks that it exists. For remote connections,
+/// sanity-checks host/port. A bare binary name costs one `which`/`where`
+/// spawn — which may first wait for the launch-time login-shell probe —
+/// so the work runs on the blocking pool; the settings page calls this on
+/// every render, so keep it to that one lookup.
 #[tauri::command]
 pub async fn validate_agent_connection(
     mode: crate::config::AcpMode,
 ) -> Result<ConnectionIssues, AppError> {
+    Ok(
+        tauri::async_runtime::spawn_blocking(move || validate_agent_connection_sync(mode))
+            .await
+            .map_err(|e| format!("Task error: {}", e))?,
+    )
+}
+
+fn validate_agent_connection_sync(mode: crate::config::AcpMode) -> ConnectionIssues {
     let mut out = ConnectionIssues::default();
     match mode {
         crate::config::AcpMode::Local { spawn_command } => {
             let trimmed = spawn_command.trim();
             if trimmed.is_empty() {
                 out.issues.push("empty".to_string());
-                return Ok(out);
+                return out;
             }
             // First whitespace-separated token is the binary; this
             // matches the transport's own parsing, so what we validate
@@ -114,7 +124,7 @@ pub async fn validate_agent_connection(
             out.ok = out.issues.is_empty();
         }
     }
-    Ok(out)
+    out
 }
 
 /// Resolve a binary token to an absolute path, mirroring how the

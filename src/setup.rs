@@ -363,7 +363,10 @@ pub fn spawn_pocket_tts_server<R: tauri::Runtime>(app: &AppHandle<R>) {
     };
     let config_arc = features.config.clone();
     let tts_proc = procs.pocket_tts.clone();
-    tauri::async_runtime::spawn(async move {
+    // Blocking pool, not an async worker: nothing here awaits, and
+    // `login_env::apply` can wait seconds for the launch-time shell probe
+    // (this runs during startup, exactly when that probe is in flight).
+    tauri::async_runtime::spawn_blocking(move || {
         let (port, voice, temp, eos_threshold, python, debug_mode) = {
             let config = config_arc.lock_or_recover();
             (

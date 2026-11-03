@@ -13,19 +13,36 @@
 //!   (`setsid`), so nothing can grab or wait on Kage's terminal in dev
 //!   mode (no SIGTTIN/SIGTTOU stops), and `exec tmux` fails fast with
 //!   "not a terminal" instead of hanging.
-//! * **Hangs**: a hard deadline; on expiry the whole process group is
-//!   SIGKILLed (background jobs an rc file started stay in the shell's
-//!   group because a non-tty interactive shell has no job control).
+//! * **Hangs**: a hard deadline; on expiry (and on every other forced
+//!   kill: output overflow, a shell that won't exit after printing) every
+//!   process in the probe's *session* is SIGKILLed, not just its process
+//!   group. Without job control, background jobs an rc file starts stay in
+//!   the shell's group; but an rc file can turn job control on (`set -m`
+//!   in bash/sh, `setopt monitor` in zsh), and then every job gets a
+//!   process group of its own that `killpg` never reaches. They do all stay in the
+//!   shell's session (`setsid` made the shell its leader, so the session
+//!   id is the shell's pid), so after `killpg` we sweep the session:
+//!   Linux reads field 6 of `/proc/<pid>/stat`; macOS lists every pid
+//!   (`proc_listallpids`) and asks `getsid` for each — which works across
+//!   sessions there, root's processes included. Only a process that
+//!   started its own session (a daemon calling `setsid`, e.g.
+//!   `eval $(ssh-agent)`) escapes, as it would a closed terminal.
 //! * **Lingering background jobs holding stdout**: we stop reading as soon
 //!   as the end marker arrives, or shortly after the shell exits, rather
 //!   than waiting for EOF.
-//! * **Endless output**: capped at [`MAX_OUTPUT`].
+//! * **Endless output**: capped at [`MAX_OUTPUT`]; the shell is killed.
 //! * **`exec` in an interactive rc** (`exec zsh`, unguarded `exec tmux`):
 //!   no markers come back, so we retry once as a non-interactive login
 //!   shell, which skips `.zshrc` / `.bashrc`.
+//! * **No `env -0`** (macOS 11 and 12.0–12.2 — the `-0` flag reached
+//!   Apple's `env` with shell_cmds-240 in macOS 12.3; `minimumSystemVersion`
+//!   is 11.0): the payload falls back to plain `/usr/bin/env` inside the
+//!   same shell run, and [`policy::parse_env_output`] tells the formats
+//!   apart (a NUL-separated block always contains a NUL).
 //!
 //! The probe sets `KAGE_RESOLVING_ENVIRONMENT=1` so rc files can skip
-//! work that only makes sense in a real terminal.
+//! work that only makes sense in a real terminal (or that has side
+//! effects: credential refreshes, browser launches, network calls).
 
 use super::policy::{self, LoginEnv};
 use std::io::Read;
@@ -76,11 +93,15 @@ pub(super) fn shell_kind(shell: &Path) -> ShellKind {
 /// Argument vectors to try, in order. The payload is one external command
 /// — `/bin/sh` printing the markers around `/usr/bin/env -0` — so the
 /// only thing each login shell has to parse is a single-quoted string with
-/// no embedded quotes, which every supported shell treats literally.
-/// `env` dumps exactly the *exported* variables, which is what a child
-/// process would inherit; `-0` keeps values with newlines intact.
+/// no embedded quotes (and no `!`, for csh), which every supported shell
+/// treats literally. `env` dumps exactly the *exported* variables, which
+/// is what a child process would inherit; `-0` keeps values with newlines
+/// intact. An `env` without `-0` prints its usage to stderr and exits
+/// non-zero before writing anything, so `||` reruns it newline-separated.
 pub(super) fn probe_attempts(kind: ShellKind, start: &str, end: &str) -> Vec<Vec<String>> {
-    let payload = format!("/bin/sh -c 'printf %s $0; /usr/bin/env -0; printf %s $1' {start} {end}");
+    let payload = format!(
+        "/bin/sh -c 'printf %s $0; /usr/bin/env -0 2>/dev/null || /usr/bin/env; printf %s $1' {start} {end}"
+    );
     let args = |flags: &[&str], cmd: String| -> Vec<String> {
         flags
             .iter()
@@ -145,7 +166,15 @@ pub(super) fn select_shell() -> Option<PathBuf> {
 pub(super) enum ProbeError {
     Spawn(String),
     TimedOut,
+    TooMuchOutput,
     NoEnvironment,
+}
+
+impl ProbeError {
+    /// Whether the probe had to be killed.
+    pub(super) fn killed(&self) -> bool {
+        matches!(self, Self::TimedOut | Self::TooMuchOutput)
+    }
 }
 
 impl std::fmt::Display for ProbeError {
@@ -153,6 +182,11 @@ impl std::fmt::Display for ProbeError {
         match self {
             Self::Spawn(e) => write!(f, "could not start the shell: {e}"),
             Self::TimedOut => write!(f, "timed out"),
+            Self::TooMuchOutput => write!(
+                f,
+                "printed more than {} MiB without finishing",
+                MAX_OUTPUT / (1024 * 1024)
+            ),
             Self::NoEnvironment => write!(f, "the shell printed no environment"),
         }
     }
@@ -162,6 +196,9 @@ impl std::fmt::Display for ProbeError {
 pub(super) struct Resolved {
     pub env: LoginEnv,
     pub flags: String,
+    /// The shell printed its environment but then didn't exit within
+    /// [`EXIT_GRACE`] (a hanging `.zlogout`, …) and was killed.
+    pub killed: bool,
 }
 
 /// Probe `shell` with an overall `timeout`.
@@ -180,12 +217,12 @@ pub(super) fn resolve_with(shell: &Path, timeout: Duration) -> Result<Resolved, 
     let home = dirs::home_dir();
 
     for args in probe_attempts(shell_kind(shell), &start, &end) {
-        let stdout = run_probe(shell, &args, home.as_deref(), &end, deadline)?;
+        let (stdout, killed) = run_probe(shell, &args, home.as_deref(), &end, deadline)?;
         if let Some(block) = policy::extract_block(&stdout, &start, &end) {
-            let env = policy::build_login_env(policy::parse_env_block(block))
+            let env = policy::build_login_env(policy::parse_env_output(block))
                 .ok_or(ProbeError::NoEnvironment)?;
             let flags = args[..args.len() - 1].join(" ");
-            return Ok(Resolved { env, flags });
+            return Ok(Resolved { env, flags, killed });
         }
         // No markers: probably an `exec` in an interactive rc. Retry with
         // the next (less interactive) form, if any.
@@ -195,14 +232,15 @@ pub(super) fn resolve_with(shell: &Path, timeout: Duration) -> Result<Resolved, 
 
 /// Spawn one probe and collect its stdout until the end marker, EOF, the
 /// shell's exit (+ grace), the output cap, or `deadline`. The child is
-/// always reaped; on the failure paths its whole process group is killed.
+/// always reaped; on the failure paths everything in its session is
+/// killed. Returns the output and whether the shell had to be killed.
 fn run_probe(
     shell: &Path,
     args: &[String],
     cwd: Option<&Path>,
     end_marker: &str,
     deadline: Instant,
-) -> Result<Vec<u8>, ProbeError> {
+) -> Result<(Vec<u8>, bool), ProbeError> {
     let mut cmd = Command::new(shell);
     cmd.args(args)
         .env(MARKER_ENV, "1")
@@ -215,8 +253,8 @@ fn run_probe(
         cmd.current_dir(dir);
     }
     // SAFETY: setsid is async-signal-safe. It makes the shell a session
-    // and group leader (pgid == pid, so `killpg` reaches everything it
-    // started) with no controlling terminal.
+    // and group leader (sid == pgid == pid, so `killpg` + the session
+    // sweep reach everything it started) with no controlling terminal.
     unsafe {
         cmd.pre_exec(|| {
             libc::setsid();
@@ -302,6 +340,7 @@ fn run_probe(
     // Closing our end makes any straggling writer get EPIPE/SIGPIPE.
     drop(stdout);
 
+    let mut killed = false;
     if exited_at.is_none() {
         match stop {
             Stop::Complete | Stop::Exited => {
@@ -317,32 +356,131 @@ fn run_probe(
                 }
                 if exited_at.is_none() {
                     kill_and_reap(&mut child);
+                    killed = true;
                 }
             }
-            Stop::Overflow | Stop::TimedOut => kill_and_reap(&mut child),
+            Stop::Overflow | Stop::TimedOut => {
+                kill_and_reap(&mut child);
+                killed = true;
+            }
         }
     }
 
     match stop {
         Stop::TimedOut => Err(ProbeError::TimedOut),
-        _ => Ok(buf),
+        Stop::Overflow => Err(ProbeError::TooMuchOutput),
+        Stop::Complete | Stop::Exited => Ok((buf, killed)),
     }
 }
 
-/// SIGKILL the child's whole process group, then reap the child. Only
-/// valid while the child is unreaped (its pid — and so the group id —
-/// can't be recycled until then).
+/// SIGKILL the child's process group and then everything else in its
+/// session, then reap the child. Only valid while the child is unreaped:
+/// until then its pid — and so the group and session ids, which equal it
+/// — can't be recycled, so nothing outside the probe can match.
 fn kill_and_reap(child: &mut Child) {
     if let Ok(pid) = i32::try_from(child.id()) {
-        if pid > 0 {
+        if pid > 1 {
             let _ = nix::sys::signal::killpg(
                 nix::unistd::Pid::from_raw(pid),
                 nix::sys::signal::Signal::SIGKILL,
             );
+            kill_session(pid);
         }
     }
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// SIGKILL every process in session `sid` except Kage itself. A few
+/// passes, because a process can fork between the listing and its kill;
+/// a SIGKILLed one can't fork again, so the next pass catches the child.
+fn kill_session(sid: libc::pid_t) {
+    if sid <= 1 {
+        return;
+    }
+    let me = std::process::id() as libc::pid_t;
+    for pass in 0..4 {
+        let members: Vec<libc::pid_t> = session_members(sid)
+            .into_iter()
+            .filter(|pid| *pid > 1 && *pid != me)
+            .collect();
+        if members.is_empty() {
+            return;
+        }
+        for pid in members {
+            // SAFETY: plain syscall. A member that exited since the
+            // listing yields ESRCH; its pid being reused by an unrelated
+            // process within these microseconds would take a full wrap of
+            // the (sequentially allocated) pid space.
+            unsafe {
+                libc::kill(pid, libc::SIGKILL);
+            }
+        }
+        if pass < 3 {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+/// Live (non-zombie) processes whose session id is `sid`.
+#[cfg(target_os = "linux")]
+fn session_members(sid: libc::pid_t) -> Vec<libc::pid_t> {
+    let Ok(dir) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    dir.flatten()
+        .filter_map(|entry| entry.file_name().to_str()?.parse::<libc::pid_t>().ok())
+        .filter(|pid| {
+            std::fs::read_to_string(format!("/proc/{pid}/stat"))
+                .ok()
+                .and_then(|stat| stat_session(&stat))
+                .is_some_and(|(state, session)| session == sid && state != 'Z' && state != 'X')
+        })
+        .collect()
+}
+
+/// `(state, session)` from a `/proc/<pid>/stat` line. The command name
+/// (field 2) is parenthesised and may itself contain spaces and `)`, so
+/// fields are counted from the *last* `)`: state, ppid, pgrp, session.
+#[cfg(any(target_os = "linux", test))]
+fn stat_session(stat: &str) -> Option<(char, libc::pid_t)> {
+    let rest = &stat[stat.rfind(')')? + 1..];
+    let mut fields = rest.split_whitespace();
+    let state = fields.next()?.chars().next()?;
+    let session = fields.nth(2)?.parse().ok()?;
+    Some((state, session))
+}
+
+/// Processes whose session id is `sid`. `getsid` answers for processes in
+/// other sessions on macOS (verified against launchd and root daemons).
+#[cfg(target_os = "macos")]
+fn session_members(sid: libc::pid_t) -> Vec<libc::pid_t> {
+    // SAFETY: a null buffer asks for the current pid count.
+    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
+    if count <= 0 {
+        return Vec::new();
+    }
+    // Headroom for processes started since the count.
+    let capacity = count as usize + 256;
+    let mut pids: Vec<libc::pid_t> = vec![0; capacity];
+    let bytes = capacity * std::mem::size_of::<libc::pid_t>();
+    // SAFETY: the buffer holds `capacity` pids, `bytes` long.
+    let filled = unsafe {
+        libc::proc_listallpids(
+            pids.as_mut_ptr().cast(),
+            libc::c_int::try_from(bytes).unwrap_or(libc::c_int::MAX),
+        )
+    };
+    pids.truncate(usize::try_from(filled).unwrap_or(0).min(capacity));
+    // SAFETY: getsid is a plain query; -1 (ESRCH, …) never equals sid.
+    pids.retain(|pid| *pid > 0 && unsafe { libc::getsid(*pid) } == sid);
+    pids
+}
+
+/// Other Unixes have no portable process listing; `killpg` has to do.
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn session_members(_sid: libc::pid_t) -> Vec<libc::pid_t> {
+    Vec::new()
 }
 
 #[cfg(test)]
@@ -524,8 +662,11 @@ mod tests {
             &format!("sleep 300 &\necho $! > '{}'\nsleep 300", pid_file.display()),
         );
         let started = Instant::now();
+        // Long enough for the fake shell to reach `echo $!` on a loaded
+        // runner: the first exec of a just-written script can take a
+        // while on macOS (1.5 s flaked under the full parallel suite).
         assert_eq!(
-            resolve_with(&shell, Duration::from_millis(1500)).err(),
+            resolve_with(&shell, Duration::from_secs(4)).err(),
             Some(ProbeError::TimedOut)
         );
         assert!(started.elapsed() < WELL_BEFORE);
@@ -565,18 +706,143 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let shell = fake_shell(dir.path(), "yes", "exec yes kage");
         let started = Instant::now();
-        assert_eq!(
-            resolve_with(&shell, NEVER).err(),
-            Some(ProbeError::NoEnvironment)
-        );
+        let err = resolve_with(&shell, NEVER).err();
+        assert_eq!(err, Some(ProbeError::TooMuchOutput));
+        assert!(err.unwrap().killed());
         assert!(started.elapsed() < WELL_BEFORE);
     }
 
-    /// Real login shell of whoever runs the tests. CI runners and dev
-    /// boxes have arbitrary rc files, so only check invariants when it
-    /// works; a failure is printed, not fatal (the fake-shell tests above
-    /// cover the failure paths deterministically).
+    /// The `env -0` fallback, end to end through the real payload: the
+    /// fake shell swaps `/usr/bin/env -0` for a command that fails the way
+    /// macOS 11's `env` does (usage on stderr, exit 1, nothing on stdout).
     #[test]
+    fn env_without_dash_zero_falls_back_to_newline_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let stub = dir.path().join("old-env");
+        std::fs::write(
+            &stub,
+            "#!/bin/sh\necho 'env: illegal option -- 0' >&2\necho 'usage: env [-iv] ...' >&2\nexit 1\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let shell = fake_shell(
+            dir.path(),
+            "old-macos",
+            &format!(
+                "export MULTI='first\nsecond'\n\
+                 export JAVA_HOME=/opt/java\n\
+                 eval \"$(printf %s \"$last\" | sed 's#/usr/bin/env -0#{}#')\"",
+                stub.display()
+            ),
+        );
+        let resolved = resolve_with(&shell, NEVER).expect("falls back to plain env");
+        assert_eq!(var(&resolved.env, "JAVA_HOME"), Some("/opt/java"));
+        assert_eq!(var(&resolved.env, "MULTI"), Some("first\nsecond"));
+        assert!(resolved
+            .env
+            .path
+            .split(':')
+            .any(|p| p == "/usr/bin" || p == "/bin"));
+        assert_eq!(resolved.flags, "-i -l -c");
+    }
+
+    /// The `-0` path still wins when `env` supports it (every CI runner).
+    #[test]
+    fn env_dash_zero_keeps_newlines_in_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell = fake_shell(
+            dir.path(),
+            "modern",
+            "export MULTI='a\nB=not-a-var'\neval \"$last\"",
+        );
+        let resolved = resolve_with(&shell, NEVER).expect("resolves");
+        assert_eq!(var(&resolved.env, "MULTI"), Some("a\nB=not-a-var"));
+        assert_eq!(var(&resolved.env, "B"), None);
+    }
+
+    #[test]
+    fn stat_session_parses_tricky_command_names() {
+        assert_eq!(
+            stat_session("1234 (bash) S 1 1234 1234 0 -1 4194560"),
+            Some(('S', 1234))
+        );
+        assert_eq!(stat_session("77 (a b) c) (d) Z 5 70 71 0"), Some(('Z', 71)));
+        assert_eq!(stat_session("garbage"), None);
+        assert_eq!(stat_session("1 (x) R 2"), None);
+    }
+
+    /// Job control in an rc file (`set -m` in ~/.bash_profile) puts every
+    /// job in its own process group, out of `killpg`'s reach: the session
+    /// sweep must still kill both the background and the foreground job.
+    /// Real bash with a temp HOME, through a wrapper so the test process's
+    /// own HOME is untouched.
+    #[test]
+    fn timeout_kills_job_control_jobs_in_their_own_process_groups() {
+        let bash = Path::new("/bin/bash");
+        if !is_usable_shell(bash) {
+            eprintln!("no /bin/bash; skipping");
+            return;
+        }
+        let home = tempfile::tempdir().unwrap();
+        let bg_pid = home.path().join("bg.pid");
+        let fg_pid = home.path().join("fg.pid");
+        std::fs::write(
+            home.path().join(".bash_profile"),
+            "set -m\n\
+             sleep 309 &\n\
+             echo $! > \"$HOME/bg.pid\"\n\
+             /bin/sh -c 'echo $$ > \"$HOME/fg.pid\"; exec sleep 310'\n",
+        )
+        .unwrap();
+        let shell = fake_shell(
+            home.path(),
+            "bash",
+            &format!("HOME='{}' exec /bin/bash \"$@\"", home.path().display()),
+        );
+        let started = Instant::now();
+        // Long enough for a loaded runner to get bash through the rc file
+        // (both pid files are written well before the deadline).
+        let err = resolve_with(&shell, Duration::from_secs(4)).err();
+        assert_eq!(err, Some(ProbeError::TimedOut));
+        assert!(started.elapsed() < WELL_BEFORE);
+
+        let read_pid = |p: &Path| -> i32 {
+            std::fs::read_to_string(p)
+                .unwrap_or_else(|e| panic!("{}: {e}", p.display()))
+                .trim()
+                .parse()
+                .unwrap()
+        };
+        let (bg, fg) = (read_pid(&bg_pid), read_pid(&fg_pid));
+        let gone_by = Instant::now() + WELL_BEFORE;
+        while running(bg) || running(fg) {
+            if Instant::now() >= gone_by {
+                let survivors = format!(
+                    "bg {bg} running={}, fg {fg} running={}",
+                    running(bg),
+                    running(fg)
+                );
+                // Don't leave them behind for the next run either.
+                for pid in [bg, fg] {
+                    let _ = nix::sys::signal::kill(
+                        nix::unistd::Pid::from_raw(pid),
+                        nix::sys::signal::Signal::SIGKILL,
+                    );
+                }
+                panic!("job-control jobs survived the timeout kill: {survivors}");
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// Real login shell of whoever runs the tests. Ignored by default:
+    /// it runs the developer's actual rc files (side effects, prompts for
+    /// credentials, …). Run with `cargo test real_login_shell_smoke --
+    /// --ignored`. Only invariants are checked when it works; a failure is
+    /// printed, not fatal (the fake-shell tests above cover the failure
+    /// paths deterministically).
+    #[test]
+    #[ignore = "runs the real login shell's rc files; opt in with --ignored"]
     fn real_login_shell_smoke() {
         let Some(shell) = select_shell() else {
             eprintln!("no usable login shell; skipping");

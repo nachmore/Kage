@@ -106,41 +106,68 @@ it works in a terminal.
 `os::login_env` fixes this the way VS Code's "resolve shell environment"
 does, but more conservatively:
 
-- `prewarm()` (called first thing in `app_setup::configure`) runs
+- `prewarm()` (called first thing in `app_setup::configure`, right after
+  `set_enabled(config.acp.agent.import_login_shell_env)`) runs
   `$SHELL -i -l` once on a background thread — falling back to the passwd
   record's shell, then `/bin/sh` — and captures `/usr/bin/env -0` between
-  per-run markers. 10 s hard timeout that SIGKILLs the shell's whole
-  process group; own session (no controlling terminal); stdin `/dev/null`;
+  per-run markers (plain `/usr/bin/env`, parsed line by line, where `-0`
+  is missing: macOS 11 and 12.0–12.2). 10 s hard timeout; on expiry every
+  process in the probe's *session* is SIGKILLed (process group first, then
+  a session sweep, because rc-file job control gives each job its own
+  group). Own session (no controlling terminal); stdin `/dev/null`;
   retries as a non-interactive login shell if an interactive rc `exec`s
   away. bash/zsh/sh/dash/ksh/fish/nu/csh/tcsh/pwsh are handled.
 - `apply(&mut cmd)` overlays the result onto one child: **PATH merged**
-  (login entries first, then inherited extras), **other variables
-  add-missing only** (nothing Kage or launchd set is overridden), an
-  **explicit denylist** (`HOME`, `TMPDIR`, `USER`, `SSH_*`, `__CF*`,
-  `XPC_*`, `KAGE_*`, terminal and shell-session state, …), size caps, and
-  anything already set on the `Command` wins. It waits up to 5 s for an
-  in-flight probe — never on the main thread — else the child gets the
-  inherited PATH plus well-known user bin dirs. `overlay(&[..])` returns the
-  same pairs for env-list APIs (the kage-core script runner).
+  (login entries first, then inherited extras, then existing well-known
+  user bin dirs — always, since a probe can succeed with a degraded PATH),
+  **other variables add-missing only** (nothing Kage or launchd set is
+  overridden), an **explicit denylist** (`HOME`, `TMPDIR`, `USER`, `SSH_*`
+  except a non-`ssh-agent` `SSH_AUTH_SOCK`, `__CF*`, `XPC_*`, `KAGE_*`,
+  `GPG_TTY`, `BASH_ENV`/`ENV`, `LD_PRELOAD`/`LD_AUDIT`, terminal and
+  shell-session state, …), **no temporary AWS credentials** (a session
+  token drops key/secret/token/expiry; `AWS_PROFILE`/`AWS_REGION` stay),
+  size caps, and anything already set on the `Command` wins.
+  `LD_LIBRARY_PATH`, `NODE_OPTIONS`, `PYTHONPATH` *are* imported, for
+  terminal parity. `overlay(&[..])` returns the same pairs for env-list
+  APIs (the kage-core script runner). The agent spawn uses `apply_agent`,
+  which additionally refreshes a result older than 30 min in the
+  background.
+- **Blocking.** `apply`/`overlay` wait for the *first* probe only, never
+  on the main thread, and only until 5 s after it started (one deadline
+  shared by all callers). That can still be seconds early in a launch, so
+  **call them from a blocking context** — `spawn_blocking` or a std
+  thread — never inside an `async` body on a Tokio worker (Tauri `async`
+  commands, `tauri::async_runtime::spawn`). Re-probes (one background
+  retry a minute after a failure, backing off to 30 min; the 30-min agent
+  refresh) are never waited for. The agent transport calls `wait_ready()`
+  before taking its connect lock, so the lock never covers the wait.
 - Bare program names resolve too: `std::process::Command` looks the program
   up in the PATH set *on the Command* on Unix.
 
-Call `apply` for every spawn of a user tool — the agent, `which` lookups
-that mirror it, version probes, npm, python, icalBuddy, shortcuts, proxy
+Call `apply` for every spawn of a user tool — `which` lookups that mirror
+the agent, version probes, npm, python, icalBuddy, shortcuts, proxy
 scripts — after the caller's own `cmd.env(...)`. Don't call it for OS
 binaries (`osascript`, `open`, `tccutil`, `codesign`, …).
 
-Launched from a terminal (any stdio stream is a TTY) nothing is probed or
-changed: Kage already has the user's real environment. Override with
-`KAGE_LOGIN_SHELL_ENV=0` (never) or `=1` (always). rc files can test
-`KAGE_RESOLVING_ENVIRONMENT=1` to skip terminal-only work (`exec tmux`).
-The log records the shell, timing, PATH, and the *names* of imported
-variables (never their values). Manual end-to-end check:
-`tests/login_env_e2e_test.rs`.
+Switches: **Settings → Agents → "Use my shell's environment for agent
+tools"** (`acp.agent.import_login_shell_env`, default on; `set_enabled` is
+called at startup and from `apply_runtime_config` on every save/import, so
+a toggle applies to the next spawn without a restart). Launched from a
+terminal (any stdio stream is a TTY) nothing is probed or changed: Kage
+already has the user's real environment. `KAGE_LOGIN_SHELL_ENV=0` (never)
+or `=1` (always) overrides both. Unit tests (`cfg(test)`) never probe
+unless `KAGE_LOGIN_SHELL_ENV=1`; the mock-app integration harness calls
+`set_enabled(false)`. rc files can test `KAGE_RESOLVING_ENVIRONMENT=1` to
+skip terminal-only or side-effecting work (user-facing write-up:
+[`AGENT_ENVIRONMENT.md`](AGENT_ENVIRONMENT.md)). The log records the
+shell, timing, PATH, and the *names* of imported variables (never their
+values), and one hint line when a probe takes over 3 s or is killed.
+Manual end-to-end check: `tests/login_env_e2e_test.rs`.
 
-macOS and Linux share one POSIX implementation (`src/os/login_env/`);
-Windows is a no-op — Explorer-launched processes already get the full
-user + system environment.
+macOS and Linux share one POSIX implementation (`src/os/login_env/`:
+`policy` = what crosses over, `probe` = running the shell, `schedule` =
+when to re-probe and who may wait); Windows is a no-op — Explorer-launched
+processes already get the full user + system environment.
 
 ## Things that aren't in `os/` and shouldn't be
 

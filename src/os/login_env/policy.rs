@@ -10,9 +10,13 @@
 //!    `KAGE_URL`, …) is never touched.
 //! 2. **`PATH` is merged**, not replaced: login-shell entries first (the
 //!    precedence the user chose in their rc files — what a terminal would
-//!    see), then any inherited entries the login shell didn't list, then —
-//!    only when no login environment is available — a short list of
-//!    well-known user bin directories as a last resort.
+//!    see), then any inherited entries the login shell didn't list, then,
+//!    at the lowest precedence, the well-known user bin directories that
+//!    exist. The last group is there even when the probe worked: a probe
+//!    can succeed with a *degraded* PATH (csh/tcsh `-i -c` never reads
+//!    `~/.login`; a `.zshrc` that `exec`s tmux forces the `-l -c` retry,
+//!    which skips `.zshrc`), and appending existing directories last can't
+//!    shadow anything the user ordered.
 //! 3. **Every other variable is add-missing only.** A variable already in
 //!    Kage's own environment is never overridden. The probe shell is
 //!    spawned *by Kage*, so it inherits Kage's environment; anything in its
@@ -22,8 +26,34 @@
 //! 4. **An explicit denylist** keeps out identity/session state that must
 //!    come from launchd or the display manager (even when Kage's
 //!    environment lacks it), the probe shell's own bookkeeping, terminal
-//!    state that would mislead a non-terminal child, and Kage's own
-//!    `KAGE_*` child-process namespace.
+//!    state that would mislead a non-terminal child (or is plain wrong in
+//!    the probe: `export GPG_TTY=$(tty)` evaluates to "not a tty" there),
+//!    startup-file hooks (`BASH_ENV`, `ENV`) that would make every
+//!    non-interactive shell a tool runs re-run rc code, loader injection
+//!    (`LD_PRELOAD`, `LD_AUDIT`), and Kage's own `KAGE_*` child-process
+//!    namespace. Two contextual rules sit on top:
+//!    * `SSH_AUTH_SOCK` is the one `SSH_*` variable that may cross, and
+//!      only when the probe did not also export `SSH_AGENT_PID` — that pair
+//!      is the signature of an rc file running `eval $(ssh-agent)`, which
+//!      would point every child at a fresh, key-less agent. A socket the rc
+//!      file merely points at (a gpg-agent / 1Password / systemd user
+//!      agent) is what git-over-ssh in an MCP server needs on Linux
+//!      sessions that start no keyring agent. Rule 3 still applies: an
+//!      inherited `SSH_AUTH_SOCK` (macOS always has launchd's) wins.
+//!    * **Temporary AWS credentials are not imported.** When the probe
+//!      exported `AWS_SESSION_TOKEN` / `AWS_SECURITY_TOKEN`, the static
+//!      key, secret, token, and expiry are all dropped: they expire within
+//!      hours, Kage keeps an imported value for its whole run, and an SDK
+//!      that finds expired keys in the environment uses them instead of
+//!      the refreshable profile / SSO chain. Long-lived keys (no session
+//!      token) still import, and `AWS_PROFILE` / `AWS_REGION` always do.
+//!
+//!    Deliberately **not** denied, for terminal parity: `LD_LIBRARY_PATH`,
+//!    `NODE_OPTIONS`, `PYTHONPATH` and friends. They change how tools
+//!    behave, but the user exported them for exactly that, and the agent
+//!    should see what their terminal sees. (On macOS, `DYLD_*` can't come
+//!    across at all: the payload's `/bin/sh` and `/usr/bin/env` are
+//!    SIP-protected, so dyld strips `DYLD_*` before `env` prints.)
 //! 5. **Size limits** keep a pathological rc file from pushing a child's
 //!    environment toward `ARG_MAX` (macOS: 1 MiB for argv + envp), which
 //!    would make every spawn fail with `E2BIG`.
@@ -43,8 +73,7 @@ pub(super) const MAX_PATH_ENTRIES: usize = 256;
 const DENY_EXACT: &[&str] = &[
     // Identity and session state owned by launchd / the login session /
     // the display manager. If Kage lacks one, inventing it from a shell
-    // rc is wrong (e.g. `eval $(ssh-agent)` in an rc file would point
-    // every child at a fresh, key-less agent).
+    // rc is wrong.
     "HOME",
     "USER",
     "LOGNAME",
@@ -107,6 +136,34 @@ const DENY_EXACT: &[&str] = &[
     "WT_SESSION",
     "LC_TERMINAL",
     "LC_TERMINAL_VERSION",
+    // `export GPG_TTY=$(tty)` (the gpg docs' recommendation) evaluates to
+    // "not a tty" in the probe; pinentry would then fail in every child.
+    "GPG_TTY",
+    "TTY",
+    // Startup-file hooks: every non-interactive bash (BASH_ENV) or POSIX
+    // sh (ENV) a tool starts would source rc code — the work this whole
+    // module exists to do exactly once.
+    "BASH_ENV",
+    "ENV",
+    // Loader injection into every child.
+    "LD_PRELOAD",
+    "LD_AUDIT",
+];
+
+/// The one `SSH_*` variable that may be imported (see the module docs).
+const SSH_AUTH_SOCK: &str = "SSH_AUTH_SOCK";
+/// Exported alongside `SSH_AUTH_SOCK` by `eval $(ssh-agent)`.
+const SSH_AGENT_PID: &str = "SSH_AGENT_PID";
+
+/// Their presence marks the probe's AWS credentials as temporary.
+const AWS_SESSION_MARKERS: &[&str] = &["AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN"];
+/// Dropped together when the credentials are temporary.
+const AWS_TEMPORARY_CREDENTIALS: &[&str] = &[
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AWS_SECURITY_TOKEN",
+    "AWS_CREDENTIAL_EXPIRATION",
 ];
 
 /// Never imported: any name starting with one of these.
@@ -116,7 +173,8 @@ const DENY_PREFIXES: &[&str] = &[
     "__",
     // launchd service identity (XPC_SERVICE_NAME, XPC_FLAGS).
     "XPC_",
-    // SSH session and agent state (see SSH note above).
+    // SSH session and agent state. `SSH_AUTH_SOCK` has its own rule in
+    // `build_login_env`.
     "SSH_",
     // Kage's own child-process contract: the probe marker, KAGE_URL /
     // KAGE_RESPONSE for proxy scripts, … A stale value from an rc file
@@ -196,6 +254,60 @@ pub(super) fn parse_env_block(block: &[u8]) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Parse `/usr/bin/env` output in whichever format the payload produced:
+/// NUL-separated (`env -0`) when the block contains a NUL, else the
+/// newline-separated fallback the payload prints when `env -0` isn't
+/// supported (macOS 11 and 12.0–12.2 ship an `env` without `-0`; it only
+/// arrived with shell_cmds-240 in macOS 12.3). A real `env -0` block
+/// always contains a NUL — at least the probe marker variable is set — and
+/// a newline-separated one never does (values can't contain NUL).
+pub(super) fn parse_env_output(block: &[u8]) -> Vec<(String, String)> {
+    if block.contains(&0) {
+        parse_env_block(block)
+    } else {
+        parse_env_lines(block)
+    }
+}
+
+/// Parse newline-separated `env` output, conservatively. A new variable
+/// starts at a line of the form `NAME=…` where `NAME` is a plain
+/// identifier (`^[A-Za-z_][A-Za-z0-9_]*=`); any other line continues the
+/// previous variable's value (a value with embedded newlines). Lines
+/// before the first variable are dropped. The format is ambiguous — a
+/// multi-line value whose continuation line happens to look like
+/// `NAME=…` is split into two variables — which is why the NUL format is
+/// preferred; the policy still filters whatever comes out.
+pub(super) fn parse_env_lines(block: &[u8]) -> Vec<(String, String)> {
+    let mut entries: Vec<Vec<u8>> = Vec::new();
+    for line in block.split(|b| *b == b'\n') {
+        if starts_with_assignment(line) {
+            entries.push(line.to_vec());
+        } else if let Some(last) = entries.last_mut() {
+            last.push(b'\n');
+            last.extend_from_slice(line);
+        }
+    }
+    // `env` ends every entry with a newline, so the split leaves one empty
+    // continuation on the last value; drop exactly that.
+    if block.ends_with(b"\n") {
+        if let Some(last) = entries.last_mut() {
+            last.pop();
+        }
+    }
+    let joined: Vec<u8> = entries.join(&0u8);
+    parse_env_block(&joined)
+}
+
+/// `^[A-Za-z_][A-Za-z0-9_]*=`
+fn starts_with_assignment(line: &[u8]) -> bool {
+    let Some(eq) = line.iter().position(|b| *b == b'=') else {
+        return false;
+    };
+    let name = &line[..eq];
+    matches!(name.first(), Some(c) if *c == b'_' || c.is_ascii_alphabetic())
+        && name.iter().all(|c| *c == b'_' || c.is_ascii_alphanumeric())
+}
+
 /// Apply the policy to a parsed login environment. `None` when it has no
 /// usable PATH — then the probe didn't really work and we'd rather fall
 /// back than import a half-environment.
@@ -206,9 +318,22 @@ pub(super) fn build_login_env(parsed: Vec<(String, String)>) -> Option<LoginEnv>
         .map(|(_, value)| merge_paths([value.as_str()]))
         .filter(|p| !p.is_empty())?;
 
+    let has = |wanted: &str| parsed.iter().any(|(name, _)| name == wanted);
+    let ssh_sock_ok = !has(SSH_AGENT_PID);
+    let temporary_aws = AWS_SESSION_MARKERS.iter().any(|m| has(m));
+
     let mut vars: Vec<(String, String)> = parsed
         .into_iter()
-        .filter(|(name, value)| is_importable(name) && value.len() <= MAX_VALUE_BYTES)
+        .filter(|(name, _)| {
+            if name == SSH_AUTH_SOCK {
+                ssh_sock_ok
+            } else if temporary_aws && AWS_TEMPORARY_CREDENTIALS.contains(&name.as_str()) {
+                false
+            } else {
+                is_importable(name)
+            }
+        })
+        .filter(|(_, value)| value.len() <= MAX_VALUE_BYTES)
         .collect();
     vars.sort();
     let mut budget = MAX_IMPORT_BYTES;
@@ -236,10 +361,11 @@ pub(super) fn merge_paths<'a>(parts: impl IntoIterator<Item = &'a str>) -> Strin
         .join(":")
 }
 
-/// Well-known user bin directories, used only when no login environment
-/// is available (probe failed, timed out, or is still running), so a bare
-/// `kiro-cli` / `builder-mcp` still has a fighting chance. The caller
-/// filters out directories that don't exist.
+/// Well-known user bin directories, appended to every merged PATH at the
+/// lowest precedence: all a bare `kiro-cli` / `builder-mcp` has to go on
+/// when no login environment is available (probe failed, timed out, or is
+/// still running), and a safety net when the probe returned a degraded
+/// PATH. The caller filters out directories that don't exist.
 pub(super) fn fallback_dir_candidates(home: Option<&Path>) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
     if cfg!(target_os = "macos") {
@@ -271,8 +397,8 @@ pub(super) fn fallback_dir_candidates(home: Option<&Path>) -> Vec<PathBuf> {
 ///
 /// * `inherited` — Kage's own environment (`std::env::var_os`).
 /// * `explicit` — whether the `Command` already sets or removes a name.
-/// * `fallback_dirs` — existing well-known dirs, appended to PATH only
-///   when `login` is `None`.
+/// * `fallback_dirs` — existing well-known dirs, appended to PATH at the
+///   lowest precedence.
 pub(super) fn plan_overlay(
     login: Option<&LoginEnv>,
     inherited: &dyn Fn(&str) -> Option<OsString>,
@@ -290,10 +416,8 @@ pub(super) fn plan_overlay(
         };
         if let Some(current) = current {
             let fallback = fallback_dirs.join(":");
-            let merged = match login {
-                Some(env) => merge_paths([env.path.as_str(), current.as_str()]),
-                None => merge_paths([current.as_str(), fallback.as_str()]),
-            };
+            let login_path = login.map(|env| env.path.as_str()).unwrap_or("");
+            let merged = merge_paths([login_path, current.as_str(), fallback.as_str()]);
             if !merged.is_empty() && merged != current {
                 out.push(("PATH".to_string(), merged));
             }
@@ -431,6 +555,10 @@ mod tests {
             "LANG",
             "LC_ALL",
             "HOMEBREW_PREFIX",
+            // Kept for terminal parity: the user exported them on purpose.
+            "LD_LIBRARY_PATH",
+            "NODE_OPTIONS",
+            "PYTHONPATH",
         ] {
             assert!(is_importable(name), "{name} should be importable");
         }
@@ -461,6 +589,14 @@ mod tests {
             "ITERM_SESSION_ID",
             "DIRENV_DIFF",
             "BASH_FUNC_module%%",
+            "GPG_TTY",
+            "TTY",
+            "BASH_ENV",
+            "ENV",
+            "LD_PRELOAD",
+            "LD_AUDIT",
+            "SSH_CONNECTION",
+            "SSH_TTY",
             "1NUMERIC",
             "has-dash",
             "",
@@ -523,10 +659,11 @@ mod tests {
             "/Users/me/.toolbox/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
             &[("JAVA_HOME", "/j"), ("HTTPS_PROXY", "http://proxy:3128")],
         );
-        let planned = plan(Some(&login), &inherited, &[], &["/never/used"]);
+        let planned = plan(Some(&login), &inherited, &[], &["/Users/me/.toolbox/bin"]);
         assert_eq!(
             planned["PATH"],
-            "/Users/me/.toolbox/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+            "/Users/me/.toolbox/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+            "a fallback dir the login PATH already has isn't repeated"
         );
         assert_eq!(planned["JAVA_HOME"], "/j");
         assert_eq!(planned["HTTPS_PROXY"], "http://proxy:3128");
@@ -581,6 +718,67 @@ mod tests {
     }
 
     #[test]
+    fn overlay_appends_fallback_dirs_to_a_degraded_login_path() {
+        // csh/tcsh `-i -c` never reads ~/.login, and a `.zshrc` that
+        // `exec`s tmux forces the `-l -c` retry, which skips `.zshrc`:
+        // the probe "works" but its PATH lacks the user's tool dirs.
+        let inherited = env_of(&[("PATH", LAUNCHD_PATH)]);
+        for (degraded, appended) in [
+            (
+                "/usr/bin:/bin",
+                &[
+                    "/Users/me/.toolbox/bin",
+                    "/opt/homebrew/bin",
+                    "/Users/me/.local/bin",
+                ][..],
+            ),
+            (
+                "/opt/homebrew/bin:/usr/bin:/bin",
+                &["/Users/me/.toolbox/bin", "/Users/me/.local/bin"][..],
+            ),
+        ] {
+            let login = login(degraded, &[("LANG", "en_US.UTF-8")]);
+            let planned = plan(
+                Some(&login),
+                &inherited,
+                &[],
+                &[
+                    "/Users/me/.toolbox/bin",
+                    "/opt/homebrew/bin",
+                    "/Users/me/.local/bin",
+                ],
+            );
+            let entries: Vec<&str> = planned["PATH"].split(':').collect();
+            assert_eq!(
+                &entries[..degraded.split(':').count()],
+                degraded.split(':').collect::<Vec<_>>().as_slice(),
+                "login entries keep the highest precedence"
+            );
+            assert_eq!(
+                &entries[entries.len() - appended.len()..],
+                appended,
+                "missing user bin dirs are appended last, after inherited extras"
+            );
+            assert_eq!(
+                entries
+                    .iter()
+                    .filter(|e| **e == "/opt/homebrew/bin")
+                    .count(),
+                1
+            );
+            assert_eq!(planned["LANG"], "en_US.UTF-8");
+        }
+    }
+
+    #[test]
+    fn overlay_fallback_dirs_follow_inherited_extras() {
+        let inherited = env_of(&[("PATH", "/venv/bin:/usr/bin")]);
+        let login = login("/usr/bin:/bin", &[]);
+        let planned = plan(Some(&login), &inherited, &[], &["/u/.cargo/bin"]);
+        assert_eq!(planned["PATH"], "/usr/bin:/bin:/venv/bin:/u/.cargo/bin");
+    }
+
+    #[test]
     fn overlay_with_no_inherited_path_still_sets_one() {
         let planned = plan(None, &env_of(&[]), &[], &["/a"]);
         assert_eq!(planned["PATH"], "/a");
@@ -600,6 +798,150 @@ mod tests {
         let planned = plan(Some(&login), &inherited, &[], &[]);
         assert!(!planned.contains_key("PATH"));
         assert_eq!(planned["A"], "1");
+    }
+
+    fn names(env: &LoginEnv) -> Vec<&str> {
+        env.vars.iter().map(|(k, _)| k.as_str()).collect()
+    }
+
+    fn build(pairs: &[(&str, &str)]) -> LoginEnv {
+        build_login_env(
+            std::iter::once(("PATH".to_string(), "/usr/bin".to_string()))
+                .chain(pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())))
+                .collect(),
+        )
+        .expect("has PATH")
+    }
+
+    #[test]
+    fn ssh_auth_sock_imports_only_without_an_rc_started_agent() {
+        // An rc file pointing at an existing agent socket (gpg-agent,
+        // 1Password, a systemd user agent): import it.
+        let env = build(&[
+            ("SSH_AUTH_SOCK", "/run/user/1000/gnupg/S.gpg-agent.ssh"),
+            ("SSH_CONNECTION", "10.0.0.1 22 10.0.0.2 22"),
+        ]);
+        assert_eq!(names(&env), ["SSH_AUTH_SOCK"], "other SSH_* stay denied");
+
+        // `eval $(ssh-agent)`: a fresh, key-less agent per probe. Drop it.
+        let env = build(&[
+            ("SSH_AUTH_SOCK", "/tmp/ssh-XXXX/agent.123"),
+            ("SSH_AGENT_PID", "124"),
+        ]);
+        assert!(names(&env).is_empty(), "{:?}", env.vars);
+    }
+
+    #[test]
+    fn ssh_auth_sock_never_overrides_the_inherited_one() {
+        let login = build(&[("SSH_AUTH_SOCK", "/rc/agent.sock")]);
+        // macOS: launchd always provides one.
+        let inherited = env_of(&[
+            ("PATH", "/usr/bin"),
+            (
+                "SSH_AUTH_SOCK",
+                "/private/tmp/com.apple.launchd.x/Listeners",
+            ),
+        ]);
+        assert!(!plan(Some(&login), &inherited, &[], &[]).contains_key("SSH_AUTH_SOCK"));
+        // A Linux session without a keyring agent: import.
+        let inherited = env_of(&[("PATH", "/usr/bin")]);
+        assert_eq!(
+            plan(Some(&login), &inherited, &[], &[])["SSH_AUTH_SOCK"],
+            "/rc/agent.sock"
+        );
+    }
+
+    #[test]
+    fn temporary_aws_credentials_are_not_imported() {
+        for marker in ["AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN"] {
+            let env = build(&[
+                ("AWS_ACCESS_KEY_ID", "ASIAEXAMPLE"),
+                ("AWS_SECRET_ACCESS_KEY", "secret"),
+                (marker, "token"),
+                ("AWS_CREDENTIAL_EXPIRATION", "2026-11-03T20:00:00Z"),
+                ("AWS_PROFILE", "dev"),
+                ("AWS_REGION", "us-west-2"),
+                ("AWS_DEFAULT_REGION", "us-west-2"),
+            ]);
+            assert_eq!(
+                names(&env),
+                ["AWS_DEFAULT_REGION", "AWS_PROFILE", "AWS_REGION"],
+                "with {marker}"
+            );
+        }
+    }
+
+    #[test]
+    fn long_lived_aws_keys_still_import() {
+        let env = build(&[
+            ("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE"),
+            ("AWS_SECRET_ACCESS_KEY", "secret"),
+            ("AWS_PROFILE", "dev"),
+        ]);
+        assert_eq!(
+            names(&env),
+            ["AWS_ACCESS_KEY_ID", "AWS_PROFILE", "AWS_SECRET_ACCESS_KEY"]
+        );
+    }
+
+    #[test]
+    fn env_lines_parse_conservatively() {
+        let out = b"PATH=/a:/b\nMULTI=line1\nline two = not a var\n  indented=x\nlast\n\
+                    _UNDER=1\nA1=x=y\nEMPTY=\n";
+        assert_eq!(
+            parse_env_lines(out),
+            vec![
+                ("PATH".to_string(), "/a:/b".to_string()),
+                (
+                    "MULTI".to_string(),
+                    "line1\nline two = not a var\n  indented=x\nlast".to_string()
+                ),
+                ("_UNDER".to_string(), "1".to_string()),
+                ("A1".to_string(), "x=y".to_string()),
+                ("EMPTY".to_string(), String::new()),
+            ]
+        );
+    }
+
+    #[test]
+    fn env_lines_drop_leading_junk_and_keep_trailing_newlines_in_values() {
+        // Lines before the first `NAME=` have no variable to belong to.
+        // A value that itself ends in a newline prints as an empty line
+        // before the next variable.
+        let out = b"env: illegal option -- 0\n=nameless\nA=1\n\nB=2";
+        assert_eq!(
+            parse_env_lines(out),
+            vec![
+                ("A".to_string(), "1\n".to_string()),
+                ("B".to_string(), "2".to_string()),
+            ]
+        );
+        assert!(parse_env_lines(b"").is_empty());
+        assert!(parse_env_lines(b"\n\n").is_empty());
+        // Names that aren't identifiers never start a variable.
+        assert_eq!(
+            parse_env_lines(b"A=1\n1BAD=2\nhas-dash=3\n"),
+            vec![("A".to_string(), "1\n1BAD=2\nhas-dash=3".to_string())]
+        );
+    }
+
+    #[test]
+    fn env_output_format_is_detected_by_nul() {
+        assert_eq!(
+            parse_env_output(b"A=1\nstill A\0B=2\0"),
+            vec![
+                ("A".to_string(), "1\nstill A".to_string()),
+                ("B".to_string(), "2".to_string()),
+            ]
+        );
+        assert_eq!(
+            parse_env_output(b"A=1\nB=2\n"),
+            vec![
+                ("A".to_string(), "1".to_string()),
+                ("B".to_string(), "2".to_string()),
+            ]
+        );
+        assert!(parse_env_output(b"").is_empty());
     }
 
     #[test]

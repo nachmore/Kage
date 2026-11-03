@@ -27,6 +27,12 @@ use tauri::Manager;
 /// Build a mock app managing EXACTLY the state production manages, via
 /// the same constructor `main.rs::run` uses.
 fn mock_app() -> tauri::App<MockRuntime> {
+    // Integration tests link the non-test library, where the login-shell
+    // probe is live: commands the sweep dispatches (agent detection,
+    // `switch_acp_session`'s respawns, …) would otherwise run the CI
+    // runner's — or the developer's — real rc files. Same switch the
+    // Settings toggle uses; `KAGE_LOGIN_SHELL_ENV=1` still forces it on.
+    kage::os::login_env::set_enabled(false);
     let config = Arc::new(std::sync::Mutex::new(kage::config::Config::default()));
     let acp_client = Arc::new(AcpClient::new(AcpConnectionMode::Local {
         // `true` is the conventional no-op command; the client doesn't

@@ -10,6 +10,7 @@ impl Default for AgentConfig {
             default_model: None,
             working_directory: None,
             auto_compact_threshold: 90,
+            import_login_shell_env: true,
         }
     }
 }
@@ -192,6 +193,14 @@ pub struct AgentConfig {
     /// Auto-compact threshold (0-100). When context usage >= this %, auto-send /compact. 0 = disabled.
     #[serde(default = "default_auto_compact_threshold")]
     pub auto_compact_threshold: u32,
+    /// macOS/Linux: give the agent (and the MCP servers it starts) the
+    /// environment of the user's login shell — PATH and rc-file exports —
+    /// by running the shell's startup files once in the background
+    /// (`os::login_env`). Off: children inherit Kage's own environment
+    /// unchanged (launchd's minimal PATH when started from Finder/Dock).
+    /// `KAGE_LOGIN_SHELL_ENV=0/1` overrides it. No effect on Windows.
+    #[serde(default = "default_true")]
+    pub import_login_shell_env: bool,
 }
 
 /// `Deserialize` is hand-written (via `AcpModeWire`) so missing fields

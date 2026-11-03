@@ -274,15 +274,26 @@ pub struct ProxyRun {
 /// Run a profile's proxy script for `url`. Blocking — call from a
 /// blocking-pool thread.
 pub fn run_proxy(profile: &InternalSiteProfile, url: &str, response: ProxyResponse) -> ProxyRun {
+    // Proxy scripts (often drafted by the agent to "reuse whatever its own
+    // tools use") call user-installed CLIs; give them the same login
+    // environment the agent and its MCP servers get.
+    run_proxy_with(profile, url, response, crate::os::login_env::overlay)
+}
+
+/// [`run_proxy`] with the login-environment overlay injected, so tests
+/// never depend on (or run) the developer's real login shell.
+fn run_proxy_with(
+    profile: &InternalSiteProfile,
+    url: &str,
+    response: ProxyResponse,
+    login_overlay: impl FnOnce(&[&str]) -> Vec<(String, String)>,
+) -> ProxyRun {
     let timeout = match profile.proxy.timeout_ms {
         0 => DEFAULT_PROXY_TIMEOUT_MS,
         t => t.min(MAX_PROXY_TIMEOUT_MS),
     };
     let own = [("KAGE_URL", url), ("KAGE_RESPONSE", response.env_value())];
-    // Proxy scripts (often drafted by the agent to "reuse whatever its own
-    // tools use") call user-installed CLIs; give them the same login
-    // environment the agent and its MCP servers get.
-    let login = crate::os::login_env::overlay(&own.map(|(k, _)| k));
+    let login = login_overlay(&own.map(|(k, _)| k));
     let env: Vec<(&str, &str)> = login
         .iter()
         .map(|(k, v)| (k.as_str(), v.as_str()))
@@ -607,16 +618,23 @@ mod tests {
         assert_eq!(p.proxy.timeout_ms, 0);
     }
 
+    /// No login environment: the proxy tests below must not depend on the
+    /// login shell of whoever runs them.
+    fn no_login_env(_explicit: &[&str]) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn proxy_receives_url_via_env_not_script_text() {
         let mut p = profile(vec![], vec![]);
         p.proxy.lang = ProxyLang::Bash;
         p.proxy.script = r#"printf '%s|%s' "$KAGE_URL" "$KAGE_RESPONSE""#.into();
-        let run = run_proxy(
+        let run = run_proxy_with(
             &p,
             "https://a.test/?q=$(touch /tmp/x)",
             ProxyResponse::Base64,
+            no_login_env,
         );
         assert!(run.ok, "{run:?}");
         assert_eq!(run.stdout, "https://a.test/?q=$(touch /tmp/x)|base64");
@@ -627,8 +645,33 @@ mod tests {
     fn proxy_receives_url_via_env_not_script_text() {
         let mut p = profile(vec![], vec![]);
         p.proxy.script = r#"[Console]::Out.Write("$env:KAGE_URL|$env:KAGE_RESPONSE")"#.into();
-        let run = run_proxy(&p, "https://a.test/?q=$(Get-Date)", ProxyResponse::Text);
+        let run = run_proxy_with(
+            &p,
+            "https://a.test/?q=$(Get-Date)",
+            ProxyResponse::Text,
+            no_login_env,
+        );
         assert!(run.ok, "{run:?}");
         assert_eq!(run.stdout, "https://a.test/?q=$(Get-Date)|text");
+    }
+
+    /// The login overlay reaches the script, is told which names the
+    /// runner sets itself, and can't override them.
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn proxy_gets_the_login_overlay_but_its_own_vars_win() {
+        let mut p = profile(vec![], vec![]);
+        p.proxy.lang = ProxyLang::Bash;
+        p.proxy.script = r#"printf '%s|%s|%s' "$FROM_LOGIN" "$KAGE_URL" "$KAGE_RESPONSE""#.into();
+        let run = run_proxy_with(&p, "https://a.test/", ProxyResponse::Text, |explicit| {
+            assert_eq!(explicit, ["KAGE_URL", "KAGE_RESPONSE"]);
+            vec![
+                ("FROM_LOGIN".into(), "yes".into()),
+                // A buggy overlay that ignored `explicit` still loses.
+                ("KAGE_URL".into(), "https://evil.test/".into()),
+            ]
+        });
+        assert!(run.ok, "{run:?}");
+        assert_eq!(run.stdout, "yes|https://a.test/|text");
     }
 }

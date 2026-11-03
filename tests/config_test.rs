@@ -158,6 +158,22 @@ fn test_config_migration_v1_config_upgrades_to_current() {
 }
 
 #[test]
+fn import_login_shell_env_defaults_on_and_round_trips_off() {
+    // Configs written before the setting existed keep the feature on.
+    let old: Config = serde_json::from_value(serde_json::json!({
+        "acp": { "agent": { "start_session_on_launch": false } }
+    }))
+    .unwrap();
+    assert!(old.acp.agent.import_login_shell_env);
+    assert!(Config::default().acp.agent.import_login_shell_env);
+
+    let mut config = Config::default();
+    config.acp.agent.import_login_shell_env = false;
+    let reloaded: Config = serde_json::from_value(serde_json::to_value(&config).unwrap()).unwrap();
+    assert!(!reloaded.acp.agent.import_login_shell_env);
+}
+
+#[test]
 fn test_config_migration_future_version_rejected() {
     let payload = serde_json::json!({
         "version": CURRENT_VERSION + 1,

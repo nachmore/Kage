@@ -30,7 +30,9 @@ pub fn configure(
     // First thing: probe the user's login-shell environment on a
     // background thread, so the launch-time agent spawn (and the MCP
     // servers it starts) rarely has to wait for it. Setup only runs in the
-    // primary instance, so a forwarded second launch never probes.
+    // primary instance, so a forwarded second launch never probes. The
+    // Settings toggle goes in first: off means no probe at all.
+    os::login_env::set_enabled(config.acp.agent.import_login_shell_env);
     os::login_env::prewarm();
 
     #[cfg(target_os = "macos")]

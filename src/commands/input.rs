@@ -429,13 +429,17 @@ pub async fn execute_shortcut<R: tauri::Runtime>(
     }
 
     // Shortcuts name user tools (`code`, scripts with `#!/usr/bin/env
-    // node`, …): resolve and run them as a terminal would.
-    crate::os::login_env::apply(&mut command);
-    crate::os::configure_breakaway_from_job(&mut command);
-
-    command
-        .spawn()
-        .map_err(|e| format!("Failed to execute shortcut: {}", e))?;
+    // node`, …): resolve and run them as a terminal would. On the blocking
+    // pool, because `login_env::apply` can wait for the launch-time shell
+    // probe and this is an async command.
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::os::login_env::apply(&mut command);
+        crate::os::configure_breakaway_from_job(&mut command);
+        command.spawn()
+    })
+    .await
+    .map_err(|e| format!("Failed to execute shortcut: {}", e))?
+    .map_err(|e| format!("Failed to execute shortcut: {}", e))?;
 
     // Anonymous shortcut-usage event. We deliberately don't send the
     // path or args — those can contain personal info like `~/Documents/...`.
