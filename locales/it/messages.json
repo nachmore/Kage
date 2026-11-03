@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Usa l'ambiente della mia shell per gli strumenti dell'agente",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Usa l'ambiente della mia shell per gli strumenti eseguiti da Kage e dall'agente",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Esegue una volta in background i file di avvio della shell (come .zshrc o .bash_profile), così l'agente e i server MCP che avvia trovano gli stessi strumenti (PATH) e le stesse impostazioni del terminale. Disattiva questa opzione se i file di avvio sono lenti o eseguono operazioni che non desideri all'avvio. La modifica si applica al prossimo avvio dell'agente.",
+    "message": "Esegue i file di avvio della shell (come .zshrc o .bash_profile) in background poco dopo l'avvio e di tanto in tanto in seguito, in modo che l'agente, i suoi server MCP e gli strumenti che Kage esegue per le scorciatoie e la sintesi vocale trovino gli stessi programmi (PATH) e le stesse impostazioni del terminale. Disattiva questa opzione se i file di avvio sono lenti o eseguono operazioni che non vuoi in background; in tal caso, i comandi installati solo tramite la configurazione della shell potrebbero non essere trovati quando Kage viene aperto dal Dock o dal Finder. Si applica agli strumenti da subito e all'agente al suo prossimo avvio.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

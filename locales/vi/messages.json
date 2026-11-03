@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Dùng môi trường shell của tôi cho công cụ của tác tử",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Dùng môi trường shell của tôi cho các công cụ mà Kage và tác nhân chạy",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Chạy các tệp khởi động của shell (như .zshrc hoặc .bash_profile) một lần ở chế độ nền để tác tử và các máy chủ MCP mà nó khởi chạy tìm thấy cùng các công cụ (PATH) và thiết lập như trong terminal. Hãy tắt tùy chọn này nếu các tệp khởi động của bạn chạy chậm hoặc thực hiện những việc bạn không muốn khi khởi chạy. Có hiệu lực từ lần tiếp theo tác tử khởi động.",
+    "message": "Chạy các tệp khởi động của shell (như .zshrc hoặc .bash_profile) ở chế độ nền ngay sau khi khởi chạy và thỉnh thoảng sau đó, để tác nhân, các máy chủ MCP của nó và các công cụ mà Kage chạy cho phím tắt và giọng nói tìm thấy cùng các chương trình (PATH) và thiết lập như trong terminal. Hãy tắt tùy chọn này nếu các tệp khởi động của bạn chạy chậm hoặc thực hiện những việc bạn không muốn chạy ở chế độ nền; khi đó, các lệnh chỉ được cài đặt thông qua thiết lập shell có thể sẽ không được tìm thấy khi mở Kage từ Dock hoặc Finder. Áp dụng cho các công cụ kể từ bây giờ và cho tác nhân vào lần khởi động tiếp theo.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

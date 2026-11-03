@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Gunakan lingkungan shell saya untuk alat agen",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Gunakan lingkungan shell saya untuk alat yang dijalankan Kage dan agen",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Menjalankan file startup shell Anda (seperti .zshrc atau .bash_profile) satu kali di latar belakang, agar agen dan server MCP yang dijalankannya menemukan alat (PATH) dan pengaturan yang sama seperti di terminal. Nonaktifkan ini jika file startup Anda lambat atau melakukan hal yang tidak Anda inginkan saat peluncuran. Berlaku saat agen dimulai berikutnya.",
+    "message": "Menjalankan file startup shell Anda (seperti .zshrc atau .bash_profile) di latar belakang sesaat setelah peluncuran dan sesekali setelahnya, agar agen, server MCP-nya, dan alat yang dijalankan Kage untuk pintasan dan ucapan menemukan program (PATH) dan pengaturan yang sama seperti di terminal. Nonaktifkan ini jika file startup Anda lambat atau melakukan hal yang tidak Anda inginkan di latar belakang; perintah yang hanya diinstal melalui pengaturan shell Anda mungkin tidak ditemukan saat Kage dibuka dari Dock atau Finder. Berlaku untuk alat mulai sekarang dan untuk agen saat dimulai berikutnya.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

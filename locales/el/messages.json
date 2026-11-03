@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Χρήση του περιβάλλοντος του κελύφους μου για τα εργαλεία του πράκτορα",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Χρήση του περιβάλλοντος του shell μου για τα εργαλεία που εκτελούν το Kage και ο agent",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Εκτελεί μία φορά στο παρασκήνιο τα αρχεία εκκίνησης του κελύφους σας (όπως .zshrc ή .bash_profile), ώστε ο πράκτορας και οι διακομιστές MCP που ξεκινά να βρίσκουν τα ίδια εργαλεία (PATH) και τις ίδιες ρυθμίσεις με ένα τερματικό. Απενεργοποιήστε το αν τα αρχεία εκκίνησής σας είναι αργά ή κάνουν ενέργειες που δεν θέλετε κατά την εκκίνηση. Εφαρμόζεται την επόμενη φορά που θα ξεκινήσει ο πράκτορας.",
+    "message": "Εκτελεί τα αρχεία εκκίνησης του shell σας (όπως .zshrc ή .bash_profile) στο παρασκήνιο λίγο μετά την εκκίνηση και περιστασιακά στη συνέχεια, ώστε ο agent, οι διακομιστές MCP του και τα εργαλεία που εκτελεί το Kage για συντομεύσεις και ομιλία να βρίσκουν τα ίδια προγράμματα (PATH) και τις ίδιες ρυθμίσεις όπως σε ένα τερματικό. Απενεργοποιήστε το αν τα αρχεία εκκίνησής σας είναι αργά ή κάνουν πράγματα που δεν θέλετε να γίνονται στο παρασκήνιο· σε αυτή την περίπτωση, εντολές που έχουν εγκατασταθεί μόνο μέσω της ρύθμισης του shell σας ενδέχεται να μην εντοπίζονται όταν το Kage ανοίγει από το Dock ή το Finder. Ισχύει για τα εργαλεία από εδώ και στο εξής και για τον agent την επόμενη φορά που θα ξεκινήσει.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

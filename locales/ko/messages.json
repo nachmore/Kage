@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "에이전트 도구에 내 셸 환경 사용",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Kage와 에이전트가 실행하는 도구에 내 셸 환경 사용",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "셸의 시작 파일(.zshrc 또는 .bash_profile 등)을 백그라운드에서 한 번 실행하여 에이전트와 에이전트가 시작하는 MCP 서버가 터미널에서와 동일한 도구(PATH)와 설정을 찾을 수 있도록 합니다. 시작 파일이 느리거나 실행 시 원하지 않는 작업을 수행하는 경우 이 옵션을 끄십시오. 다음에 에이전트가 시작될 때 적용됩니다.",
+    "message": "앱 실행 직후와 이후 가끔 백그라운드에서 셸 시작 파일(.zshrc 또는 .bash_profile 등)을 실행하여, 에이전트와 에이전트의 MCP 서버, 그리고 Kage가 단축어 및 음성 기능을 위해 실행하는 도구가 터미널과 동일한 프로그램(PATH)과 설정을 찾을 수 있도록 합니다. 시작 파일이 느리거나 백그라운드에서 원하지 않는 작업을 수행하는 경우 이 옵션을 끄십시오. 이 경우 Dock 또는 Finder에서 Kage를 열면 셸 설정을 통해서만 설치된 명령을 찾지 못할 수 있습니다. 도구에는 지금부터 적용되며, 에이전트에는 다음에 시작될 때 적용됩니다.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

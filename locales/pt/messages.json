@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Usar o ambiente da minha shell para as ferramentas do agente",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Usar o ambiente da minha shell para as ferramentas executadas pelo Kage e pelo agente",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Executa uma vez em segundo plano os ficheiros de arranque da sua shell (como .zshrc ou .bash_profile), para que o agente e os servidores MCP que inicia encontrem as mesmas ferramentas (PATH) e definições que num terminal. Desative esta opção se os seus ficheiros de arranque forem lentos ou fizerem coisas que não pretende no arranque. Aplica-se na próxima vez que o agente for iniciado.",
+    "message": "Executa os ficheiros de arranque da sua shell (como .zshrc ou .bash_profile) em segundo plano pouco depois do arranque e, ocasionalmente, mais tarde, para que o agente, os respetivos servidores MCP e as ferramentas que o Kage executa para atalhos e voz encontrem os mesmos programas (PATH) e definições que num terminal. Desative esta opção se os seus ficheiros de arranque forem lentos ou fizerem coisas que não pretende em segundo plano; nesse caso, os comandos instalados apenas através da configuração da shell poderão não ser encontrados quando o Kage for aberto a partir da Dock ou do Finder. Aplica-se às ferramentas a partir de agora e ao agente da próxima vez que for iniciado.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

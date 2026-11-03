@@ -33,9 +33,11 @@
 //!    (`LD_PRELOAD`, `LD_AUDIT`), and Kage's own `KAGE_*` child-process
 //!    namespace. Two contextual rules sit on top:
 //!    * `SSH_AUTH_SOCK` is the one `SSH_*` variable that may cross, and
-//!      only when the probe did not also export `SSH_AGENT_PID` — that pair
-//!      is the signature of an rc file running `eval $(ssh-agent)`, which
-//!      would point every child at a fresh, key-less agent. A socket the rc
+//!      only when the probe did not also export `SSH_AGENT_PID`, or the
+//!      socket already existed before the probe started — a fresh pair is
+//!      the signature of an rc file running `eval $(ssh-agent)`, which
+//!      would point every child at a key-less agent, while `keychain
+//!      --eval` / a saved `agent.env` reattach to a long-lived one. A socket the rc
 //!      file merely points at (a gpg-agent / 1Password / systemd user
 //!      agent) is what git-over-ssh in an MCP server needs on Linux
 //!      sessions that start no keyring agent. Rule 3 still applies: an
@@ -272,15 +274,19 @@ pub(super) fn parse_env_output(block: &[u8]) -> Vec<(String, String)> {
 /// Parse newline-separated `env` output, conservatively. A new variable
 /// starts at a line of the form `NAME=…` where `NAME` is a plain
 /// identifier (`^[A-Za-z_][A-Za-z0-9_]*=`); any other line continues the
-/// previous variable's value (a value with embedded newlines). Lines
-/// before the first variable are dropped. The format is ambiguous — a
+/// previous variable's value (a value with embedded newlines). An exported
+/// shell function (`export -f`: bash prints `BASH_FUNC_f%%=() {  …`, Apple's
+/// bash `__BASH_FUNC<f>()=() {`, over several lines) also starts an entry,
+/// so its body doesn't run into the previous variable's value;
+/// `is_importable` then drops it by name. Lines before the first variable
+/// are dropped. The format is ambiguous — a
 /// multi-line value whose continuation line happens to look like
 /// `NAME=…` is split into two variables — which is why the NUL format is
 /// preferred; the policy still filters whatever comes out.
 pub(super) fn parse_env_lines(block: &[u8]) -> Vec<(String, String)> {
     let mut entries: Vec<Vec<u8>> = Vec::new();
     for line in block.split(|b| *b == b'\n') {
-        if starts_with_assignment(line) {
+        if starts_with_assignment(line) || starts_with_exported_function(line) {
             entries.push(line.to_vec());
         } else if let Some(last) = entries.last_mut() {
             last.push(b'\n');
@@ -298,6 +304,14 @@ pub(super) fn parse_env_lines(block: &[u8]) -> Vec<(String, String)> {
     parse_env_block(&joined)
 }
 
+/// `^[^\s=]+=\(\) \{` — the first line of an exported shell function.
+fn starts_with_exported_function(line: &[u8]) -> bool {
+    let Some(eq) = line.iter().position(|b| *b == b'=') else {
+        return false;
+    };
+    eq > 0 && !line[..eq].iter().any(u8::is_ascii_whitespace) && line[eq + 1..].starts_with(b"() {")
+}
+
 /// `^[A-Za-z_][A-Za-z0-9_]*=`
 fn starts_with_assignment(line: &[u8]) -> bool {
     let Some(eq) = line.iter().position(|b| *b == b'=') else {
@@ -308,10 +322,22 @@ fn starts_with_assignment(line: &[u8]) -> bool {
         && name.iter().all(|c| *c == b'_' || c.is_ascii_alphanumeric())
 }
 
+/// [`build_login_env_with`] for tests that don't care about agent sockets.
+#[cfg(test)]
+pub(super) fn build_login_env(parsed: Vec<(String, String)>) -> Option<LoginEnv> {
+    build_login_env_with(parsed, &|_| false)
+}
+
 /// Apply the policy to a parsed login environment. `None` when it has no
 /// usable PATH — then the probe didn't really work and we'd rather fall
-/// back than import a half-environment.
-pub(super) fn build_login_env(parsed: Vec<(String, String)>) -> Option<LoginEnv> {
+/// back than import a half-environment. `socket_predates_probe(path)` says
+/// whether the agent socket at `path` already existed when the probe
+/// started — i.e. the rc file reattached to a long-lived agent (`keychain
+/// --eval`, a saved `~/.ssh/agent.env`) rather than starting a fresh one.
+pub(super) fn build_login_env_with(
+    parsed: Vec<(String, String)>,
+    socket_predates_probe: &dyn Fn(&str) -> bool,
+) -> Option<LoginEnv> {
     let path = parsed
         .iter()
         .find(|(name, _)| name == "PATH")
@@ -319,7 +345,11 @@ pub(super) fn build_login_env(parsed: Vec<(String, String)>) -> Option<LoginEnv>
         .filter(|p| !p.is_empty())?;
 
     let has = |wanted: &str| parsed.iter().any(|(name, _)| name == wanted);
-    let ssh_sock_ok = !has(SSH_AGENT_PID);
+    let ssh_sock_ok = !has(SSH_AGENT_PID)
+        || parsed
+            .iter()
+            .find(|(name, _)| name == SSH_AUTH_SOCK)
+            .is_some_and(|(_, sock)| socket_predates_probe(sock));
     let temporary_aws = AWS_SESSION_MARKERS.iter().any(|m| has(m));
 
     let mut vars: Vec<(String, String)> = parsed
@@ -829,6 +859,34 @@ mod tests {
             ("SSH_AGENT_PID", "124"),
         ]);
         assert!(names(&env).is_empty(), "{:?}", env.vars);
+
+        // `eval $(keychain --eval)` / `. ~/.ssh/agent.env`: same pair, but
+        // the socket predates the probe — a long-lived agent with keys.
+        let pairs = [
+            ("PATH", "/usr/bin"),
+            ("SSH_AUTH_SOCK", "/tmp/ssh-OLD/agent.99"),
+            ("SSH_AGENT_PID", "100"),
+        ];
+        let parsed = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let env = build_login_env_with(parsed, &|sock| sock == "/tmp/ssh-OLD/agent.99")
+            .expect("has PATH");
+        assert_eq!(names(&env), ["SSH_AUTH_SOCK"]);
+    }
+
+    #[test]
+    fn exported_functions_do_not_bleed_into_the_previous_value() {
+        // `export -f f` in an rc file, printed by plain (no -0) env.
+        let out = b"JAVA_HOME=/x\nBASH_FUNC_f%%=() {  echo hi\n}\nPATH=/usr/bin\n__BASH_FUNC<g>()=() {  true\n}\n";
+        let parsed = parse_env_lines(out);
+        assert!(
+            parsed.contains(&("JAVA_HOME".to_string(), "/x".to_string())),
+            "{parsed:?}"
+        );
+        let env = build_login_env(parsed).expect("has PATH");
+        assert_eq!(names(&env), ["JAVA_HOME"]);
     }
 
     #[test]

@@ -133,6 +133,18 @@ pub fn set_enabled(enabled: bool) {
     let _ = enabled;
 }
 
+/// Record the saved Settings toggle at process start, before any window
+/// (and so any invoke that might spawn a tool) exists: until then the
+/// setting reads as on, which for a user who turned it off would run
+/// their rc files anyway. Silent and never probes; [`set_enabled`] is for
+/// later changes.
+pub fn init_setting(enabled: bool) {
+    #[cfg(unix)]
+    imp::init_user_setting(enabled);
+    #[cfg(not(unix))]
+    let _ = enabled;
+}
+
 /// Block until the first probe has finished — at most until
 /// [`SPAWN_WAIT`] after it started, and not at all on the main thread,
 /// when disabled, or once any probe has finished. For callers that are
@@ -155,25 +167,29 @@ pub fn wait_ready() {
 /// `async` body on a Tokio worker.
 pub fn apply(cmd: &mut Command) {
     #[cfg(unix)]
-    apply_for(cmd, schedule::Purpose::Tool);
+    apply_for(cmd, schedule::Purpose::Tool, true);
     #[cfg(not(unix))]
     let _ = cmd;
 }
 
-/// [`apply`] for the agent (re)spawn. Additionally kicks off a background
-/// refresh when the cached environment is older than 30 minutes (the
-/// spawn itself still uses the cached one).
+/// [`apply`] for the agent (re)spawn. Never waits: the spawn runs under
+/// the transport's connect lock, and its caller already did the bounded
+/// [`wait_ready`] before taking it (if the first probe started after that,
+/// e.g. the toggle was just turned on, this spawn gets the fallback PATH).
+/// Additionally kicks off a background refresh when the cached
+/// environment is older than 30 minutes (the spawn itself still uses the
+/// cached one).
 pub fn apply_agent(cmd: &mut Command) {
     #[cfg(unix)]
-    apply_for(cmd, schedule::Purpose::Agent);
+    apply_for(cmd, schedule::Purpose::Agent, false);
     #[cfg(not(unix))]
     let _ = cmd;
 }
 
 #[cfg(unix)]
-fn apply_for(cmd: &mut Command, purpose: schedule::Purpose) {
+fn apply_for(cmd: &mut Command, purpose: schedule::Purpose, wait: bool) {
     let explicit = explicit_names(cmd);
-    for (k, v) in imp::overlay(purpose, &|name| explicit.iter().any(|e| e == name)) {
+    for (k, v) in imp::overlay(purpose, wait, &|name| explicit.iter().any(|e| e == name)) {
         cmd.env(k, v);
     }
 }
@@ -193,7 +209,9 @@ fn explicit_names(cmd: &Command) -> Vec<String> {
 pub fn overlay(explicit: &[&str]) -> Vec<(String, String)> {
     #[cfg(unix)]
     {
-        imp::overlay(schedule::Purpose::Tool, &|name| explicit.contains(&name))
+        imp::overlay(schedule::Purpose::Tool, true, &|name| {
+            explicit.contains(&name)
+        })
     }
     #[cfg(not(unix))]
     {
@@ -269,6 +287,19 @@ mod imp {
             None if cfg!(test) => false,
             None => USER_SETTING.load(Ordering::Relaxed) && !launched_from_terminal(),
         }
+    }
+
+    pub(super) fn init_user_setting(on: bool) {
+        USER_SETTING.store(on, Ordering::Relaxed);
+    }
+
+    /// Off only because of the Settings toggle (not the env override, a
+    /// terminal launch, or a test build).
+    fn off_by_setting() -> bool {
+        env_override().is_none()
+            && !cfg!(test)
+            && !USER_SETTING.load(Ordering::Relaxed)
+            && !launched_from_terminal()
     }
 
     pub(super) fn set_user_setting(on: bool) {
@@ -449,12 +480,25 @@ mod imp {
 
     pub(super) fn overlay(
         purpose: Purpose,
+        wait: bool,
         explicit: &dyn Fn(&str) -> bool,
     ) -> Vec<(String, String)> {
         if !enabled() {
+            // The toggle is about running rc files. Appending the
+            // well-known user bin dirs runs nothing, and without them a
+            // Finder-launched Kage can't find `kiro-cli`, Homebrew's
+            // python, … at all.
+            if off_by_setting() {
+                return policy::plan_overlay(
+                    None,
+                    &|k| std::env::var_os(k),
+                    explicit,
+                    fallback_dirs(),
+                );
+            }
             return Vec::new();
         }
-        let login = use_state(purpose, may_wait());
+        let login = use_state(purpose, wait && may_wait());
         policy::plan_overlay(
             login.as_deref(),
             &|k| std::env::var_os(k),

@@ -1638,11 +1638,11 @@
     "description": "Helper for start-on-launch toggle"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Use my shell's environment for agent tools",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell"
+    "message": "Use my shell's environment for tools Kage and the agent run",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Runs your shell's startup files (such as .zshrc or .bash_profile) once in the background, so the agent and the MCP servers it starts find the same tools (PATH) and settings as in a terminal. Turn this off if your startup files are slow or do things you don't want at launch. Applies the next time the agent starts.",
+    "message": "Runs your shell's startup files (such as .zshrc or .bash_profile) in the background shortly after launch and occasionally afterwards, so the agent, its MCP servers, and the tools Kage runs for shortcuts and speech find the same programs (PATH) and settings as in a terminal. Turn this off if your startup files are slow or do things you don't want in the background; commands installed only through your shell setup may then not be found when Kage is opened from the Dock or Finder. Applies to tools from now on and to the agent the next time it starts.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated"
   },
   "settings.connection.workspace.label": {

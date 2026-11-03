@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "ใช้สภาพแวดล้อมของเชลล์ของฉันสำหรับเครื่องมือของเอเจนต์",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "ใช้สภาพแวดล้อมของเชลล์ของฉันกับเครื่องมือที่ Kage และเอเจนต์เรียกใช้",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "เรียกใช้ไฟล์เริ่มต้นของเชลล์ (เช่น .zshrc หรือ .bash_profile) หนึ่งครั้งในเบื้องหลัง เพื่อให้เอเจนต์และเซิร์ฟเวอร์ MCP ที่เอเจนต์เริ่มต้นพบเครื่องมือ (PATH) และการตั้งค่าเดียวกันกับในเทอร์มินัล ปิดตัวเลือกนี้หากไฟล์เริ่มต้นของคุณทำงานช้าหรือทำสิ่งที่คุณไม่ต้องการเมื่อเปิดใช้งาน มีผลในครั้งถัดไปที่เอเจนต์เริ่มทำงาน",
+    "message": "เรียกใช้ไฟล์เริ่มต้นของเชลล์ (เช่น .zshrc หรือ .bash_profile) ในเบื้องหลังหลังเปิดแอปไม่นานและเป็นครั้งคราวหลังจากนั้น เพื่อให้เอเจนต์ เซิร์ฟเวอร์ MCP ของเอเจนต์ และเครื่องมือที่ Kage เรียกใช้สำหรับคำสั่งลัดและเสียงพูด พบโปรแกรม (PATH) และการตั้งค่าเดียวกันกับในเทอร์มินัล ปิดตัวเลือกนี้หากไฟล์เริ่มต้นของคุณทำงานช้าหรือทำสิ่งที่คุณไม่ต้องการให้เกิดขึ้นในเบื้องหลัง แต่เมื่อปิดแล้ว คำสั่งที่ติดตั้งผ่านการตั้งค่าเชลล์เท่านั้นอาจหาไม่พบเมื่อเปิด Kage จาก Dock หรือ Finder การตั้งค่านี้มีผลกับเครื่องมือตั้งแต่ตอนนี้เป็นต้นไป และมีผลกับเอเจนต์เมื่อเริ่มทำงานครั้งถัดไป",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

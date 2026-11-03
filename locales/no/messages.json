@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Bruk skallmiljøet mitt for agentverktøy",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Bruk skallmiljøet mitt for verktøy som Kage og agenten kjører",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Kjører oppstartsfilene til skallet ditt (for eksempel .zshrc eller .bash_profile) én gang i bakgrunnen, slik at agenten og MCP-serverne den starter, finner de samme verktøyene (PATH) og innstillingene som i en terminal. Slå av dette hvis oppstartsfilene dine er trege eller gjør ting du ikke vil skal skje ved oppstart. Tas i bruk neste gang agenten starter.",
+    "message": "Kjører oppstartsfilene til skallet ditt (for eksempel .zshrc eller .bash_profile) i bakgrunnen like etter oppstart og av og til senere, slik at agenten, MCP-serverne dens og verktøyene Kage kjører for snarveier og tale, finner de samme programmene (PATH) og innstillingene som i en terminal. Slå av dette hvis oppstartsfilene dine er trege eller gjør ting du ikke vil ha i bakgrunnen. Kommandoer som bare er installert via skalloppsettet ditt, blir da kanskje ikke funnet når Kage åpnes fra Dock eller Finder. Gjelder verktøy fra nå av, og agenten neste gang den starter.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

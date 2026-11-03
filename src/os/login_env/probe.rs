@@ -215,12 +215,21 @@ pub(super) fn resolve_with(shell: &Path, timeout: Duration) -> Result<Resolved, 
     let end = format!("__KAGE_ENV_END_{nonce}__");
     let deadline = Instant::now() + timeout;
     let home = dirs::home_dir();
+    let probe_started = std::time::SystemTime::now();
+    let socket_predates_probe = |sock: &str| {
+        std::fs::metadata(sock)
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| t < probe_started)
+    };
 
     for args in probe_attempts(shell_kind(shell), &start, &end) {
         let (stdout, killed) = run_probe(shell, &args, home.as_deref(), &end, deadline)?;
         if let Some(block) = policy::extract_block(&stdout, &start, &end) {
-            let env = policy::build_login_env(policy::parse_env_output(block))
-                .ok_or(ProbeError::NoEnvironment)?;
+            let env = policy::build_login_env_with(
+                policy::parse_env_output(block),
+                &socket_predates_probe,
+            )
+            .ok_or(ProbeError::NoEnvironment)?;
             let flags = args[..args.len() - 1].join(" ");
             return Ok(Resolved { env, flags, killed });
         }

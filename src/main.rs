@@ -172,6 +172,7 @@ async fn run() {
     // Register state on the builder before windows can issue Tauri invokes.
     // Setup retains only work requiring `&mut App` or `app.handle()`.
     let config = startup::load_config_with_overrides(debug_mode, Config::load);
+    os::login_env::init_setting(config.acp.agent.import_login_shell_env);
     info!("Configuration loaded");
 
     // Initialize the localisation catalogs from the embedded JSON resources.

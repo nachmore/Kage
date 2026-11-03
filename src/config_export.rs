@@ -353,6 +353,11 @@ pub fn sanitise_imported_config(mut imported: Config, local: &Config) -> Config 
     // the local value (the import flow calls set_startup_enabled if
     // the saved preference disagrees).
     imported.system.auto_start = local.system.auto_start;
+    // Whether Kage runs this machine's shell startup files is a decision
+    // about this machine's rc files; a backup (from Windows, where the
+    // toggle is hidden, or from before it existed) would silently turn it
+    // back on and run them at once.
+    imported.acp.agent.import_login_shell_env = local.acp.agent.import_login_shell_env;
 
     imported
 }
@@ -564,13 +569,24 @@ mod tests {
     }
 
     #[test]
-    fn sanitise_imports_the_login_shell_env_preference() {
-        // A preference, not device state: it travels with the backup.
-        let local = fake_config();
+    fn sanitise_keeps_local_login_shell_env_preference() {
+        // Device-local: a backup must not turn it back on (or off).
+        let mut local = fake_config();
+        local.acp.agent.import_login_shell_env = false;
         let mut imported = fake_config();
-        imported.acp.agent.import_login_shell_env = false;
+        imported.acp.agent.import_login_shell_env = true;
         let out = sanitise_imported_config(imported, &local);
         assert!(!out.acp.agent.import_login_shell_env);
+
+        local.acp.agent.import_login_shell_env = true;
+        imported = fake_config();
+        imported.acp.agent.import_login_shell_env = false;
+        assert!(
+            sanitise_imported_config(imported, &local)
+                .acp
+                .agent
+                .import_login_shell_env
+        );
     }
 
     #[test]

@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "ایجنٹ ٹولز کے لیے میرے شیل کا ماحول استعمال کریں",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Kage اور ایجنٹ جو ٹولز چلاتے ہیں ان کے لیے میرے شیل کا ماحول استعمال کریں",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "آپ کے شیل کی اسٹارٹ اپ فائلیں (جیسے .zshrc یا .bash_profile) پس منظر میں ایک بار چلاتا ہے، تاکہ ایجنٹ اور اس کے شروع کردہ MCP سرورز کو وہی ٹولز (PATH) اور سیٹنگز ملیں جو ٹرمینل میں ہوتی ہیں۔ اگر آپ کی اسٹارٹ اپ فائلیں سست ہیں یا لانچ کے وقت ایسے کام کرتی ہیں جو آپ نہیں چاہتے تو اسے بند کر دیں۔ یہ اگلی بار ایجنٹ شروع ہونے پر لاگو ہوگا۔",
+    "message": "لانچ کے کچھ دیر بعد اور پھر وقتاً فوقتاً پس منظر میں آپ کے شیل کی اسٹارٹ اپ فائلیں (جیسے ‎.zshrc یا ‎.bash_profile) چلاتا ہے، تاکہ ایجنٹ، اس کے MCP سرورز، اور وہ ٹولز جو Kage شارٹ کٹس اور تقریر کے لیے چلاتا ہے، وہی پروگرام (PATH) اور سیٹنگز تلاش کر سکیں جو ٹرمینل میں ہوتی ہیں۔ اگر آپ کی اسٹارٹ اپ فائلیں سست ہیں یا ایسے کام کرتی ہیں جو آپ پس منظر میں نہیں چاہتے تو اسے بند کر دیں؛ ایسی صورت میں جب Kage کو Dock یا Finder سے کھولا جائے تو صرف آپ کے شیل سیٹ اپ کے ذریعے انسٹال کردہ کمانڈز شاید نہ مل سکیں۔ یہ ٹولز پر ابھی سے اور ایجنٹ پر اس کے اگلی بار شروع ہونے پر لاگو ہوگا۔",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Usar el entorno de mi shell para las herramientas del agente",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Usar el entorno de mi shell para las herramientas que ejecutan Kage y el agente",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Ejecuta una vez en segundo plano los archivos de inicio de tu shell (como .zshrc o .bash_profile), para que el agente y los servidores MCP que inicia encuentren las mismas herramientas (PATH) y la misma configuración que en una terminal. Desactívalo si tus archivos de inicio son lentos o hacen cosas que no quieres al arrancar. Se aplica la próxima vez que se inicie el agente.",
+    "message": "Ejecuta los archivos de inicio de tu shell (como .zshrc o .bash_profile) en segundo plano poco después de abrir la app y, de vez en cuando, más adelante, para que el agente, sus servidores MCP y las herramientas que Kage ejecuta para atajos y voz encuentren los mismos programas (PATH) y la misma configuración que en una terminal. Desactívalo si tus archivos de inicio son lentos o hacen cosas que no quieres que ocurran en segundo plano; en ese caso, es posible que no se encuentren los comandos instalados solo mediante la configuración de tu shell cuando abras Kage desde el Dock o el Finder. Se aplica a las herramientas a partir de ahora y al agente la próxima vez que se inicie.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

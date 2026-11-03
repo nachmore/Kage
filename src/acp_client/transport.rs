@@ -74,6 +74,14 @@ pub struct AcpTransport {
     /// `disconnect`, the reader thread, or anything `connect` calls, so it
     /// can't deadlock (see `connect`).
     connect_lock: Mutex<()>,
+    /// Bumped (under `connect_lock`) after every spawn / dial attempt, with
+    /// its error kept in `last_connect_error`. A caller that queued on the
+    /// lock behind an attempt that then failed returns that failure
+    /// instead of repeating it: a remote dial retries for ~30 s, and a
+    /// send queued behind the launch-time connect would otherwise wait for
+    /// two of them. Cleared by `set_mode` (a new target deserves a try).
+    connect_attempts: AtomicU64,
+    last_connect_error: Mutex<Option<String>>,
     pub max_retries: u32,
     pub initial_retry_delay_ms: u64,
     pub process_manager: Arc<Mutex<ProcessManager>>,
@@ -96,6 +104,8 @@ impl AcpTransport {
             generation: Arc::new(AtomicU64::new(0)),
             notification_handler: Arc::new(Mutex::new(None)),
             connect_lock: Mutex::new(()),
+            connect_attempts: AtomicU64::new(0),
+            last_connect_error: Mutex::new(None),
             max_retries: 5,
             initial_retry_delay_ms: 100,
             process_manager: Arc::new(Mutex::new(ProcessManager::new())),
@@ -183,10 +193,10 @@ impl AcpTransport {
         self.connect_then(|| {})
     }
 
-    /// [`connect`](Self::connect), running `on_fresh` — still under the
-    /// connect lock — only when this call established a new connection
-    /// (so a caller can reset per-connection state before any other
-    /// connect caller can proceed onto the new agent).
+    /// [`connect`](Self::connect), running `on_fresh` — under the connect
+    /// lock, just before spawning / dialling — only when this call is the
+    /// one that (re)connects, so a caller can reset per-connection state
+    /// before the new connection is published to anyone.
     ///
     /// Concurrent callers are serialised: the first spawns/dials, the rest
     /// wait on `connect_lock`, re-check `is_connected()`, and return `Ok`
@@ -217,26 +227,39 @@ impl AcpTransport {
         ) {
             os::login_env::wait_ready();
         }
+        let attempts_before = self.connect_attempts.load(Ordering::SeqCst);
         let _serial = self.connect_lock.lock_or_recover();
         if self.is_connected() {
             info!("Already connected (a concurrent connect won the race)");
             return Ok(());
         }
+        if self.connect_attempts.load(Ordering::SeqCst) != attempts_before {
+            if let Some(err) = self.last_connect_error.lock_or_recover().clone() {
+                info!("A concurrent connect just failed; reporting its error");
+                anyhow::bail!("{err}");
+            }
+        }
         // Read the mode under the lock: a `set_mode` that ran while we
         // waited must not be undone by spawning the old command.
         let mode = self.mode.lock_or_recover().clone();
-        match mode {
+        // Before the connection is published (`connected = true` inside
+        // the spawn / dial): a caller on the unlocked fast path must never
+        // see the new agent paired with the old one's `initialized`.
+        on_fresh();
+        let result = match mode {
             AcpConnectionMode::Local { ref spawn_command } => {
                 info!("Local mode: spawning process");
-                self.spawn_backend_process(spawn_command)?;
+                self.spawn_backend_process(spawn_command)
             }
             AcpConnectionMode::Remote { .. } => {
                 info!("Remote mode: establishing TCP connection");
-                self.connect_with_retry(0)?;
+                self.connect_with_retry(0)
             }
-        }
-        on_fresh();
-        Ok(())
+        };
+        *self.last_connect_error.lock_or_recover() =
+            result.as_ref().err().map(|e| format!("{e:#}"));
+        self.connect_attempts.fetch_add(1, Ordering::SeqCst);
+        result
     }
 
     /// Replace the connection mode and tear down the current connection.
@@ -250,6 +273,7 @@ impl AcpTransport {
     pub fn set_mode(&self, mode: AcpConnectionMode) {
         *self.mode.lock_or_recover() = mode;
         let _serial = self.connect_lock.lock_or_recover();
+        *self.last_connect_error.lock_or_recover() = None;
         self.disconnect();
     }
 

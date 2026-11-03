@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Käytä komentotulkkini ympäristöä agentin työkaluille",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Käytä shellini ympäristöä Kagen ja agentin suorittamille työkaluille",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Suorittaa komentotulkin käynnistystiedostot (kuten .zshrc tai .bash_profile) kerran taustalla, jotta agentti ja sen käynnistämät MCP-palvelimet löytävät samat työkalut (PATH) ja asetukset kuin päätteessä. Poista tämä käytöstä, jos käynnistystiedostosi ovat hitaita tai tekevät käynnistyksessä asioita, joita et halua. Muutos tulee voimaan, kun agentti käynnistyy seuraavan kerran.",
+    "message": "Suorittaa shellin käynnistystiedostot (kuten .zshrc tai .bash_profile) taustalla pian käynnistyksen jälkeen ja ajoittain sen jälkeenkin, jotta agentti, sen MCP-palvelimet ja Kagen pikakomentoja ja puhetta varten suorittamat työkalut löytävät samat ohjelmat (PATH) ja asetukset kuin päätteessä. Poista tämä käytöstä, jos käynnistystiedostosi ovat hitaita tai tekevät asioita, joita et halua taustalla. Tällöin pelkästään shellin asetusten kautta asennettuja komentoja ei ehkä löydetä, kun Kage avataan Dockista tai Finderista. Muutos koskee työkaluja tästä eteenpäin ja agenttia sen seuraavasta käynnistyksestä alkaen.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

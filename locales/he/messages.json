@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "שימוש בסביבת המעטפת שלי עבור כלי הסוכן",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "שימוש בסביבת המעטפת שלי עבור כלים ש-Kage והסוכן מריצים",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "מריץ פעם אחת ברקע את קובצי האתחול של המעטפת שלך (כמו ‎.zshrc או ‎.bash_profile), כדי שהסוכן ושרתי ה-MCP שהוא מפעיל ימצאו את אותם כלים (PATH) ואותן הגדרות כמו במסוף. כדאי לכבות אפשרות זו אם קובצי האתחול שלך איטיים או מבצעים פעולות שאינך רוצה שיתבצעו בהפעלה. השינוי ייכנס לתוקף בהפעלה הבאה של הסוכן.",
+    "message": "מריץ ברקע את קובצי האתחול של המעטפת שלך (כמו .zshrc או .bash_profile) זמן קצר לאחר ההפעלה ומדי פעם לאחר מכן, כדי שהסוכן, שרתי ה-MCP שלו והכלים ש-Kage מריץ עבור קיצורי דרך ודיבור ימצאו את אותן תוכניות (PATH) ואותן הגדרות כמו במסוף. כדאי לכבות את האפשרות הזו אם קובצי האתחול שלך איטיים או מבצעים פעולות שאינך רוצה שיתבצעו ברקע. במקרה כזה, ייתכן שפקודות שהותקנו רק דרך הגדרות המעטפת שלך לא יימצאו כאשר Kage נפתח מה-Dock או מ-Finder. השינוי חל על כלים מעכשיו, ועל הסוכן בפעם הבאה שהוא יופעל.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

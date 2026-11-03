@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "استخدام بيئة الصدفة الخاصة بي لأدوات الوكيل",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "استخدام بيئة الصدفة الخاصة بي للأدوات التي يشغّلها Kage والوكيل",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "يشغّل ملفات بدء التشغيل الخاصة بالصدفة (مثل .zshrc أو .bash_profile) مرة واحدة في الخلفية، كي يعثر الوكيل وخوادم MCP التي يشغّلها على الأدوات نفسها (PATH) والإعدادات نفسها الموجودة في الطرفية. أوقف هذا الخيار إذا كانت ملفات بدء التشغيل بطيئة أو تنفّذ أمورًا لا تريدها عند التشغيل. يُطبَّق عند تشغيل الوكيل في المرة التالية.",
+    "message": "يشغّل ملفات بدء التشغيل الخاصة بالصدفة (مثل .zshrc أو .bash_profile) في الخلفية بعد التشغيل بوقت قصير وأحيانًا بعد ذلك، حتى يعثر الوكيل وخوادم MCP الخاصة به والأدوات التي يشغّلها Kage للاختصارات والكلام على البرامج نفسها (PATH) والإعدادات نفسها كما في الطرفية. أوقف هذا الخيار إذا كانت ملفات بدء التشغيل بطيئة أو تنفّذ أمورًا لا تريدها في الخلفية؛ وقد لا يتم العثور حينها على الأوامر المثبّتة عبر إعدادات الصدفة فقط عند فتح Kage من Dock أو Finder. يُطبَّق على الأدوات من الآن فصاعدًا وعلى الوكيل عند بدء تشغيله في المرة القادمة.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

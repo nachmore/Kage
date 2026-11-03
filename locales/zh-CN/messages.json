@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "为智能体工具使用我的 shell 环境",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "为 Kage 和智能体运行的工具使用我的 shell 环境",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "在后台运行一次您的 shell 启动文件（如 .zshrc 或 .bash_profile），使智能体及其启动的 MCP 服务器能找到与终端中相同的工具（PATH）和设置。如果您的启动文件运行缓慢，或会在启动时执行您不希望的操作，请关闭此选项。将在智能体下次启动时生效。",
+    "message": "在启动后不久及之后不定期地于后台运行您的 shell 启动文件（如 .zshrc 或 .bash_profile），使智能体、其 MCP 服务器以及 Kage 为快捷指令和语音运行的工具能找到与终端中相同的程序（PATH）和设置。如果您的启动文件运行缓慢，或会执行您不希望在后台进行的操作，请关闭此选项；关闭后，从程序坞或访达打开 Kage 时，可能无法找到仅通过 shell 配置安装的命令。此设置将立即应用于工具，并在智能体下次启动时应用于智能体。",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

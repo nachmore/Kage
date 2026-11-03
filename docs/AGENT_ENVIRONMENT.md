@@ -25,10 +25,19 @@ Windows doesn't need any of this; the setting isn't shown there.
 
 ## Turning it off
 
-**Settings → Agents → "Use my shell's environment for agent tools"**. When
-it's off, the agent and its tools get exactly the environment Kage was
-started with. The change applies the next time the agent starts (switching
-connections, a reconnect, or the next launch) — no restart required.
+**Settings → Agents → "Use my shell's environment for tools Kage and the
+agent run"**. The setting covers everything Kage starts that comes from
+your own installs: the agent and its MCP servers, shortcut commands,
+speech (the Python behind pocket-tts), the icalBuddy calendar fallback,
+and internal-site proxy scripts. When it's off, none of your startup files
+run; those programs get the environment Kage was started with plus the
+usual user tool folders (`~/.toolbox/bin`, `~/.local/bin`, Homebrew's
+`bin`, …) — so anything your shell setup adds beyond those (an `nvm` or
+`pyenv` shim, a custom `PATH` entry, `JAVA_HOME`) won't be found when
+Kage is opened from the Dock or Finder. The change applies to tools right
+away and to the agent the next time it starts (switching connections, a
+reconnect, or the next launch) — no restart required. It's a per-machine
+setting: restoring a backup doesn't change it.
 
 You can also force it from the environment Kage is started with:
 `KAGE_LOGIN_SHELL_ENV=0` turns it off, `KAGE_LOGIN_SHELL_ENV=1` turns it on
@@ -66,7 +75,10 @@ Things to know:
   above.
 - The startup files run without a terminal and with no input, so anything
   that asks a question gets an immediate "end of input".
-- Kage re-reads your environment in the background now and then (when the
-  agent restarts and the last read is more than 30 minutes old, or a
-  minute after a failed read), so newly installed tools are picked up
-  without restarting Kage.
+- Kage re-reads your environment in the background now and then: when the
+  agent restarts and the last read is more than 30 minutes old, and after
+  a failed read (on the next tool or agent start at least a minute later,
+  backing off up to every 30 minutes while it keeps failing). A re-read
+  takes effect from the *following* start, so a newly installed tool shows
+  up after the next agent restart once a refresh has happened — or right
+  away if you restart Kage.

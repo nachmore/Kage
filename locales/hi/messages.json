@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "एजेंट टूल के लिए मेरे शेल का एनवायरनमेंट इस्तेमाल करें",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Kage और एजेंट द्वारा चलाए जाने वाले टूल के लिए मेरे शेल के एनवायरनमेंट का उपयोग करें",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "आपके शेल की स्टार्टअप फ़ाइलें (जैसे .zshrc या .bash_profile) बैकग्राउंड में एक बार चलाता है, ताकि एजेंट और उसके द्वारा शुरू किए गए MCP सर्वर को वही टूल (PATH) और सेटिंग मिलें जो टर्मिनल में मिलती हैं। अगर आपकी स्टार्टअप फ़ाइलें धीमी हैं या लॉन्च के समय ऐसे काम करती हैं जो आप नहीं चाहते, तो इसे बंद करें। यह बदलाव एजेंट के अगली बार शुरू होने पर लागू होगा।",
+    "message": "लॉन्च के कुछ देर बाद और उसके बाद समय-समय पर आपके शेल की स्टार्टअप फ़ाइलें (जैसे .zshrc या .bash_profile) बैकग्राउंड में चलाता है, ताकि एजेंट, उसके MCP सर्वर और शॉर्टकट व स्पीच के लिए Kage द्वारा चलाए जाने वाले टूल वही प्रोग्राम (PATH) और सेटिंग्स पा सकें जो टर्मिनल में मिलती हैं। अगर आपकी स्टार्टअप फ़ाइलें धीमी हैं या बैकग्राउंड में ऐसे काम करती हैं जो आप नहीं चाहते, तो इसे बंद करें; ऐसे में Dock या Finder से Kage खोलने पर केवल आपके शेल सेटअप के ज़रिए इंस्टॉल किए गए कमांड शायद न मिलें। यह टूल पर अभी से और एजेंट पर उसके अगली बार शुरू होने पर लागू होता है।",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

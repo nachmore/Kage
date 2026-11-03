@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Umgebung meiner Shell für Agent-Tools verwenden",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Umgebung meiner Shell für Tools verwenden, die Kage und der Agent ausführen",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Führt die Startdateien Ihrer Shell (z. B. .zshrc oder .bash_profile) einmal im Hintergrund aus, damit der Agent und die von ihm gestarteten MCP-Server dieselben Tools (PATH) und Einstellungen finden wie in einem Terminal. Deaktivieren Sie diese Option, wenn Ihre Startdateien langsam sind oder beim Start Dinge ausführen, die Sie nicht möchten. Wird beim nächsten Start des Agents wirksam.",
+    "message": "Führt die Startdateien Ihrer Shell (z. B. .zshrc oder .bash_profile) kurz nach dem Start und gelegentlich danach im Hintergrund aus, damit der Agent, seine MCP-Server und die Tools, die Kage für Kurzbefehle und Sprache ausführt, dieselben Programme (PATH) und Einstellungen finden wie in einem Terminal. Deaktivieren Sie diese Option, wenn Ihre Startdateien langsam sind oder Dinge tun, die Sie nicht im Hintergrund ausführen möchten. Befehle, die nur über Ihre Shell-Konfiguration installiert wurden, werden dann möglicherweise nicht gefunden, wenn Kage über das Dock oder den Finder geöffnet wird. Gilt ab sofort für Tools und beim nächsten Start für den Agent.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "এজেন্ট টুলের জন্য আমার শেলের এনভায়রনমেন্ট ব্যবহার করুন",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Kage ও এজেন্ট যে টুলগুলো চালায়, সেগুলোর জন্য আমার শেলের এনভায়রনমেন্ট ব্যবহার করুন",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "আপনার শেলের স্টার্টআপ ফাইলগুলো (যেমন .zshrc বা .bash_profile) ব্যাকগ্রাউন্ডে একবার চালায়, যাতে এজেন্ট এবং এটি যে MCP সার্ভারগুলো চালু করে সেগুলো টার্মিনালের মতোই একই টুল (PATH) ও সেটিংস খুঁজে পায়। আপনার স্টার্টআপ ফাইলগুলো ধীর হলে বা চালু হওয়ার সময় অনাকাঙ্ক্ষিত কিছু করলে এটি বন্ধ করুন। এজেন্ট পরের বার চালু হলে কার্যকর হবে।",
+    "message": "চালু হওয়ার কিছুক্ষণ পরে এবং পরবর্তীতে মাঝে মাঝে ব্যাকগ্রাউন্ডে আপনার শেলের স্টার্টআপ ফাইলগুলো (যেমন .zshrc বা .bash_profile) চালায়, যাতে এজেন্ট, এর MCP সার্ভারগুলো এবং শর্টকাট ও স্পিচের জন্য Kage যে টুলগুলো চালায়, সেগুলো টার্মিনালের মতোই একই প্রোগ্রাম (PATH) ও সেটিংস খুঁজে পায়। আপনার স্টার্টআপ ফাইলগুলো ধীরগতির হলে বা ব্যাকগ্রাউন্ডে এমন কিছু করলে যা আপনি চান না, তাহলে এটি বন্ধ করুন; সেক্ষেত্রে Dock বা Finder থেকে Kage খোলা হলে শুধু শেল সেটআপের মাধ্যমে ইনস্টল করা কমান্ডগুলো হয়তো খুঁজে পাওয়া যাবে না। টুলগুলোর ক্ষেত্রে এখন থেকেই এবং এজেন্টের ক্ষেত্রে পরেরবার এটি চালু হলে প্রযোজ্য হবে।",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

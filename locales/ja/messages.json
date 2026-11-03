@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "エージェントのツールにシェルの環境を使用",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Kage とエージェントが実行するツールにシェルの環境を使用する",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "シェルの起動ファイル（.zshrc や .bash_profile など）をバックグラウンドで一度実行し、エージェントとエージェントが起動する MCP サーバーがターミナルと同じツール（PATH）や設定を使えるようにします。起動ファイルの実行に時間がかかる場合や、起動時に実行したくない処理が含まれている場合はオフにしてください。次回エージェントを起動したときに適用されます。",
+    "message": "起動直後とその後ときどき、シェルの起動ファイル（.zshrc や .bash_profile など）をバックグラウンドで実行します。これにより、エージェント、その MCP サーバー、およびショートカットや音声のために Kage が実行するツールが、ターミナルと同じプログラム（PATH）と設定を使用できます。起動ファイルの処理が遅い場合や、バックグラウンドで実行されたくない処理が含まれている場合はオフにしてください。その場合、Dock や Finder から Kage を開いたときに、シェルの設定でのみインストールされたコマンドが見つからないことがあります。ツールにはこれ以降、エージェントには次回の起動時から適用されます。",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

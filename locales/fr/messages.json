@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Utiliser l'environnement de mon shell pour les outils de l'agent",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Utiliser l'environnement de mon shell pour les outils lancés par Kage et l'agent",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Exécute une fois en arrière-plan les fichiers de démarrage de votre shell (comme .zshrc ou .bash_profile), afin que l'agent et les serveurs MCP qu'il lance trouvent les mêmes outils (PATH) et paramètres que dans un terminal. Désactivez cette option si vos fichiers de démarrage sont lents ou effectuent des actions indésirables au lancement. S'applique au prochain démarrage de l'agent.",
+    "message": "Exécute les fichiers de démarrage de votre shell (comme .zshrc ou .bash_profile) en arrière-plan peu après le lancement, puis de temps en temps, afin que l'agent, ses serveurs MCP et les outils que Kage lance pour les raccourcis et la parole trouvent les mêmes programmes (PATH) et paramètres que dans un terminal. Désactivez cette option si vos fichiers de démarrage sont lents ou effectuent des actions que vous ne voulez pas en arrière-plan. Les commandes installées uniquement via la configuration de votre shell risquent alors d'être introuvables quand Kage est ouvert depuis le Dock ou le Finder. S'applique aux outils dès maintenant et à l'agent à son prochain démarrage.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

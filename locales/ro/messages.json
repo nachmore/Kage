@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Folosește mediul shell-ului meu pentru instrumentele agentului",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Folosește mediul shell-ului meu pentru instrumentele rulate de Kage și de agent",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Rulează o dată, în fundal, fișierele de pornire ale shell-ului (de exemplu .zshrc sau .bash_profile), astfel încât agentul și serverele MCP pe care le pornește să găsească aceleași instrumente (PATH) și setări ca într-un terminal. Dezactivați această opțiune dacă fișierele de pornire sunt lente sau fac lucruri pe care nu le doriți la lansare. Se aplică la următoarea pornire a agentului.",
+    "message": "Rulează fișierele de pornire ale shell-ului (de exemplu .zshrc sau .bash_profile) în fundal, la scurt timp după lansare și ocazional după aceea, astfel încât agentul, serverele sale MCP și instrumentele rulate de Kage pentru scurtături și vorbire să găsească aceleași programe (PATH) și setări ca într-un terminal. Dezactivează această opțiune dacă fișierele de pornire sunt lente sau fac în fundal lucruri pe care nu le dorești; în acest caz, comenzile instalate doar prin configurarea shell-ului s-ar putea să nu fie găsite când Kage este deschis din Dock sau din Finder. Se aplică instrumentelor de acum înainte și agentului la următoarea pornire.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }

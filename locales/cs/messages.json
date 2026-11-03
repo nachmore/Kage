@@ -8616,15 +8616,15 @@
     "_source_hash": "69b149becd78bcba"
   },
   "settings.connection.session.login_shell_env.label": {
-    "message": "Použít prostředí mého shellu pro nástroje agenta",
-    "description": "Toggle (macOS/Linux): give the agent and its MCP servers the PATH and variables from the user's login shell",
+    "message": "Pro nástroje, které spouští Kage a agent, používat prostředí mého shellu",
+    "description": "Toggle (macOS/Linux): give the agent, its MCP servers, and the tools Kage itself runs (shortcuts, speech, calendar helpers) the PATH and variables from the user's login shell",
     "_machine_translated": true,
-    "_source_hash": "00c2c1d74447685c"
+    "_source_hash": "32304f63ea2f4107"
   },
   "settings.connection.session.login_shell_env.description": {
-    "message": "Jednou na pozadí spustí spouštěcí soubory vašeho shellu (například .zshrc nebo .bash_profile), aby agent a MCP servery, které spouští, našly stejné nástroje (PATH) a nastavení jako v terminálu. Pokud jsou vaše spouštěcí soubory pomalé nebo při spuštění dělají něco, co nechcete, tuto možnost vypněte. Projeví se při příštím spuštění agenta.",
+    "message": "Krátce po spuštění a občas i později na pozadí spustí spouštěcí soubory vašeho shellu (například .zshrc nebo .bash_profile), aby agent, jeho MCP servery a nástroje, které Kage spouští pro zkratky a řeč, našly stejné programy (PATH) a nastavení jako v terminálu. Vypněte tuto možnost, pokud jsou vaše spouštěcí soubory pomalé nebo na pozadí dělají něco, co nechcete. Příkazy nainstalované pouze prostřednictvím nastavení shellu pak nemusí být nalezeny, když Kage otevřete z Docku nebo Finderu. Pro nástroje platí od této chvíle, pro agenta při jeho příštím spuštění.",
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
-    "_source_hash": "effa13fc46511df5"
+    "_source_hash": "0119b3e23f2cee23"
   }
 }
