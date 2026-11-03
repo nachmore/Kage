@@ -34,10 +34,14 @@ fn application_dirs() -> Vec<PathBuf> {
 /// `/Applications/Unity/Hub/Editor/<version>/Unity.app` (depth 5).
 const MAX_DEPTH: usize = 5;
 
-/// Upper bound on plain folders visited under one application dir, so a
-/// vendor that drops a huge non-bundle tree into /Applications can't make
-/// the scan crawl.
-const MAX_DIRS_PER_ROOT: usize = 2_000;
+/// Upper bound on plain folders visited under one vendor folder (a direct
+/// child of an application dir), so a vendor that drops a huge non-bundle
+/// tree into /Applications can't make the scan crawl — or starve the
+/// vendors after it of their share of a global budget.
+const MAX_DIRS_PER_VENDOR: usize = 2_000;
+
+/// Backstop across all vendor folders of one application dir.
+const MAX_DIRS_PER_ROOT: usize = 20_000;
 
 /// Directory extensions that mark a bundle or package. The scan never
 /// looks inside one: apps embedded in other apps (helpers, login items)
@@ -82,10 +86,12 @@ fn is_bundle_name(name: &OsStr) -> bool {
 /// priority) — at most `max_depth` levels down.
 fn find_app_bundles(root: &Path, skip: &[PathBuf], max_depth: usize) -> Vec<PathBuf> {
     let mut apps = Vec::new();
-    let mut queue = VecDeque::from([(root.to_path_buf(), 1usize)]);
+    // (dir, depth, index into `per_vendor` — None for `root` itself)
+    let mut queue = VecDeque::from([(root.to_path_buf(), 1usize, None::<usize>)]);
+    let mut per_vendor: Vec<usize> = Vec::new();
     let mut visited = 0usize;
 
-    while let Some((dir, depth)) = queue.pop_front() {
+    while let Some((dir, depth, vendor)) = queue.pop_front() {
         // Missing dirs (no ~/Applications, pre-Catalina layout) and
         // unreadable ones are normal.
         let Ok(entries) = fs::read_dir(&dir) else {
@@ -111,10 +117,20 @@ fn find_app_bundles(root: &Path, skip: &[PathBuf], max_depth: usize) -> Vec<Path
             }
             // `file_type` doesn't follow symlinks, so a link back up the
             // tree can't loop the walk.
-            if entry.file_type().is_ok_and(|t| t.is_dir()) && !skip.contains(&path) {
-                visited += 1;
-                queue.push_back((path, depth + 1));
+            if !entry.file_type().is_ok_and(|t| t.is_dir()) || skip.contains(&path) {
+                continue;
             }
+            let vendor = match vendor {
+                Some(v) if per_vendor[v] >= MAX_DIRS_PER_VENDOR => continue,
+                Some(v) => v,
+                None => {
+                    per_vendor.push(0);
+                    per_vendor.len() - 1
+                }
+            };
+            per_vendor[vendor] += 1;
+            visited += 1;
+            queue.push_back((path, depth + 1, Some(vendor)));
         }
     }
     apps
@@ -134,12 +150,38 @@ pub fn watch_roots_impl() -> Vec<WatchRoot> {
         .collect()
 }
 
-/// A change inside a bundle (an app updating its own `Contents/`) can't
-/// add or remove an app; a change at or above bundle level can.
+/// A change inside a bundle (an app updating its own `Contents/`) or
+/// under a hidden folder (an updater's `.tmp/Foo.app` staging copy) can't
+/// change what the scan finds; anything else might. `path` is relative to
+/// its application dir, whose own location may well contain hidden or
+/// dotted components.
 pub fn affects_app_list_impl(path: &Path) -> bool {
-    !path
-        .parent()
-        .is_some_and(|parent| parent.iter().any(is_bundle_name))
+    !path.parent().is_some_and(|parent| {
+        parent
+            .iter()
+            .any(|c| is_bundle_name(c) || c.to_string_lossy().starts_with('.'))
+    })
+}
+
+/// Display name for the app at `path` (found under application dir
+/// `root`), or `None` if an app of that name is already listed.
+///
+/// A top-level app that collides with an earlier one is a duplicate (the
+/// /Applications copy shadows /System/Applications). A vendor-folder app
+/// that collides is usually another version — Unity Hub's
+/// `Editor/<version>/Unity.app`, Python.org's `Python 3.x/IDLE.app` — so it
+/// stays reachable as "Unity (6000.0.23f1)".
+fn unique_app_name(path: &Path, root: &Path, seen: &mut HashSet<String>) -> Option<String> {
+    let stem = path.file_stem()?.to_str()?;
+    if seen.insert(stem.to_lowercase()) {
+        return Some(stem.to_string());
+    }
+    let parent = path.parent()?;
+    if parent == root {
+        return None;
+    }
+    let qualified = format!("{} ({})", stem, parent.file_name()?.to_string_lossy());
+    seen.insert(qualified.to_lowercase()).then_some(qualified)
 }
 
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
@@ -150,13 +192,9 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     for dir in &dirs {
         let skip: Vec<PathBuf> = dirs.iter().filter(|d| *d != dir).cloned().collect();
         for path in find_app_bundles(dir, &skip, MAX_DEPTH) {
-            let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
+            let Some(name) = unique_app_name(&path, dir, &mut seen) else {
                 continue;
             };
-            if !seen.insert(name.to_string()) {
-                continue;
-            }
-            let name = name.to_string();
             let icon_path = path.to_string_lossy().to_string();
             apps.push(AppInfo {
                 name,
@@ -407,26 +445,80 @@ mod tests {
     }
 
     #[test]
+    fn one_big_vendor_folder_cannot_starve_the_others() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for i in 0..(super::MAX_DIRS_PER_VENDOR + 50) {
+            fs::create_dir_all(root.join(format!("Adobe/Presets/P{i}"))).unwrap();
+        }
+        fs::create_dir_all(root.join("Unity/Hub/Editor/6000.0.23f1/Unity.app")).unwrap();
+        let found = names(&find_app_bundles(root, &[], 5), root);
+        assert_eq!(found, ["Unity/Hub/Editor/6000.0.23f1/Unity.app"]);
+    }
+
+    #[test]
+    fn colliding_vendor_folder_apps_are_qualified_by_folder() {
+        use super::unique_app_name;
+        use std::collections::HashSet;
+        let root = Path::new("/Applications");
+        let mut seen = HashSet::new();
+        let name = |p: &str, seen: &mut HashSet<String>| unique_app_name(Path::new(p), root, seen);
+        assert_eq!(
+            name(
+                "/Applications/Unity/Hub/Editor/2021.3.45f1/Unity.app",
+                &mut seen
+            )
+            .as_deref(),
+            Some("Unity")
+        );
+        assert_eq!(
+            name(
+                "/Applications/Unity/Hub/Editor/6000.0.23f1/Unity.app",
+                &mut seen
+            )
+            .as_deref(),
+            Some("Unity (6000.0.23f1)")
+        );
+        assert_eq!(
+            name("/Applications/Safari.app", &mut seen).as_deref(),
+            Some("Safari")
+        );
+        // A top-level duplicate (e.g. from a lower-priority dir) is dropped.
+        assert_eq!(
+            unique_app_name(
+                Path::new("/System/Applications/Safari.app"),
+                Path::new("/System/Applications"),
+                &mut seen
+            ),
+            None
+        );
+        // Collisions are case-insensitive, like the launcher's registry keys.
+        assert_eq!(name("/Applications/safari.app", &mut seen), None);
+    }
+
+    #[test]
     fn missing_root_yields_nothing() {
         assert!(find_app_bundles(Path::new("/definitely/not/here"), &[], 5).is_empty());
     }
 
     #[test]
     fn bundle_internal_changes_do_not_affect_the_app_list() {
-        assert!(affects_app_list_impl(Path::new("/Applications/Foo.app")));
+        assert!(affects_app_list_impl(Path::new("Foo.app")));
         assert!(affects_app_list_impl(Path::new(
             "/Applications/Cisco/Foo.app"
         )));
-        assert!(affects_app_list_impl(Path::new("/Applications/Cisco")));
+        assert!(affects_app_list_impl(Path::new("Cisco")));
         assert!(!affects_app_list_impl(Path::new(
-            "/Applications/Google Chrome.app/Contents/Frameworks/x.dylib"
+            "Google Chrome.app/Contents/Frameworks/x.dylib"
         )));
         assert!(!affects_app_list_impl(Path::new(
-            "/Applications/Xcode.app/Contents/Applications/Instruments.app"
+            "Xcode.app/Contents/Applications/Instruments.app"
         )));
         assert!(!affects_app_list_impl(Path::new(
-            "/Applications/Foo.APP/Contents/Info.plist"
+            "Foo.APP/Contents/Info.plist"
         )));
+        // Updater staging copies under a hidden folder.
+        assert!(!affects_app_list_impl(Path::new("Vendor/.tmp/Foo.app")));
     }
 
     #[test]

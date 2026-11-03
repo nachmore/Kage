@@ -456,15 +456,32 @@ const APP_INSTALL_SETTLE: std::time::Duration = std::time::Duration::from_millis
 /// Upper bound on how long a continuous stream of signals (a big copy
 /// into /Applications) can postpone the rescan.
 const APP_INSTALL_MAX_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
-/// Safety-net rescan for sources the watchers miss (a folder created
-/// after startup, a watcher that failed to start).
+/// Safety-net rescan for sources the watchers miss (a watcher that
+/// failed to start, a change no event describes).
 const APP_RESCAN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3600);
+/// One more rescan this long after an install-triggered one. A Finder/DMG
+/// drag-copy creates `Foo.app` first and fills it for seconds to minutes;
+/// a scan mid-copy lists the app with a "prohibited" or generic icon, and
+/// NSWorkspace keeps serving that icon for ~30 s even after the copy ends.
+const APP_INSTALL_FOLLOW_UP: std::time::Duration = std::time::Duration::from_secs(45);
+/// How often to check whether a scanned folder that didn't exist yet
+/// (`~/Applications` before the first Chrome web app) has appeared.
+const APP_ROOT_POLL: std::time::Duration = std::time::Duration::from_secs(30);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RescanReason {
+    Initial,
+    Periodic,
+    InstallTriggered,
+    FollowUp,
+}
 
 /// Kick off the background app-registry scan: one scan now, a rescan
 /// shortly after the OS reports an app install or removal
-/// (`os::app_install_watch`), and an hourly safety-net refresh. Scans run
-/// on blocking threads so the async runtime isn't tied up during Windows
-/// registry walks.
+/// (`os::app_install_watch`) plus a follow-up once it has surely
+/// finished, and an hourly safety-net refresh. Scans run on blocking
+/// threads so the async runtime isn't tied up during Windows registry
+/// walks.
 pub fn spawn_app_registry_scan(app: &App) {
     let features: tauri::State<'_, FeatureServices> = app.state();
     let launcher = features.app_launcher.clone();
@@ -476,24 +493,48 @@ pub fn spawn_app_registry_scan(app: &App) {
         // when nobody is waiting, so no signal is lost between scans.
         let changed = std::sync::Arc::new(tokio::sync::Notify::new());
         let signal = changed.clone();
-        let _watch =
+        let mut watch =
             crate::os::app_install_watch::start(std::sync::Arc::new(move || signal.notify_one()));
 
-        rescan_apps(&launcher, "Initial").await;
+        rescan_apps(&launcher, RescanReason::Initial).await;
+        watch.watch_new_roots();
 
         let mut interval = tokio::time::interval(APP_RESCAN_INTERVAL);
+        // After a long sleep, one catch-up scan is plenty.
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await; // skip immediate first tick
+        let mut root_poll = tokio::time::interval(APP_ROOT_POLL);
+        root_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut follow_up: Option<tokio::time::Instant> = None;
         loop {
             let reason = tokio::select! {
-                _ = interval.tick() => "Periodic",
+                _ = interval.tick() => RescanReason::Periodic,
                 _ = changed.notified() => {
                     settle(&changed, APP_INSTALL_SETTLE, APP_INSTALL_MAX_WAIT).await;
-                    "Install-triggered"
+                    RescanReason::InstallTriggered
+                }
+                _ = sleep_until(follow_up) => RescanReason::FollowUp,
+                // A root that appears signals `changed`, so the next
+                // iteration rescans.
+                _ = root_poll.tick(), if watch.has_pending_roots() => {
+                    watch.watch_new_roots();
+                    continue;
                 }
             };
             rescan_apps(&launcher, reason).await;
+            watch.watch_new_roots();
+            follow_up = (reason == RescanReason::InstallTriggered)
+                .then(|| tokio::time::Instant::now() + APP_INSTALL_FOLLOW_UP);
         }
     });
+}
+
+/// Sleep until `deadline`, or forever if there is none.
+async fn sleep_until(deadline: Option<tokio::time::Instant>) {
+    match deadline {
+        Some(at) => tokio::time::sleep_until(at).await,
+        None => std::future::pending().await,
+    }
 }
 
 /// Wait until `changed` has been quiet for `quiet`, or `max` has elapsed.
@@ -514,15 +555,15 @@ async fn settle(
 
 async fn rescan_apps(
     launcher: &std::sync::Arc<tokio::sync::Mutex<crate::app_launcher::AppLauncher>>,
-    reason: &str,
+    reason: RescanReason,
 ) {
-    log::info!("{} app registry scan", reason);
+    log::info!("App registry scan ({:?})", reason);
     match tauri::async_runtime::spawn_blocking(crate::app_launcher::AppLauncher::build_registry)
         .await
     {
         Ok(Ok(registry)) => launcher.lock().await.apply_registry(registry),
-        Ok(Err(e)) => log::error!("{} app scan failed: {}", reason, e),
-        Err(e) => log::error!("{} app scan task failed: {}", reason, e),
+        Ok(Err(e)) => log::error!("App scan ({:?}) failed: {}", reason, e),
+        Err(e) => log::error!("App scan ({:?}) task failed: {}", reason, e),
     }
 }
 

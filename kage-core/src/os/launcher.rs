@@ -37,9 +37,10 @@ pub fn watch_roots() -> Vec<WatchRoot> {
     crate::os::platform::launcher::watch_roots_impl()
 }
 
-/// Whether a filesystem change at `path` (under a `watch_roots` dir) could
-/// add or remove a scanned app. On macOS, changes inside a bundle — an app
-/// updating its own `Contents/` — can't; elsewhere every change counts.
+/// Whether a filesystem change at `path` — relative to the `watch_roots`
+/// dir it happened under — could add or remove a scanned app. On macOS,
+/// changes inside a bundle (an app updating its own `Contents/`) or a
+/// hidden folder can't; elsewhere every change counts.
 pub fn affects_app_list(path: &std::path::Path) -> bool {
     crate::os::platform::launcher::affects_app_list_impl(path)
 }

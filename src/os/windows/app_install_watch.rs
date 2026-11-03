@@ -28,6 +28,20 @@ use windows::Win32::System::Registry::{
 /// Same key `kage_core::os::windows::launcher::scan_registry_apps` reads.
 const UNINSTALL_KEY: PCWSTR = w!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall");
 
+/// The Start Menu trees hold shortcuts and folders only, so any
+/// create/remove/rename/content change can matter; attribute and
+/// timestamp changes can't.
+pub fn is_relevant_change_impl(
+    kind: &notify::EventKind,
+    _root: &std::path::Path,
+    _path: &std::path::Path,
+) -> bool {
+    !matches!(
+        kind,
+        notify::EventKind::Modify(notify::event::ModifyKind::Metadata(_))
+    )
+}
+
 pub fn start_extra_impl(on_change: ChangeCallback) {
     let registry_cb = on_change.clone();
     spawn("app-watch-registry", move || {
