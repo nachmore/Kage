@@ -608,6 +608,41 @@ fn classify_tool_kind(
         .map(str::to_string)
 }
 
+/// The MCP server a permission request's tool belongs to, or `None` unless
+/// it can be identified unambiguously.
+///
+/// ACP's `ToolCall` has no MCP server field and no agent we've seen sends a
+/// dedicated one, so the server comes from the title, in the forms kiro-cli
+/// and Claude Code use (`config::mcp_server_from_title`). Two extra
+/// conditions:
+///
+/// - The kind must be absent or `"other"` — what agents report for MCP
+///   tools. Any other kind is a built-in tool; above all `"execute"`,
+///   whose kiro-cli title is the command itself (`Running: <command>`), so
+///   a shell command spelled `@builder-mcp/InternalSearch` (or one whose
+///   title is cut at a newline) must never read as that server's tool.
+///   Claude Code's adapter also reports its built-in Edit/Bash/Read with
+///   their own kinds.
+/// - Every title we have must name the same server: the policy title
+///   (`tool_title`, from the call's first `tool_call`) and the request's
+///   own `toolCall.title`, when it differs.
+fn classify_mcp_server(
+    tool_title: &str,
+    request_title: Option<&str>,
+    kind: Option<&str>,
+) -> Option<String> {
+    if !matches!(kind, None | Some("other")) {
+        return None;
+    }
+    let server = crate::config::mcp_server_from_title(tool_title)?;
+    if let Some(title) = request_title.filter(|t| !t.is_empty() && *t != tool_title) {
+        if crate::config::mcp_server_from_title(title) != Some(server) {
+            return None;
+        }
+    }
+    Some(server.to_string())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_permission_notification(
     notification: &serde_json::Value,
@@ -653,6 +688,12 @@ fn handle_permission_notification(
         notification.get("params").and_then(|p| p.get("toolCall")),
         recorded.as_ref().and_then(|(_, kind)| kind.as_deref()),
     );
+    let request_title = notification
+        .get("params")
+        .and_then(|p| p.get("toolCall"))
+        .and_then(|tc| tc.get("title"))
+        .and_then(|t| t.as_str());
+    let mcp_server = classify_mcp_server(&tool_title, request_title, tool_kind.as_deref());
 
     let timestamp = chrono::Utc::now().to_rfc3339();
 
@@ -665,7 +706,8 @@ fn handle_permission_notification(
     // Category trust applies only to prompts the user can see. Background
     // prompts (inline assist, macros, script generation, titler, auto-
     // steering) run on text from other apps and their tool calls are never
-    // shown — a prompt-injected selection must not get commands run silently.
+    // shown — a prompt-injected selection must not get commands (or a
+    // trusted MCP server's tools) run silently.
     let request_session = notification
         .get("params")
         .and_then(|p| p.get("sessionId"))
@@ -673,15 +715,25 @@ fn handle_permission_notification(
     let hidden_session = request_session.is_some_and(|sid| {
         client.is_background_prompt_session(sid) || crate::ephemeral_session::is_active(sid)
     });
-    let trust_kind = if hidden_session {
-        None
+    let (trust_kind, trust_server) = if hidden_session {
+        (None, None)
     } else {
-        tool_kind.as_deref()
+        (tool_kind.as_deref(), mcp_server.as_deref())
     };
 
-    let (policy, save_snapshot) = {
+    let (policy, category_trust, save_snapshot) = {
         let mut config_guard = config.lock_or_recover();
-        let kind_trusted = config_guard.tool_permissions.is_kind_trusted(trust_kind);
+        // Which category trust, if any, covers this call (for the log line).
+        let category_trust = if config_guard.tool_permissions.is_kind_trusted(trust_kind) {
+            trust_kind.map(|k| format!("kind '{k}'"))
+        } else if config_guard
+            .tool_permissions
+            .is_mcp_server_trusted(trust_server)
+        {
+            trust_server.map(|s| format!("MCP server '{s}'"))
+        } else {
+            None
+        };
         let existing = config_guard
             .tool_permissions
             .tools
@@ -696,10 +748,11 @@ fn handle_permission_notification(
             if needs_save {
                 *last_save = std::time::Instant::now();
             }
-        } else if kind_trusted {
-            // A trusted category (every CLI command) is auto-allowed; one
-            // policy row per distinct command string would only bloat the
-            // config and the Settings list.
+        } else if category_trust.is_some() {
+            // A trusted category (every CLI command, every tool of an MCP
+            // server) is auto-allowed; one policy row per distinct command
+            // string or tool would only bloat the config and the Settings
+            // list.
             needs_save = false;
         } else {
             config_guard
@@ -719,9 +772,10 @@ fn handle_permission_notification(
 
         // An explicit per-tool Deny wins even under trust_all / terminator_mode
         // — see ToolPermissionsConfig::resolve_policy.
-        let p = config_guard
-            .tool_permissions
-            .resolve_policy_for(&tool_title, trust_kind);
+        let p =
+            config_guard
+                .tool_permissions
+                .resolve_policy_for(&tool_title, trust_kind, trust_server);
         // Snapshot the config for an off-thread save if one is due.
         // The clone happens inside the lock so the snapshot is
         // consistent — but the Mutex is released as the guard drops
@@ -731,7 +785,7 @@ fn handle_permission_notification(
         } else {
             None
         };
-        (p, snap)
+        (p, category_trust, snap)
     };
 
     // Disk save on a worker thread — never blocks the ACP reader.
@@ -769,18 +823,27 @@ fn handle_permission_notification(
         .map(|s| s.to_string());
     match policy {
         crate::config::PolicyKind::Allow => {
-            // Auto-approved commands: record what actually ran.
-            let args_preview = (tool_kind.as_deref() == Some(crate::config::TOOL_KIND_EXECUTE))
-                .then(|| {
-                    notification
-                        .get("params")
-                        .and_then(|p| p.get("toolCall"))
-                        .and_then(|tc| tc.get("rawInput"))
-                        .and_then(|ri| ri.get("command"))
-                        .and_then(|c| c.as_str())
-                        .map(|c| c.chars().take(2048).collect::<String>())
-                })
-                .flatten();
+            if let Some(reason) = &category_trust {
+                info!("Auto-approved a tool call (trusted {})", reason);
+            }
+            // Auto-approved commands and MCP tools: record what actually ran
+            // (the command line / the tool's arguments).
+            let raw_input = notification
+                .get("params")
+                .and_then(|p| p.get("toolCall"))
+                .and_then(|tc| tc.get("rawInput"));
+            let args_preview = if tool_kind.as_deref() == Some(crate::config::TOOL_KIND_EXECUTE) {
+                raw_input
+                    .and_then(|ri| ri.get("command"))
+                    .and_then(|c| c.as_str())
+                    .map(|c| c.chars().take(2048).collect::<String>())
+            } else if mcp_server.is_some() {
+                raw_input
+                    .filter(|ri| !ri.is_null())
+                    .map(|ri| ri.to_string().chars().take(2048).collect::<String>())
+            } else {
+                None
+            };
             crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
                 crate::permission_audit::AuditEvent::Granted {
                     tool: tool_title.to_string(),
@@ -846,6 +909,12 @@ fn handle_permission_notification(
                 "toolName": tool_title,
                 // Lets the prompt offer "Trust all commands" for shell runs.
                 "toolKind": tool_kind,
+                // Lets the prompt offer "Trust all tools from <server>".
+                "mcpServer": mcp_server,
+                // Category trust never covers these sessions, so the prompt
+                // must not bulk-approve their queued requests when the user
+                // trusts a category from another prompt.
+                "backgroundSession": hidden_session,
                 "source": source,
             });
 
@@ -864,6 +933,105 @@ fn handle_permission_notification(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod mcp_server_tests {
+    use super::classify_mcp_server;
+
+    #[test]
+    fn kiro_mcp_call_names_its_server() {
+        let t = "Running: @builder-mcp/InternalSearch";
+        assert_eq!(
+            classify_mcp_server(t, Some(t), None).as_deref(),
+            Some("builder-mcp")
+        );
+        assert_eq!(
+            classify_mcp_server(t, Some(t), Some("other")).as_deref(),
+            Some("builder-mcp")
+        );
+        // No request title (only the recorded one) is fine too.
+        assert_eq!(
+            classify_mcp_server("Running: @kage-computer-control/launch_app", None, None)
+                .as_deref(),
+            Some("kage-computer-control")
+        );
+    }
+
+    #[test]
+    fn claude_mcp_call_names_its_server() {
+        let t = "mcp__builder-mcp__InternalSearch";
+        assert_eq!(
+            classify_mcp_server(t, Some(t), Some("other")).as_deref(),
+            Some("builder-mcp")
+        );
+    }
+
+    #[test]
+    fn a_shell_command_is_never_an_mcp_call() {
+        // kiro-cli titles shell runs "Running: <command>": a command spelled
+        // like an MCP tool, or cut at a newline, must not read as one.
+        let t = "Running: @builder-mcp/InternalSearch";
+        assert_eq!(classify_mcp_server(t, Some(t), Some("execute")), None);
+        assert_eq!(
+            classify_mcp_server("Running: cd x; @foo/bar", None, None),
+            None
+        );
+        assert_eq!(
+            classify_mcp_server("Running: cd x; @foo/bar", None, Some("execute")),
+            None
+        );
+    }
+
+    #[test]
+    fn built_in_kinds_are_never_mcp_calls() {
+        let t = "mcp__fs__write";
+        for kind in ["edit", "read", "delete", "move", "search", "fetch", "think"] {
+            assert_eq!(classify_mcp_server(t, Some(t), Some(kind)), None, "{kind}");
+        }
+    }
+
+    #[test]
+    fn titles_that_disagree_are_ambiguous() {
+        assert_eq!(
+            classify_mcp_server(
+                "Running: @builder-mcp/InternalSearch",
+                Some("Running: @other/InternalSearch"),
+                None
+            ),
+            None
+        );
+        assert_eq!(
+            classify_mcp_server(
+                "Running: @builder-mcp/InternalSearch",
+                Some("Running: rm -rf ~"),
+                None
+            ),
+            None
+        );
+        // Same server, different tool wording: still that server.
+        assert_eq!(
+            classify_mcp_server(
+                "Running: @builder-mcp/InternalSearch",
+                Some("mcp__builder-mcp__InternalSearch"),
+                None
+            )
+            .as_deref(),
+            Some("builder-mcp")
+        );
+        // An empty request title adds nothing.
+        assert_eq!(
+            classify_mcp_server("Running: @builder-mcp/InternalSearch", Some(""), None).as_deref(),
+            Some("builder-mcp")
+        );
+    }
+
+    #[test]
+    fn non_mcp_titles_have_no_server() {
+        assert_eq!(classify_mcp_server("Searching the web", None, None), None);
+        assert_eq!(classify_mcp_server("unknown", None, None), None);
+        assert_eq!(classify_mcp_server("ext:todos/add", None, None), None);
     }
 }
 

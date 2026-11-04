@@ -97,6 +97,39 @@ export function escapeAttr(s) {
     return String(s).replace(/[&<>"']/g, (c) => HTML_ENTITIES[c]);
 }
 
+/**
+ * Placeholder value for an identifier (server name, path, …) that must be
+ * shown as LTR-isolated text inside a translated string. Pass it as that
+ * variable's value to `t()`, then hand the translated text and the real
+ * value to `setTextWithLtrValue`. (The `t()` call stays at the call site,
+ * with its literal key, so the i18n drift check still sees the key.) A
+ * private-use character, so it never occurs in a catalog string.
+ */
+export const LTR_SLOT = '\uE000';
+
+/**
+ * Fill `el` with `text`, replacing each `LTR_SLOT` with `value` in a
+ * `<bdi dir="ltr">` — an identifier keeps its own direction (and doesn't
+ * reorder the sentence around it) in RTL locales. DOM-built, so `value`
+ * is never parsed as HTML.
+ */
+export function setTextWithLtrValue(el, text, value) {
+    if (!el) return;
+    el.textContent = '';
+    String(text ?? '')
+        .split(LTR_SLOT)
+        .forEach((part, i) => {
+            if (i > 0) {
+                const bdi = document.createElement('bdi');
+                bdi.dir = 'ltr';
+                bdi.className = 'ltr-value';
+                bdi.textContent = String(value ?? '');
+                el.append(bdi);
+            }
+            if (part) el.append(part);
+        });
+}
+
 const HTML_ENTITIES = Object.freeze({
     '&': '&amp;',
     '<': '&lt;',

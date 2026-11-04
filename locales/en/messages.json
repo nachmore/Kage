@@ -37,6 +37,10 @@
     "message": "Unknown tool kind: {kind}",
     "description": "Error when asked to trust a tool category Kage doesn't support. {kind} is the raw identifier"
   },
+  "errors.permission.invalid_mcp_server": {
+    "message": "Not a valid MCP server name: {server}",
+    "description": "Error when asked to trust an MCP server whose name isn't a plain identifier. {server} is the raw name"
+  },
   "errors.command.failed": {
     "message": "Command failed: {reason}",
     "description": "Generic command execution failure shown to the user"
@@ -1076,6 +1080,30 @@
   "permission.dialog.trust_commands_failed": {
     "message": "Couldn't save that setting, so nothing was changed. Try again, or approve this command on its own.",
     "description": "Shown in the trust-all-commands confirmation when saving the setting fails"
+  },
+  "permission.dialog.trust_server": {
+    "message": "Trust all tools from {server}…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the tool belongs to an MCP server. {server} is the server's name (an identifier, shown left-to-right, e.g. builder-mcp). Opens a confirmation."
+  },
+  "permission.dialog.trust_server_title": {
+    "message": "Trust every tool from {server}?",
+    "description": "Heading of the inline confirmation for trusting all tools of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)"
+  },
+  "permission.dialog.trust_server_body": {
+    "message": "From now on the agent can use any tool from the {server} MCP server without asking — the tools it has today and any it adds later, including ones that change things or send data elsewhere. Only do this for servers you trust. A tool you've set to Always deny stays denied, and you can stop trusting the server in Settings → Tool Permissions.",
+    "description": "Warning shown before the user trusts every tool of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)"
+  },
+  "permission.dialog.trust_server_cancel": {
+    "message": "Cancel",
+    "description": "Button that backs out of the trust-MCP-server confirmation"
+  },
+  "permission.dialog.trust_server_confirm": {
+    "message": "Trust this server",
+    "description": "Button that confirms trusting every tool of the MCP server named in the confirmation"
+  },
+  "permission.dialog.trust_server_failed": {
+    "message": "Couldn't save that setting, so nothing was changed. Try again, or approve this tool on its own.",
+    "description": "Shown in the trust-MCP-server confirmation when saving the setting fails"
   },
   "inline_assist.window_title": {
     "message": "Inline Assist",
@@ -2184,6 +2212,30 @@
   "settings.tool_permissions.trust_commands.confirm": {
     "message": "The agent will be able to run any command on this computer without asking. A command can do anything your account can — delete or change files, send data elsewhere. Only turn this on if you trust the agent and the tasks you give it.",
     "description": "Body of the confirmation dialog when enabling trust for all CLI commands"
+  },
+  "settings.tool_permissions.trusted_servers.label": {
+    "message": "Trusted MCP servers",
+    "description": "Settings → Tool Permissions: label of the list of MCP servers whose every tool is trusted"
+  },
+  "settings.tool_permissions.trusted_servers.description": {
+    "message": "The agent can use every tool from these servers without asking, including tools a server adds later. A tool you've set to Always deny stays denied, and tools started by background features (inline assist, macros) still ask. Trust a server from its permission prompt (\"Trust all tools from …\").",
+    "description": "Settings → Tool Permissions: help text under the trusted MCP servers label"
+  },
+  "settings.tool_permissions.trusted_servers.empty": {
+    "message": "No MCP servers are trusted.",
+    "description": "Settings → Tool Permissions: empty state of the trusted MCP servers list"
+  },
+  "settings.tool_permissions.trusted_servers.revoke": {
+    "message": "Stop trusting",
+    "description": "Settings → Tool Permissions: button that removes one MCP server from the trusted list"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_title": {
+    "message": "Ask again before using tools from {server}",
+    "description": "Tooltip on the Stop trusting button. {server} is the MCP server's name (an identifier, e.g. builder-mcp)"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_failed": {
+    "message": "Couldn't stop trusting {server}. Try again.",
+    "description": "Settings → Tool Permissions: shown when removing an MCP server from the trusted list fails. {server} is the server's name"
   },
   "settings.tool_permissions.terminator.label": {
     "message": "Terminator Mode",

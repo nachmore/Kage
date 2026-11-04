@@ -322,6 +322,17 @@ body.dark-theme .message-content th:hover {
     background: rgba(255, 152, 0, 0.15);
     color: #ffa726;
 }
+/* "Trust all tools from <server>…" — the server name can be long. */
+.permission-trust-server-item {
+    max-width: 320px;
+    overflow-wrap: anywhere;
+}
+/* Server names inside the trust item / confirmation (LTR-isolated <bdi>). */
+.permission-trust-server-item .ltr-value,
+.permission-trust-confirm .ltr-value {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
 
 /* Inline confirmation that replaces the action row (a separate dialog
    would be clipped by the small launcher window). The modal card is always

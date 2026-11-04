@@ -16,6 +16,14 @@ pub struct ToolPermissionsConfig {
     /// only ever covered one exact command string.
     #[serde(default)]
     pub trusted_kinds: Vec<String>,
+    /// MCP servers the user trusts as a whole ("Trust all tools from
+    /// <server>"): every tool the server has now or adds later. Per-tool
+    /// policies are keyed by title, which for an MCP call names one tool
+    /// ("Running: @builder-mcp/InternalSearch"), so "Always allow" only
+    /// ever covered that one tool. Exact, case-sensitive names as parsed by
+    /// [`mcp_server_from_title`].
+    #[serde(default)]
+    pub trusted_mcp_servers: Vec<String>,
 }
 
 /// ACP `ToolKind` for running shell / CLI commands.
@@ -25,7 +33,112 @@ pub const TOOL_KIND_EXECUTE: &str = "execute";
 /// else is rejected so a hand-edited or hostile value can't widen trust.
 pub const TRUSTABLE_TOOL_KINDS: &[&str] = &[TOOL_KIND_EXECUTE];
 
+/// Longest MCP server name Kage will trust. Real names are short
+/// (`builder-mcp`, `kage-computer-control`); the bound keeps a hostile
+/// title from bloating config, the prompt and the audit log.
+pub const MAX_MCP_SERVER_NAME_LEN: usize = 64;
+
+/// Longest MCP tool name accepted when parsing a title (the MCP spec
+/// recommends 1–128 characters).
+const MAX_MCP_TOOL_NAME_LEN: usize = 128;
+
+/// kiro-cli titles MCP tool calls `Running: @<server>/<tool>`.
+const KIRO_MCP_TITLE_PREFIX: &str = "Running: @";
+
+/// Claude Code names MCP tools `mcp__<server>__<tool>`, and its ACP adapter
+/// uses that name as the tool call's title.
+const CLAUDE_MCP_NAME_PREFIX: &str = "mcp__";
+
+/// Claude Code's ACP adapter runs its own built-in file and terminal tools
+/// through an in-process MCP server of this name (`mcp__acp__Edit`,
+/// `mcp__acp__Bash`, …). Those are the agent's core tools, not a
+/// third-party server, so they never count as one.
+const CLAUDE_ADAPTER_BUILTIN_SERVER: &str = "acp";
+
+/// Whether `name` may be trusted as an MCP server: 1–64 ASCII letters,
+/// digits, `-`, `_` or `.`. No whitespace, slashes, `@` or non-ASCII (no
+/// look-alike characters), so a parsed name is a plain identifier the
+/// prompt can show unambiguously.
+pub fn is_valid_mcp_server_name(name: &str) -> bool {
+    is_mcp_identifier(name, MAX_MCP_SERVER_NAME_LEN)
+}
+
+fn is_mcp_identifier(s: &str, max_len: usize) -> bool {
+    !s.is_empty()
+        && s.len() <= max_len
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+}
+
+/// The MCP server named by a tool call title, when the title is exactly an
+/// agent's MCP tool form and the server is unambiguous:
+///
+/// - kiro-cli: `Running: @<server>/<tool>`
+/// - Claude Code: `mcp__<server>__<tool>` (one `__` separator; a run of
+///   three or more underscores, or a second separator, could split more
+///   than one way and is refused)
+///
+/// Server and tool must both be plain identifiers, so anything with
+/// spaces, extra slashes or trailing text is not MCP. Callers must also
+/// check the tool kind: kiro-cli titles shell runs `Running: <command>`,
+/// so a command spelled `@foo/bar` produces the same title — see
+/// `classify_mcp_server` in the permission handler.
+pub fn mcp_server_from_title(title: &str) -> Option<&str> {
+    if let Some(rest) = title.strip_prefix(KIRO_MCP_TITLE_PREFIX) {
+        let (server, tool) = rest.split_once('/')?;
+        return (is_valid_mcp_server_name(server)
+            && is_mcp_identifier(tool, MAX_MCP_TOOL_NAME_LEN))
+        .then_some(server);
+    }
+    if let Some(rest) = title.strip_prefix(CLAUDE_MCP_NAME_PREFIX) {
+        if rest.matches("__").count() != 1 || rest.contains("___") {
+            return None;
+        }
+        let (server, tool) = rest.split_once("__")?;
+        if server == CLAUDE_ADAPTER_BUILTIN_SERVER {
+            return None;
+        }
+        return (is_valid_mcp_server_name(server)
+            && is_mcp_identifier(tool, MAX_MCP_TOOL_NAME_LEN))
+        .then_some(server);
+    }
+    None
+}
+
 impl ToolPermissionsConfig {
+    /// Whether every tool from this MCP server is trusted. A name that
+    /// isn't a valid server name (hand-edited config) never matches.
+    pub fn is_mcp_server_trusted(&self, server: Option<&str>) -> bool {
+        match server {
+            Some(s) => {
+                is_valid_mcp_server_name(s) && self.trusted_mcp_servers.iter().any(|t| t == s)
+            }
+            None => false,
+        }
+    }
+
+    /// Trust or untrust an MCP server. `Some(changed)`, or `None` when
+    /// asked to trust a name that isn't a valid server name (refused).
+    /// Untrusting removes any entry with that exact name — including junk
+    /// from a hand-edited config — so Settings can always clear it.
+    pub fn set_mcp_server_trusted(&mut self, server: &str, trusted: bool) -> Option<bool> {
+        let has = self.trusted_mcp_servers.iter().any(|t| t == server);
+        if trusted {
+            if !is_valid_mcp_server_name(server) {
+                return None;
+            }
+            if has {
+                return Some(false);
+            }
+            self.trusted_mcp_servers.push(server.to_string());
+            return Some(true);
+        }
+        if has {
+            self.trusted_mcp_servers.retain(|t| t != server);
+        }
+        Some(has)
+    }
+
     /// Whether every request of this ACP tool kind is trusted.
     pub fn is_kind_trusted(&self, kind: Option<&str>) -> bool {
         match kind {
@@ -67,14 +180,25 @@ impl ToolPermissionsConfig {
     ///
     /// `kind` is the request's ACP tool kind, if known: a trusted kind (see
     /// `trusted_kinds`) acts like a blanket allow for that category, and an
-    /// explicit per-tool `Deny` still wins over it.
-    pub fn resolve_policy_for(&self, tool_title: &str, kind: Option<&str>) -> PolicyKind {
+    /// explicit per-tool `Deny` still wins over it. `mcp_server` is the MCP
+    /// server the tool belongs to, if identified: a trusted server (see
+    /// `trusted_mcp_servers`) is a blanket allow for its tools, again below
+    /// an explicit per-tool `Deny`.
+    pub fn resolve_policy_for(
+        &self,
+        tool_title: &str,
+        kind: Option<&str>,
+        mcp_server: Option<&str>,
+    ) -> PolicyKind {
         let explicit = self
             .tools
             .iter()
             .find(|t| t.title == tool_title)
             .map(|t| t.effective_policy());
-        let blanket_allow = self.terminator_mode || self.trust_all || self.is_kind_trusted(kind);
+        let blanket_allow = self.terminator_mode
+            || self.trust_all
+            || self.is_kind_trusted(kind)
+            || self.is_mcp_server_trusted(mcp_server);
         match explicit {
             Some(PolicyKind::Deny) => PolicyKind::Deny,
             Some(PolicyKind::Allow) => PolicyKind::Allow,

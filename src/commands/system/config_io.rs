@@ -192,6 +192,29 @@ pub(crate) fn preserve_backend_owned_fields(incoming: &mut Config, authoritative
         incoming.tool_permissions.trusted_kinds =
             authoritative.tool_permissions.trusted_kinds.clone();
     }
+    // Same for "trust all tools from <server>": only the audited
+    // `set_mcp_server_trusted` grants or revokes it.
+    if incoming.tool_permissions.trusted_mcp_servers
+        != authoritative.tool_permissions.trusted_mcp_servers
+    {
+        log::warn!(
+            "save_config: ignoring a trusted_mcp_servers change in the incoming snapshot \
+             (backend-owned; use set_mcp_server_trusted)"
+        );
+        incoming.tool_permissions.trusted_mcp_servers =
+            authoritative.tool_permissions.trusted_mcp_servers.clone();
+    }
+}
+
+/// Keep this machine's category-wide tool trust ("trust all commands",
+/// "trust all tools from <server>") over an imported config's. A backup is
+/// a plain, possibly hand-edited file: restoring it must neither switch
+/// that trust on without consent here nor silently drop what the user
+/// trusted on this machine.
+pub(crate) fn keep_local_tool_trust(imported: &mut Config, local: &Config) {
+    imported.tool_permissions.trusted_kinds = local.tool_permissions.trusted_kinds.clone();
+    imported.tool_permissions.trusted_mcp_servers =
+        local.tool_permissions.trusted_mcp_servers.clone();
 }
 
 /// Replace an imported config's grants with the local map, then fill in
@@ -591,10 +614,8 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
         // capabilities without the user consenting here. Backup grants
         // only fill gaps the local install consent would have covered.
         merge_imported_grants(&mut new_config, &state_config.extension_grants, &installed);
-        // Like grants: a backup file must not switch on "trust all
-        // commands" on this machine without consent here.
-        new_config.tool_permissions.trusted_kinds =
-            state_config.tool_permissions.trusted_kinds.clone();
+        // Like grants: category-wide tool trust stays this machine's.
+        keep_local_tool_trust(&mut new_config, &state_config);
         *state_config = new_config;
         // Channel is a typed enum — unknown values from a hand-edited
         // backup collapsed to Stable at deserialise time.
@@ -792,6 +813,54 @@ mod tests {
         assert_eq!(
             stale.tool_permissions.trusted_kinds,
             vec!["execute".to_string()]
+        );
+    }
+
+    #[test]
+    fn snapshot_cannot_grant_or_revoke_mcp_server_trust() {
+        // "Trust all tools from <server>" changes only through
+        // set_mcp_server_trusted.
+        let authoritative = Config::default();
+        let mut incoming = Config::default();
+        incoming.tool_permissions.trusted_mcp_servers = vec!["builder-mcp".into()];
+        preserve_backend_owned_fields(&mut incoming, &authoritative);
+        assert!(incoming.tool_permissions.trusted_mcp_servers.is_empty());
+
+        let mut trusted = Config::default();
+        trusted.tool_permissions.trusted_mcp_servers = vec!["builder-mcp".into()];
+        let mut stale = Config::default(); // fetched before the user trusted
+        preserve_backend_owned_fields(&mut stale, &trusted);
+        assert_eq!(
+            stale.tool_permissions.trusted_mcp_servers,
+            vec!["builder-mcp".to_string()]
+        );
+    }
+
+    #[test]
+    fn import_keeps_this_machines_tool_trust() {
+        // A backup trusting a server / every command must not grant that
+        // here…
+        let local = Config::default();
+        let mut imported = Config::default();
+        imported.tool_permissions.trusted_kinds = vec!["execute".into()];
+        imported.tool_permissions.trusted_mcp_servers = vec!["evil-mcp".into()];
+        keep_local_tool_trust(&mut imported, &local);
+        assert!(imported.tool_permissions.trusted_kinds.is_empty());
+        assert!(imported.tool_permissions.trusted_mcp_servers.is_empty());
+
+        // …and a backup from before the user trusted one must not revoke it.
+        let mut local = Config::default();
+        local.tool_permissions.trusted_kinds = vec!["execute".into()];
+        local.tool_permissions.trusted_mcp_servers = vec!["builder-mcp".into()];
+        let mut imported = Config::default();
+        keep_local_tool_trust(&mut imported, &local);
+        assert_eq!(
+            imported.tool_permissions.trusted_kinds,
+            vec!["execute".to_string()]
+        );
+        assert_eq!(
+            imported.tool_permissions.trusted_mcp_servers,
+            vec!["builder-mcp".to_string()]
         );
     }
 

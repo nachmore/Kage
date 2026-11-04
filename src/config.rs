@@ -603,7 +603,10 @@ mod resolve_policy_tests {
             tools: vec![tool("rm_rf", PolicyKind::Deny)],
             ..Default::default()
         };
-        assert_eq!(cfg.resolve_policy_for("rm_rf", None), PolicyKind::Deny);
+        assert_eq!(
+            cfg.resolve_policy_for("rm_rf", None, None),
+            PolicyKind::Deny
+        );
     }
 
     #[test]
@@ -614,7 +617,10 @@ mod resolve_policy_tests {
             tools: vec![tool("rm_rf", PolicyKind::Deny)],
             ..Default::default()
         };
-        assert_eq!(cfg.resolve_policy_for("rm_rf", None), PolicyKind::Deny);
+        assert_eq!(
+            cfg.resolve_policy_for("rm_rf", None, None),
+            PolicyKind::Deny
+        );
     }
 
     #[test]
@@ -625,9 +631,12 @@ mod resolve_policy_tests {
             tools: vec![tool("known", PolicyKind::Ask)],
             ..Default::default()
         };
-        assert_eq!(cfg.resolve_policy_for("known", None), PolicyKind::Allow);
         assert_eq!(
-            cfg.resolve_policy_for("never_seen", None),
+            cfg.resolve_policy_for("known", None, None),
+            PolicyKind::Allow
+        );
+        assert_eq!(
+            cfg.resolve_policy_for("never_seen", None, None),
             PolicyKind::Allow
         );
     }
@@ -640,10 +649,13 @@ mod resolve_policy_tests {
             tools: vec![tool("a", PolicyKind::Allow), tool("d", PolicyKind::Deny)],
             ..Default::default()
         };
-        assert_eq!(cfg.resolve_policy_for("a", None), PolicyKind::Allow);
-        assert_eq!(cfg.resolve_policy_for("d", None), PolicyKind::Deny);
+        assert_eq!(cfg.resolve_policy_for("a", None, None), PolicyKind::Allow);
+        assert_eq!(cfg.resolve_policy_for("d", None, None), PolicyKind::Deny);
         // Unknown tool with no blanket mode → Ask.
-        assert_eq!(cfg.resolve_policy_for("unknown", None), PolicyKind::Ask);
+        assert_eq!(
+            cfg.resolve_policy_for("unknown", None, None),
+            PolicyKind::Ask
+        );
     }
 
     #[test]
@@ -652,22 +664,25 @@ mod resolve_policy_tests {
         assert_eq!(cfg.set_kind_trusted(TOOL_KIND_EXECUTE, true), Some(true));
         // Each command is its own title; the kind covers all of them.
         assert_eq!(
-            cfg.resolve_policy_for("Running: git status", Some("execute")),
+            cfg.resolve_policy_for("Running: git status", Some("execute"), None),
             PolicyKind::Allow
         );
         assert_eq!(
-            cfg.resolve_policy_for("Running: rm -rf build", Some("execute")),
+            cfg.resolve_policy_for("Running: rm -rf build", Some("execute"), None),
             PolicyKind::Allow
         );
         // Other kinds (edits, deletes, fetches) still prompt.
         assert_eq!(
-            cfg.resolve_policy_for("Editing main.rs", Some("edit")),
+            cfg.resolve_policy_for("Editing main.rs", Some("edit"), None),
             PolicyKind::Ask
         );
-        assert_eq!(cfg.resolve_policy_for("Mystery", None), PolicyKind::Ask);
+        assert_eq!(
+            cfg.resolve_policy_for("Mystery", None, None),
+            PolicyKind::Ask
+        );
         // Without a kind, the trust doesn't apply.
         assert_eq!(
-            cfg.resolve_policy_for("Running: git status", None),
+            cfg.resolve_policy_for("Running: git status", None, None),
             PolicyKind::Ask
         );
     }
@@ -680,7 +695,7 @@ mod resolve_policy_tests {
         };
         cfg.set_kind_trusted(TOOL_KIND_EXECUTE, true).unwrap();
         assert_eq!(
-            cfg.resolve_policy_for("Running: rm -rf ~", Some("execute")),
+            cfg.resolve_policy_for("Running: rm -rf ~", Some("execute"), None),
             PolicyKind::Deny
         );
     }
@@ -709,6 +724,202 @@ mod resolve_policy_tests {
         let old: ToolPermissionsConfig =
             serde_json::from_str(r#"{"trust_all":false,"tools":[]}"#).unwrap();
         assert!(old.trusted_kinds.is_empty());
+    }
+
+    #[test]
+    fn trusted_mcp_server_allows_all_its_tools_and_only_its_tools() {
+        let mut cfg = ToolPermissionsConfig::default();
+        assert_eq!(cfg.set_mcp_server_trusted("builder-mcp", true), Some(true));
+        // Every tool of the server, including ones never seen before.
+        assert_eq!(
+            cfg.resolve_policy_for(
+                "Running: @builder-mcp/InternalSearch",
+                None,
+                Some("builder-mcp")
+            ),
+            PolicyKind::Allow
+        );
+        assert_eq!(
+            cfg.resolve_policy_for(
+                "Running: @builder-mcp/SomeFutureTool",
+                Some("other"),
+                Some("builder-mcp")
+            ),
+            PolicyKind::Allow
+        );
+        // Other servers, and calls with no identified server, still ask.
+        assert_eq!(
+            cfg.resolve_policy_for(
+                "Running: @kage-computer-control/launch_app",
+                None,
+                Some("kage-computer-control")
+            ),
+            PolicyKind::Ask
+        );
+        assert_eq!(
+            cfg.resolve_policy_for("Running: @builder-mcp/InternalSearch", None, None),
+            PolicyKind::Ask
+        );
+        // Names are case-sensitive.
+        assert_eq!(
+            cfg.resolve_policy_for("Running: @Builder-MCP/X", None, Some("Builder-MCP")),
+            PolicyKind::Ask
+        );
+    }
+
+    #[test]
+    fn explicit_deny_wins_over_trusted_mcp_server() {
+        let mut cfg = ToolPermissionsConfig {
+            tools: vec![
+                tool("Running: @builder-mcp/QuipEditor", PolicyKind::Deny),
+                tool("Running: @builder-mcp/InternalSearch", PolicyKind::Ask),
+            ],
+            ..Default::default()
+        };
+        cfg.set_mcp_server_trusted("builder-mcp", true).unwrap();
+        assert_eq!(
+            cfg.resolve_policy_for(
+                "Running: @builder-mcp/QuipEditor",
+                None,
+                Some("builder-mcp")
+            ),
+            PolicyKind::Deny
+        );
+        // An "Always Ask" row is upgraded by the server trust, like the
+        // other blanket modes.
+        assert_eq!(
+            cfg.resolve_policy_for(
+                "Running: @builder-mcp/InternalSearch",
+                None,
+                Some("builder-mcp")
+            ),
+            PolicyKind::Allow
+        );
+    }
+
+    #[test]
+    fn mcp_server_trust_toggles_and_refuses_invalid_names() {
+        let mut cfg = ToolPermissionsConfig::default();
+        assert_eq!(cfg.set_mcp_server_trusted("builder-mcp", true), Some(true));
+        assert_eq!(cfg.set_mcp_server_trusted("builder-mcp", true), Some(false));
+        assert_eq!(cfg.trusted_mcp_servers, vec!["builder-mcp".to_string()]);
+        assert!(cfg.is_mcp_server_trusted(Some("builder-mcp")));
+        assert!(!cfg.is_mcp_server_trusted(None));
+        assert_eq!(cfg.set_mcp_server_trusted("builder-mcp", false), Some(true));
+        assert_eq!(
+            cfg.set_mcp_server_trusted("builder-mcp", false),
+            Some(false)
+        );
+        assert!(cfg.trusted_mcp_servers.is_empty());
+
+        let too_long = "a".repeat(MAX_MCP_SERVER_NAME_LEN + 1);
+        for bad in [
+            "",
+            "two words",
+            "a/b",
+            "@a",
+            "tab\there",
+            "ünïcode",
+            &too_long,
+        ] {
+            assert_eq!(cfg.set_mcp_server_trusted(bad, true), None, "{bad:?}");
+        }
+        assert!(cfg.trusted_mcp_servers.is_empty());
+        let max = "a".repeat(MAX_MCP_SERVER_NAME_LEN);
+        assert_eq!(cfg.set_mcp_server_trusted(&max, true), Some(true));
+    }
+
+    #[test]
+    fn hand_edited_invalid_mcp_server_never_matches_but_can_be_revoked() {
+        let mut cfg: ToolPermissionsConfig =
+            serde_json::from_str(r#"{"trusted_mcp_servers":["a b","builder-mcp"]}"#).unwrap();
+        assert!(!cfg.is_mcp_server_trusted(Some("a b")));
+        assert!(cfg.is_mcp_server_trusted(Some("builder-mcp")));
+        // Settings can still clear the junk entry.
+        assert_eq!(cfg.set_mcp_server_trusted("a b", false), Some(true));
+        assert_eq!(cfg.trusted_mcp_servers, vec!["builder-mcp".to_string()]);
+        // Old configs without the field still load.
+        let old: ToolPermissionsConfig =
+            serde_json::from_str(r#"{"trust_all":false,"tools":[]}"#).unwrap();
+        assert!(old.trusted_mcp_servers.is_empty());
+    }
+
+    #[test]
+    fn mcp_server_parses_from_kiro_titles() {
+        // Real titles from kiro-cli.
+        assert_eq!(
+            mcp_server_from_title("Running: @builder-mcp/InternalSearch"),
+            Some("builder-mcp")
+        );
+        assert_eq!(
+            mcp_server_from_title("Running: @builder-mcp/ReadInternalWebsites"),
+            Some("builder-mcp")
+        );
+        assert_eq!(
+            mcp_server_from_title("Running: @kage-computer-control/launch_app"),
+            Some("kage-computer-control")
+        );
+        assert_eq!(
+            mcp_server_from_title("Running: @aws.docs/read_sections"),
+            Some("aws.docs")
+        );
+    }
+
+    #[test]
+    fn mcp_server_parses_from_claude_tool_names() {
+        assert_eq!(
+            mcp_server_from_title("mcp__builder-mcp__InternalSearch"),
+            Some("builder-mcp")
+        );
+        assert_eq!(
+            mcp_server_from_title("mcp__my_server__do_thing"),
+            Some("my_server")
+        );
+    }
+
+    #[test]
+    fn mcp_server_refuses_anything_ambiguous() {
+        for title in [
+            // Shell text: the server must follow "Running: @" directly and
+            // the whole rest must be exactly <server>/<tool>.
+            "Running: cd x; @foo/bar",
+            "Running: echo @foo/bar",
+            "Running: @foo/bar; rm -rf ~",
+            "Running: @foo/bar && curl evil",
+            "Running: @foo/bar --flag",
+            "Running: @foo/bar\nrm -rf ~",
+            "Running: @foo/bar/baz",
+            "Running: @foo",
+            "Running: @/bar",
+            "Running: @foo/",
+            "Running: @fo o/bar",
+            "Running: git status",
+            "running: @foo/bar",
+            " Running: @foo/bar",
+            "Running:  @foo/bar",
+            // Claude form: one separator, no underscore runs, no extra text.
+            "mcp__a__b__c",
+            "mcp__a___b",
+            "mcp____b",
+            "mcp__a__",
+            "mcp__a",
+            "mcp__a b__c",
+            "mcp__a__b c",
+            "mcp__a/b__c",
+            // Claude Code's adapter wraps its built-in tools as server "acp".
+            "mcp__acp__Bash",
+            "mcp__acp__Edit",
+            // Everything else.
+            "",
+            "InternalSearch",
+            "@builder-mcp/InternalSearch",
+            "Editing main.rs",
+            "ext:todos/add",
+        ] {
+            assert_eq!(mcp_server_from_title(title), None, "{title:?}");
+        }
+        let long_server = format!("Running: @{}/tool", "s".repeat(MAX_MCP_SERVER_NAME_LEN + 1));
+        assert_eq!(mcp_server_from_title(&long_server), None);
     }
 }
 

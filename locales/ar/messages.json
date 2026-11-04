@@ -8626,5 +8626,83 @@
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
     "_source_hash": "0119b3e23f2cee23"
+  },
+  "errors.permission.invalid_mcp_server": {
+    "message": "اسم خادم MCP غير صالح: {server}",
+    "description": "Error when asked to trust an MCP server whose name isn't a plain identifier. {server} is the raw name",
+    "_machine_translated": true,
+    "_source_hash": "3f83c065eb08d4d3"
+  },
+  "permission.dialog.trust_server": {
+    "message": "الوثوق بجميع أدوات {server}…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the tool belongs to an MCP server. {server} is the server's name (an identifier, shown left-to-right, e.g. builder-mcp). Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "f45505607c84d19a"
+  },
+  "permission.dialog.trust_server_title": {
+    "message": "هل تريد الوثوق بكل أدوات {server}؟",
+    "description": "Heading of the inline confirmation for trusting all tools of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "4010fcd61eacef42"
+  },
+  "permission.dialog.trust_server_body": {
+    "message": "من الآن فصاعدًا، يمكن للوكيل استخدام أي أداة من خادم MCP ‏{server} دون أن يسأل، سواء الأدوات المتوفرة حاليًا أو أي أدوات يضيفها لاحقًا، بما في ذلك الأدوات التي تُجري تغييرات أو ترسل بيانات إلى جهات أخرى. لا تفعل ذلك إلا مع الخوادم التي تثق بها. تبقى الأداة التي ضبطتها على «الرفض دائمًا» مرفوضة، ويمكنك إيقاف الوثوق بالخادم من الإعدادات ← أذونات الأدوات.",
+    "description": "Warning shown before the user trusts every tool of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "485a6776afa2b6b2"
+  },
+  "permission.dialog.trust_server_cancel": {
+    "message": "إلغاء",
+    "description": "Button that backs out of the trust-MCP-server confirmation",
+    "_machine_translated": true,
+    "_source_hash": "70a6a6f5e43ffea3"
+  },
+  "permission.dialog.trust_server_confirm": {
+    "message": "الوثوق بهذا الخادم",
+    "description": "Button that confirms trusting every tool of the MCP server named in the confirmation",
+    "_machine_translated": true,
+    "_source_hash": "2c995a63593d5c85"
+  },
+  "permission.dialog.trust_server_failed": {
+    "message": "تعذّر حفظ هذا الإعداد، لذا لم يتغير شيء. حاول مرة أخرى، أو وافق على هذه الأداة وحدها.",
+    "description": "Shown in the trust-MCP-server confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "cb15bd69aa65b2f2"
+  },
+  "settings.tool_permissions.trusted_servers.label": {
+    "message": "خوادم MCP الموثوق بها",
+    "description": "Settings → Tool Permissions: label of the list of MCP servers whose every tool is trusted",
+    "_machine_translated": true,
+    "_source_hash": "5b61f0bd1b460aa1"
+  },
+  "settings.tool_permissions.trusted_servers.description": {
+    "message": "يمكن للوكيل استخدام كل أداة من هذه الخوادم دون أن يسأل، بما في ذلك الأدوات التي يضيفها الخادم لاحقًا. تبقى الأداة التي ضبطتها على «الرفض دائمًا» مرفوضة، وتظل الأدوات التي تبدأها الميزات العاملة في الخلفية (المساعدة المضمّنة، ووحدات الماكرو) تطلب الإذن. يمكنك الوثوق بخادم من خلال مطالبة الإذن الخاصة به («الوثوق بجميع أدوات …»).",
+    "description": "Settings → Tool Permissions: help text under the trusted MCP servers label",
+    "_machine_translated": true,
+    "_source_hash": "5320dd8c77178595"
+  },
+  "settings.tool_permissions.trusted_servers.empty": {
+    "message": "لا توجد خوادم MCP موثوق بها.",
+    "description": "Settings → Tool Permissions: empty state of the trusted MCP servers list",
+    "_machine_translated": true,
+    "_source_hash": "e20ef57580c0717f"
+  },
+  "settings.tool_permissions.trusted_servers.revoke": {
+    "message": "إيقاف الوثوق",
+    "description": "Settings → Tool Permissions: button that removes one MCP server from the trusted list",
+    "_machine_translated": true,
+    "_source_hash": "6aa8ac341407c9d6"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_title": {
+    "message": "السؤال مجددًا قبل استخدام أدوات {server}",
+    "description": "Tooltip on the Stop trusting button. {server} is the MCP server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "3d09ab2e2919cda0"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_failed": {
+    "message": "تعذّر إيقاف الوثوق بـ {server}. حاول مرة أخرى.",
+    "description": "Settings → Tool Permissions: shown when removing an MCP server from the trusted list fails. {server} is the server's name",
+    "_machine_translated": true,
+    "_source_hash": "3ee0dced51f686c9"
   }
 }

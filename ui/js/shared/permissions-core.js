@@ -16,7 +16,7 @@
  *       If handle is false, the request is ignored.
  */
 
-import { getToolEmoji, escapeHtml } from './tool-utils.js';
+import { getToolEmoji, escapeHtml, LTR_SLOT, setTextWithLtrValue } from './tool-utils.js';
 import { EVT } from './events.js';
 import { t } from './i18n.js';
 
@@ -27,6 +27,44 @@ export const TOOL_KIND_EXECUTE = 'execute';
 export function toolKindOf(notification) {
     return notification?._kageToolKind || notification?.params?.toolCall?.kind || null;
 }
+
+/**
+ * The MCP server a permission notification's tool belongs to, as identified
+ * by the backend (src/commands/messaging/notifications.rs). Never parsed
+ * from the title here: the backend's rules (shell runs are never MCP,
+ * ambiguous names are refused) are the only source of truth.
+ */
+export function mcpServerOf(notification) {
+    const server = notification?._kageMcpServer;
+    return typeof server === 'string' && server ? server : null;
+}
+
+/**
+ * The two inline "trust a whole category" confirmations: every CLI command
+ * (ACP kind "execute"), and every tool of one MCP server.
+ */
+const TRUST_PANELS = Object.freeze({
+    commands: Object.freeze({
+        panel: 'permissionTrustConfirm',
+        title: 'permissionTrustConfirmTitle',
+        body: 'permissionTrustConfirmBody',
+        cancel: 'permissionTrustCancel',
+        confirm: 'permissionTrustConfirmBtn',
+    }),
+    server: Object.freeze({
+        panel: 'permissionTrustServerConfirm',
+        title: 'permissionTrustServerConfirmTitle',
+        body: 'permissionTrustServerConfirmBody',
+        cancel: 'permissionTrustServerCancel',
+        confirm: 'permissionTrustServerConfirmBtn',
+    }),
+});
+
+/** Dropdown item that opens each confirmation. */
+const TRUST_ITEMS = Object.freeze({
+    commands: 'permissionTrustCommands',
+    server: 'permissionTrustServer',
+});
 
 export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     let currentPermissionRequest = null;
@@ -89,20 +127,35 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             options: params.options || [],
             toolName: toolName || null,
             toolKind: toolKindOf(notification),
+            mcpServer: notification.extCallback ? null : mcpServerOf(notification),
             isExtension: !!notification.extCallback,
             extCallback: notification.extCallback || null,
             notification,
         };
 
         // "Trust all commands…" only makes sense for an agent's shell run.
-        const trustItem = document.getElementById('permissionTrustCommands');
+        const trustItem = document.getElementById(TRUST_ITEMS.commands);
         if (trustItem) {
             const offer =
                 !currentPermissionRequest.isExtension &&
                 currentPermissionRequest.toolKind === TOOL_KIND_EXECUTE;
             trustItem.style.display = offer ? '' : 'none';
         }
-        setTrustConfirmVisible(false);
+        // "Trust all tools from <server>…" only for a tool the backend
+        // identified as an MCP server's.
+        const serverItem = document.getElementById(TRUST_ITEMS.server);
+        if (serverItem) {
+            const server = currentPermissionRequest.mcpServer;
+            serverItem.style.display = server ? '' : 'none';
+            if (server) {
+                setTextWithLtrValue(
+                    serverItem,
+                    t('permission.dialog.trust_server', { server: LTR_SLOT }),
+                    server
+                );
+            }
+        }
+        setTrustConfirmVisible(null);
 
         toolTitleEl.textContent = toolCall.title || t('shared.permission.unknown_tool');
 
@@ -148,61 +201,129 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         if (hooks.onHide) await hooks.onHide(modal, false);
     }
 
-    function setTrustConfirmVisible(visible) {
-        const panel = document.getElementById('permissionTrustConfirm');
+    /**
+     * Show one trust confirmation (`'commands'` / `'server'`) in place of
+     * the action row, or neither (`null`). Always resets busy / error state.
+     */
+    function setTrustConfirmVisible(mode) {
         const actions = document.querySelector('#permissionModal .permission-actions');
-        if (!panel) return;
-        panel.style.display = visible ? 'block' : 'none';
-        if (actions) actions.style.display = visible ? 'none' : '';
+        let shown = null;
+        for (const [name, ids] of Object.entries(TRUST_PANELS)) {
+            const panel = document.getElementById(ids.panel);
+            if (!panel) continue;
+            const visible = name === mode;
+            panel.style.display = visible ? 'block' : 'none';
+            if (visible) shown = ids;
+        }
+        if (actions) actions.style.display = shown ? 'none' : '';
         setTrustBusy(false);
-        const body = document.getElementById('permissionTrustConfirmBody');
+        resetTrustText();
+        // Focus the safe choice so a stray Enter can't trust everything.
+        if (shown) document.getElementById(shown.cancel)?.focus();
+    }
+
+    /** Restore the confirmations' warning text (clearing a failure message). */
+    function resetTrustText() {
+        const body = document.getElementById(TRUST_PANELS.commands.body);
         if (body?.dataset.defaultText) {
             body.textContent = body.dataset.defaultText;
             body.classList.remove('permission-trust-error');
         }
-        // Focus the safe choice so a stray Enter can't trust everything.
-        if (visible) document.getElementById('permissionTrustCancel')?.focus();
+        // The server confirmation names the current request's server.
+        const server = currentPermissionRequest?.mcpServer;
+        if (!server) return;
+        const ids = TRUST_PANELS.server;
+        setTextWithLtrValue(
+            document.getElementById(ids.title),
+            t('permission.dialog.trust_server_title', { server: LTR_SLOT }),
+            server
+        );
+        const serverBody = document.getElementById(ids.body);
+        setTextWithLtrValue(
+            serverBody,
+            t('permission.dialog.trust_server_body', { server: LTR_SLOT }),
+            server
+        );
+        serverBody?.classList.remove('permission-trust-error');
     }
 
     function setTrustBusy(busy) {
-        for (const id of ['permissionTrustCancel', 'permissionTrustConfirmBtn']) {
-            const b = document.getElementById(id);
-            if (b) b.disabled = busy;
+        for (const ids of Object.values(TRUST_PANELS)) {
+            for (const id of [ids.cancel, ids.confirm]) {
+                const b = document.getElementById(id);
+                if (b) b.disabled = busy;
+            }
         }
     }
 
-    function showTrustError() {
-        const body = document.getElementById('permissionTrustConfirmBody');
+    function showTrustError(mode) {
+        const body = document.getElementById(TRUST_PANELS[mode]?.body);
         if (!body) return;
-        body.dataset.defaultText ||= body.textContent;
-        body.textContent = t('permission.dialog.trust_commands_failed');
+        if (mode === 'commands') {
+            body.dataset.defaultText ||= body.textContent;
+            body.textContent = t('permission.dialog.trust_commands_failed');
+        } else {
+            body.textContent = t('permission.dialog.trust_server_failed');
+        }
         body.classList.add('permission-trust-error');
     }
 
-    function trustConfirmVisible() {
-        return document.getElementById('permissionTrustConfirm')?.style.display === 'block';
+    /** The trust confirmation currently shown (`'commands'` / `'server'`), or null. */
+    function visibleTrustPanel() {
+        for (const [name, ids] of Object.entries(TRUST_PANELS)) {
+            if (document.getElementById(ids.panel)?.style.display === 'block') return name;
+        }
+        return null;
     }
 
     /**
-     * The user confirmed "Trust all commands": record the category grant,
-     * approve this request, and approve any command prompts already queued
-     * in this window (they were asked before the trust existed — the backend
-     * auto-approves only new ones).
+     * What confirming `mode` means for `req`: the backend command that
+     * records the category grant, and which queued requests it covers.
+     * Null when that category doesn't apply to the request.
      */
-    async function trustAllCommandsAndAllow() {
+    function trustPlan(mode, req) {
+        if (!req || req.isExtension) return null;
+        if (mode === 'commands' && req.toolKind === TOOL_KIND_EXECUTE) {
+            return {
+                command: 'set_tool_kind_trusted',
+                args: { kind: TOOL_KIND_EXECUTE, trusted: true },
+                covers: (n) => toolKindOf(n) === TOOL_KIND_EXECUTE,
+            };
+        }
+        if (mode === 'server' && req.mcpServer) {
+            const server = req.mcpServer;
+            return {
+                command: 'set_mcp_server_trusted',
+                args: { server, trusted: true },
+                covers: (n) => mcpServerOf(n) === server,
+            };
+        }
+        return null;
+    }
+
+    /**
+     * The user confirmed "Trust all commands" / "Trust all tools from
+     * <server>": record the category grant, approve this request, and
+     * approve the requests of that category already queued in this window
+     * (they were asked before the trust existed — the backend auto-approves
+     * only new ones). Queued requests from background sessions keep
+     * asking: category trust never covers those (see the backend).
+     */
+    async function trustCategoryAndAllow(mode) {
         const req = currentPermissionRequest;
-        if (!req || req.isExtension || req.toolKind !== TOOL_KIND_EXECUTE) return;
+        const plan = trustPlan(mode, req);
+        if (!plan) return;
         if (req.answering || req.trusting) return; // double-click / key repeat
         req.trusting = true;
         setTrustBusy(true);
         try {
-            await invoke('set_tool_kind_trusted', { kind: TOOL_KIND_EXECUTE, trusted: true });
+            await invoke(plan.command, plan.args);
         } catch (e) {
-            console.error('Failed to trust all commands:', e);
+            console.error(`Failed to save trust (${plan.command}):`, e);
             req.trusting = false;
             if (currentPermissionRequest === req) {
                 setTrustBusy(false);
-                showTrustError();
+                showTrustError(mode);
             }
             return;
         }
@@ -210,11 +331,14 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         // dismissed): never approve whatever request happens to be current
         // now — it could be an edit, an extension tool or another session's.
         if (currentPermissionRequest !== req) return;
-        const queuedCommands = _permissionQueue.filter(
-            (q) => !q.notification?.extCallback && toolKindOf(q.notification) === TOOL_KIND_EXECUTE
+        const covered = _permissionQueue.filter(
+            (q) =>
+                !q.notification?.extCallback &&
+                !q.notification?._kageBackground &&
+                plan.covers(q.notification)
         );
-        _permissionQueue = _permissionQueue.filter((q) => !queuedCommands.includes(q));
-        for (const q of queuedCommands) {
+        _permissionQueue = _permissionQueue.filter((q) => !covered.includes(q));
+        for (const q of covered) {
             const n = q.notification;
             invoke('send_permission_response', {
                 sessionId: n.params?.sessionId || null,
@@ -222,7 +346,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 optionId: 'allow_once',
                 toolTitle:
                     q.toolName || n.params?.toolCall?.title || t('shared.permission.unknown'),
-            }).catch((e) => console.error('Failed to approve queued command:', e));
+            }).catch((e) => console.error('Failed to approve queued request:', e));
         }
         await handlePermissionResponse('allow_once');
     }
@@ -362,18 +486,21 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 handlePermissionResponse('allow_once', 'allow', 'always')
             );
 
-        // Trust all commands: confirm inline first (dangerous, category-wide).
-        document.getElementById('permissionTrustCommands')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (dropdown) dropdown.style.display = 'none';
-            setTrustConfirmVisible(true);
-        });
-        document
-            .getElementById('permissionTrustCancel')
-            ?.addEventListener('click', () => setTrustConfirmVisible(false));
-        document
-            .getElementById('permissionTrustConfirmBtn')
-            ?.addEventListener('click', () => trustAllCommandsAndAllow());
+        // Trust all commands / all tools from an MCP server: confirm inline
+        // first (dangerous, category-wide).
+        for (const [mode, ids] of Object.entries(TRUST_PANELS)) {
+            document.getElementById(TRUST_ITEMS[mode])?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (dropdown) dropdown.style.display = 'none';
+                setTrustConfirmVisible(mode);
+            });
+            document
+                .getElementById(ids.cancel)
+                ?.addEventListener('click', () => setTrustConfirmVisible(null));
+            document
+                .getElementById(ids.confirm)
+                ?.addEventListener('click', () => trustCategoryAndAllow(mode));
+        }
     }
 
     function wireOverlayDismiss() {
@@ -384,7 +511,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             ) {
                 // Like Escape: an outside click backs out of the trust
                 // confirmation rather than denying the request.
-                if (trustConfirmVisible()) setTrustConfirmVisible(false);
+                if (visibleTrustPanel()) setTrustConfirmVisible(null);
                 else handlePermissionResponse('reject_once');
             }
         });
@@ -398,22 +525,25 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 // typing in the session the user is actually in.
                 if (!currentPermissionRequest) return;
                 if (!isShowing(document.getElementById('permissionModal'))) return;
+                const trustPanel = visibleTrustPanel();
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (trustConfirmVisible()) setTrustConfirmVisible(false);
+                    if (trustPanel) setTrustConfirmVisible(null);
                     else handlePermissionResponse('reject_once');
-                } else if (e.key === 'Tab' && trustConfirmVisible()) {
+                } else if (e.key === 'Tab' && trustPanel) {
                     // Keep focus inside the confirmation (two buttons).
                     e.preventDefault();
                     e.stopPropagation();
-                    const cancel = document.getElementById('permissionTrustCancel');
-                    const confirmBtn = document.getElementById('permissionTrustConfirmBtn');
+                    const ids = TRUST_PANELS[trustPanel];
+                    const cancel = document.getElementById(ids.cancel);
+                    const confirmBtn = document.getElementById(ids.confirm);
                     (document.activeElement === cancel ? confirmBtn : cancel)?.focus();
                 } else if (
+                    trustPanel &&
                     (e.key === 'Enter' || e.key === ' ') &&
                     e.target instanceof HTMLButtonElement &&
-                    e.target.closest('#permissionTrustConfirm')
+                    e.target.closest(`#${TRUST_PANELS[trustPanel].panel}`)
                 ) {
                     // Keyboard use of the trust confirmation's own buttons.
                 } else {
@@ -439,6 +569,9 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             // Ride on the notification so it survives queueing.
             notification._kageToolKind =
                 event.payload.toolKind || notification.params?.toolCall?.kind || null;
+            notification._kageMcpServer =
+                typeof event.payload.mcpServer === 'string' ? event.payload.mcpServer : null;
+            notification._kageBackground = event.payload.backgroundSession === true;
 
             if (auto_approve) {
                 invoke('send_permission_response', {

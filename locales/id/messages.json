@@ -8626,5 +8626,83 @@
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
     "_source_hash": "0119b3e23f2cee23"
+  },
+  "errors.permission.invalid_mcp_server": {
+    "message": "Nama server MCP tidak valid: {server}",
+    "description": "Error when asked to trust an MCP server whose name isn't a plain identifier. {server} is the raw name",
+    "_machine_translated": true,
+    "_source_hash": "3f83c065eb08d4d3"
+  },
+  "permission.dialog.trust_server": {
+    "message": "Percayai semua alat dari {server}…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the tool belongs to an MCP server. {server} is the server's name (an identifier, shown left-to-right, e.g. builder-mcp). Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "f45505607c84d19a"
+  },
+  "permission.dialog.trust_server_title": {
+    "message": "Percayai setiap alat dari {server}?",
+    "description": "Heading of the inline confirmation for trusting all tools of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "4010fcd61eacef42"
+  },
+  "permission.dialog.trust_server_body": {
+    "message": "Mulai sekarang, agen dapat menggunakan alat apa pun dari server MCP {server} tanpa bertanya — alat yang dimilikinya saat ini dan alat apa pun yang ditambahkan nanti, termasuk alat yang mengubah sesuatu atau mengirim data ke tempat lain. Lakukan ini hanya untuk server yang Anda percayai. Alat yang telah Anda setel ke Selalu tolak akan tetap ditolak, dan Anda dapat berhenti memercayai server ini di Pengaturan → Izin Alat.",
+    "description": "Warning shown before the user trusts every tool of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "485a6776afa2b6b2"
+  },
+  "permission.dialog.trust_server_cancel": {
+    "message": "Batal",
+    "description": "Button that backs out of the trust-MCP-server confirmation",
+    "_machine_translated": true,
+    "_source_hash": "70a6a6f5e43ffea3"
+  },
+  "permission.dialog.trust_server_confirm": {
+    "message": "Percayai server ini",
+    "description": "Button that confirms trusting every tool of the MCP server named in the confirmation",
+    "_machine_translated": true,
+    "_source_hash": "2c995a63593d5c85"
+  },
+  "permission.dialog.trust_server_failed": {
+    "message": "Tidak dapat menyimpan pengaturan tersebut, jadi tidak ada yang diubah. Coba lagi, atau setujui alat ini secara terpisah.",
+    "description": "Shown in the trust-MCP-server confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "cb15bd69aa65b2f2"
+  },
+  "settings.tool_permissions.trusted_servers.label": {
+    "message": "Server MCP tepercaya",
+    "description": "Settings → Tool Permissions: label of the list of MCP servers whose every tool is trusted",
+    "_machine_translated": true,
+    "_source_hash": "5b61f0bd1b460aa1"
+  },
+  "settings.tool_permissions.trusted_servers.description": {
+    "message": "Agen dapat menggunakan setiap alat dari server ini tanpa bertanya, termasuk alat yang ditambahkan server nanti. Alat yang telah Anda setel ke Selalu tolak akan tetap ditolak, dan alat yang dijalankan oleh fitur latar belakang (bantuan inline, makro) tetap akan meminta izin. Percayai server dari permintaan izinnya (\"Percayai semua alat dari …\").",
+    "description": "Settings → Tool Permissions: help text under the trusted MCP servers label",
+    "_machine_translated": true,
+    "_source_hash": "5320dd8c77178595"
+  },
+  "settings.tool_permissions.trusted_servers.empty": {
+    "message": "Tidak ada server MCP yang dipercayai.",
+    "description": "Settings → Tool Permissions: empty state of the trusted MCP servers list",
+    "_machine_translated": true,
+    "_source_hash": "e20ef57580c0717f"
+  },
+  "settings.tool_permissions.trusted_servers.revoke": {
+    "message": "Berhenti memercayai",
+    "description": "Settings → Tool Permissions: button that removes one MCP server from the trusted list",
+    "_machine_translated": true,
+    "_source_hash": "6aa8ac341407c9d6"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_title": {
+    "message": "Tanyakan lagi sebelum menggunakan alat dari {server}",
+    "description": "Tooltip on the Stop trusting button. {server} is the MCP server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "3d09ab2e2919cda0"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_failed": {
+    "message": "Tidak dapat berhenti memercayai {server}. Coba lagi.",
+    "description": "Settings → Tool Permissions: shown when removing an MCP server from the trusted list fails. {server} is the server's name",
+    "_machine_translated": true,
+    "_source_hash": "3ee0dced51f686c9"
   }
 }

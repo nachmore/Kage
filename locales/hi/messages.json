@@ -8626,5 +8626,83 @@
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
     "_source_hash": "0119b3e23f2cee23"
+  },
+  "errors.permission.invalid_mcp_server": {
+    "message": "यह मान्य MCP सर्वर नाम नहीं है: {server}",
+    "description": "Error when asked to trust an MCP server whose name isn't a plain identifier. {server} is the raw name",
+    "_machine_translated": true,
+    "_source_hash": "3f83c065eb08d4d3"
+  },
+  "permission.dialog.trust_server": {
+    "message": "{server} के सभी टूल पर भरोसा करें…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the tool belongs to an MCP server. {server} is the server's name (an identifier, shown left-to-right, e.g. builder-mcp). Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "f45505607c84d19a"
+  },
+  "permission.dialog.trust_server_title": {
+    "message": "{server} के हर टूल पर भरोसा करें?",
+    "description": "Heading of the inline confirmation for trusting all tools of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "4010fcd61eacef42"
+  },
+  "permission.dialog.trust_server_body": {
+    "message": "अब से एजेंट {server} MCP सर्वर का कोई भी टूल बिना पूछे इस्तेमाल कर सकेगा — इसमें अभी मौजूद टूल और बाद में जोड़े जाने वाले टूल, दोनों शामिल हैं, वे टूल भी जो चीज़ें बदलते हैं या डेटा कहीं और भेजते हैं। ऐसा केवल उन्हीं सर्वर के लिए करें जिन पर आप भरोसा करते हैं। जिस टूल को आपने हमेशा अस्वीकार करें पर सेट किया है, वह अस्वीकृत ही रहेगा, और आप सेटिंग्स → टूल अनुमतियाँ में जाकर इस सर्वर पर भरोसा करना बंद कर सकते हैं।",
+    "description": "Warning shown before the user trusts every tool of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "485a6776afa2b6b2"
+  },
+  "permission.dialog.trust_server_cancel": {
+    "message": "रद्द करें",
+    "description": "Button that backs out of the trust-MCP-server confirmation",
+    "_machine_translated": true,
+    "_source_hash": "70a6a6f5e43ffea3"
+  },
+  "permission.dialog.trust_server_confirm": {
+    "message": "इस सर्वर पर भरोसा करें",
+    "description": "Button that confirms trusting every tool of the MCP server named in the confirmation",
+    "_machine_translated": true,
+    "_source_hash": "2c995a63593d5c85"
+  },
+  "permission.dialog.trust_server_failed": {
+    "message": "यह सेटिंग सहेजी नहीं जा सकी, इसलिए कुछ भी नहीं बदला गया। फिर से कोशिश करें, या सिर्फ़ इस टूल को अनुमति दें।",
+    "description": "Shown in the trust-MCP-server confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "cb15bd69aa65b2f2"
+  },
+  "settings.tool_permissions.trusted_servers.label": {
+    "message": "भरोसेमंद MCP सर्वर",
+    "description": "Settings → Tool Permissions: label of the list of MCP servers whose every tool is trusted",
+    "_machine_translated": true,
+    "_source_hash": "5b61f0bd1b460aa1"
+  },
+  "settings.tool_permissions.trusted_servers.description": {
+    "message": "एजेंट इन सर्वर के हर टूल को बिना पूछे इस्तेमाल कर सकता है, जिनमें वे टूल भी शामिल हैं जिन्हें सर्वर बाद में जोड़ता है। जिस टूल को आपने हमेशा अस्वीकार करें पर सेट किया है, वह अस्वीकृत ही रहेगा, और बैकग्राउंड सुविधाओं (इनलाइन सहायता, मैक्रो) से शुरू होने वाले टूल अब भी पूछेंगे। किसी सर्वर पर भरोसा करने के लिए उसके अनुमति प्रॉम्प्ट में (\"… के सभी टूल पर भरोसा करें\") चुनें।",
+    "description": "Settings → Tool Permissions: help text under the trusted MCP servers label",
+    "_machine_translated": true,
+    "_source_hash": "5320dd8c77178595"
+  },
+  "settings.tool_permissions.trusted_servers.empty": {
+    "message": "किसी भी MCP सर्वर पर भरोसा नहीं किया गया है।",
+    "description": "Settings → Tool Permissions: empty state of the trusted MCP servers list",
+    "_machine_translated": true,
+    "_source_hash": "e20ef57580c0717f"
+  },
+  "settings.tool_permissions.trusted_servers.revoke": {
+    "message": "भरोसा करना बंद करें",
+    "description": "Settings → Tool Permissions: button that removes one MCP server from the trusted list",
+    "_machine_translated": true,
+    "_source_hash": "6aa8ac341407c9d6"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_title": {
+    "message": "{server} के टूल इस्तेमाल करने से पहले फिर से पूछें",
+    "description": "Tooltip on the Stop trusting button. {server} is the MCP server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "3d09ab2e2919cda0"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_failed": {
+    "message": "{server} पर भरोसा करना बंद नहीं किया जा सका। फिर से कोशिश करें।",
+    "description": "Settings → Tool Permissions: shown when removing an MCP server from the trusted list fails. {server} is the server's name",
+    "_machine_translated": true,
+    "_source_hash": "3ee0dced51f686c9"
   }
 }

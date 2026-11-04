@@ -8626,5 +8626,83 @@
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
     "_source_hash": "0119b3e23f2cee23"
+  },
+  "errors.permission.invalid_mcp_server": {
+    "message": "বৈধ MCP সার্ভারের নাম নয়: {server}",
+    "description": "Error when asked to trust an MCP server whose name isn't a plain identifier. {server} is the raw name",
+    "_machine_translated": true,
+    "_source_hash": "3f83c065eb08d4d3"
+  },
+  "permission.dialog.trust_server": {
+    "message": "{server}-এর সব টুল বিশ্বাস করুন…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the tool belongs to an MCP server. {server} is the server's name (an identifier, shown left-to-right, e.g. builder-mcp). Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "f45505607c84d19a"
+  },
+  "permission.dialog.trust_server_title": {
+    "message": "{server}-এর প্রতিটি টুল বিশ্বাস করবেন?",
+    "description": "Heading of the inline confirmation for trusting all tools of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "4010fcd61eacef42"
+  },
+  "permission.dialog.trust_server_body": {
+    "message": "এখন থেকে এজেন্ট জিজ্ঞাসা না করেই {server} MCP সার্ভারের যেকোনো টুল ব্যবহার করতে পারবে — আজ যেসব টুল আছে এবং পরে যেগুলো যোগ হবে, যার মধ্যে কিছু পরিবর্তন করে বা অন্য কোথাও ডেটা পাঠায় এমন টুলও রয়েছে। শুধুমাত্র আপনার বিশ্বস্ত সার্ভারের জন্য এটি করুন। যে টুল আপনি সবসময় প্রত্যাখ্যান-এ সেট করেছেন সেটি প্রত্যাখ্যাতই থাকবে, এবং আপনি সেটিংস → টুলের অনুমতি থেকে সার্ভারটিকে বিশ্বাস করা বন্ধ করতে পারবেন।",
+    "description": "Warning shown before the user trusts every tool of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "485a6776afa2b6b2"
+  },
+  "permission.dialog.trust_server_cancel": {
+    "message": "বাতিল করুন",
+    "description": "Button that backs out of the trust-MCP-server confirmation",
+    "_machine_translated": true,
+    "_source_hash": "70a6a6f5e43ffea3"
+  },
+  "permission.dialog.trust_server_confirm": {
+    "message": "এই সার্ভারটি বিশ্বাস করুন",
+    "description": "Button that confirms trusting every tool of the MCP server named in the confirmation",
+    "_machine_translated": true,
+    "_source_hash": "2c995a63593d5c85"
+  },
+  "permission.dialog.trust_server_failed": {
+    "message": "সেটিংটি সংরক্ষণ করা যায়নি, তাই কিছুই পরিবর্তন করা হয়নি। আবার চেষ্টা করুন, অথবা শুধু এই টুলটি অনুমোদন করুন।",
+    "description": "Shown in the trust-MCP-server confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "cb15bd69aa65b2f2"
+  },
+  "settings.tool_permissions.trusted_servers.label": {
+    "message": "বিশ্বস্ত MCP সার্ভার",
+    "description": "Settings → Tool Permissions: label of the list of MCP servers whose every tool is trusted",
+    "_machine_translated": true,
+    "_source_hash": "5b61f0bd1b460aa1"
+  },
+  "settings.tool_permissions.trusted_servers.description": {
+    "message": "এজেন্ট জিজ্ঞাসা না করেই এই সার্ভারগুলোর প্রতিটি টুল ব্যবহার করতে পারে, যার মধ্যে কোনো সার্ভার পরে যে টুল যোগ করে সেগুলোও রয়েছে। যে টুল আপনি সবসময় প্রত্যাখ্যান-এ সেট করেছেন সেটি প্রত্যাখ্যাতই থাকবে, এবং ব্যাকগ্রাউন্ড ফিচার (ইনলাইন সহায়তা, ম্যাক্রো) দ্বারা চালু হওয়া টুল তখনও জিজ্ঞাসা করবে। কোনো সার্ভারের অনুমতি প্রম্পট থেকে সেটিকে বিশ্বাস করুন (\"…-এর সব টুল বিশ্বাস করুন\")।",
+    "description": "Settings → Tool Permissions: help text under the trusted MCP servers label",
+    "_machine_translated": true,
+    "_source_hash": "5320dd8c77178595"
+  },
+  "settings.tool_permissions.trusted_servers.empty": {
+    "message": "কোনো MCP সার্ভার বিশ্বস্ত নয়।",
+    "description": "Settings → Tool Permissions: empty state of the trusted MCP servers list",
+    "_machine_translated": true,
+    "_source_hash": "e20ef57580c0717f"
+  },
+  "settings.tool_permissions.trusted_servers.revoke": {
+    "message": "বিশ্বাস করা বন্ধ করুন",
+    "description": "Settings → Tool Permissions: button that removes one MCP server from the trusted list",
+    "_machine_translated": true,
+    "_source_hash": "6aa8ac341407c9d6"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_title": {
+    "message": "{server}-এর টুল ব্যবহারের আগে আবার জিজ্ঞাসা করুন",
+    "description": "Tooltip on the Stop trusting button. {server} is the MCP server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "3d09ab2e2919cda0"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_failed": {
+    "message": "{server}-কে বিশ্বাস করা বন্ধ করা যায়নি। আবার চেষ্টা করুন।",
+    "description": "Settings → Tool Permissions: shown when removing an MCP server from the trusted list fails. {server} is the server's name",
+    "_machine_translated": true,
+    "_source_hash": "3ee0dced51f686c9"
   }
 }

@@ -175,6 +175,7 @@
                         <button class="permission-dropdown-item" id="permissionAllow24h" data-i18n="permission.dialog.allow_24h">Allow for 24 hours</button>
                         <button class="permission-dropdown-item" id="permissionAllowAlways" data-i18n="permission.dialog.allow_always">Always allow</button>
                         <button class="permission-dropdown-item permission-dropdown-danger" id="permissionTrustCommands" style="display:none;" data-i18n="permission.dialog.trust_commands">Trust all commands…</button>
+                        <button class="permission-dropdown-item permission-dropdown-danger permission-trust-server-item" id="permissionTrustServer" style="display:none;"></button>
                     </div>
                 </div>
             </div>
@@ -184,6 +185,15 @@
                 <div class="permission-trust-actions">
                     <button class="permission-btn permission-btn-deny" id="permissionTrustCancel" data-i18n="permission.dialog.trust_commands_cancel">Cancel</button>
                     <button class="permission-btn permission-btn-trust" id="permissionTrustConfirmBtn" data-i18n="permission.dialog.trust_commands_confirm">Trust all commands</button>
+                </div>
+            </div>
+            <!-- Title and body name the server; filled in by permissions-core.js. -->
+            <div class="permission-trust-confirm" id="permissionTrustServerConfirm" style="display:none;" role="alertdialog" aria-labelledby="permissionTrustServerConfirmTitle" aria-describedby="permissionTrustServerConfirmBody">
+                <p class="permission-trust-title" id="permissionTrustServerConfirmTitle"></p>
+                <p class="permission-trust-body" id="permissionTrustServerConfirmBody"></p>
+                <div class="permission-trust-actions">
+                    <button class="permission-btn permission-btn-deny" id="permissionTrustServerCancel" data-i18n="permission.dialog.trust_server_cancel">Cancel</button>
+                    <button class="permission-btn permission-btn-trust" id="permissionTrustServerConfirmBtn" data-i18n="permission.dialog.trust_server_confirm">Trust this server</button>
                 </div>
             </div>
         </div>

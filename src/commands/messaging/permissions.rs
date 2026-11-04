@@ -165,6 +165,68 @@ pub async fn set_tool_kind_trusted<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Trust (or stop trusting) every tool from an MCP server — "Trust all
+/// tools from <server>". Same contract as `set_tool_kind_trusted`: refuses
+/// an invalid server name, saves under the lock and rolls back if the save
+/// fails, records a standing grant / revoke in the audit log, and broadcasts
+/// `config_updated`.
+#[tauri::command]
+pub async fn set_mcp_server_trusted<R: tauri::Runtime>(
+    server: String,
+    trusted: bool,
+    features: State<'_, FeatureServices>,
+    app: tauri::AppHandle<R>,
+) -> Result<(), AppError> {
+    {
+        // lock_or_recover so revoking works even after a poisoning panic;
+        // see set_tool_kind_trusted for why the save happens under the lock.
+        let mut config = features.config.lock_or_recover();
+        let prior = config.tool_permissions.trusted_mcp_servers.clone();
+        let changed = config
+            .tool_permissions
+            .set_mcp_server_trusted(&server, trusted)
+            .ok_or_else(|| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.permission.invalid_mcp_server",
+                    &[("server", &server)],
+                )
+            })?;
+        if !changed {
+            return Ok(());
+        }
+        if let Err(e) = config.save() {
+            config.tool_permissions.trusted_mcp_servers = prior;
+            return Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.config.save_failed",
+                &[("reason", &e.to_string())],
+            ));
+        }
+    }
+    info!("MCP server {:?} trusted={}", server, trusted);
+    let label = format!("All tools from MCP server '{}'", server);
+    let event = if trusted {
+        crate::permission_audit::AuditEvent::Granted {
+            tool: label,
+            grant_type: crate::config::GrantType::Always,
+            session_id: None,
+            args_preview: None,
+        }
+    } else {
+        crate::permission_audit::AuditEvent::Revoked {
+            tool: label,
+            prior_policy: crate::config::PolicyKind::Allow,
+            prior_grant_type: Some(crate::config::GrantType::Always),
+        }
+    };
+    crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(event));
+    if let Err(e) = app.emit(events::CONFIG_UPDATED, ()) {
+        warn!("Failed to emit config_updated: {}", e);
+    }
+    Ok(())
+}
+
 /// Dismiss pending permission requests. With `session_id`, only requests
 /// belonging to that session (or carrying no session) are dismissed —
 /// another window's blocked prompt is left alone. Without it, everything

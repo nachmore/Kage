@@ -8626,5 +8626,83 @@
     "description": "Helper for the login-shell environment toggle; .zshrc and .bash_profile are file names and PATH is an environment variable name, keep them untranslated",
     "_machine_translated": true,
     "_source_hash": "0119b3e23f2cee23"
+  },
+  "errors.permission.invalid_mcp_server": {
+    "message": "Érvénytelen MCP-kiszolgálónév: {server}",
+    "description": "Error when asked to trust an MCP server whose name isn't a plain identifier. {server} is the raw name",
+    "_machine_translated": true,
+    "_source_hash": "3f83c065eb08d4d3"
+  },
+  "permission.dialog.trust_server": {
+    "message": "Megbízom a(z) {server} kiszolgáló összes eszközében…",
+    "description": "Allow-menu item in the tool permission prompt, shown only when the tool belongs to an MCP server. {server} is the server's name (an identifier, shown left-to-right, e.g. builder-mcp). Opens a confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "f45505607c84d19a"
+  },
+  "permission.dialog.trust_server_title": {
+    "message": "Megbízik a(z) {server} kiszolgáló összes eszközében?",
+    "description": "Heading of the inline confirmation for trusting all tools of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "4010fcd61eacef42"
+  },
+  "permission.dialog.trust_server_body": {
+    "message": "Mostantól az ügynök kérdezés nélkül használhatja a(z) {server} MCP-kiszolgáló bármely eszközét – a mostani és a később hozzáadott eszközöket is, beleértve azokat, amelyek módosításokat végeznek vagy máshová küldenek adatokat. Ezt csak olyan kiszolgálóknál tegye meg, amelyekben megbízik. A Mindig tiltás beállítású eszközök továbbra is tiltva maradnak, a kiszolgáló megbízhatóságát pedig a Beállítások → Eszközengedélyek részben vonhatja vissza.",
+    "description": "Warning shown before the user trusts every tool of one MCP server. {server} is the server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "485a6776afa2b6b2"
+  },
+  "permission.dialog.trust_server_cancel": {
+    "message": "Mégse",
+    "description": "Button that backs out of the trust-MCP-server confirmation",
+    "_machine_translated": true,
+    "_source_hash": "70a6a6f5e43ffea3"
+  },
+  "permission.dialog.trust_server_confirm": {
+    "message": "Megbízom ebben a kiszolgálóban",
+    "description": "Button that confirms trusting every tool of the MCP server named in the confirmation",
+    "_machine_translated": true,
+    "_source_hash": "2c995a63593d5c85"
+  },
+  "permission.dialog.trust_server_failed": {
+    "message": "Nem sikerült menteni a beállítást, ezért semmi sem változott. Próbálja újra, vagy csak ezt az eszközt engedélyezze.",
+    "description": "Shown in the trust-MCP-server confirmation when saving the setting fails",
+    "_machine_translated": true,
+    "_source_hash": "cb15bd69aa65b2f2"
+  },
+  "settings.tool_permissions.trusted_servers.label": {
+    "message": "Megbízható MCP-kiszolgálók",
+    "description": "Settings → Tool Permissions: label of the list of MCP servers whose every tool is trusted",
+    "_machine_translated": true,
+    "_source_hash": "5b61f0bd1b460aa1"
+  },
+  "settings.tool_permissions.trusted_servers.description": {
+    "message": "Az ügynök kérdezés nélkül használhatja ezeknek a kiszolgálóknak az összes eszközét, a később hozzáadott eszközöket is beleértve. A Mindig tiltás beállítású eszközök tiltva maradnak, a háttérfunkciók (beágyazott segítség, makrók) által indított eszközök pedig továbbra is engedélyt kérnek. Egy kiszolgálót az engedélykérésében jelölhet megbízhatónak („Megbízom a(z) … kiszolgáló összes eszközében”).",
+    "description": "Settings → Tool Permissions: help text under the trusted MCP servers label",
+    "_machine_translated": true,
+    "_source_hash": "5320dd8c77178595"
+  },
+  "settings.tool_permissions.trusted_servers.empty": {
+    "message": "Nincs megbízható MCP-kiszolgáló.",
+    "description": "Settings → Tool Permissions: empty state of the trusted MCP servers list",
+    "_machine_translated": true,
+    "_source_hash": "e20ef57580c0717f"
+  },
+  "settings.tool_permissions.trusted_servers.revoke": {
+    "message": "Bizalom visszavonása",
+    "description": "Settings → Tool Permissions: button that removes one MCP server from the trusted list",
+    "_machine_translated": true,
+    "_source_hash": "6aa8ac341407c9d6"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_title": {
+    "message": "Újra engedélyt kér a(z) {server} kiszolgáló eszközeinek használata előtt",
+    "description": "Tooltip on the Stop trusting button. {server} is the MCP server's name (an identifier, e.g. builder-mcp)",
+    "_machine_translated": true,
+    "_source_hash": "3d09ab2e2919cda0"
+  },
+  "settings.tool_permissions.trusted_servers.revoke_failed": {
+    "message": "Nem sikerült visszavonni a(z) {server} kiszolgáló megbízhatóságát. Próbálja újra.",
+    "description": "Settings → Tool Permissions: shown when removing an MCP server from the trusted list fails. {server} is the server's name",
+    "_machine_translated": true,
+    "_source_hash": "3ee0dced51f686c9"
   }
 }

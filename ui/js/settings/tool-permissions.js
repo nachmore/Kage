@@ -1,5 +1,5 @@
 import { SettingsModule } from './base.js';
-import { getToolEmoji, escapeHtml } from '../shared/tool-utils.js';
+import { getToolEmoji, escapeHtml, LTR_SLOT, setTextWithLtrValue } from '../shared/tool-utils.js';
 import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 /**
@@ -12,6 +12,8 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         super('tool-permissions', t('settings.sidebar.tool_permissions'), '🔧');
         this.trustAll = false;
         this.trustCommands = false;
+        /** MCP servers whose every tool is trusted (backend-owned). */
+        this.trustedServers = [];
         this.tools = [];
     }
 
@@ -61,6 +63,16 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 'trustAllCommands',
                 false
             )}
+            <div class="setting-row">
+                <div class="setting-label">${t('settings.tool_permissions.trusted_servers.label')}</div>
+                <div class="setting-description">
+                    ${t('settings.tool_permissions.trusted_servers.description')}
+                </div>
+                <div class="agent-tools-list trusted-servers-list" id="trustedMcpServersList" style="margin-top: 8px;">
+                    <div class="tools-empty">${t('settings.tool_permissions.trusted_servers.empty')}</div>
+                </div>
+                <div class="trusted-servers-status" id="trustedMcpServersStatus" role="status"></div>
+            </div>
             <div class="setting-row terminator-row">
                 <div class="terminator-header">
                     <div class="terminator-mascot" id="terminatorMascot"></div>
@@ -164,23 +176,27 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 const trustBox = document.getElementById('trustAllCommands');
                 if (trustBox) trustBox.checked = false;
                 this.renderToolsList();
-                // Save immediately. Command trust is backend-owned (save_config
-                // ignores it), so revoke it through its own audited command,
-                // independently of the rest of the reset.
+                // Save immediately. Command and MCP server trust are
+                // backend-owned (save_config ignores them), so revoke them
+                // through their own audited commands, independently of the
+                // rest of the reset.
                 const { invoke } = window.__TAURI__.core;
                 await invoke('set_tool_kind_trusted', { kind: 'execute', trusted: false }).catch(
                     (e) => console.error('Failed to revoke command trust:', e)
                 );
+                await this._revokeAllServers(invoke);
                 try {
                     const config = await invoke('get_config');
                     config.tool_permissions = {
                         trust_all: false,
                         terminator_mode: false,
                         trusted_kinds: config.tool_permissions?.trusted_kinds ?? [],
+                        trusted_mcp_servers: config.tool_permissions?.trusted_mcp_servers ?? [],
                         tools: [],
                     };
                     await invoke('save_config', { config });
                     this._syncTrustCommands(config);
+                    this._syncTrustedServers(config);
                 } catch (e) {
                     console.error('Failed to reset permissions:', e);
                 }
@@ -229,6 +245,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         this.terminatorMode = config.tool_permissions?.terminator_mode || false;
         this.tools = config.tool_permissions?.tools || [];
         this._syncTrustCommands(config);
+        this._syncTrustedServers(config);
 
         const terminatorCheckbox = document.getElementById('terminatorMode');
         if (terminatorCheckbox) {
@@ -246,9 +263,11 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             const config = await window.__TAURI__.core.invoke('get_config');
             this.tools = config.tool_permissions?.tools || [];
             this.renderToolsList();
-            // Command trust is backend-owned and can change from a prompt in
-            // another window ("Trust all commands…") — always reflect it.
+            // Command and MCP server trust are backend-owned and can change
+            // from a prompt in another window ("Trust all commands…",
+            // "Trust all tools from …") — always reflect them.
             this._syncTrustCommands(config);
+            this._syncTrustedServers(config);
         } catch (e) {
             console.warn('Failed to refresh tool permissions:', e);
         }
@@ -260,13 +279,104 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         if (box) box.checked = this.trustCommands;
     }
 
+    _syncTrustedServers(config) {
+        const servers = config?.tool_permissions?.trusted_mcp_servers;
+        this.trustedServers = Array.isArray(servers)
+            ? servers.filter((s) => typeof s === 'string')
+            : [];
+        this.renderTrustedServers();
+    }
+
+    _setServersStatus(text) {
+        const status = document.getElementById('trustedMcpServersStatus');
+        if (status) status.textContent = text || '';
+    }
+
+    /** Trusted MCP servers, each with a "Stop trusting" button. */
+    renderTrustedServers() {
+        const list = document.getElementById('trustedMcpServersList');
+        if (!list) return;
+        list.textContent = '';
+        if (this.trustedServers.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'tools-empty';
+            empty.textContent = t('settings.tool_permissions.trusted_servers.empty');
+            list.append(empty);
+            return;
+        }
+        // Built with the DOM API: server names come from agent tool titles.
+        for (const server of this.trustedServers) {
+            const row = document.createElement('div');
+            row.className = 'agent-tool-item trusted-server-item';
+            const info = document.createElement('div');
+            info.className = 'agent-tool-info';
+            const name = document.createElement('bdi');
+            name.dir = 'ltr';
+            name.className = 'agent-tool-name trusted-server-name';
+            name.textContent = server;
+            info.append(name);
+            const revoke = document.createElement('button');
+            revoke.type = 'button';
+            revoke.className = 'trusted-server-revoke';
+            revoke.dataset.server = server;
+            revoke.textContent = t('settings.tool_permissions.trusted_servers.revoke');
+            revoke.title = t('settings.tool_permissions.trusted_servers.revoke_title', { server });
+            revoke.addEventListener('click', () => this.revokeServer(server, revoke));
+            row.append(info, revoke);
+            list.append(row);
+        }
+    }
+
+    /** Stop trusting one MCP server, through the audited backend command. */
+    async revokeServer(server, button) {
+        if (button) button.disabled = true;
+        this._setServersStatus('');
+        try {
+            await window.__TAURI__.core.invoke('set_mcp_server_trusted', {
+                server,
+                trusted: false,
+            });
+            this.trustedServers = this.trustedServers.filter((s) => s !== server);
+        } catch (e) {
+            console.error('Failed to stop trusting MCP server:', e);
+            const status = document.getElementById('trustedMcpServersStatus');
+            setTextWithLtrValue(
+                status,
+                t('settings.tool_permissions.trusted_servers.revoke_failed', { server: LTR_SLOT }),
+                server
+            );
+        }
+        this.renderTrustedServers();
+    }
+
+    /**
+     * Reset: revoke every MCP server the backend trusts — not just this
+     * window's list, which may predate a trust granted from a prompt.
+     */
+    async _revokeAllServers(invoke) {
+        let servers = this.trustedServers;
+        try {
+            const config = await invoke('get_config');
+            servers = config?.tool_permissions?.trusted_mcp_servers ?? servers;
+        } catch (e) {
+            console.warn('Failed to read trusted MCP servers:', e);
+        }
+        for (const server of servers) {
+            await invoke('set_mcp_server_trusted', { server, trusted: false }).catch((e) =>
+                console.error('Failed to stop trusting MCP server:', e)
+            );
+        }
+    }
+
     save(config) {
         config.tool_permissions = {
             trust_all: false, // deprecated, kept for compat
             terminator_mode: this.terminatorMode,
-            // Owned by set_tool_kind_trusted (applied immediately); keep the
-            // backend's current value — config is fresh from get_config.
+            // Owned by set_tool_kind_trusted / set_mcp_server_trusted (applied
+            // immediately); keep the backend's current values — config is
+            // fresh from get_config.
             trusted_kinds: config.tool_permissions?.trusted_kinds ?? [],
+            trusted_mcp_servers: config.tool_permissions?.trusted_mcp_servers ?? [],
             // Every per-tool edit (policy, remove, reset) is persisted
             // immediately, so keep the backend's current list (config is
             // fresh from get_config) rather than this window's snapshot —
@@ -648,6 +758,38 @@ toolPermStyle.textContent = `
     .reset-permissions-btn:hover {
         background: rgba(244, 67, 54, 0.2);
         border-color: rgba(244, 67, 54, 0.5);
+    }
+
+    .trusted-servers-list .tools-empty {
+        padding: 14px 16px;
+    }
+    .trusted-server-name {
+        overflow-wrap: anywhere;
+    }
+    .trusted-server-revoke {
+        padding: 4px 10px;
+        background: rgba(244, 67, 54, 0.12);
+        border: 1px solid rgba(244, 67, 54, 0.3);
+        border-radius: 4px;
+        color: #f44336;
+        font-size: 12px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .trusted-server-revoke:hover:not(:disabled) {
+        background: rgba(244, 67, 54, 0.2);
+    }
+    .trusted-server-revoke:disabled {
+        opacity: 0.6;
+        cursor: default;
+    }
+    .trusted-servers-status {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #ff8a80;
+    }
+    .trusted-servers-status:empty {
+        display: none;
     }
 
     .terminator-row {
