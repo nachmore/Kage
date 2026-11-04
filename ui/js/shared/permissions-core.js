@@ -19,6 +19,7 @@
 import { getToolEmoji, escapeHtml, LTR_SLOT, setTextWithLtrValue } from './tool-utils.js';
 import { EVT } from './events.js';
 import { t } from './i18n.js';
+import { cleanShellCommand, extractShellCommand } from './shell-commands.js';
 
 /** ACP tool kind for shell / CLI commands (see src/config/permissions.rs). */
 export const TOOL_KIND_EXECUTE = 'execute';
@@ -65,6 +66,45 @@ const TRUST_ITEMS = Object.freeze({
     commands: 'permissionTrustCommands',
     server: 'permissionTrustServer',
 });
+
+/**
+ * Show the command line of a shell-run request (kind "execute") under the
+ * title, in the same terminal style as the response's command blocks.
+ * kiro-cli titles the request `Running: <command>` and Claude Code's
+ * adapter titles it with the backticked command; such a title only repeats
+ * the block, so it's hidden (the element keeps its text). Other requests
+ * get no block. The command is untrusted: text nodes only.
+ */
+export function renderPermissionCommand(titleEl, toolKind, toolCall) {
+    if (!titleEl) return;
+    const title = typeof toolCall?.title === 'string' ? toolCall.title : '';
+    const raw =
+        toolKind === TOOL_KIND_EXECUTE ? extractShellCommand(toolCall?.rawInput, title) : '';
+    const command = raw ? cleanShellCommand(raw) : '';
+    let box = document.getElementById('permissionToolCommand');
+    titleEl.classList.remove('is-shell-redundant');
+    if (!command) {
+        box?.remove();
+        return;
+    }
+    if (!box) {
+        box = document.createElement('pre');
+        box.id = 'permissionToolCommand';
+        box.className = 'shell-cmd-inline';
+        box.dir = 'ltr';
+        box.tabIndex = 0;
+        box.setAttribute('role', 'group');
+        titleEl.after(box);
+    }
+    box.setAttribute('aria-label', t('shared.shell.command_label'));
+    box.textContent = '';
+    const prompt = document.createElement('span');
+    prompt.className = 'shell-cmd-prompt';
+    prompt.setAttribute('aria-hidden', 'true');
+    prompt.textContent = '$';
+    box.append(prompt, document.createTextNode(command));
+    if (extractShellCommand(null, title) === raw) titleEl.classList.add('is-shell-redundant');
+}
 
 export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     let currentPermissionRequest = null;
@@ -161,6 +201,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         setTrustConfirmVisible(null);
 
         toolTitleEl.textContent = toolCall.title || t('shared.permission.unknown_tool');
+        renderPermissionCommand(toolTitleEl, currentPermissionRequest.toolKind, toolCall);
 
         // Show tool name with emoji if available
         if (toolNameEl) {
