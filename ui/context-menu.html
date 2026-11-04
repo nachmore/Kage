@@ -51,9 +51,11 @@
         import { applyTheme, initThemeListener, loadAndApplyTheme } from './js/shared/theme.js';
         import { EVT } from './js/shared/events.js';
         import { initI18n, applyStaticTranslations } from './js/shared/i18n.js';
+        import { initLinkHandler } from './js/shared/link-handler.js';
 
         (async function() {
             const { invoke } = window.__TAURI__.core;
+            initLinkHandler(invoke);
             const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
             const LogicalSize = window.__TAURI__.dpi.LogicalSize;
             const { emit } = window.__TAURI__.event;

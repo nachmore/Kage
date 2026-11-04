@@ -468,10 +468,13 @@
     import { isMacOS as detectMacOS, renderAllInto as renderMacPermsInto } from './js/shared/mac-permissions.js';
     import * as kageAgentConnections from './js/shared/agent-connections.js';
     import { initI18n, applyStaticTranslations, t } from './js/shared/i18n.js';
+    import { initLinkHandler } from './js/shared/link-handler.js';
 
     async function initWelcome() {
         if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
         const { invoke } = window.__TAURI__.core;
+        // Links (Aptabase, setup help) open in the system browser.
+        initLinkHandler(invoke);
         const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 
         // Load the active locale's catalog before any rendering. The window

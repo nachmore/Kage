@@ -996,6 +996,15 @@ tags are replaced with their text content.
 `<span>`, `<div>`. The host wires each such element to an RPC on the
 owning provider (see widget/renderResult contracts above).
 
+**Links:** when the user clicks an `http(s)`/`mailto` link in your HTML
+(widgets, formatters, result rows, settings `info` blocks), it opens
+in their default browser / mail client — never inside the Kage window,
+with or without `target="_blank"` (which is ignored). That needs no
+capability, because the user is the one clicking. Opening a URL from
+code (`context.invoke('open_url', …)`) still requires `urls`. A sandbox
+that navigates its own iframe (`location.href = …`) never reaches the
+browser.
+
 ## Tool Provider API
 
 A tool provider exposes extension functionality to the LLM agent. When the agent needs data from an extension (e.g. calendar appointments), it calls the tool locally — no cloud round-trip needed.

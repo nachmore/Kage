@@ -28,6 +28,7 @@ import { cmdOrCtrlPressed } from '../shared/shortcuts.js';
 import { isMacOS } from '../shared/mac-permissions.js';
 import { EVT } from '../shared/events.js';
 import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
+import { initLinkHandler } from '../shared/link-handler.js';
 
 // First-party settings modules (registration order matches the sidebar
 // in settings.html — see the comments in that file for the contract).
@@ -179,6 +180,11 @@ document.addEventListener('keydown', (e) => {
 
 window.addEventListener('DOMContentLoaded', async () => {
     const invoke = window.__TAURI__.core.invoke;
+
+    // Before anything renders: extension settings info blocks and first-party
+    // help text carry plain <a href> links, and without the window-wide
+    // handler a click navigated the whole Settings webview to the site.
+    initLinkHandler(invoke);
 
     // Load the i18n catalog before constructing any settings module — modules
     // call `t()` from their `render()` to build labels, and a missing

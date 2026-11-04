@@ -17,6 +17,7 @@ import { errMessage } from './shared/error-message.js';
 import { escapeAttr } from './shared/tool-utils.js';
 import { localizeManifestForPrompt } from './shared/extension-manager.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
+import { initLinkHandler } from './shared/link-handler.js';
 import { runStagedExtensionInstall } from './shared/staged-extension-install.js';
 import { cmdOrCtrlPressed } from './shared/shortcuts.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
@@ -39,6 +40,8 @@ function waitForTauri(cb) {
 
 async function init() {
     const invoke = window.__TAURI__.core.invoke;
+    // Clicked links open in the system browser, never in this window.
+    initLinkHandler(invoke);
 
     try {
         await initI18n(invoke);

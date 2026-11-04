@@ -10,6 +10,7 @@ import { EVT } from './shared/events.js';
 import { WINDOW } from './shared/window-labels.js';
 import { getWindowSessionOrNull } from './shared/session-resolve.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
+import { initLinkHandler } from './shared/link-handler.js';
 import { interceptConsole } from './shared/kage-log.js';
 import { escapeHtml } from './shared/tool-utils.js';
 
@@ -30,6 +31,9 @@ console.log(
     const { listen, emit } = window.__TAURI__.event;
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
     const LogicalSize = window.__TAURI__.dpi.LogicalSize;
+
+    // Any link clicked in this window opens in the system browser.
+    initLinkHandler(invoke);
 
     // Load i18n catalog before any rendering so the static markup +
     // any future t() calls see real translations rather than literal keys.

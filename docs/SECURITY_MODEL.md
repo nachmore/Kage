@@ -235,6 +235,55 @@ adding protection given the sandbox is doing the heavy lifting.
 - A stricter CSP on just the sandbox iframe's host document could
   be added as belt-and-braces without much downside.
 
+## Links and navigation
+
+A Kage window must never *become* a web page: it has full
+`window.__TAURI__` access and no back button. (A plain
+`<a href="https://developer.spotify.com/dashboard">` in the Spotify
+extension's settings text once replaced the whole Settings window with
+Spotify's site, because that window had no link handler.) Two layers:
+
+1. **JS link handler** (`ui/js/shared/link-handler.js`), installed in
+   every window — `ui-tests/shared/link-handler.test.js` fails if a
+   window in `capabilities/default.json` doesn't call it. It cancels
+   every anchor click and opens only `http(s)` / `mailto` through
+   `open_url`; `kage:` routes internally; everything else
+   (`javascript:`, `file:`, custom app schemes) is dropped. It also
+   strips `target` at capture time so `tauri-plugin-shell`'s injected
+   `target=_blank` opener can't open the link a second time. Host code
+   that renders extension HTML (formatters, widgets, settings info
+   blocks) additionally runs `neutralizeLinks`, so no live `href` is left
+   for the engine to follow.
+2. **Rust navigation guard** (`src/navigation_guard.rs`). A Tauri
+   plugin `on_navigation` hook — the only hook that also reaches the
+   `tauri.conf.json` windows — cancels any navigation that isn't the
+   app origin (`tauri://localhost`, `http(s)://tauri.localhost`, the dev
+   server in dev builds) or an inert in-process document (`about:` for
+   iframe bootstraps, `blob:`, `data:`). On macOS/Linux that covers
+   iframes too; on Windows only main-frame navigations reach the hook.
+   New-window requests are always
+   denied (wry's default with no handler; on-demand windows install one
+   that also forwards `http(s)`/`mailto` to the browser — only
+   first-party top-level documents can raise them, since our iframes
+   lack `allow-popups`).
+
+**Who may open the browser.** A cancelled `http(s)` navigation is
+handed to the browser **only on Windows**, where WebView2's
+`NavigationStarting` is main-frame-only. WKWebView and WebKitGTK report
+iframe navigations through the same callback without saying which frame,
+and an extension's sandbox iframe can `location.href = …` at any time
+with no user gesture — opening those would let an extension without
+`urls` open arbitrary sites. So on macOS/Linux the guard only cancels,
+and opening is the JS handler's job.
+
+A user's click on a link in host-rendered extension HTML opens it
+without the extension holding `urls`: the sandbox can't synthesize
+clicks in the host document, the sanitizers limit link targets to
+`http(s)`/`mailto` (narrower than `urls`, nothing that reaches
+`launch`), and the user chose to follow a link they could see.
+Programmatic opens (`context.invoke('open_url', …)`) still require
+`urls`.
+
 ## Defense in depth
 
 Even with the sandbox doing most of the work, these additional
@@ -274,6 +323,8 @@ mitigations are in place:
 | Extension updates silently expand capabilities        | ✅ Blocked | Extras dropped until user re-approves. |
 | Zip Slip during extension install                     | ✅ Blocked | Canonical-path + symlink checks. |
 | Malicious markdown injecting script tags              | ✅ Blocked | Rendering pipeline strips document markers. |
+| Link or redirect turns a Kage window into a remote page | ✅ Blocked | JS link handler in every window + Rust `on_navigation` guard. See "Links and navigation". |
+| Extension opens the browser without `urls` via an iframe redirect | ✅ Blocked | The guard never opens URLs it can't attribute to the main frame. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
 
 ## Known gaps being worked on

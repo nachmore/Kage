@@ -1,9 +1,16 @@
 /**
- * Global link click interceptor.
+ * Global link click interceptor — installed in EVERY Kage window.
  *
- * - http/https links → open in default browser via Tauri
+ * - http/https/mailto links → open in the default browser / mail client via
+ *   the `open_url` command (left- and middle-click)
  * - kage: protocol → route to internal actions (store, settings, etc.)
  * - All other clicks on <a> tags → prevent default navigation
+ *
+ * A window without this handler navigates ITSELF to any plain
+ * <a href="https://…"> the user clicks. The Rust navigation guard
+ * (src/navigation_guard.rs) cancels that as a backstop, but on macOS/Linux it
+ * can't tell a user's click from an extension iframe's redirect, so it only
+ * cancels — opening the browser is this module's job.
  *
  * Usage: import { initLinkHandler } from './link-handler.js';
  *        initLinkHandler(invoke);
@@ -61,15 +68,16 @@ async function handleKageProtocol(path) {
  * `data-href` and set `href="#"`. The delegated click handler reads `data-href`
  * and opens the URL exactly once via `open_url`.
  *
- * Why this is needed: a real `href` makes WebView2 perform a top-level
- * navigation on click, which Tauri hands to the OS default browser — a SECOND
- * open, in parallel with our handler's `open_url`, and one that never hits our
- * command (so it produced no log while doubling every link). `preventDefault()`
- * in the click handler does not reliably cancel that native navigation. Killing
- * the navigable href removes the second open at the source. Idempotent: an
- * anchor already carrying `data-href` is skipped.
+ * Why this is needed: links with a live `href` were opened a SECOND time, in
+ * parallel with our handler's `open_url`, by a path that never hit our command
+ * (no log while doubling every link) — tauri-plugin-shell's injected
+ * target=_blank opener, which the click handler now also defuses. Without a
+ * navigable href there is nothing for the engine or any other listener to
+ * follow if the click handler isn't there; the Rust navigation guard is the
+ * last line. Idempotent: an anchor already carrying `data-href` is skipped.
  *
- * Call after rendering agent markdown (streaming and final).
+ * Call after rendering agent markdown (streaming and final) and after
+ * injecting sanitized extension HTML (formatters, settings info blocks).
  *
  * @param {ParentNode} root - container whose descendant <a> tags to neutralize
  */
@@ -78,29 +86,134 @@ export function neutralizeLinks(root) {
     for (const a of root.querySelectorAll('a[href]')) {
         if (a.hasAttribute('data-href')) continue; // already neutralized
         const href = a.getAttribute('href');
-        if (!href || href === '#') continue;
         // Only intercept schemes we actually handle; leave in-page anchors
         // (#section) and anything unrecognised alone.
-        if (
-            href.startsWith('http://') ||
-            href.startsWith('https://') ||
-            href.startsWith('mailto:') ||
-            href.startsWith('kage:')
-        ) {
+        if (classifyLinkHref(href) !== 'none') {
             a.setAttribute('data-href', href);
             a.setAttribute('href', '#');
             // The sanitizer forces target=_blank on http(s) links. Left on a
-            // neutralized anchor it turns the click into a native new-window
-            // request for "#", which Tauri hands to the OS browser as
-            // http://tauri.localhost/# — alongside our own open_url.
+            // neutralized anchor, tauri-plugin-shell's injected target=_blank
+            // opener hands the resolved "#" to the OS browser as
+            // http://tauri.localhost/# — alongside our own open_url. (The
+            // click handler also strips target at capture time; this keeps
+            // the rendered DOM honest too.)
             a.removeAttribute('target');
         }
     }
 }
 
 /**
+ * What a click on an anchor with this href should do:
+ *   'kage'     — internal deep link (kage:store, kage:settings/<section>)
+ *   'external' — hand to the OS default handler via open_url (http, https,
+ *                mailto). The same set the Rust navigation guard forwards.
+ *   'none'     — nothing; the click is just cancelled (javascript:, file:,
+ *                in-page "#…", custom app schemes, empty).
+ *
+ * Case-insensitive and tolerant of leading whitespace, like the engine's own
+ * URL parser — `HTTPS://…` must not fall through to 'none' and get dropped.
+ *
+ * @param {string|null|undefined} href
+ * @returns {'kage'|'external'|'none'}
+ */
+export function classifyLinkHref(href) {
+    const h = String(href ?? '').trimStart();
+    if (!h || h.startsWith('#')) return 'none';
+    const lower = h.toLowerCase();
+    if (lower.startsWith('kage:')) return 'kage';
+    if (
+        lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.startsWith('mailto:')
+    ) {
+        return 'external';
+    }
+    return 'none';
+}
+
+/**
+ * Prefer data-href: neutralizeLinks() moves external URLs there and sets
+ * href="#" so the webview has nothing to natively navigate to. SVG anchors
+ * carry a namespaced xlink:href that getAttribute('href') doesn't see.
+ */
+function hrefOf(anchor) {
+    return (
+        anchor.getAttribute('data-href') ||
+        anchor.getAttribute('href') ||
+        anchor.getAttributeNS(XLINK_NS, 'href')
+    );
+}
+
+/**
+ * Capture phase, before any bubbling listener: drop `target` from the
+ * clicked anchor. tauri-plugin-shell injects a `body` click listener into
+ * every window that opens `target="_blank"` http(s)/mailto/tel links through
+ * `plugin:shell|open` — in addition to our open_url below, so those links
+ * opened twice (and a neutralized `href="#"` one opened
+ * http://tauri.localhost/#). Without `target` its predicate never matches
+ * and this module is the only opener. Kage windows never want an
+ * engine-created popup anyway — the Rust navigation guard denies them.
+ */
+function onClickCapture(e) {
+    const anchor = e.target?.closest?.('a');
+    if (anchor?.hasAttribute('target')) anchor.removeAttribute('target');
+}
+
+function onActivate(e) {
+    const anchor = e.target?.closest?.('a');
+    if (!anchor) return;
+
+    // An earlier handler (an element's own click listener, the settings
+    // action dispatcher, the source-chip handler) already claimed this click
+    // with preventDefault and did its own thing. Opening the URL here too
+    // would double-open it.
+    const claimed = e.defaultPrevented;
+
+    // Cancel native activation for EVERY anchor up front, before any early
+    // return — the only URLs we follow are the ones we explicitly open below.
+    // A plain <a href="https://…"> left alone navigates the whole window to
+    // the remote page (an extension's setup link turned the Settings window
+    // into developer.spotify.com that way), and an SVG
+    // <a xlink:href="javascript:…"> (e.g. from a Graphviz diagram) would run
+    // in this privileged webview.
+    e.preventDefault();
+    if (claimed) return;
+
+    const href = hrefOf(anchor);
+    switch (classifyLinkHref(href)) {
+        case 'kage': {
+            e.stopPropagation();
+            const path = href.trimStart().slice('kage:'.length);
+            handleKageProtocol(path).catch((err) => console.warn('kage: link error:', err));
+            return;
+        }
+        case 'external': {
+            // Module-level `_invoke` (not a closure param) so a re-init
+            // refreshes the reference.
+            e.stopPropagation();
+            const url = href.trim();
+            console.log(`[link-handler] open_url: ${url}`);
+            _invoke?.('open_url', { url }).catch((err) => console.warn('Failed to open URL:', err));
+            return;
+        }
+        default:
+            // Already prevented above, so no navigation away from the app.
+            return;
+    }
+}
+
+function onAuxClick(e) {
+    // A middle-click asks the engine for a new window, which the Rust guard
+    // denies — without this, middle-clicking a link did nothing at all.
+    // Right-click (button 2) keeps its context menu.
+    if (e.button !== 1) return;
+    onActivate(e);
+}
+
+/**
  * Initialize the global link click handler.
- * Call once per window on startup.
+ * Call once per window on startup — every Kage window does; see
+ * docs/SECURITY_MODEL.md § "Links and navigation".
  */
 export function initLinkHandler(invoke) {
     _invoke = invoke;
@@ -112,58 +225,21 @@ export function initLinkHandler(invoke) {
     }
     _listenerInstalled = true;
 
-    document.addEventListener('click', (e) => {
-        const anchor = e.target.closest('a');
-        if (!anchor) return;
+    document.addEventListener('click', onClickCapture, true);
+    document.addEventListener('click', onActivate);
+    document.addEventListener('auxclick', onAuxClick);
+}
 
-        // Cancel native activation for EVERY anchor up front, before any early
-        // return — the only URLs we follow are the ones we explicitly open
-        // below. An SVG <a xlink:href="javascript:…"> (e.g. from a Graphviz
-        // diagram) used to slip past the `!href` return and run in this
-        // privileged webview.
-        e.preventDefault();
-
-        // Prefer data-href: neutralizeLinks() moves external URLs there and
-        // sets href="#" so WebView2 has nothing to natively navigate to. A
-        // real href would make WebView2 open the URL ITSELF (a top-level
-        // navigation the OS then hands to the default browser) IN ADDITION to
-        // our open_url call — that was the "opens twice" bug, and it bypassed
-        // open_url entirely (no log), which is why no open_url-side fix helped.
-        // SVG anchors carry a namespaced xlink:href that getAttribute('href')
-        // doesn't see.
-        const href =
-            anchor.getAttribute('data-href') ||
-            anchor.getAttribute('href') ||
-            anchor.getAttributeNS(XLINK_NS, 'href');
-        if (!href || href === '#') return;
-
-        // kage: protocol — internal deep links
-        if (href.startsWith('kage:')) {
-            e.stopPropagation();
-            const path = href.slice('kage:'.length);
-            handleKageProtocol(path).catch((err) => console.warn('kage: link error:', err));
-            return;
-        }
-
-        // External URLs — open in default browser. Use the module-level
-        // `_invoke` (not the closure param) so a re-init refreshes the
-        // reference — consistent with the kage: branch above.
-        if (href.startsWith('http://') || href.startsWith('https://')) {
-            e.stopPropagation();
-            console.log(`[link-handler] open_url: ${href}`);
-            _invoke?.('open_url', { url: href }).catch((err) =>
-                console.warn('Failed to open URL:', err)
-            );
-            return;
-        }
-
-        // mailto: links — let the OS handle them
-        if (href.startsWith('mailto:')) {
-            e.stopPropagation();
-            _invoke?.('open_url', { url: href }).catch(() => {});
-        }
-
-        // Anything else — already prevented above, so no navigation away
-        // from the app.
-    });
+/**
+ * Remove the listeners again. Test-only: jsdom keeps one `document` across a
+ * test file, and a stale handler from an earlier module instance would claim
+ * every click (preventDefault) before the instance under test sees it.
+ */
+export function disposeLinkHandler() {
+    if (!_listenerInstalled) return;
+    document.removeEventListener('click', onClickCapture, true);
+    document.removeEventListener('click', onActivate);
+    document.removeEventListener('auxclick', onAuxClick);
+    _listenerInstalled = false;
+    _invoke = null;
 }

@@ -8,12 +8,28 @@
  * sibling listeners on the same node.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+// Each test gets a fresh module instance; the previous one's document
+// listeners must go, or its handler claims every click first.
+let _loaded = null;
 
 async function loadFresh() {
+    _loaded?.disposeLinkHandler();
     vi.resetModules();
-    return await import('../../ui/js/shared/link-handler.js');
+    _loaded = await import('../../ui/js/shared/link-handler.js');
+    return _loaded;
 }
+
+afterEach(() => {
+    _loaded?.disposeLinkHandler();
+    _loaded = null;
+});
 
 function clickAnchor(href) {
     const a = document.createElement('a');
@@ -195,5 +211,223 @@ describe('neutralizeLinks', () => {
 
         expect(invoke).toHaveBeenCalledTimes(1);
         expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com/deep' });
+    });
+});
+
+describe('classifyLinkHref', () => {
+    it('sorts hrefs into kage / external / none', async () => {
+        const { classifyLinkHref } = await loadFresh();
+        expect(classifyLinkHref('https://developer.spotify.com/dashboard')).toBe('external');
+        expect(classifyLinkHref('http://example.com/')).toBe('external');
+        expect(classifyLinkHref('mailto:a@b.com')).toBe('external');
+        // The engine's URL parser is case-insensitive and trims; ours must
+        // be too, or the click is cancelled but never opened.
+        expect(classifyLinkHref('HTTPS://EXAMPLE.COM/')).toBe('external');
+        expect(classifyLinkHref('  https://example.com/')).toBe('external');
+        expect(classifyLinkHref('kage:store')).toBe('kage');
+        expect(classifyLinkHref('KAGE:settings/updates')).toBe('kage');
+
+        for (const href of [
+            '',
+            null,
+            undefined,
+            '#',
+            '#section',
+            'javascript:alert(1)',
+            ' JavaScript:alert(1)',
+            'file:///etc/passwd',
+            'data:text/html,<script>alert(1)</script>',
+            'blob:tauri://localhost/x',
+            'spotify:track:1',
+            'vscode://file/x',
+            'tel:+15555550100',
+            'ftp://h/f',
+            '/relative/path',
+            'settings.html',
+        ]) {
+            expect(classifyLinkHref(href), String(href)).toBe('none');
+        }
+    });
+});
+
+describe('link-handler — every link in every window', () => {
+    function makeAnchor(attrs, parent = document.body) {
+        const a = document.createElement('a');
+        for (const [k, v] of Object.entries(attrs)) a.setAttribute(k, v);
+        a.textContent = 'link';
+        parent.appendChild(a);
+        return a;
+    }
+
+    function click(el) {
+        const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+        el.dispatchEvent(ev);
+        return ev;
+    }
+
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('a plain extension setup link (no target) opens in the browser, never navigates the window', async () => {
+        // The reported bug: Spotify's settings info block renders
+        // <a href="https://developer.spotify.com/dashboard"> with no target,
+        // and the Settings window had no handler, so the click navigated the
+        // Settings webview itself.
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const info = document.createElement('div');
+        info.className = 'setting-info-body';
+        info.innerHTML =
+            'Create one at <a href="https://developer.spotify.com/dashboard">developer.spotify.com/dashboard</a>.';
+        document.body.appendChild(info);
+        const ev = click(info.querySelector('a'));
+
+        expect(ev.defaultPrevented).toBe(true);
+        expect(invoke).toHaveBeenCalledTimes(1);
+        expect(invoke).toHaveBeenCalledWith('open_url', {
+            url: 'https://developer.spotify.com/dashboard',
+        });
+    });
+
+    it("target=_blank links open once — tauri-plugin-shell's injected opener never fires", async () => {
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        // Same predicate as tauri-plugin-shell's init-iife.js: a body click
+        // listener that opens target=_blank http(s)/mailto/tel links itself.
+        const shellOpen = vi.fn();
+        const shellListener = (e) => {
+            const a = e.target.closest('a');
+            if (
+                a &&
+                a.href !== '' &&
+                ['http://', 'https://', 'mailto:', 'tel:'].some((p) => a.href.startsWith(p)) &&
+                a.target === '_blank'
+            ) {
+                shellOpen(a.href);
+                e.preventDefault();
+            }
+        };
+        document.body.addEventListener('click', shellListener);
+        try {
+            const a = makeAnchor({ href: 'https://ollama.com/download', target: '_blank' });
+            click(a);
+            expect(shellOpen).not.toHaveBeenCalled();
+            expect(invoke).toHaveBeenCalledTimes(1);
+            expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://ollama.com/download' });
+        } finally {
+            document.body.removeEventListener('click', shellListener);
+        }
+    });
+
+    it('a click another handler already claimed (preventDefault) is not opened again', async () => {
+        // e.g. an element's own click listener that calls open_url itself.
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const a = makeAnchor({ href: 'https://example.com/' });
+        const own = vi.fn((e) => e.preventDefault());
+        a.addEventListener('click', own);
+        click(a);
+
+        expect(own).toHaveBeenCalledTimes(1);
+        expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it('dangerous and non-web schemes are cancelled, never opened', async () => {
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        for (const href of [
+            'javascript:alert(1)',
+            'file:///etc/passwd',
+            'spotify:track:1',
+            'tel:+15555550100',
+            'settings.html',
+        ]) {
+            const ev = click(makeAnchor({ href }));
+            expect(ev.defaultPrevented, href).toBe(true);
+        }
+        expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it('opens mixed-case http links instead of silently dropping them', async () => {
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        click(makeAnchor({ href: 'HTTPS://Example.com/Docs' }));
+
+        expect(invoke).toHaveBeenCalledWith('open_url', { url: 'HTTPS://Example.com/Docs' });
+    });
+
+    it('middle-click opens the link; right-click is left alone', async () => {
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const a = makeAnchor({ href: 'https://example.com/mid' });
+        const right = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 2 });
+        a.dispatchEvent(right);
+        expect(right.defaultPrevented).toBe(false);
+        expect(invoke).not.toHaveBeenCalled();
+
+        const middle = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 });
+        a.dispatchEvent(middle);
+        expect(middle.defaultPrevented).toBe(true);
+        expect(invoke).toHaveBeenCalledTimes(1);
+        expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com/mid' });
+    });
+
+    it('kage: links route internally instead of leaving the app', async () => {
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        click(makeAnchor({ href: 'kage:settings/updates' }));
+        await Promise.resolve();
+
+        expect(invoke).toHaveBeenCalledWith('open_settings_window', { section: 'updates' });
+        expect(invoke).not.toHaveBeenCalledWith('open_url', expect.anything());
+    });
+});
+
+describe('every Kage window installs the link handler', () => {
+    // A window that forgets initLinkHandler navigates itself to any plain
+    // link the user clicks (the Settings window did). The Rust navigation
+    // guard cancels that, but only hands the URL to the browser on Windows,
+    // so on macOS/Linux this handler is what makes the link work at all.
+    const ENTRY_POINTS = {
+        main: 'ui/js/chat/main.js',
+        floating: 'ui/js/floating/main.js',
+        'inline-assist': 'ui/js/inline-assist.js',
+        settings: 'ui/js/settings/main.js',
+        store: 'ui/js/store.js',
+        welcome: 'ui/welcome.html',
+        'context-menu': 'ui/context-menu.html',
+    };
+
+    for (const [label, file] of Object.entries(ENTRY_POINTS)) {
+        it(`${label} (${file})`, () => {
+            const src = readFileSync(path.join(repoRoot, file), 'utf8');
+            expect(src).toMatch(
+                /import\s*\{[^}]*\binitLinkHandler\b[^}]*\}\s*from\s*'[^']*link-handler\.js'/
+            );
+            expect(src).toMatch(/\binitLinkHandler\(invoke\)/);
+        });
+    }
+
+    it('covers every window in the capability file', () => {
+        // New window → add its entry point above (and call initLinkHandler).
+        const caps = JSON.parse(
+            readFileSync(path.join(repoRoot, 'capabilities/default.json'), 'utf8')
+        );
+        expect([...caps.windows].sort()).toEqual(Object.keys(ENTRY_POINTS).sort());
     });
 });

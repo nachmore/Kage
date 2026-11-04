@@ -295,4 +295,73 @@ describe('renderSchema', () => {
         // The action's status message survived the re-render.
         expect(container.querySelector('#ext-ctrl-sp-check__status').textContent).toBe('❌ revoked');
     });
+
+    it('info-block links are neutralized: no live href for the Settings webview to follow', () => {
+        // Spotify's setup text. Rendered with a live href and no target, a
+        // click navigated the whole Settings window to Spotify's dashboard.
+        const inst = renderSchema({
+            extensionId: 'spotify',
+            container,
+            sandbox: stubSandbox(),
+            schema: {
+                sections: [{
+                    controls: [{
+                        type: 'info',
+                        html:
+                            'Create one free at <a href="https://developer.spotify.com/dashboard">developer.spotify.com/dashboard</a>' +
+                            ' or <a href="https://example.com/x" target="_blank">here</a>.' +
+                            ' <a href="javascript:alert(1)">bad</a>',
+                    }],
+                }],
+            },
+        });
+        inst.load({});
+
+        const [dash, blank, bad] = container.querySelectorAll('.setting-info-body a');
+        expect(dash.getAttribute('href')).toBe('#');
+        expect(dash.getAttribute('data-href')).toBe('https://developer.spotify.com/dashboard');
+        expect(blank.getAttribute('href')).toBe('#');
+        expect(blank.getAttribute('data-href')).toBe('https://example.com/x');
+        expect(blank.hasAttribute('target')).toBe(false);
+        // The info sanitizer already dropped the javascript: href.
+        expect(bad.hasAttribute('href')).toBe(false);
+        expect(bad.hasAttribute('data-href')).toBe(false);
+    });
+
+    it('a click on an info-block link opens it once via open_url (with the window link handler)', async () => {
+        vi.resetModules();
+        const { renderSchema: render } = await import('../../ui/js/shared/settings-renderer.js');
+        const lh = await import('../../ui/js/shared/link-handler.js');
+        const invoke = vi.fn(() => Promise.resolve());
+        lh.initLinkHandler(invoke);
+        try {
+            const inst = render({
+                // Distinct id: earlier tests' containers stay in the document,
+                // and jsdom's #id lookup returns the first match document-wide.
+                extensionId: 'spotify-click',
+                container,
+                sandbox: stubSandbox(),
+                schema: {
+                    sections: [{
+                        controls: [{
+                            type: 'info',
+                            html: '<a href="https://developer.spotify.com/dashboard">dashboard</a>',
+                        }],
+                    }],
+                },
+            });
+            inst.load({});
+            const a = container.querySelector('.setting-info-body a');
+            const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+            a.dispatchEvent(ev);
+
+            expect(ev.defaultPrevented).toBe(true);
+            expect(invoke).toHaveBeenCalledTimes(1);
+            expect(invoke).toHaveBeenCalledWith('open_url', {
+                url: 'https://developer.spotify.com/dashboard',
+            });
+        } finally {
+            lh.disposeLinkHandler();
+        }
+    });
 });

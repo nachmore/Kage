@@ -19,6 +19,7 @@ import {
 } from './settings-schema.js';
 import { escapeAttr, escapeHtml } from './tool-utils.js';
 import { runSettingsHostSideEffect } from './settings-host-effects.js';
+import { neutralizeLinks } from './link-handler.js';
 
 /**
  * Timeout for a settings action RPC. Far longer than the default 10s
@@ -409,6 +410,12 @@ export class RenderedSettings {
                 if (!slot) continue;
                 const frag = sanitizeInfoHtml(ctrl.html || '');
                 slot.appendChild(frag);
+                // Extension-authored links (Spotify's developer-dashboard
+                // setup link) must open in the system browser, not navigate
+                // the Settings window. The window-wide link handler opens
+                // them from data-href; neutralizing leaves no live href for
+                // the engine to follow if that handler ever isn't there.
+                neutralizeLinks(slot);
             }
         }
     }
