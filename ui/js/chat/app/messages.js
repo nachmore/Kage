@@ -1,3 +1,14 @@
+/**
+ * The text of a reply for Copy / Speak / Translate: what the agent wrote,
+ * without the tool/source chip row rendered into the same element (its
+ * shell command list holds every command and any output the user opened).
+ */
+function replyText(contentDiv) {
+    const clone = contentDiv.cloneNode(true);
+    for (const node of clone.querySelectorAll('.tool-sources')) node.remove();
+    return clone.textContent || '';
+}
+
 export function createMessagesMixin(dependencies) {
     const {
         renderMarkdown,
@@ -12,6 +23,7 @@ export function createMessagesMixin(dependencies) {
         attachSourceClickHandler,
         createShellActivitySlot,
         finishShellActivity,
+        handOffShellActivity,
         pruneShellActivity,
         renderToolSources,
         showShellActivity,
@@ -133,7 +145,7 @@ export function createMessagesMixin(dependencies) {
             `;
                 // Wire up action buttons
                 actions.querySelector('[data-action="copy"]').onclick = () => {
-                    const text = contentDiv.textContent || '';
+                    const text = replyText(contentDiv);
                     navigator.clipboard.writeText(text).then(() => {
                         const btn = actions.querySelector('[data-action="copy"]');
                         btn.innerHTML =
@@ -148,13 +160,13 @@ export function createMessagesMixin(dependencies) {
                     if (this.speech) {
                         // Stop any existing speech before starting new one
                         this.speech.cancelSpeech();
-                        const text = contentDiv.textContent || '';
+                        const text = replyText(contentDiv);
                         // speakText ignores the read-back gate (explicit request).
                         this.speech.speakText(text);
                     }
                 };
                 actions.querySelector('[data-action="translate"]').onclick = async () => {
-                    const text = contentDiv.textContent || '';
+                    const text = replyText(contentDiv);
                     if (!text.trim()) return;
                     try {
                         const config = await getConfig(this.invoke);
@@ -213,6 +225,10 @@ export function createMessagesMixin(dependencies) {
             // In place: an open "shell" command list survives re-renders.
             renderToolSources(sourcesEl, this.toolUsages, this.toolSources);
             attachSourceClickHandler(sourcesEl, this.invoke);
+            // Commands the user still has open in the live slot (outside
+            // the bubble) move into the list, so each is listed once.
+            const slot = contentDiv.parentElement?.querySelector(':scope > .shell-activity');
+            handOffShellActivity(slot, sourcesEl);
         }
 
         /**

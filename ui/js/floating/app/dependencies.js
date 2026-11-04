@@ -24,6 +24,7 @@ import {
 import {
     createShellActivitySlot,
     finishShellActivity,
+    handOffShellActivity,
     pruneShellActivity,
     renderToolSources,
     SHELL_LAYOUT_EVENT,
@@ -128,6 +129,7 @@ export {
     finishShellActivity,
     formatBytes,
     getActionsForText,
+    handOffShellActivity,
     getClipboardFilter,
     getConfig,
     getSlotState,

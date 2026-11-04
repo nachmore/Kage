@@ -48,6 +48,7 @@ import {
 import {
     createShellActivitySlot,
     finishShellActivity,
+    handOffShellActivity,
     pruneShellActivity,
     renderToolSources,
     showShellActivity,
@@ -119,6 +120,7 @@ const CHAT_APP_DEPENDENCIES = {
     formatErrorShared,
     formatRelativeDate,
     getActionsForText,
+    handOffShellActivity,
     getConfig,
     getExtensionManager,
     getSlashCommandDispatch,

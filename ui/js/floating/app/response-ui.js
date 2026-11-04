@@ -5,6 +5,7 @@ import {
     finishShellActivity,
     getActionsForText,
     getConfig,
+    handOffShellActivity,
     pruneShellActivity,
     renderMarkdown,
     renderSourceBubblesHtml,
@@ -255,11 +256,20 @@ export const ResponseUiMethods = {
         if (slot) pruneShellActivity(slot);
     },
 
-    /** Turn over (complete / error / stop): settle running commands. */
+    /**
+     * Turn over (complete / error / stop): settle running commands, redraw
+     * the whole chip row (a call can have become a shell call after its
+     * plain chip was drawn) and move blocks the user still has open from
+     * the activity slot into the command list, so each command shows once.
+     */
     _finishShellActivity() {
-        finishShellActivity(this._shellActivitySlot(), this.toolUsages);
+        const slot = this._shellActivitySlot();
+        finishShellActivity(slot, this.toolUsages);
         const sourcesEl = document.getElementById('toolSources');
-        if (sourcesEl) syncShellCommandList(sourcesEl, this.toolUsages);
+        if (!sourcesEl) return;
+        renderToolSources(sourcesEl, this.toolUsages, this.toolSources);
+        attachSourceClickHandler(sourcesEl, this.invoke);
+        handOffShellActivity(slot, sourcesEl);
     },
 
     _removeShellActivity() {
