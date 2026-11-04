@@ -20,17 +20,19 @@
  *     `[{ type: "terminal", terminalId }]` — Kage doesn't implement ACP
  *     terminals, so that only flags "output not available".
  *
- * Command and output are untrusted agent data: everything stored here is
- * stripped of ANSI escapes and control characters and capped in size, and
- * the view only ever renders it with textContent.
+ * Command and output are untrusted agent data, and the view only ever
+ * renders them as text. Output is stripped of ANSI escapes and control
+ * characters and capped in size. A command is never altered: it is stored
+ * as the agent sent it (Copy command copies exactly that), and shown with
+ * `shellCommandDisplayParts`, which makes every control, bidi, zero-width
+ * and other invisible character visible instead of removing or applying
+ * it — what the user reads is what runs.
  */
 
 /** Output kept per tool call (stdout + stderr), in characters. */
 export const SHELL_OUTPUT_CAP = 64 * 1024;
 /** Output kept across all shell calls of one response, in characters. */
 export const SHELL_RESPONSE_OUTPUT_CAP = 512 * 1024;
-/** Longest command line kept for display. */
-export const SHELL_COMMAND_CAP = 16 * 1024;
 
 /** ACP tool kind for shell / CLI commands (see src/config/permissions.rs). */
 const KIND_EXECUTE = 'execute';
@@ -200,17 +202,41 @@ function quoteArg(a) {
     return SAFE_ARG.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`;
 }
 
-/** `["bash", "-lc", "ls"]` → `ls`; other argv arrays are shell-quoted and joined. */
+const POSIX_SHELL = /^(?:ba|z|da|k|fi)?sh$/;
+// Where a system / package-manager shell lives. A shell anywhere else (say
+// /tmp/x/bash) is a different program: its argv is shown in full.
+const SHELL_DIRS = new Set(['/bin', '/usr/bin', '/usr/local/bin', '/opt/homebrew/bin']);
+
+function isSystemShell(arg) {
+    if (POSIX_SHELL.test(arg)) return true;
+    const slash = arg.lastIndexOf('/');
+    return (
+        slash > 0 && SHELL_DIRS.has(arg.slice(0, slash)) && POSIX_SHELL.test(arg.slice(slash + 1))
+    );
+}
+
+/**
+ * `["bash", "-lc", "ls"]` → `ls`: a system shell's `-c` / `-lc` script is
+ * the command (also via `/usr/bin/env bash`, and `pwsh` / `powershell
+ * -Command`). Any other argv — an unknown interpreter path, extra flags or
+ * arguments — is shell-quoted and joined in full, so the program that runs
+ * is always on screen.
+ */
 function argvToCommand(argv) {
     const parts = argv.filter((a) => typeof a === 'string');
     if (parts.length !== argv.length || parts.length === 0) return '';
-    const shell = parts[0].split('/').pop();
-    if (
-        parts.length === 3 &&
-        /^(?:ba|z|da|k|fi)?sh$|^pwsh$|^powershell(?:\.exe)?$/.test(shell) &&
-        /^-l?c$|^-Command$/i.test(parts[1])
-    ) {
-        return parts[2];
+    const rest =
+        parts.length === 4 && /^(?:\/usr\/bin\/)?env$/.test(parts[0]) ? parts.slice(1) : parts;
+    if (rest.length === 3) {
+        const [shell, flag, script] = rest;
+        if (isSystemShell(shell) && (flag === '-c' || flag === '-lc')) return script;
+        if (
+            rest === parts &&
+            /^(?:pwsh|powershell)(?:\.exe)?$/i.test(shell) &&
+            /^-(?:c|Command)$/i.test(flag)
+        ) {
+            return script;
+        }
     }
     return parts.map(quoteArg).join(' ');
 }
@@ -238,6 +264,110 @@ export function extractShellCommand(rawInput, title) {
         if (b) return b[1].replace(/\\`/g, '`');
     }
     return '';
+}
+
+// --- Displaying commands ---------------------------------------------------
+
+// Characters a command line can't be shown as-is, because they're invisible
+// or make the text read differently from what the shell runs: C0/C1
+// controls except \t and \n (ESC, CR, BEL, …) and DEL; format characters
+// (bidi controls, zero-width characters, BOM, soft hyphen, tag characters,
+// …); line/paragraph separators (they look like line breaks, the shell
+// doesn't treat them as such); spaces other than U+0020 (they look like a
+// word break and aren't one); Hangul fillers; variation selectors; lone
+// surrogates. One run of them becomes one mark.
+const RE_HIDDEN_RUN = new RegExp(
+    `[${ctrlRange(0x00, 0x08)}${ctrlRange(0x0b, 0x1f)}${ctrlRange(0x7f, 0x9f)}` +
+        '\\p{Cf}\\p{Zl}\\p{Zp}\\p{Cs}\\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000' +
+        '\\u115f\\u1160\\u3164\\uffa0\\ufe00-\\ufe0f\\u{e0100}-\\u{e01ef}]+',
+    'gu'
+);
+// Two or more blank lines in a row: shown as one counted mark, so a run of
+// empty lines can't push the rest of a command out of view.
+const RE_BLANK_LINES = /\n(?:[ \t]*\n){2,}/g;
+const HIDDEN_RUN_LIMIT = 8;
+
+function codePointLabel(cp) {
+    return `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
+/** Visible stand-in for one hidden character: a Control Picture or `<U+XXXX>`. */
+function hiddenGlyph(cp) {
+    if (cp < 0x20) return String.fromCharCode(0x2400 + cp);
+    if (cp === 0x7f) return '␡';
+    return `<${codePointLabel(cp)}>`;
+}
+
+/** A mark for a run of hidden characters (repeats of one character counted). */
+function hiddenRunMark(run) {
+    const groups = [];
+    for (const ch of run) {
+        const cp = ch.codePointAt(0);
+        const last = groups[groups.length - 1];
+        if (last && last.cp === cp) last.count += 1;
+        else groups.push({ cp, count: 1 });
+    }
+    const mark = groups
+        .map((g) =>
+            g.count > 3 ? `${hiddenGlyph(g.cp)}×${g.count}` : hiddenGlyph(g.cp).repeat(g.count)
+        )
+        .join('');
+    const shown = groups.slice(0, HIDDEN_RUN_LIMIT);
+    let title = shown
+        .map((g) => codePointLabel(g.cp) + (g.count > 1 ? ` ×${g.count}` : ''))
+        .join(' ');
+    if (groups.length > shown.length) title += ' …';
+    return { mark, title };
+}
+
+function pushTextParts(parts, text) {
+    let last = 0;
+    RE_HIDDEN_RUN.lastIndex = 0;
+    for (let m = RE_HIDDEN_RUN.exec(text); m; m = RE_HIDDEN_RUN.exec(text)) {
+        if (m.index > last) parts.push({ text: text.slice(last, m.index) });
+        parts.push(hiddenRunMark(m[0]));
+        last = m.index + m[0].length;
+    }
+    if (last < text.length) parts.push({ text: text.slice(last) });
+}
+
+/**
+ * Split a command line into display parts: `{ text }` runs to show as-is
+ * and `{ mark, title }` stand-ins for characters that can't be — every
+ * control character (ESC as `␛`, CR as `␍`, …), bidi / zero-width /
+ * other invisible character (`<U+202E>`), and runs of blank lines (`⏎×N`).
+ * Nothing is dropped or applied: unlike the output sanitiser, an escape
+ * sequence or carriage return never hides what follows it. `\n` and `\t`
+ * stay text. The view renders marks distinctly so they can't pass for
+ * literal text.
+ */
+export function shellCommandDisplayParts(command) {
+    const s = typeof command === 'string' ? command : '';
+    const parts = [];
+    let last = 0;
+    RE_BLANK_LINES.lastIndex = 0;
+    for (let m = RE_BLANK_LINES.exec(s); m; m = RE_BLANK_LINES.exec(s)) {
+        pushTextParts(parts, s.slice(last, m.index));
+        const breaks = m[0].split('\n').length - 1;
+        parts.push({ text: '\n' });
+        parts.push({ mark: `⏎×${breaks}`, title: `${codePointLabel(0x0a)} ×${breaks}` });
+        parts.push({ text: '\n' });
+        last = m.index + m[0].length;
+    }
+    pushTextParts(parts, s.slice(last));
+    return parts;
+}
+
+/** Whether `command` displays exactly as written (no marks needed). */
+export function isPlainShellCommand(command) {
+    return shellCommandDisplayParts(command).every((p) => 'text' in p);
+}
+
+/** The displayed form of `command` as one string (marks inline), e.g. for a tooltip. */
+export function shellCommandDisplayText(command) {
+    return shellCommandDisplayParts(command)
+        .map((p) => ('text' in p ? p.text : p.mark))
+        .join('');
 }
 
 // --- Parsing output -------------------------------------------------------
@@ -324,8 +454,14 @@ function parseOutputObject(obj) {
     return p.found ? p : null;
 }
 
+// Bounds recursion on hostile nesting. The deepest real shape — kiro's
+// Success wrapper sent as a JSON string, with MCP-style content inside —
+// reaches its text block at depth 7: string, { Success }, { items }, [ ],
+// { Json }, [ content ], { type: "text" }.
+const PARSE_DEPTH_LIMIT = 10;
+
 function parseRaw(raw, depth) {
-    if (raw == null || depth > 4) return null;
+    if (raw == null || depth > PARSE_DEPTH_LIMIT) return null;
     if (typeof raw === 'string') {
         const s = raw.trim();
         if (!s) return null;
@@ -454,9 +590,28 @@ function storeOutput(parsed, budget) {
             soMax = b - seMax;
         }
     }
-    out.stdout = so ? sanitizeAndCap(so, soMax) : null;
-    out.stderr = se ? sanitizeAndCap(se, seMax) : null;
+    out.stdout = so ? detachSegment(sanitizeAndCap(so, soMax)) : null;
+    out.stderr = se ? detachSegment(sanitizeAndCap(se, seMax)) : null;
     return out;
+}
+
+/**
+ * A copy of `s` that doesn't reference the string it was cut from. Engines
+ * implement slice() as a view into the parent string (and replace() with
+ * no match returns its input), so a capped head of a 10 MB output would
+ * otherwise keep all 10 MB alive for as long as the record lives.
+ */
+function detach(s) {
+    return s.length > 64 ? JSON.parse(JSON.stringify(s)) : s;
+}
+
+function detachSegment(seg) {
+    if (!seg) return seg;
+    return { head: detach(seg.head), tail: detach(seg.tail), omitted: seg.omitted };
+}
+
+function hasStoredText(out) {
+    return !!(out && (out.stdout || out.stderr));
 }
 
 /** Characters of output a record holds. */
@@ -494,15 +649,6 @@ export function shellOutputOf(record) {
 }
 
 /**
- * A command line made safe for display: escapes/control characters
- * stripped, capped at SHELL_COMMAND_CAP. `''` when nothing printable is left.
- */
-export function cleanShellCommand(s) {
-    const seg = sanitizeAndCap(s, SHELL_COMMAND_CAP);
-    return seg ? joinCapped(seg, (n) => `…[${n}]…`).trim() : '';
-}
-
-/**
  * Merge one ACP `tool_call` / `tool_call_update` into a tool-usage `entry`
  * (from `processToolCallUpdate`). Keeps `entry.shell` — the normalised
  * shell record — up to date and returns it, or returns `null` when the
@@ -519,11 +665,12 @@ export function applyShellUpdate(entry, update, opts = {}) {
         const kind = update.kind || entry.kind;
         if (!isShellToolCall(kind, update.title || entry.title)) return null;
         // The call may only now turn out to be a shell run (its kind came
-        // late): start from the title the entry was created with.
-        const seedCommand = cleanShellCommand(extractShellCommand(null, entry.title));
+        // late): start from the title the entry was created with. Command
+        // and title are kept exactly as sent (see shellCommandDisplayParts).
+        const seedCommand = extractShellCommand(null, entry.title);
         rec = {
             toolCallId: entry.toolCallId,
-            title: cleanShellCommand(entry.title || ''),
+            title: typeof entry.title === 'string' ? entry.title : '',
             command: seedCommand,
             commandFromTitle: !!seedCommand,
             description: '',
@@ -538,20 +685,16 @@ export function applyShellUpdate(entry, update, opts = {}) {
     const budget = Math.min(SHELL_OUTPUT_CAP, Math.max(0, opts.outputBudget ?? SHELL_OUTPUT_CAP));
     let changed = rec.rev === 0;
 
-    if (typeof update.title === 'string' && update.title) {
-        const title = cleanShellCommand(update.title);
-        if (title && title !== rec.title) {
-            rec.title = title;
-            changed = true;
-        }
+    if (typeof update.title === 'string' && update.title && update.title !== rec.title) {
+        rec.title = update.title;
+        changed = true;
     }
     const fromInput = extractShellCommand(update.rawInput, null);
     const fromTitle = extractShellCommand(null, update.title);
     const cmd = fromInput || (!rec.command || rec.commandFromTitle ? fromTitle : '');
     if (cmd) {
-        const clean = cleanShellCommand(cmd);
-        if (clean && clean !== rec.command) {
-            rec.command = clean;
+        if (cmd !== rec.command) {
+            rec.command = cmd;
             changed = true;
         }
         rec.commandFromTitle = !fromInput;
@@ -568,6 +711,11 @@ export function applyShellUpdate(entry, update, opts = {}) {
     if ('rawOutput' in update) {
         const parsed = parseShellRawOutput(update.rawOutput);
         rec.rawOut = parsed ? storeOutput(parsed, budget) : null;
+        // rawOutput's text is what shows (shellOutputOf), so content's text
+        // is dead weight now — drop it rather than hold the budget twice.
+        if (hasStoredText(rec.rawOut) && hasStoredText(rec.contentOut)) {
+            rec.contentOut = { ...rec.contentOut, stdout: null, stderr: null };
+        }
         changed = true;
     }
     if ('content' in update) {

@@ -18,9 +18,10 @@
  *     reveals the list of commands.
  *
  * Command and output are untrusted: they only ever reach the DOM through
- * textContent / text nodes. Expanding or collapsing dispatches a bubbling
- * SHELL_LAYOUT_EVENT so a window that sizes itself to its content (the
- * floating window) can re-measure.
+ * textContent / text nodes. A command is shown exactly as it will run, with
+ * hidden characters made visible (`appendShellCommandText`). Expanding or
+ * collapsing dispatches a bubbling SHELL_LAYOUT_EVENT so a window that
+ * sizes itself to its content (the floating window) can re-measure.
  */
 
 import { t } from './i18n.js';
@@ -29,6 +30,8 @@ import {
     joinCapped,
     settleShellCalls,
     shellCallState,
+    shellCommandDisplayParts,
+    shellCommandDisplayText,
     shellOutputOf,
 } from './shell-commands.js';
 import { renderSourceChipsHtml, renderToolChipsHtml } from './streaming-utils.js';
@@ -49,6 +52,9 @@ const ICONS = Object.freeze({
 let _uid = 0;
 const COPIED_FLASH_MS = 1500;
 const TOOLTIP_MAX = 500;
+// The header shows one ellipsised line: laying out more than this of a
+// huge command would be wasted work. The panel shows all of it.
+const HEADER_COMMAND_MAX = 1000;
 
 function el(tag, className) {
     const node = document.createElement(tag);
@@ -71,8 +77,52 @@ function omittedMarker(count) {
     return t('shared.shell.omitted', { count });
 }
 
-function displayCommand(record) {
-    return record?.command || record?.title || t('shared.shell.unknown_command');
+/** Cut `s` at `max` characters (never inside a surrogate pair). */
+function clip(s, max) {
+    if (s.length <= max) return s;
+    const c = s.charCodeAt(max - 1);
+    return s.slice(0, c >= 0xd800 && c <= 0xdbff ? max - 1 : max);
+}
+
+/**
+ * Append `command` to `parent` exactly as it will run: text as text nodes,
+ * and every character that can't be shown as-is (controls, bidi and
+ * zero-width characters, runs of blank lines — see shellCommandDisplayParts)
+ * as a distinct `.shell-cmd-mark`, so nothing in it is hidden, dropped or
+ * reordered. `max` clips a one-line preview (an ellipsis marks the cut).
+ */
+export function appendShellCommandText(parent, command, max = Number.POSITIVE_INFINITY) {
+    if (!parent || typeof command !== 'string') return;
+    const shown = clip(command, max);
+    for (const part of shellCommandDisplayParts(shown)) {
+        if ('text' in part) {
+            parent.append(document.createTextNode(part.text));
+        } else {
+            const mark = el('span', 'shell-cmd-mark');
+            mark.textContent = part.mark;
+            mark.title = part.title;
+            parent.append(mark);
+        }
+    }
+    if (shown.length < command.length) parent.append(document.createTextNode('…'));
+}
+
+/** What a block names the call by: its command, else its title. */
+function commandOf(record) {
+    return record?.command || record?.title || '';
+}
+
+/** Changes whenever what renderCommandInto draws would. */
+function commandKey(record) {
+    return `${record?.command ? 'c' : 't'}:${commandOf(record)}`;
+}
+
+/** Fill `node` with the record's command (or the placeholder when unknown). */
+function renderCommandInto(node, record, max) {
+    node.textContent = '';
+    const command = commandOf(record);
+    if (command) appendShellCommandText(node, command, max);
+    else node.textContent = t('shared.shell.unknown_command');
 }
 
 /** stdout then stderr as one string (omission markers included). */
@@ -169,7 +219,7 @@ function buildPanel(root) {
     const prompt = el('span', 'shell-cmd-prompt');
     prompt.setAttribute('aria-hidden', 'true');
     prompt.textContent = '$ ';
-    const fullText = document.createTextNode('');
+    const fullText = el('span', 'shell-cmd-full-text');
     full.append(prompt, fullText);
 
     const output = el('div', 'shell-cmd-output');
@@ -204,8 +254,11 @@ function renderPanel(root) {
     const state = shellCallState(record);
     const out = shellOutputOf(record);
 
-    fullText.data = displayCommand(record);
-    full.classList.toggle('is-placeholder', !record.command);
+    if (st.panelCommand !== commandKey(record)) {
+        renderCommandInto(fullText, record);
+        full.classList.toggle('is-placeholder', !record.command);
+        st.panelCommand = commandKey(record);
+    }
     copyCommand.hidden = !record.command;
 
     // Keep the reader's place when output grows under an open panel.
@@ -259,6 +312,12 @@ export function setShellCommandExpanded(root, open) {
     st.panel.hidden = !want;
     root.classList.toggle('expanded', want);
     if (want && st.panelRev !== st.record.rev) renderPanel(root);
+    if (!want && st.parts) {
+        // A closed panel doesn't hold the output (up to SHELL_OUTPUT_CAP per
+        // call) in the DOM; it's rebuilt from the record when reopened.
+        st.parts.output.textContent = '';
+        st.panelRev = -1;
+    }
     layoutChanged(root);
 }
 
@@ -271,10 +330,16 @@ export function updateShellCommandBlock(root, record) {
     if (st.renderedRev === record.rev && st.renderedState === state) return;
     const out = shellOutputOf(record);
     root.dataset.state = state;
-    const command = displayCommand(record);
-    st.text.textContent = command;
-    st.text.classList.toggle('is-placeholder', !record.command);
-    st.header.title = command.length > TOOLTIP_MAX ? `${command.slice(0, TOOLTIP_MAX)}…` : command;
+    const command = commandOf(record);
+    if (st.headerCommand !== commandKey(record)) {
+        renderCommandInto(st.text, record, HEADER_COMMAND_MAX);
+        st.text.classList.toggle('is-placeholder', !record.command);
+        st.header.title = command
+            ? shellCommandDisplayText(clip(command, TOOLTIP_MAX)) +
+              (command.length > TOOLTIP_MAX ? '…' : '')
+            : t('shared.shell.unknown_command');
+        st.headerCommand = commandKey(record);
+    }
     renderStatus(st.status, state, out);
     if (isShellCommandExpanded(root)) renderPanel(root);
     st.renderedRev = record.rev;
@@ -317,6 +382,8 @@ export function createShellCommandBlock(record) {
         renderedRev: -1,
         renderedState: null,
         panelRev: -1,
+        headerCommand: null,
+        panelCommand: null,
     };
     header.addEventListener('click', () => {
         setShellCommandExpanded(root, !isShellCommandExpanded(root));
@@ -377,12 +444,48 @@ export function showShellActivity(slot, record) {
 
 /**
  * The turn ended: calls that never reported a terminal status stop showing
- * as running, every block repaints and finished collapsed ones go.
+ * as running, every block repaints and finished collapsed ones go. Blocks
+ * the user has open stay until `handOffShellActivity` moves them into the
+ * response's command list.
  */
 export function finishShellActivity(slot, toolUsages) {
     settleShellCalls(toolUsages);
     for (const b of blocksOf(slot)) updateShellCommandBlock(b, b._kageShell.record);
     pruneShellActivity(slot);
+}
+
+function scrollOffsets(block) {
+    return Array.from(block.querySelectorAll('.shell-cmd-full, .shell-cmd-output'), (n) => [
+        n,
+        n.scrollTop,
+    ]);
+}
+
+/**
+ * After the turn, once the response's chip row (`container`) is rendered:
+ * each block still in the activity slot replaces its twin in the command
+ * list — the same element, so an open panel keeps its place — the list
+ * opens if any of them is open, and the emptied slot goes. Each command is
+ * then listed once, inside the response. Blocks without a twin (no list
+ * yet) stay in the slot.
+ */
+export function handOffShellActivity(slot, container) {
+    if (!slot) return;
+    const list = container?.querySelector(':scope > .shell-cmd-list');
+    const chip = container?.querySelector(':scope > .shell-chip');
+    if (!list || !chip) return;
+    let opened = false;
+    for (const block of blocksOf(slot)) {
+        const twin = findBlock(list, block._kageShell.record.toolCallId);
+        if (!twin) continue;
+        const offsets = scrollOffsets(block);
+        twin.replaceWith(block);
+        for (const [node, top] of offsets) node.scrollTop = top;
+        opened = opened || isShellCommandExpanded(block);
+    }
+    if (opened) setShellListOpen(chip, list, true);
+    if (!blocksOf(slot).length) slot.remove();
+    layoutChanged(container);
 }
 
 // --- Chip row --------------------------------------------------------------
@@ -395,6 +498,11 @@ function aggregateState(calls) {
         if (s === 'failed') failed = true;
     }
     return failed ? 'failed' : 'done';
+}
+
+function setShellListOpen(chip, list, open) {
+    chip.setAttribute('aria-expanded', String(open));
+    list.hidden = !open;
 }
 
 function createShellChip(listId) {
@@ -442,9 +550,7 @@ export function syncShellCommandList(container, toolUsages) {
         const chipRef = chip;
         const listRef = list;
         chip.addEventListener('click', () => {
-            const open = chipRef.getAttribute('aria-expanded') !== 'true';
-            chipRef.setAttribute('aria-expanded', String(open));
-            listRef.hidden = !open;
+            setShellListOpen(chipRef, listRef, chipRef.getAttribute('aria-expanded') !== 'true');
             layoutChanged(chipRef);
         });
         container.prepend(chip);

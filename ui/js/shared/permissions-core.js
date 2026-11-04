@@ -19,7 +19,8 @@
 import { getToolEmoji, escapeHtml, LTR_SLOT, setTextWithLtrValue } from './tool-utils.js';
 import { EVT } from './events.js';
 import { t } from './i18n.js';
-import { cleanShellCommand, extractShellCommand } from './shell-commands.js';
+import { extractShellCommand, isPlainShellCommand } from './shell-commands.js';
+import { appendShellCommandText } from './shell-command-view.js';
 
 /** ACP tool kind for shell / CLI commands (see src/config/permissions.rs). */
 export const TOOL_KIND_EXECUTE = 'execute';
@@ -70,17 +71,21 @@ const TRUST_ITEMS = Object.freeze({
 /**
  * Show the command line of a shell-run request (kind "execute") under the
  * title, in the same terminal style as the response's command blocks.
- * kiro-cli titles the request `Running: <command>` and Claude Code's
- * adapter titles it with the backticked command; such a title only repeats
- * the block, so it's hidden (the element keeps its text). Other requests
- * get no block. The command is untrusted: text nodes only.
+ *
+ * The user approves what this box shows, so it shows exactly what will run:
+ * the whole command, never shortened, with every control / escape / bidi /
+ * zero-width character drawn as a visible mark rather than removed or
+ * applied (see shellCommandDisplayParts). kiro-cli titles the request
+ * `Running: <command>` and Claude Code's adapter titles it with the
+ * backticked command; such a title is hidden (the element keeps its text)
+ * only when it repeats a command that displays with no marks at all.
+ * Other requests get no block. The command is untrusted: text nodes only.
  */
 export function renderPermissionCommand(titleEl, toolKind, toolCall) {
     if (!titleEl) return;
     const title = typeof toolCall?.title === 'string' ? toolCall.title : '';
-    const raw =
+    const command =
         toolKind === TOOL_KIND_EXECUTE ? extractShellCommand(toolCall?.rawInput, title) : '';
-    const command = raw ? cleanShellCommand(raw) : '';
     let box = document.getElementById('permissionToolCommand');
     titleEl.classList.remove('is-shell-redundant');
     if (!command) {
@@ -102,8 +107,11 @@ export function renderPermissionCommand(titleEl, toolKind, toolCall) {
     prompt.className = 'shell-cmd-prompt';
     prompt.setAttribute('aria-hidden', 'true');
     prompt.textContent = '$';
-    box.append(prompt, document.createTextNode(command));
-    if (extractShellCommand(null, title) === raw) titleEl.classList.add('is-shell-redundant');
+    box.append(prompt);
+    appendShellCommandText(box, command);
+    if (extractShellCommand(null, title) === command && isPlainShellCommand(command)) {
+        titleEl.classList.add('is-shell-redundant');
+    }
 }
 
 export function createPermissionHandler(invoke, appWindow, hooks = {}) {

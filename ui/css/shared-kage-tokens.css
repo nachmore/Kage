@@ -55,6 +55,11 @@
     --kage-term-muted: #a0aec0;
     --kage-term-prompt: #81e6d9;
     --kage-term-stderr: #fc8181;
+    --kage-term-error: #f56565;
+    --kage-term-success: #48bb78;
+    --kage-term-mark: #fbd38d;
+    --kage-term-mark-bg: rgba(251, 211, 141, 0.12);
+    --kage-term-mark-border: rgba(251, 211, 141, 0.45);
 
     /* Mascot */
     --kage-mascot-outline: #319795; /* matches --kage-accent */
@@ -87,7 +92,15 @@ body.light-theme {
     --kage-term-hover: rgba(15, 23, 42, 0.05);
     --kage-term-border: rgba(15, 23, 42, 0.13);
     --kage-term-text: #1a202c;
-    --kage-term-muted: #64748b;
-    --kage-term-prompt: #2c7a7b;
-    --kage-term-stderr: #c53030;
+    /* Light terminal text colours are darker than the generic tokens: they
+       sit on a tinted surface (chat bubble #f3f4f6 + terminal tint) and
+       must keep 4.5:1 there. */
+    --kage-term-muted: #4a5568;
+    --kage-term-prompt: #285e61;
+    --kage-term-stderr: #9b2c2c;
+    --kage-term-error: #9b2c2c;
+    --kage-term-success: #276749;
+    --kage-term-mark: #7b341e;
+    --kage-term-mark-bg: rgba(221, 107, 32, 0.1);
+    --kage-term-mark-border: rgba(156, 66, 33, 0.45);
 }

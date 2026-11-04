@@ -25,8 +25,10 @@ export { escapeAttr };
  * @param {Object} event - Tauri event payload
  * @param {Object} state - { toolUsages: [], toolSources: [] }
  * @returns {{ updated: boolean, update: Object|null, shell: Object|null }}
- *   `updated`: a new tool or new sources were tracked (shell status/output
- *   changes don't set it — they come back as `shell`).
+ *   `updated`: the chip row needs re-rendering — a new tool or new sources
+ *   were tracked, or a tracked tool just turned out to be a shell command
+ *   (its kind came late), moving it from the plain chips to the shell chip.
+ *   Shell status/output changes don't set it; they come back as `shell`.
  */
 export function processToolCallUpdate(event, state) {
     const notification = event.payload;
@@ -64,9 +66,11 @@ export function processToolCallUpdate(event, state) {
             for (const u of state.toolUsages) {
                 if (u !== entry && u?.shell) othersSize += shellOutputSize(u.shell);
             }
+            const wasShell = !!entry.shell;
             shell = applyShellUpdate(entry, update, {
                 outputBudget: SHELL_RESPONSE_OUTPUT_CAP - othersSize,
             });
+            if (shell && !wasShell) updated = true;
         }
     }
 

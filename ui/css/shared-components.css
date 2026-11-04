@@ -2605,7 +2605,7 @@ body.light-theme .conn-edit-actions {
     overflow: hidden;
 }
 .shell-cmd[data-state="failed"] {
-    border-color: color-mix(in srgb, var(--kage-error) 50%, var(--kage-term-border));
+    border-color: color-mix(in srgb, var(--kage-term-error) 50%, var(--kage-term-border));
 }
 
 .shell-cmd-header {
@@ -2662,6 +2662,20 @@ body.light-theme .conn-edit-actions {
     color: var(--kage-term-muted);
     font-style: italic;
 }
+/* A character of the command that can't be shown as-is (ESC, CR, a bidi
+   or zero-width character, a run of blank lines): drawn as a boxed
+   stand-in so it can't pass for literal text (shell-command-view.js). */
+.shell-cmd-mark {
+    display: inline;
+    margin: 0 1px;
+    padding: 0 3px;
+    border: 1px solid var(--kage-term-mark-border);
+    border-radius: 3px;
+    background: var(--kage-term-mark-bg);
+    color: var(--kage-term-mark);
+    font-style: normal;
+    font-weight: 600;
+}
 
 .shell-cmd-icon,
 .shell-cmd-chevron,
@@ -2678,10 +2692,10 @@ body.light-theme .conn-edit-actions {
     color: var(--kage-term-muted);
 }
 .shell-cmd-status[data-state="success"] {
-    color: var(--kage-success);
+    color: var(--kage-term-success);
 }
 .shell-cmd-status[data-state="failed"] {
-    color: var(--kage-error);
+    color: var(--kage-term-error);
 }
 .shell-cmd-code {
     font-size: 11px;
@@ -2806,7 +2820,7 @@ body.light-theme .conn-edit-actions {
 }
 .shell-cmd-copy.copied {
     border-color: currentColor;
-    color: var(--kage-success);
+    color: var(--kage-term-success);
 }
 .shell-cmd-copy[hidden] {
     display: none;
@@ -2845,7 +2859,7 @@ button.shell-chip {
 }
 .shell-chip[data-state="failed"] .shell-chip-dot {
     display: inline-block;
-    background: var(--kage-error);
+    background: var(--kage-term-error);
 }
 .shell-cmd-list {
     display: flex;
@@ -2859,18 +2873,23 @@ button.shell-chip {
 }
 
 /* Permission prompt: the command an execute request wants to run. The
-   modal is dark in both themes, so pin the dark terminal tokens. */
+   modal is dark in both themes, so pin the dark terminal tokens. No
+   max-height: the user approves what this shows, so all of it is laid out
+   and the modal body scrolls as a whole (runs of blank lines are already
+   collapsed into one mark). */
 .shell-cmd-inline {
     --kage-term-bg: rgba(0, 0, 0, 0.35);
     --kage-term-border: rgba(255, 255, 255, 0.12);
     --kage-term-text: #e2e8f0;
     --kage-term-prompt: #81e6d9;
+    --kage-term-mark: #fbd38d;
+    --kage-term-mark-bg: rgba(251, 211, 141, 0.12);
+    --kage-term-mark-border: rgba(251, 211, 141, 0.45);
     direction: ltr;
     text-align: left;
-    max-height: 160px;
     margin: 0 0 12px 0;
     padding: 8px 10px;
-    overflow: auto;
+    overflow-x: auto;
     border: 1px solid var(--kage-term-border);
     border-radius: 8px;
     background: var(--kage-term-bg);
