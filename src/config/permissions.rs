@@ -207,6 +207,108 @@ impl ToolPermissionsConfig {
             None => PolicyKind::Ask,
         }
     }
+
+    /// The category trust that covers `req` — `"kind 'execute'"` or
+    /// `"MCP server '<s>'"`, for the log line — or `None`. Always `None`
+    /// for a hidden session.
+    pub fn category_trust_for(&self, req: &ToolRequest) -> Option<String> {
+        let (kind, server) = req.trust_scope();
+        if self.is_kind_trusted(kind) {
+            kind.map(|k| format!("kind '{k}'"))
+        } else if self.is_mcp_server_trusted(server) {
+            server.map(|s| format!("MCP server '{s}'"))
+        } else {
+            None
+        }
+    }
+
+    /// The policy that applies to `req` right now, without changing the
+    /// config: [`Self::resolve_policy_for`], with category trust limited to
+    /// visible sessions.
+    pub fn resolve_request(&self, req: &ToolRequest) -> PolicyKind {
+        let (kind, server) = req.trust_scope();
+        self.resolve_policy_for(&req.title, kind, server)
+    }
+
+    /// Record a permission request seen at `timestamp` and decide it. An
+    /// existing per-tool row gets its `last_seen` updated; a tool seen for
+    /// the first time gets an `Ask` row, unless a trusted category covers
+    /// it (one row per command string or MCP tool would only bloat the
+    /// config and the Settings list).
+    pub fn observe_request(&mut self, req: &ToolRequest, timestamp: &str) -> RequestDecision {
+        let category_trust = self.category_trust_for(req);
+        let row = if let Some(tool) = self.tools.iter_mut().find(|t| t.title == req.title) {
+            tool.last_seen = timestamp.to_string();
+            PolicyRowChange::Touched
+        } else if category_trust.is_some() {
+            PolicyRowChange::Skipped
+        } else {
+            self.tools.push(ToolPolicy {
+                title: req.title.clone(),
+                policy: PolicyKind::Ask,
+                last_seen: timestamp.to_string(),
+                granted_at: String::new(),
+                grant_type: GrantType::Once,
+            });
+            PolicyRowChange::Added
+        };
+        RequestDecision {
+            policy: self.resolve_request(req),
+            category_trust,
+            row,
+        }
+    }
+}
+
+/// One tool permission request as the policy sees it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ToolRequest {
+    /// The per-tool policy key: the title of the call's first `tool_call`.
+    pub title: String,
+    /// The request's ACP tool kind, when known.
+    pub kind: Option<String>,
+    /// The MCP server the tool belongs to, when identified
+    /// (`classify_mcp_server` in the permission handler).
+    pub mcp_server: Option<String>,
+    /// A background or ephemeral session (inline assist, macros, script
+    /// generation, titler, auto-steering). Those prompts run on text from
+    /// other apps and their tool calls are never shown, so category trust
+    /// never covers them: a prompt-injected selection must not get commands,
+    /// or a trusted MCP server's tools, run silently.
+    pub hidden_session: bool,
+}
+
+impl ToolRequest {
+    /// The kind and MCP server category trust may match: neither, for a
+    /// hidden session.
+    fn trust_scope(&self) -> (Option<&str>, Option<&str>) {
+        if self.hidden_session {
+            (None, None)
+        } else {
+            (self.kind.as_deref(), self.mcp_server.as_deref())
+        }
+    }
+}
+
+/// What [`ToolPermissionsConfig::observe_request`] did to the request's
+/// per-tool policy row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PolicyRowChange {
+    /// An existing row's `last_seen` was updated.
+    Touched,
+    /// A new `Ask` row was added.
+    Added,
+    /// No row exists and none was added (a trusted category covers it).
+    Skipped,
+}
+
+/// [`ToolPermissionsConfig::observe_request`]'s verdict.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestDecision {
+    pub policy: PolicyKind,
+    /// The category trust covering the request, for the log line.
+    pub category_trust: Option<String>,
+    pub row: PolicyRowChange,
 }
 
 /// Per-tool permission policy. The frontend's UI exposes three states —

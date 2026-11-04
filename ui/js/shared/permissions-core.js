@@ -129,6 +129,9 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             toolKind: toolKindOf(notification),
             mcpServer: notification.extCallback ? null : mcpServerOf(notification),
             isExtension: !!notification.extCallback,
+            // Inline assist, macros, …: category trust never covers these
+            // sessions (see the backend), so neither trust is offered.
+            isBackground: notification._kageBackground === true,
             extCallback: notification.extCallback || null,
             notification,
         };
@@ -136,16 +139,16 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         // "Trust all commands…" only makes sense for an agent's shell run.
         const trustItem = document.getElementById(TRUST_ITEMS.commands);
         if (trustItem) {
-            const offer =
-                !currentPermissionRequest.isExtension &&
-                currentPermissionRequest.toolKind === TOOL_KIND_EXECUTE;
+            const offer = !!trustPlan('commands', currentPermissionRequest);
             trustItem.style.display = offer ? '' : 'none';
         }
         // "Trust all tools from <server>…" only for a tool the backend
         // identified as an MCP server's.
         const serverItem = document.getElementById(TRUST_ITEMS.server);
         if (serverItem) {
-            const server = currentPermissionRequest.mcpServer;
+            const server = trustPlan('server', currentPermissionRequest)
+                ? currentPermissionRequest.mcpServer
+                : null;
             serverItem.style.display = server ? '' : 'none';
             if (server) {
                 setTextWithLtrValue(
@@ -282,7 +285,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
      * Null when that category doesn't apply to the request.
      */
     function trustPlan(mode, req) {
-        if (!req || req.isExtension) return null;
+        if (!req || req.isExtension || req.isBackground) return null;
         if (mode === 'commands' && req.toolKind === TOOL_KIND_EXECUTE) {
             return {
                 command: 'set_tool_kind_trusted',
@@ -306,8 +309,9 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
      * <server>": record the category grant, approve this request, and
      * approve the requests of that category already queued in this window
      * (they were asked before the trust existed — the backend auto-approves
-     * only new ones). Queued requests from background sessions keep
-     * asking: category trust never covers those (see the backend).
+     * only new ones). The backend decides each queued request again before
+     * approving it, so one whose tool the user set to Deny meanwhile, or
+     * one from a background session, keeps asking.
      */
     async function trustCategoryAndAllow(mode) {
         const req = currentPermissionRequest;
@@ -331,24 +335,50 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         // dismissed): never approve whatever request happens to be current
         // now — it could be an edit, an extension tool or another session's.
         if (currentPermissionRequest !== req) return;
-        const covered = _permissionQueue.filter(
+        await approveCoveredQueued(plan);
+        if (currentPermissionRequest !== req) return;
+        await handlePermissionResponse('allow_once');
+    }
+
+    /**
+     * Ask the backend to approve the queued requests `plan` covers. It
+     * approves only those its policy allows now and returns their ids;
+     * the rest stay queued for the user to answer.
+     */
+    async function approveCoveredQueued(plan) {
+        const candidates = _permissionQueue.filter(
             (q) =>
                 !q.notification?.extCallback &&
                 !q.notification?._kageBackground &&
                 plan.covers(q.notification)
         );
-        _permissionQueue = _permissionQueue.filter((q) => !covered.includes(q));
-        for (const q of covered) {
-            const n = q.notification;
-            invoke('send_permission_response', {
-                sessionId: n.params?.sessionId || null,
-                requestId: n.id,
-                optionId: 'allow_once',
-                toolTitle:
-                    q.toolName || n.params?.toolCall?.title || t('shared.permission.unknown'),
-            }).catch((e) => console.error('Failed to approve queued request:', e));
+        if (candidates.length === 0) return;
+        let approved;
+        try {
+            approved = await invoke('approve_permissions_if_allowed', {
+                requestIds: candidates.map((q) => q.notification.id),
+            });
+        } catch (e) {
+            console.error('Failed to approve queued requests:', e);
+            return;
         }
-        await handlePermissionResponse('allow_once');
+        const done = new Set(
+            (Array.isArray(approved) ? approved : []).map((id) => JSON.stringify(id))
+        );
+        _permissionQueue = _permissionQueue.filter(
+            (q) => !done.has(JSON.stringify(q.notification?.id))
+        );
+    }
+
+    /**
+     * Escape / an outside click on a trust confirmation: back out, unless
+     * the trust is being saved. Backing out then would show the Allow /
+     * Deny row while the save can still succeed — the user could deny this
+     * request and still end up trusting the whole category.
+     */
+    function backOutOfTrust() {
+        if (currentPermissionRequest?.trusting) return;
+        setTrustConfirmVisible(null);
     }
 
     async function handlePermissionResponse(optionId, policyOverride, grantType) {
@@ -511,7 +541,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             ) {
                 // Like Escape: an outside click backs out of the trust
                 // confirmation rather than denying the request.
-                if (visibleTrustPanel()) setTrustConfirmVisible(null);
+                if (visibleTrustPanel()) backOutOfTrust();
                 else handlePermissionResponse('reject_once');
             }
         });
@@ -529,7 +559,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (trustPanel) setTrustConfirmVisible(null);
+                    if (trustPanel) backOutOfTrust();
                     else handlePermissionResponse('reject_once');
                 } else if (e.key === 'Tab' && trustPanel) {
                     // Keep focus inside the confirmation (two buttons).

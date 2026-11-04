@@ -84,7 +84,11 @@ function setup() {
     mountModal();
     const listeners = {};
     const appWindow = { listen: vi.fn((evt, fn) => { listeners[evt] = fn; }) };
-    const invoke = vi.fn(async () => undefined);
+    // The backend approves every queued candidate it's asked about unless
+    // a test says otherwise (it re-decides each against the policy).
+    const invoke = vi.fn(async (cmd, args) =>
+        cmd === 'approve_permissions_if_allowed' ? args.requestIds : undefined
+    );
     const handler = createPermissionHandler(invoke, appWindow);
     handler.init();
     const request = async (
@@ -111,10 +115,14 @@ function setup() {
     return { invoke, handler, request };
 }
 
+/** Requests answered "allow once": directly, or queued ones the (mock)
+ *  backend approved via `approve_permissions_if_allowed`. */
 const answered = (invoke) =>
-    invoke.mock.calls
-        .filter(([cmd]) => cmd === 'send_permission_response')
-        .map(([, a]) => [a.requestId, a.optionId]);
+    invoke.mock.calls.flatMap(([cmd, a]) => {
+        if (cmd === 'send_permission_response') return [[a.requestId, a.optionId]];
+        if (cmd === 'approve_permissions_if_allowed') return a.requestIds.map((id) => [id, 'allow_once']);
+        return [];
+    });
 
 describe('Trust all tools from an MCP server', () => {
     it('is offered only when the backend names the server, with the name LTR-isolated', async () => {

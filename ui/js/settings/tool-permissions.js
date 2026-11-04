@@ -786,7 +786,8 @@ toolPermStyle.textContent = `
     .trusted-servers-status {
         margin-top: 6px;
         font-size: 12px;
-        color: #ff8a80;
+        /* Theme token: the fixed light red was ~2:1 on the light theme. */
+        color: var(--kage-error, #e53e3e);
     }
     .trusted-servers-status:empty {
         display: none;

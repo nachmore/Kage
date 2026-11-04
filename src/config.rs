@@ -921,6 +921,105 @@ mod resolve_policy_tests {
         let long_server = format!("Running: @{}/tool", "s".repeat(MAX_MCP_SERVER_NAME_LEN + 1));
         assert_eq!(mcp_server_from_title(&long_server), None);
     }
+
+    // --- observe_request / resolve_request: the permission handler's
+    // in-lock decision (src/commands/messaging/notifications.rs).
+
+    const NOW: &str = "2026-11-03T12:00:00Z";
+
+    fn mcp_request(tool: &str, hidden_session: bool) -> ToolRequest {
+        ToolRequest {
+            title: format!("Running: @builder-mcp/{tool}"),
+            kind: None,
+            mcp_server: Some("builder-mcp".into()),
+            hidden_session,
+        }
+    }
+
+    fn command_request(command: &str, hidden_session: bool) -> ToolRequest {
+        ToolRequest {
+            title: format!("Running: {command}"),
+            kind: Some(TOOL_KIND_EXECUTE.into()),
+            mcp_server: None,
+            hidden_session,
+        }
+    }
+
+    #[test]
+    fn trusted_server_allows_without_adding_a_row() {
+        let mut cfg = ToolPermissionsConfig::default();
+        cfg.set_mcp_server_trusted("builder-mcp", true).unwrap();
+        let d = cfg.observe_request(&mcp_request("InternalSearch", false), NOW);
+        assert_eq!(d.policy, PolicyKind::Allow);
+        assert_eq!(
+            d.category_trust.as_deref(),
+            Some("MCP server 'builder-mcp'")
+        );
+        assert_eq!(d.row, PolicyRowChange::Skipped);
+        assert!(cfg.tools.is_empty());
+    }
+
+    #[test]
+    fn trusted_server_never_covers_a_hidden_session() {
+        // Inline assist / macros run on text from other apps: a trusted
+        // server's tools must still ask there, and get the usual row.
+        let mut cfg = ToolPermissionsConfig::default();
+        cfg.set_mcp_server_trusted("builder-mcp", true).unwrap();
+        let req = mcp_request("InternalSearch", true);
+        let d = cfg.observe_request(&req, NOW);
+        assert_eq!(d.policy, PolicyKind::Ask);
+        assert_eq!(d.category_trust, None);
+        assert_eq!(d.row, PolicyRowChange::Added);
+        assert_eq!(cfg.tools.len(), 1);
+        assert_eq!(cfg.tools[0].title, req.title);
+        assert_eq!(cfg.tools[0].policy, PolicyKind::Ask);
+        assert_eq!(cfg.resolve_request(&req), PolicyKind::Ask);
+    }
+
+    #[test]
+    fn trusted_commands_never_cover_a_hidden_session() {
+        let mut cfg = ToolPermissionsConfig::default();
+        cfg.set_kind_trusted(TOOL_KIND_EXECUTE, true).unwrap();
+        let d = cfg.observe_request(&command_request("git status", false), NOW);
+        assert_eq!(d.policy, PolicyKind::Allow);
+        assert_eq!(d.category_trust.as_deref(), Some("kind 'execute'"));
+        assert_eq!(d.row, PolicyRowChange::Skipped);
+        let d = cfg.observe_request(&command_request("git status", true), NOW);
+        assert_eq!(d.policy, PolicyKind::Ask);
+        assert_eq!(d.row, PolicyRowChange::Added);
+    }
+
+    #[test]
+    fn explicit_deny_beats_a_trusted_server_in_observe_and_resolve() {
+        let mut cfg = ToolPermissionsConfig {
+            tools: vec![tool("Running: @builder-mcp/DeleteThing", PolicyKind::Deny)],
+            ..Default::default()
+        };
+        cfg.set_mcp_server_trusted("builder-mcp", true).unwrap();
+        let req = mcp_request("DeleteThing", false);
+        // A request queued before the trust re-resolves to Deny.
+        assert_eq!(cfg.resolve_request(&req), PolicyKind::Deny);
+        let d = cfg.observe_request(&req, NOW);
+        assert_eq!(d.policy, PolicyKind::Deny);
+        assert_eq!(d.row, PolicyRowChange::Touched);
+        assert_eq!(cfg.tools[0].last_seen, NOW);
+        assert_eq!(cfg.tools[0].policy, PolicyKind::Deny);
+    }
+
+    #[test]
+    fn untrusted_new_tool_asks_and_adds_a_row_once() {
+        let mut cfg = ToolPermissionsConfig::default();
+        let req = mcp_request("InternalSearch", false);
+        let d = cfg.observe_request(&req, NOW);
+        assert_eq!(d.policy, PolicyKind::Ask);
+        assert_eq!(d.row, PolicyRowChange::Added);
+        let d = cfg.observe_request(&req, NOW);
+        assert_eq!(d.row, PolicyRowChange::Touched);
+        assert_eq!(cfg.tools.len(), 1);
+        // Trusting the server afterwards allows the (already queued) request.
+        cfg.set_mcp_server_trusted("builder-mcp", true).unwrap();
+        assert_eq!(cfg.resolve_request(&req), PolicyKind::Allow);
+    }
 }
 
 #[cfg(test)]

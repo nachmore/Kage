@@ -49,6 +49,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::send_permission_response,
         crate::commands::set_tool_kind_trusted,
         crate::commands::set_mcp_server_trusted,
+        crate::commands::approve_permissions_if_allowed,
         crate::commands::remove_tool_permission,
         crate::commands::update_tool_policy,
         crate::commands::get_permission_audit_log,

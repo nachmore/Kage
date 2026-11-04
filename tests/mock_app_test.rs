@@ -397,6 +397,7 @@ fn pending_permission_state_survives_failed_dismissal() {
             kage::state::PendingPermission {
                 request_id: serde_json::json!(42),
                 session_id: Some("s1".into()),
+                ..Default::default()
             },
         );
         pending.insert(
@@ -404,6 +405,7 @@ fn pending_permission_state_survives_failed_dismissal() {
             kage::state::PendingPermission {
                 request_id: serde_json::json!("req-str"),
                 session_id: Some("s2".into()),
+                ..Default::default()
             },
         );
     }

@@ -643,6 +643,50 @@ fn classify_mcp_server(
     Some(server.to_string())
 }
 
+/// The audit log's `args_preview` for an auto-approved request: the command
+/// line of a shell run, the arguments of an MCP tool call (at most 2048
+/// characters), nothing for other tools.
+fn auto_allow_args_preview(
+    raw_input: Option<&serde_json::Value>,
+    request: &crate::config::ToolRequest,
+) -> Option<String> {
+    let clip = |s: &str| s.chars().take(2048).collect::<String>();
+    if request.kind.as_deref() == Some(crate::config::TOOL_KIND_EXECUTE) {
+        raw_input
+            .and_then(|ri| ri.get("command"))
+            .and_then(|c| c.as_str())
+            .map(clip)
+    } else if request.mcp_server.is_some() {
+        raw_input
+            .filter(|ri| !ri.is_null())
+            .map(|ri| clip(&ri.to_string()))
+    } else {
+        None
+    }
+}
+
+/// The `permission_request` event payload for a request that prompts.
+fn permission_prompt_payload(
+    notification: &serde_json::Value,
+    request: &crate::config::ToolRequest,
+    source: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "notification": notification,
+        "auto_approve": false,
+        "toolName": request.title,
+        // Lets the prompt offer "Trust all commands" for shell runs.
+        "toolKind": request.kind,
+        // Lets the prompt offer "Trust all tools from <server>".
+        "mcpServer": request.mcp_server,
+        // Category trust never covers these sessions: the prompt offers no
+        // category trust for them, and doesn't bulk-approve their queued
+        // requests when the user trusts a category from another prompt.
+        "backgroundSession": request.hidden_session,
+        "source": source,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_permission_notification(
     notification: &serde_json::Value,
@@ -697,17 +741,12 @@ fn handle_permission_notification(
 
     let timestamp = chrono::Utc::now().to_rfc3339();
 
-    // Hold the lock just long enough to mutate the in-memory config and
-    // decide whether a disk save is due. The actual save is dispatched
-    // off-thread (see below) so the ACP reader thread that's invoking
-    // this notification handler is never blocked on disk I/O — pre-fix
-    // a slow disk could stall ACP message parsing for tens of ms,
-    // long enough for in-flight prompts to time out.
     // Category trust applies only to prompts the user can see. Background
     // prompts (inline assist, macros, script generation, titler, auto-
     // steering) run on text from other apps and their tool calls are never
     // shown — a prompt-injected selection must not get commands (or a
-    // trusted MCP server's tools) run silently.
+    // trusted MCP server's tools) run silently. `ToolRequest::hidden_session`
+    // carries that into every policy decision.
     let request_session = notification
         .get("params")
         .and_then(|p| p.get("sessionId"))
@@ -715,77 +754,50 @@ fn handle_permission_notification(
     let hidden_session = request_session.is_some_and(|sid| {
         client.is_background_prompt_session(sid) || crate::ephemeral_session::is_active(sid)
     });
-    let (trust_kind, trust_server) = if hidden_session {
-        (None, None)
-    } else {
-        (tool_kind.as_deref(), mcp_server.as_deref())
+    let request = crate::config::ToolRequest {
+        title: tool_title.clone(),
+        kind: tool_kind.clone(),
+        mcp_server: mcp_server.clone(),
+        hidden_session,
     };
 
-    let (policy, category_trust, save_snapshot) = {
+    // Hold the lock just long enough to mutate the in-memory config and
+    // decide whether a disk save is due. The actual save is dispatched
+    // off-thread (see below) so the ACP reader thread that's invoking
+    // this notification handler is never blocked on disk I/O — pre-fix
+    // a slow disk could stall ACP message parsing for tens of ms,
+    // long enough for in-flight prompts to time out.
+    let (decision, save_snapshot) = {
         let mut config_guard = config.lock_or_recover();
-        // Which category trust, if any, covers this call (for the log line).
-        let category_trust = if config_guard.tool_permissions.is_kind_trusted(trust_kind) {
-            trust_kind.map(|k| format!("kind '{k}'"))
-        } else if config_guard
+        // An explicit per-tool Deny wins even under trust_all /
+        // terminator_mode / a trusted category — see resolve_policy_for.
+        let decision = config_guard
             .tool_permissions
-            .is_mcp_server_trusted(trust_server)
-        {
-            trust_server.map(|s| format!("MCP server '{s}'"))
-        } else {
-            None
-        };
-        let existing = config_guard
-            .tool_permissions
-            .tools
-            .iter_mut()
-            .find(|t| t.title == tool_title);
-        let needs_save: bool;
-        if let Some(tool) = existing {
-            // Update last_seen in memory — throttle disk writes to at most once per 60s
-            tool.last_seen = timestamp;
-            let mut last_save = last_config_save.lock_or_recover();
-            needs_save = last_save.elapsed() >= std::time::Duration::from_secs(60);
-            if needs_save {
-                *last_save = std::time::Instant::now();
+            .observe_request(&request, &timestamp);
+        let needs_save = match decision.row {
+            crate::config::PolicyRowChange::Touched => {
+                // last_seen changed in memory — throttle disk writes to at
+                // most once per 60s.
+                let mut last_save = last_config_save.lock_or_recover();
+                let due = last_save.elapsed() >= std::time::Duration::from_secs(60);
+                if due {
+                    *last_save = std::time::Instant::now();
+                }
+                due
             }
-        } else if category_trust.is_some() {
-            // A trusted category (every CLI command, every tool of an MCP
-            // server) is auto-allowed; one policy row per distinct command
-            // string or tool would only bloat the config and the Settings
-            // list.
-            needs_save = false;
-        } else {
-            config_guard
-                .tool_permissions
-                .tools
-                .push(crate::config::ToolPolicy {
-                    title: tool_title.to_string(),
-                    policy: crate::config::PolicyKind::Ask,
-                    last_seen: timestamp,
-                    granted_at: String::new(),
-                    grant_type: crate::config::GrantType::Once,
-                });
-            // New tool discovered — save immediately
-            needs_save = true;
-            *last_config_save.lock_or_recover() = std::time::Instant::now();
-        }
-
-        // An explicit per-tool Deny wins even under trust_all / terminator_mode
-        // — see ToolPermissionsConfig::resolve_policy.
-        let p =
-            config_guard
-                .tool_permissions
-                .resolve_policy_for(&tool_title, trust_kind, trust_server);
+            crate::config::PolicyRowChange::Added => {
+                // New tool discovered — save immediately
+                *last_config_save.lock_or_recover() = std::time::Instant::now();
+                true
+            }
+            crate::config::PolicyRowChange::Skipped => false,
+        };
         // Snapshot the config for an off-thread save if one is due.
         // The clone happens inside the lock so the snapshot is
         // consistent — but the Mutex is released as the guard drops
         // at end-of-block, BEFORE the save runs.
-        let snap = if needs_save {
-            Some(config_guard.clone())
-        } else {
-            None
-        };
-        (p, category_trust, snap)
+        let snap = needs_save.then(|| config_guard.clone());
+        (decision, snap)
     };
 
     // Disk save on a worker thread — never blocks the ACP reader.
@@ -821,29 +833,21 @@ fn handle_permission_notification(
         .and_then(|p| p.get("sessionId"))
         .and_then(|s| s.as_str())
         .map(|s| s.to_string());
-    match policy {
+    // Auto-approved commands and MCP tools: record what actually ran (the
+    // command line / the tool's arguments). Also kept with a prompted
+    // request, for when trusting a category approves it from the queue.
+    let args_preview = auto_allow_args_preview(
+        notification
+            .get("params")
+            .and_then(|p| p.get("toolCall"))
+            .and_then(|tc| tc.get("rawInput")),
+        &request,
+    );
+    match decision.policy {
         crate::config::PolicyKind::Allow => {
-            if let Some(reason) = &category_trust {
+            if let Some(reason) = &decision.category_trust {
                 info!("Auto-approved a tool call (trusted {})", reason);
             }
-            // Auto-approved commands and MCP tools: record what actually ran
-            // (the command line / the tool's arguments).
-            let raw_input = notification
-                .get("params")
-                .and_then(|p| p.get("toolCall"))
-                .and_then(|tc| tc.get("rawInput"));
-            let args_preview = if tool_kind.as_deref() == Some(crate::config::TOOL_KIND_EXECUTE) {
-                raw_input
-                    .and_then(|ri| ri.get("command"))
-                    .and_then(|c| c.as_str())
-                    .map(|c| c.chars().take(2048).collect::<String>())
-            } else if mcp_server.is_some() {
-                raw_input
-                    .filter(|ri| !ri.is_null())
-                    .map(|ri| ri.to_string().chars().take(2048).collect::<String>())
-            } else {
-                None
-            };
             crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
                 crate::permission_audit::AuditEvent::Granted {
                     tool: tool_title.to_string(),
@@ -880,6 +884,8 @@ fn handle_permission_notification(
                     crate::state::PendingPermission {
                         request_id,
                         session_id: session_id.clone(),
+                        request: request.clone(),
+                        args_preview,
                     },
                 );
             }
@@ -903,20 +909,7 @@ fn handle_permission_notification(
                 })
                 .unwrap_or_else(|| window_labels::FLOATING.to_string());
 
-            let payload = serde_json::json!({
-                "notification": notification,
-                "auto_approve": false,
-                "toolName": tool_title,
-                // Lets the prompt offer "Trust all commands" for shell runs.
-                "toolKind": tool_kind,
-                // Lets the prompt offer "Trust all tools from <server>".
-                "mcpServer": mcp_server,
-                // Category trust never covers these sessions, so the prompt
-                // must not bulk-approve their queued requests when the user
-                // trusts a category from another prompt.
-                "backgroundSession": hidden_session,
-                "source": source,
-            });
+            let payload = permission_prompt_payload(notification, &request, &source);
 
             // Fan out to the windows that subscribe to permission prompts
             // (chat hosts, floating, settings). Each decides whether to show.
@@ -933,6 +926,78 @@ fn handle_permission_notification(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod permission_payload_tests {
+    use super::{auto_allow_args_preview, permission_prompt_payload};
+    use crate::config::ToolRequest;
+    use serde_json::json;
+
+    fn mcp_request(hidden_session: bool) -> ToolRequest {
+        ToolRequest {
+            title: "Running: @builder-mcp/InternalSearch".into(),
+            kind: None,
+            mcp_server: Some("builder-mcp".into()),
+            hidden_session,
+        }
+    }
+
+    #[test]
+    fn prompt_payload_carries_what_the_trust_ui_needs() {
+        let n = json!({ "id": 7, "params": { "sessionId": "s1" } });
+        let p = permission_prompt_payload(&n, &mcp_request(false), "main");
+        assert_eq!(p["notification"], n);
+        assert_eq!(p["auto_approve"], false);
+        assert_eq!(p["toolName"], "Running: @builder-mcp/InternalSearch");
+        assert_eq!(p["toolKind"], serde_json::Value::Null);
+        assert_eq!(p["mcpServer"], "builder-mcp");
+        assert_eq!(p["backgroundSession"], false);
+        assert_eq!(p["source"], "main");
+
+        let p = permission_prompt_payload(&n, &mcp_request(true), "floating");
+        assert_eq!(p["backgroundSession"], true);
+        let shell = ToolRequest {
+            title: "Running: ls".into(),
+            kind: Some("execute".into()),
+            ..Default::default()
+        };
+        let p = permission_prompt_payload(&n, &shell, "main");
+        assert_eq!(p["toolKind"], "execute");
+        assert_eq!(p["mcpServer"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn args_preview_records_commands_and_mcp_arguments_only() {
+        let shell = ToolRequest {
+            kind: Some("execute".into()),
+            ..Default::default()
+        };
+        let raw = json!({ "command": "git status" });
+        assert_eq!(
+            auto_allow_args_preview(Some(&raw), &shell).as_deref(),
+            Some("git status")
+        );
+        let raw = json!({ "query": "kage" });
+        assert_eq!(
+            auto_allow_args_preview(Some(&raw), &mcp_request(false)).as_deref(),
+            Some(r#"{"query":"kage"}"#)
+        );
+        assert_eq!(
+            auto_allow_args_preview(Some(&serde_json::Value::Null), &mcp_request(false)),
+            None
+        );
+        let edit = ToolRequest {
+            kind: Some("edit".into()),
+            ..Default::default()
+        };
+        assert_eq!(auto_allow_args_preview(Some(&raw), &edit), None);
+        let long = json!({ "command": "x".repeat(5000) });
+        assert_eq!(
+            auto_allow_args_preview(Some(&long), &shell).map(|s| s.chars().count()),
+            Some(2048)
+        );
     }
 }
 

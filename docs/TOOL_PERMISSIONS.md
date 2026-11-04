@@ -47,14 +47,13 @@ also offers:
   Trust is by name: a different server later registered under the same
   name is trusted too.
 
-Three settings change this prompt flow:
+Four settings change this prompt flow:
 
 - **Trust mode (`trust_all`)** — auto-approves every tool call without
   prompting, except those with an explicit `deny` policy.
 - **Terminator mode (`terminator_mode`)** — same as `trust_all` but
   intended as a temporary "leave me alone" toggle. Toggling it on/off
   is recorded in the audit log.
-
 - **Trusted tool kinds (`trusted_kinds`)** — category-wide trust; today
   only `"execute"` (CLI commands). An explicit per-tool `deny` still
   wins. Backend-owned: `save_config` ignores changes to it and a config
@@ -67,7 +66,9 @@ Three settings change this prompt flow:
   the audited `set_mcp_server_trusted` command (which refuses names that
   aren't plain identifiers).
 
-All default to off. All surface a warning in Settings when enabled.
+All default to off. Trust mode, terminator mode and trusted commands show
+a warning in Settings when enabled; trusted MCP servers are listed there,
+each with a Revoke button (Reset revokes them all).
 
 ## MCP server identification
 

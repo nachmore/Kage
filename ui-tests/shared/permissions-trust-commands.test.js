@@ -55,7 +55,11 @@ function setup() {
     mountModal();
     const listeners = {};
     const appWindow = { listen: vi.fn((evt, fn) => { listeners[evt] = fn; }) };
-    const invoke = vi.fn(async () => undefined);
+    // The backend approves every queued candidate it's asked about unless
+    // a test says otherwise (it re-decides each against the policy).
+    const invoke = vi.fn(async (cmd, args) =>
+        cmd === 'approve_permissions_if_allowed' ? args.requestIds : undefined
+    );
     const handler = createPermissionHandler(invoke, appWindow);
     handler.init();
     const request = async (id, { kind = null, title = `Running: cmd ${id}`, sessionId = 's1' } = {}) => {
@@ -125,8 +129,9 @@ describe('Trust all commands', () => {
         const answered = invoke.mock.calls
             .filter(([cmd]) => cmd === 'send_permission_response')
             .map(([, a]) => [a.requestId, a.optionId]);
-        expect(answered).toEqual(expect.arrayContaining([[1, 'allow_once'], [2, 'allow_once']]));
-        expect(answered.find(([id]) => id === 3)).toBeUndefined();
+        expect(answered).toEqual([[1, 'allow_once']]);
+        // Queued commands go to the backend, which re-decides each.
+        expect(invoke).toHaveBeenCalledWith('approve_permissions_if_allowed', { requestIds: [2] });
         // The edit request is shown next instead.
         await tick(200);
         expect(el('permissionToolTitle').textContent).toBe('Editing a.rs');
@@ -151,6 +156,20 @@ describe('Trust all commands', () => {
         const answered = invoke.mock.calls.filter(([c]) => c === 'send_permission_response');
         expect(answered).toEqual([]);
         expect(el('permissionToolTitle').textContent).toBe('Editing a.rs');
+    });
+
+    it('a queued command the backend refuses (e.g. set to Deny meanwhile) keeps asking', async () => {
+        const { request, invoke } = setup();
+        invoke.mockImplementation(async (cmd) =>
+            cmd === 'approve_permissions_if_allowed' ? [] : undefined
+        );
+        await request(1, { kind: 'execute' });
+        await request(2, { kind: 'execute', title: 'Running: rm -rf build' });
+        el('permissionTrustCommands').click();
+        el('permissionTrustConfirmBtn').click();
+        await tick(250);
+        await tick(200);
+        expect(el('permissionToolTitle').textContent).toBe('Running: rm -rf build');
     });
 
     it('a double click trusts and answers once', async () => {

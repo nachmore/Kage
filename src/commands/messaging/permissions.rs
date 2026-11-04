@@ -101,6 +101,85 @@ pub async fn send_permission_response<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Approve those of the given pending requests that the policy allows now.
+/// The prompt calls this right after the user trusts a category ("Trust all
+/// commands" / "Trust all tools from <server>") for the requests of that
+/// category already queued in its window: they were asked before the trust
+/// existed, and the backend only auto-approves new ones.
+///
+/// Every request is decided again here, by the same rules the permission
+/// handler enforces, rather than taken on the prompt's word: a tool the
+/// user set to Deny after the request was queued stays denied, and a
+/// background session's request stays outside category trust. Returns the
+/// ids approved; the rest stay pending for the user to answer.
+#[tauri::command]
+pub async fn approve_permissions_if_allowed<R: tauri::Runtime>(
+    request_ids: Vec<serde_json::Value>,
+    acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<serde_json::Value>, AppError> {
+    // Never hold the pending map and the config lock at the same time.
+    let candidates: Vec<(String, crate::state::PendingPermission)> = {
+        let pending = acp.pending_permissions.lock_or_recover();
+        request_ids
+            .iter()
+            .filter_map(|id| {
+                let key = crate::state::permission_key(id);
+                pending.get(&key).cloned().map(|p| (key, p))
+            })
+            .collect()
+    };
+    let allowed: Vec<String> = {
+        let config = features.config.lock_or_recover();
+        candidates
+            .into_iter()
+            .filter(|(_, p)| {
+                config.tool_permissions.resolve_request(&p.request)
+                    == crate::config::PolicyKind::Allow
+            })
+            .map(|(key, _)| key)
+            .collect()
+    };
+
+    let mut approved = Vec::new();
+    for key in allowed {
+        // Claim it first: a request answered elsewhere meanwhile is gone,
+        // and must not get a second answer.
+        let Some(entry) = acp.pending_permissions.lock_or_recover().remove(&key) else {
+            continue;
+        };
+        if let Err(e) = acp
+            .client
+            .send_permission_response(&entry.request_id, "allow_once")
+        {
+            warn!("Failed to approve a queued permission request: {}", e);
+            acp.pending_permissions.lock_or_recover().insert(key, entry);
+            continue;
+        }
+        info!(
+            "Approved a queued permission request under a new category trust: {}",
+            entry.request.title
+        );
+        crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
+            crate::permission_audit::AuditEvent::Granted {
+                tool: entry.request.title.clone(),
+                grant_type: crate::config::GrantType::Once,
+                session_id: entry.session_id.clone(),
+                args_preview: entry.args_preview.clone(),
+            },
+        ));
+        // Other windows showing or queueing it drop it, like any answer.
+        crate::event_targets::emit_permission_audience(
+            &app,
+            events::PERMISSION_DISMISSED,
+            &serde_json::json!({ "requestId": entry.request_id }),
+        );
+        approved.push(entry.request_id);
+    }
+    Ok(approved)
+}
+
 /// Trust (or stop trusting) every tool request of an ACP tool kind — today
 /// only `"execute"`, i.e. "trust all CLI commands". Recorded in the audit
 /// log as a standing grant / revoke, and broadcast as `config_updated` so

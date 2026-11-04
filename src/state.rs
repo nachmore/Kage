@@ -243,12 +243,18 @@ pub fn build_managed_state(
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PendingPermission {
     pub request_id: serde_json::Value,
     /// Session the permission belongs to, when the notification carried
     /// one. Lets dismissal target only the caller's session.
     pub session_id: Option<String>,
+    /// What the policy needs to decide the request again later
+    /// (`approve_permissions_if_allowed`, after the user trusts a category).
+    pub request: crate::config::ToolRequest,
+    /// The audit log's `args_preview` should the request be approved that
+    /// way (see `notifications::auto_allow_args_preview`).
+    pub args_preview: Option<String>,
 }
 
 /// Canonical map key for a pending permission: the compact JSON encoding
