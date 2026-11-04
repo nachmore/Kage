@@ -216,7 +216,7 @@ If you cannot produce this document, respond with exactly "STEERING_DECLINED" on
 fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<String>> {
     use std::io::{BufRead, BufReader};
 
-    let home = dirs::home_dir().context("Failed to get home directory")?;
+    let home = crate::paths::home_dir().context("Failed to get home directory")?;
     let jsonl_path = crate::agent_presets::default_sessions_dir()
         .unwrap_or_else(|| home.join(".kiro").join("sessions").join("cli"))
         .join(format!("{}.jsonl", session_id));

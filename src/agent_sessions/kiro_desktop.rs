@@ -36,7 +36,7 @@ impl KiroDesktopProvider {
     pub fn data_dir() -> Option<PathBuf> {
         #[cfg(target_os = "windows")]
         {
-            dirs::config_dir().map(|d| {
+            crate::paths::config_dir().map(|d| {
                 d.join("Kiro")
                     .join("User")
                     .join("globalStorage")
@@ -45,7 +45,7 @@ impl KiroDesktopProvider {
         }
         #[cfg(target_os = "macos")]
         {
-            dirs::home_dir().map(|d| {
+            crate::paths::home_dir().map(|d| {
                 d.join("Library")
                     .join("Application Support")
                     .join("Kiro")
@@ -59,7 +59,7 @@ impl KiroDesktopProvider {
             std::env::var("XDG_CONFIG_HOME")
                 .ok()
                 .map(PathBuf::from)
-                .or_else(|| dirs::home_dir().map(|d| d.join(".config")))
+                .or_else(|| crate::paths::home_dir().map(|d| d.join(".config")))
                 .map(|d| {
                     d.join("Kiro")
                         .join("User")

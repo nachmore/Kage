@@ -102,7 +102,7 @@ static PREINIT_BUFFER: Mutex<Option<Vec<LogEntry>>> = Mutex::new(Some(Vec::new()
 
 /// Get the log directory path.
 pub fn get_log_dir() -> Result<PathBuf> {
-    let dir = dirs::data_local_dir()
+    let dir = crate::paths::data_local_dir()
         .context("Failed to get local data directory")?
         .join("kage")
         .join("logs");

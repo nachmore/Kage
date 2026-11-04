@@ -85,7 +85,7 @@ fn redirect_installer_staging_dir() {
     if !cfg!(windows) {
         return;
     }
-    let Some(dir) = dirs::config_dir().map(|d| d.join("kage").join("updates")) else {
+    let Some(dir) = crate::paths::config_dir().map(|d| d.join("kage").join("updates")) else {
         warn!("Could not resolve config dir; staging the installer in %TEMP%");
         return;
     };
@@ -304,7 +304,7 @@ const OPEN_BIN: &str = "/usr/bin/open";
 /// `<logs>/relaunch.log` (next to app.jsonl), append mode.
 #[cfg(target_os = "macos")]
 fn open_relaunch_log() -> Option<std::fs::File> {
-    let dir = dirs::data_local_dir()?.join("kage").join("logs");
+    let dir = crate::paths::data_local_dir()?.join("kage").join("logs");
     let _ = std::fs::create_dir_all(&dir);
     std::fs::OpenOptions::new()
         .create(true)

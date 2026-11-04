@@ -41,6 +41,7 @@ mod ollama;
 mod os;
 mod overlay_windows;
 mod panic_handler;
+mod paths;
 mod permission_audit;
 mod process_manager;
 #[path = "main/run_events.rs"]

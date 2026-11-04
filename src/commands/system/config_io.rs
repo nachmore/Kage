@@ -240,7 +240,7 @@ pub(crate) fn merge_imported_grants(
 
 #[tauri::command]
 pub async fn save_frecency(data: String) -> Result<(), AppError> {
-    let path = dirs::config_dir()
+    let path = crate::paths::config_dir()
         .ok_or("No config dir")?
         .join("kage")
         .join("search-frecency.json");
@@ -249,7 +249,7 @@ pub async fn save_frecency(data: String) -> Result<(), AppError> {
 
 #[tauri::command]
 pub async fn load_frecency() -> Result<String, AppError> {
-    let path = dirs::config_dir()
+    let path = crate::paths::config_dir()
         .ok_or("No config dir")?
         .join("kage")
         .join("search-frecency.json");
@@ -262,7 +262,7 @@ pub async fn load_frecency() -> Result<String, AppError> {
 const MAX_SHORTCUT_HISTORY: usize = 20;
 
 fn shortcut_history_path() -> Result<std::path::PathBuf, String> {
-    Ok(dirs::config_dir()
+    Ok(crate::paths::config_dir()
         .ok_or("No config dir")?
         .join("kage")
         .join("shortcut-history.json"))

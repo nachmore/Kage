@@ -147,7 +147,7 @@ impl RecoveryState {
 }
 
 fn marker_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("kage").join(MARKER_FILE))
+    crate::paths::config_dir().map(|d| d.join("kage").join(MARKER_FILE))
 }
 
 fn read_marker() -> RecoveryState {

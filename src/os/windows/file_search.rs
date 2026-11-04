@@ -107,7 +107,7 @@ fn run_query(query: &str, max_results: usize) -> windows::core::Result<Vec<FileS
     // query against home reaches the same surface the previous
     // SystemIndex query did, without us having to enumerate folder
     // roots ourselves.
-    let home = match dirs::home_dir() {
+    let home = match crate::paths::home_dir() {
         Some(p) => p,
         None => return Ok(vec![]),
     };

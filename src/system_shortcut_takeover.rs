@@ -455,7 +455,7 @@ fn display_name_key(id: u32) -> &'static str {
 }
 
 fn state_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("kage").join("system-shortcuts.json"))
+    crate::paths::config_dir().map(|d| d.join("kage").join("system-shortcuts.json"))
 }
 
 fn load_from_disk() -> PersistedState {

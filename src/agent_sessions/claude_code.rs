@@ -54,7 +54,7 @@ impl ClaudeCodeProvider {
     /// Resolve `~/.claude/projects/`. Identical layout on every OS
     /// (Claude Code uses the home directory regardless of platform).
     fn projects_dir() -> Option<PathBuf> {
-        dirs::home_dir().map(|h| h.join(".claude").join("projects"))
+        crate::paths::home_dir().map(|h| h.join(".claude").join("projects"))
     }
 }
 

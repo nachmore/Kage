@@ -114,7 +114,7 @@ impl AuditEntry {
 /// directory itself is unavailable (very rare).
 pub fn default_log_path() -> Option<PathBuf> {
     Some(
-        dirs::config_dir()?
+        crate::paths::config_dir()?
             .join("kage")
             .join("permission-audit.jsonl"),
     )

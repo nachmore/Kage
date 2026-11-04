@@ -42,7 +42,7 @@ impl KiroCliProvider {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            dirs::home_dir().map(|d| {
+            crate::paths::home_dir().map(|d| {
                 d.join(".local")
                     .join("share")
                     .join("kiro-cli")

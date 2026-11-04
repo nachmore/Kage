@@ -165,7 +165,7 @@ pub async fn read_extension_file(
 
 /// Returns the root extension-data directory, creating it if needed.
 fn extension_data_root() -> Result<std::path::PathBuf, String> {
-    let dir = dirs::config_dir()
+    let dir = crate::paths::config_dir()
         .ok_or("No config directory")?
         .join("kage")
         .join("extension-data");

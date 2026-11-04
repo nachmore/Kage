@@ -181,7 +181,7 @@ fn credited_secs(elapsed: std::time::Duration, interval_secs: u64) -> u64 {
 // ---------------------------------------------------------------------------
 
 fn db_path() -> PathBuf {
-    let dir = dirs::config_dir()
+    let dir = crate::paths::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("kage");
     std::fs::create_dir_all(&dir).ok();

@@ -214,7 +214,9 @@ pub(super) fn resolve_with(shell: &Path, timeout: Duration) -> Result<Resolved, 
     let start = format!("__KAGE_ENV_START_{nonce}__");
     let end = format!("__KAGE_ENV_END_{nonce}__");
     let deadline = Instant::now() + timeout;
-    let home = dirs::home_dir();
+    // Only an existing directory can be a cwd (an isolated test home may
+    // not exist; then the probe inherits Kage's cwd).
+    let home = crate::paths::home_dir().filter(|h| h.is_dir());
     let probe_started = std::time::SystemTime::now();
     let socket_predates_probe = |sock: &str| {
         std::fs::metadata(sock)

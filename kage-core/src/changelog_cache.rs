@@ -32,7 +32,7 @@ pub struct ChangelogCache {
 /// `<config_dir>/kage/changelog-cache.json` — next to config.json and
 /// the updater marker files.
 pub fn cache_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|dir| dir.join("kage").join("changelog-cache.json"))
+    crate::paths::config_dir().map(|dir| dir.join("kage").join("changelog-cache.json"))
 }
 
 pub fn read() -> Option<ChangelogCache> {

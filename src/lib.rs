@@ -4,6 +4,9 @@
 // consumed by the MCP sidecar). Re-exported here so existing
 // `crate::lock_ext` / `kage::mcp_json_rpc` paths keep working.
 pub use kage_core::{computer_control, lock_ext, mcp_json_rpc};
+// Per-user dirs with a test-isolation switch; resolve through this, not
+// `dirs::*_dir()` directly.
+pub mod paths;
 
 // Pure modules — always available, including in test mode
 pub mod acp_client;

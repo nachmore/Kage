@@ -28,7 +28,7 @@ use std::path::PathBuf;
 /// `panic_handler::crash_log_path`. Pulled here so the recovery
 /// reader doesn't have to reach into the panic module's internals.
 pub fn crash_log_path() -> PathBuf {
-    dirs::data_local_dir()
+    crate::paths::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("kage")
         .join("logs")

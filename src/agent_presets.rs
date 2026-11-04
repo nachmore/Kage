@@ -133,14 +133,14 @@ impl AgentKind {
     /// agent has a dot-dir).
     pub fn mcp_json_path(&self) -> Option<PathBuf> {
         let dot = self.dot_dir()?;
-        dirs::home_dir().map(|h| h.join(dot).join("settings").join("mcp.json"))
+        crate::paths::home_dir().map(|h| h.join(dot).join("settings").join("mcp.json"))
     }
 
     /// Sessions directory: ~/<dot_dir>/sessions/cli/ (only if the agent
     /// has a dot-dir).
     pub fn sessions_dir(&self) -> Option<PathBuf> {
         let dot = self.dot_dir()?;
-        dirs::home_dir().map(|h| h.join(dot).join("sessions").join("cli"))
+        crate::paths::home_dir().map(|h| h.join(dot).join("sessions").join("cli"))
     }
 }
 
@@ -289,7 +289,7 @@ pub fn resolve_mcp_json_path(config: &crate::config::Config) -> Option<PathBuf> 
             if p.is_absolute() {
                 return Some(p);
             }
-            return dirs::home_dir().map(|h| h.join(custom));
+            return crate::paths::home_dir().map(|h| h.join(custom));
         }
     }
     detect(config)
@@ -299,7 +299,7 @@ pub fn resolve_mcp_json_path(config: &crate::config::Config) -> Option<PathBuf> 
 
 /// Resolve the sessions directory, respecting the user's explicit override.
 pub fn resolve_sessions_dir(config: &crate::config::Config) -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
+    let home = crate::paths::home_dir()?;
 
     // 1) Explicit override on the active connection
     if let Some(ref dir) = config
@@ -337,7 +337,7 @@ pub fn resolve_sessions_dir(config: &crate::config::Config) -> Option<PathBuf> {
 
 /// Default MCP json path without config context — probes known paths.
 pub fn default_mcp_json_path() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
+    let home = crate::paths::home_dir()?;
     for agent in AgentKind::all() {
         if let Some(dot) = agent.dot_dir() {
             let p = home.join(dot).join("settings").join("mcp.json");
@@ -351,7 +351,7 @@ pub fn default_mcp_json_path() -> Option<PathBuf> {
 
 /// Default sessions dir without config context — probes known paths.
 pub fn default_sessions_dir() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
+    let home = crate::paths::home_dir()?;
     for agent in AgentKind::all() {
         if let Some(dot) = agent.dot_dir() {
             let dir = home.join(dot).join("sessions").join("cli");

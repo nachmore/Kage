@@ -140,7 +140,7 @@ fn get_current_user_sid() -> Option<String> {
 
 /// Fallback: scan the AppData AccountPictures directory
 fn get_avatar_from_appdata() -> Option<String> {
-    let home = dirs::home_dir()?;
+    let home = crate::paths::home_dir()?;
     let pictures_dir = home
         .join("AppData")
         .join("Roaming")

@@ -28,7 +28,7 @@ pub fn install() {
 }
 
 fn crash_log_path() -> PathBuf {
-    dirs::data_local_dir()
+    crate::paths::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("kage")
         .join("logs")

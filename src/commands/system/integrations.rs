@@ -66,14 +66,14 @@ pub async fn read_clipboard() -> Result<String, AppError> {
 #[tauri::command]
 pub async fn resolve_directories() -> Result<Vec<serde_json::Value>, AppError> {
     let dirs: Vec<(&str, &[&str], Option<std::path::PathBuf>)> = vec![
-        ("cache", &["—"], dirs::cache_dir()),
-        ("config", &["configuration"], dirs::config_dir()),
-        ("data", &["—"], dirs::data_dir()),
+        ("cache", &["—"], crate::paths::cache_dir()),
+        ("config", &["configuration"], crate::paths::config_dir()),
+        ("data", &["—"], crate::paths::data_dir()),
         ("desktop", &["—"], dirs::desktop_dir()),
         ("documents", &["docs"], dirs::document_dir()),
         ("downloads", &["download"], dirs::download_dir()),
         ("fonts", &["font"], crate::os::fonts_dir()),
-        ("home", &["user"], dirs::home_dir()),
+        ("home", &["user"], crate::paths::home_dir()),
         ("music", &["audio"], dirs::audio_dir()),
         ("pictures", &["photos"], dirs::picture_dir()),
         ("public", &["—"], dirs::public_dir()),
@@ -367,7 +367,7 @@ pub fn compute_user_info() -> UserInfo {
         initials,
         avatar_path: profile.avatar_path.clone(),
         avatar_base64,
-        home: dirs::home_dir().and_then(|p| p.to_str().map(|s| s.to_string())),
+        home: crate::paths::home_dir().and_then(|p| p.to_str().map(|s| s.to_string())),
     }
 }
 

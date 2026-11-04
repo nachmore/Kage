@@ -30,7 +30,7 @@ pub fn get_avatar_path_impl(username: &str) -> Option<String> {
     }
 
     // 4. Freedesktop fallback (~/.face)
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = crate::paths::home_dir() {
         let face = home.join(".face");
         if face.exists() {
             return face.to_str().map(|s| s.to_string());
@@ -107,7 +107,7 @@ fn extract_jpeg_photo_from_dscl(username: &str) -> Option<String> {
     let bytes = hex_to_bytes(&hex_data)?;
 
     // Write to a cache file in the app's cache directory
-    let cache_dir = dirs::cache_dir()?.join("com.kage.app");
+    let cache_dir = crate::paths::cache_dir()?.join("com.kage.app");
     std::fs::create_dir_all(&cache_dir).ok()?;
     let cache_path = cache_dir.join("user-avatar.jpg");
     std::fs::write(&cache_path, &bytes).ok()?;

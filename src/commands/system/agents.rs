@@ -169,7 +169,7 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
     use crate::agent_presets::detection_hints;
 
     let mut agents = Vec::new();
-    let home = dirs::home_dir();
+    let home = crate::paths::home_dir();
 
     for hint in detection_hints() {
         let preset = hint.kind.preset();

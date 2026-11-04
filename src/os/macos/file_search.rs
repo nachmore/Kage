@@ -46,7 +46,7 @@ pub fn search_files_impl(query: &str, max_results: usize) -> Vec<FileSearchResul
     // accept additional search roots from config, but the common case
     // (launcher-style search) is "my files" — we don't want to surface
     // /Library or /System entries.
-    let home = match dirs::home_dir() {
+    let home = match crate::paths::home_dir() {
         Some(h) => h,
         None => {
             warn!("file_search: no home directory — returning empty");

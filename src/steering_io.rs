@@ -62,7 +62,7 @@ impl SteeringKind {
 /// both files together and survives portable installs that share a
 /// config dir.
 pub fn default_user_steering_path() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir().context("Failed to get config directory")?;
+    let config_dir = crate::paths::config_dir().context("Failed to get config directory")?;
     Ok(config_dir.join("kage").join("user-steering.md"))
 }
 

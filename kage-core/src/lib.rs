@@ -14,3 +14,4 @@ pub mod folder_tools;
 pub mod lock_ext;
 pub mod mcp_json_rpc;
 pub mod os;
+pub mod paths;

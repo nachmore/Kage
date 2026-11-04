@@ -51,7 +51,7 @@ pub fn configure(
         }
     }
 
-    let resume_session_id = dirs::config_dir()
+    let resume_session_id = crate::paths::config_dir()
         .map(|d| d.join("kage"))
         .and_then(|cfg_dir| crate::startup::resolve_resume_session_id(main_args, &cfg_dir));
     if let Some(ref id) = resume_session_id {

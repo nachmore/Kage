@@ -369,7 +369,7 @@ pub async fn open_path<R: tauri::Runtime>(
     info!("Opening path: {}", path);
 
     let expanded_path = if path.starts_with('~') {
-        if let Some(home) = dirs::home_dir() {
+        if let Some(home) = crate::paths::home_dir() {
             path.replacen('~', &home.to_string_lossy(), 1)
         } else {
             path.clone()
@@ -404,7 +404,7 @@ pub async fn execute_shortcut<R: tauri::Runtime>(
     use std::process::Command;
 
     let expanded_path = if path.starts_with('~') {
-        if let Some(home) = dirs::home_dir() {
+        if let Some(home) = crate::paths::home_dir() {
             path.replacen('~', &home.to_string_lossy(), 1)
         } else {
             path.clone()
@@ -415,7 +415,7 @@ pub async fn execute_shortcut<R: tauri::Runtime>(
 
     let expanded_work_dir = working_directory.as_ref().and_then(|wd| {
         if wd.starts_with('~') {
-            dirs::home_dir().map(|home| wd.replacen('~', &home.to_string_lossy(), 1))
+            crate::paths::home_dir().map(|home| wd.replacen('~', &home.to_string_lossy(), 1))
         } else {
             Some(wd.clone())
         }

@@ -34,7 +34,7 @@ impl ProcessManager {
 
     /// Get the path to the PID file
     fn get_pid_file_path() -> PathBuf {
-        let mut path = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
+        let mut path = crate::paths::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
         path.push("kage");
 
         // Create directory if it doesn't exist

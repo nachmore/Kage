@@ -81,7 +81,7 @@ struct CacheFile {
 }
 
 fn cache_path() -> Option<PathBuf> {
-    Some(dirs::config_dir()?.join("kage").join(CACHE_FILE))
+    Some(crate::paths::config_dir()?.join("kage").join(CACHE_FILE))
 }
 
 fn load_file() -> CacheFile {

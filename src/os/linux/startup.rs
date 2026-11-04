@@ -7,7 +7,7 @@ use std::path::PathBuf;
 const DESKTOP_FILENAME: &str = "kage.desktop";
 
 fn get_autostart_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|c| c.join("autostart").join(DESKTOP_FILENAME))
+    crate::paths::config_dir().map(|c| c.join("autostart").join(DESKTOP_FILENAME))
 }
 
 pub fn get_startup_enabled_impl() -> bool {

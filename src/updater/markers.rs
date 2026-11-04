@@ -1,7 +1,7 @@
 use log::{info, warn};
 
 fn marker(name: &str) -> Option<std::path::PathBuf> {
-    dirs::config_dir().map(|dir| dir.join("kage").join(name))
+    crate::paths::config_dir().map(|dir| dir.join("kage").join(name))
 }
 
 fn write_marker(name: &str, value: &str, description: &str) {

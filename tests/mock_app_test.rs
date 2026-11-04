@@ -24,9 +24,26 @@ use std::sync::Arc;
 use tauri::test::{mock_builder, MockRuntime};
 use tauri::Manager;
 
+/// Redirect `kage::paths` to a per-process scratch dir, once.
+fn isolate_user_dirs() {
+    let root = std::env::temp_dir().join(format!("kage-mock-app-test-{}", std::process::id()));
+    kage::paths::isolate(&root);
+    assert!(
+        kage::paths::is_isolated(),
+        "refusing to run against the real per-user directories"
+    );
+}
+
 /// Build a mock app managing EXACTLY the state production manages, via
 /// the same constructor `main.rs::run` uses.
 fn mock_app() -> tauri::App<MockRuntime> {
+    // MockRuntime isolates Tauri, not the filesystem: the command sweep
+    // calls every command (e.g. `clear_update_flag`, which saves the
+    // in-memory `Config::default()`), and before this a local run
+    // overwrote the developer's real config.json and emptied their
+    // permission audit log. Every per-user directory Kage touches
+    // resolves through `kage::paths`; point them at a scratch dir first.
+    isolate_user_dirs();
     // Integration tests link the non-test library, where the login-shell
     // probe is live: commands the sweep dispatches (agent detection,
     // `switch_acp_session`'s respawns, …) would otherwise run the CI
@@ -670,6 +687,12 @@ fn is_acceptable_failure(err: &serde_json::Value) -> Option<String> {
 #[test]
 fn command_sweep_no_wiring_failures() {
     let app = mock_app();
+    let config_dir = kage::paths::config_dir().expect("resolves");
+    assert!(
+        kage::paths::is_under_isolation_root(&config_dir),
+        "the sweep must never dispatch against the real config dir ({})",
+        config_dir.display()
+    );
     let webview = mock_webview(&app);
     let commands = all_commands();
 

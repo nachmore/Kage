@@ -411,7 +411,7 @@ impl Config {
     }
 
     pub fn get_config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().context("Failed to get config directory")?;
+        let config_dir = crate::paths::config_dir().context("Failed to get config directory")?;
 
         Ok(config_dir.join("kage").join("config.json"))
     }
@@ -448,7 +448,7 @@ impl Config {
 
     /// Get the path to the auto-generated steering document
     pub fn get_auto_steering_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().context("Failed to get config directory")?;
+        let config_dir = crate::paths::config_dir().context("Failed to get config directory")?;
         Ok(config_dir.join("kage").join("auto-steering.md"))
     }
 }

@@ -193,7 +193,7 @@ pub fn wait_for_webview_release<F: FnMut(std::time::Duration)>(
 /// extremely rare on real systems but worth handling defensively.
 pub fn webview_user_data_dir() -> Option<PathBuf> {
     Some(
-        dirs::data_local_dir()?
+        crate::paths::data_local_dir()?
             .join("com.kage.launcher")
             .join("EBWebView"),
     )

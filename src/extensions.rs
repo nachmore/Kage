@@ -237,7 +237,7 @@ pub struct InstalledItem {
 
 /// Get a user directory under `<config_dir>/kage/<subdir>/`.
 pub fn user_item_dir(subdir: &str) -> Result<PathBuf> {
-    let config_dir = dirs::config_dir().context("Failed to get config directory")?;
+    let config_dir = crate::paths::config_dir().context("Failed to get config directory")?;
     Ok(config_dir.join("kage").join(subdir))
 }
 

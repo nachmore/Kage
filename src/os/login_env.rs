@@ -470,7 +470,7 @@ mod imp {
     fn fallback_dirs() -> &'static [String] {
         static DIRS: OnceLock<Vec<String>> = OnceLock::new();
         DIRS.get_or_init(|| {
-            policy::fallback_dir_candidates(dirs::home_dir().as_deref())
+            policy::fallback_dir_candidates(crate::paths::home_dir().as_deref())
                 .into_iter()
                 .filter(|d| d.is_dir())
                 .filter_map(|d| d.into_os_string().into_string().ok())

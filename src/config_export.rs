@@ -365,7 +365,11 @@ pub fn sanitise_imported_config(mut imported: Config, local: &Config) -> Config 
 // --- Helpers ----------------------------------------------------------------
 
 fn extension_data_root() -> Option<PathBuf> {
-    Some(dirs::config_dir()?.join("kage").join("extension-data"))
+    Some(
+        crate::paths::config_dir()?
+            .join("kage")
+            .join("extension-data"),
+    )
 }
 
 fn resolve_user_steering_path(config: &Config) -> Option<PathBuf> {
