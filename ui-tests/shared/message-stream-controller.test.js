@@ -238,6 +238,63 @@ describe('MessageStreamController.handleToolCallUpdate', () => {
         expect(host.flushPendingMarkdown).not.toHaveBeenCalled();
         expect(host.showToolRunningSpinner).not.toHaveBeenCalled();
     });
+
+    it('routes shell commands to showShellCommand instead of the spinner', () => {
+        const host = makeHost({ showShellCommand: vi.fn() });
+        const c = new MessageStreamController(host);
+        c.handleToolCallUpdate({
+            payload: {
+                params: {
+                    update: {
+                        title: 'shell',
+                        toolCallId: 'sh1',
+                        kind: 'execute',
+                        rawInput: { command: 'ls' },
+                    },
+                },
+            },
+        });
+        expect(host.showToolRunningSpinner).not.toHaveBeenCalled();
+        expect(host.showShellCommand).toHaveBeenCalledWith(
+            expect.objectContaining({ toolCallId: 'sh1', command: 'ls' })
+        );
+        // Untitled status/output updates still reach the block.
+        c.handleToolCallUpdate({
+            payload: {
+                params: {
+                    update: {
+                        toolCallId: 'sh1',
+                        status: 'completed',
+                        rawOutput: { items: [{ Json: { exit_status: 'exit status: 0', stdout: 'a' } }] },
+                    },
+                },
+            },
+        });
+        expect(host.showShellCommand).toHaveBeenCalledTimes(2);
+        expect(host.showShellCommand.mock.calls[1][0].status).toBe('completed');
+        expect(host.showToolRunningSpinner).not.toHaveBeenCalled();
+    });
+
+    it('keeps the spinner for shell calls when the host has no command block', () => {
+        const host = makeHost();
+        const c = new MessageStreamController(host);
+        c.handleToolCallUpdate({
+            payload: { params: { update: { title: 'Running: ls', toolCallId: 'sh2', kind: 'execute' } } },
+        });
+        expect(host.showToolRunningSpinner).toHaveBeenCalled();
+    });
+
+    it('keeps the spinner for kiro MCP tools titled `Running: @server/tool`', () => {
+        const host = makeHost({ showShellCommand: vi.fn() });
+        const c = new MessageStreamController(host);
+        c.handleToolCallUpdate({
+            payload: {
+                params: { update: { title: 'Running: @builder-mcp/InternalSearch', toolCallId: 'm1' } },
+            },
+        });
+        expect(host.showShellCommand).not.toHaveBeenCalled();
+        expect(host.showToolRunningSpinner).toHaveBeenCalled();
+    });
 });
 
 describe('MessageStreamController tool tracking with production-shaped host', () => {

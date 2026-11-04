@@ -4233,6 +4233,90 @@
     "message": "Extension tool: {label}",
     "description": "Tooltip on the streaming-source chip showing which extension tool produced output"
   },
+  "shared.shell.chip_label": {
+    "message": "shell",
+    "description": "Label of the chip under an agent response that groups the shell commands the agent ran (like the agent's 'shell' tool name). Clicking it lists the commands. Keep short; lowercase is fine."
+  },
+  "shared.shell.chip_title": {
+    "message": "{count, plural, one {# shell command} other {# shell commands}}",
+    "description": "Tooltip / accessible name of the 'shell' chip under an agent response; clicking the chip shows or hides the list of those commands. {count} is how many shell commands the agent ran in that response."
+  },
+  "shared.shell.unknown_command": {
+    "message": "Shell command",
+    "description": "Shown in place of the command line when the agent hasn't said which command it is running"
+  },
+  "shared.shell.command_label": {
+    "message": "Command",
+    "description": "Accessible name of the box that shows the shell command an agent wants to run (permission prompt)"
+  },
+  "shared.shell.status.running": {
+    "message": "Running",
+    "description": "Status of a shell command the agent is still running (accessible label of the spinner)"
+  },
+  "shared.shell.status.success": {
+    "message": "Succeeded",
+    "description": "Status of a shell command that finished successfully (accessible label of the check mark)"
+  },
+  "shared.shell.status.failed": {
+    "message": "Failed",
+    "description": "Status of a shell command that failed, when no exit code is known"
+  },
+  "shared.shell.status.failed_code": {
+    "message": "Failed (exit code {code})",
+    "description": "Status of a shell command that failed. {code} is the process exit code, a number such as 1 or 127"
+  },
+  "shared.shell.status.unknown": {
+    "message": "Status not reported",
+    "description": "Status of a shell command when the agent's turn ended without saying whether the command finished or how"
+  },
+  "shared.shell.exit_short": {
+    "message": "exit {code}",
+    "description": "Very short label next to the error mark of a failed shell command. {code} is the exit code number. Keep it as short as possible."
+  },
+  "shared.shell.exit_code": {
+    "message": "Exit code {code}",
+    "description": "Footer of an expanded shell command block. {code} is the process exit code, a number (0 means success)"
+  },
+  "shared.shell.output_label": {
+    "message": "Command output",
+    "description": "Accessible name of the scrollable area that shows a shell command's output"
+  },
+  "shared.shell.stderr_label": {
+    "message": "stderr",
+    "description": "Small label above the part of a command's output that the command wrote to its error stream (standard error). A technical term; keep it short"
+  },
+  "shared.shell.no_output": {
+    "message": "No output reported by the agent",
+    "description": "Shown in an expanded shell command block when the agent didn't report any output for the command"
+  },
+  "shared.shell.still_running": {
+    "message": "Still running…",
+    "description": "Shown in an expanded shell command block while the command is running and no output has arrived yet"
+  },
+  "shared.shell.output_terminal": {
+    "message": "Output not available — the agent sent it to a terminal Kage doesn't display",
+    "description": "Shown in an expanded shell command block when the agent ran the command in a terminal whose output Kage can't show"
+  },
+  "shared.shell.output_dropped": {
+    "message": "Output not kept — this response already holds a lot of command output",
+    "description": "Shown in an expanded shell command block when Kage didn't store the output because the response's other commands already produced the maximum amount"
+  },
+  "shared.shell.omitted": {
+    "message": "{count, plural, one {… # character omitted …} other {… # characters omitted …}}",
+    "description": "Marker in the middle of a long command output whose middle part was cut. {count} is how many characters were left out"
+  },
+  "shared.shell.copy_command": {
+    "message": "Copy command",
+    "description": "Button in an expanded shell command block that copies the command line to the clipboard"
+  },
+  "shared.shell.copy_output": {
+    "message": "Copy output",
+    "description": "Button in an expanded shell command block that copies the command's output to the clipboard"
+  },
+  "shared.shell.copied": {
+    "message": "Copied",
+    "description": "Briefly replaces a copy button's label after copying succeeded"
+  },
   "shared.tts.bar.pause": {
     "message": "Pause/Resume",
     "description": "Tooltip on the TTS bar pause/resume button"

@@ -45,6 +45,13 @@ import {
     attachSourceClickHandler,
     processToolCallUpdate,
 } from '../shared/streaming-utils.js';
+import {
+    createShellActivitySlot,
+    finishShellActivity,
+    pruneShellActivity,
+    renderToolSources,
+    showShellActivity,
+} from '../shared/shell-command-view.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
@@ -97,6 +104,7 @@ const CHAT_APP_DEPENDENCIES = {
     buildRenderQueue,
     checkOnline,
     cmdOrCtrlPressed,
+    createShellActivitySlot,
     defaultExportFilename,
     drawContextRing,
     errLabel,
@@ -106,6 +114,7 @@ const CHAT_APP_DEPENDENCIES = {
     executeResultShared,
     ExtensionManager,
     ExtensionToolController,
+    finishShellActivity,
     formatDuration,
     formatErrorShared,
     formatRelativeDate,
@@ -130,11 +139,13 @@ const CHAT_APP_DEPENDENCIES = {
     orderSessionsForSidebar,
     parseContextPercent,
     processToolCallUpdate,
+    pruneShellActivity,
     renderAttachmentPreviews,
     renderMarkdown,
     renderSourceChipsHtml,
     renderToolbarButtons,
     renderToolChipsHtml,
+    renderToolSources,
     runToolbarHostEffect,
     sanitizeExtensionHtmlStatic,
     sessionImageToDataUrl,
@@ -142,6 +153,7 @@ const CHAT_APP_DEPENDENCIES = {
     setExtensionManager,
     setupDragDrop,
     setupRtlDetection,
+    showShellActivity,
     SpeechController,
     STREAM,
     splitPromptContext,
@@ -333,6 +345,9 @@ export class ChatApp {
                 renderMarkdown(text, contentDiv, true);
                 const toolSpinner = contentDiv.querySelector('.tool-running-indicator');
                 if (toolSpinner) toolSpinner.remove();
+                // Text resumed: finished, collapsed command blocks give way
+                // like the spinner line does (they stay under the chip).
+                app._pruneShellActivity();
                 let indicator = contentDiv.querySelector('.streaming-indicator');
                 if (!indicator) {
                     indicator = document.createElement('span');
@@ -355,6 +370,7 @@ export class ChatApp {
             dropEmptyComplete: () => false,
             onBeforeFinalRender: () => {
                 app.hideTypingIndicator();
+                app._finishShellActivity();
                 if (app.currentStreamingMessage) {
                     const contentDiv =
                         app.currentStreamingMessage.querySelector('.message-content');
@@ -495,6 +511,7 @@ export class ChatApp {
                 if (!app.currentStreamingMessage) return;
                 const contentDiv = app.currentStreamingMessage.querySelector('.message-content');
                 if (!contentDiv) return;
+                app._pruneShellActivity();
                 let spinner = contentDiv.querySelector('.tool-running-indicator');
                 if (!spinner) {
                     spinner = document.createElement('div');
@@ -505,6 +522,7 @@ export class ChatApp {
                 // isn't in the friendly-name map — must be escaped.
                 spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${escapeHtml(friendly)}...`;
             },
+            showShellCommand: (record) => app._showShellCommand(record),
             // Chat doesn't render sources inline during streaming — they're
             // rendered once when the message completes.
             onToolCallTracked: () => {},

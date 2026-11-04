@@ -1,0 +1,439 @@
+/**
+ * Shell command blocks in the DOM: untrusted text stays text, the header is
+ * a real toggle button with aria wiring, expanded state survives updates
+ * and chip-row re-renders, open panels refresh when output arrives, the
+ * "shell ×N" chip toggles the ordered command list, and the activity slot
+ * keeps only what's still live.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+    createShellActivitySlot,
+    createShellCommandBlock,
+    finishShellActivity,
+    isShellCommandExpanded,
+    pruneShellActivity,
+    renderToolSources,
+    setShellCommandExpanded,
+    SHELL_LAYOUT_EVENT,
+    shellOutputText,
+    showShellActivity,
+    syncShellCommandList,
+    updateShellCommandBlock,
+} from '../../ui/js/shared/shell-command-view.js';
+import { processToolCallUpdate } from '../../ui/js/shared/streaming-utils.js';
+
+const XSS = '<img src=x onerror="window.__pwned=1">';
+
+function evt(update) {
+    return { payload: { params: { sessionId: 's1', update } } };
+}
+
+function makeState() {
+    return { toolUsages: [], toolSources: [] };
+}
+
+/** Feed updates; returns the shell record of the last one. */
+function feed(state, ...updates) {
+    let shell = null;
+    for (const u of updates) shell = processToolCallUpdate(evt(u), state).shell;
+    return shell;
+}
+
+function startShell(state, id, command, extra = {}) {
+    return feed(state, {
+        sessionUpdate: 'tool_call',
+        toolCallId: id,
+        title: 'shell',
+        kind: 'execute',
+        status: 'in_progress',
+        rawInput: { command },
+        ...extra,
+    });
+}
+
+function complete(state, id, stdout, { exit = 0, stderr = '' } = {}) {
+    return feed(state, {
+        toolCallId: id,
+        status: 'completed',
+        rawOutput: { items: [{ Json: { exit_status: `exit status: ${exit}`, stdout, stderr } }] },
+    });
+}
+
+const header = (block) => block.querySelector('.shell-cmd-header');
+const panel = (block) => block.querySelector('.shell-cmd-panel');
+
+beforeEach(() => {
+    document.body.innerHTML = '';
+    delete window.__pwned;
+});
+
+afterEach(() => {
+    vi.restoreAllMocks();
+});
+
+describe('command block', () => {
+    it('renders a $ prompt, the command, and a running status', () => {
+        const state = makeState();
+        const rec = startShell(state, 'a', 'ls -la');
+        const block = createShellCommandBlock(rec);
+        document.body.append(block);
+        expect(block.dir).toBe('ltr');
+        expect(block.querySelector('.shell-cmd-prompt').textContent).toBe('$');
+        expect(block.querySelector('.shell-cmd-text').textContent).toBe('ls -la');
+        expect(block.dataset.state).toBe('running');
+        const status = block.querySelector('.shell-cmd-status');
+        expect(status.getAttribute('role')).toBe('img');
+        expect(status.getAttribute('aria-label')).toBe('shared.shell.status.running');
+        expect(status.querySelector('.shell-cmd-spinner')).not.toBeNull();
+    });
+
+    it('shows success, and failure with the exit code', () => {
+        const state = makeState();
+        startShell(state, 'ok', 'true');
+        const okRec = complete(state, 'ok', '');
+        const ok = createShellCommandBlock(okRec);
+        expect(ok.dataset.state).toBe('success');
+        expect(ok.querySelector('.shell-cmd-status').getAttribute('aria-label')).toBe(
+            'shared.shell.status.success'
+        );
+
+        startShell(state, 'bad', 'false');
+        const badRec = complete(state, 'bad', '', { exit: 2, stderr: 'boom' });
+        const bad = createShellCommandBlock(badRec);
+        expect(bad.dataset.state).toBe('failed');
+        const st = bad.querySelector('.shell-cmd-status');
+        expect(st.getAttribute('aria-label')).toBe('shared.shell.status.failed_code');
+        expect(st.querySelector('.shell-cmd-code')).not.toBeNull();
+    });
+
+    it('is a real toggle button wired with aria-expanded / aria-controls', () => {
+        const state = makeState();
+        const rec = startShell(state, 'a', 'echo hi');
+        const block = createShellCommandBlock(rec);
+        document.body.append(block);
+        const btn = header(block);
+        expect(btn.tagName).toBe('BUTTON');
+        expect(btn.type).toBe('button');
+        expect(btn.getAttribute('aria-expanded')).toBe('false');
+        const p = document.getElementById(btn.getAttribute('aria-controls'));
+        expect(p).toBe(panel(block));
+        expect(p.hidden).toBe(true);
+        expect(p.getAttribute('aria-labelledby')).toBe(btn.id);
+
+        const onLayout = vi.fn();
+        document.body.addEventListener(SHELL_LAYOUT_EVENT, onLayout);
+        btn.click();
+        expect(btn.getAttribute('aria-expanded')).toBe('true');
+        expect(p.hidden).toBe(false);
+        expect(block.classList.contains('expanded')).toBe(true);
+        expect(onLayout).toHaveBeenCalledTimes(1);
+
+        btn.click();
+        expect(btn.getAttribute('aria-expanded')).toBe('false');
+        expect(p.hidden).toBe(true);
+        expect(onLayout).toHaveBeenCalledTimes(2);
+        document.body.removeEventListener(SHELL_LAYOUT_EVENT, onLayout);
+    });
+
+    it('panel shows the full command, stdout, then stderr, and the exit code', () => {
+        const state = makeState();
+        startShell(state, 'a', 'make test');
+        const rec = complete(state, 'a', 'compiled\n', { exit: 1, stderr: 'error: x' });
+        const block = createShellCommandBlock(rec);
+        setShellCommandExpanded(block, true);
+        expect(block.querySelector('.shell-cmd-full').textContent).toBe('$ make test');
+        const pres = [...block.querySelectorAll('.shell-cmd-output pre')];
+        expect(pres.map((p) => p.className)).toEqual(['shell-cmd-stdout', 'shell-cmd-stderr']);
+        expect(pres[0].textContent).toBe('compiled\n');
+        expect(pres[1].textContent).toBe('shared.shell.stderr_labelerror: x');
+        expect(block.querySelector('.shell-cmd-exit').textContent).toBe('shared.shell.exit_code');
+        expect(block.querySelector('.shell-cmd-output').tabIndex).toBe(0);
+    });
+
+    it('says when there is no output, or that it is still running', () => {
+        const state = makeState();
+        const running = startShell(state, 'r', 'sleep 5');
+        const block = createShellCommandBlock(running);
+        setShellCommandExpanded(block, true);
+        expect(block.querySelector('.shell-cmd-empty').textContent).toBe('shared.shell.still_running');
+
+        startShell(state, 'n', 'true');
+        const done = feed(state, { toolCallId: 'n', status: 'completed' });
+        const b2 = createShellCommandBlock(done);
+        setShellCommandExpanded(b2, true);
+        expect(b2.querySelector('.shell-cmd-empty').textContent).toBe('shared.shell.no_output');
+        // Copy output only appears when there is output.
+        const copyButtons = b2.querySelectorAll('.shell-cmd-copy');
+        expect(copyButtons[1].hidden).toBe(true);
+    });
+
+    it('says output is unavailable for terminal content', () => {
+        const state = makeState();
+        const rec = feed(
+            state,
+            { toolCallId: 't', title: '`top`', kind: 'execute', content: [{ type: 'terminal', terminalId: 'x' }] },
+            { toolCallId: 't', status: 'completed' }
+        );
+        const block = createShellCommandBlock(rec);
+        setShellCommandExpanded(block, true);
+        expect(block.querySelector('.shell-cmd-empty').textContent).toBe(
+            'shared.shell.output_terminal'
+        );
+    });
+
+    it('renders untrusted command and output as text, never markup', () => {
+        const state = makeState();
+        startShell(state, 'x', `echo '${XSS}'`);
+        const rec = complete(state, 'x', `${XSS}\n<script>window.__pwned=2</script>`, {
+            exit: 1,
+            stderr: XSS,
+        });
+        const block = createShellCommandBlock(rec);
+        document.body.append(block);
+        setShellCommandExpanded(block, true);
+        expect(block.querySelector('img')).toBeNull();
+        expect(block.querySelector('script')).toBeNull();
+        expect(block.querySelector('.shell-cmd-text').textContent).toBe(`echo '${XSS}'`);
+        expect(block.querySelector('.shell-cmd-stdout').textContent).toContain(XSS);
+        expect(window.__pwned).toBeUndefined();
+    });
+
+    it('marks the middle of capped output with an omission marker', () => {
+        const state = makeState();
+        startShell(state, 'big', 'yes');
+        const rec = complete(state, 'big', 'y\n'.repeat(100_000));
+        const block = createShellCommandBlock(rec);
+        setShellCommandExpanded(block, true);
+        const marker = block.querySelector('.shell-cmd-stdout .shell-cmd-omitted');
+        expect(marker).not.toBeNull();
+        expect(marker.textContent).toBe('shared.shell.omitted');
+        expect(shellOutputText(rec)).toContain('shared.shell.omitted');
+    });
+
+    it('refreshes an open panel when later output arrives, keeping it open', () => {
+        const state = makeState();
+        const rec = startShell(state, 'a', 'npm test');
+        const block = createShellCommandBlock(rec);
+        setShellCommandExpanded(block, true);
+        expect(block.querySelector('.shell-cmd-empty')).not.toBeNull();
+
+        complete(state, 'a', 'all green');
+        updateShellCommandBlock(block, rec);
+        expect(isShellCommandExpanded(block)).toBe(true);
+        expect(block.querySelector('.shell-cmd-stdout').textContent).toBe('all green');
+        expect(block.dataset.state).toBe('success');
+    });
+
+    it('renders a collapsed panel lazily, then fresh when opened', () => {
+        const state = makeState();
+        const rec = startShell(state, 'a', 'ls');
+        const block = createShellCommandBlock(rec);
+        expect(panel(block).childElementCount).toBe(0);
+        complete(state, 'a', 'file.txt');
+        updateShellCommandBlock(block, rec);
+        expect(panel(block).childElementCount).toBe(0);
+        setShellCommandExpanded(block, true);
+        expect(block.querySelector('.shell-cmd-stdout').textContent).toBe('file.txt');
+    });
+
+    it('copies the command and the output', async () => {
+        const writeText = vi.fn(() => Promise.resolve());
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        const state = makeState();
+        startShell(state, 'a', 'git status');
+        const rec = complete(state, 'a', 'clean', { exit: 1, stderr: 'warn' });
+        const block = createShellCommandBlock(rec);
+        setShellCommandExpanded(block, true);
+        const [copyCmd, copyOut] = block.querySelectorAll('.shell-cmd-copy');
+        copyCmd.click();
+        copyOut.click();
+        expect(writeText).toHaveBeenNthCalledWith(1, 'git status');
+        expect(writeText).toHaveBeenNthCalledWith(2, 'clean\nwarn');
+        // The copy click must not toggle the block.
+        expect(isShellCommandExpanded(block)).toBe(true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(copyCmd.querySelector('.shell-cmd-copy-label').textContent).toBe('shared.shell.copied');
+    });
+});
+
+describe('activity slot', () => {
+    it('shows the running command and replaces finished, collapsed ones', () => {
+        const state = makeState();
+        const slot = createShellActivitySlot();
+        const a = startShell(state, 'a', 'one');
+        showShellActivity(slot, a);
+        expect(slot.children).toHaveLength(1);
+        complete(state, 'a', 'x');
+        showShellActivity(slot, a);
+        expect(slot.children[0].dataset.state).toBe('success');
+
+        const b = startShell(state, 'b', 'two');
+        showShellActivity(slot, b);
+        expect([...slot.children].map((c) => c.querySelector('.shell-cmd-text').textContent)).toEqual([
+            'two',
+        ]);
+    });
+
+    it('keeps expanded and running blocks when pruned', () => {
+        const state = makeState();
+        const slot = createShellActivitySlot();
+        const a = startShell(state, 'a', 'one');
+        const blockA = showShellActivity(slot, a);
+        complete(state, 'a', 'x');
+        showShellActivity(slot, a);
+        setShellCommandExpanded(blockA, true);
+        const b = startShell(state, 'b', 'two');
+        showShellActivity(slot, b);
+        pruneShellActivity(slot);
+        expect(slot.children).toHaveLength(2);
+        expect(slot.children[0]).toBe(blockA);
+        expect(isShellCommandExpanded(blockA)).toBe(true);
+    });
+
+    it('updates a block in place (same element, state kept)', () => {
+        const state = makeState();
+        const slot = createShellActivitySlot();
+        const a = startShell(state, 'a', 'one');
+        const first = showShellActivity(slot, a);
+        setShellCommandExpanded(first, true);
+        complete(state, 'a', 'done!');
+        const again = showShellActivity(slot, a);
+        expect(again).toBe(first);
+        expect(isShellCommandExpanded(again)).toBe(true);
+        expect(again.querySelector('.shell-cmd-stdout').textContent).toBe('done!');
+    });
+
+    it('finishing the turn settles running commands and drops collapsed ones', () => {
+        const state = makeState();
+        const slot = createShellActivitySlot();
+        const a = startShell(state, 'a', 'hangs');
+        const block = showShellActivity(slot, a);
+        expect(block.dataset.state).toBe('running');
+        finishShellActivity(slot, state.toolUsages);
+        expect(a.settled).toBe(true);
+        expect(slot.children).toHaveLength(0);
+
+        const b = startShell(state, 'b', 'also hangs');
+        const bb = showShellActivity(slot, b);
+        setShellCommandExpanded(bb, true);
+        finishShellActivity(slot, state.toolUsages);
+        expect(slot.children).toHaveLength(1);
+        expect(bb.dataset.state).toBe('unknown');
+    });
+});
+
+describe('tool sources chip row', () => {
+    function setup() {
+        const state = makeState();
+        feed(state, { toolCallId: 'r1', title: 'read_file', kind: 'read' });
+        startShell(state, 's1', 'first cmd');
+        complete(state, 's1', 'out1');
+        startShell(state, 's2', 'second cmd');
+        complete(state, 's2', '', { exit: 1, stderr: 'bad' });
+        const container = document.createElement('div');
+        container.className = 'tool-sources';
+        document.body.append(container);
+        renderToolSources(container, state.toolUsages, [
+            { url: 'https://a.example/x', domain: 'a.example', title: 'A', initials: 'AE', color: '#000', favicon: '' },
+        ]);
+        return { state, container };
+    }
+
+    it('keeps non-shell chips and sources, and groups shell calls into one toggle chip', () => {
+        const { container } = setup();
+        const chips = container.querySelector('.tool-sources-static');
+        expect(chips.textContent).toContain('read_file');
+        expect(chips.textContent).not.toContain('shell');
+        expect(chips.querySelector('a.source-chip[data-url]')).not.toBeNull();
+        const chip = container.querySelector('button.shell-chip');
+        expect(chip).not.toBeNull();
+        expect(chip.type).toBe('button');
+        expect(chip.querySelector('.tool-chip-count').textContent).toBe('×2');
+        expect(chip.getAttribute('aria-label')).toBe('shared.shell.chip_title');
+        expect(chip.dataset.state).toBe('failed');
+    });
+
+    it('chip toggles the ordered list of the response commands', () => {
+        const { container } = setup();
+        const chip = container.querySelector('.shell-chip');
+        const list = document.getElementById(chip.getAttribute('aria-controls'));
+        expect(list).toBe(container.querySelector('.shell-cmd-list'));
+        expect(list.hidden).toBe(true);
+        expect(chip.getAttribute('aria-expanded')).toBe('false');
+        chip.click();
+        expect(list.hidden).toBe(false);
+        expect(chip.getAttribute('aria-expanded')).toBe('true');
+        const texts = [...list.querySelectorAll('.shell-cmd-text')].map((n) => n.textContent);
+        expect(texts).toEqual(['first cmd', 'second cmd']);
+        // All collapsed by default.
+        expect([...list.querySelectorAll('.shell-cmd-header')].map((h) => h.getAttribute('aria-expanded'))).toEqual([
+            'false',
+            'false',
+        ]);
+        chip.click();
+        expect(list.hidden).toBe(true);
+    });
+
+    it('open list and expanded commands survive a re-render of the row', () => {
+        const { state, container } = setup();
+        container.querySelector('.shell-chip').click();
+        const block = container.querySelector('.shell-cmd-list .shell-cmd');
+        setShellCommandExpanded(block, true);
+
+        // A new tool call arrives → the host re-renders the whole row.
+        feed(state, { toolCallId: 'w1', title: 'web_search', kind: 'search' });
+        startShell(state, 's3', 'third cmd');
+        renderToolSources(container, state.toolUsages, []);
+
+        const chip = container.querySelector('.shell-chip');
+        expect(chip.getAttribute('aria-expanded')).toBe('true');
+        expect(chip.querySelector('.tool-chip-count').textContent).toBe('×3');
+        expect(container.querySelector('.shell-cmd-list').hidden).toBe(false);
+        const blocks = container.querySelectorAll('.shell-cmd-list .shell-cmd');
+        expect(blocks).toHaveLength(3);
+        expect(blocks[0]).toBe(block);
+        expect(isShellCommandExpanded(blocks[0])).toBe(true);
+        expect(container.querySelector('.tool-sources-static').textContent).toContain('web_search');
+        expect(container.querySelector('.tool-sources-static .source-chip[data-url]')).toBeNull();
+    });
+
+    it('later output refreshes an open command in the list', () => {
+        const { state, container } = setup();
+        startShell(state, 's3', 'slow');
+        syncShellCommandList(container, state.toolUsages);
+        container.querySelector('.shell-chip').click();
+        const blocks = container.querySelectorAll('.shell-cmd-list .shell-cmd');
+        const slow = blocks[2];
+        setShellCommandExpanded(slow, true);
+        expect(slow.dataset.state).toBe('running');
+        complete(state, 's3', 'finally');
+        syncShellCommandList(container, state.toolUsages);
+        expect(slow.dataset.state).toBe('success');
+        expect(slow.querySelector('.shell-cmd-stdout').textContent).toBe('finally');
+    });
+
+    it('removes the chip when a new turn has no shell calls', () => {
+        const { container } = setup();
+        renderToolSources(container, [{ toolCallId: 'r', title: 'read', kind: 'read' }], []);
+        expect(container.querySelector('.shell-chip')).toBeNull();
+        expect(container.querySelector('.shell-cmd-list')).toBeNull();
+    });
+
+    it('takes over a row that was rendered with plain innerHTML before', () => {
+        const container = document.createElement('div');
+        container.innerHTML = '<span class="source-chip tool-chip">old</span>';
+        renderToolSources(container, [{ toolCallId: 'r', title: 'read', kind: 'read' }], []);
+        expect(container.textContent).not.toContain('old');
+        expect(container.children).toHaveLength(1);
+    });
+
+    it('shell titles and commands in the chip row stay text', () => {
+        const state = makeState();
+        feed(state, { toolCallId: 'x', title: XSS, kind: 'execute', rawInput: { command: XSS } });
+        const container = document.createElement('div');
+        renderToolSources(container, state.toolUsages, []);
+        container.querySelector('.shell-chip').click();
+        expect(container.querySelector('img')).toBeNull();
+        expect(container.querySelector('.shell-cmd-text').textContent).toBe(XSS);
+    });
+});

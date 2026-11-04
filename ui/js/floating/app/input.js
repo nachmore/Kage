@@ -577,6 +577,7 @@ export const InputMethods = {
                 if (sourcesEl2) sourcesEl2.remove();
                 const compactEl2 = document.getElementById('toolSourcesCompact');
                 if (compactEl2) compactEl2.remove();
+                this._removeShellActivity();
                 await this.windowManager.resetHeightForNewMessage();
                 this.startThinking();
                 this.updateDatetimeVisibility();

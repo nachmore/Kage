@@ -308,6 +308,7 @@ export function createComposerMixin(dependencies) {
 
             this.isWaitingForResponse = false;
             this.hideTypingIndicator();
+            this._finishShellActivity();
 
             if (this.currentStreamingMessage && !this._automationPlan) {
                 const contentDiv = this.currentStreamingMessage.querySelector('.message-content');

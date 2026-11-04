@@ -54,6 +54,10 @@
  *                                     painted right now (e.g. before a
  *                                     permission dialog opens over it)
  *   - showToolRunningSpinner(friendly) append the running-tool spinner
+ *   - showShellCommand(record)        a shell command started or changed
+ *                                     (status/output): show its command
+ *                                     block in place of the spinner. A
+ *                                     host without it gets the spinner.
  *   - onToolCallTracked(update, updated)  after processToolCallUpdate
  */
 
@@ -152,7 +156,7 @@ export class MessageStreamController {
         const evtSessionId = event?.payload?.params?.sessionId;
         if (evtSessionId && !host.acceptSessionId(evtSessionId)) return;
 
-        const { updated, update } = processToolCallUpdate(event, host);
+        const { updated, update, shell } = processToolCallUpdate(event, host);
 
         // Note: we deliberately do NOT call host.flushPendingMarkdown() here
         // any more. Tool-call updates fire on every kind/title change and
@@ -164,7 +168,12 @@ export class MessageStreamController {
         // permission handler now calls flushStreamingRender() directly
         // before showing the modal.
 
-        if (update?.title) {
+        // Shell commands get a command block that follows the call's
+        // status and output (every update, not only titled ones); other
+        // tools keep the one-line spinner.
+        if (shell && host.showShellCommand) {
+            host.showShellCommand(shell);
+        } else if (update?.title) {
             host.showToolRunningSpinner?.(getToolFriendlyName(update.title));
         }
 

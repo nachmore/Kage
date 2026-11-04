@@ -8704,5 +8704,131 @@
     "description": "Settings → Tool Permissions: shown when removing an MCP server from the trusted list fails. {server} is the server's name",
     "_machine_translated": true,
     "_source_hash": "3ee0dced51f686c9"
+  },
+  "shared.shell.chip_label": {
+    "message": "shell",
+    "description": "Label of the chip under an agent response that groups the shell commands the agent ran (like the agent's 'shell' tool name). Clicking it lists the commands. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "07cdf35df68febf8"
+  },
+  "shared.shell.chip_title": {
+    "message": "{count, plural, one {# Shell-Befehl} other {# Shell-Befehle}}",
+    "description": "Tooltip / accessible name of the 'shell' chip under an agent response; clicking the chip shows or hides the list of those commands. {count} is how many shell commands the agent ran in that response.",
+    "_machine_translated": true,
+    "_source_hash": "864ecd5e2d72cefb"
+  },
+  "shared.shell.unknown_command": {
+    "message": "Shell-Befehl",
+    "description": "Shown in place of the command line when the agent hasn't said which command it is running",
+    "_machine_translated": true,
+    "_source_hash": "02b93a81918dd01d"
+  },
+  "shared.shell.command_label": {
+    "message": "Befehl",
+    "description": "Accessible name of the box that shows the shell command an agent wants to run (permission prompt)",
+    "_machine_translated": true,
+    "_source_hash": "d28cf172541de94f"
+  },
+  "shared.shell.status.running": {
+    "message": "Wird ausgeführt",
+    "description": "Status of a shell command the agent is still running (accessible label of the spinner)",
+    "_machine_translated": true,
+    "_source_hash": "edff07d57250fa8c"
+  },
+  "shared.shell.status.success": {
+    "message": "Erfolgreich",
+    "description": "Status of a shell command that finished successfully (accessible label of the check mark)",
+    "_machine_translated": true,
+    "_source_hash": "79fba0163185d976"
+  },
+  "shared.shell.status.failed": {
+    "message": "Fehlgeschlagen",
+    "description": "Status of a shell command that failed, when no exit code is known",
+    "_machine_translated": true,
+    "_source_hash": "76bbd2aa3640bc58"
+  },
+  "shared.shell.status.failed_code": {
+    "message": "Fehlgeschlagen (Exit-Code {code})",
+    "description": "Status of a shell command that failed. {code} is the process exit code, a number such as 1 or 127",
+    "_machine_translated": true,
+    "_source_hash": "5c10d1e065991269"
+  },
+  "shared.shell.status.unknown": {
+    "message": "Status nicht gemeldet",
+    "description": "Status of a shell command when the agent's turn ended without saying whether the command finished or how",
+    "_machine_translated": true,
+    "_source_hash": "2a2b77bdf3b2bd4f"
+  },
+  "shared.shell.exit_short": {
+    "message": "Exit {code}",
+    "description": "Very short label next to the error mark of a failed shell command. {code} is the exit code number. Keep it as short as possible.",
+    "_machine_translated": true,
+    "_source_hash": "c3ab66cdc0e73e68"
+  },
+  "shared.shell.exit_code": {
+    "message": "Exit-Code {code}",
+    "description": "Footer of an expanded shell command block. {code} is the process exit code, a number (0 means success)",
+    "_machine_translated": true,
+    "_source_hash": "2731801d6d08ceb3"
+  },
+  "shared.shell.output_label": {
+    "message": "Befehlsausgabe",
+    "description": "Accessible name of the scrollable area that shows a shell command's output",
+    "_machine_translated": true,
+    "_source_hash": "9b55baa99bc6740a"
+  },
+  "shared.shell.stderr_label": {
+    "message": "stderr",
+    "description": "Small label above the part of a command's output that the command wrote to its error stream (standard error). A technical term; keep it short",
+    "_machine_translated": true,
+    "_source_hash": "ffb05ce5d00f33fc"
+  },
+  "shared.shell.no_output": {
+    "message": "Keine Ausgabe vom Agenten gemeldet",
+    "description": "Shown in an expanded shell command block when the agent didn't report any output for the command",
+    "_machine_translated": true,
+    "_source_hash": "8372eb8131fa9944"
+  },
+  "shared.shell.still_running": {
+    "message": "Wird noch ausgeführt…",
+    "description": "Shown in an expanded shell command block while the command is running and no output has arrived yet",
+    "_machine_translated": true,
+    "_source_hash": "6d5cda05422b5829"
+  },
+  "shared.shell.output_terminal": {
+    "message": "Ausgabe nicht verfügbar – der Agent hat sie an ein Terminal gesendet, das Kage nicht anzeigt",
+    "description": "Shown in an expanded shell command block when the agent ran the command in a terminal whose output Kage can't show",
+    "_machine_translated": true,
+    "_source_hash": "3786648b03677a95"
+  },
+  "shared.shell.output_dropped": {
+    "message": "Ausgabe nicht gespeichert – diese Antwort enthält bereits viel Befehlsausgabe",
+    "description": "Shown in an expanded shell command block when Kage didn't store the output because the response's other commands already produced the maximum amount",
+    "_machine_translated": true,
+    "_source_hash": "798978a0b9d671c7"
+  },
+  "shared.shell.omitted": {
+    "message": "{count, plural, one {… # Zeichen ausgelassen …} other {… # Zeichen ausgelassen …}}",
+    "description": "Marker in the middle of a long command output whose middle part was cut. {count} is how many characters were left out",
+    "_machine_translated": true,
+    "_source_hash": "4e5ee14addf03f5d"
+  },
+  "shared.shell.copy_command": {
+    "message": "Befehl kopieren",
+    "description": "Button in an expanded shell command block that copies the command line to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "da2211797bba788a"
+  },
+  "shared.shell.copy_output": {
+    "message": "Ausgabe kopieren",
+    "description": "Button in an expanded shell command block that copies the command's output to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "4fc9aba7e2183a8a"
+  },
+  "shared.shell.copied": {
+    "message": "Kopiert",
+    "description": "Briefly replaces a copy button's label after copying succeeded",
+    "_machine_translated": true,
+    "_source_hash": "b3d8aa115c03cd7c"
   }
 }

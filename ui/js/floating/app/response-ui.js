@@ -1,14 +1,19 @@
 import {
     attachSourceClickHandler,
+    createShellActivitySlot,
     escapeHtml,
+    finishShellActivity,
     getActionsForText,
     getConfig,
+    pruneShellActivity,
     renderMarkdown,
     renderSourceBubblesHtml,
-    renderSourceChipsHtml,
-    renderToolChipsHtml,
+    renderToolSources,
+    SHELL_LAYOUT_EVENT,
+    showShellActivity,
     signalMascot,
     signalMascotRecovered,
+    syncShellCommandList,
     t,
 } from './dependencies.js';
 
@@ -202,10 +207,63 @@ export const ResponseUiMethods = {
 
         sourcesEl.style.display = 'flex';
         this.elements.contentArea.classList.add('visible');
-        sourcesEl.innerHTML =
-            renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
+        // Updates the chip row in place: an open "shell" command list
+        // survives the re-render on every new tool call.
+        renderToolSources(sourcesEl, this.toolUsages, this.toolSources);
         attachSourceClickHandler(sourcesEl, this.invoke);
+        this._wireShellLayout();
         this.windowManager.resizeWindow();
+    },
+
+    /**
+     * The slot right under the response text where a shell command's block
+     * shows while it runs (in place of the generic tool spinner line). Lives
+     * outside `responseText` so streaming markdown renders never touch it.
+     */
+    _shellActivitySlot(create = false) {
+        let slot = document.getElementById('shellActivity');
+        if (!slot && create && this.elements.responseText) {
+            slot = createShellActivitySlot();
+            slot.id = 'shellActivity';
+            this.elements.responseText.after(slot);
+            this._wireShellLayout();
+        }
+        return slot;
+    },
+
+    /** Re-measure the window when a command block or the shell list opens/closes. */
+    _wireShellLayout() {
+        const area = this.elements.contentArea;
+        if (!area || area._kageShellLayoutWired) return;
+        area._kageShellLayoutWired = true;
+        area.addEventListener(SHELL_LAYOUT_EVENT, () => this.windowManager.resizeWindow());
+    },
+
+    _showShellCommand(record) {
+        // The command block takes over from any generic spinner line.
+        const spinner = this.elements.responseText?.querySelector('.tool-running-indicator');
+        if (spinner) spinner.remove();
+        showShellActivity(this._shellActivitySlot(true), record);
+        const sourcesEl = document.getElementById('toolSources');
+        if (sourcesEl) syncShellCommandList(sourcesEl, this.toolUsages);
+        this.elements.contentArea.classList.add('visible');
+        this.windowManager.resizeWindow();
+    },
+
+    _pruneShellActivity() {
+        const slot = this._shellActivitySlot();
+        if (slot) pruneShellActivity(slot);
+    },
+
+    /** Turn over (complete / error / stop): settle running commands. */
+    _finishShellActivity() {
+        finishShellActivity(this._shellActivitySlot(), this.toolUsages);
+        const sourcesEl = document.getElementById('toolSources');
+        if (sourcesEl) syncShellCommandList(sourcesEl, this.toolUsages);
+    },
+
+    _removeShellActivity() {
+        document.getElementById('shellActivity')?.remove();
     },
 
     renderSourcesCompact() {

@@ -21,6 +21,15 @@ import {
     attachSourceClickHandler,
     extractSuggestedActions,
 } from '../../shared/streaming-utils.js';
+import {
+    createShellActivitySlot,
+    finishShellActivity,
+    pruneShellActivity,
+    renderToolSources,
+    SHELL_LAYOUT_EVENT,
+    showShellActivity,
+    syncShellCommandList,
+} from '../../shared/shell-command-view.js';
 import { sendAppNotification } from '../../shared/notify.js';
 import { EVT } from '../../shared/events.js';
 import { WINDOW } from '../../shared/window-labels.js';
@@ -102,6 +111,7 @@ export {
     buildShortcutCommandFn,
     checkOnline,
     cmdOrCtrlPressed,
+    createShellActivitySlot,
     createTaskPlanElement,
     createToolActivityTracker,
     drawContextRing,
@@ -115,6 +125,7 @@ export {
     extractSuggestedActions,
     fetchClipboardHistory,
     filterClipboardHistory,
+    finishShellActivity,
     formatBytes,
     getActionsForText,
     getClipboardFilter,
@@ -140,6 +151,7 @@ export {
     pauseResumeSlot,
     platformKeyLabel,
     playTimerSound,
+    pruneShellActivity,
     renderAttachmentPreviews,
     renderClipboardHistory,
     renderMarkdown,
@@ -148,6 +160,7 @@ export {
     renderSourceChipsHtml,
     renderToolbarButtons,
     renderToolChipsHtml,
+    renderToolSources,
     renderUnifiedResults,
     runToolbarHostEffect,
     sanitizeExtensionHtml,
@@ -158,7 +171,9 @@ export {
     setHostTimerHint,
     setupRtlDetection,
     setupTimerBarControls,
+    SHELL_LAYOUT_EVENT,
     showExtensionBar,
+    showShellActivity,
     signalMascot,
     signalMascotError,
     signalMascotRecovered,
@@ -168,6 +183,7 @@ export {
     startTimer,
     stopSlot,
     submitSelection,
+    syncShellCommandList,
     t,
     trackEvent,
     unifiedSearch,

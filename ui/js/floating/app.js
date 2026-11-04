@@ -235,6 +235,9 @@ export class FloatingApp {
                 const toolSpinner =
                     this.elements.responseText.querySelector('.tool-running-indicator');
                 if (toolSpinner) toolSpinner.remove();
+                // Text resumed: finished, collapsed command blocks give way
+                // like the spinner line does (they stay under the chip).
+                this._pruneShellActivity();
                 if (this.elements.responseText.lastChild) {
                     let streamingIndicator =
                         this.elements.responseText.querySelector('.streaming-indicator');
@@ -261,6 +264,7 @@ export class FloatingApp {
             },
             onBeforeFinalRender: () => {
                 this.stopThinking();
+                this._finishShellActivity();
                 this.computerControlActive = false;
                 this.elements.floatingStopBtn.style.display = 'none';
                 this.updateDatetimeVisibility();
@@ -320,6 +324,7 @@ export class FloatingApp {
             onError: async (event, online) => {
                 if (!this.isWaitingForResponse) return;
                 this.isWaitingForResponse = false;
+                this._finishShellActivity();
                 this.computerControlActive = false;
                 this._noBlurTools.clear();
                 this.elements.floatingStopBtn.style.display = 'none';
@@ -334,6 +339,7 @@ export class FloatingApp {
             },
             onSessionReset: (_event, msg) => {
                 this.isWaitingForResponse = false;
+                this._finishShellActivity();
                 this.elements.floatingStopBtn.style.display = 'none';
                 this.updateDatetimeVisibility();
                 _resetDiagramFailures();
@@ -345,6 +351,7 @@ export class FloatingApp {
                 }
             },
             showToolRunningSpinner: (friendly) => {
+                this._pruneShellActivity();
                 let spinner = this.elements.responseText.querySelector('.tool-running-indicator');
                 if (!spinner) {
                     spinner = document.createElement('div');
@@ -357,6 +364,7 @@ export class FloatingApp {
                 this.elements.contentArea.classList.add('visible');
                 this.windowManager.resizeWindow();
             },
+            showShellCommand: (record) => this._showShellCommand(record),
             onToolCallTracked: (update, updated) => {
                 // Detect computer-control tool usage and keep window visible
                 if (update?.title) {

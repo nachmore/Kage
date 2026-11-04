@@ -2575,3 +2575,326 @@ body.light-theme .conn-edit-actions {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* ===== Shell command blocks (shared/shell-command-view.js) =====
+   Terminal-style rows for an agent's shell runs: the running block in the
+   activity slot, the commands listed under the "shell" chip, and the
+   command shown in the permission prompt. Command/output text is LTR. */
+.shell-activity {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 6px 0;
+    min-width: 0;
+}
+.shell-activity:empty {
+    display: none;
+}
+
+.shell-cmd {
+    direction: ltr;
+    text-align: left;
+    min-width: 0;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 8px;
+    background: var(--kage-term-bg);
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    font-size: 12px;
+    line-height: 1.45;
+    overflow: hidden;
+}
+.shell-cmd[data-state="failed"] {
+    border-color: color-mix(in srgb, var(--kage-error) 50%, var(--kage-term-border));
+}
+
+.shell-cmd-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.shell-cmd.expanded .shell-cmd-header {
+    border-radius: 7px 7px 0 0;
+}
+.shell-cmd-header:hover {
+    background: var(--kage-term-hover);
+}
+.shell-cmd-header:focus-visible,
+.shell-cmd-copy:focus-visible,
+.shell-cmd-output:focus-visible,
+.shell-cmd-full:focus-visible,
+.shell-cmd-inline:focus-visible,
+.shell-chip:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: -2px;
+}
+
+.shell-cmd-prompt {
+    flex-shrink: 0;
+    color: var(--kage-term-prompt);
+    font-weight: 700;
+    user-select: none;
+}
+.shell-cmd-text {
+    /* Zero preferred width: the one-line clamp must never feed the
+       command's full length into ancestors' intrinsic (min-content) widths
+       and push the window wider. */
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.shell-cmd-text.is-placeholder,
+.shell-cmd-full.is-placeholder {
+    color: var(--kage-term-muted);
+    font-style: italic;
+}
+
+.shell-cmd-icon,
+.shell-cmd-chevron,
+.shell-chip-chevron {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.shell-cmd-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    color: var(--kage-term-muted);
+}
+.shell-cmd-status[data-state="success"] {
+    color: var(--kage-success);
+}
+.shell-cmd-status[data-state="failed"] {
+    color: var(--kage-error);
+}
+.shell-cmd-code {
+    font-size: 11px;
+    font-weight: 600;
+}
+.shell-cmd-spinner {
+    display: inline-block;
+    box-sizing: border-box;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--kage-term-border);
+    border-top-color: var(--kage-accent-light);
+    border-radius: 50%;
+    animation: folder-plan-spin 0.8s linear infinite;
+}
+.shell-cmd-chevron {
+    color: var(--kage-term-muted);
+    transition: transform 0.15s ease;
+}
+.shell-cmd.expanded .shell-cmd-chevron {
+    transform: rotate(90deg);
+}
+
+.shell-cmd-panel {
+    border-top: 1px solid var(--kage-term-border);
+}
+.shell-cmd-panel[hidden] {
+    display: none;
+}
+.shell-cmd-full {
+    max-height: 120px;
+    margin: 0;
+    padding: 8px 10px;
+    overflow: auto;
+    background: none;
+    color: inherit;
+    font: inherit;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+.shell-cmd-full .shell-cmd-prompt {
+    font-weight: 700;
+}
+.shell-cmd-output {
+    max-height: 240px;
+    padding: 8px 10px;
+    overflow: auto;
+    border-top: 1px dashed var(--kage-term-border);
+    background: var(--kage-term-bg-strong);
+}
+.shell-cmd-output pre {
+    margin: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+.shell-cmd-output pre + pre {
+    margin-top: 8px;
+}
+.shell-cmd-output .shell-cmd-stderr {
+    padding-left: 8px;
+    border-left: 2px solid var(--kage-term-stderr);
+    color: var(--kage-term-stderr);
+}
+.shell-cmd-stream-label {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.8;
+    user-select: none;
+}
+.shell-cmd-omitted {
+    display: block;
+    margin: 4px 0;
+    color: var(--kage-term-muted);
+    font-family: var(--kage-font);
+    font-style: italic;
+    user-select: none;
+}
+.shell-cmd-empty {
+    color: var(--kage-term-muted);
+    font-family: var(--kage-font);
+    font-style: italic;
+}
+.shell-cmd-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 6px 10px;
+    border-top: 1px solid var(--kage-term-border);
+    color: var(--kage-term-muted);
+    font-family: var(--kage-font);
+    font-size: 11px;
+}
+.shell-cmd-actions {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: auto;
+}
+.shell-cmd-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--kage-term-text);
+    font: inherit;
+    cursor: pointer;
+}
+.shell-cmd-copy:hover {
+    background: var(--kage-term-hover);
+}
+.shell-cmd-copy.copied {
+    border-color: currentColor;
+    color: var(--kage-success);
+}
+.shell-cmd-copy[hidden] {
+    display: none;
+}
+
+/* "shell ×N" chip: a toggle for the response's command list. */
+.tool-sources-static {
+    display: contents;
+}
+button.shell-chip {
+    border: 0;
+    font: inherit;
+    font-size: 12px;
+    line-height: inherit;
+    cursor: pointer;
+}
+.shell-chip .shell-chip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--kage-term-prompt);
+}
+.shell-chip-chevron {
+    opacity: 0.7;
+    transition: transform 0.15s ease;
+}
+.shell-chip[aria-expanded="true"] .shell-chip-chevron {
+    transform: rotate(90deg);
+}
+.shell-chip-dot {
+    display: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.shell-chip[data-state="failed"] .shell-chip-dot {
+    display: inline-block;
+    background: var(--kage-error);
+}
+.shell-cmd-list {
+    display: flex;
+    flex-basis: 100%;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.shell-cmd-list[hidden] {
+    display: none;
+}
+
+/* Permission prompt: the command an execute request wants to run. The
+   modal is dark in both themes, so pin the dark terminal tokens. */
+.shell-cmd-inline {
+    --kage-term-bg: rgba(0, 0, 0, 0.35);
+    --kage-term-border: rgba(255, 255, 255, 0.12);
+    --kage-term-text: #e2e8f0;
+    --kage-term-prompt: #81e6d9;
+    direction: ltr;
+    text-align: left;
+    max-height: 160px;
+    margin: 0 0 12px 0;
+    padding: 8px 10px;
+    overflow: auto;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 8px;
+    background: var(--kage-term-bg);
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+.shell-cmd-inline .shell-cmd-prompt {
+    margin-right: 6px;
+}
+.permission-tool-title.is-shell-redundant {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shell-cmd-spinner {
+        animation-duration: 2.4s;
+    }
+    .shell-cmd-chevron,
+    .shell-chip-chevron {
+        transition: none;
+    }
+}

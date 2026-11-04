@@ -44,6 +44,7 @@ export const UiStateMethods = {
         if (sourcesEl) sourcesEl.remove();
         const compactEl = document.getElementById('toolSourcesCompact');
         if (compactEl) compactEl.remove();
+        this._removeShellActivity();
         // Exit voice conversation mode on reset
         if (this.speech?.voiceMode) {
             this.speech.stopVoiceMode();
@@ -159,6 +160,7 @@ export const UiStateMethods = {
             this._justStoppedGenerating = false;
         }, 300);
         this.stopThinking();
+        this._finishShellActivity();
         this.elements.floatingStopBtn.style.display = 'none';
         this.updateDatetimeVisibility();
         const indicator = this.elements.responseText.querySelector('.streaming-indicator');

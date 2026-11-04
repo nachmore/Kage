@@ -229,3 +229,15 @@ html[dir="rtl"] [data-icon-start] {
        lands in more components. Each individual component still owns its
        padding override. */
 }
+
+/* ===== Shell command blocks =============================================== */
+
+/* Commands and their output are inherently LTR: the blocks carry
+   dir="ltr" (covered by the [dir="ltr"] rule above) and pin
+   `text-align: left` themselves, so an RTL ancestor's inherited
+   `text-align: right` (e.g. `.response-text.rtl`) can't flip them. Only the
+   "shell" chip — translated UI chrome — follows the page direction. */
+html[dir="rtl"] .shell-chip[aria-expanded="false"] .shell-chip-chevron {
+    /* "Expand" points toward the reading direction. */
+    transform: scaleX(-1);
+}

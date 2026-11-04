@@ -9,9 +9,12 @@ export function createMessagesMixin(dependencies) {
         checkOnline,
         onNetworkChange,
         offlineMessage,
-        renderToolChipsHtml,
-        renderSourceChipsHtml,
         attachSourceClickHandler,
+        createShellActivitySlot,
+        finishShellActivity,
+        pruneShellActivity,
+        renderToolSources,
+        showShellActivity,
         getConfig,
         ExtensionToolController,
         formatErrorShared,
@@ -207,9 +210,47 @@ export function createMessagesMixin(dependencies) {
                 sourcesEl.className = 'tool-sources';
                 contentDiv.appendChild(sourcesEl);
             }
-            sourcesEl.innerHTML =
-                renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
+            // In place: an open "shell" command list survives re-renders.
+            renderToolSources(sourcesEl, this.toolUsages, this.toolSources);
             attachSourceClickHandler(sourcesEl, this.invoke);
+        }
+
+        /**
+         * The streaming message's slot for running shell command blocks
+         * (in place of the generic tool spinner line). A sibling right
+         * after `.message-content`, which markdown re-renders on every
+         * chunk — blocks in here keep their expanded state.
+         */
+        _shellActivitySlot(create = false) {
+            const msg = this.currentStreamingMessage;
+            const contentDiv = msg?.querySelector('.message-content');
+            if (!contentDiv) return null;
+            let slot = contentDiv.parentElement.querySelector(':scope > .shell-activity');
+            if (!slot && create) {
+                slot = createShellActivitySlot();
+                contentDiv.after(slot);
+            }
+            return slot;
+        }
+
+        _showShellCommand(record) {
+            const slot = this._shellActivitySlot(true);
+            if (!slot) return;
+            // The command block takes over from any generic spinner line.
+            const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+            contentDiv?.querySelector('.tool-running-indicator')?.remove();
+            showShellActivity(slot, record);
+            this.scrollToBottom();
+        }
+
+        _pruneShellActivity() {
+            const slot = this._shellActivitySlot();
+            if (slot) pruneShellActivity(slot);
+        }
+
+        /** Turn over (complete / stop): settle running commands. */
+        _finishShellActivity() {
+            finishShellActivity(this._shellActivitySlot(), this.toolUsages);
         }
 
         /**
