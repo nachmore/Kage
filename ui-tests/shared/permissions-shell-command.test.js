@@ -36,7 +36,11 @@ beforeEach(() => {
     });
     delete window.__pwned;
 });
-afterEach(() => {
+afterEach(async () => {
+    // The handler shows the next queued request on a 150 ms timer; let it
+    // fire while the DOM still exists (it otherwise lands after teardown
+    // on slow runners: "document is not defined").
+    await new Promise((r) => setTimeout(r, 200)); // drainQueuedPermissionTimers
     for (const [type, fn, opts] of docListeners.splice(0)) {
         document.removeEventListener(type, fn, opts);
     }
