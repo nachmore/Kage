@@ -1,11 +1,13 @@
 /**
  * Tests for the global link-click interceptor.
  *
- * The key invariant (the fix for the "links open twice" bug): the delegated
- * click listener is installed on `document` exactly ONCE per window, even if
- * initLinkHandler is called more than once. A second listener would make every
- * link open twice — stopPropagation only stops node-to-node bubbling, not two
- * sibling listeners on the same node.
+ * Key invariants:
+ * - the delegated click listener is installed on `window` exactly ONCE per
+ *   window, even if initLinkHandler is called more than once (a second
+ *   listener made every link open twice);
+ * - it runs in the capture phase, so an ancestor's stopPropagation() can't
+ *   keep a click from being cancelled (and the link from being opened);
+ * - script-built blob: download links are let through.
  */
 
 import { readFileSync } from 'node:fs';
@@ -15,7 +17,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-// Each test gets a fresh module instance; the previous one's document
+// Each test gets a fresh module instance; the previous one's window
 // listeners must go, or its handler claims every click first.
 let _loaded = null;
 
@@ -35,7 +37,8 @@ function clickAnchor(href) {
     const a = document.createElement('a');
     a.setAttribute('href', href);
     document.body.appendChild(a);
-    // Bubbling click so the delegated document listener sees it.
+    // Dispatched on the anchor, like a real click; the window capture
+    // listener sees it first.
     a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     a.remove();
 }
@@ -324,19 +327,142 @@ describe('link-handler — every link in every window', () => {
         }
     });
 
-    it('a click another handler already claimed (preventDefault) is not opened again', async () => {
-        // e.g. an element's own click listener that calls open_url itself.
+    it('an ancestor that stops propagation cannot turn a link into an in-place navigation', async () => {
+        // ui/welcome.html's privacy label (`onclick="event.stopPropagation()"`)
+        // wraps the Aptabase link. A bubbling handler never saw that click:
+        // target was stripped, nothing cancelled it, and the welcome window
+        // tried to navigate to aptabase.com itself (blocked on macOS, so the
+        // link was dead).
         const { initLinkHandler } = await loadFresh();
         const invoke = vi.fn(() => Promise.resolve());
         initLinkHandler(invoke);
 
-        const a = makeAnchor({ href: 'https://example.com/' });
-        const own = vi.fn((e) => e.preventDefault());
-        a.addEventListener('click', own);
-        click(a);
+        const label = document.createElement('label');
+        label.addEventListener('click', (e) => e.stopPropagation());
+        document.body.appendChild(label);
+        const a = makeAnchor({ href: 'https://aptabase.com', target: '_blank' }, label);
+        const ev = click(a);
 
-        expect(own).toHaveBeenCalledTimes(1);
+        expect(ev.defaultPrevented).toBe(true);
+        expect(a.hasAttribute('target')).toBe(false);
+        expect(invoke).toHaveBeenCalledTimes(1);
+        expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://aptabase.com' });
+    });
+
+    it('cancels a javascript: SVG link even under a stopPropagation ancestor', async () => {
+        // The diagram lightbox's overlay stops every click from propagating
+        // (so the floating window doesn't hide); a Graphviz <a xlink:href>
+        // inside it must still never run.
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const overlay = document.createElement('div');
+        overlay.addEventListener('click', (e) => e.stopPropagation());
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const a = document.createElementNS('http://www.w3.org/2000/svg', 'a');
+        a.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', 'javascript:alert(1)');
+        svg.appendChild(a);
+        overlay.appendChild(svg);
+        document.body.appendChild(overlay);
+
+        expect(click(a).defaultPrevented).toBe(true);
         expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it('anchors a first-party handler owns are cancelled but not opened', async () => {
+        // The handler runs first, so ownership is declared on the anchor:
+        // an extension action (data-ext-action, on the link or an ancestor)
+        // or a settings action (data-action) does its own thing.
+        const { initLinkHandler, neutralizeLinks } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const host = document.createElement('div');
+        host.innerHTML =
+            '<a data-ext-action="refresh" href="https://example.com/a">a</a>' +
+            '<span data-ext-action="open"><a href="https://example.com/b">b</a></span>' +
+            '<a data-action="updates.openReleases" href="https://example.com/c">c</a>';
+        document.body.appendChild(host);
+        neutralizeLinks(host);
+        // The owner's own listener still runs: we cancel, we don't stop.
+        const action = vi.fn();
+        host.querySelector('[data-ext-action]').addEventListener('click', action);
+
+        for (const a of host.querySelectorAll('a')) {
+            expect(click(a).defaultPrevented, a.textContent).toBe(true);
+        }
+        expect(action).toHaveBeenCalledTimes(1);
+        expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it('lets a script-built blob: download through, and nothing else', async () => {
+        // settings-host-effects' "download" effect appends
+        // <a download href="blob:…"> to the body and clicks it (Settings →
+        // Todos → Export). Cancelling that click dropped the file silently.
+        const { initLinkHandler } = await loadFresh();
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const outcomes = new Map();
+        // Window bubble: after our capture listener. Record, then stop jsdom's
+        // own (unimplemented) navigation.
+        const observe = (e) => {
+            outcomes.set(e.target, e.defaultPrevented);
+            e.preventDefault();
+        };
+        window.addEventListener('click', observe);
+        try {
+            const download = makeAnchor({ href: 'blob:tauri://localhost/1', download: 'x.json' });
+            const blobNav = makeAnchor({ href: 'blob:tauri://localhost/2' });
+            const dataDownload = makeAnchor({ href: 'data:text/plain,hi', download: 'x.txt' });
+            for (const a of [download, blobNav, dataDownload]) a.click();
+
+            expect(outcomes.get(download)).toBe(false);
+            // Without `download` a blob: link replaces the window's document.
+            expect(outcomes.get(blobNav)).toBe(true);
+            // data: is plain markup anyone who can inject HTML could author.
+            expect(outcomes.get(dataDownload)).toBe(true);
+            expect(invoke).not.toHaveBeenCalled();
+        } finally {
+            window.removeEventListener('click', observe);
+        }
+    });
+
+    it("the settings 'download' host effect is not cancelled (Todos Export)", async () => {
+        const { initLinkHandler } = await loadFresh();
+        const { runSettingsHostSideEffect } = await import(
+            '../../ui/js/shared/settings-host-effects.js'
+        );
+        const invoke = vi.fn(() => Promise.resolve());
+        initLinkHandler(invoke);
+
+        const origCreate = URL.createObjectURL;
+        const origRevoke = URL.revokeObjectURL;
+        URL.createObjectURL = () => 'blob:tauri://localhost/todos';
+        URL.revokeObjectURL = () => {};
+        const seen = [];
+        const observe = (e) => {
+            const a = e.target.closest?.('a');
+            if (a) seen.push({ download: a.download, prevented: e.defaultPrevented });
+            e.preventDefault();
+        };
+        window.addEventListener('click', observe);
+        try {
+            // What Kage-Extensions/extensions/todos/settings.js returns.
+            await runSettingsHostSideEffect(
+                {},
+                { type: 'download', filename: 'todos.json', content: '[]', mime: 'application/json' },
+                {},
+                async () => null
+            );
+            expect(seen).toEqual([{ download: 'todos.json', prevented: false }]);
+            expect(invoke).not.toHaveBeenCalled();
+        } finally {
+            window.removeEventListener('click', observe);
+            URL.createObjectURL = origCreate;
+            URL.revokeObjectURL = origRevoke;
+        }
     });
 
     it('dangerous and non-web schemes are cancelled, never opened', async () => {

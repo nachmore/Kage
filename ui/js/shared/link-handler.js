@@ -5,12 +5,28 @@
  *   the `open_url` command (left- and middle-click)
  * - kage: protocol → route to internal actions (store, settings, etc.)
  * - All other clicks on <a> tags → prevent default navigation
+ * - Exception: a script-built `<a download href="blob:…">` (a settings
+ *   "Export" host effect) is left alone so the download goes through.
  *
  * A window without this handler navigates ITSELF to any plain
  * <a href="https://…"> the user clicks. The Rust navigation guard
  * (src/navigation_guard.rs) cancels that as a backstop, but on macOS/Linux it
  * can't tell a user's click from an extension iframe's redirect, so it only
  * cancels — opening the browser is this module's job.
+ *
+ * The listeners sit on `window` in the CAPTURE phase — the first stop of
+ * every click — so no page handler can hide a click from them. A bubbling
+ * handler missed every click under an ancestor that calls
+ * stopPropagation() (the welcome wizard's privacy label, the diagram
+ * lightbox): nothing cancelled it, and the link navigated the window in
+ * place.
+ *
+ * Because this runs before every other handler, a first-party handler that
+ * handles an anchor click itself must leave nothing here to open: give the
+ * anchor `href="#"` (or no href) and keep the URL elsewhere (source chips
+ * use `data-url`), or mark it `data-action` (settings dispatcher) /
+ * `data-ext-action` (extension actions). Those clicks are still cancelled,
+ * just not opened.
  *
  * Usage: import { initLinkHandler } from './link-handler.js';
  *        initLinkHandler(invoke);
@@ -22,12 +38,11 @@ const XLINK_NS = 'http://www.w3.org/1999/xlink';
 
 /**
  * Guard against double-registration. The click listener is delegated on
- * `document`, so registering it twice makes every link open twice (each
- * listener independently calls `open_url` — `stopPropagation` only stops
- * bubbling between nodes, not sibling listeners on the same node). If
- * `initLinkHandler` is ever called more than once in a window (double module
- * eval, a re-init on config change, a future refactor), we refresh `_invoke`
- * but do NOT add a second listener.
+ * `window`, so registering it twice makes every link open twice (each
+ * listener independently calls `open_url`). If `initLinkHandler` is ever
+ * called more than once in a window (double module eval, a re-init on config
+ * change, a future refactor), we refresh `_invoke` but do NOT add a second
+ * listener.
  */
 let _listenerInstalled = false;
 
@@ -145,44 +160,57 @@ function hrefOf(anchor) {
 }
 
 /**
- * Capture phase, before any bubbling listener: drop `target` from the
- * clicked anchor. tauri-plugin-shell injects a `body` click listener into
- * every window that opens `target="_blank"` http(s)/mailto/tel links through
- * `plugin:shell|open` — in addition to our open_url below, so those links
- * opened twice (and a neutralized `href="#"` one opened
- * http://tauri.localhost/#). Without `target` its predicate never matches
- * and this module is the only opener. Kage windows never want an
- * engine-created popup anyway — the Rust navigation guard denies them.
+ * A script-built download link: `<a download href="blob:…">` clicked by
+ * `settings-host-effects` for an extension's "Export". Its activation saves a
+ * file and never leaves the page (the Rust guard treats blob: as inert), so
+ * it must not be cancelled — that silently dropped the export. Only blob:
+ * qualifies: blob URLs are minted by this document's own script, whereas a
+ * data: URL is plain markup anyone who can inject HTML could author.
  */
-function onClickCapture(e) {
-    const anchor = e.target?.closest?.('a');
-    if (anchor?.hasAttribute('target')) anchor.removeAttribute('target');
+function isBlobDownload(anchor) {
+    if (!anchor.hasAttribute('download')) return false;
+    const href = String(anchor.getAttribute('href') ?? '').trimStart();
+    return href.toLowerCase().startsWith('blob:');
+}
+
+/**
+ * A first-party handler owns this anchor's click and does its own thing:
+ * the settings action dispatcher (`data-action`, which also cancels anchor
+ * clicks) or an extension action (`data-ext-action`, wired by the extension
+ * manager). Opening its URL as well would double up.
+ */
+function ownedByHandler(anchor) {
+    return anchor.hasAttribute('data-action') || anchor.closest('[data-ext-action]') !== null;
 }
 
 function onActivate(e) {
     const anchor = e.target?.closest?.('a');
     if (!anchor) return;
+    if (isBlobDownload(anchor)) return;
 
-    // An earlier handler (an element's own click listener, the settings
-    // action dispatcher, the source-chip handler) already claimed this click
-    // with preventDefault and did its own thing. Opening the URL here too
-    // would double-open it.
-    const claimed = e.defaultPrevented;
+    // Drop `target`. tauri-plugin-shell injects a `body` click listener into
+    // every window that opens `target="_blank"` http(s)/mailto/tel links
+    // through `plugin:shell|open` — in addition to our open_url below, so
+    // those links opened twice (and a neutralized `href="#"` one opened
+    // http://tauri.localhost/#). Without `target` its predicate never matches
+    // and this module is the only opener. Kage windows never want an
+    // engine-created popup anyway — the Rust navigation guard denies them.
+    anchor.removeAttribute('target');
 
-    // Cancel native activation for EVERY anchor up front, before any early
-    // return — the only URLs we follow are the ones we explicitly open below.
-    // A plain <a href="https://…"> left alone navigates the whole window to
-    // the remote page (an extension's setup link turned the Settings window
-    // into developer.spotify.com that way), and an SVG
-    // <a xlink:href="javascript:…"> (e.g. from a Graphviz diagram) would run
-    // in this privileged webview.
+    // Cancel native activation for EVERY anchor up front — the only URLs we
+    // follow are the ones we explicitly open below. A plain
+    // <a href="https://…"> left alone navigates the whole window to the
+    // remote page (an extension's setup link turned the Settings window into
+    // developer.spotify.com that way), and an SVG <a xlink:href="javascript:…">
+    // (e.g. from a Graphviz diagram) would run in this privileged webview.
+    // Done here in capture, a later stopPropagation() can't undo it.
+    const claimed = e.defaultPrevented; // by an earlier window-capture listener
     e.preventDefault();
-    if (claimed) return;
+    if (claimed || ownedByHandler(anchor)) return;
 
     const href = hrefOf(anchor);
     switch (classifyLinkHref(href)) {
         case 'kage': {
-            e.stopPropagation();
             const path = href.trimStart().slice('kage:'.length);
             handleKageProtocol(path).catch((err) => console.warn('kage: link error:', err));
             return;
@@ -190,7 +218,6 @@ function onActivate(e) {
         case 'external': {
             // Module-level `_invoke` (not a closure param) so a re-init
             // refreshes the reference.
-            e.stopPropagation();
             const url = href.trim();
             console.log(`[link-handler] open_url: ${url}`);
             _invoke?.('open_url', { url }).catch((err) => console.warn('Failed to open URL:', err));
@@ -218,28 +245,28 @@ function onAuxClick(e) {
 export function initLinkHandler(invoke) {
     _invoke = invoke;
 
-    // Idempotent: only ever install one delegated listener per document.
+    // Idempotent: only ever install one delegated listener per window.
     if (_listenerInstalled) {
         console.warn('[link-handler] initLinkHandler called again — reusing existing listener');
         return;
     }
     _listenerInstalled = true;
 
-    document.addEventListener('click', onClickCapture, true);
-    document.addEventListener('click', onActivate);
-    document.addEventListener('auxclick', onAuxClick);
+    // Capture phase on window: ahead of every listener in the page, so an
+    // ancestor's stopPropagation() can't keep a click from being cancelled.
+    window.addEventListener('click', onActivate, true);
+    window.addEventListener('auxclick', onAuxClick, true);
 }
 
 /**
- * Remove the listeners again. Test-only: jsdom keeps one `document` across a
+ * Remove the listeners again. Test-only: jsdom keeps one `window` across a
  * test file, and a stale handler from an earlier module instance would claim
  * every click (preventDefault) before the instance under test sees it.
  */
 export function disposeLinkHandler() {
     if (!_listenerInstalled) return;
-    document.removeEventListener('click', onClickCapture, true);
-    document.removeEventListener('click', onActivate);
-    document.removeEventListener('auxclick', onAuxClick);
+    window.removeEventListener('click', onActivate, true);
+    window.removeEventListener('auxclick', onAuxClick, true);
     _listenerInstalled = false;
     _invoke = null;
 }

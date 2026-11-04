@@ -1000,10 +1000,11 @@ owning provider (see widget/renderResult contracts above).
 (widgets, formatters, result rows, settings `info` blocks), it opens
 in their default browser / mail client — never inside the Kage window,
 with or without `target="_blank"` (which is ignored). That needs no
-capability, because the user is the one clicking. Opening a URL from
-code (`context.invoke('open_url', …)`) still requires `urls`. A sandbox
-that navigates its own iframe (`location.href = …`) never reaches the
-browser.
+capability, because the user is the one clicking. A link that is (or
+sits inside) a `data-ext-action` element runs your action instead and
+is not opened. Opening a URL from code (`context.invoke('open_url', …)`)
+still requires `urls`. A sandbox that navigates its own iframe
+(`location.href = …`) never reaches the browser.
 
 ## Tool Provider API
 

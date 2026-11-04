@@ -245,15 +245,21 @@ Spotify's site, because that window had no link handler.) Two layers:
 
 1. **JS link handler** (`ui/js/shared/link-handler.js`), installed in
    every window — `ui-tests/shared/link-handler.test.js` fails if a
-   window in `capabilities/default.json` doesn't call it. It cancels
-   every anchor click and opens only `http(s)` / `mailto` through
-   `open_url`; `kage:` routes internally; everything else
-   (`javascript:`, `file:`, custom app schemes) is dropped. It also
-   strips `target` at capture time so `tauri-plugin-shell`'s injected
-   `target=_blank` opener can't open the link a second time. Host code
-   that renders extension HTML (formatters, widgets, settings info
-   blocks) additionally runs `neutralizeLinks`, so no live `href` is left
-   for the engine to follow.
+   window in `capabilities/default.json` doesn't call it. It listens on
+   `window` in the capture phase, ahead of every page listener, so an
+   ancestor's `stopPropagation()` can't hide a click from it. It cancels
+   every anchor click (left and middle) and opens only `http(s)` /
+   `mailto` through `open_url`; `kage:` routes internally; everything
+   else (`javascript:`, `file:`, custom app schemes) is dropped. Two
+   exceptions: a script-built `<a download href="blob:…">` (a settings
+   "Export") is let through so the file is saved, and an anchor a
+   first-party handler owns (`data-action`, `data-ext-action`) is
+   cancelled but not opened, because that handler acts on it. It also
+   strips `target` so `tauri-plugin-shell`'s injected `target=_blank`
+   opener can't open the link a second time. Host code that renders
+   extension HTML (formatters, widgets, settings info blocks)
+   additionally runs `neutralizeLinks`, so no live `href` is left for
+   the engine to follow.
 2. **Rust navigation guard** (`src/navigation_guard.rs`). A Tauri
    plugin `on_navigation` hook — the only hook that also reaches the
    `tauri.conf.json` windows — cancels any navigation that isn't the
