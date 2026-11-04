@@ -37,7 +37,7 @@ export function getToolIcon(kind) {
     if (k === 'search' || k === 'web_search') return '🔍';
     if (k === 'edit' || k === 'write') return '✏️';
     if (k === 'read') return '📖';
-    if (k === 'shell' || k === 'terminal') return '💻';
+    if (k === 'shell' || k === 'terminal' || k === 'execute') return '💻';
     if (k === 'fetch' || k === 'web') return '🌐';
     if (k === 'extension') return '🧩';
     return '🔧';

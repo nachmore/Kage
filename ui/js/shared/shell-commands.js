@@ -1,0 +1,628 @@
+/**
+ * Shell command tool calls — pure data layer (no DOM).
+ *
+ * Agents report shell runs as ACP tool calls of kind `execute`. This module
+ * recognises them, pulls out the command line, and parses whatever output
+ * the agent reports into one normalised record per call, so the floating
+ * and chat windows can render the same command block (see
+ * `shell-command-view.js`).
+ *
+ * Output shapes handled (everything else yields no output — raw JSON is
+ * never dumped):
+ *   - kiro-cli: `rawOutput = { items: [{ Json: { exit_status: "exit status: 0",
+ *     stdout, stderr } }] }` (its session log stores exactly that), also
+ *     `{ items: [{ Text }] }` and a `{ Success: { items } }` wrapper.
+ *   - Flat objects: `{ stdout, stderr, exit_code | exitCode | exit_status }`,
+ *     `{ output | aggregated_output | formatted_output }`.
+ *   - Plain-string `rawOutput`, or a string holding one of the JSON shapes.
+ *   - ACP content blocks: `[{ type: "content", content: { type: "text",
+ *     text } }]` (Claude Code's adapter fences it as ```console), and
+ *     `[{ type: "terminal", terminalId }]` — Kage doesn't implement ACP
+ *     terminals, so that only flags "output not available".
+ *
+ * Command and output are untrusted agent data: everything stored here is
+ * stripped of ANSI escapes and control characters and capped in size, and
+ * the view only ever renders it with textContent.
+ */
+
+/** Output kept per tool call (stdout + stderr), in characters. */
+export const SHELL_OUTPUT_CAP = 64 * 1024;
+/** Output kept across all shell calls of one response, in characters. */
+export const SHELL_RESPONSE_OUTPUT_CAP = 512 * 1024;
+/** Longest command line kept for display. */
+export const SHELL_COMMAND_CAP = 16 * 1024;
+
+/** ACP tool kind for shell / CLI commands (see src/config/permissions.rs). */
+const KIND_EXECUTE = 'execute';
+const KNOWN_STATUSES = new Set(['pending', 'in_progress', 'completed', 'failed']);
+// kiro-cli titles shell runs `Running: <command>` and MCP tool calls
+// `Running: @<server>/<tool>` — the latter is never a shell command.
+const KIRO_RUNNING_PREFIX = /^Running:\s+/;
+
+// --- Sanitising -----------------------------------------------------------
+
+// The control characters are spliced in from char codes (as in
+// chat-export.js) so Biome's `noControlCharactersInRegex` stays quiet —
+// matching control characters is the whole point here.
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+const CSI8 = String.fromCharCode(0x9b);
+const ctrlRange = (from, to) => `${String.fromCharCode(from)}-${String.fromCharCode(to)}`;
+
+// OSC (ESC ] … BEL | ESC \). An unterminated one stops at the next ESC
+// rather than swallowing the rest of the output.
+const RE_OSC = new RegExp(`${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)?`, 'g');
+// DCS / SOS / PM / APC strings (ESC P|X|^|_ … ESC \).
+const RE_STRING_SEQ = new RegExp(`${ESC}[PX^_][^${ESC}]*(?:${ESC}\\\\)?`, 'g');
+// CSI (ESC [ params intermediates final), plus the 8-bit C1 form.
+const RE_CSI = new RegExp(`(?:${ESC}\\[|${CSI8})[0-?]*[ -/]*[@-~]`, 'g');
+// Any other escape: nF (ESC intermediates final) and two-byte Fp/Fe/Fs.
+const RE_OTHER_ESC = new RegExp(`${ESC}[ -/]*[0-~]`, 'g');
+// C0/C1 controls except \t and \n (\r is resolved before this runs).
+const RE_CONTROL = new RegExp(
+    `[${ctrlRange(0x00, 0x08)}${ctrlRange(0x0b, 0x1f)}${ctrlRange(0x7f, 0x9f)}]`,
+    'g'
+);
+// Bidi embedding/override/isolate controls: they can make displayed text
+// read differently from what runs ("Trojan Source").
+const RE_BIDI = /[\u202a-\u202e\u2066-\u2069]/g;
+
+/**
+ * Overlay `\r`-separated segments the way a terminal does: each segment
+ * overwrites the start of the line (progress bars, spinners).
+ */
+function resolveCarriageReturns(line) {
+    if (!line.includes('\r')) return line;
+    let out = '';
+    for (const seg of line.split('\r')) {
+        out = seg + out.slice(seg.length);
+    }
+    return out;
+}
+
+/**
+ * Strip terminal escape sequences (CSI, OSC, DCS/APC, other ESC) and control
+ * characters from `s`, keeping `\n` and `\t`. Carriage returns are resolved
+ * terminal-style. Non-strings yield `''`.
+ */
+export function sanitizeTerminalText(s) {
+    if (typeof s !== 'string' || !s) return '';
+    let out = s
+        .replace(RE_OSC, '')
+        .replace(RE_STRING_SEQ, '')
+        .replace(RE_CSI, '')
+        .replace(RE_OTHER_ESC, '');
+    out = out.replace(/\r\n/g, '\n');
+    if (out.includes('\r')) out = out.split('\n').map(resolveCarriageReturns).join('\n');
+    return out.replace(RE_CONTROL, '').replace(RE_BIDI, '');
+}
+
+// --- Capping --------------------------------------------------------------
+
+/** Move `i` off the low half of a surrogate pair so a cut never splits one. */
+function safeCut(s, i) {
+    if (i > 0 && i < s.length) {
+        const c = s.charCodeAt(i);
+        if (c >= 0xdc00 && c <= 0xdfff) return i - 1;
+    }
+    return i;
+}
+
+/**
+ * Cap `s` at `max` characters, keeping its head and tail. Returns
+ * `{ head, tail, omitted }` — `tail` is `''` and `omitted` is 0 when `s`
+ * fits. Cuts snap to a nearby line break so the omission marker sits on
+ * its own line, and never split a surrogate pair.
+ */
+export function capText(s, max) {
+    const text = typeof s === 'string' ? s : '';
+    const limit = Math.max(0, Math.floor(max));
+    if (text.length <= limit) return { head: text, tail: '', omitted: 0 };
+    if (limit === 0) return { head: '', tail: '', omitted: text.length };
+    let headEnd = Math.ceil(limit / 2);
+    let tailStart = text.length - (limit - headEnd);
+    const SNAP = Math.min(200, Math.floor(limit / 8));
+    const nl = text.lastIndexOf('\n', headEnd);
+    if (nl > 0 && headEnd - nl <= SNAP) headEnd = nl + 1;
+    const nl2 = text.indexOf('\n', tailStart);
+    if (nl2 !== -1 && nl2 - tailStart <= SNAP) tailStart = nl2 + 1;
+    headEnd = safeCut(text, headEnd);
+    tailStart = safeCut(text, tailStart);
+    if (tailStart < headEnd) tailStart = headEnd;
+    return {
+        head: text.slice(0, headEnd),
+        tail: text.slice(tailStart),
+        omitted: tailStart - headEnd,
+    };
+}
+
+/** Characters a capped segment keeps. */
+export function cappedLength(seg) {
+    return seg ? seg.head.length + seg.tail.length : 0;
+}
+
+/**
+ * Sanitise then cap. Huge input is trimmed to a head and tail slice first,
+ * so the escape-stripping regexes never run over megabytes. Returns `null`
+ * when nothing printable is left.
+ */
+export function sanitizeAndCap(raw, max) {
+    if (typeof raw !== 'string' || !raw) return null;
+    const limit = Math.max(0, Math.floor(max));
+    const pre = limit * 2 + 8192;
+    if (raw.length <= pre) {
+        const clean = sanitizeTerminalText(raw);
+        if (!clean.trim()) return null;
+        return capText(clean, limit);
+    }
+    const half = Math.floor(pre / 2);
+    const headClean = sanitizeTerminalText(raw.slice(0, safeCut(raw, half)));
+    const tailClean = sanitizeTerminalText(raw.slice(safeCut(raw, raw.length - half)));
+    const keepHead = Math.ceil(limit / 2);
+    const keepTail = limit - keepHead;
+    const head = headClean.slice(0, safeCut(headClean, keepHead));
+    const tail =
+        keepTail > 0 ? tailClean.slice(safeCut(tailClean, tailClean.length - keepTail)) : '';
+    const omitted = raw.length - head.length - tail.length;
+    return { head, tail, omitted: Math.max(1, omitted) };
+}
+
+/** Full text of a capped segment, with `marker(omitted)` between head and tail. */
+export function joinCapped(seg, marker) {
+    if (!seg) return '';
+    if (!seg.omitted) return seg.head + seg.tail;
+    const m = marker ? marker(seg.omitted) : `… ${seg.omitted} characters omitted …`;
+    const sep1 = seg.head && !seg.head.endsWith('\n') ? '\n' : '';
+    const sep2 = seg.tail ? '\n' : '';
+    return `${seg.head}${sep1}${m}${sep2}${seg.tail}`;
+}
+
+// --- Recognising shell calls and their command ---------------------------
+
+/**
+ * Whether a tool call is a shell command: ACP kind `execute`, or — for an
+ * agent that leaves the kind out — kiro-cli's `Running: <command>` title.
+ * kiro titles MCP calls `Running: @server/tool`; those (and any other
+ * explicit kind) are never shell.
+ */
+export function isShellToolCall(kind, title) {
+    if (kind === KIND_EXECUTE) return true;
+    if (kind && kind !== 'other') return false;
+    if (typeof title !== 'string') return false;
+    const m = KIRO_RUNNING_PREFIX.exec(title);
+    return !!m && title.length > m[0].length && title[m[0].length] !== '@';
+}
+
+const SAFE_ARG = /^[\w@%+=:,./-]+$/;
+
+function quoteArg(a) {
+    if (a === '') return "''";
+    return SAFE_ARG.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`;
+}
+
+/** `["bash", "-lc", "ls"]` → `ls`; other argv arrays are shell-quoted and joined. */
+function argvToCommand(argv) {
+    const parts = argv.filter((a) => typeof a === 'string');
+    if (parts.length !== argv.length || parts.length === 0) return '';
+    const shell = parts[0].split('/').pop();
+    if (
+        parts.length === 3 &&
+        /^(?:ba|z|da|k|fi)?sh$|^pwsh$|^powershell(?:\.exe)?$/.test(shell) &&
+        /^-l?c$|^-Command$/i.test(parts[1])
+    ) {
+        return parts[2];
+    }
+    return parts.map(quoteArg).join(' ');
+}
+
+/**
+ * The command line of a shell call: `rawInput.command` (string or argv
+ * array), else the title — kiro's `Running: <command>`, or Claude Code's
+ * backticked `` `command` ``. `''` when neither names a command (e.g. a
+ * bare `shell` title before the input arrives).
+ */
+export function extractShellCommand(rawInput, title) {
+    if (rawInput && typeof rawInput === 'object') {
+        let c = rawInput.command ?? rawInput.cmd;
+        if (Array.isArray(c)) c = argvToCommand(c);
+        if (typeof c === 'string' && c.trim()) return c;
+    }
+    if (typeof title === 'string') {
+        const s = title.trim();
+        const m = KIRO_RUNNING_PREFIX.exec(s);
+        if (m) {
+            const rest = s.slice(m[0].length);
+            return rest.startsWith('@') ? '' : rest;
+        }
+        const b = /^`([\s\S]+)`$/.exec(s);
+        if (b) return b[1].replace(/\\`/g, '`');
+    }
+    return '';
+}
+
+// --- Parsing output -------------------------------------------------------
+
+/** `{ code }` / `{ signal }` from an exit status value, or `null`. */
+export function parseExitStatus(v) {
+    if (typeof v === 'number' && Number.isInteger(v)) return { code: v };
+    if (typeof v !== 'string') return null;
+    const s = v.trim();
+    let m = /^(?:exit (?:status|code):?\s*)?(-?\d+)$/i.exec(s);
+    if (m) return { code: Number.parseInt(m[1], 10) };
+    m = /signal:?\s*(\d+)/i.exec(s);
+    if (m) {
+        const label = sanitizeTerminalText(s).slice(0, 64);
+        return { signal: label || `signal ${m[1]}` };
+    }
+    return null;
+}
+
+const EXIT_FIELDS = [
+    'exit_status',
+    'exitStatus',
+    'exit_code',
+    'exitCode',
+    'returncode',
+    'returnCode',
+];
+const COMBINED_FIELDS = ['output', 'aggregated_output', 'formatted_output'];
+
+function emptyParse() {
+    return { stdout: '', stderr: '', exit: null, failed: false, terminal: false, found: false };
+}
+
+function mergeParse(into, part) {
+    if (!part) return into;
+    if (part.stdout) into.stdout = into.stdout ? `${into.stdout}\n${part.stdout}` : part.stdout;
+    if (part.stderr) into.stderr = into.stderr ? `${into.stderr}\n${part.stderr}` : part.stderr;
+    if (part.exit) into.exit = part.exit;
+    into.failed = into.failed || part.failed;
+    into.terminal = into.terminal || part.terminal;
+    into.found = into.found || part.found;
+    return into;
+}
+
+function textParse(s) {
+    const p = emptyParse();
+    p.stdout = s;
+    p.found = true;
+    return p;
+}
+
+/** Strip one fence wrapping the whole text (```console … ```). */
+function unfence(text) {
+    const m = /^\s*```[\w+-]*[ \t]*\n([\s\S]*?)\n?```\s*$/.exec(text);
+    return m ? m[1] : text;
+}
+
+function parseOutputObject(obj) {
+    const p = emptyParse();
+    const str = (k) => (typeof obj[k] === 'string' ? obj[k] : null);
+    const stdout = str('stdout');
+    const stderr = str('stderr');
+    if (stdout !== null || stderr !== null) {
+        p.stdout = stdout || '';
+        p.stderr = stderr || '';
+        p.found = true;
+    } else {
+        for (const k of COMBINED_FIELDS) {
+            if (str(k) !== null) {
+                p.stdout = obj[k];
+                p.found = true;
+                break;
+            }
+        }
+    }
+    for (const k of EXIT_FIELDS) {
+        const exit = parseExitStatus(obj[k]);
+        if (exit) {
+            p.exit = exit;
+            p.found = true;
+            break;
+        }
+    }
+    return p.found ? p : null;
+}
+
+function parseRaw(raw, depth) {
+    if (raw == null || depth > 4) return null;
+    if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (!s) return null;
+        if (s[0] === '{' || s[0] === '[') {
+            try {
+                // A JSON string: only its recognised shapes count.
+                return parseRaw(JSON.parse(s), depth + 1);
+            } catch {
+                /* not JSON — plain text */
+            }
+        }
+        return textParse(unfence(raw));
+    }
+    if (Array.isArray(raw)) {
+        const p = emptyParse();
+        for (const item of raw) mergeParse(p, parseRaw(item, depth + 1));
+        return p.found ? p : null;
+    }
+    if (typeof raw !== 'object') return null;
+
+    if ('Success' in raw) return parseRaw(raw.Success, depth + 1);
+    for (const k of ['Error', 'Failure', 'error']) {
+        if (typeof raw[k] === 'string' && raw[k]) {
+            const p = emptyParse();
+            p.stderr = raw[k];
+            p.failed = true;
+            p.found = true;
+            return p;
+        }
+    }
+    if (Array.isArray(raw.items)) return parseRaw(raw.items, depth + 1);
+    if ('Json' in raw) return parseRaw(raw.Json, depth + 1);
+    if (typeof raw.Text === 'string') return raw.Text.trim() ? textParse(raw.Text) : null;
+    // A bare text block ({ type: "text", text }), e.g. inside MCP-style content.
+    if (raw.type === 'text' && typeof raw.text === 'string') {
+        return raw.text.trim() ? textParse(unfence(raw.text)) : null;
+    }
+    const flat = parseOutputObject(raw);
+    if (flat) return flat;
+    if (Array.isArray(raw.content)) {
+        // MCP-style tool result: { content: [{ type: "text", text }], isError }.
+        const p = parseRaw(raw.content, depth + 1);
+        if (p && raw.isError === true) p.failed = true;
+        return p;
+    }
+    return null;
+}
+
+/**
+ * Parse an ACP `rawOutput` value into `{ stdout, stderr, exit, failed,
+ * terminal }` (strings unsanitised), or `null` when the shape isn't one we
+ * recognise.
+ */
+export function parseShellRawOutput(rawOutput) {
+    const p = parseRaw(rawOutput, 0);
+    if (!p) return null;
+    const { found: _found, ...rest } = p;
+    return rest;
+}
+
+/**
+ * Parse an ACP tool-call `content` array: text blocks become output (one
+ * wrapping code fence is stripped), a `terminal` block flags output Kage
+ * can't show. `null` when there is neither.
+ */
+export function parseShellContent(content) {
+    if (!Array.isArray(content)) return null;
+    const p = emptyParse();
+    const texts = [];
+    for (const block of content) {
+        if (!block || typeof block !== 'object') continue;
+        if (block.type === 'terminal') {
+            p.terminal = true;
+            p.found = true;
+        } else if (block.type === 'content' && block.content?.type === 'text') {
+            if (typeof block.content.text === 'string' && block.content.text.trim()) {
+                texts.push(unfence(block.content.text));
+            }
+        } else if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+            texts.push(unfence(block.text));
+        }
+    }
+    if (texts.length) {
+        p.stdout = texts.join('\n');
+        p.found = true;
+    }
+    if (!p.found) return null;
+    const { found: _found, ...rest } = p;
+    return rest;
+}
+
+// --- Records --------------------------------------------------------------
+
+/**
+ * Cap a parsed output to `budget` characters (stdout + stderr) and sanitise
+ * it into the stored form `{ stdout, stderr, exitCode, exitSignal, failed,
+ * terminal, dropped }` where stdout/stderr are capped segments or `null`.
+ */
+function storeOutput(parsed, budget) {
+    const out = {
+        stdout: null,
+        stderr: null,
+        exitCode: parsed.exit && 'code' in parsed.exit ? parsed.exit.code : null,
+        exitSignal: parsed.exit?.signal || null,
+        failed: !!parsed.failed,
+        terminal: !!parsed.terminal,
+        dropped: false,
+    };
+    const so = parsed.stdout || '';
+    const se = parsed.stderr || '';
+    if (!so && !se) return out;
+    const b = Math.max(0, Math.floor(budget));
+    if (b === 0) {
+        out.dropped = !!(so.trim() || se.trim());
+        return out;
+    }
+    let soMax = b;
+    let seMax = 0;
+    if (se) {
+        if (so.length + se.length <= b) {
+            soMax = so.length;
+            seMax = se.length;
+        } else {
+            const half = Math.floor(b / 2);
+            seMax = Math.min(se.length, so.length < half ? b - so.length : half);
+            soMax = b - seMax;
+        }
+    }
+    out.stdout = so ? sanitizeAndCap(so, soMax) : null;
+    out.stderr = se ? sanitizeAndCap(se, seMax) : null;
+    return out;
+}
+
+/** Characters of output a record holds. */
+export function shellOutputSize(record) {
+    if (!record) return 0;
+    let n = 0;
+    for (const o of [record.rawOut, record.contentOut]) {
+        if (o) n += cappedLength(o.stdout) + cappedLength(o.stderr);
+    }
+    return n;
+}
+
+/**
+ * The output to show for a record: what `rawOutput` reported, else what the
+ * content blocks reported. `null` when neither has arrived.
+ */
+export function shellOutputOf(record) {
+    if (!record) return null;
+    const raw = record.rawOut;
+    const content = record.contentOut;
+    if (raw && (raw.stdout || raw.stderr || raw.dropped)) {
+        // rawOutput carries the structured exit status; content may carry
+        // the terminal flag.
+        return { ...raw, terminal: raw.terminal || !!content?.terminal };
+    }
+    if (content) {
+        return {
+            ...content,
+            exitCode: raw?.exitCode ?? content.exitCode,
+            exitSignal: raw?.exitSignal || content.exitSignal,
+            failed: !!raw?.failed || content.failed,
+        };
+    }
+    return raw || null;
+}
+
+/**
+ * A command line made safe for display: escapes/control characters
+ * stripped, capped at SHELL_COMMAND_CAP. `''` when nothing printable is left.
+ */
+export function cleanShellCommand(s) {
+    const seg = sanitizeAndCap(s, SHELL_COMMAND_CAP);
+    return seg ? joinCapped(seg, (n) => `…[${n}]…`).trim() : '';
+}
+
+/**
+ * Merge one ACP `tool_call` / `tool_call_update` into a tool-usage `entry`
+ * (from `processToolCallUpdate`). Keeps `entry.shell` — the normalised
+ * shell record — up to date and returns it, or returns `null` when the
+ * call isn't a shell command. ACP semantics: fields an update omits are
+ * unchanged; `rawOutput` and `content` replace the previous value.
+ *
+ * `opts.outputBudget` caps the output this call may store (the caller
+ * deducts what the response's other calls already hold).
+ */
+export function applyShellUpdate(entry, update, opts = {}) {
+    if (!entry || !update) return null;
+    let rec = entry.shell || null;
+    if (!rec) {
+        const kind = update.kind || entry.kind;
+        if (!isShellToolCall(kind, update.title || entry.title)) return null;
+        // The call may only now turn out to be a shell run (its kind came
+        // late): start from the title the entry was created with.
+        const seedCommand = cleanShellCommand(extractShellCommand(null, entry.title));
+        rec = {
+            toolCallId: entry.toolCallId,
+            title: cleanShellCommand(entry.title || ''),
+            command: seedCommand,
+            commandFromTitle: !!seedCommand,
+            description: '',
+            status: null,
+            rawOut: null,
+            contentOut: null,
+            settled: false,
+            rev: 0,
+        };
+        entry.shell = rec;
+    }
+    const budget = Math.min(SHELL_OUTPUT_CAP, Math.max(0, opts.outputBudget ?? SHELL_OUTPUT_CAP));
+    let changed = rec.rev === 0;
+
+    if (typeof update.title === 'string' && update.title) {
+        const title = cleanShellCommand(update.title);
+        if (title && title !== rec.title) {
+            rec.title = title;
+            changed = true;
+        }
+    }
+    const fromInput = extractShellCommand(update.rawInput, null);
+    const fromTitle = extractShellCommand(null, update.title);
+    const cmd = fromInput || (!rec.command || rec.commandFromTitle ? fromTitle : '');
+    if (cmd) {
+        const clean = cleanShellCommand(cmd);
+        if (clean && clean !== rec.command) {
+            rec.command = clean;
+            changed = true;
+        }
+        rec.commandFromTitle = !fromInput;
+    }
+    if (update.rawInput && typeof update.rawInput.description === 'string') {
+        rec.description = update.rawInput.description.trim();
+    }
+    if (KNOWN_STATUSES.has(update.status) && update.status !== rec.status) {
+        rec.status = update.status;
+        changed = true;
+    }
+    const terminal = rec.status === 'completed' || rec.status === 'failed';
+
+    if ('rawOutput' in update) {
+        const parsed = parseShellRawOutput(update.rawOutput);
+        rec.rawOut = parsed ? storeOutput(parsed, budget) : null;
+        changed = true;
+    }
+    if ('content' in update) {
+        let parsed = parseShellContent(update.content);
+        // Before the call finishes, an agent's content can be a description
+        // of the command rather than its output (Claude Code's adapter sends
+        // the Bash tool's `description`) — never show that as output.
+        if (parsed && !terminal && rec.description && parsed.stdout.trim() === rec.description) {
+            parsed = parsed.terminal ? { ...parsed, stdout: '' } : null;
+        }
+        if (parsed || terminal) {
+            const room = Math.max(0, budget - shellOutputSize({ rawOut: rec.rawOut }));
+            rec.contentOut = parsed ? storeOutput(parsed, room) : null;
+            changed = true;
+        }
+    }
+    if (changed) rec.rev += 1;
+    return rec;
+}
+
+/**
+ * Display state of a record: `running`, `success`, `failed`, or `unknown`
+ * (the turn ended without the agent reporting how the call finished).
+ */
+export function shellCallState(record) {
+    if (!record) return 'unknown';
+    const out = shellOutputOf(record);
+    const exitCode = out?.exitCode ?? null;
+    if (record.status === 'failed' || out?.failed || out?.exitSignal) return 'failed';
+    if (exitCode !== null && exitCode !== 0) return 'failed';
+    if (record.status === 'completed') return 'success';
+    if (exitCode === 0) return 'success';
+    return record.settled ? 'unknown' : 'running';
+}
+
+/** Shell records of a response's tool usages, in call order. */
+export function getShellCalls(toolUsages) {
+    if (!Array.isArray(toolUsages)) return [];
+    const out = [];
+    for (const u of toolUsages) if (u?.shell) out.push(u.shell);
+    return out;
+}
+
+/**
+ * The turn is over: any shell call still without a terminal status never
+ * will get one — stop showing it as running. Returns whether any changed.
+ */
+export function settleShellCalls(toolUsages) {
+    let changed = false;
+    for (const rec of getShellCalls(toolUsages)) {
+        if (!rec.settled && rec.status !== 'completed' && rec.status !== 'failed') {
+            rec.settled = true;
+            rec.rev += 1;
+            changed = true;
+        }
+    }
+    return changed;
+}

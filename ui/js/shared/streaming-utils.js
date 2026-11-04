@@ -7,6 +7,7 @@
 import { tHtml } from './i18n.js';
 import { escapeAttr, escapeHtml, getToolIcon } from './tool-utils.js';
 import { isInternalHost } from './internal-hosts.js';
+import { applyShellUpdate, SHELL_RESPONSE_OUTPUT_CAP, shellOutputSize } from './shell-commands.js';
 
 // `escapeAttr` is re-exported here so existing call sites that import
 // it from this module keep working. Canonical home is `tool-utils.js`.
@@ -14,16 +15,26 @@ export { escapeAttr };
 
 /**
  * Parse a tool_call_update event and track tool usage + sources.
+ *
+ * Shell commands (ACP kind `execute`) additionally get a normalised record
+ * on their usage entry (`entry.shell`, see shell-commands.js) that follows
+ * the call's status and output across later updates; it's returned as
+ * `shell` for any update that concerns one. Per-response output is capped
+ * at SHELL_RESPONSE_OUTPUT_CAP across all of the state's shell calls.
+ *
  * @param {Object} event - Tauri event payload
  * @param {Object} state - { toolUsages: [], toolSources: [] }
- * @returns {{ updated: boolean, update: Object|null }} whether state changed
+ * @returns {{ updated: boolean, update: Object|null, shell: Object|null }}
+ *   `updated`: a new tool or new sources were tracked (shell status/output
+ *   changes don't set it — they come back as `shell`).
  */
 export function processToolCallUpdate(event, state) {
     const notification = event.payload;
     const update = notification?.params?.update;
-    if (!update) return { updated: false, update: null };
+    if (!update) return { updated: false, update: null, shell: null };
 
     let updated = false;
+    let entry = null;
 
     // Track tool usage
     if (update.title && update.toolCallId) {
@@ -31,12 +42,31 @@ export function processToolCallUpdate(event, state) {
         if (!state.toolUsages) state.toolUsages = [];
         if (!state._toolCallIds.has(update.toolCallId)) {
             state._toolCallIds.add(update.toolCallId);
-            state.toolUsages.push({
+            entry = {
                 toolCallId: update.toolCallId,
                 title: update.title,
                 kind: update.kind,
-            });
+            };
+            state.toolUsages.push(entry);
             updated = true;
+        }
+    }
+
+    // Follow shell commands through their later updates (status, output),
+    // which usually carry no title.
+    let shell = null;
+    if (update.toolCallId && Array.isArray(state.toolUsages)) {
+        entry ??= state.toolUsages.find((u) => u?.toolCallId === update.toolCallId) || null;
+        if (entry) {
+            // A kind can arrive after the first update.
+            if (!entry.kind && update.kind) entry.kind = update.kind;
+            let othersSize = 0;
+            for (const u of state.toolUsages) {
+                if (u !== entry && u?.shell) othersSize += shellOutputSize(u.shell);
+            }
+            shell = applyShellUpdate(entry, update, {
+                outputBudget: SHELL_RESPONSE_OUTPUT_CAP - othersSize,
+            });
         }
     }
 
@@ -56,7 +86,7 @@ export function processToolCallUpdate(event, state) {
         }
     }
 
-    return { updated, update };
+    return { updated, update, shell };
 }
 
 /**
