@@ -244,6 +244,7 @@ pub async fn open_new_chat_window<R: tauri::Runtime>(
     resume_session_id: Option<String>,
     app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
+    use crate::navigation_guard::NewWindowGuardExt;
     use tauri::WebviewWindowBuilder;
 
     let label = window_labels::chat_label(&uuid::Uuid::new_v4().simple().to_string());
@@ -265,6 +266,7 @@ pub async fn open_new_chat_window<R: tauri::Runtime>(
         .resizable(true)
         .center()
         .visible(false)
+        .guard_new_windows(&app)
         .build()
         .map_err(|e| {
             AppError::keyed(

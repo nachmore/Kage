@@ -36,6 +36,7 @@ pub async fn open_settings_window<R: tauri::Runtime>(
     section: Option<String>,
     sub_section: Option<String>,
 ) -> Result<(), AppError> {
+    use crate::navigation_guard::NewWindowGuardExt;
     use tauri::WebviewWindowBuilder;
     info!(
         "Opening settings window (section: {:?}, sub: {:?})",
@@ -101,6 +102,7 @@ pub async fn open_settings_window<R: tauri::Runtime>(
         .resizable(true)
         .center()
         .visible(false) // shown below after we know it built
+        .guard_new_windows(&app)
         .build()
         .map_err(|e| {
             AppError::keyed(
@@ -156,6 +158,7 @@ const CONTEXT_MENU_LOGICAL_H: f64 = 220.0;
 pub fn ensure_context_menu_window<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<tauri::WebviewWindow<R>, AppError> {
+    use crate::navigation_guard::NewWindowGuardExt;
     use tauri::WebviewWindowBuilder;
     if let Some(w) = app.get_webview_window(window_labels::CONTEXT_MENU) {
         return Ok(w);
@@ -175,6 +178,7 @@ pub fn ensure_context_menu_window<R: tauri::Runtime>(
     .skip_taskbar(true)
     .focused(false)
     .visible(false)
+    .guard_new_windows(app)
     .build()
     .map_err(|e| {
         AppError::keyed(

@@ -237,6 +237,7 @@ pub async fn open_devtools<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Resul
 pub async fn open_welcome_window<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
+    use crate::navigation_guard::NewWindowGuardExt;
     use tauri::WebviewWindowBuilder;
     // If window exists and is valid, just focus it
     if let Some(w) = app.get_webview_window(window_labels::WELCOME) {
@@ -257,6 +258,7 @@ pub async fn open_welcome_window<R: tauri::Runtime>(
     .decorations(false)
     .center()
     .visible(false) // Hidden until content loads
+    .guard_new_windows(&app)
     .build()
     .map_err(|e| format!("Failed to open welcome window: {}", e))?;
     // Set dark background to prevent white flash

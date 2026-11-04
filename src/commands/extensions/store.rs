@@ -51,6 +51,7 @@ pub async fn open_store_window_with_intent<R: tauri::Runtime>(
     tab: Option<String>,
     install_id: Option<String>,
 ) -> Result<(), AppError> {
+    use crate::navigation_guard::NewWindowGuardExt;
     use tauri::WebviewWindowBuilder;
 
     // Telemetry early so we count "opened" even on the path where the
@@ -135,6 +136,7 @@ pub async fn open_store_window_with_intent<R: tauri::Runtime>(
     .min_inner_size(600.0, 400.0)
     .center()
     .visible(true)
+    .guard_new_windows(&app)
     .build()
     .map_err(|e| format!("Failed to open store window: {}", e))?;
 

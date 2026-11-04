@@ -37,6 +37,7 @@ mod internal_sites;
 mod link_metadata_cache;
 mod logger;
 mod mcp_registration;
+mod navigation_guard;
 mod ollama;
 mod os;
 mod overlay_windows;
@@ -379,6 +380,12 @@ async fn run() {
     }
 
     let builder = builder
+        // Cancels any navigation that would turn a Kage window into a web
+        // page (an extension's setup link once replaced the whole Settings
+        // window with developer.spotify.com). A plugin hook because it's
+        // the only one that reaches the tauri.conf.json windows, which are
+        // built before setup(). See src/navigation_guard.rs.
+        .plugin(navigation_guard::plugin())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
