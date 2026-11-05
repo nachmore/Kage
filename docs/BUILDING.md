@@ -126,6 +126,17 @@ The postinstall hook (`ui-vendor/setup.js`) copies the browser bundles into `ui/
 
 Current dependencies: marked, mermaid, prismjs, @hpcc-js/wasm-graphviz, mathjs
 
+## Marketing site
+
+The GitHub Pages site lives in [`site/`](../site/README.md) and deploys from `main` through `.github/workflows/site.yml`. To preview it locally:
+
+```bash
+node site/scripts/build.mjs --base /
+python3 -m http.server 8000 --bind 127.0.0.1 --directory _site   # http://127.0.0.1:8000/
+```
+
+[`site/README.md`](../site/README.md) covers the checks, the one-time Pages setup and how the build pulls in the README screenshots.
+
 ## How Kage works inside
 
 Background reading for contributors:
