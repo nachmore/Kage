@@ -9,6 +9,7 @@ pub mod diagnostics;
 pub mod file_search;
 pub mod hotkey;
 pub mod icon;
+pub mod locale;
 pub mod notification;
 pub mod permissions;
 pub mod power;

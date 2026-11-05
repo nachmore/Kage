@@ -61,7 +61,13 @@ import { formatIcu } from './icu-message.js';
 
 let _catalog = null;
 let _fallback = null;
-let _meta = { language: 'en', system_language: '', rtl: false, machine_translated: false };
+let _meta = {
+    language: 'en',
+    system_language: '',
+    first_weekday: null,
+    rtl: false,
+    machine_translated: false,
+};
 let _loadPromise = null;
 // False until a real catalog payload has been applied, so a failed initial
 // load never lets the config_updated fast path skip the retry.
@@ -83,7 +89,13 @@ export async function initI18n(invoke) {
             // This keeps the UI from going blank if the IPC ever breaks.
             _catalog = {};
             _fallback = {};
-            _meta = { language: 'en', system_language: '', rtl: false, machine_translated: false };
+            _meta = {
+                language: 'en',
+                system_language: '',
+                first_weekday: null,
+                rtl: false,
+                machine_translated: false,
+            };
         }
         _applyDocumentDir();
     })();
@@ -129,6 +141,7 @@ function _applyPayload(payload) {
     _meta = {
         language: payload?.language || 'en',
         system_language: payload?.system_language || '',
+        first_weekday: Number.isInteger(payload?.first_weekday) ? payload.first_weekday : null,
         rtl: !!payload?.rtl,
         machine_translated: !!payload?.machine_translated,
     };
@@ -158,6 +171,16 @@ export function activeLanguage() {
  */
 export function systemLanguage() {
     return _meta.system_language;
+}
+
+/**
+ * The OS "first day of the week" preference as a JS weekday (0 = Sunday …
+ * 6 = Saturday), or null when the OS doesn't report one. Separate from the
+ * locale tag, which doesn't carry it.
+ */
+export function systemFirstWeekday() {
+    const n = _meta.first_weekday;
+    return Number.isInteger(n) && n >= 0 && n <= 6 ? n : null;
 }
 
 /**

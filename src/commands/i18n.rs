@@ -46,6 +46,11 @@ pub struct I18nPayload {
     /// whatever the user picked. Empty string when sys-locale couldn't
     /// detect anything.
     pub system_language: String,
+    /// The OS "first day of the week" preference as a JS weekday (0 = Sunday
+    /// … 6 = Saturday), which the locale tag doesn't carry (an en-US Mac set
+    /// to Monday weeks still reports `en-US`). `None` where the OS has no such
+    /// setting; the date picker then uses the locale's CLDR default.
+    pub first_weekday: Option<u8>,
     /// `true` if the active language is right-to-left.
     pub rtl: bool,
     /// `true` if the active catalog is mostly machine-translated.
@@ -81,6 +86,7 @@ pub async fn get_i18n_catalog() -> Result<I18nPayload, AppError> {
     // independent of the user's `config.ui.language` override and lets the
     // settings UI honestly answer "what is the system language?".
     let system_language = sys_locale::get_locale().unwrap_or_default();
+    let first_weekday = crate::os::locale::first_weekday();
 
     // Views borrow the parsed catalogs; nothing is cloned until serde
     // writes the IPC payload.
@@ -90,6 +96,7 @@ pub async fn get_i18n_catalog() -> Result<I18nPayload, AppError> {
     Ok(I18nPayload {
         language,
         system_language,
+        first_weekday,
         rtl,
         machine_translated,
         catalog,

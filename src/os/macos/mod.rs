@@ -15,6 +15,7 @@ pub mod file_search;
 pub mod hotkey;
 pub mod icon;
 pub mod keycodes;
+pub mod locale;
 pub mod permissions;
 pub mod power;
 pub mod process;
