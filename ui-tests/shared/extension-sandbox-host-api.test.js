@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { HOST_FEATURES, invokeError } from '../../ui/js/extension-sandbox/runtime/host-api.js';
 
 describe('sandbox runtime host API', () => {
-    it('advertises the settings copy action, structured invoke errors, and manifest-default config', () => {
+    it('advertises the settings copy action, structured invoke errors, manifest-default config, and minimized windows', () => {
         expect(HOST_FEATURES).toContain('settings.copy_action');
         expect(HOST_FEATURES).toContain('invoke.error_kind');
         expect(HOST_FEATURES).toContain('config.manifest_defaults');
+        expect(HOST_FEATURES).toContain('windows.minimized');
         expect(Object.isFrozen(HOST_FEATURES)).toBe(true);
     });
 

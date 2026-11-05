@@ -21,6 +21,9 @@ export const HOST_FEATURES = Object.freeze([
     // Settings controls whose id the manifest declares take that default and
     // ignore their own.
     'config.manifest_defaults',
+    // `list_open_windows` entries carry `minimized: boolean` (minimized
+    // windows are listed and flagged, not filtered out).
+    'windows.minimized',
 ]);
 
 /**

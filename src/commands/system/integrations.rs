@@ -566,9 +566,14 @@ pub async fn ollama_codex_spawn_command(
 
 // --- Window Walker ---
 
+/// Other apps' top-level windows, minimized ones included and flagged
+/// (`WindowInfo::minimized`). Blocking pool: on macOS the minimized probe
+/// messages other apps over Accessibility (bounded, but not instant).
 #[tauri::command]
 pub async fn list_open_windows() -> Result<Vec<crate::os::window_list::WindowInfo>, AppError> {
-    Ok(crate::os::list_windows())
+    tauri::async_runtime::spawn_blocking(crate::os::list_windows)
+        .await
+        .map_err(|e| AppError::from(format!("Window list task failed: {}", e)))
 }
 
 /// Fetch app icons for a set of window handles. Designed to be called after

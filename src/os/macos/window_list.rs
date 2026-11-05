@@ -1,36 +1,73 @@
 // macOS window enumeration using CGWindowList (fast, no Accessibility TCC).
 //
-// Uses CGWindowListCopyWindowInfo to enumerate on-screen windows. This is
-// the same API used by `get_foreground_window_info()` for title extraction.
-// Window titles require Screen Recording permission (macOS 10.15+); without
-// it we still get process names and PIDs, just empty titles.
+// Uses CGWindowListCopyWindowInfo to enumerate windows. This is the same
+// API used by `get_foreground_window_info()` for title extraction. Window
+// titles require Screen Recording permission (macOS 10.15+); without it we
+// still get process names and PIDs, just empty titles.
+//
+// Minimized windows: CGWindowList can't tell a minimized window from the
+// other off-screen layer-0 windows (other Spaces, Cmd+H-hidden apps,
+// background native tabs, and dozens of invisible helper windows) — they
+// all just lack `kCGWindowIsOnscreen`. The only reliable signal is AX
+// `kAXMinimizedAttribute`, which needs Accessibility. So:
+//   - untrusted: on-screen windows only, every entry `minimized: false`
+//     (the list as it has always been; `AXIsProcessTrusted` never prompts);
+//   - trusted: all windows, then AX is asked about off-screen windows that
+//     could add an entry (see `ax_candidate_pids`), on this thread, with a
+//     short per-message timeout and an overall budget so a hung app can't
+//     stall the list. Minimized windows are appended after the on-screen
+//     ones and flagged; other off-screen windows are still dropped.
 //
 // Handles pack the CG window number with the owner PID (see `pack_handle`).
 // Focus activates the app via NSRunningApplication.activateWithOptions,
 // which only needs the PID — no Accessibility permission. When Kage is
-// already Accessibility-trusted it also raises the exact window via AX, so
-// picking one of several windows of the same app lands on that window;
-// without the permission it degrades to app-level activation (no prompt).
+// already Accessibility-trusted it also restores (if minimized) and raises
+// the exact window via AX, so picking one of several windows of the same
+// app lands on that window; without the permission it degrades to
+// app-level activation (no prompt).
 
 use crate::os::window_list::WindowInfo;
 use core_foundation::array::CFArray;
 use core_foundation::base::{CFType, TCFType};
+use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use core_graphics::window::{
-    kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly,
-    CGWindowListCopyWindowInfo,
+    kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionAll,
+    kCGWindowListOptionOnScreenOnly, CGWindowListCopyWindowInfo,
 };
 use log::debug;
 use std::collections::HashSet;
 use std::process::Command;
+use std::time::{Duration, Instant};
+
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    // Private but long-stable HIServices SPI (used by yabai, AltTab,
+    // Hammerspoon) mapping an AX window to its CGWindowID — there is no
+    // public equivalent.
+    fn _AXUIElementGetWindow(
+        element: accessibility_sys::AXUIElementRef,
+        out: *mut u32,
+    ) -> accessibility_sys::AXError;
+}
+
+/// Per-message AX timeout while probing for minimized windows. Responsive
+/// apps answer far sooner; the default (6 s) would let one hung app freeze
+/// the window switcher.
+const AX_MESSAGE_TIMEOUT_SECS: f32 = 0.1;
+
+/// Stop asking further apps once the minimized-window probe has run this
+/// long; their off-screen windows are dropped, as when untrusted.
+const AX_PROBE_BUDGET: Duration = Duration::from_millis(150);
 
 /// Low bits of a handle hold the owner PID; the CG window number sits above.
 /// macOS PIDs are capped at 99_999 (PID_MAX), well inside 20 bits, and the
 /// packed value stays far below 2^53 so it survives the JS Number round
 /// trip. Window number 0 (kCGNullWindowID) means "app only", so untitled
-/// per-app entries keep handle == PID.
+/// per-app entries keep handle == PID — except a minimized-only app's
+/// entry, which carries its window so focusing it can restore that window.
 const PID_BITS: u32 = 20;
 const PID_MASK: u64 = (1 << PID_BITS) - 1;
 
@@ -44,10 +81,50 @@ fn unpack_handle(handle: u64) -> (i32, u32) {
 }
 
 pub fn list_windows_impl() -> Vec<WindowInfo> {
-    // CGWindowListCopyWindowInfo is fast (~1-5ms) and doesn't require
-    // Accessibility permission. Window titles require Screen Recording
-    // permission; without it they'll be empty strings.
-    let options = kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements;
+    // Plain AXIsProcessTrusted never prompts. Without Accessibility there's
+    // no way to pick the minimized windows out of the off-screen ones, so
+    // don't pay for listing those (all ~280 windows of a busy desktop: ~5
+    // ms; just the on-screen ones: ~1 ms).
+    let trusted = unsafe { accessibility_sys::AXIsProcessTrusted() };
+    let entries = cg_layer0_windows(!trusted);
+    let minimized = if trusted {
+        minimized_window_numbers(&entries)
+    } else {
+        HashSet::new()
+    };
+    let windows = merge_windows(&entries, &minimized);
+
+    debug!(
+        "[window-walker] CGWindowList returned {} windows ({} minimized)",
+        windows.len(),
+        windows.iter().filter(|w| w.minimized).count()
+    );
+
+    windows
+}
+
+/// One layer-0 CGWindowList entry, reduced to what the list needs.
+#[derive(Debug)]
+struct CgWindow {
+    pid: u64,
+    window_number: u32,
+    process_name: String,
+    /// Empty without Screen Recording.
+    title: String,
+    on_screen: bool,
+}
+
+/// Layer-0 (regular app) windows in front-to-back order, Kage's own
+/// excluded. `on_screen_only` lists just the windows on the current Space;
+/// otherwise every window, with `on_screen` from `kCGWindowIsOnscreen`.
+/// CGWindowListCopyWindowInfo doesn't need Accessibility; titles need
+/// Screen Recording and are empty strings without it.
+fn cg_layer0_windows(on_screen_only: bool) -> Vec<CgWindow> {
+    let options = if on_screen_only {
+        kCGWindowListOptionOnScreenOnly
+    } else {
+        kCGWindowListOptionAll
+    } | kCGWindowListExcludeDesktopElements;
 
     let window_list: CFArray<CFDictionary<CFString, CFType>> = unsafe {
         let cf_array = CGWindowListCopyWindowInfo(options, kCGNullWindowID);
@@ -63,13 +140,9 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
     let key_layer = CFString::from_static_string("kCGWindowLayer");
     let key_owner = CFString::from_static_string("kCGWindowOwnerName");
     let key_number = CFString::from_static_string("kCGWindowNumber");
+    let key_on_screen = CFString::from_static_string("kCGWindowIsOnscreen");
 
     let mut windows = Vec::new();
-    // Track PIDs we've already added a window for — show one entry per app
-    // when the title is empty (Screen Recording not granted), but show all
-    // titled windows when we have permission.
-    let mut seen_pids_no_title: HashSet<u64> = HashSet::new();
-
     for info in window_list.iter() {
         // Only layer 0 = regular app windows (skip menubar, dock, etc.)
         let layer = info
@@ -107,42 +180,204 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
             .map(|s| s.to_string())
             .unwrap_or_default();
 
-        // If we have a title, show each window individually.
-        // If no title (Screen Recording not granted), show one entry per app.
-        if title.is_empty() {
-            if seen_pids_no_title.contains(&pid) {
+        let window_number = info
+            .find(&key_number)
+            .and_then(|v| v.downcast::<CFNumber>())
+            .and_then(|n| n.to_i64())
+            .and_then(|n| u32::try_from(n).ok())
+            .unwrap_or(0);
+
+        // Optional key, present (true) only for on-screen windows.
+        let on_screen = on_screen_only
+            || info
+                .find(&key_on_screen)
+                .and_then(|v| v.downcast::<CFBoolean>())
+                .is_some_and(bool::from);
+
+        windows.push(CgWindow {
+            pid,
+            window_number,
+            process_name,
+            title,
+            on_screen,
+        });
+    }
+    windows
+}
+
+/// Build the list from `cg_layer0_windows` output: on-screen windows in
+/// z-order, then the off-screen ones in `minimized` (CG window numbers),
+/// flagged. Every other off-screen window is dropped.
+///
+/// A titled window gets its own entry. Untitled windows (Screen Recording
+/// not granted) collapse to one entry per app, titled with the process
+/// name — so an app with any on-screen window shows as not minimized, and
+/// one whose windows are all minimized shows as minimized.
+fn merge_windows(entries: &[CgWindow], minimized: &HashSet<u32>) -> Vec<WindowInfo> {
+    let mut windows = Vec::new();
+    let mut seen_pids_no_title: HashSet<u64> = HashSet::new();
+    let shown = entries.iter().filter(|w| w.on_screen).map(|w| (w, false));
+    let hidden = entries
+        .iter()
+        .filter(|w| !w.on_screen && w.window_number != 0 && minimized.contains(&w.window_number))
+        .map(|w| (w, true));
+
+    for (w, is_minimized) in shown.chain(hidden) {
+        if w.title.is_empty() {
+            if !seen_pids_no_title.insert(w.pid) {
                 continue;
             }
-            seen_pids_no_title.insert(pid);
-            // Use process name as the display title when we can't get window titles
+            // On-screen: handle == PID, so focus activates the app. Minimized
+            // only: point at the window so focus can restore it.
+            let handle = if is_minimized {
+                pack_handle(w.pid, w.window_number)
+            } else {
+                w.pid
+            };
             windows.push(WindowInfo {
-                title: process_name.clone(),
-                process_name,
-                handle: pid,
+                title: w.process_name.clone(),
+                process_name: w.process_name.clone(),
+                handle,
                 icon_base64: None,
+                minimized: is_minimized,
             });
         } else {
-            let window_number = info
-                .find(&key_number)
-                .and_then(|v| v.downcast::<CFNumber>())
-                .and_then(|n| n.to_i64())
-                .and_then(|n| u32::try_from(n).ok())
-                .unwrap_or(0);
             windows.push(WindowInfo {
-                title,
-                process_name,
-                handle: pack_handle(pid, window_number),
+                title: w.title.clone(),
+                process_name: w.process_name.clone(),
+                handle: pack_handle(w.pid, w.window_number),
                 icon_base64: None,
+                minimized: is_minimized,
             });
         }
     }
-
-    debug!(
-        "[window-walker] CGWindowList returned {} windows",
-        windows.len()
-    );
-
     windows
+}
+
+/// PIDs worth asking AX about, in z-order: owners of an off-screen window
+/// that `merge_windows` would list if it turned out minimized. A titled
+/// window always would; an untitled one only when its app has no
+/// on-screen untitled entry already. Without Screen Recording that skips
+/// every app with a window on screen, which is most of them.
+fn ax_candidate_pids(entries: &[CgWindow]) -> Vec<u64> {
+    let untitled_on_screen: HashSet<u64> = entries
+        .iter()
+        .filter(|w| w.on_screen && w.title.is_empty())
+        .map(|w| w.pid)
+        .collect();
+    let mut seen = HashSet::new();
+    entries
+        .iter()
+        .filter(|w| !w.on_screen && w.window_number != 0)
+        .filter(|w| !w.title.is_empty() || !untitled_on_screen.contains(&w.pid))
+        .filter(|w| seen.insert(w.pid))
+        .map(|w| w.pid)
+        .collect()
+}
+
+/// CG window numbers of the candidates' minimized windows, via AX
+/// `kAXMinimizedAttribute`. Call only when Accessibility is trusted. Runs
+/// on the calling thread, like `raise_window` — not on kage-core's AX
+/// worker, which exists for Computer Control's element registry (unneeded
+/// here) and whose queue can be busy with a multi-second tree walk. Gives
+/// up on further apps after `AX_PROBE_BUDGET`.
+fn minimized_window_numbers(entries: &[CgWindow]) -> HashSet<u32> {
+    let mut found = HashSet::new();
+    let pids = ax_candidate_pids(entries);
+    let started = Instant::now();
+    for (i, &pid) in pids.iter().enumerate() {
+        if started.elapsed() >= AX_PROBE_BUDGET {
+            debug!(
+                "[window-walker] minimized-window probe over budget; skipped {} of {} apps",
+                pids.len() - i,
+                pids.len()
+            );
+            break;
+        }
+        let Ok(pid) = i32::try_from(pid) else {
+            continue;
+        };
+        collect_minimized_windows(pid, &mut found);
+    }
+    found
+}
+
+/// Add the CG window numbers of `pid`'s minimized windows to `out`. Every
+/// AX read messages the target app, so each element gets a short timeout,
+/// and an app that stops answering is abandoned rather than paying that
+/// timeout once per window.
+fn collect_minimized_windows(pid: i32, out: &mut HashSet<u32>) {
+    use accessibility_sys as ax;
+    use core_foundation::base::{CFRelease, CFTypeRef};
+    use std::ffi::c_void;
+
+    let app = unsafe { ax::AXUIElementCreateApplication(pid) };
+    if app.is_null() {
+        return;
+    }
+    unsafe { ax::AXUIElementSetMessagingTimeout(app, AX_MESSAGE_TIMEOUT_SECS) };
+
+    let attr = CFString::from_static_string(ax::kAXWindowsAttribute);
+    let mut value: CFTypeRef = std::ptr::null();
+    let err =
+        unsafe { ax::AXUIElementCopyAttributeValue(app, attr.as_concrete_TypeRef(), &mut value) };
+    if err == ax::kAXErrorSuccess && !value.is_null() {
+        // Copy rule: owns the array; the window refs below borrow from it.
+        let value = unsafe { CFType::wrap_under_create_rule(value) };
+        if let Some(windows) = value.downcast::<CFArray<*const c_void>>() {
+            for item in windows.iter() {
+                let win = *item as ax::AXUIElementRef;
+                if win.is_null() {
+                    continue;
+                }
+                unsafe { ax::AXUIElementSetMessagingTimeout(win, AX_MESSAGE_TIMEOUT_SECS) };
+                match ax_bool_attr(win, ax::kAXMinimizedAttribute) {
+                    Ok(true) => {
+                        let mut wid: u32 = 0;
+                        if unsafe { _AXUIElementGetWindow(win, &mut wid) } == ax::kAXErrorSuccess
+                            && wid != 0
+                        {
+                            out.insert(wid);
+                        }
+                    }
+                    Ok(false) => {}
+                    Err(ax::kAXErrorCannotComplete) => break,
+                    // E.g. kAXErrorAttributeUnsupported on an odd window.
+                    Err(_) => {}
+                }
+            }
+        }
+    }
+    unsafe { CFRelease(app as CFTypeRef) };
+}
+
+/// Read a boolean AX attribute. `Err` carries the AXError, or
+/// `kAXErrorNoValue` / `kAXErrorIllegalArgument` for a missing or
+/// non-boolean value.
+fn ax_bool_attr(
+    elem: accessibility_sys::AXUIElementRef,
+    attr: &'static str,
+) -> Result<bool, accessibility_sys::AXError> {
+    use accessibility_sys as ax;
+    use core_foundation::base::CFTypeRef;
+
+    let cf_attr = CFString::from_static_string(attr);
+    let mut value: CFTypeRef = std::ptr::null();
+    let err = unsafe {
+        ax::AXUIElementCopyAttributeValue(elem, cf_attr.as_concrete_TypeRef(), &mut value)
+    };
+    if err != ax::kAXErrorSuccess {
+        return Err(err);
+    }
+    if value.is_null() {
+        return Err(ax::kAXErrorNoValue);
+    }
+    // Copy rule: the wrapper takes ownership and releases on drop.
+    let value = unsafe { CFType::wrap_under_create_rule(value) };
+    value
+        .downcast::<CFBoolean>()
+        .map(bool::from)
+        .ok_or(ax::kAXErrorIllegalArgument)
 }
 
 /// Extract app icons for a list of window handles (see `pack_handle`).
@@ -206,15 +441,14 @@ pub fn focus_window_impl(handle: u64) -> Result<(), String> {
         let app = NSRunningApplication::runningApplicationWithProcessIdentifier(pid);
         match app {
             Some(app) => {
-                // Un-hide/un-minimize the app first so its windows are restored.
-                // unhide() brings back windows hidden via Cmd+H; for minimized
-                // (Dock'd) windows, activateWithOptions also restores them when
-                // the app becomes frontmost.
+                // unhide() brings back windows hidden via Cmd+H.
                 app.unhide();
 
-                // Raise the chosen window before activating so it's the
-                // app's main window when activation lands — otherwise the
-                // app comes forward with whichever window was last key.
+                // Restore (if minimized) and raise the chosen window before
+                // activating so it's the app's main window when activation
+                // lands — otherwise the app comes forward with whichever
+                // window was last key. Activation alone doesn't bring a
+                // window back out of the Dock.
                 if window_number != 0 && !raise_window(pid, window_number) {
                     debug!(
                         "[window-walker] AX raise unavailable for window {window_number}; \
@@ -264,22 +498,15 @@ fn focus_via_osascript(pid: i32) -> Result<(), String> {
     }
 }
 
-/// Raise one specific window of `pid` via Accessibility. Only runs when
-/// Kage is already trusted (`AXIsProcessTrusted` never prompts); returns
-/// false when untrusted or the window can't be matched, and the caller
-/// falls back to plain app activation.
+/// Restore (if minimized) and raise one specific window of `pid` via
+/// Accessibility. Only runs when Kage is already trusted
+/// (`AXIsProcessTrusted` never prompts); returns false when untrusted or
+/// the window can't be matched, and the caller falls back to plain app
+/// activation.
 fn raise_window(pid: i32, window_number: u32) -> bool {
     use accessibility_sys as ax;
     use core_foundation::base::{CFRelease, CFTypeRef};
     use std::ffi::c_void;
-
-    #[link(name = "ApplicationServices", kind = "framework")]
-    extern "C" {
-        // Private but long-stable HIServices SPI (used by yabai, AltTab,
-        // Hammerspoon) mapping an AX window to its CGWindowID — there is
-        // no public equivalent.
-        fn _AXUIElementGetWindow(element: ax::AXUIElementRef, out: *mut u32) -> ax::AXError;
-    }
 
     if !unsafe { ax::AXIsProcessTrusted() } {
         return false;
@@ -322,6 +549,22 @@ fn raise_window(pid: i32, window_number: u32) -> bool {
             }
         }
         if let Some(win) = by_id.or(by_title) {
+            if ax_bool_attr(win, ax::kAXMinimizedAttribute) == Ok(true) {
+                let attr = CFString::from_static_string(ax::kAXMinimizedAttribute);
+                let restored = unsafe {
+                    ax::AXUIElementSetAttributeValue(
+                        win,
+                        attr.as_concrete_TypeRef(),
+                        CFBoolean::false_value().as_CFTypeRef(),
+                    )
+                };
+                if restored != ax::kAXErrorSuccess {
+                    debug!(
+                        "[window-walker] AX un-minimize failed for window {window_number}: \
+                         {restored}"
+                    );
+                }
+            }
             let action = CFString::from_static_string(ax::kAXRaiseAction);
             raised = unsafe { ax::AXUIElementPerformAction(win, action.as_concrete_TypeRef()) }
                 == ax::kAXErrorSuccess;
@@ -467,7 +710,107 @@ fn window_title_for_pid(pid: i32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{pack_handle, unpack_handle};
+    use super::{ax_candidate_pids, merge_windows, pack_handle, unpack_handle, CgWindow};
+    use std::collections::HashSet;
+
+    fn cg(pid: u64, window_number: u32, title: &str, on_screen: bool) -> CgWindow {
+        CgWindow {
+            pid,
+            window_number,
+            process_name: format!("app{pid}"),
+            title: title.into(),
+            on_screen,
+        }
+    }
+
+    fn set(ids: &[u32]) -> HashSet<u32> {
+        ids.iter().copied().collect()
+    }
+
+    #[test]
+    fn on_screen_windows_first_then_minimized_and_other_off_screen_dropped() {
+        let entries = [
+            cg(10, 1, "Doc A", true),
+            cg(10, 2, "Doc B (minimized)", false),
+            cg(20, 3, "Other Space", false),
+            cg(20, 4, "Mail", true),
+            cg(30, 5, "Notes (minimized)", false),
+        ];
+        let list = merge_windows(&entries, &set(&[2, 5]));
+        let got: Vec<(&str, u64, bool)> = list
+            .iter()
+            .map(|w| (w.title.as_str(), w.handle, w.minimized))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("Doc A", pack_handle(10, 1), false),
+                ("Mail", pack_handle(20, 4), false),
+                ("Doc B (minimized)", pack_handle(10, 2), true),
+                ("Notes (minimized)", pack_handle(30, 5), true),
+            ]
+        );
+    }
+
+    #[test]
+    fn untrusted_list_is_on_screen_only_and_never_minimized() {
+        // What `list_windows_impl` builds without Accessibility: an
+        // on-screen-only CG list and no AX answers.
+        let entries = [cg(10, 1, "Doc A", true), cg(20, 2, "", true)];
+        let list = merge_windows(&entries, &HashSet::new());
+        assert_eq!(list.len(), 2);
+        assert!(list.iter().all(|w| !w.minimized));
+    }
+
+    #[test]
+    fn minimized_number_only_flags_off_screen_windows() {
+        // An on-screen window is never reported minimized, whatever AX said.
+        let list = merge_windows(&[cg(10, 1, "Doc", true)], &set(&[1]));
+        assert_eq!(list.len(), 1);
+        assert!(!list[0].minimized);
+    }
+
+    #[test]
+    fn untitled_windows_collapse_per_app() {
+        // No Screen Recording: titles are empty.
+        let entries = [
+            cg(10, 1, "", true),
+            cg(10, 2, "", false), // minimized, but app 10 is already listed
+            cg(20, 3, "", false), // app 20's only windows are minimized
+            cg(20, 4, "", false),
+            cg(30, 5, "", false), // off-screen, not minimized
+        ];
+        let list = merge_windows(&entries, &set(&[2, 3, 4]));
+        let got: Vec<(&str, u64, bool)> = list
+            .iter()
+            .map(|w| (w.title.as_str(), w.handle, w.minimized))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                // On-screen per-app entry keeps handle == PID.
+                ("app10", 10, false),
+                // Minimized-only app carries its first minimized window.
+                ("app20", pack_handle(20, 3), true),
+            ]
+        );
+    }
+
+    #[test]
+    fn ax_candidates_are_apps_whose_off_screen_windows_could_be_listed() {
+        let entries = [
+            cg(10, 1, "", true),
+            cg(10, 2, "", false), // app 10 already has an untitled entry
+            cg(20, 3, "Titled", true),
+            cg(20, 4, "", false), // app 20 has no untitled entry yet
+            cg(30, 5, "Other Space", false),
+            cg(30, 6, "Another", false),
+            cg(40, 7, "On screen", true), // nothing off-screen
+            cg(50, 0, "No number", false),
+            cg(10, 8, "Titled off-screen", false),
+        ];
+        assert_eq!(ax_candidate_pids(&entries), [20, 30, 10]);
+    }
 
     #[test]
     fn handle_round_trips_pid_and_window_number() {

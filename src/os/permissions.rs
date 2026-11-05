@@ -9,7 +9,8 @@
 //!
 //!   - **Accessibility** — synthetic Cmd+C / Cmd+V (`os::clipboard`'s
 //!     selection capture and `simulate_paste`), raising one specific
-//!     window in the window switcher, and the Computer Control sidecar's
+//!     window in the window switcher and listing/restoring its minimized
+//!     windows (`os::window_list`), and the Computer Control sidecar's
 //!     AX tree + mouse/keyboard synthesis (kage-core).
 //!   - **Screen Recording** — `kCGWindowName` from CGWindowList, i.e.
 //!     window titles for the active-window context, activity tracking and

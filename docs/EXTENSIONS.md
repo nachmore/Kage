@@ -239,6 +239,45 @@ If you add a new Tauri command you want extensions to be able to
 call, add it to that table under an existing capability (or propose
 a new one).
 
+### Other apps' windows
+
+With the `windows` capability, `invoke('list_open_windows')` resolves
+to an array of other apps' top-level windows (Kage's own excluded),
+front to back on Windows and macOS:
+
+```js
+{
+    title: 'Quarterly plan.docx',  // the app's name when titles are unavailable (below)
+    process_name: 'Microsoft Word',
+    handle: 123456789,             // opaque; pass to focus_open_window / get_window_icons
+    minimized: false,
+}
+```
+
+- `minimized` is `true` for a window in the Dock / taskbar. Minimized
+  windows are **listed, not filtered**: if you offer a "hide
+  minimized" option, filter on this field yourself. Focusing one with
+  `focus_open_window` restores it.
+- `minimized` is `false` whenever the host can't tell, so `false`
+  means "not known to be minimized":
+  - **Windows** — always accurate.
+  - **macOS** — needs the Accessibility permission. Without it the list
+    holds on-screen windows only (minimized ones are missing, not
+    flagged), and no permission prompt is shown. With it, minimized
+    windows are listed after the on-screen ones. Windows that are just
+    off screen (on another Space, or of an app hidden with ⌘H) aren't
+    listed either way.
+  - **Linux** — not detected, always `false`.
+- On macOS without the Screen Recording permission, titles are empty,
+  so each app gets one entry titled with its name. That entry is
+  `minimized: true` only when all of the app's listed windows are
+  minimized.
+- Hosts that predate the field omit it (so it reads as `undefined`)
+  and don't list `windows.minimized` in
+  [`context.hostFeatures`](#feature-detection). Check the feature if
+  you need to tell "not minimized" from "this host doesn't say", e.g.
+  to hide a "hide minimized windows" setting that would do nothing.
+
 ### Forbidden commands
 
 Some commands are never callable from any extension regardless of
@@ -413,6 +452,7 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 | `settings.copy_action` | Settings `action` controls accept `copy` (see [Copy to clipboard](#copy-to-clipboard)). |
 | `invoke.error_kind`    | `invoke()` rejections carry `err.kind` / `err.key` (see [Errors from `invoke()`](#errors-from-invoke)). |
 | `config.manifest_defaults` | `context.config` is the manifest defaults overlaid with saved values, `config.enabled` is the host's on/off switch, saving stores only overrides, and settings controls take their defaults from the manifest (see [Config Schema](#config-schema)). |
+| `windows.minimized`    | `list_open_windows` entries carry `minimized: boolean`, and minimized windows are listed and flagged rather than left out (see [Other apps' windows](#other-apps-windows)). |
 
 ### Errors from `invoke()`
 

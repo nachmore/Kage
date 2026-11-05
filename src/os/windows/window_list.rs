@@ -147,6 +147,9 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
                 process_name,
                 handle: hwnd as u64,
                 icon_base64: None,
+                // Minimized windows keep WS_VISIBLE, so they pass the
+                // IsWindowVisible gate above and are listed — just flagged.
+                minimized: IsIconic(hwnd) != 0,
             },
             exe_path,
         ));

@@ -8,7 +8,8 @@
  *
  *   - Accessibility    — synthetic Cmd+C / Cmd+V (selection capture and
  *                        paste-back), raising a specific window from the
- *                        window list, and Computer Control's AX tree +
+ *                        window list and listing/restoring minimized
+ *                        windows there, and Computer Control's AX tree +
  *                        input synthesis
  *   - Screen Recording — window titles from CGWindowList (active-window
  *                        context, activity tracking, open-windows list)

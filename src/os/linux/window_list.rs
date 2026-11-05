@@ -1,5 +1,10 @@
 // Linux window enumeration using wmctrl
 // Falls back to xdotool if wmctrl is not available.
+//
+// Minimized state isn't detected: `wmctrl -l` doesn't print _NET_WM_STATE
+// and a per-window `xprop` would cost a process spawn each. Every entry
+// reports `minimized: false`. (wmctrl lists minimized windows; xdotool's
+// `--onlyvisible` drops them, since minimized windows are unmapped.)
 
 use crate::os::window_list::WindowInfo;
 use std::process::Command;
@@ -50,6 +55,7 @@ fn list_with_wmctrl() -> Option<Vec<WindowInfo>> {
             process_name,
             handle,
             icon_base64: None,
+            minimized: false, // not detected on Linux (see module docs)
         });
     }
 
@@ -128,6 +134,7 @@ fn list_with_xdotool() -> Option<Vec<WindowInfo>> {
             process_name,
             handle,
             icon_base64: None,
+            minimized: false, // not detected on Linux (see module docs)
         });
     }
 
