@@ -8,6 +8,8 @@ export function createSessionHistoryMixin(dependencies) {
         t,
         buildRenderQueue,
         formatDuration,
+        renderToolSources,
+        attachSourceClickHandler,
     } = dependencies;
     return class {
         /**
@@ -441,18 +443,33 @@ export function createSessionHistoryMixin(dependencies) {
                     this.addMessageFromHistory('user', item.text, item.snapshots, item.meta);
                     break;
                 case 'assistant':
-                    this.addMessageFromHistory('assistant', item.text, null, item.meta);
+                    this.addMessageFromHistory('assistant', item.text, null, item.meta, item.tools);
                     break;
             }
         }
 
-        addMessageFromHistory(role, text, imageSnapshots, meta) {
+        /**
+         * `tools` (assistant only): the response's tool calls rebuilt from
+         * the session log (`{ toolUsages, toolSources }`, see
+         * shared/tool-call-history.js) — drawn as the same chip row a live
+         * response gets.
+         */
+        addMessageFromHistory(role, text, imageSnapshots, meta, tools = null) {
             // Injected context goes in its own section, ahead of the bubble.
             const displayText = role === 'user' && text ? this.appendPromptContext(text) : text;
             const msgEl = this.createMessageElement(role, '');
             const contentDiv = msgEl.querySelector('.message-content');
             if (role === 'assistant') {
-                renderMarkdown(text, contentDiv);
+                if (text) renderMarkdown(text, contentDiv);
+                const usages = tools?.toolUsages || [];
+                const sources = tools?.toolSources || [];
+                if (usages.length || sources.length) {
+                    const sourcesEl = document.createElement('div');
+                    sourcesEl.className = 'tool-sources';
+                    contentDiv.appendChild(sourcesEl);
+                    renderToolSources(sourcesEl, usages, sources);
+                    attachSourceClickHandler(sourcesEl, this.invoke);
+                }
             } else {
                 if (displayText) contentDiv.textContent = displayText;
             }
@@ -477,7 +494,8 @@ export function createSessionHistoryMixin(dependencies) {
                 }
             }
             this.elements.messagesArea.appendChild(msgEl);
-            this.messages.push({ role, content: text });
+            // A tools-only reply has no text to export, copy or read back.
+            if (text || role !== 'assistant') this.messages.push({ role, content: text });
         }
 
         _formatDuration(totalSecs) {

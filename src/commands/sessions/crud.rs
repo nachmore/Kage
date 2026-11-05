@@ -86,14 +86,78 @@ fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {
             })
             .collect();
 
+        let tool_kinds = if kind == "ToolResults" {
+            data.get("results").map(tool_kinds_of).unwrap_or_default()
+        } else {
+            HashMap::new()
+        };
+
         messages.push(SessionMessage {
             kind,
             message_id,
             content,
+            tool_kinds,
         });
     }
 
     messages
+}
+
+/// Longest built-in tool variant / MCP tool name kept in [`ToolUseKind`].
+const MAX_TOOL_KIND_NAME_LEN: usize = 128;
+
+fn is_plain_tool_name(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= MAX_TOOL_KIND_NAME_LEN
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+}
+
+/// [`ToolUseKind`]s from a kiro-cli `ToolResults` line's `results` map,
+/// keyed by tool use id. Entries whose kind isn't recognisable are left
+/// out (the frontend then treats the call as a plain tool by its name).
+fn tool_kinds_of(results: &serde_json::Value) -> HashMap<String, ToolUseKind> {
+    let mut out = HashMap::new();
+    let Some(map) = results.as_object() else {
+        return out;
+    };
+    for (id, entry) in map {
+        let Some(kind) = entry
+            .get("tool")
+            .and_then(|t| t.get("kind"))
+            .and_then(|k| k.as_object())
+        else {
+            continue;
+        };
+        let mut tk = ToolUseKind::default();
+        if let Some(mcp) = kind.get("Mcp") {
+            let server = mcp.get("serverName").and_then(|v| v.as_str());
+            let tool = mcp.get("toolName").and_then(|v| v.as_str());
+            match (server, tool) {
+                (Some(server), Some(tool))
+                    if crate::config::is_valid_mcp_server_name(server)
+                        && is_plain_tool_name(tool) =>
+                {
+                    tk.mcp_server = Some(server.to_string());
+                    tk.mcp_tool = Some(tool.to_string());
+                }
+                // An MCP tool whose names we can't show unambiguously:
+                // say nothing rather than guess.
+                _ => continue,
+            }
+        } else if let Some(variant) = kind
+            .get("BuiltIn")
+            .and_then(|b| b.as_object())
+            .and_then(|b| b.keys().next())
+            .filter(|v| is_plain_tool_name(v))
+        {
+            tk.builtin = Some(variant.clone());
+        } else {
+            continue;
+        }
+        out.insert(id.clone(), tk);
+    }
+    out
 }
 
 /// Cached session list, invalidated by the file watcher or explicit mutations.
@@ -889,6 +953,118 @@ mod tests {
         assert!(msgs[1].content.is_empty());
 
         assert_eq!(msgs[2].content[0].data, serde_json::Value::Null);
+    }
+
+    /// Lines shaped like kiro-cli's session log (structure only — the
+    /// values are made up): an MCP result names its server only in the
+    /// `results` map, built-ins name their variant there.
+    #[test]
+    fn parse_jsonl_projects_tool_kinds_from_tool_results() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.jsonl");
+        let assistant = serde_json::json!({
+            "version": "v1",
+            "kind": "AssistantMessage",
+            "data": {
+                "message_id": "a1",
+                "content": [
+                    { "kind": "text", "data": "Looking." },
+                    { "kind": "toolUse", "data": {
+                        "toolUseId": "tooluse_mcp", "name": "InternalSearch",
+                        "input": { "query": "widgets" } } },
+                    { "kind": "toolUse", "data": {
+                        "toolUseId": "tooluse_sh", "name": "shell",
+                        "input": { "command": "ls" } } }
+                ]
+            }
+        });
+        let results = serde_json::json!({
+            "version": "v1",
+            "kind": "ToolResults",
+            "data": {
+                "message_id": "r1",
+                "content": [
+                    { "kind": "toolResult", "data": {
+                        "toolUseId": "tooluse_mcp", "status": "success",
+                        "content": [{ "kind": "json", "data": {
+                            "content": [{ "type": "text", "text": "3 hits" }],
+                            "isError": false } }] } },
+                    { "kind": "toolResult", "data": {
+                        "toolUseId": "tooluse_sh", "status": "error",
+                        "content": [{ "kind": "json", "data": {
+                            "exit_status": "exit status: 2", "stdout": "", "stderr": "nope" } }] } }
+                ],
+                "results": {
+                    "tooluse_mcp": {
+                        "tool": { "tool_use_purpose": null, "kind": { "Mcp": {
+                            "toolName": "InternalSearch", "serverName": "builder-mcp",
+                            "params": { "query": "widgets" } } } },
+                        "result": { "Success": { "items": [{ "Json": {} }] } }
+                    },
+                    "tooluse_sh": {
+                        "tool": { "tool_use_purpose": null, "kind": { "BuiltIn": {
+                            "ExecuteCmd": { "command": "ls", "working_dir": null } } } },
+                        "result": { "Error": { "Custom": "exit 2" } }
+                    },
+                    "tooluse_bad_server": {
+                        "tool": { "kind": { "Mcp": {
+                            "toolName": "x", "serverName": "evil server/@x" } } }
+                    },
+                    "tooluse_no_kind": { "tool": {} },
+                    "tooluse_weird": { "tool": { "kind": { "Other": {} } } }
+                }
+            }
+        });
+        fs::write(&path, format!("{assistant}\n{results}\n")).unwrap();
+
+        let msgs = parse_jsonl(&path);
+        assert_eq!(msgs.len(), 2);
+        assert!(msgs[0].tool_kinds.is_empty());
+        // The tool uses and results themselves pass through untouched.
+        assert_eq!(msgs[0].content[1].kind, "toolUse");
+        assert_eq!(msgs[0].content[1].data["name"], "InternalSearch");
+        assert_eq!(msgs[1].content[1].data["status"], "error");
+
+        let kinds = &msgs[1].tool_kinds;
+        assert_eq!(kinds.len(), 2, "{kinds:?}");
+        assert_eq!(
+            kinds["tooluse_mcp"],
+            ToolUseKind {
+                mcp_server: Some("builder-mcp".into()),
+                mcp_tool: Some("InternalSearch".into()),
+                builtin: None,
+            }
+        );
+        assert_eq!(
+            kinds["tooluse_sh"],
+            ToolUseKind {
+                builtin: Some("ExecuteCmd".into()),
+                ..Default::default()
+            }
+        );
+
+        // Serialised for the frontend: absent fields are omitted, and
+        // other lines carry no `tool_kinds` at all.
+        let json = serde_json::to_value(&msgs).unwrap();
+        assert!(json[0].get("tool_kinds").is_none());
+        assert_eq!(
+            json[1]["tool_kinds"]["tooluse_sh"],
+            serde_json::json!({ "builtin": "ExecuteCmd" })
+        );
+    }
+
+    #[test]
+    fn tool_kinds_ignore_malformed_results() {
+        assert!(tool_kinds_of(&serde_json::json!(null)).is_empty());
+        assert!(tool_kinds_of(&serde_json::json!([1, 2])).is_empty());
+        let long = "t".repeat(MAX_TOOL_KIND_NAME_LEN + 1);
+        let v = serde_json::json!({
+            "a": { "tool": { "kind": { "Mcp": { "serverName": "ok", "toolName": long } } } },
+            "b": { "tool": { "kind": { "BuiltIn": { "Exec Cmd": {} } } } },
+            "c": { "tool": { "kind": { "Mcp": { "serverName": "ok" } } } },
+            "d": { "tool": { "kind": "BuiltIn" } }
+        });
+        assert!(tool_kinds_of(&v).is_empty());
     }
 
     #[test]

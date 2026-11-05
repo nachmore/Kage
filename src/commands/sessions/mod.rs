@@ -42,6 +42,30 @@ pub struct SessionMessage {
     pub kind: String, // "Prompt", "AssistantMessage", "ToolResults"
     pub message_id: String,
     pub content: Vec<MessageContent>,
+    /// For a `ToolResults` line: which kind of tool each result (by tool
+    /// use id) came from — see [`ToolUseKind`]. Empty otherwise.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub tool_kinds: HashMap<String, ToolUseKind>,
+}
+
+/// What kind of tool a session log's tool result came from: the one fact
+/// the reopened-session view can't get from the tool use itself (kiro-cli
+/// logs an MCP tool by its bare name, e.g. `InternalSearch`), and the one
+/// the frontend needs to classify the call — an MCP server's tool, or a
+/// built-in. Projected from the `results` map of kiro-cli's `ToolResults`
+/// lines (`{ <toolUseId>: { tool: { kind: { Mcp: { serverName, toolName } }
+/// | { BuiltIn: { <Variant>: … } } } } }`); everything else in that map
+/// duplicates `content` and is dropped. Names are kept only when they're
+/// plain identifiers (the MCP server by the same rule the permission
+/// handler trusts servers with).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolUseKind {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_server: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_tool: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub builtin: Option<String>,
 }
 
 /// Content item within a message

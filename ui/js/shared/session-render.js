@@ -14,11 +14,16 @@
 //   text — they're stripped from the displayed prompt.
 // - Images are extracted and listed alongside text parts so the renderer
 //   can show them as snapshots.
+// - Tool calls: each turn's logged tool uses and results are rebuilt into
+//   the tool state a live turn leaves (`item.tools`, see
+//   tool-call-history.js) on the turn's last assistant item, so a reopened
+//   response shows the same tool chips and expandable details.
 //
 // Callers must inject a `sessionImageToDataUrl` adapter so this module
 // stays free of Tauri / browser-specific image decoding.
 
 import { sessionImageToDataUrl as _defaultSessionImageToDataUrl } from './attachments.js';
+import { HistoryToolCollector } from './tool-call-history.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI. */
 export const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
@@ -50,9 +55,14 @@ export function buildMsgMeta(messageId, timestamps, durations, role) {
  *
  * Output shape per item:
  *   { type: 'user',          text, snapshots, meta }
- *   { type: 'assistant',     text, meta }
+ *   { type: 'assistant',     text, meta, tools? }
  *   { type: 'steering',      text }
  *   { type: 'steering_ack',  text }
+ *
+ * `tools` (`{ toolUsages, toolSources }`, the shape `renderToolSources`
+ * takes) is set on the last assistant item of a turn that used tools; a
+ * turn that used tools but wrote no text gets an assistant item with empty
+ * text for them.
  *
  * `imageToDataUrl` is the adapter used to materialize image content into
  * displayable data URLs. Defaults to the shared `sessionImageToDataUrl`,
@@ -66,9 +76,27 @@ export function buildRenderQueue(
 ) {
     const queue = [];
     let skipNextAssistant = false;
+    const tools = new HistoryToolCollector();
+    // A turn that used tools but wrote nothing still gets a reply bubble
+    // for its chips.
+    const closeTurn = () => {
+        if (!tools.needsItem()) return;
+        const item = { type: 'assistant', text: '', meta: null };
+        queue.push(item);
+        tools.setItem(item);
+    };
 
     for (const msg of messages) {
         if (msg.kind === 'Prompt') {
+            closeTurn();
+            tools.startTurn(
+                msg.content.some(
+                    (item) =>
+                        item.kind === 'text' &&
+                        typeof item.data === 'string' &&
+                        item.data.startsWith(STEERING_MSG_PREFIX)
+                )
+            );
             const textParts = [];
             const imageDataUrls = [];
             let isSteering = false;
@@ -122,6 +150,7 @@ export function buildRenderQueue(
                 }
                 continue;
             }
+            tools.addAssistant(msg.content);
             const textParts = [];
             for (const item of msg.content) {
                 if (item.kind === 'text' && typeof item.data === 'string' && item.data.trim()) {
@@ -129,14 +158,20 @@ export function buildRenderQueue(
                 }
             }
             if (textParts.length > 0) {
-                queue.push({
+                const item = {
                     type: 'assistant',
                     text: textParts.join('\n\n'),
                     meta: buildMsgMeta(msg.message_id, timestamps, durations, 'assistant'),
-                });
+                };
+                queue.push(item);
+                tools.setItem(item);
             }
+        } else if (msg.kind === 'ToolResults') {
+            tools.addResults(msg);
         }
     }
+    closeTurn();
+    tools.finish();
     return queue;
 }
 
