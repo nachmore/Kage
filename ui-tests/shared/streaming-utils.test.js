@@ -32,7 +32,11 @@ describe('processToolCallUpdate', () => {
     const result = processToolCallUpdate(event, state);
     expect(result.updated).toBe(true);
     expect(state.toolUsages).toHaveLength(1);
-    expect(state.toolUsages[0]).toEqual({ toolCallId: 'tc1', title: 'read_file', kind: 'read' });
+    expect(state.toolUsages[0]).toMatchObject({ toolCallId: 'tc1', title: 'read_file', kind: 'read' });
+    // Every non-shell call carries its normalised record (tool-calls.js).
+    expect(state.toolUsages[0].call).toMatchObject({ toolCallId: 'tc1', category: 'read' });
+    expect(result.call).toBe(state.toolUsages[0].call);
+    expect(result.shell).toBeNull();
   });
 
   it('deduplicates by toolCallId', () => {

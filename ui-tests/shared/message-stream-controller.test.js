@@ -340,7 +340,8 @@ describe('MessageStreamController tool tracking with production-shaped host', ()
         c.handleToolCallUpdate({
             payload: { params: { update: { title: 'read_file', toolCallId: 'tc1', kind: 'read' } } },
         });
-        expect(app.toolUsages).toEqual([{ toolCallId: 'tc1', title: 'read_file', kind: 'read' }]);
+        expect(app.toolUsages).toHaveLength(1);
+        expect(app.toolUsages[0]).toMatchObject({ toolCallId: 'tc1', title: 'read_file', kind: 'read' });
         expect(host.onToolCallTracked).toHaveBeenCalledWith(
             expect.objectContaining({ toolCallId: 'tc1' }),
             true

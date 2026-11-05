@@ -8,6 +8,7 @@ import { tHtml } from './i18n.js';
 import { escapeAttr, escapeHtml, getToolIcon } from './tool-utils.js';
 import { isInternalHost } from './internal-hosts.js';
 import { applyShellUpdate, SHELL_RESPONSE_OUTPUT_CAP, shellOutputSize } from './shell-commands.js';
+import { applyToolUpdate, toolCallSize, toolChipGroup } from './tool-calls.js';
 
 // `escapeAttr` is re-exported here so existing call sites that import
 // it from this module keep working. Canonical home is `tool-utils.js`.
@@ -16,24 +17,26 @@ export { escapeAttr };
 /**
  * Parse a tool_call_update event and track tool usage + sources.
  *
- * Shell commands (ACP kind `execute`) additionally get a normalised record
- * on their usage entry (`entry.shell`, see shell-commands.js) that follows
- * the call's status and output across later updates; it's returned as
- * `shell` for any update that concerns one. Per-response output is capped
- * at SHELL_RESPONSE_OUTPUT_CAP across all of the state's shell calls.
+ * Every tracked call also gets a normalised record on its usage entry that
+ * follows the call's status, arguments and output across later updates:
+ * shell commands (ACP kind `execute`) `entry.shell` (shell-commands.js),
+ * every other tool `entry.call` (tool-calls.js). The record an update
+ * concerns is returned as `shell` or `call`. Output is capped per call and
+ * at SHELL_RESPONSE_OUTPUT_CAP across all of the state's calls (or
+ * `state._outputCap` when the caller sets a smaller one).
  *
  * @param {Object} event - Tauri event payload
  * @param {Object} state - { toolUsages: [], toolSources: [] }
- * @returns {{ updated: boolean, update: Object|null, shell: Object|null }}
+ * @returns {{ updated: boolean, update: Object|null, shell: Object|null, call: Object|null }}
  *   `updated`: the chip row needs re-rendering — a new tool or new sources
- *   were tracked, or a tracked tool just turned out to be a shell command
- *   (its kind came late), moving it from the plain chips to the shell chip.
- *   Shell status/output changes don't set it; they come back as `shell`.
+ *   were tracked, or a tracked call moved to another chip (its kind or
+ *   title came late: plain → shell, or into an MCP server's chip).
+ *   Status/output changes don't set it; they come back as `shell` / `call`.
  */
 export function processToolCallUpdate(event, state) {
     const notification = event.payload;
     const update = notification?.params?.update;
-    if (!update) return { updated: false, update: null, shell: null };
+    if (!update) return { updated: false, update: null, shell: null, call: null };
 
     let updated = false;
     let entry = null;
@@ -54,9 +57,10 @@ export function processToolCallUpdate(event, state) {
         }
     }
 
-    // Follow shell commands through their later updates (status, output),
-    // which usually carry no title.
+    // Follow every call through its later updates (status, output), which
+    // usually carry no title.
     let shell = null;
+    let call = null;
     if (update.toolCallId && Array.isArray(state.toolUsages)) {
         entry ??= state.toolUsages.find((u) => u?.toolCallId === update.toolCallId) || null;
         if (entry) {
@@ -64,19 +68,32 @@ export function processToolCallUpdate(event, state) {
             if (!entry.kind && update.kind) entry.kind = update.kind;
             let othersSize = 0;
             for (const u of state.toolUsages) {
-                if (u !== entry && u?.shell) othersSize += shellOutputSize(u.shell);
+                if (u === entry) continue;
+                if (u?.shell) othersSize += shellOutputSize(u.shell);
+                else if (u?.call) othersSize += toolCallSize(u.call);
             }
+            const cap = Math.min(SHELL_RESPONSE_OUTPUT_CAP, state._outputCap ?? Infinity);
+            const budget = Math.max(0, cap - othersSize);
             const wasShell = !!entry.shell;
-            shell = applyShellUpdate(entry, update, {
-                outputBudget: SHELL_RESPONSE_OUTPUT_CAP - othersSize,
-            });
-            if (shell && !wasShell) updated = true;
+            shell = applyShellUpdate(entry, update, { outputBudget: budget });
+            if (shell) {
+                if (!wasShell) updated = true;
+                // It turned out to be a shell run: the shell record takes over.
+                if (entry.call) entry.call = null;
+            } else {
+                const before = entry.call ? toolChipGroup(entry.call)?.key : null;
+                call = applyToolUpdate(entry, update, { outputBudget: budget });
+                if (before !== null && toolChipGroup(call)?.key !== before) updated = true;
+            }
         }
     }
 
-    // Extract sources from search results
+    // Extract sources from search results. The result usually arrives on
+    // a later, untitled update: judge it by the call's tracked kind/title.
     const rawOutput = update.rawOutput;
-    if (rawOutput && (update.kind === 'search' || update.title?.toLowerCase().includes('search'))) {
+    const searchKind = update.kind || entry?.kind;
+    const searchTitle = update.title || entry?.title;
+    if (rawOutput && (searchKind === 'search' || searchTitle?.toLowerCase().includes('search'))) {
         extractSources(rawOutput, state);
         updated = true;
     }
@@ -90,7 +107,7 @@ export function processToolCallUpdate(event, state) {
         }
     }
 
-    return { updated, update, shell };
+    return { updated, update, shell, call };
 }
 
 /**
