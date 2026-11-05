@@ -31,7 +31,7 @@ exact command string. For those prompts the Allow menu also offers:
   Permissions ("Trust all CLI commands").
 
 The same applies to MCP tools: the title names one tool of one server
-(kiro-cli: `Running: @builder-mcp/InternalSearch`), so **Always** covers
+(kiro-cli: `Running: @github/search_issues`), so **Always** covers
 only that tool. When the backend can identify the tool's MCP server (see
 [MCP server identification](#mcp-server-identification)), the Allow menu
 also offers:
@@ -91,7 +91,7 @@ handler (`classify_mcp_server` in
 
 - **kind absent or `"other"`** — what agents report for MCP tools. kiro-cli
   titles shell runs `Running: <command>`, so a command spelled
-  `@builder-mcp/InternalSearch` produces an MCP-looking title; its kind is
+  `@github/search_issues` produces an MCP-looking title; its kind is
   `execute`, and an `execute` (or any other built-in kind) call is never an
   MCP call.
 - **titles agree** — the call's first `tool_call` title (the policy key)

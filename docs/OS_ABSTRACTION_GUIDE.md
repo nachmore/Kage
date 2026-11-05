@@ -100,7 +100,7 @@ relaunch) inherits launchd's minimal environment —
 `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, nothing from `.zshrc`. Linux desktop
 sessions are often similar. Anything Kage spawns inherits that, and so does
 everything the agent spawns: an `mcp.json` entry like
-`"command": "builder-mcp"` (in `~/.toolbox/bin`) fails to start even though
+`"command": "my-mcp-server"` (in `~/.local/bin`) fails to start even though
 it works in a terminal.
 
 `os::login_env` fixes this the way VS Code's "resolve shell environment"

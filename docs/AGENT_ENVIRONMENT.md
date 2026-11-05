@@ -6,7 +6,7 @@ the environment your terminal has. On macOS it starts with only
 `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, and nothing from `.zshrc`,
 `.bash_profile`, or similar files. The agent Kage starts, and the MCP
 servers the agent starts from your `mcp.json`, would inherit that, so a
-server like `"command": "builder-mcp"` (installed in `~/.toolbox/bin`) or
+server like `"command": "my-mcp-server"` (installed in `~/.local/bin`) or
 anything run through `#!/usr/bin/env node` would fail with "command not
 found" even though it works in a terminal.
 
@@ -31,7 +31,7 @@ your own installs: the agent and its MCP servers, shortcut commands,
 speech (the Python behind pocket-tts), the icalBuddy calendar fallback,
 and internal-site proxy scripts. When it's off, none of your startup files
 run; those programs get the environment Kage was started with plus the
-usual user tool folders (`~/.toolbox/bin`, `~/.local/bin`, Homebrew's
+usual user tool folders (`~/.local/bin`, `~/.cargo/bin`, Homebrew's
 `bin`, …) — so anything your shell setup adds beyond those (an `nvm` or
 `pyenv` shim, a custom `PATH` entry, `JAVA_HOME`) won't be found when
 Kage is opened from the Dock or Finder. The change applies to tools right

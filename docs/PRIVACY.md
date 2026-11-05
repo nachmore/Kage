@@ -19,7 +19,7 @@ any event is ever sent. You can change your mind at any time from
 - The events are tied to a random install ID generated on your machine. It is not linked to you, your account, or your device.
 - We **never** collect message contents, file paths, clipboard data, names, emails, or IP addresses.
 - Data is stored in the EU.
-- You can disable analytics, reset your install ID, or request deletion from Settings → Privacy.
+- You can disable analytics or reset your install ID in Settings → Privacy. To have your data deleted, [open a GitHub issue](#your-rights) with the install ID shown there.
 
 ## What is collected
 

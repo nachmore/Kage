@@ -18,6 +18,7 @@ All platforms:
 - [Rust](https://rustup.rs/) stable toolchain (Edition 2021).
 - Tauri CLI v2: `cargo install tauri-cli --version "^2" --locked`.
 - Node.js for JS vendor deps + tests: `cd ui-vendor && npm install`.
+- Python 3, runnable as **`python`** on your `PATH`. Tauri's dev and build hooks in `tauri.conf.json` run `python scripts/dev_server.py` and `python scripts/ensure_vendor.py`. macOS ships only `python3`; with Homebrew's Python (`brew install python`), put `$(brew --prefix python)/libexec/bin` on your `PATH` to get an unversioned `python`.
 
 Windows-specific:
 - WebView2 Runtime (ships with Windows 11; installed automatically on Windows 10).
@@ -124,3 +125,14 @@ cd ui-vendor && npm install
 The postinstall hook (`ui-vendor/setup.js`) copies the browser bundles into `ui/vendor/lib/`. After adding a new package, extend the COPIES manifest in `setup.js` and add a `<script>` tag pointing at `vendor/lib/...` in the relevant HTML files.
 
 Current dependencies: marked, mermaid, prismjs, @hpcc-js/wasm-graphviz, mathjs
+
+## How Kage works inside
+
+Background reading for contributors:
+
+- [OS Abstraction Layer](OS_ABSTRACTION_GUIDE.md): how platform code is split, and spawning user-installed tools.
+- [Computer Control MCP: why it's a separate binary](COMPUTER_CONTROL_MCP.md).
+- [Release & Update System](RELEASE.md): channels, signing and the updater.
+- [Internationalisation](I18N.md): adding strings and languages.
+- [Tool Permissions](TOOL_PERMISSIONS.md) and the [Security Model](SECURITY_MODEL.md).
+- [Debug Mode Guide](DEBUG_MODE.md).
