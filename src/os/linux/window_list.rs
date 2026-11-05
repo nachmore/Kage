@@ -21,6 +21,11 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
     vec![]
 }
 
+/// Same list: minimized state isn't detected here (see module docs).
+pub fn list_windows_with_minimized_impl() -> Vec<WindowInfo> {
+    list_windows_impl()
+}
+
 fn list_with_wmctrl() -> Option<Vec<WindowInfo>> {
     // wmctrl -l -p outputs: <hwnd> <desktop> <pid> <hostname> <title>
     let output = Command::new("wmctrl").args(["-l", "-p"]).output().ok()?;

@@ -21,10 +21,20 @@ pub struct WindowInfo {
     pub minimized: bool,
 }
 
-/// List all visible top-level windows with titles, minimized ones included
-/// and flagged (see [`WindowInfo::minimized`]).
+/// List visible top-level windows with titles. Cheap and never messages
+/// other apps, so it's fine on an async worker. Minimized windows are
+/// listed where that's free (Windows: flagged; Linux: unflagged); on macOS
+/// they're left out — use [`list_windows_with_minimized`] for those.
 pub fn list_windows() -> Vec<WindowInfo> {
     crate::os::platform::window_list::list_windows_impl()
+}
+
+/// [`list_windows`] with minimized windows included and flagged (see
+/// [`WindowInfo::minimized`]). On macOS that takes an Accessibility probe
+/// of other apps (bounded, but up to a few hundred ms), so call it from a
+/// blocking thread.
+pub fn list_windows_with_minimized() -> Vec<WindowInfo> {
+    crate::os::platform::window_list::list_windows_with_minimized_impl()
 }
 
 /// Bring a window to the foreground by its handle.
@@ -34,14 +44,16 @@ pub fn focus_window(handle: u64) -> Result<(), String> {
 
 /// Look up a cached app icon by process name (e.g. "winword", "chrome").
 /// Returns the base64 data URI if found in the cache populated by an
-/// earlier `list_windows()` call. If the cache is empty, primes it by
-/// enumerating windows once — covers the activity tracker's first-call
-/// path before any UI has rendered.
+/// earlier `list_windows()` (Windows) or `get_window_icons()` call. On
+/// Windows, an empty cache is primed by enumerating windows once — covers
+/// the activity tracker's first-call path before any UI has rendered.
+/// Elsewhere `list_windows()` doesn't register icons, so priming would
+/// only cost an enumeration per lookup.
 pub fn get_app_icon(process_name: &str) -> Option<String> {
     if let Some(icon) = crate::os::icon::get_icon_by_process_name(process_name) {
         return Some(icon);
     }
-    if crate::os::icon::process_name_cache_is_empty() {
+    if cfg!(target_os = "windows") && crate::os::icon::process_name_cache_is_empty() {
         let _ = list_windows();
         return crate::os::icon::get_icon_by_process_name(process_name);
     }

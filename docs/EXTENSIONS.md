@@ -243,7 +243,8 @@ a new one).
 
 With the `windows` capability, `invoke('list_open_windows')` resolves
 to an array of other apps' top-level windows (Kage's own excluded),
-front to back on Windows and macOS:
+front to back on Windows and macOS (on macOS, minimized windows follow
+the on-screen ones):
 
 ```js
 {
@@ -264,9 +265,10 @@ front to back on Windows and macOS:
   - **macOS** — needs the Accessibility permission. Without it the list
     holds on-screen windows only (minimized ones are missing, not
     flagged), and no permission prompt is shown. With it, minimized
-    windows are listed after the on-screen ones. Windows that are just
-    off screen (on another Space, or of an app hidden with ⌘H) aren't
-    listed either way.
+    windows are listed after the on-screen ones; an app slow to answer
+    the host's query can have its minimized windows missing from that
+    one call. Windows that are just off screen (on another Space, or of
+    an app hidden with ⌘H) aren't listed either way.
   - **Linux** — not detected, always `false`.
 - On macOS without the Screen Recording permission, titles are empty,
   so each app gets one entry titled with its name. That entry is
@@ -452,7 +454,7 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 | `settings.copy_action` | Settings `action` controls accept `copy` (see [Copy to clipboard](#copy-to-clipboard)). |
 | `invoke.error_kind`    | `invoke()` rejections carry `err.kind` / `err.key` (see [Errors from `invoke()`](#errors-from-invoke)). |
 | `config.manifest_defaults` | `context.config` is the manifest defaults overlaid with saved values, `config.enabled` is the host's on/off switch, saving stores only overrides, and settings controls take their defaults from the manifest (see [Config Schema](#config-schema)). |
-| `windows.minimized`    | `list_open_windows` entries carry `minimized: boolean`, and minimized windows are listed and flagged rather than left out (see [Other apps' windows](#other-apps-windows)). |
+| `windows.minimized`    | `list_open_windows` entries carry `minimized: boolean`. Whether minimized windows are listed and flagged depends on the platform and permissions (see [Other apps' windows](#other-apps-windows)). |
 
 ### Errors from `invoke()`
 

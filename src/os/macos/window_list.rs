@@ -5,18 +5,25 @@
 // titles require Screen Recording permission (macOS 10.15+); without it we
 // still get process names and PIDs, just empty titles.
 //
+// Order: only kCGWindowListOptionOnScreenOnly promises front-to-back order.
+// kCGWindowListOptionAll's order is unspecified and does differ (the
+// on-screen subset comes back shuffled), so on-screen entries always come
+// from an OnScreenOnly call; the All call only supplies off-screen windows.
+//
 // Minimized windows: CGWindowList can't tell a minimized window from the
 // other off-screen layer-0 windows (other Spaces, Cmd+H-hidden apps,
 // background native tabs, and dozens of invisible helper windows) — they
 // all just lack `kCGWindowIsOnscreen`. The only reliable signal is AX
 // `kAXMinimizedAttribute`, which needs Accessibility. So:
-//   - untrusted: on-screen windows only, every entry `minimized: false`
-//     (the list as it has always been; `AXIsProcessTrusted` never prompts);
-//   - trusted: all windows, then AX is asked about off-screen windows that
-//     could add an entry (see `ax_candidate_pids`), on this thread, with a
-//     short per-message timeout and an overall budget so a hung app can't
-//     stall the list. Minimized windows are appended after the on-screen
-//     ones and flagged; other off-screen windows are still dropped.
+//   - `list_windows_impl` (the cheap list the rest of Kage uses): on-screen
+//     windows only, every entry `minimized: false`;
+//   - `list_windows_with_minimized_impl` (`list_open_windows`): the same
+//     while untrusted (`AXIsProcessTrusted` never prompts). Trusted, it also
+//     lists all windows and asks AX about the off-screen ones that could add
+//     an entry (see `ax_candidate_pids` / `ax_probe_order`), on this thread,
+//     with a short per-message timeout and an overall budget so a hung app
+//     can't stall the list. Minimized windows are appended after the
+//     on-screen ones and flagged; other off-screen windows are dropped.
 //
 // Handles pack the CG window number with the owner PID (see `pack_handle`).
 // Focus activates the app via NSRunningApplication.activateWithOptions,
@@ -35,9 +42,10 @@ use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use core_graphics::window::{
     kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionAll,
-    kCGWindowListOptionOnScreenOnly, CGWindowListCopyWindowInfo,
+    kCGWindowListOptionOnScreenOnly, CGWindowListCopyWindowInfo, CGWindowListOption,
 };
 use log::debug;
+use objc2_app_kit::NSApplicationActivationPolicy;
 use std::collections::HashSet;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -80,19 +88,32 @@ fn unpack_handle(handle: u64) -> (i32, u32) {
     ((handle & PID_MASK) as i32, (handle >> PID_BITS) as u32)
 }
 
+/// On-screen windows front to back; minimized ones aren't listed. Never
+/// messages other apps.
 pub fn list_windows_impl() -> Vec<WindowInfo> {
+    list(false)
+}
+
+/// `list_windows_impl` plus, when Accessibility is trusted, the minimized
+/// windows (flagged, after the on-screen ones). Can take up to
+/// `AX_PROBE_BUDGET` plus one app's message timeout.
+pub fn list_windows_with_minimized_impl() -> Vec<WindowInfo> {
     // Plain AXIsProcessTrusted never prompts. Without Accessibility there's
     // no way to pick the minimized windows out of the off-screen ones, so
-    // don't pay for listing those (all ~280 windows of a busy desktop: ~5
-    // ms; just the on-screen ones: ~1 ms).
-    let trusted = unsafe { accessibility_sys::AXIsProcessTrusted() };
-    let entries = cg_layer0_windows(!trusted);
-    let minimized = if trusted {
-        minimized_window_numbers(&entries)
+    // don't pay for listing those.
+    list(unsafe { accessibility_sys::AXIsProcessTrusted() })
+}
+
+fn list(with_minimized: bool) -> Vec<WindowInfo> {
+    let on_screen = cg_layer0_windows(kCGWindowListOptionOnScreenOnly);
+    let (off_screen, minimized) = if with_minimized {
+        let off_screen = off_screen_windows(cg_layer0_windows(kCGWindowListOptionAll), &on_screen);
+        let minimized = minimized_window_numbers(&on_screen, &off_screen);
+        (off_screen, minimized)
     } else {
-        HashSet::new()
+        (Vec::new(), HashSet::new())
     };
-    let windows = merge_windows(&entries, &minimized);
+    let windows = merge_windows(&on_screen, &off_screen, &minimized);
 
     debug!(
         "[window-walker] CGWindowList returned {} windows ({} minimized)",
@@ -111,20 +132,14 @@ struct CgWindow {
     process_name: String,
     /// Empty without Screen Recording.
     title: String,
-    on_screen: bool,
 }
 
-/// Layer-0 (regular app) windows in front-to-back order, Kage's own
-/// excluded. `on_screen_only` lists just the windows on the current Space;
-/// otherwise every window, with `on_screen` from `kCGWindowIsOnscreen`.
-/// CGWindowListCopyWindowInfo doesn't need Accessibility; titles need
-/// Screen Recording and are empty strings without it.
-fn cg_layer0_windows(on_screen_only: bool) -> Vec<CgWindow> {
-    let options = if on_screen_only {
-        kCGWindowListOptionOnScreenOnly
-    } else {
-        kCGWindowListOptionAll
-    } | kCGWindowListExcludeDesktopElements;
+/// Layer-0 (regular app) windows for `list_option`, in the order CG returns
+/// them (front to back only for kCGWindowListOptionOnScreenOnly), Kage's
+/// own excluded. CGWindowListCopyWindowInfo doesn't need Accessibility;
+/// titles need Screen Recording and are empty strings without it.
+fn cg_layer0_windows(list_option: CGWindowListOption) -> Vec<CgWindow> {
+    let options = list_option | kCGWindowListExcludeDesktopElements;
 
     let window_list: CFArray<CFDictionary<CFString, CFType>> = unsafe {
         let cf_array = CGWindowListCopyWindowInfo(options, kCGNullWindowID);
@@ -140,7 +155,6 @@ fn cg_layer0_windows(on_screen_only: bool) -> Vec<CgWindow> {
     let key_layer = CFString::from_static_string("kCGWindowLayer");
     let key_owner = CFString::from_static_string("kCGWindowOwnerName");
     let key_number = CFString::from_static_string("kCGWindowNumber");
-    let key_on_screen = CFString::from_static_string("kCGWindowIsOnscreen");
 
     let mut windows = Vec::new();
     for info in window_list.iter() {
@@ -187,39 +201,46 @@ fn cg_layer0_windows(on_screen_only: bool) -> Vec<CgWindow> {
             .and_then(|n| u32::try_from(n).ok())
             .unwrap_or(0);
 
-        // Optional key, present (true) only for on-screen windows.
-        let on_screen = on_screen_only
-            || info
-                .find(&key_on_screen)
-                .and_then(|v| v.downcast::<CFBoolean>())
-                .is_some_and(bool::from);
-
         windows.push(CgWindow {
             pid,
             window_number,
             process_name,
             title,
-            on_screen,
         });
     }
     windows
 }
 
-/// Build the list from `cg_layer0_windows` output: on-screen windows in
-/// z-order, then the off-screen ones in `minimized` (CG window numbers),
-/// flagged. Every other off-screen window is dropped.
+/// The entries of an all-windows list that aren't in `on_screen`. Matched
+/// by window number rather than `kCGWindowIsOnscreen`, so a window that
+/// changes state between the two CG calls is never listed twice. Number 0
+/// can't be matched to an AX window, so those are dropped.
+fn off_screen_windows(all: Vec<CgWindow>, on_screen: &[CgWindow]) -> Vec<CgWindow> {
+    let shown: HashSet<u32> = on_screen.iter().map(|w| w.window_number).collect();
+    all.into_iter()
+        .filter(|w| w.window_number != 0 && !shown.contains(&w.window_number))
+        .collect()
+}
+
+/// Build the list: `on_screen` in the order given (z-order), then the
+/// `off_screen` windows whose CG number is in `minimized`, flagged. Every
+/// other off-screen window is dropped.
 ///
 /// A titled window gets its own entry. Untitled windows (Screen Recording
 /// not granted) collapse to one entry per app, titled with the process
 /// name — so an app with any on-screen window shows as not minimized, and
 /// one whose windows are all minimized shows as minimized.
-fn merge_windows(entries: &[CgWindow], minimized: &HashSet<u32>) -> Vec<WindowInfo> {
+fn merge_windows(
+    on_screen: &[CgWindow],
+    off_screen: &[CgWindow],
+    minimized: &HashSet<u32>,
+) -> Vec<WindowInfo> {
     let mut windows = Vec::new();
     let mut seen_pids_no_title: HashSet<u64> = HashSet::new();
-    let shown = entries.iter().filter(|w| w.on_screen).map(|w| (w, false));
-    let hidden = entries
+    let shown = on_screen.iter().map(|w| (w, false));
+    let hidden = off_screen
         .iter()
-        .filter(|w| !w.on_screen && w.window_number != 0 && minimized.contains(&w.window_number))
+        .filter(|w| w.window_number != 0 && minimized.contains(&w.window_number))
         .map(|w| (w, true));
 
     for (w, is_minimized) in shown.chain(hidden) {
@@ -254,25 +275,63 @@ fn merge_windows(entries: &[CgWindow], minimized: &HashSet<u32>) -> Vec<WindowIn
     windows
 }
 
-/// PIDs worth asking AX about, in z-order: owners of an off-screen window
-/// that `merge_windows` would list if it turned out minimized. A titled
-/// window always would; an untitled one only when its app has no
-/// on-screen untitled entry already. Without Screen Recording that skips
-/// every app with a window on screen, which is most of them.
-fn ax_candidate_pids(entries: &[CgWindow]) -> Vec<u64> {
-    let untitled_on_screen: HashSet<u64> = entries
+/// PIDs worth asking AX about, in `off_screen` order (which CG doesn't
+/// define — see `ax_probe_order` for the probe order): owners of an
+/// off-screen window that `merge_windows` would list if it turned out
+/// minimized. A titled window always would; an untitled one only when its
+/// app has no on-screen untitled entry already. Without Screen Recording
+/// that skips every app with a window on screen, which is most of them.
+fn ax_candidate_pids(on_screen: &[CgWindow], off_screen: &[CgWindow]) -> Vec<u64> {
+    let untitled_on_screen: HashSet<u64> = on_screen
         .iter()
-        .filter(|w| w.on_screen && w.title.is_empty())
+        .filter(|w| w.title.is_empty())
         .map(|w| w.pid)
         .collect();
     let mut seen = HashSet::new();
-    entries
+    off_screen
         .iter()
-        .filter(|w| !w.on_screen && w.window_number != 0)
+        .filter(|w| w.window_number != 0)
         .filter(|w| !w.title.is_empty() || !untitled_on_screen.contains(&w.pid))
         .filter(|w| seen.insert(w.pid))
         .map(|w| w.pid)
         .collect()
+}
+
+/// Order AX candidates so the probe budget goes to the apps that minimize
+/// windows into the Dock: `.regular` first, then `.accessory` (menu-bar
+/// apps, which can still open the odd window), then PIDs AppKit doesn't
+/// know; stable within each group. `.prohibited` processes are skipped:
+/// they're view services ("AutoFill (…)", Open and Save Panel Service, …)
+/// that make up about half the candidates, own no window a user can
+/// minimize, and would each cost a round trip, or a timeout if busy.
+fn ax_probe_order(
+    pids: Vec<u64>,
+    policy_of: impl Fn(u64) -> Option<NSApplicationActivationPolicy>,
+) -> Vec<u64> {
+    let mut ranked: Vec<(u8, u64)> = pids
+        .into_iter()
+        .filter_map(|pid| {
+            let rank = match policy_of(pid) {
+                Some(NSApplicationActivationPolicy::Prohibited) => return None,
+                Some(NSApplicationActivationPolicy::Regular) => 0,
+                Some(NSApplicationActivationPolicy::Accessory) => 1,
+                _ => 2,
+            };
+            Some((rank, pid))
+        })
+        .collect();
+    ranked.sort_by_key(|&(rank, _)| rank); // stable
+    ranked.into_iter().map(|(_, pid)| pid).collect()
+}
+
+/// `pid`'s activation policy, from AppKit's in-process running-apps table
+/// (no message to the app). `None` when AppKit doesn't know the PID.
+fn activation_policy(pid: u64) -> Option<NSApplicationActivationPolicy> {
+    use objc2_app_kit::NSRunningApplication;
+
+    let pid = i32::try_from(pid).ok()?;
+    NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+        .map(|app| app.activationPolicy())
 }
 
 /// CG window numbers of the candidates' minimized windows, via AX
@@ -281,9 +340,13 @@ fn ax_candidate_pids(entries: &[CgWindow]) -> Vec<u64> {
 /// worker, which exists for Computer Control's element registry (unneeded
 /// here) and whose queue can be busy with a multi-second tree walk. Gives
 /// up on further apps after `AX_PROBE_BUDGET`.
-fn minimized_window_numbers(entries: &[CgWindow]) -> HashSet<u32> {
+fn minimized_window_numbers(on_screen: &[CgWindow], off_screen: &[CgWindow]) -> HashSet<u32> {
+    use objc2::rc::autoreleasepool;
+
     let mut found = HashSet::new();
-    let pids = ax_candidate_pids(entries);
+    let pids = autoreleasepool(|_pool| {
+        ax_probe_order(ax_candidate_pids(on_screen, off_screen), activation_policy)
+    });
     let started = Instant::now();
     for (i, &pid) in pids.iter().enumerate() {
         if started.elapsed() >= AX_PROBE_BUDGET {
@@ -710,16 +773,19 @@ fn window_title_for_pid(pid: i32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ax_candidate_pids, merge_windows, pack_handle, unpack_handle, CgWindow};
+    use super::{
+        ax_candidate_pids, ax_probe_order, merge_windows, off_screen_windows, pack_handle,
+        unpack_handle, CgWindow,
+    };
+    use objc2_app_kit::NSApplicationActivationPolicy;
     use std::collections::HashSet;
 
-    fn cg(pid: u64, window_number: u32, title: &str, on_screen: bool) -> CgWindow {
+    fn cg(pid: u64, window_number: u32, title: &str) -> CgWindow {
         CgWindow {
             pid,
             window_number,
             process_name: format!("app{pid}"),
             title: title.into(),
-            on_screen,
         }
     }
 
@@ -727,22 +793,23 @@ mod tests {
         ids.iter().copied().collect()
     }
 
+    fn summary(list: &[crate::os::window_list::WindowInfo]) -> Vec<(&str, u64, bool)> {
+        list.iter()
+            .map(|w| (w.title.as_str(), w.handle, w.minimized))
+            .collect()
+    }
+
     #[test]
     fn on_screen_windows_first_then_minimized_and_other_off_screen_dropped() {
-        let entries = [
-            cg(10, 1, "Doc A", true),
-            cg(10, 2, "Doc B (minimized)", false),
-            cg(20, 3, "Other Space", false),
-            cg(20, 4, "Mail", true),
-            cg(30, 5, "Notes (minimized)", false),
+        let on_screen = [cg(10, 1, "Doc A"), cg(20, 4, "Mail")];
+        let off_screen = [
+            cg(10, 2, "Doc B (minimized)"),
+            cg(20, 3, "Other Space"),
+            cg(30, 5, "Notes (minimized)"),
         ];
-        let list = merge_windows(&entries, &set(&[2, 5]));
-        let got: Vec<(&str, u64, bool)> = list
-            .iter()
-            .map(|w| (w.title.as_str(), w.handle, w.minimized))
-            .collect();
+        let list = merge_windows(&on_screen, &off_screen, &set(&[2, 5]));
         assert_eq!(
-            got,
+            summary(&list),
             [
                 ("Doc A", pack_handle(10, 1), false),
                 ("Mail", pack_handle(20, 4), false),
@@ -753,11 +820,41 @@ mod tests {
     }
 
     #[test]
+    fn on_screen_order_is_kept_as_given() {
+        // The on-screen list is CG's front-to-back order; the merge must not
+        // regroup it by app or window number (Window Walker ranks by index).
+        let on_screen = [cg(30, 9, "Front"), cg(10, 2, "Second"), cg(30, 1, "Third")];
+        let off_screen = [cg(20, 7, "Min B"), cg(10, 3, "Min A")];
+        let list = merge_windows(&on_screen, &off_screen, &set(&[3, 7]));
+        let titles: Vec<&str> = list.iter().map(|w| w.title.as_str()).collect();
+        assert_eq!(titles, ["Front", "Second", "Third", "Min B", "Min A"]);
+    }
+
+    #[test]
+    fn off_screen_windows_are_the_all_list_minus_on_screen_numbers() {
+        // The all-windows list shuffles the on-screen windows among the
+        // others; they're removed by number, whatever their position.
+        let on_screen = [cg(10, 1, "A"), cg(20, 2, "B")];
+        let all = vec![
+            cg(20, 2, "B"),
+            cg(30, 5, "Hidden"),
+            cg(10, 1, "A"),
+            cg(40, 0, "No number"),
+            cg(10, 6, "Minimized"),
+        ];
+        let off: Vec<u32> = off_screen_windows(all, &on_screen)
+            .iter()
+            .map(|w| w.window_number)
+            .collect();
+        assert_eq!(off, [5, 6]);
+    }
+
+    #[test]
     fn untrusted_list_is_on_screen_only_and_never_minimized() {
-        // What `list_windows_impl` builds without Accessibility: an
-        // on-screen-only CG list and no AX answers.
-        let entries = [cg(10, 1, "Doc A", true), cg(20, 2, "", true)];
-        let list = merge_windows(&entries, &HashSet::new());
+        // What `list` builds without the probe: no off-screen list and no
+        // AX answers.
+        let on_screen = [cg(10, 1, "Doc A"), cg(20, 2, "")];
+        let list = merge_windows(&on_screen, &[], &HashSet::new());
         assert_eq!(list.len(), 2);
         assert!(list.iter().all(|w| !w.minimized));
     }
@@ -765,7 +862,7 @@ mod tests {
     #[test]
     fn minimized_number_only_flags_off_screen_windows() {
         // An on-screen window is never reported minimized, whatever AX said.
-        let list = merge_windows(&[cg(10, 1, "Doc", true)], &set(&[1]));
+        let list = merge_windows(&[cg(10, 1, "Doc")], &[], &set(&[1]));
         assert_eq!(list.len(), 1);
         assert!(!list[0].minimized);
     }
@@ -773,20 +870,16 @@ mod tests {
     #[test]
     fn untitled_windows_collapse_per_app() {
         // No Screen Recording: titles are empty.
-        let entries = [
-            cg(10, 1, "", true),
-            cg(10, 2, "", false), // minimized, but app 10 is already listed
-            cg(20, 3, "", false), // app 20's only windows are minimized
-            cg(20, 4, "", false),
-            cg(30, 5, "", false), // off-screen, not minimized
+        let on_screen = [cg(10, 1, "")];
+        let off_screen = [
+            cg(10, 2, ""), // minimized, but app 10 is already listed
+            cg(20, 3, ""), // app 20's only windows are minimized
+            cg(20, 4, ""),
+            cg(30, 5, ""), // off-screen, not minimized
         ];
-        let list = merge_windows(&entries, &set(&[2, 3, 4]));
-        let got: Vec<(&str, u64, bool)> = list
-            .iter()
-            .map(|w| (w.title.as_str(), w.handle, w.minimized))
-            .collect();
+        let list = merge_windows(&on_screen, &off_screen, &set(&[2, 3, 4]));
         assert_eq!(
-            got,
+            summary(&list),
             [
                 // On-screen per-app entry keeps handle == PID.
                 ("app10", 10, false),
@@ -798,18 +891,30 @@ mod tests {
 
     #[test]
     fn ax_candidates_are_apps_whose_off_screen_windows_could_be_listed() {
-        let entries = [
-            cg(10, 1, "", true),
-            cg(10, 2, "", false), // app 10 already has an untitled entry
-            cg(20, 3, "Titled", true),
-            cg(20, 4, "", false), // app 20 has no untitled entry yet
-            cg(30, 5, "Other Space", false),
-            cg(30, 6, "Another", false),
-            cg(40, 7, "On screen", true), // nothing off-screen
-            cg(50, 0, "No number", false),
-            cg(10, 8, "Titled off-screen", false),
+        let on_screen = [cg(10, 1, ""), cg(20, 3, "Titled"), cg(40, 7, "On screen")];
+        let off_screen = [
+            cg(10, 2, ""), // app 10 already has an untitled entry
+            cg(20, 4, ""), // app 20 has no untitled entry yet
+            cg(30, 5, "Other Space"),
+            cg(30, 6, "Another"),
+            cg(50, 0, "No number"),
+            cg(10, 8, "Titled off-screen"),
         ];
-        assert_eq!(ax_candidate_pids(&entries), [20, 30, 10]);
+        assert_eq!(ax_candidate_pids(&on_screen, &off_screen), [20, 30, 10]);
+    }
+
+    #[test]
+    fn ax_probe_order_puts_dock_apps_first_and_skips_view_services() {
+        let policy = |pid: u64| match pid {
+            1 | 5 => Some(NSApplicationActivationPolicy::Prohibited),
+            2 | 6 => Some(NSApplicationActivationPolicy::Accessory),
+            3 | 7 => Some(NSApplicationActivationPolicy::Regular),
+            _ => None, // 4, 8: not a running application AppKit knows
+        };
+        assert_eq!(
+            ax_probe_order(vec![1, 2, 3, 4, 5, 6, 7, 8], policy),
+            [3, 7, 2, 6, 4, 8]
+        );
     }
 
     #[test]

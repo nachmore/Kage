@@ -184,6 +184,12 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
     state.windows.into_iter().map(|(w, _)| w).collect()
 }
 
+/// `list_windows_impl` already lists minimized windows, flagged via
+/// `IsIconic`; there's nothing extra to probe.
+pub fn list_windows_with_minimized_impl() -> Vec<WindowInfo> {
+    list_windows_impl()
+}
+
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {
     let hwnd = handle as isize;
     unsafe {
