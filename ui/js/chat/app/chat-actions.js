@@ -378,11 +378,17 @@ export function createChatActionsMixin(dependencies) {
                 },
             });
 
-            if (result.handled) {
-                this.elements.chatInput.value = '';
-                this.elements.chatInput.style.height = 'auto';
-                this.clearSuggestions();
-            }
+            // Same verdicts as the floating window's _applyEnterActionResult.
+            if (!result.handled) return;
+            // onReplaceInput already filled the input (and its `input` event
+            // re-runs the search): e.g. todos' "Delete x?" question, math's
+            // answer, keyword completions. Clearing it here undid that.
+            if (result.action === 'replace_input') return;
+            this.elements.chatInput.value = '';
+            this.elements.chatInput.style.height = 'auto';
+            // A picker was just rendered into the suggestions (/agent, /model).
+            if (result.action === 'keep_suggestions') return;
+            this.clearSuggestions();
         }
 
         scrollToBottom(force = false) {
