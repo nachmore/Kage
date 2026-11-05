@@ -477,8 +477,12 @@ describe('tool sources chip row', () => {
         expect(chip).not.toBeNull();
         expect(chip.type).toBe('button');
         expect(chip.querySelector('.tool-chip-count').textContent).toBe('×2');
-        expect(chip.getAttribute('aria-label')).toBe('shared.shell.chip_title');
+        // A failed command: the accessible name says so (the dot is decorative).
+        expect(chip.getAttribute('aria-label')).toBe('shared.tool.chip_state.failed');
         expect(chip.dataset.state).toBe('failed');
+        expect(document.getElementById(chip.getAttribute('aria-controls')).getAttribute('aria-label')).toBe(
+            'shared.shell.chip_title'
+        );
     });
 
     it('chip toggles the ordered list of the response commands', () => {
@@ -521,7 +525,8 @@ describe('tool sources chip row', () => {
         expect(blocks).toHaveLength(3);
         expect(blocks[0]).toBe(block);
         expect(isShellCommandExpanded(blocks[0])).toBe(true);
-        expect(container.querySelector('.tool-call-chips').textContent).toContain('web_search');
+        // web_search is a built-in: listed under its kind.
+        expect(container.querySelector('.tool-call-chips').textContent).toContain('shared.tool.kind.search');
         expect(container.querySelector('.tool-sources-static .source-chip[data-url]')).toBeNull();
     });
 

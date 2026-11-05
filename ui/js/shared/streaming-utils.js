@@ -89,11 +89,18 @@ export function processToolCallUpdate(event, state) {
     }
 
     // Extract sources from search results. The result usually arrives on
-    // a later, untitled update: judge it by the call's tracked kind/title.
+    // a later, untitled update: then only a call whose effective kind is
+    // `search` (the agent's kind, or a built-in search tool's name) counts
+    // — never a title that merely contains "search" (an MCP tool such as
+    // `Running: @docs/search_docs`, whose results the agent's server
+    // shapes as it likes).
     const rawOutput = update.rawOutput;
-    const searchKind = update.kind || entry?.kind;
-    const searchTitle = update.title || entry?.title;
-    if (rawOutput && (searchKind === 'search' || searchTitle?.toLowerCase().includes('search'))) {
+    if (
+        rawOutput &&
+        (update.kind === 'search' ||
+            update.title?.toLowerCase().includes('search') ||
+            entry?.call?.kind === 'search')
+    ) {
         extractSources(rawOutput, state);
         updated = true;
     }
@@ -117,7 +124,7 @@ export function extractSources(rawOutput, state) {
     const tryExtract = (results) => {
         if (Array.isArray(results)) {
             for (const r of results) {
-                if (r.url) addSource(r.url, r.title, r.domain, state);
+                if (r?.url) addSource(r.url, r.title, state);
             }
         }
     };
@@ -140,43 +147,57 @@ export function extractSourcesFromText(text, state) {
     const linkRegex = /\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
     let match;
     while ((match = linkRegex.exec(text)) !== null) {
-        addSource(match[2], match[1], null, state);
+        addSource(match[2], match[1], state);
     }
 }
 
 /**
- * Add a source URL, deduplicating by domain.
+ * The parsed URL when `url` is a web address (http / https), else `null`.
+ * Source chips open their URL with the OS default handler (`open_url`), so
+ * anything else — `file:`, a custom app scheme — must never become one.
  */
-export function addSource(url, title, domainHint, state) {
+export function parseWebUrl(url) {
+    if (typeof url !== 'string') return null;
     try {
-        const parsed = new URL(url);
-        const domain = domainHint || parsed.hostname.replace(/^www\./, '');
-        if (!state._sourceDomains) state._sourceDomains = new Set();
-        if (!state.toolSources) state.toolSources = [];
-        if (!state._sourceDomains.has(domain)) {
-            state._sourceDomains.add(domain);
-            const initials = domain.split('.')[0].substring(0, 2).toUpperCase();
-            let hash = 0;
-            for (let i = 0; i < domain.length; i++) {
-                hash = domain.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            const hue = Math.abs(hash) % 360;
-            state.toolSources.push({
-                url,
-                domain,
-                title: title || domain,
-                initials,
-                color: `hsl(${hue}, 55%, 45%)`,
-                // Internal hostnames must not be sent to a third-party
-                // favicon service; those chips keep their initials.
-                favicon: isInternalHost(parsed.hostname)
-                    ? ''
-                    : `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
-            });
-        }
+        const parsed = new URL(url.trim());
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed : null;
     } catch {
-        /* invalid URL */
+        return null;
     }
+}
+
+/**
+ * Add a source URL, deduplicating by domain. Only web URLs; the chip is
+ * labelled with the URL's own host (never a label the result supplies, which
+ * could name a different site than the link opens).
+ */
+export function addSource(url, title, state) {
+    const parsed = parseWebUrl(url);
+    if (!parsed?.hostname) return;
+    const domain = parsed.hostname.replace(/^www\./, '');
+    if (!state._sourceDomains) state._sourceDomains = new Set();
+    if (!state.toolSources) state.toolSources = [];
+    if (state._sourceDomains.has(domain)) return;
+    state._sourceDomains.add(domain);
+    const initials = domain.split('.')[0].substring(0, 2).toUpperCase();
+    let hash = 0;
+    for (let i = 0; i < domain.length; i++) {
+        hash = domain.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    state.toolSources.push({
+        // The normalised form: what was checked is what gets opened.
+        url: parsed.href,
+        domain,
+        title: typeof title === 'string' && title.trim() ? title : domain,
+        initials,
+        color: `hsl(${hue}, 55%, 45%)`,
+        // Internal hostnames must not be sent to a third-party
+        // favicon service; those chips keep their initials.
+        favicon: isInternalHost(parsed.hostname)
+            ? ''
+            : `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
+    });
 }
 
 function faviconImgHtml(favicon) {
@@ -311,9 +332,11 @@ export function attachSourceClickHandler(container, invoke) {
     container.addEventListener('click', (event) => {
         const link = event.target.closest('[data-url]');
         if (!link || !container.contains(link)) return;
-        const url = link.getAttribute('data-url');
-        if (!url) return;
         event.preventDefault();
+        // Belt and braces: addSource only keeps web URLs, but nothing else
+        // may reach the OS default handler from here either.
+        const url = parseWebUrl(link.getAttribute('data-url'))?.href;
+        if (!url) return;
         invoke('open_url', { url }).catch(() => {});
     });
 }

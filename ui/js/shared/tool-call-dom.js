@@ -1,7 +1,8 @@
 /**
  * Small DOM helpers shared by the tool-call views (shell-command-view.js,
  * tool-call-view.js): element creation, the constant SVG icon set, copy
- * buttons, and the bubbling layout event a self-sizing window listens for.
+ * buttons, chip names, and the bubbling layout event a self-sizing window
+ * listens for.
  *
  * Nothing here ever parses data as HTML: icons are constant markup, text
  * goes in via textContent.
@@ -86,6 +87,17 @@ export function copyButton(getLabel, getText) {
         });
     });
     return btn;
+}
+
+/**
+ * A tool / shell chip's accessible name (and tooltip): its `title`, plus
+ * whether a call under it failed or is still running (`state`: the chip's
+ * `running` / `failed` / `done`). Its red dot is decorative; this says it.
+ */
+export function chipStateLabel(title, state) {
+    if (state === 'failed') return t('shared.tool.chip_state.failed', { label: title });
+    if (state === 'running') return t('shared.tool.chip_state.running', { label: title });
+    return title;
 }
 
 let _uid = 0;

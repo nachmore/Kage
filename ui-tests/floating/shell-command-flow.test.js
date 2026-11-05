@@ -151,7 +151,10 @@ describe('floating window shell commands', () => {
         const app = makeApp();
         chunk(app, 'Let me check.');
         tool(app, { sessionUpdate: 'tool_call', toolCallId: 'k', title: 'shell' });
-        expect(plainChips().map((c) => c.textContent.replace(/\s+/g, ' ').trim())).toEqual(['shell']);
+        // Until its kind arrives, it's a tool chip named like the shell chip.
+        expect(plainChips().map((c) => c.textContent.replace(/\s+/g, ' ').trim())).toEqual([
+            'shared.shell.chip_label',
+        ]);
 
         tool(app, { sessionUpdate: 'tool_call_update', toolCallId: 'k', kind: 'execute', rawInput: { command: 'ls' } });
         expect(plainChips()).toHaveLength(0);
@@ -193,16 +196,22 @@ describe('floating window: other tools', () => {
         chunk(app, 'Reading.');
         tool(app, { sessionUpdate: 'tool_call', toolCallId: 'r', title: 'read', kind: 'read', status: 'in_progress', rawInput: { path: '/a' } });
         tool(app, { sessionUpdate: 'tool_call', toolCallId: 'g', title: 'grep', kind: 'search', status: 'in_progress', rawInput: { pattern: 'x' } });
-        const chip = toolChip('read');
+        const chip = toolChip('shared.tool.kind.read');
         chip.click();
         const list = document.getElementById(chip.getAttribute('aria-controls'));
         const block = list.querySelector('.tool-call');
         setToolCallExpanded(block, true);
         expect(block.dataset.state).toBe('running');
+        // A keyboard user is on "Copy path" while the call streams.
+        block.querySelector('[data-focus="copy:subject"]').focus();
 
         tool(app, { sessionUpdate: 'tool_call_update', toolCallId: 'r', status: 'completed', rawOutput: { items: [{ Text: 'contents' }] } });
         expect(block.dataset.state).toBe('success');
         expect(block.querySelector('.tool-call-text').textContent).toBe('contents');
+        // The panel was rebuilt; focus is on the same control, not <body>.
+        expect(document.activeElement.isConnected).toBe(true);
+        expect(document.activeElement.dataset.focus).toBe('copy:subject');
+        expect(block.contains(document.activeElement)).toBe(true);
         chunk(app, ' More text.');
         // Streaming re-renders leave the open list and block alone.
         expect(list.hidden).toBe(false);
@@ -211,7 +220,7 @@ describe('floating window: other tools', () => {
         await completeTurn(app);
         expect(row().querySelector('.tool-call')).toBe(block);
         expect(isToolCallExpanded(block)).toBe(true);
-        const grepList = document.getElementById(toolChip('grep').getAttribute('aria-controls'));
+        const grepList = document.getElementById(toolChip('shared.tool.kind.search').getAttribute('aria-controls'));
         expect(grepList.querySelector('.tool-call').dataset.state).toBe('unknown');
     });
 });

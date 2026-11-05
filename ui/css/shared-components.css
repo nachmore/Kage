@@ -2919,6 +2919,8 @@ button.shell-chip {
 .tool-call-output:focus-visible,
 .tool-diff:focus-visible,
 .tool-json-summary:focus-visible,
+.tool-json-body:focus-visible,
+.tool-call-arg-value:focus-visible,
 .tool-call-chip:focus-visible {
     outline: 2px solid var(--kage-accent);
     outline-offset: -2px;
@@ -2975,9 +2977,12 @@ button.shell-chip {
     font-family: var(--kage-font);
     font-style: italic;
 }
+/* The name column is capped (fit-content, not max-content): one long name
+   must neither squeeze the values to nothing nor widen the block past its
+   bubble — past 40% it wraps. */
 .tool-call-fields {
     display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns: fit-content(40%) minmax(0, 1fr);
     gap: 2px 10px;
     align-items: baseline;
 }
@@ -3008,7 +3013,7 @@ button.shell-chip {
 }
 .tool-call-args {
     display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns: fit-content(40%) minmax(0, 1fr);
     gap: 3px 10px;
     align-items: baseline;
 }
@@ -3016,7 +3021,12 @@ button.shell-chip {
     display: contents;
 }
 .tool-call-arg-key {
+    min-width: 0;
     color: var(--kage-term-prompt);
+    overflow-wrap: anywhere;
+}
+.tool-call-label {
+    min-width: 0;
     overflow-wrap: anywhere;
 }
 .tool-call-arg-value {
@@ -3202,6 +3212,12 @@ button.tool-call-chip {
 .tool-call-chip[data-state="failed"] .shell-chip-dot {
     display: inline-block;
     background: var(--kage-term-error);
+}
+/* Light theme: a chip is the chat bubble's own grey (#f3f4f6), so a toggle
+   chip carries an outline to read as a control, not a bare label. */
+body.light-theme button.tool-call-chip,
+body.light-theme button.shell-chip {
+    box-shadow: inset 0 0 0 1px var(--kage-border);
 }
 .tool-sr-only {
     position: absolute;

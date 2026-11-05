@@ -27,7 +27,15 @@
  */
 
 import { t } from './i18n.js';
-import { copyButton, el, icon, layoutChanged, TOOL_LAYOUT_EVENT, uid } from './tool-call-dom.js';
+import {
+    chipStateLabel,
+    copyButton,
+    el,
+    icon,
+    layoutChanged,
+    TOOL_LAYOUT_EVENT,
+    uid,
+} from './tool-call-dom.js';
 import {
     getShellCalls,
     joinCapped,
@@ -503,9 +511,11 @@ export function syncShellCommandList(container, toolUsages) {
     chip.querySelector('.shell-chip-label').textContent = t('shared.shell.chip_label');
     chip.querySelector('.tool-chip-count').textContent = n > 1 ? `×${n}` : '';
     const title = t('shared.shell.chip_title', { count: n });
-    chip.title = title;
-    chip.setAttribute('aria-label', title);
-    chip.dataset.state = aggregateState(calls);
+    const state = aggregateState(calls);
+    const named = chipStateLabel(title, state);
+    chip.title = named;
+    chip.setAttribute('aria-label', named);
+    chip.dataset.state = state;
     list.setAttribute('aria-label', title);
 
     const existing = new Map(blocksOf(list).map((b) => [b._kageShell.record.toolCallId, b]));

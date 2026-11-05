@@ -44,8 +44,8 @@ describe('internal hosts', () => {
             { url_rules: [{ kind: 'domain_suffix', pattern: 'corp.example.com' }] },
         ]);
         const state = {};
-        addSource('https://wiki.corp.example.com/page', 'Wiki', null, state);
-        addSource('https://docs.github.com/x', 'Docs', null, state);
+        addSource('https://wiki.corp.example.com/page', 'Wiki', state);
+        addSource('https://docs.github.com/x', 'Docs', state);
         const [internal, external] = state.toolSources;
         expect(internal.favicon).toBe('');
         expect(external.favicon).toContain('docs.github.com');

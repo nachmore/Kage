@@ -65,6 +65,43 @@ describe('processToolCallUpdate', () => {
     const result = processToolCallUpdate({ payload: null }, state);
     expect(result.updated).toBe(false);
   });
+
+  describe('search sources from a later, untitled result', () => {
+    const evt = (update) => ({ payload: { params: { update } } });
+    const results = (...urls) => ({ items: [{ Json: { results: urls.map((url) => ({ url, title: 'T' })) } }] });
+    const run = (first, rawOutput) => {
+      const state = { toolUsages: [], toolSources: [] };
+      processToolCallUpdate(evt({ toolCallId: 'c', ...first }), state);
+      processToolCallUpdate(evt({ toolCallId: 'c', status: 'completed', rawOutput }), state);
+      return state.toolSources.map((s) => s.domain);
+    };
+
+    it('come from a call whose effective kind is search', () => {
+      expect(run({ title: 'Searching the web', kind: 'search' }, results('https://a.example/x'))).toEqual(['a.example']);
+      // A built-in search tool's name settles a missing / `other` kind.
+      expect(run({ title: 'web_search', kind: 'other' }, results('https://b.example/'))).toEqual(['b.example']);
+      expect(run({ title: 'web_search' }, results('https://c.example/'))).toEqual(['c.example']);
+    });
+
+    it("not from a tool whose title merely contains 'search' (MCP tools, shell runs)", () => {
+      const out = {
+        items: [
+          {
+            Json: {
+              results: [
+                { url: 'file:///tmp/Install%20update.command', title: 'Python docs', domain: 'docs.python.org' },
+                { url: 'https://evil.example/x', domain: 'github.com' },
+              ],
+            },
+          },
+        ],
+      };
+      expect(run({ title: 'Running: @docs/search_docs', kind: 'other' }, out)).toEqual([]);
+      expect(run({ title: 'mcp__docs__search_docs' }, out)).toEqual([]);
+      expect(run({ title: 'Running: rg search', kind: 'execute' }, out)).toEqual([]);
+      expect(run({ title: 'research_notes', kind: 'other' }, out)).toEqual([]);
+    });
+  });
 });
 
 // --- extractSources ---
@@ -126,40 +163,78 @@ describe('extractSourcesFromText', () => {
 describe('addSource', () => {
   it('deduplicates by domain', () => {
     const state = { toolUsages: [], toolSources: [] };
-    addSource('https://example.com/page1', 'Page 1', null, state);
-    addSource('https://example.com/page2', 'Page 2', null, state);
+    addSource('https://example.com/page1', 'Page 1', state);
+    addSource('https://example.com/page2', 'Page 2', state);
     expect(state.toolSources).toHaveLength(1);
   });
 
   it('adds sources with different domains', () => {
     const state = { toolUsages: [], toolSources: [] };
-    addSource('https://example.com', 'Ex', null, state);
-    addSource('https://other.com', 'Other', null, state);
+    addSource('https://example.com', 'Ex', state);
+    addSource('https://other.com', 'Other', state);
     expect(state.toolSources).toHaveLength(2);
   });
 
   it('strips www. from domain', () => {
     const state = { toolUsages: [], toolSources: [] };
-    addSource('https://www.example.com', 'Ex', null, state);
+    addSource('https://www.example.com', 'Ex', state);
     expect(state.toolSources[0].domain).toBe('example.com');
   });
 
-  it('uses domainHint when provided', () => {
+  it("labels a source by its URL's own host and keeps the normalised URL", () => {
     const state = { toolUsages: [], toolSources: [] };
-    addSource('https://cdn.example.com/img', 'Img', 'example.com', state);
-    expect(state.toolSources[0].domain).toBe('example.com');
+    addSource(' https://cdn.example.com/img', 'Img', state);
+    expect(state.toolSources[0].domain).toBe('cdn.example.com');
+    expect(state.toolSources[0].url).toBe('https://cdn.example.com/img');
+  });
+
+  it('a search result cannot pick its own label', () => {
+    // A result saying it's github.com while linking elsewhere is shown as
+    // where the link goes.
+    const state = { toolUsages: [], toolSources: [] };
+    extractSources(
+      { items: [{ Json: { results: [{ url: 'https://evil.example/x', title: 'Repo', domain: 'github.com' }] } }] },
+      state
+    );
+    expect(state.toolSources.map((s) => s.domain)).toEqual(['evil.example']);
+  });
+
+  it('keeps web URLs only: no file:, custom app schemes or javascript:', () => {
+    const state = { toolUsages: [], toolSources: [] };
+    for (const url of [
+      'file:///tmp/Install%20update.command',
+      'FILE:///etc/passwd',
+      'javascript:alert(1)',
+      'vscode://file/tmp/x',
+      'x-apple.systempreferences:com.apple.preference.security',
+      'data:text/html,<b>x</b>',
+      'mailto:a@b.c',
+      'http://',
+    ]) {
+      addSource(url, 'T', state);
+    }
+    extractSources([{ url: 'file:///tmp/x.command', title: 'Docs', domain: 'docs.python.org' }], state);
+    expect(state.toolSources).toEqual([]);
+    addSource('HTTP://Example.COM/a', 'Ex', state);
+    expect(state.toolSources.map((s) => [s.url, s.domain])).toEqual([['http://example.com/a', 'example.com']]);
+  });
+
+  it('ignores non-string titles', () => {
+    const state = { toolUsages: [], toolSources: [] };
+    addSource('https://example.com/', { x: 1 }, state);
+    expect(state.toolSources[0].title).toBe('example.com');
   });
 
   it('generates initials and color', () => {
     const state = { toolUsages: [], toolSources: [] };
-    addSource('https://github.com/repo', 'GH', null, state);
+    addSource('https://github.com/repo', 'GH', state);
     expect(state.toolSources[0].initials).toBe('GI');
     expect(state.toolSources[0].color).toMatch(/^hsl\(\d+, 55%, 45%\)$/);
   });
 
   it('ignores invalid URLs', () => {
     const state = { toolUsages: [], toolSources: [] };
-    addSource('not-a-url', 'Bad', null, state);
+    addSource('not-a-url', 'Bad', state);
     expect(state.toolSources).toHaveLength(0);
   });
 });
@@ -527,7 +602,26 @@ describe('attachSourceClickHandler — delegated open_url routing', () => {
     attachSourceClickHandler(container, invoke);
 
     container.querySelector('.source-chip').click();
-    expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com' });
+    expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com/' });
+  });
+
+  it('never hands a non-web URL to open_url', () => {
+    document.body.innerHTML = `
+      <div id="container">
+        <a class="source-chip" href="#" data-url="file:///tmp/Install%20update.command">docs.python.org</a>
+        <a class="source-chip" href="#" data-url="javascript:alert(1)">x</a>
+        <a class="source-chip" href="#" data-url="vscode://file/x">y</a>
+      </div>
+    `;
+    const container = document.getElementById('container');
+    const invoke = vi.fn(() => Promise.resolve());
+    attachSourceClickHandler(container, invoke);
+    for (const a of container.querySelectorAll('a')) {
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+      a.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+    }
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('routes clicks on inner spans up to the data-url ancestor', () => {
@@ -541,7 +635,7 @@ describe('attachSourceClickHandler — delegated open_url routing', () => {
     attachSourceClickHandler(container, invoke);
 
     container.querySelector('.source-domain').click();
-    expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://nested.test' });
+    expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://nested.test/' });
   });
 
   it('is idempotent — installing twice does not double-fire', () => {

@@ -9208,5 +9208,17 @@
     "description": "Shown in the change view of a file edit that left the file as it was",
     "_machine_translated": true,
     "_source_hash": "977871c487463b3b"
+  },
+  "shared.tool.chip_state.failed": {
+    "message": "{label} – legalább egy sikertelen",
+    "description": "Accessible name / tooltip of a tool chip (or the 'shell' chip) under an agent response when at least one of the calls it groups failed (the chip also shows a red dot). {label} is the chip's own name, e.g. '3 calls to read' or '2 shell commands'.",
+    "_machine_translated": true,
+    "_source_hash": "c6ae21a6c7c34d34"
+  },
+  "shared.tool.chip_state.running": {
+    "message": "{label} – még fut",
+    "description": "Accessible name / tooltip of a tool chip (or the 'shell' chip) under an agent response while at least one of the calls it groups hasn't finished yet. {label} is the chip's own name, e.g. '3 calls to read' or '2 shell commands'.",
+    "_machine_translated": true,
+    "_source_hash": "8b6b3aaad5115edb"
   }
 }

@@ -23,6 +23,7 @@ import {
     JSON_CUT,
     parseMcpTitle,
     parseToolOutput,
+    readOperationsShown,
     readRanges,
     searchQueryOf,
     searchSourcesOf,
@@ -206,26 +207,36 @@ describe('categories and chip groups', () => {
         expect(classifyToolCall(undefined, 'constructor', 'constructor').category).toBe('other');
     });
 
-    it('groups MCP calls by server, plain tool names by name, the rest by kind', () => {
+    it('groups MCP calls by server, built-ins and described calls by kind, unknown plain names by name', () => {
         const state = newState();
         feed(
             state,
             { toolCallId: '1', title: 'read', kind: 'read' },
             { toolCallId: '2', title: 'Running: @builder-mcp/InternalSearch' },
-            { toolCallId: '3', title: 'read', kind: 'read' },
+            { toolCallId: '3', title: 'Reading /src/app.rs', kind: 'read' },
             { toolCallId: '4', title: 'Running: @builder-mcp/ReadInternalWebsites', kind: 'other' },
             { toolCallId: '5', title: 'Read /Users/me/a.txt', kind: 'read' },
-            { toolCallId: '6', title: 'Edit `src/main.rs`', kind: 'edit' }
+            { toolCallId: '6', title: 'Edit `src/main.rs`', kind: 'edit' },
+            { toolCallId: '7', title: 'deploy', kind: 'other' },
+            { toolCallId: '8', title: 'write', kind: 'edit' },
+            { toolCallId: '9', title: 'deploy' }
         );
         const groups = groupToolCalls(state.toolUsages);
         expect(groups.map((g) => [g.key, g.label, g.calls.length])).toEqual([
-            ['tool:read', 'read', 2],
+            ['kind:read', null, 3],
             ['mcp:builder-mcp', 'builder-mcp', 2],
-            ['kind:read', null, 1],
-            ['kind:edit', null, 1],
+            ['kind:edit', null, 2],
+            ['tool:deploy', 'deploy', 2],
         ]);
         expect(groups[1].mcp).toBe(true);
         expect(groups[1].calls.map((c) => c.mcp.tool)).toEqual(['InternalSearch', 'ReadInternalWebsites']);
+    });
+
+    it('a record marked built-in groups by kind whatever its name', () => {
+        const { rec } = call({ toolCallId: 'b', title: 'introspect', kind: 'other' });
+        expect(toolChipGroup(rec).key).toBe('tool:introspect');
+        rec.builtin = true;
+        expect(toolChipGroup(rec)).toEqual({ key: 'kind:other', label: null, kind: 'other', mcp: false });
     });
 });
 
@@ -505,6 +516,49 @@ describe('applyToolUpdate records', () => {
         expect(toolOutputOf(rec).text.head).toBe('body');
         expect(rec.locations).toEqual([{ path: '/x', line: 40 }]);
         expect(readRanges(rec)).toEqual([{ path: '/x', start: 40, end: null }]);
+    });
+
+    it("reads kiro-cli's line-mode offset / limit as a 1-based line range", () => {
+        // Shaped like a real kiro v3 read (session log / live rawInput):
+        // `offset` lines skipped, `limit` lines read.
+        const read = (...operations) =>
+            call({
+                toolCallId: 'r',
+                title: 'Reading /src/app.rs',
+                kind: 'read',
+                rawInput: { __tool_use_purpose: 'See the handler', operations },
+            }).rec;
+        let rec = read({ mode: 'Line', path: '/src/app.rs', offset: 120, limit: 40 });
+        expect(readRanges(rec)).toEqual([{ path: '/src/app.rs', start: 121, end: 160 }]);
+        expect(readOperationsShown(rec)).toBe(true);
+        expect(readRanges(read({ mode: 'Line', path: '/a', offset: 1275 }))).toEqual([{ path: '/a', start: 1276, end: null }]);
+        expect(readRanges(read({ mode: 'Line', path: '/a', limit: 40 }))).toEqual([{ path: '/a', start: 1, end: 40 }]);
+        // From the top with no limit: the whole file, no range.
+        rec = read({ mode: 'Line', path: '/a' }, { mode: 'Line', path: '/b', offset: 0, limit: null });
+        expect(readRanges(rec)).toEqual([]);
+        expect(readOperationsShown(rec)).toBe(true);
+        // Not line mode, or nonsense values: left in the arguments.
+        rec = read({ mode: 'Directory', path: '/d', offset: 3 });
+        expect(readRanges(rec)).toEqual([]);
+        expect(readOperationsShown(rec)).toBe(false);
+        rec = read({ mode: 'Line', path: '/a', offset: -5, limit: '40' });
+        expect(readRanges(rec)).toEqual([]);
+        expect(readOperationsShown(rec)).toBe(false);
+        // Other agents' top-level offset / limit count differently: as sent.
+        rec = call({ toolCallId: 'c', title: 'Read /a', kind: 'read', rawInput: { file_path: '/a', offset: 10, limit: 5 } }).rec;
+        expect(readRanges(rec)).toEqual([]);
+    });
+
+    it('a `__proto__` argument stays a listed key next to a diff', () => {
+        const { rec } = call({
+            toolCallId: 'e',
+            title: 'write',
+            kind: 'edit',
+            rawInput: JSON.parse('{"path":"/tmp/a","oldStr":"a","newStr":"b","__proto__":{"hidden":"rm -rf ~"},"extra":"shown"}'),
+        });
+        expect(Object.keys(rec.input)).toEqual(['path', '__proto__', 'extra']);
+        expect(rec.input.__proto__).toEqual(Object.assign(Object.create(null), { hidden: 'rm -rf ~' }));
+        expect({}.hidden).toBeUndefined();
     });
 
     it('keeps arguments as sent (untrusted text is not altered), capped', () => {

@@ -76,17 +76,18 @@ describe('chips', () => {
         return { state, container: row(state) };
     }
 
-    it('one toggle chip per tool / MCP server with a count; extension chips stay static', () => {
+    it('one toggle chip per kind / MCP server with a count; extension chips stay static', () => {
         const { container } = setup();
         const cs = chips(container);
-        expect(cs.map(chipText)).toEqual(['read×2', 'builder-mcp×2']);
+        // A built-in (kiro `read`) is listed by its kind, translated.
+        expect(cs.map(chipText)).toEqual(['shared.tool.kind.read×2', 'builder-mcp×2']);
         for (const c of cs) {
             expect(c.tagName).toBe('BUTTON');
             expect(c.type).toBe('button');
             expect(c.getAttribute('aria-expanded')).toBe('false');
         }
-        expect(cs[0].getAttribute('aria-label')).toBe('shared.tool.chip_title');
-        expect(cs[1].getAttribute('aria-label')).toBe('shared.tool.chip_title_mcp');
+        expect(cs[0].getAttribute('aria-label')).toBe('shared.tool.chip_state.running');
+        expect(cs[1].getAttribute('aria-label')).toBe('shared.tool.chip_state.running');
         expect(cs[1].dataset.state).toBe('running');
         expect(container.querySelector('.tool-sources-static').textContent).toContain('Todos');
         expect(container.querySelector('.tool-sources-static .tool-call-chip')).toBeNull();
@@ -111,10 +112,32 @@ describe('chips', () => {
         expect(list.hidden).toBe(true);
     });
 
-    it('a failed call marks its chip', () => {
-        const state = feed(newState(), { toolCallId: 'a', title: 'read', kind: 'read', status: 'failed' });
+    it('a failed call marks its chip, for screen readers too', () => {
+        const state = feed(
+            newState(),
+            { toolCallId: 'a', title: 'read', kind: 'read', status: 'failed' },
+            { toolCallId: 'b', title: 'read', kind: 'read', status: 'completed' }
+        );
         const container = row(state);
-        expect(chips(container)[0].dataset.state).toBe('failed');
+        const chip = chips(container)[0];
+        expect(chip.dataset.state).toBe('failed');
+        // The red dot is decorative; the accessible name says it.
+        expect(chip.querySelector('.shell-chip-dot').getAttribute('aria-hidden')).toBe('true');
+        expect(chip.getAttribute('aria-label')).toBe('shared.tool.chip_state.failed');
+        expect(chip.title).toBe('shared.tool.chip_state.failed');
+        // The list keeps the plain name.
+        expect(listOf(chip).getAttribute('aria-label')).toBe('shared.tool.chip_title');
+        // All done, none failed: just the name.
+        feed(state, { toolCallId: 'c', title: 'Running: @srv/tool', status: 'completed' });
+        renderToolSources(container, state.toolUsages, []);
+        expect(chips(container)[1].getAttribute('aria-label')).toBe('shared.tool.chip_title_mcp');
+    });
+
+    it('an unknown plain tool name keeps a chip of its own', () => {
+        const state = feed(newState(), { toolCallId: 'a', title: 'deploy', kind: 'other', status: 'completed' });
+        const chip = chips(row(state))[0];
+        expect(chipText(chip)).toBe('deploy');
+        expect(chip.querySelector('.tool-call-chip-label').dir).toBe('ltr');
     });
 
     it('groups by kind with a translated label when the title is not a tool name', () => {
@@ -141,7 +164,11 @@ describe('chips', () => {
         const again = chips(container);
         expect(again[1]).toBe(chip);
         expect(chipText(again[1])).toBe('builder-mcp×3');
-        expect(again.map(chipText)).toEqual(['read×2', 'builder-mcp×3', 'grep']);
+        expect(again.map(chipText)).toEqual([
+            'shared.tool.kind.read×2',
+            'builder-mcp×3',
+            'shared.tool.kind.search',
+        ]);
         expect(listOf(chip)).toBe(list);
         expect(list.hidden).toBe(false);
         expect(blocksIn(list)[0]).toBe(block);
@@ -474,5 +501,104 @@ describe('untrusted data stays text', () => {
         });
         const p = open(createToolCallBlock(recOf(state, 'a')));
         expect(p.querySelector('.tool-call-text').textContent).toBe('red ok');
+    });
+});
+
+describe('keyboard and screen readers', () => {
+    const argRows = (p) =>
+        [...p.querySelectorAll('.tool-call-arg-key')].map((k) => k.textContent);
+
+    it('a `__proto__` argument is listed for every kind of call', () => {
+        const proto = (extra) =>
+            JSON.parse(`{${extra}"__proto__":{"hidden":"rm -rf ~"},"extra":"shown"}`);
+        const cases = [
+            { title: 'write', kind: 'edit', rawInput: proto('"path":"/tmp/a","oldStr":"a","newStr":"b",') },
+            { title: 'grep', kind: 'search', rawInput: proto('"query":"widgets",') },
+            { title: 'read', kind: 'read', rawInput: proto('"path":"/a",') },
+            { title: 'web_fetch', kind: 'fetch', rawInput: proto('"url":"https://x.example",') },
+            { title: 'Running: @srv/tool', rawInput: proto('"q":"x",') },
+        ];
+        for (const [i, c] of cases.entries()) {
+            const state = feed(newState(), { toolCallId: `c${i}`, ...c });
+            const p = open(createToolCallBlock(recOf(state, `c${i}`)));
+            expect(argRows(p)).toContain('__proto__');
+            expect(argRows(p)).toContain('extra');
+        }
+    });
+
+    it('argument values and argument JSON scroll boxes take focus and are named by their key', () => {
+        const state = feed(newState(), {
+            toolCallId: 'm',
+            title: 'Running: @srv/tool',
+            rawInput: { query: 'x\n'.repeat(40), filters: { a: [1, 2, 3] } },
+        });
+        const p = open(createToolCallBlock(recOf(state, 'm')));
+        const [qKey, fKey] = p.querySelectorAll('.tool-call-arg-key');
+        const value = p.querySelector('.tool-call-arg-value');
+        expect(value.tabIndex).toBe(0);
+        expect(value.getAttribute('role')).toBe('group');
+        expect(value.getAttribute('aria-labelledby')).toBe(qKey.id);
+        const body = p.querySelector('.tool-call-args .tool-json-body');
+        expect(body.tabIndex).toBe(0);
+        expect(body.getAttribute('aria-labelledby')).toBe(fKey.id);
+        expect(qKey.id).not.toBe(fKey.id);
+
+        // A result's JSON scrolls inside its (focusable) result box instead.
+        feed(state, { toolCallId: 'm', status: 'completed', rawOutput: { items: [{ Json: { ok: true } }] } });
+        const block = createToolCallBlock(recOf(state, 'm'));
+        const p2 = open(block);
+        expect(p2.querySelector('.tool-call-output .tool-json-body').hasAttribute('tabindex')).toBe(false);
+        expect(p2.querySelector('.tool-call-output').tabIndex).toBe(0);
+    });
+
+    it('focus survives a panel rebuild while the call streams', () => {
+        const state = feed(newState(), {
+            toolCallId: 'm',
+            title: 'Running: @srv/tool',
+            rawInput: { q: 'x', filters: { a: 1 } },
+        });
+        const container = row(state);
+        chips(container)[0].click();
+        const block = blocksIn(listOf(chips(container)[0]))[0];
+        const p = open(block);
+
+        // On "Copy arguments".
+        p.querySelector('[data-focus="copy:arguments"]').focus();
+        feed(state, { toolCallId: 'm', status: 'in_progress', rawOutput: 'partial' });
+        syncToolSources(container, state.toolUsages);
+        expect(document.activeElement.dataset.focus).toBe('copy:arguments');
+        expect(p.contains(document.activeElement)).toBe(true);
+
+        // On a JSON value's summary (the arguments' nested value).
+        p.querySelector('.tool-call-args summary').focus();
+        feed(state, { toolCallId: 'm', rawOutput: 'more' });
+        syncToolSources(container, state.toolUsages);
+        expect(document.activeElement.tagName).toBe('SUMMARY');
+        expect(document.activeElement.dataset.focus).toBe('json:arg:filters');
+
+        // On the result box.
+        p.querySelector('.tool-call-output').focus();
+        feed(state, { toolCallId: 'm', status: 'completed', rawOutput: 'done' });
+        syncToolSources(container, state.toolUsages);
+        expect(document.activeElement.classList.contains('tool-call-output')).toBe(true);
+
+        // What had focus is gone: the block's header takes it, not <body>.
+        p.querySelector('[data-focus="copy:result"]').focus();
+        feed(state, { toolCallId: 'm', rawOutput: null });
+        syncToolSources(container, state.toolUsages);
+        expect(p.querySelector('[data-focus="copy:result"]')).toBeNull();
+        expect(document.activeElement).toBe(header(block));
+    });
+
+    it('a block moved to another chip keeps focus', () => {
+        const state = feed(newState(), { toolCallId: 'a', title: 'Running: @srv/tool' });
+        const container = row(state);
+        chips(container)[0].click();
+        const block = blocksIn(listOf(chips(container)[0]))[0];
+        header(block).focus();
+        feed(state, { toolCallId: 'a', title: 'Running: @other/tool' });
+        syncToolCallLists(container, state.toolUsages);
+        expect(chips(container)[0].dataset.group).toBe('kind:other');
+        expect(document.activeElement).toBe(header(block));
     });
 });

@@ -14,7 +14,8 @@ import {
     historyToolUpdates,
 } from '../../ui/js/shared/tool-call-history.js';
 import { shellCallState } from '../../ui/js/shared/shell-commands.js';
-import { toolCallState, toolOutputOf } from '../../ui/js/shared/tool-calls.js';
+import { processToolCallUpdate } from '../../ui/js/shared/streaming-utils.js';
+import { groupToolCalls, toolCallState, toolOutputOf } from '../../ui/js/shared/tool-calls.js';
 import { renderToolSources } from '../../ui/js/shared/tool-call-view.js';
 
 const noImages = () => null;
@@ -79,6 +80,85 @@ function session() {
 
 const byId = (tools, id) => tools.toolUsages.find((u) => u.toolCallId === id);
 
+describe('live / reopened parity', () => {
+    // One turn as kiro-cli streams it (its descriptive titles: notifications.rs
+    // fixtures, kiro's own title strings) and as its session log has it (tool
+    // names, the results map's kinds).
+    const live = [
+        { toolCallId: 't1', title: 'Reading /repo/b.rs', kind: 'read', rawInput: { operations: [{ mode: 'Line', path: '/repo/b.rs', offset: 2, limit: 7 }] } },
+        { toolCallId: 't2', title: 'Editing /repo/a.toml', kind: 'edit', rawInput: { command: 'str_replace', path: '/repo/a.toml', oldStr: 'x = 1', newStr: 'x = 2' } },
+        { toolCallId: 't3', title: "Searching for 'TODO' in /repo", kind: 'search', rawInput: { pattern: 'TODO', path: '/repo' } },
+        { toolCallId: 't4', title: 'Finding *.rs', kind: 'search', rawInput: { pattern: '*.rs' } },
+        { toolCallId: 't5', title: 'Running: @builder-mcp/InternalSearch', kind: 'other', rawInput: { query: 'widgets' } },
+        { toolCallId: 't6', title: 'Running: cargo check', kind: 'execute', rawInput: { command: 'cargo check' } },
+        { toolCallId: 't7', title: 'Running: @builder-mcp/ReadInternalWebsites', kind: 'other', rawInput: { inputs: ['https://w.example'] } },
+        { toolCallId: 't8', title: 'Spawning a subagent', kind: 'other', rawInput: { task: 'x' } },
+    ];
+    const log = [
+        prompt('p1', 'Do it'),
+        assistant(
+            'a1',
+            use('t1', 'read', live[0].rawInput),
+            use('t2', 'write', live[1].rawInput),
+            use('t3', 'grep', live[2].rawInput),
+            use('t4', 'glob', live[3].rawInput),
+            use('t5', 'InternalSearch', live[4].rawInput),
+            use('t6', 'shell', live[5].rawInput),
+            use('t7', 'ReadInternalWebsites', live[6].rawInput),
+            use('t8', 'subagent', live[7].rawInput)
+        ),
+        results('r1', [], {
+            t1: { builtin: 'FileRead' },
+            t2: { builtin: 'FileWrite' },
+            t3: { builtin: 'Grep' },
+            t4: { builtin: 'Glob' },
+            t5: { mcp_server: 'builder-mcp', mcp_tool: 'InternalSearch' },
+            t6: { builtin: 'ExecuteCmd' },
+            t7: { mcp_server: 'builder-mcp', mcp_tool: 'ReadInternalWebsites' },
+            t8: { builtin: 'Subagent' },
+        }),
+        assistant('a2', text('Done.')),
+    ];
+    const chipRow = (tools) => {
+        const container = document.createElement('div');
+        renderToolSources(container, tools.toolUsages, tools.toolSources);
+        return [...container.querySelectorAll('.tool-call-chip, .shell-chip')].map((c) =>
+            c.textContent.replace(/\s+/g, ' ').trim()
+        );
+    };
+    const shape = (tools) =>
+        groupToolCalls(tools.toolUsages).map((g) => [g.key, g.label, g.calls.map((c) => c.toolCallId)]);
+
+    it('a reopened response groups and labels its chips like the live one', () => {
+        const state = { toolUsages: [], toolSources: [] };
+        for (const update of live) processToolCallUpdate({ payload: { params: { update } } }, state);
+        const reopened = buildRenderQueue(log, {}, {}, noImages).find((i) => i.tools).tools;
+
+        expect(shape(reopened)).toEqual(shape(state));
+        expect(shape(state)).toEqual([
+            ['kind:read', null, ['t1']],
+            ['kind:edit', null, ['t2']],
+            ['kind:search', null, ['t3', 't4']],
+            ['mcp:builder-mcp', 'builder-mcp', ['t5', 't7']],
+            ['kind:other', null, ['t8']],
+        ]);
+        expect(chipRow(reopened)).toEqual(chipRow(state));
+    });
+
+    it('the same read shows the same line range', () => {
+        const state = { toolUsages: [], toolSources: [] };
+        processToolCallUpdate({ payload: { params: { update: live[0] } } }, state);
+        const reopened = buildRenderQueue(log, {}, {}, noImages).find((i) => i.tools).tools;
+        const meta = (tools) => {
+            const container = document.createElement('div');
+            renderToolSources(container, tools.toolUsages, []);
+            return container.querySelector('.tool-call[data-category="read"] .tool-call-meta span').textContent;
+        };
+        expect(meta(state)).toBe('3–9');
+        expect(meta(reopened)).toBe('3–9');
+    });
+});
+
 describe('buildRenderQueue with tool calls', () => {
     it("attaches a turn's tools to its last reply, rebuilt like a live turn", () => {
         const queue = buildRenderQueue(session(), {}, {}, noImages);
@@ -125,7 +205,13 @@ describe('buildRenderQueue with tool calls', () => {
         const container = document.createElement('div');
         renderToolSources(container, queue[2].tools.toolUsages, queue[2].tools.toolSources);
         const chipLabels = [...container.querySelectorAll('.tool-call-chip .tool-call-chip-label')].map((n) => n.textContent);
-        expect(chipLabels).toEqual(['builder-mcp', 'write', 'read', 'web_search', 'grep']);
+        // Built-ins by kind (as kiro's descriptive live titles group).
+        expect(chipLabels).toEqual([
+            'builder-mcp',
+            'shared.tool.kind.edit',
+            'shared.tool.kind.read',
+            'shared.tool.kind.search',
+        ]);
         expect(container.querySelector('.shell-chip')).not.toBeNull();
         expect(container.querySelector('.shell-chip').dataset.state).toBe('failed');
         expect(container.querySelector('.tool-sources-static a.source-chip[data-url]')).not.toBeNull();

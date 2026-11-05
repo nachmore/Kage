@@ -4369,6 +4369,14 @@
     "message": "{count, plural, one {# call to the {server} MCP server} other {# calls to the {server} MCP server}}",
     "description": "Tooltip / accessible name of the chip that groups an agent response's calls to the tools of one MCP server (a plugin that gives the agent extra tools). {server} is the server's name, an identifier such as 'builder-mcp'. Keep 'MCP' as is."
   },
+  "shared.tool.chip_state.failed": {
+    "message": "{label} — at least one failed",
+    "description": "Accessible name / tooltip of a tool chip (or the 'shell' chip) under an agent response when at least one of the calls it groups failed (the chip also shows a red dot). {label} is the chip's own name, e.g. '3 calls to read' or '2 shell commands'."
+  },
+  "shared.tool.chip_state.running": {
+    "message": "{label} — still running",
+    "description": "Accessible name / tooltip of a tool chip (or the 'shell' chip) under an agent response while at least one of the calls it groups hasn't finished yet. {label} is the chip's own name, e.g. '3 calls to read' or '2 shell commands'."
+  },
   "shared.tool.kind.read": {
     "message": "read",
     "description": "Chip label for an agent's file-reading tool calls when the tool has no short name of its own. Keep short; lowercase is fine."

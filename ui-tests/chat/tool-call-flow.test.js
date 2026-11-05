@@ -84,7 +84,7 @@ describe('chat window: live tool calls', () => {
 
         const msg = document.querySelector('.message.assistant');
         const chips = chipsIn(msg);
-        expect(chips.map(label)).toEqual(['read', 'builder-mcp']);
+        expect(chips.map(label)).toEqual(['shared.tool.kind.read', 'builder-mcp']);
         chips[1].click();
         const block = listOf(chips[1]).querySelector('.tool-call');
         expect(block.dataset.state).toBe('unknown');
@@ -153,7 +153,7 @@ describe('chat window: reopened sessions', () => {
         const row = replies[1].querySelector('.message-content > .tool-sources');
         expect(row).not.toBeNull();
         const chips = chipsIn(row);
-        expect(chips.map(label)).toEqual(['write', 'builder-mcp']);
+        expect(chips.map(label)).toEqual(['shared.tool.kind.edit', 'builder-mcp']);
         expect(chips[1].dataset.state).toBe('failed');
         expect(row.querySelector('.shell-chip')).not.toBeNull();
 

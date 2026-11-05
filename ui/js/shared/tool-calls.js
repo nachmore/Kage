@@ -201,16 +201,23 @@ export function classifyToolCall(kind, firstTitle, latestTitle) {
     return { category: KIND_CATEGORY[k] || 'other', kind: k, mcp: null };
 }
 
-// A chip names its group by the tool's first title when that is a plain
-// tool name (kiro: `read`, `write`, `grep`) — anything longer (Claude
-// Code's `Read /path/to/file`) groups by kind instead.
+// A tool the agent titles with a plain name we don't know (`deploy`) keeps
+// a chip of its own, named so.
 const PLAIN_TOOL_NAME = /^[A-Za-z0-9_.-]{1,40}$/;
 
 /**
  * Which chip a record is listed under: `{ key, label, kind, mcp }`.
- * MCP calls group by server (`builder-mcp ×2`), plain tool names by name,
- * the rest by kind — `label` is `null` then and the view shows the kind's
- * translated name.
+ * MCP calls group by server (`builder-mcp ×2`); everything else by its
+ * effective kind (`read`, `edit`, `search` …; `label` is `null` and the
+ * view shows the kind's translated name) — except a call titled with a
+ * plain tool name that isn't a known built-in, which groups by that name.
+ *
+ * Built-in tools group by kind however they're titled: kiro-cli titles
+ * them descriptively while it streams (`Reading /src/app.rs`, `Searching
+ * for '…' in /src`), its session log only has the name (`read`, `grep`),
+ * and a reopened response must show the chips the live one did. A record
+ * rebuilt from the log is marked `builtin` when the log says the tool was
+ * one (tool-call-history.js).
  */
 export function toolChipGroup(rec) {
     if (!rec) return null;
@@ -218,7 +225,12 @@ export function toolChipGroup(rec) {
         return { key: `mcp:${rec.mcp.server}`, label: rec.mcp.server, kind: 'mcp', mcp: true };
     }
     const first = rec.firstTitle;
-    if (typeof first === 'string' && PLAIN_TOOL_NAME.test(first)) {
+    if (
+        !rec.builtin &&
+        typeof first === 'string' &&
+        PLAIN_TOOL_NAME.test(first) &&
+        !kindForToolName(first)
+    ) {
         return { key: `tool:${first}`, label: first, kind: rec.kind, mcp: false };
     }
     return { key: `kind:${rec.kind}`, label: null, kind: rec.kind, mcp: false };
@@ -642,7 +654,9 @@ export function diffsFromEditInput(input, budget = TOOL_OUTPUT_CAP) {
 /** The input to list as arguments: edit text the diff shows is left out. */
 function displayInput(input, hasDiff) {
     if (!hasDiff || !input || typeof input !== 'object' || Array.isArray(input)) return input;
-    const out = {};
+    // Null-prototype: assigning a `__proto__` argument must add a key, not
+    // set the copy's prototype (and drop the argument from the list).
+    const out = Object.create(null);
     for (const k of Object.keys(input)) if (!EDIT_TEXT_KEYS.has(k)) out[k] = input[k];
     return out;
 }
@@ -876,6 +890,8 @@ export function applyToolUpdate(entry, update, opts = {}) {
             category: 'other',
             kind: 'other',
             mcp: null,
+            // A built-in tool of the agent (known from the session log).
+            builtin: false,
             status: null,
             input: undefined,
             inputTruncated: false,
@@ -1085,25 +1101,60 @@ function intOf(v) {
     return Number.isInteger(v) ? v : null;
 }
 
+function countOf(v) {
+    return Number.isInteger(v) && v >= 0 ? v : null;
+}
+
+/**
+ * Whether `op` is one of kiro-cli's `read` operations in line mode (`{
+ * mode: "Line", path, offset?, limit? }`), whose `offset` is the number of
+ * lines skipped — `offset: 1275` starts at line 1276 (checked against a
+ * real read) — and `limit` the number of lines read.
+ */
+function isKiroLineRead(op) {
+    return op.mode === 'Line' && !!pick(op, PATH_KEYS);
+}
+
+/**
+ * The 1-based line range of a kiro line-mode read's `offset` / `limit`, or
+ * `null` when it reads from the top with no limit (the whole file).
+ */
+function kiroLineRange(op) {
+    const offset = countOf(op.offset);
+    const limit = countOf(op.limit);
+    if (!offset && !limit) return null;
+    const start = (offset ?? 0) + 1;
+    return { start, end: limit ? start + limit - 1 : null };
+}
+
 /**
  * Line ranges a read names, when it says so unambiguously:
- * `[{ path, start, end }]` from `start_line` / `end_line` (kiro) or an ACP
- * location's line. `offset` / `limit` style arguments stay in the
- * argument list instead — agents count them differently.
+ * `[{ path, start, end }]` (1-based, inclusive; either end may be `null`)
+ * from `start_line` / `end_line` (Amazon Q / older kiro), kiro-cli's
+ * line-mode `operations` (`offset` / `limit`, see `isKiroLineRead`), or an
+ * ACP location's line. Other agents' `offset` / `limit` arguments stay in
+ * the argument list — they count them differently (Claude Code's `offset`
+ * is the first line's number).
  */
 export function readRanges(rec) {
     const out = [];
     const input = inputObj(rec);
+    const kiroOps = !!input && Array.isArray(input.operations);
     const ops = input
-        ? Array.isArray(input.operations)
-            ? input.operations.filter((o) => o && typeof o === 'object')
+        ? kiroOps
+            ? input.operations.filter((o) => o && typeof o === 'object' && !Array.isArray(o))
             : [input]
         : [];
     for (const op of ops) {
         const path = pick(op, PATH_KEYS);
+        if (!path) continue;
         const start = intOf(op.start_line ?? op.startLine);
         const end = intOf(op.end_line ?? op.endLine);
-        if (path && (start !== null || end !== null)) out.push({ path, start, end });
+        if (start !== null || end !== null) out.push({ path, start, end });
+        else if (kiroOps && isKiroLineRead(op)) {
+            const r = kiroLineRange(op);
+            if (r) out.push({ path, ...r });
+        }
     }
     if (!out.length) {
         for (const loc of rec?.locations || []) {
@@ -1149,6 +1200,8 @@ const READ_SHOWN_KEYS = new Set([
     'startLine',
     'endLine',
 ]);
+// ...and, for kiro's line mode, the range's `offset` / `limit`.
+const KIRO_LINE_SHOWN_KEYS = new Set(['offset', 'limit']);
 
 /**
  * Whether a read's `operations` argument says nothing the view doesn't
@@ -1163,7 +1216,13 @@ export function readOperationsShown(rec) {
             typeof op === 'object' &&
             !Array.isArray(op) &&
             pick(op, PATH_KEYS) &&
-            Object.keys(op).every((k) => READ_SHOWN_KEYS.has(k))
+            Object.keys(op).every(
+                (k) =>
+                    READ_SHOWN_KEYS.has(k) ||
+                    (KIRO_LINE_SHOWN_KEYS.has(k) &&
+                        isKiroLineRead(op) &&
+                        (op[k] === null || countOf(op[k]) !== null))
+            )
     );
 }
 

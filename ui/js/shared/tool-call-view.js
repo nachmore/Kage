@@ -33,7 +33,7 @@
  */
 
 import { t } from './i18n.js';
-import { copyButton, el, icon, layoutChanged, uid } from './tool-call-dom.js';
+import { chipStateLabel, copyButton, el, icon, layoutChanged, uid } from './tool-call-dom.js';
 import { appendShellCommandText, syncShellCommandList } from './shell-command-view.js';
 import { joinCapped, shellCommandDisplayText } from './shell-commands.js';
 import { renderSourceChipsHtml, renderToolChipsHtml } from './streaming-utils.js';
@@ -106,6 +106,10 @@ function kindLabel(kind) {
             return t('shared.tool.kind.think');
         case 'switch_mode':
             return t('shared.tool.kind.switch_mode');
+        case 'execute':
+            // A shell tool whose kind hasn't arrived yet (it moves to the
+            // shell chip when it does): named like that chip.
+            return t('shared.shell.chip_label');
         default:
             return t('shared.tool.kind.other');
     }
@@ -297,19 +301,40 @@ function prettyJson(v) {
 }
 
 /**
+ * Make a scroll box reachable from the keyboard (WebKit can't scroll one
+ * that can't take focus), named for screen readers: by the element with id
+ * `labelledBy`, else by `name`.
+ */
+function scrollable(node, focusKey, { labelledBy = null, name = null } = {}) {
+    node.tabIndex = 0;
+    node.setAttribute('role', 'group');
+    if (labelledBy) node.setAttribute('aria-labelledby', labelledBy);
+    else if (name) node.setAttribute('aria-label', name);
+    node.dataset.focus = focusKey;
+    return node;
+}
+
+/**
  * A collapsible JSON value: `<details>` whose summary counts the keys /
  * items and whose body is the pretty-printed JSON (marks visible when
  * `marks`, i.e. for arguments). `key` lets an open one stay open when the
- * panel is rebuilt.
+ * panel is rebuilt. With `labelledBy` / `name` the body scrolls on its own
+ * and takes focus (outside a result box, which scrolls instead).
  */
-function jsonDetails(value, key, { open = false, marks = true } = {}) {
+function jsonDetails(
+    value,
+    key,
+    { open = false, marks = true, labelledBy = null, name = null } = {}
+) {
     const details = el('details', 'tool-json');
     details.dataset.key = key;
     if (open) details.open = true;
     const summary = el('summary', 'tool-json-summary');
+    summary.dataset.focus = `json:${key}`;
     summary.append(label('tool-json-count', jsonCount(value)));
     const pre = el('pre', 'tool-json-body');
     pre.dir = 'ltr';
+    if (labelledBy || name) scrollable(pre, `json-body:${key}`, { labelledBy, name });
     const text = prettyJson(value);
     if (marks) appendShellCommandText(pre, text);
     else pre.textContent = text;
@@ -322,25 +347,35 @@ function scalarText(v) {
     return prettyJson(v);
 }
 
-/** Arguments as key / value rows; nested values as collapsed JSON. */
+/**
+ * Arguments as key / value rows; nested values as collapsed JSON. Values
+ * scroll past a few lines, so each can take focus (named by its key).
+ */
 function argumentsList(input, keyPrefix) {
     const list = el('div', 'tool-call-args');
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
-        list.append(jsonDetails(input, `${keyPrefix}:all`, { open: true }));
+        list.append(
+            jsonDetails(input, `${keyPrefix}:all`, {
+                open: true,
+                name: t('shared.tool.label.arguments'),
+            })
+        );
         return list;
     }
     for (const k of Object.keys(input)) {
         const v = input[k];
         const row = el('div', 'tool-call-arg');
         const keyEl = el('span', 'tool-call-arg-key');
+        keyEl.id = uid('kage-tool-arg');
         keyEl.dir = 'ltr';
         appendShellCommandText(keyEl, k);
         row.append(keyEl);
         if (v && typeof v === 'object') {
-            row.append(jsonDetails(v, `${keyPrefix}:${k}`));
+            row.append(jsonDetails(v, `${keyPrefix}:${k}`, { labelledBy: keyEl.id }));
         } else {
             const val = el('span', 'tool-call-arg-value');
             val.dir = 'ltr';
+            scrollable(val, `arg:${k}`, { labelledBy: keyEl.id });
             appendShellCommandText(val, scalarText(v));
             row.append(val);
         }
@@ -351,7 +386,9 @@ function argumentsList(input, keyPrefix) {
 
 function argsWithout(input, keys) {
     if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
-    const out = {};
+    // Null-prototype, like the stored input: a `__proto__` argument is a key
+    // (a plain `{}` would take it as its prototype and drop it from the list).
+    const out = Object.create(null);
     let n = 0;
     for (const k of Object.keys(input)) {
         if (keys.includes(k)) continue;
@@ -375,11 +412,9 @@ function segmentPre(seg) {
     return pre;
 }
 
-function outputBox(...children) {
+function outputBox(focusKey, ...children) {
     const box = el('div', 'tool-call-output');
-    box.tabIndex = 0;
-    box.setAttribute('role', 'group');
-    box.setAttribute('aria-label', t('shared.tool.result_label'));
+    scrollable(box, focusKey, { name: t('shared.tool.result_label') });
     box.append(...children);
     return box;
 }
@@ -397,7 +432,7 @@ function resultSection(rec, state, { skipJson = false } = {}) {
         if (out.jsonTruncated) parts.push(note(t('shared.tool.result_shortened')));
     }
     const name = state === 'failed' ? t('shared.tool.error_label') : t('shared.tool.result_label');
-    if (parts.length) return section(name, outputBox(...parts));
+    if (parts.length) return section(name, outputBox('output:result', ...parts));
     if (skipJson && out?.json !== undefined) return null;
     let msg;
     if (out?.dropped) msg = t('shared.tool.output_dropped');
@@ -440,7 +475,7 @@ function diffGap(count) {
 }
 
 /** One diff: its file (when the call has several or it's new) and lines. */
-function diffView(diff, showPath) {
+function diffView(diff, showPath, index) {
     const wrap = el('div', 'tool-diff-file');
     if (showPath || diff.isNew) {
         const head = el('div', 'tool-diff-head');
@@ -460,6 +495,7 @@ function diffView(diff, showPath) {
     box.dir = 'ltr';
     box.tabIndex = 0;
     box.setAttribute('role', 'group');
+    box.dataset.focus = `diff:${index}`;
     if (diff.numbered) {
         // One gutter width for the whole diff, from its largest line number.
         let maxNo = 1;
@@ -510,7 +546,7 @@ function sourcesList(sources, more) {
         }
         list.append(li);
     }
-    const box = outputBox(list);
+    const box = outputBox('output:sources', list);
     if (more > 0) box.append(note(t('shared.tool.more_results', { count: more })));
     return box;
 }
@@ -581,7 +617,7 @@ function buildBody(rec, state) {
 
     if (rec.category === 'edit') {
         const many = rec.diffs.length > 1;
-        for (const d of rec.diffs) body.append(diffView(d, many));
+        rec.diffs.forEach((d, i) => body.append(diffView(d, many, i)));
     }
 
     const hasArgs =
@@ -613,22 +649,25 @@ function buildBody(rec, state) {
     if (state === 'failed') statusText.textContent = t('shared.tool.status.failed');
     statusText.hidden = state !== 'failed';
     const actions = el('span', 'shell-cmd-actions');
-    if (copy) actions.append(copyButton(copy.label, () => copy.text));
+    const addCopy = (focusKey, getLabel, getText) => {
+        const btn = copyButton(getLabel, getText);
+        btn.dataset.focus = focusKey;
+        actions.append(btn);
+    };
+    if (copy) addCopy('copy:subject', copy.label, () => copy.text);
     if (hasArgs && rec.category !== 'edit') {
-        actions.append(
-            copyButton(
-                () => t('shared.tool.copy_arguments'),
-                () => prettyJson(args)
-            )
+        addCopy(
+            'copy:arguments',
+            () => t('shared.tool.copy_arguments'),
+            () => prettyJson(args)
         );
     }
     const resultText = toolResultText(rec);
     if (resultText) {
-        actions.append(
-            copyButton(
-                () => t('shared.tool.copy_result'),
-                () => toolResultText(rec)
-            )
+        addCopy(
+            'copy:result',
+            () => t('shared.tool.copy_result'),
+            () => toolResultText(rec)
         );
     }
     footer.append(statusText, actions);
@@ -648,10 +687,27 @@ export function toolResultText(rec) {
 
 // --- Blocks ---------------------------------------------------------------
 
+/**
+ * Put focus back on the element keyed `key` (`data-focus`) inside `panel`
+ * after a rebuild, else — it's gone — on the block's header, so a keyboard
+ * or screen reader user is never thrown back to the top of the page.
+ */
+function restoreFocus(panel, key, fallback) {
+    const target = Array.from(panel.querySelectorAll('[data-focus]')).find(
+        (n) => n.dataset.focus === key
+    );
+    (target || fallback).focus({ preventScroll: true });
+}
+
 function renderPanel(root) {
     const st = root._kageTool;
     const rec = st.record;
-    // Keep the reader's place: open JSON values and scroll offsets.
+    // Keep the reader's place: focus, open JSON values and scroll offsets.
+    const active = document.activeElement;
+    const focusKey =
+        active && st.panel.contains(active)
+            ? active.closest('[data-focus]')?.dataset.focus || ''
+            : null;
     const open = new Set(
         Array.from(st.panel.querySelectorAll('details[open][data-key]'), (d) => d.dataset.key)
     );
@@ -671,6 +727,7 @@ function renderPanel(root) {
     st.panel.querySelectorAll('.tool-call-output, .tool-diff').forEach((n, i) => {
         if (scrolls[i]) n.scrollTop = scrolls[i];
     });
+    if (focusKey !== null) restoreFocus(st.panel, focusKey, st.header);
     st.panelRev = rec.rev;
 }
 
@@ -836,9 +893,12 @@ function updateChip(chip, list, group) {
     const title = group.mcp
         ? t('shared.tool.chip_title_mcp', { count: n, server: name })
         : t('shared.tool.chip_title', { count: n, name });
-    chip.title = title;
-    chip.setAttribute('aria-label', title);
-    chip.dataset.state = aggregateState(group.calls);
+    const state = aggregateState(group.calls);
+    // The red dot is decorative; the name says it too.
+    const named = chipStateLabel(title, state);
+    chip.title = named;
+    chip.setAttribute('aria-label', named);
+    chip.dataset.state = state;
     list.setAttribute('aria-label', title);
 }
 
@@ -852,6 +912,9 @@ function updateChip(chip, list, group) {
  */
 export function syncToolCallLists(container, toolUsages) {
     if (!container) return;
+    // Moving a node (a block that changed chip, a reordered chip) drops
+    // focus inside it; put it back afterwards.
+    const active = document.activeElement;
     const groups = groupToolCalls(toolUsages);
     let chipsWrap = container.querySelector(':scope > .tool-call-chips');
     let listsWrap = container.querySelector(':scope > .tool-call-lists');
@@ -920,6 +983,9 @@ export function syncToolCallLists(container, toolUsages) {
     });
     for (const stale of chips.values()) stale.remove();
     for (const stale of lists.values()) stale.remove();
+    if (active && active !== document.activeElement && active.isConnected) {
+        if (container.contains(active)) active.focus({ preventScroll: true });
+    }
 }
 
 /**

@@ -148,7 +148,10 @@ export function buildHistoryTools(uses, results, toolKinds, outputCap = SHELL_RE
         const result = results.get(use.toolUseId) || null;
         const kind = toolKinds.get(use.toolUseId) || null;
         for (const update of historyToolUpdates(use, result, kind)) {
-            processToolCallUpdate({ payload: { params: { update } } }, state);
+            const { call } = processToolCallUpdate({ payload: { params: { update } } }, state);
+            // The log says it's one of the agent's built-ins: it groups by
+            // kind, as its descriptively titled live call did (toolChipGroup).
+            if (call && typeof kind?.builtin === 'string' && kind.builtin) call.builtin = true;
         }
     }
     settleShellCalls(state.toolUsages);
