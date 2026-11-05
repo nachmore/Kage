@@ -9,6 +9,9 @@
     "format": "biome format --write ui",
     "format:check": "biome format ui",
     "ci": "biome ci ui --error-on-warnings",
+    "site:build": "node site/scripts/build.mjs",
+    "site:check": "node site/scripts/check.mjs",
+    "site:lint": "biome ci site --error-on-warnings",
     "prepare": "husky"
   },
   "devDependencies": {

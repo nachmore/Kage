@@ -50,6 +50,8 @@ config.json
 # Root-level local-only directories
 node_modules/
 www/
+# Marketing site build output (node site/scripts/build.mjs)
+_site/
 .claude/
 
 # Agent scratch — todos, migration notes, anything not ready for commit

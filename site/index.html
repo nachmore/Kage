@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kage: your AI, one keystroke away</title>
+<meta name="description" content="Kage is a fast, extensible launcher for Windows and macOS. Press Alt+Space to launch apps, convert units, start timers and open folders, or ask the AI agent you already use (Kiro CLI, Claude Code, Codex, Ollama) and see every tool it runs.">
+<meta name="theme-color" content="#080c11">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="{{SITE_URL}}">
+<link rel="icon" href="assets/icons/kage-icon-basic.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icons/32x32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/icons/128x128@2x.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Kage">
+<meta property="og:title" content="Kage: your AI, one keystroke away">
+<meta property="og:description" content="A fast, extensible launcher for Windows and macOS that works with the AI agent you already use. Free and open source.">
+<meta property="og:url" content="{{SITE_URL}}">
+<meta property="og:image" content="{{SITE_URL}}assets/media/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Kage, a teal cat-shaped shadow, next to the tagline: Your AI, one keystroke away.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Kage: your AI, one keystroke away">
+<meta name="twitter:description" content="A fast, extensible launcher for Windows and macOS that works with the AI agent you already use.">
+<meta name="twitter:image" content="{{SITE_URL}}assets/media/social-preview.png">
+<meta name="twitter:image:alt" content="Kage, a teal cat-shaped shadow, next to the tagline: Your AI, one keystroke away.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Kage","description":"A fast, extensible launcher for Windows and macOS that works with the AI agent you already use.","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows 10, Windows 11, macOS 11 or later (Apple Silicon)","url":"{{SITE_URL}}","downloadUrl":"https://github.com/nachmore/Kage/releases/tag/dev-latest","license":"https://www.apache.org/licenses/LICENSE-2.0","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+</script>
+<script>
+(function (h) {
+  var n = navigator, p = (n.userAgentData && n.userAgentData.platform) || n.platform || '';
+  h.classList.replace('no-js', 'js');
+  h.dataset.os = /mac/i.test(p) && n.maxTouchPoints < 2 ? 'mac' : /win/i.test(p) ? 'windows' : 'other';
+})(document.documentElement);
+</script>
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/launcher.css">
+<script src="js/launcher.js" defer></script>
+<script src="js/mascot.js" defer></script>
+<script src="js/main.js" defer></script>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <linearGradient id="shadow-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#81e6d9" stop-opacity=".11"/><stop offset=".55" stop-color="#38b2ac" stop-opacity=".05"/><stop offset="1" stop-color="#38b2ac" stop-opacity="0"/></linearGradient>
+  <symbol id="cat-body" viewBox="0 0 150.181 119.455"><path transform="translate(-30.458 -97.464)" d="M83.074 216.822c-24.928-.713-46.78-3.185-51.25-5.797-1.34-.784-1.5-1.013-1.29-1.847.396-1.577 5.609-3.09 14.777-4.286l1.527-.199-1.852-1.41c-9.888-7.53-15.005-21.17-12.997-34.639 1.638-10.994 6.575-21.535 15.299-32.67l2.416-3.085-1.32-1.984c-.727-1.09-2.098-3.559-3.047-5.485-3.62-7.343-5.655-13.577-5.655-17.33 0-3.355.873-3.954 5.689-3.908 4.597.043 10.363 1.01 16.536 2.774 3.109.889 8.464 2.745 9.621 3.336.73.372.875.326 3.846-1.21 8.34-4.31 16.719-6.505 26.089-6.833 10.726-.375 21.017 1.945 30.813 6.945 1.795.916 2.871 1.327 3.062 1.168.414-.343 31.249-12.687 32.137-12.865.402-.08.983-.01 1.292.155 1.145.612 1.18.423-4.497 23.912l-3.186 13.18 1.159 1.24c4.118 4.41 9.249 11.83 12.11 17.512 4.41 8.76 7.012 19.582 6.107 25.396-.774 4.973-2.56 5.136-9.058.825-1.94-1.288-3.756-2.595-4.033-2.904-.764-.852-.935-.681-.562.562.186.618.487 2.38.668 3.914.934 7.9-2.452 16.6-8.529 21.913l-1.519 1.327 1.255.166c2.896.381 9.268 1.48 10.886 1.877 2.45.601 4.978 1.837 5.202 2.543.247.779-.946 1.825-2.925 2.566-6.08 2.274-25.821 4.359-47.693 5.035-6.68.207-35.002.28-41.078.106z"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8.3 8 9 4.6-.7 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14.5 8.5l2 2"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M5 20v-7M11 20V5M17 20v-10M3 20h18"/></symbol>
+  <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-wand" viewBox="0 0 24 24"><path d="m15 3 1.4 3.1L19.5 7.5l-3.1 1.4L15 12l-1.4-3.1-3.1-1.4 3.1-1.4zM4 20l8-8"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 24 24"><path d="m5 3 6.5 17 2.4-7.1L21 10.5z"/></symbol>
+  <symbol id="i-command" viewBox="0 0 24 24"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 5v14M15.5 5v14"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1.1.2-2.2 1.4-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2h5"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-tray" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5l1.5-3h5M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/></symbol>
+  <symbol id="i-user-off" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0M3 3l18 18"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M5 6a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v9H5zM2.5 18.5h19"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-github" viewBox="0 0 16 16"><path class="fill" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+<div class="progress" aria-hidden="true"><span></span></div>
+
+<header class="nav" data-nav>
+  <div class="nav__inner wrap">
+    <a class="brand" href="#top" aria-label="Kage home">
+      <img src="assets/icons/kage-icon-basic.svg" width="34" height="27" alt="">
+      <span>Kage</span>
+    </a>
+    <nav class="nav__links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#agents">Agents</a>
+      <a href="#extensions">Extensions</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://github.com/nachmore/Kage/blob/main/docs/FEATURES.md">Docs</a>
+    </nav>
+    <div class="nav__cta">
+      <a class="icon-link" href="https://github.com/nachmore/Kage" aria-label="Kage on GitHub"><svg class="ico ico--fill" aria-hidden="true"><use href="#i-github"/></svg></a>
+      <a class="btn btn--sm btn--primary" href="#download">Download</a>
+    </div>
+    <details class="nav__menu">
+      <summary aria-label="Menu"><svg class="ico" aria-hidden="true"><use href="#i-menu"/></svg></summary>
+      <nav class="nav__sheet" aria-label="Mobile">
+        <a href="#features">Features</a>
+        <a href="#agents">Agents</a>
+        <a href="#extensions">Extensions</a>
+        <a href="#privacy">Privacy</a>
+        <a href="https://github.com/nachmore/Kage/blob/main/docs/FEATURES.md">Docs</a>
+        <a href="https://github.com/nachmore/Kage">GitHub</a>
+        <a class="btn btn--primary" href="#download">Download</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" id="top" aria-labelledby="hero-title">
+    <div class="sky" aria-hidden="true">
+      <div class="layer layer--aurora" data-depth="0.12" data-px="10"><div class="aurora"><span></span><span></span><span></span></div></div>
+      <div class="layer layer--stars-far" data-depth="0.18" data-px="6"></div>
+      <div class="layer layer--stars-near" data-depth="0.32" data-px="14"></div>
+      <div class="layer layer--shadow" data-depth="0.22" data-px="22"><svg class="shadow-cat" viewBox="0 0 150.181 119.455"><use href="#cat-body"/></svg></div>
+      <div class="layer layer--moon" data-depth="0.42" data-px="26"><img class="moon" src="assets/mascot/kage-moon.svg" width="200" height="190" alt=""></div>
+      <div class="layer layer--balloon" data-depth="0.62" data-px="34"><img class="balloon" src="assets/mascot/kage-balloon.svg" width="120" height="160" alt=""></div>
+      <div class="layer layer--mist"></div>
+    </div>
+
+    <div class="hero__inner wrap">
+      <p class="eyebrow eyebrow--pill reveal"><span class="pulse-dot" aria-hidden="true"></span>Free and open source<span class="hide-sm"> · Windows and macOS</span></p>
+      <h1 id="hero-title" class="hero__title reveal" style="--d: 60ms">Your AI, <span class="grad">one keystroke away.</span></h1>
+      <p class="hero__lede reveal" style="--d: 120ms">A fast, extensible launcher for Windows and macOS. Open apps, convert units and start timers as you type, or ask the AI agent you already use and watch every step.</p>
+      <div class="hero__ctas reveal" style="--d: 180ms">
+        <a class="btn btn--primary btn--lg" href="#download" data-dl-label><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span>Download Kage</span></a>
+        <a class="btn btn--ghost btn--lg" href="https://github.com/nachmore/Kage"><svg class="ico ico--fill" aria-hidden="true"><use href="#i-github"/></svg><span>View on GitHub</span></a>
+      </div>
+
+      <div class="stage reveal reveal--rise" style="--d: 260ms">
+        <div class="demo-controls needs-js" data-demo-controls>
+          <span class="demo-label" aria-hidden="true">Try</span>
+          <div class="demo-chips" role="group" aria-label="Demo examples">
+            <button type="button" data-scene="0">calc</button>
+            <button type="button" data-scene="1">12 km to mi</button>
+            <button type="button" data-scene="2">timer 25m</button>
+            <button type="button" data-scene="3">down</button>
+            <button type="button" data-scene="4">Ask the agent</button>
+            <button type="button" data-scene="5">Run a command</button>
+          </div>
+          <button type="button" class="demo-toggle" data-demo-toggle aria-pressed="false" aria-label="Pause the demo">
+            <svg class="ico ico--pause" aria-hidden="true"><use href="#i-pause"/></svg>
+            <svg class="ico ico--play ico--fill" aria-hidden="true"><use href="#i-play"/></svg>
+          </button>
+        </div>
+        <div class="stage__win">
+        <div class="hotkey" data-hotkey>
+          <span class="hotkey__label">Press</span>
+          <kbd class="key" data-key="mod"><span data-mod-label>Alt</span></kbd>
+          <span class="hotkey__plus" aria-hidden="true">+</span>
+          <kbd class="key key--wide" data-key="space">Space</kbd>
+          <span class="hotkey__label hotkey__label--rest">over any app</span>
+        </div>
+
+        <button class="peek" type="button" data-cat aria-label="Kage the cat. Press to say hello.">
+          <span class="peek__glow" aria-hidden="true"></span>
+          <svg class="cat" viewBox="-3 -3 156.181 125.455" aria-hidden="true">
+            <defs>
+              <clipPath id="eye-clip-l"><circle cx="41.4" cy="45.4" r="13.4"/></clipPath>
+              <clipPath id="eye-clip-r"><circle cx="101.2" cy="47.1" r="13.8"/></clipPath>
+            </defs>
+            <g class="cat__tilt">
+              <use class="cat__body" href="#cat-body" width="150.181" height="119.455"/>
+              <g class="cat__eyes">
+                <g class="cat__eye cat__eye--l">
+                  <circle class="cat__white" cx="41.4" cy="45.4" r="13.4"/>
+                  <g clip-path="url(#eye-clip-l)"><g class="cat__pupil"><circle class="cat__iris" cx="46.6" cy="44" r="10.4"/><circle class="cat__glint" cx="51.2" cy="41.7" r="2.75"/><circle class="cat__glint" cx="53.6" cy="45.8" r="1.05"/></g></g>
+                </g>
+                <g class="cat__eye cat__eye--r">
+                  <circle class="cat__white" cx="101.2" cy="47.1" r="13.8"/>
+                  <g clip-path="url(#eye-clip-r)"><g class="cat__pupil"><circle class="cat__iris" cx="95.9" cy="45.5" r="10.6"/><circle class="cat__glint" cx="93.5" cy="43.2" r="2.8"/><circle class="cat__glint" cx="90.6" cy="46.85" r="1"/></g></g>
+                </g>
+              </g>
+              <g class="cat__happy"><path d="M30.5 48.5c3.4-7.6 14.6-7.6 18 0M91 50c3.4-7.6 14.6-7.6 18 0"/></g>
+              <path class="cat__mouth" transform="translate(-30.458 -97.464)" d="M103.789 157.071c2.467-.642 4.685-2.5 4.685-3.921 0-.766-.522-.753-2.64.064-3.243 1.25-5.743 1.033-8.785-.762-.863-.509-.966-.518-1.298-.119-.309.373-.266.602.306 1.627.807 1.446 2.422 2.667 4.135 3.128 1.663.447 1.82.446 3.597-.017z"/>
+              <g class="cat__blush"><ellipse cx="28" cy="60" rx="6" ry="3"/><ellipse cx="114" cy="62" rx="6" ry="3"/></g>
+            </g>
+          </svg>
+        </button>
+
+        <div class="lm lm--hero is-chat" data-lm="hero">
+          <div class="lm__shadow"></div>
+          <div class="lm__clip"><div class="lm__panel"><div class="lm__strip"></div></div></div>
+          <div class="lm__mascot" aria-hidden="true">
+            <img data-pose="idle" src="assets/mascot/kage-icon.svg" width="44" height="35" alt="">
+            <img data-pose="typing" src="assets/mascot/kage-interested.svg" width="44" height="35" alt="">
+            <img data-pose="thinking" src="assets/mascot/kage-magnifying-glass.svg" width="44" height="35" alt="">
+            <img class="is-on" data-pose="happy" src="assets/mascot/kage-happy.svg" width="44" height="35" alt="">
+            <span class="lm__badge">⏳</span>
+          </div>
+          <div class="lm__content" data-lm-content aria-hidden="true">
+            <div class="lm__timer"><span class="lm__time-ico">⏳</span><span class="lm__time" data-lm-time>25:00</span><span class="lm__tbtns"><span>+1m</span><span>❚❚</span><span>■</span></span></div>
+            <div class="lm__answer" data-lm-answer>
+              <div class="lm-echo">Plan an easy weekend in Lisbon</div>
+              <div class="lm-answer">
+                <p>An easy-going <strong>weekend in Lisbon</strong>:</p>
+                <p class="lm-h">Saturday · Alfama &amp; Baixa</p>
+                <ul><li><strong>Tram 28</strong> up to São Jorge Castle</li><li>Sunset at a <em>miradouro</em>, then fado</li></ul>
+                <p class="lm-h">Sunday · Belém</p>
+                <ul><li>Pastéis de Belém (go early)</li><li>A riverside walk to LX Factory</li></ul>
+              </div>
+              <div class="lm-chips"><span class="lm-chip"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>fetch<span class="lm-chip__chev">›</span></span></div>
+            </div>
+            <div class="lm__input">
+              <span class="lm__query" data-lm-query></span><span class="lm__caret"></span>
+              <span class="lm__placeholder">Ask me anything…</span>
+              <span class="lm__keytoast" data-lm-key></span>
+              <span class="lm__stop"></span>
+            </div>
+            <div class="lm__results" data-lm-results></div>
+            <div class="lm__foot">
+              <span class="lm__foot-l"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg><svg class="ico" aria-hidden="true"><use href="#i-image"/></svg></span>
+              <span class="lm__foot-r"><span class="lm-ring" data-lm-ring style="--p: 12"></span><span data-lm-pct>12%</span><span class="lm-model">claude-sonnet-4.5</span></span>
+            </div>
+          </div>
+        </div>
+        </div>
+        <p class="sr-only">An animated demo of the Kage launcher. Typing "calc" finds the Calculator app, "12 km to mi" answers "= 7.46 mi", "timer 25m" starts a countdown, "down" offers to open the Downloads folder, a question about a Lisbon weekend streams an answer from the agent with a "fetch" tool chip, and a question about the biggest files in Downloads asks permission, then shows the shell command it ran and its output.</p>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="agents" id="agents" aria-labelledby="agents-title">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="eyebrow">Bring your own agent</p>
+        <h2 id="agents-title">Works with the agent you already use.</h2>
+        <p class="lede">Kage doesn't include a model or need an account. It's the front end; the thinking happens in an agent you run, connected over the <a href="https://agentclientprotocol.com">Agent Client Protocol</a> (ACP).</p>
+      </div>
+    </div>
+    <div class="marquee marquee--agents reveal" style="--d: 80ms">
+      <div class="marquee__track">
+        <ul class="marquee__list">
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 168">K</span><span><strong>Kiro CLI</strong><small>kiro-cli acp</small></span></li>
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 22">C</span><span><strong>Claude Code</strong><small>ACP adapter</small></span></li>
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 205">O</span><span><strong>OpenAI Codex</strong><small>codex-acp</small></span></li>
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 285">L</span><span><strong>Ollama</strong><small>a local model</small></span></li>
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 130">+</span><span><strong>Any ACP agent</strong><small>by command, host or port</small></span></li>
+        </ul>
+        <ul class="marquee__list" aria-hidden="true">
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 168">K</span><span><strong>Kiro CLI</strong><small>kiro-cli acp</small></span></li>
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 22">C</span><span><strong>Claude Code</strong><small>ACP adapter</small></span></li>
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 205">O</span><span><strong>OpenAI Codex</strong><small>codex-acp</small></span></li>
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 285">L</span><span><strong>Ollama</strong><small>a local model</small></span></li>
+          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 130">+</span><span><strong>Any ACP agent</strong><small>by command, host or port</small></span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="wrap split split--agents">
+      <figure class="shot shot--tilt-l reveal reveal--tilt" data-tilt>
+        <div class="frame">
+          <img src="assets/shots/settings-agents-dark.png" width="1800" height="1240" data-sizes="(min-width: 1100px) 620px, 92vw" loading="lazy" decoding="async" alt="Kage Settings, Agents page, in the dark theme. Kiro CLI is the active connection; Claude Code and Ollama are saved with Make active buttons; an auto-detected OpenAI Codex has an Add button.">
+        </div>
+      </figure>
+      <ul class="points reveal" style="--d: 100ms">
+        <li><svg class="ico" aria-hidden="true"><use href="#i-sparkle"/></svg><div><h3>Found for you</h3><p>Setup detects Kiro CLI, Claude Code, OpenAI Codex and Ollama, and offers to install the Claude Code ACP adapter if it only finds <code>claude</code>.</p></div></li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-plug"/></svg><div><h3>Any ACP agent</h3><p>Add another agent by its command, or by host and port, then switch between saved connections.</p></div></li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg><div><h3>Local, if you like</h3><p>Your prompts go to the agent you connect. With a local model through Ollama, they go nowhere else.</p></div></li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-terminal"/></svg><div><h3>Your tools, found</h3><p>On macOS, Kage passes your shell's <code>PATH</code> to the agent, so it finds your tools even when Kage was opened from the Dock.</p></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="why" aria-labelledby="why-title">
+    <div class="wrap">
+      <div class="section-head section-head--center reveal">
+        <p class="eyebrow">Why Kage</p>
+        <h2 id="why-title">Out of sight until you call it.</h2>
+        <p class="lede"><span lang="ja">影</span> (<i>kage</i>) is Japanese for "shadow". One keystroke and it's there, over whatever you're doing.</p>
+      </div>
+      <div class="pillars">
+        <article class="card pillar reveal" style="--d: 0ms" data-spot>
+          <span class="pillar__icon"><svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg></span>
+          <h3>Fast first</h3>
+          <p>Apps, math, timers and folders answer as you type, on your machine. None of it goes to the AI.</p>
+        </article>
+        <article class="card pillar reveal" style="--d: 70ms" data-spot>
+          <span class="pillar__icon"><svg class="ico" aria-hidden="true"><use href="#i-plug"/></svg></span>
+          <h3>Your agent, not ours</h3>
+          <p>No bundled model and no account. Kiro CLI, Claude Code, OpenAI Codex, a local Ollama model, or any ACP agent.</p>
+        </article>
+        <article class="card pillar reveal" style="--d: 140ms" data-spot>
+          <span class="pillar__icon"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg></span>
+          <h3>Nothing hidden</h3>
+          <p>Every file read, edit, search and shell command appears under the reply, with its output. New tools need your OK.</p>
+        </article>
+        <article class="card pillar reveal" style="--d: 210ms" data-spot>
+          <span class="pillar__icon"><svg class="ico" aria-hidden="true"><use href="#i-sliders"/></svg></span>
+          <h3>Yours to shape</h3>
+          <p>Sandboxed extensions, themes, your own commands and automations, 32 languages, and a cat that reacts to what's going on.</p>
+        </article>
+      </div>
+      <dl class="stats reveal" style="--d: 120ms">
+        <div><dt>Keystroke to open</dt><dd data-count="1">1</dd></div>
+        <div><dt>Languages</dt><dd data-count="32">32</dd></div>
+        <div><dt>Extensions installed by setup</dt><dd data-count="10">10</dd></div>
+        <div><dt>Accounts needed</dt><dd data-count="0">0</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="feature" id="features" aria-labelledby="f-launcher">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="eyebrow">A launcher first, AI second</p>
+        <h2 id="f-launcher">Answers before you finish typing.</h2>
+        <p class="lede">What you type is matched on your machine first. Only text that matches nothing goes to your agent.</p>
+      </div>
+      <figure class="shot shot--wide reveal reveal--tilt" data-tilt data-parallax="0.06">
+        <div class="frame">
+          <img src="assets/shots/launcher-instant-light.png" width="1800" height="684" data-sizes="(min-width: 1240px) 1140px, 94vw" loading="lazy" decoding="async" alt="Four launcher panels in the light theme: 'calc' finds the Calculator app; '12 km to mi' shows '= 7.46 mi'; a 'timer 25m' countdown with +1m, pause and stop; and 'down' offering to open the Downloads folder.">
+        </div>
+      </figure>
+      <div class="grid4">
+        <div class="mini reveal" style="--d: 0ms"><svg class="ico" aria-hidden="true"><use href="#i-apps"/></svg><h3>Apps by a few letters</h3><p>Kage learns which result you pick and sees new installs right away.</p></div>
+        <div class="mini reveal" style="--d: 60ms"><svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg><h3>Instant answers</h3><p>Math and units, timers, UUIDs, hashes, base64, epoch times, JSON and colors.</p></div>
+        <div class="mini reveal" style="--d: 120ms"><svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg><h3>Folders, files, system</h3><p><code>down</code> opens Downloads, <code>*.pdf</code> finds files, and <code>lock</code>, <code>sleep</code> or <code>terminal</code> do what they say.</p></div>
+        <div class="mini reveal" style="--d: 180ms"><svg class="ico" aria-hidden="true"><use href="#i-keyboard"/></svg><h3>Then, the AI</h3><p><kbd>Enter</kbd> on text that matches nothing asks your agent. <kbd data-send-label>Ctrl+Enter</kbd> always does.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature feature--alt" aria-labelledby="f-chat">
+    <div class="wrap split">
+      <div class="split__text">
+        <div class="section-head reveal">
+          <p class="eyebrow">Chat, with every step in view</p>
+          <h2 id="f-chat">See exactly what your agent did.</h2>
+        </div>
+        <ul class="points reveal" style="--d: 80ms">
+          <li><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg><div><h3>Tool chips</h3><p>Under each reply, chips group what the agent read, edited, searched, fetched or ran. Expand one for diffs, arguments, results and errors.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-terminal"/></svg><div><h3>Shell commands, in full</h3><p>The exact command, live status, exit code, stdout and stderr, with copy buttons.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-sparkle"/></svg><div><h3>Rich replies</h3><p>Highlighted code, math, Mermaid and Graphviz diagrams, sortable tables, and HTML previews in a sandbox.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-window"/></svg><div><h3>Room to work</h3><p>Sessions to search, rename and export, a context-usage ring, a model picker, attachments, and plans you review before multi-step jobs run.</p></div></li>
+        </ul>
+      </div>
+      <figure class="shot shot--tilt-r reveal reveal--tilt" data-tilt data-parallax="0.05">
+        <div class="frame">
+          <img src="assets/shots/chat-tools-dark.png" width="1800" height="1594" data-sizes="(min-width: 1100px) 600px, 92vw" loading="lazy" decoding="async" alt="The chat window in the dark theme, with sessions on the left. A reply about what fills a demo folder has a size table and 'shell ×2' and 'read' chips, with one du command expanded to show its output and exit code 0.">
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section class="feature" aria-labelledby="f-perm">
+    <div class="wrap split split--rev">
+      <figure class="shot shot--tilt-l reveal reveal--tilt" data-tilt data-parallax="0.05">
+        <div class="frame frame--narrow">
+          <img src="assets/shots/permission-prompt-dark.png" width="1800" height="1698" data-sizes="(min-width: 1100px) 520px, 92vw" loading="lazy" decoding="async" alt="The Tool Permission Required dialog in the dark launcher. The agent wants to run 'cd ~/Projects/demo-app && npm test'. The Allow menu is open with 'Allow for 24 hours', 'Always allow' and 'Trust all commands…'.">
+        </div>
+      </figure>
+      <div class="split__text">
+        <div class="section-head reveal">
+          <p class="eyebrow">You decide what the agent runs</p>
+          <h2 id="f-perm">Nothing runs without your say-so.</h2>
+          <p class="lede">The agent has to ask before it uses a tool you haven't allowed.</p>
+        </div>
+        <ul class="points reveal" style="--d: 80ms">
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><div><h3>Allow or deny, your way</h3><p>Allow once, for 24 hours or always, or deny once or always. An unused "always" expires after 30 days.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg><div><h3>Trust, with guard rails</h3><p>Trust all commands, or all tools from one MCP server, after a confirmation. Always deny still wins, and background features always ask.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-sliders"/></svg><div><h3>A full audit trail</h3><p>Settings → Agent Permissions lists every tool and trusted server, with a local audit log and a reset button.</p></div></li>
+        </ul>
+        <div class="terminator reveal" style="--d: 140ms">
+          <img src="assets/mascot/kage-terminator.svg" width="88" height="70" alt="" loading="lazy">
+          <p><strong>Terminator Mode</strong> approves everything you haven't set to Always deny, until you switch it off. A banner reminds you while it's on, and the cat dresses for the part.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature feature--alt" aria-labelledby="f-inline">
+    <div class="wrap">
+      <div class="section-head section-head--center reveal">
+        <p class="eyebrow">Inline assist</p>
+        <h2 id="f-inline">AI inside any app.</h2>
+        <p class="lede">Select text anywhere and press <span class="nowrap"><kbd data-inline-label>Ctrl+Shift+Space</kbd>.</span> Actions that suit the text appear at the cursor, or type your own.</p>
+      </div>
+      <figure class="shot shot--wide reveal reveal--tilt" data-tilt data-parallax="0.06">
+        <div class="frame">
+          <img src="assets/shots/inline-assist-dark.png" width="1800" height="841" data-sizes="(min-width: 1240px) 1140px, 94vw" loading="lazy" decoding="async" alt="A notes editor, twice. Left: a paragraph of Spanish meeting notes is selected and the inline assist panel offers Summarize, '→ English' and 'Ask anything…'. Right: the paragraph, now in English, pasted back in place.">
+        </div>
+      </figure>
+      <div class="grid3">
+        <div class="mini reveal"><h3>Edits land in place</h3><p>Translate or Format, and your own requests, are pasted back where you were typing.</p></div>
+        <div class="mini reveal" style="--d: 60ms"><h3>Answers open in chat</h3><p>Summarize, Explain or Find bugs open their answer in the chat window.</p></div>
+        <div class="mini reveal" style="--d: 120ms"><h3>The launcher knows too</h3><p>Tick Include selected text, or use the quick-action chips Kage picks for what you selected.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature" aria-labelledby="f-cal">
+    <div class="wrap split">
+      <div class="split__text">
+        <div class="section-head reveal">
+          <p class="eyebrow">Your day at a glance</p>
+          <h2 id="f-cal">Your next meeting, one keystroke away.</h2>
+        </div>
+        <ul class="points reveal" style="--d: 80ms">
+          <li><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg><div><h3>A keyboard-friendly calendar</h3><p>Turn on the clock and date, then click the date or press <kbd>Alt+↓</kbd> for a month view.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg><div><h3>Join from the bar</h3><p>With the Calendar extension: a next-meeting bar with Join, busy-day dots, <code>cal</code> and <code>meetings</code>, and appointment lookups for your agent.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-window"/></svg><div><h3>Where your meetings live</h3><p>The Calendar app on macOS, and classic Outlook for desktop on Windows.</p></div></li>
+        </ul>
+      </div>
+      <figure class="shot shot--tilt-r reveal reveal--tilt" data-tilt data-parallax="0.05">
+        <div class="frame">
+          <img src="assets/shots/launcher-calendar-dark.png" width="1800" height="766" data-sizes="(min-width: 1100px) 640px, 92vw" loading="lazy" decoding="async" alt="The launcher in the Nord theme. Left: a next-meeting bar, '[in 5m] Design review' with a Join button, above a month calendar with dots on busy days. Right: three meetings for the chosen day with Join Meeting buttons.">
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section class="more" aria-labelledby="more-title">
+    <div class="wrap">
+      <div class="section-head section-head--center reveal">
+        <p class="eyebrow">And a lot more</p>
+        <h2 id="more-title">Power tools, when you want them.</h2>
+      </div>
+      <div class="bento">
+        <article class="card tile tile--wide reveal" data-spot>
+          <svg class="ico" aria-hidden="true"><use href="#i-command"/></svg>
+          <h3>Commands &amp; Prompts</h3>
+          <p>Trigger words that open a program or URL, send a prompt with <code>{selection}</code>, or run a script.</p>
+          <div class="tile__demo" aria-hidden="true"><span class="tq">yt cats</span><span class="ta">→ searches YouTube for cats</span></div>
+        </article>
+        <article class="card tile reveal" style="--d: 60ms" data-spot>
+          <svg class="ico" aria-hidden="true"><use href="#i-wand"/></svg>
+          <h3>Automations</h3>
+          <p>Chains of prompts, find &amp; replace, text transforms, conditions and scripts. Run by hand, on a schedule, or when a meeting is about to start.</p>
+        </article>
+        <article class="card tile reveal" style="--d: 120ms" data-spot>
+          <svg class="ico" aria-hidden="true"><use href="#i-cursor"/></svg>
+          <h3>Computer control</h3>
+          <p>An optional MCP server that lets your agent launch apps, read and click their interface, type, and tidy folders.</p>
+        </article>
+        <article class="card tile reveal" style="--d: 0ms" data-spot>
+          <svg class="ico" aria-hidden="true"><use href="#i-mic"/></svg>
+          <h3>Voice</h3>
+          <p>A microphone button for speaking your prompt, and replies read aloud with system voices or the local Pocket TTS engine.</p>
+        </article>
+        <article class="card tile reveal" style="--d: 60ms" data-spot>
+          <svg class="ico" aria-hidden="true"><use href="#i-archive"/></svg>
+          <h3>Backup &amp; restore</h3>
+          <p>Settings, prompts and extension data in one <code>.kage</code> file, optionally protected with a passphrase.</p>
+        </article>
+        <article class="card tile tile--wide tile--tray reveal" style="--d: 120ms" data-spot>
+          <div>
+            <svg class="ico" aria-hidden="true"><use href="#i-tray"/></svg>
+            <h3>Stays out of the way</h3>
+            <p>Lives in the tray or menu bar, runs as a single instance, can start at login, and can keep itself up to date with signed builds.</p>
+          </div>
+          <div class="traymenu" aria-hidden="true">
+            <div class="traymenu__bar"><span class="traymenu__dot"></span><span class="traymenu__dot"></span><img src="assets/icons/kage-icon-basic.svg" width="22" height="18" alt=""><span class="traymenu__clock">9:41</span></div>
+            <ul class="traymenu__list"><li>Show</li><li>New Chat Window</li><li>Settings</li><li class="traymenu__sep">Quit</li></ul>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="extensions" id="extensions" aria-labelledby="ext-title">
+    <div class="wrap">
+      <div class="section-head section-head--center reveal">
+        <img class="section-cat" src="assets/mascot/kage-in-cute-box.svg" width="120" height="96" alt="" loading="lazy">
+        <p class="eyebrow">Extensions and the store</p>
+        <h2 id="ext-title">Extensions do the heavy lifting.</h2>
+        <p class="lede">Setup installs ten favorites and three extra themes. Find more in the Extension Store, in Kage (<code>&gt;store</code>) or on the web.</p>
+      </div>
+    </div>
+    <div class="ext-rows reveal" style="--d: 80ms">
+      <div class="marquee marquee--ext">
+        <div class="marquee__track">
+          <ul class="marquee__list">
+            <li class="ext"><span class="ext__icon">🧮</span><span class="ext__name">Math Calculator</span><span class="ext__meta"><code>12 km to mi</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">⏱️</span><span class="ext__name">Timer &amp; Stopwatch</span><span class="ext__meta"><code>timer 5m</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">📅</span><span class="ext__name">Calendar</span><span class="ext__meta"><code>cal</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">🪟</span><span class="ext__name">Window Walker</span><span class="ext__meta"><code>w </code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">✅</span><span class="ext__name">Todos &amp; Reminders</span><span class="ext__meta"><code>todo</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">🔧</span><span class="ext__name">Developer Tools</span><span class="ext__meta"><code>uuid</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">📖</span><span class="ext__name">Dictionary</span><span class="ext__meta"><code>dict serendipity</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">🎨</span><span class="ext__name">Color Picker</span><span class="ext__meta"><code>#38b2ac</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">🔗</span><span class="ext__name">Link Preview</span><span class="ext__meta"><code>automatic</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">📊</span><span class="ext__name">Focus Tracker</span><span class="ext__meta"><code>focus</code><span class="ext__tag">Setup</span></span></li>
+          </ul>
+          <ul class="marquee__list" aria-hidden="true">
+            <li class="ext"><span class="ext__icon">🧮</span><span class="ext__name">Math Calculator</span><span class="ext__meta"><code>12 km to mi</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">⏱️</span><span class="ext__name">Timer &amp; Stopwatch</span><span class="ext__meta"><code>timer 5m</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">📅</span><span class="ext__name">Calendar</span><span class="ext__meta"><code>cal</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">🪟</span><span class="ext__name">Window Walker</span><span class="ext__meta"><code>w </code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">✅</span><span class="ext__name">Todos &amp; Reminders</span><span class="ext__meta"><code>todo</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">🔧</span><span class="ext__name">Developer Tools</span><span class="ext__meta"><code>uuid</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">📖</span><span class="ext__name">Dictionary</span><span class="ext__meta"><code>dict serendipity</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">🎨</span><span class="ext__name">Color Picker</span><span class="ext__meta"><code>#38b2ac</code><span class="ext__tag">Setup</span></span></li>
+            <li class="ext"><span class="ext__icon">🔗</span><span class="ext__name">Link Preview</span><span class="ext__meta"><code>automatic</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">📊</span><span class="ext__name">Focus Tracker</span><span class="ext__meta"><code>focus</code><span class="ext__tag">Setup</span></span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="marquee marquee--ext marquee--reverse">
+        <div class="marquee__track">
+          <ul class="marquee__list">
+            <li class="ext"><span class="ext__icon">💱</span><span class="ext__name">Currency Converter</span><span class="ext__meta"><code>100 usd to eur</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">🌤️</span><span class="ext__name">Weather</span><span class="ext__meta"><code>weather lisbon</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">😀</span><span class="ext__name">Emoji Picker</span><span class="ext__meta"><code>:fire</code><span class="ext__tag">Store</span></span></li>
+            <li class="ext"><span class="ext__icon">🔐</span><span class="ext__name">Password Generator</span><span class="ext__meta"><code>pw</code><span class="ext__tag">Store</span></span></li>
+            <li class="ext"><span class="ext__icon">📋</span><span class="ext__name">Snippets</span><span class="ext__meta"><code>snip</code><span class="ext__tag">Store</span></span></li>
+            <li class="ext"><span class="ext__icon">🔖</span><span class="ext__name">Bookmarks</span><span class="ext__meta"><code>bm docs</code><span class="ext__tag">Store</span></span></li>
+            <li class="ext"><span class="ext__icon">🐙</span><span class="ext__name">GitHub Search</span><span class="ext__meta"><code>gh tauri</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">🎧</span><span class="ext__name">Spotify</span><span class="ext__meta"><code>sp</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+          </ul>
+          <ul class="marquee__list" aria-hidden="true">
+            <li class="ext"><span class="ext__icon">💱</span><span class="ext__name">Currency Converter</span><span class="ext__meta"><code>100 usd to eur</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">🌤️</span><span class="ext__name">Weather</span><span class="ext__meta"><code>weather lisbon</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">😀</span><span class="ext__name">Emoji Picker</span><span class="ext__meta"><code>:fire</code><span class="ext__tag">Store</span></span></li>
+            <li class="ext"><span class="ext__icon">🔐</span><span class="ext__name">Password Generator</span><span class="ext__meta"><code>pw</code><span class="ext__tag">Store</span></span></li>
+            <li class="ext"><span class="ext__icon">📋</span><span class="ext__name">Snippets</span><span class="ext__meta"><code>snip</code><span class="ext__tag">Store</span></span></li>
+            <li class="ext"><span class="ext__icon">🔖</span><span class="ext__name">Bookmarks</span><span class="ext__meta"><code>bm docs</code><span class="ext__tag">Store</span></span></li>
+            <li class="ext"><span class="ext__icon">🐙</span><span class="ext__name">GitHub Search</span><span class="ext__meta"><code>gh tauri</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+            <li class="ext"><span class="ext__icon">🎧</span><span class="ext__name">Spotify</span><span class="ext__meta"><code>sp</code><span class="ext__tag ext__tag--online">Online</span></span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="wrap split split--ext">
+      <figure class="shot shot--tilt-l reveal reveal--tilt" data-tilt data-parallax="0.05">
+        <div class="frame">
+          <img src="assets/shots/store-light.png" width="1800" height="1320" data-sizes="(min-width: 1100px) 600px, 92vw" loading="lazy" decoding="async" alt="The Extension Store in the light theme, behind an 'Install Calendar' dialog that lists the access it asks for (Calendar, Open links, Automation) and notes that extensions run in a sandbox.">
+        </div>
+      </figure>
+      <div class="split__text">
+        <div class="section-head reveal">
+          <p class="eyebrow">Untrusted by default</p>
+          <h3 class="h2">Every extension runs in a sandbox.</h3>
+        </div>
+        <p class="body-copy reveal" style="--d: 60ms">That includes the ones setup installs. Kage checks every request an extension makes (clipboard, files, windows, calendar, the agent…) against the access it declared. You see that list before you install, and again if an update asks for more.</p>
+        <p class="body-copy reveal" style="--d: 100ms">Extensions marked <span class="ext__tag ext__tag--online ext__tag--inline">Online</span> talk to a web service: Dictionary, for example, looks up the words you type.</p>
+        <div class="btn-row reveal" style="--d: 140ms">
+          <a class="btn btn--primary" href="https://nachmore.github.io/Kage-Extensions/">Open the Extension Store<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="btn btn--ghost" href="https://github.com/nachmore/Kage/blob/main/docs/EXTENSIONS.md">Build an extension</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="themes" id="themes" aria-labelledby="themes-title">
+    <div class="wrap split split--themes">
+      <div class="split__text">
+        <div class="section-head reveal">
+          <p class="eyebrow">Make it yours</p>
+          <h2 id="themes-title">Your colors. Your language.</h2>
+          <p class="lede">Themes and languages switch everywhere at once, without a restart. Try it.</p>
+        </div>
+        <ul class="points reveal" style="--d: 80ms">
+          <li><svg class="ico" aria-hidden="true"><use href="#i-palette"/></svg><div><h3>Themes</h3><p>Kage Light, Kage Dark, or Auto, which follows your OS, plus Nord, Sunset and Kiro‑ish from setup.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg><div><h3>32 languages</h3><p>With a full right-to-left layout for Arabic, Hebrew, Persian and Urdu. English is written by hand; the rest are machine-translated.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-keyboard"/></svg><div><h3>Hotkeys and placement</h3><p>Pick your hotkeys and where the launcher opens, its opacity and font size. On a Mac, ⌘Space can replace Spotlight while Kage runs.</p></div></li>
+        </ul>
+      </div>
+      <div class="themes__demo reveal reveal--rise" style="--d: 100ms">
+        <div class="lm lm--demo" data-lm="demo">
+          <div class="lm__shadow"></div>
+          <div class="lm__clip"><div class="lm__panel"><div class="lm__strip"></div></div></div>
+          <div class="lm__mascot" aria-hidden="true"><img class="is-on" src="assets/mascot/kage-icon.svg" width="44" height="35" alt=""></div>
+          <div class="lm__content" data-lm-content>
+            <div class="lm__body lm__body--demo">
+              <div class="lm-answer">
+                <p data-i18n="title">Three easy ideas for a rainy Sunday:</p>
+                <ul><li data-i18n="a">Bake a loaf of banana bread</li><li data-i18n="b">Start a 1,000-piece puzzle</li><li data-i18n="c">Visit a museum nearby</li></ul>
+              </div>
+            </div>
+            <div class="lm__input lm__input--bottom"><span class="lm__placeholder" data-i18n="ph">Ask me anything…</span></div>
+          </div>
+        </div>
+        <div class="pickers needs-js">
+          <div class="picker" role="group" aria-label="Theme">
+            <span class="picker__label">Theme</span>
+            <button type="button" data-theme-pick="dark" aria-pressed="true"><span class="sw" style="--a: #81e6d9; --b: #28242e"></span>Kage Dark</button>
+            <button type="button" data-theme-pick="light" aria-pressed="false"><span class="sw" style="--a: #81e6d9; --b: #ffffff"></span>Kage Light</button>
+            <button type="button" data-theme-pick="nord" aria-pressed="false"><span class="sw" style="--a: #88c0d0; --b: #2e3440"></span>Nord</button>
+            <button type="button" data-theme-pick="sunset" aria-pressed="false"><span class="sw" style="--a: #f4c08e; --b: #221c28"></span>Sunset</button>
+            <button type="button" data-theme-pick="kiro" aria-pressed="false"><span class="sw" style="--a: #c09cff; --b: #252526"></span>Kiro‑ish</button>
+          </div>
+          <div class="picker" role="group" aria-label="Language">
+            <span class="picker__label">Language</span>
+            <button type="button" data-lang-pick="en" aria-pressed="true">English</button>
+            <button type="button" data-lang-pick="ja" aria-pressed="false" lang="ja">日本語</button>
+            <button type="button" data-lang-pick="ar" aria-pressed="false" lang="ar">العربية</button>
+            <button type="button" data-lang-pick="de" aria-pressed="false" lang="de">Deutsch</button>
+          </div>
+        </div>
+        <noscript><p class="note">The same reply in four themes and languages:</p><img class="noscript-shot" src="assets/shots/themes-languages.png" width="1800" height="919" alt="The same launcher reply four ways: Sunset theme in English, Kage Light in Japanese, Kage Dark in Arabic with a mirrored right-to-left layout, and Kiro-ish in German."></noscript>
+      </div>
+    </div>
+    <div class="marquee marquee--langs reveal" aria-label="Languages Kage speaks">
+      <div class="marquee__track">
+        <ul class="marquee__list">
+          <li lang="en">English</li><li lang="ar">العربية</li><li lang="bn">বাংলা</li><li lang="zh-Hans">简体中文</li><li lang="zh-Hant">繁體中文</li><li lang="cs">Čeština</li><li lang="da">Dansk</li><li lang="nl">Nederlands</li><li lang="fi">Suomi</li><li lang="fr">Français</li><li lang="de">Deutsch</li><li lang="el">Ελληνικά</li><li lang="he">עברית</li><li lang="hi">हिन्दी</li><li lang="hu">Magyar</li><li lang="id">Bahasa Indonesia</li><li lang="it">Italiano</li><li lang="ja">日本語</li><li lang="ko">한국어</li><li lang="no">Norsk</li><li lang="fa">فارسی</li><li lang="pl">Polski</li><li lang="pt">Português</li><li lang="ro">Română</li><li lang="ru">Русский</li><li lang="es">Español</li><li lang="sv">Svenska</li><li lang="th">ไทย</li><li lang="tr">Türkçe</li><li lang="uk">Українська</li><li lang="ur">اردو</li><li lang="vi">Tiếng Việt</li>
+        </ul>
+        <ul class="marquee__list" aria-hidden="true">
+          <li>English</li><li>العربية</li><li>বাংলা</li><li>简体中文</li><li>繁體中文</li><li>Čeština</li><li>Dansk</li><li>Nederlands</li><li>Suomi</li><li>Français</li><li>Deutsch</li><li>Ελληνικά</li><li>עברית</li><li>हिन्दी</li><li>Magyar</li><li>Bahasa Indonesia</li><li>Italiano</li><li>日本語</li><li>한국어</li><li>Norsk</li><li>فارسی</li><li>Polski</li><li>Português</li><li>Română</li><li>Русский</li><li>Español</li><li>Svenska</li><li>ไทย</li><li>Türkçe</li><li>Українська</li><li>اردو</li><li>Tiếng Việt</li>
+        </ul>
+      </div>
+    </div>
+    <div class="wrap">
+      <div class="cat-note reveal">
+        <img src="assets/mascot/kage-paint.svg" width="96" height="76" alt="" loading="lazy">
+        <p><strong>And the cat.</strong> Kage breathes, blinks and reacts as you type and wait. It wears a party hat after an update and, with extensions, a headset in meetings; it even bops along to music. Not your thing? <em>Animate Kage</em> in Settings → Appearance turns it off.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="privacy" id="privacy" aria-labelledby="privacy-title">
+    <div class="wrap">
+      <div class="section-head section-head--center reveal">
+        <img class="section-cat" src="assets/mascot/kage-magnifying-glass.svg" width="120" height="96" alt="" loading="lazy">
+        <p class="eyebrow">Privacy and security</p>
+        <h2 id="privacy-title">Private by design. Honest about the details.</h2>
+      </div>
+      <div class="privacy__grid">
+        <article class="card pcard reveal" data-spot><svg class="ico" aria-hidden="true"><use href="#i-user-off"/></svg><h3>No Kage account, no Kage cloud</h3><p>Your prompts go to the agent you connect, and from there to whichever model service it uses, or nowhere else with a local Ollama model.</p></article>
+        <article class="card pcard reveal" style="--d: 60ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg><h3>You approve the tools</h3><p>The agent asks before it uses a tool you haven't allowed, and every command it runs shows up under the reply.</p></article>
+        <article class="card pcard reveal" style="--d: 120ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg><h3>Sandboxed extensions</h3><p>Every extension is untrusted. Each request it makes is checked against the access it declared.</p></article>
+        <article class="card pcard reveal" data-spot><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg><h3>Signed updates</h3><p>Every download is verified against a signing key built into the app before it's installed.</p></article>
+        <article class="card pcard reveal" style="--d: 60ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-chart"/></svg><h3>Analytics you can switch off</h3><p>Anonymous usage events never include your messages, prompts, replies, file names or paths. Setup explains them with a switch that starts on; turn it off there or in Settings → Privacy.</p></article>
+        <article class="card pcard reveal" style="--d: 120ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-window"/></svg><h3>Screen context, disclosed</h3><p>By default, prompts include the name and window title of the app you came from. Turn it off in Settings → System Integration.</p></article>
+      </div>
+      <p class="privacy__links reveal">Read the <a href="https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md">privacy policy</a>, the <a href="https://github.com/nachmore/Kage/blob/main/docs/SECURITY_MODEL.md">security model</a> and how <a href="https://github.com/nachmore/Kage/blob/main/docs/TOOL_PERMISSIONS.md">tool permissions</a> work.</p>
+    </div>
+  </section>
+
+  <section class="download" id="download" aria-labelledby="dl-title">
+    <div class="download__glow" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="section-head section-head--center reveal">
+        <img class="section-cat section-cat--jump" src="assets/mascot/kage-balloon-looking-up.svg" width="110" height="146" alt="" loading="lazy">
+        <p class="eyebrow">Download</p>
+        <h2 id="dl-title">Get Kage.</h2>
+        <p class="lede">Kage is under active development and publishes <strong>Nightly</strong> builds for now. <span class="release-meta" data-release-meta></span></p>
+      </div>
+      <div class="dl-grid">
+        <article class="card dl reveal" data-platform="windows">
+          <div class="dl__head"><svg class="ico" aria-hidden="true"><use href="#i-monitor"/></svg><div><h3>Windows</h3><p>Windows 10 or 11, x64</p></div></div>
+          <a class="btn btn--primary btn--block" href="https://github.com/nachmore/Kage/releases/tag/dev-latest"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg>Download for Windows</a>
+          <p class="dl__file"><code>Kage_&lt;version&gt;_x64-setup.exe</code> <span data-asset-size="exe"></span></p>
+          <p class="dl__note">Installs for your user only, so no admin rights. The builds aren't code-signed yet, so SmartScreen may say "Windows protected your PC": choose <strong>More info → Run anyway</strong>.</p>
+          <p class="dl__note dl__note--small">On Windows 10, the installer adds Microsoft's WebView2 runtime if it isn't there yet.</p>
+        </article>
+        <article class="card dl reveal" style="--d: 80ms" data-platform="mac">
+          <div class="dl__head"><svg class="ico" aria-hidden="true"><use href="#i-laptop"/></svg><div><h3>macOS</h3><p>macOS 11 or later, Apple Silicon</p></div></div>
+          <a class="btn btn--primary btn--block" href="https://github.com/nachmore/Kage/releases/tag/dev-latest"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg>Download for macOS</a>
+          <p class="dl__file"><code>Kage_&lt;version&gt;_aarch64.dmg</code> <span data-asset-size="dmg"></span></p>
+          <p class="dl__note">The Mac builds aren't signed or notarized yet. <strong>Before you open the DMG</strong>, remove the quarantine flag in Terminal:</p>
+          <div class="cmd">
+            <code data-copy-src>xattr -d com.apple.quarantine ~/<wbr>Downloads/<wbr>Kage_*_aarch64.dmg</code>
+            <button type="button" class="cmd__copy needs-js" data-copy aria-label="Copy the command"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span data-copy-label>Copy</span></button>
+          </div>
+          <p class="dl__note dl__note--small">Then open the DMG and drag Kage to Applications. Intel Macs aren't supported. Already seeing "damaged"? See the <a href="https://github.com/nachmore/Kage#macos">install guide</a>.</p>
+        </article>
+      </div>
+      <ol class="steps reveal" style="--d: 120ms">
+        <li><span>1</span><div><h3>Install an agent</h3><p>Kage doesn't include a model, so <a href="#agents">pick an agent</a> and sign in to it the usual way.</p></div></li>
+        <li><span>2</span><div><h3>Open Kage</h3><p>The setup wizard finds your agents and walks you through the rest, or choose <em>Set it up for me</em>.</p></div></li>
+        <li><span>3</span><div><h3>Press <kbd data-mod-label-kbd>Alt</kbd>+<kbd>Space</kbd></h3><p>Try <code>calc</code>, <code>12 km to mi</code> or <code>timer 25m</code>, then ask your agent anything.</p></div></li>
+      </ol>
+      <p class="download__more reveal">No Linux build yet. Prefer to build it yourself? See <a href="https://github.com/nachmore/Kage/blob/main/docs/BUILDING.md">Building Kage</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__inner">
+    <div class="footer__brand">
+      <a class="brand" href="#top" aria-label="Back to top">
+        <img src="assets/icons/kage-icon-basic.svg" width="34" height="27" alt="">
+        <span>Kage</span>
+      </a>
+      <p>Your AI, one keystroke away. <span lang="ja">影</span> stays out of sight until you call it.</p>
+      <button class="sleepy" type="button" data-sleepy aria-label="Wake the cat">
+        <img class="sleepy__still" src="assets/mascot/kage-sleeping.svg" width="104" height="70" alt="" loading="lazy">
+        <span class="sleepy__wave" aria-hidden="true">
+          <img src="assets/mascot/animations/waving/kage-waving-f1.svg" width="82" height="70" alt="" loading="lazy">
+          <img src="assets/mascot/animations/waving/kage-waving-f2.svg" width="82" height="70" alt="" loading="lazy">
+          <img src="assets/mascot/animations/waving/kage-waving-f3.svg" width="82" height="70" alt="" loading="lazy">
+          <img src="assets/mascot/animations/waving/kage-waving-f4.svg" width="82" height="70" alt="" loading="lazy">
+          <img src="assets/mascot/animations/waving/kage-waving-f5.svg" width="82" height="70" alt="" loading="lazy">
+        </span>
+      </button>
+    </div>
+    <nav class="footer__cols" aria-label="Footer">
+      <div>
+        <h2>Product</h2>
+        <ul>
+          <li><a href="#download">Download</a></li>
+          <li><a href="https://github.com/nachmore/Kage/releases/tag/dev-latest">Releases</a></li>
+          <li><a href="https://nachmore.github.io/Kage-Extensions/">Extension Store</a></li>
+          <li><a href="#features">Features</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Docs</h2>
+        <ul>
+          <li><a href="https://github.com/nachmore/Kage/blob/main/docs/FEATURES.md">User guide</a></li>
+          <li><a href="https://github.com/nachmore/Kage/blob/main/docs/SHORTCUTS_GUIDE.md">Shortcuts guide</a></li>
+          <li><a href="https://github.com/nachmore/Kage/blob/main/docs/TOOL_PERMISSIONS.md">Tool permissions</a></li>
+          <li><a href="https://github.com/nachmore/Kage/blob/main/docs/EXTENSIONS.md">Build an extension</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Project</h2>
+        <ul>
+          <li><a href="https://github.com/nachmore/Kage">GitHub</a></li>
+          <li><a href="https://github.com/nachmore/Kage/issues/new/choose">Report an issue</a></li>
+          <li><a href="https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md">Privacy policy</a></li>
+          <li><a href="https://github.com/nachmore/Kage/blob/main/LICENSE">Apache License 2.0</a></li>
+        </ul>
+      </div>
+    </nav>
+  </div>
+  <div class="wrap footer__base">
+    <p>Kage is free and open source under the Apache License 2.0.</p>
+    <p class="footer__build">Site built {{BUILD_DATE}} from <a href="https://github.com/nachmore/Kage/commit/{{BUILD_SHA}}">{{BUILD_SHA_SHORT}}</a> · Kage {{VERSION}}</p>
+  </div>
+</footer>
+</body>
+</html>
