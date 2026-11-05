@@ -62,6 +62,9 @@ console.log(
     let selectedText = '';
     let sourceApp = '';
     let sourceTitle = '';
+    // Settings → System Integration → Screen context awareness. Read with
+    // the macros on every show; on unless the user switched it off.
+    let includeScreenContext = true;
     let selectedIndex = -1;
     let actionItems = [];
     let isProcessing = false;
@@ -222,6 +225,7 @@ console.log(
         try {
             const config = await invoke('get_config');
             loadedMacros = config.macros || [];
+            includeScreenContext = config.system?.screen_context !== false;
         } catch {
             loadedMacros = [];
         }
@@ -311,8 +315,8 @@ console.log(
             prompt = `${prompt}\n\nSelected text:\n\`\`\`\n${selectedText.trim()}\n\`\`\``;
         }
 
-        // Add screen context
-        if (sourceApp) {
+        // Add screen context (app name + window title), unless turned off
+        if (sourceApp && includeScreenContext) {
             prompt = `<_kage_ctx app="${sourceApp}" title="${sourceTitle}"/>\n${prompt}`;
         }
 
