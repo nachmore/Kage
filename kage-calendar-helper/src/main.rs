@@ -103,11 +103,21 @@ mod imp {
         let (start, end): (DateTime<Utc>, DateTime<Utc>) = match mode {
             Mode::Upcoming { hours } => (now, now + chrono::Duration::hours(i64::from(hours))),
             Mode::Date { ref iso } => {
-                let start = local_midnight(iso);
-                (start, start + chrono::Duration::hours(24))
+                // Midnight to NEXT midnight, not +24h: on a DST-change day
+                // the local day is 23h or 25h long, and the range mode (the
+                // picker's busy-day dots) buckets by real local days too —
+                // a dot must never promise a meeting this list then lacks.
+                let day = parse_day(iso);
+                let next = day
+                    .succ_opt()
+                    .unwrap_or_else(|| emit_error(&format!("date '{iso}' has no following day")));
+                (local_midnight(day), local_midnight(next))
             }
             Mode::Range { ref start, ref end } => {
-                let (start, end) = (local_midnight(start), local_midnight(end));
+                let (start, end) = (
+                    local_midnight(parse_day(start)),
+                    local_midnight(parse_day(end)),
+                );
                 if end <= start {
                     emit_error("range end must be after its start");
                 }
@@ -123,17 +133,20 @@ mod imp {
         std::process::exit(0);
     }
 
-    /// Local midnight of a `yyyy-MM-dd` day, as UTC — matching the Swift
-    /// original's DateFormatter with TimeZone.current. `earliest` so a
-    /// midnight inside a DST gap still resolves.
-    fn local_midnight(iso: &str) -> DateTime<Utc> {
-        let Ok(day) = NaiveDate::parse_from_str(iso, "%Y-%m-%d") else {
-            emit_error(&format!("invalid date '{iso}' — expected yyyy-MM-dd"));
-        };
+    /// A `yyyy-MM-dd` argument, or a usage error.
+    fn parse_day(iso: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(iso, "%Y-%m-%d")
+            .unwrap_or_else(|_| emit_error(&format!("invalid date '{iso}' — expected yyyy-MM-dd")))
+    }
+
+    /// Local midnight of `day`, as UTC — matching the Swift original's
+    /// DateFormatter with TimeZone.current. `earliest` so a midnight inside
+    /// a DST gap still resolves.
+    fn local_midnight(day: NaiveDate) -> DateTime<Utc> {
         chrono::Local
             .from_local_datetime(&day.and_hms_opt(0, 0, 0).expect("00:00:00 is valid"))
             .earliest()
-            .unwrap_or_else(|| emit_error(&format!("date '{iso}' has no valid local midnight")))
+            .unwrap_or_else(|| emit_error(&format!("date '{day}' has no valid local midnight")))
             .with_timezone(&Utc)
     }
 

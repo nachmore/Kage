@@ -182,19 +182,26 @@ struct QueryShape {
     max_items: u32,
     /// Read the (slow, large) item body. Only needed to sniff join URLs.
     read_body: bool,
+    /// Report a killed (timed-out) query as an error instead of "no events".
+    timeout_is_error: bool,
 }
 
-/// The launcher lists: a handful of events, join URLs included.
+/// The launcher lists: a handful of events, join URLs included. A timeout
+/// degrades to an empty list, as it always has.
 const LIST_QUERY: QueryShape = QueryShape {
     max_items: 50,
     read_body: true,
+    timeout_is_error: false,
 };
 
 /// The month view's busy-day dots: only start/duration/all-day matter, but a
-/// 6-week grid can hold far more than 50 events.
+/// 6-week grid can hold far more than 50 events. A timeout is an error here:
+/// "no events" would be cached by the picker as a genuinely empty month
+/// (no dots for a minute), while an error is retried after a few seconds.
 const RANGE_QUERY: QueryShape = QueryShape {
     max_items: 1000,
     read_body: false,
+    timeout_is_error: true,
 };
 
 /// Core Outlook COM query. `time_range_setup` is a PowerShell snippet that sets
@@ -282,10 +289,21 @@ try {{
         Ok(o) => o,
         Err(RunError::Timeout) => {
             warn!(
-                "[calendar] PowerShell query ({}) exceeded {}s — killed; returning no events",
+                "[calendar] PowerShell query ({}) exceeded {}s — killed{}",
                 label,
-                CALENDAR_QUERY_TIMEOUT.as_secs()
+                CALENDAR_QUERY_TIMEOUT.as_secs(),
+                if shape.timeout_is_error {
+                    ""
+                } else {
+                    "; returning no events"
+                }
             );
+            if shape.timeout_is_error {
+                return Err(format!(
+                    "Outlook calendar query timed out after {}s",
+                    CALENDAR_QUERY_TIMEOUT.as_secs()
+                ));
+            }
             return Ok(vec![]);
         }
         Err(RunError::Spawn(e)) => {

@@ -40,10 +40,13 @@ pub fn get_events_for_date(date: &str) -> Result<Vec<CalendarEvent>, String> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CalendarQueryError {
     /// The OS refused calendar access (macOS TCC denial, or the prompt
-    /// timed out unanswered).
+    /// timed out unanswered). Only the EventKit path can report this;
+    /// elsewhere the variant is matched but never built, hence the allow.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     PermissionDenied,
-    /// Any other backend failure. English, for logs only. (macOS and Linux
-    /// degrade to "no events" instead — only the Outlook path reports this.)
+    /// Any other backend failure (including a timed-out query). English, for
+    /// logs only. (macOS and Linux degrade to "no events" instead — only the
+    /// Outlook path reports this.)
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     Failed(String),
 }
@@ -226,7 +229,14 @@ mod tests {
 
     #[test]
     fn parse_day_range_rejects_bad_shapes_and_impossible_dates() {
-        for bad in ["2026-2-01", "2026/02/01", "2026-02-01'", "20260201", "", "２０２６-02-01"] {
+        for bad in [
+            "2026-2-01",
+            "2026/02/01",
+            "2026-02-01'",
+            "20260201",
+            "",
+            "２０２６-02-01",
+        ] {
             assert_eq!(
                 parse_day_range(bad, "2026-03-01"),
                 Err(DayRangeError::Malformed),
