@@ -3436,6 +3436,10 @@ body.light-theme .kage-date-picker {
 
 .kdp-grid {
     width: 100%;
+    /* Same fixed body height as .kdp-cells (a table treats this as its
+       minimum and spreads the rows), so the day, month and year views are
+       one size and switching between them never resizes the window. */
+    height: 222px;
     border-collapse: separate;
     border-spacing: 0 1px;
     table-layout: fixed;
@@ -3513,8 +3517,8 @@ body.dark-theme .kdp-dot {
     background: #fff;
 }
 
-/* Same height as the 6-week day grid (weekday row + 6 × 33px), so switching
-   views doesn't resize the floating window. */
+/* Same fixed height as the day grid (.kdp-grid), so switching views doesn't
+   resize the floating window. */
 .kdp-cells {
     display: flex;
     flex-direction: column;
@@ -3560,7 +3564,10 @@ body.dark-theme .kdp-dot {
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 24px;
+    /* Fixed, sized for a two-line hint, so the popup is the same height
+       with or without one ("Update the Calendar extension…"). */
+    box-sizing: border-box;
+    height: 35px;
     margin-top: 4px;
     padding-top: 6px;
     /* --kage-border-subtle equals the dark picker's own background
@@ -3573,6 +3580,11 @@ body.light-theme .kdp-footer {
 .kdp-hint {
     flex: 1;
     min-width: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
     font-size: 10.5px;
     line-height: 1.3;
     color: var(--kage-text-muted);
