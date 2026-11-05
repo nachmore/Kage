@@ -1466,7 +1466,9 @@ its activity, and shouldn't assume its hint is the one being shown.
 
 The floating window has a host-owned month calendar (prev/next month,
 month and year lists, Today, full keyboard support, busy-day dots). It
-opens from the date in the input bar, and an extension holding the
+opens from the date in the input bar — or with **Alt+↓** (⌥↓) in the
+launcher input, which opens it from the highlighted result's date when
+it has one — and an extension holding the
 **`calendar`** capability can open it from its own date labels and feed
 it data. The popup is host UI: your code never renders into it or sees
 its DOM. You take part through three narrow channels, available only
@@ -1485,7 +1487,9 @@ button with an ISO day:
 ```
 
 The host styles it, labels it for screen readers, and opens the
-calendar anchored to it on that day. The attribute survives
+calendar anchored to it on that day. Re-rendering (a widget refresh)
+while the calendar is open is fine: the new button for the same date
+takes over as its opener. The attribute survives
 sanitization only on a `<button>` with a real date; where your extension
 may not use the picker (no `calendar` grant, not a date provider, or a
 window without the popup) the button is unwrapped to plain text. On an
@@ -1513,7 +1517,9 @@ to three `colors` (`#rgb`/`#rrggbb` hex) for per-calendar dots. The host
 drops anything outside the range, clamps counts, ignores non-hex
 colours, and maps `status` (`ok` / `permission_denied` / `error`) to its
 OWN hint text — you can't put words in the popup. Answers are cached
-for a minute per range, so paging back and forth is free.
+for a minute per range (`error` for five seconds), so paging back and
+forth is free, and while the user pages the host asks only for the
+month they stop on, one lookup at a time.
 `get_calendar_busy_days` takes at most 62 days and needs `calendar`.
 
 **3. Selection.** Implementing `onDateSelected(date)` on the search
@@ -1526,11 +1532,20 @@ onDateSelected(date) {
 }
 ```
 
-The host fills the input with it and runs the search, so the day's
+The host fills the input with it (as an undoable edit — a draft it
+replaced comes back with Ctrl/⌘+Z) and runs the search, so the day's
 results (or your empty state) render through your normal result rows.
 The query must be a single line that starts with one of **your own**
 registered keywords (`getKeywords`), or it's ignored. For a pick made
-from the input bar's date, the first enabled date provider answers.
+from the input bar's date, the first enabled date provider answers. An
+enabled extension with `calendar` and a search provider but no
+`onDateSelected` (e.g. a Calendar extension from before the picker) gets
+an "update the extension" hint in the popup rather than "turn it on".
+
+Date labels you show next to the popup should be Gregorian
+(`toLocaleDateString(locale, { calendar: 'gregory', … })`): the grid is,
+and a locale whose default calendar differs (fa → Persian) would
+otherwise label a different-looking day than the one it highlights.
 
 The calendar extension is the reference implementation
 (`Kage-Extensions/extensions/calendar/`: `dates.js`, `search.js`,

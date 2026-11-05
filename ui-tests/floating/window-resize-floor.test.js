@@ -189,3 +189,38 @@ describe('WindowManager._targetHeight', () => {
         expect(m._targetHeight(500, 76, 900, 150)).toBe(500);
     });
 });
+
+describe('WindowManager._suggestionsPhys (transient rows)', () => {
+    // The month-calendar popup is an in-flow row of the bubble. Like the
+    // suggestions dropdown it must grow the window ON TOP OF a user-set
+    // height, or a launcher the user dragged short clips it (and the input).
+    const build = ({ suggestions = true, popup = true } = {}) => {
+        document.body.innerHTML = `<div class="speech-bubble">
+            <div class="input-container"></div>
+            ${popup ? '<div class="kage-date-popover-row"></div>' : ''}
+            <div class="app-suggestions ${suggestions ? 'visible' : ''}" id="appSuggestions"></div>
+        </div>`;
+        const m = mgr();
+        m._measureFlow = (el) => (el.id === 'appSuggestions' ? 120 : el.classList.contains('kage-date-popover-row') ? 330 : 0);
+        return m;
+    };
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('counts an open calendar popup row', () => {
+        expect(build({ suggestions: false })._suggestionsPhys(1)).toBe(330);
+        expect(build({ suggestions: false })._suggestionsPhys(2)).toBe(660);
+    });
+
+    it('adds it to the dropdown when both show, and is 0 with neither', () => {
+        expect(build()._suggestionsPhys(1)).toBe(450);
+        expect(build({ suggestions: false, popup: false })._suggestionsPhys(1)).toBe(0);
+    });
+
+    it('so a user-set height grows by the popup instead of clipping it', () => {
+        const m = build({ suggestions: false });
+        m.userSetHeight = 260;
+        expect(m._targetHeight(8000, 76, 900, m._suggestionsPhys(1))).toBe(590);
+    });
+});

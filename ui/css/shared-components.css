@@ -3307,14 +3307,20 @@ button.kage-date-affordance[aria-expanded="true"] {
     color: var(--kage-accent-light);
     text-decoration-color: currentColor;
 }
+/* Inset ring + tint, not an outer outline: the opener sits in single-line
+   containers (the widget bar's text is overflow:hidden) that would clip an
+   outline above and below it, leaving only stray side bars. */
 button.kage-date-affordance:focus-visible {
-    outline: 2px solid var(--kage-accent);
-    outline-offset: 1px;
+    outline: none;
+    background: var(--kage-accent-glow);
+    box-shadow: inset 0 0 0 1.5px var(--kage-accent);
 }
 
 /* The floating window's in-flow popup row (calendar-picker.js). Forced LTR
    so the inline margin that lines the popup up with its opener is a
-   physical offset; the picker itself carries the locale's dir. */
+   physical offset; the picker itself carries the locale's dir. The row is
+   as wide as the bubble — only the picker inside it counts as "inside" for
+   outside-click dismissal. */
 .kage-date-popover-row {
     display: flex;
     direction: ltr;
@@ -3348,7 +3354,10 @@ body.light-theme .kage-date-picker {
 .kage-date-picker [hidden] {
     display: none !important;
 }
-.kage-date-picker button {
+/* Zero-specificity base for the picker's buttons (UA buttons don't inherit
+   colour), so the per-control colours below (.kdp-today, .kdp-nav,
+   .kdp-title, …) win without each needing the .kage-date-picker prefix. */
+:where(.kage-date-picker) button {
     font-family: inherit;
     color: inherit;
     -webkit-tap-highlight-color: transparent;
@@ -3554,7 +3563,12 @@ body.dark-theme .kdp-dot {
     min-height: 24px;
     margin-top: 4px;
     padding-top: 6px;
-    border-top: 1px solid var(--kage-border-subtle);
+    /* --kage-border-subtle equals the dark picker's own background
+       (--kage-bg-elevated), which made the divider vanish in dark. */
+    border-top: 1px solid var(--kage-border);
+}
+body.light-theme .kdp-footer {
+    border-top-color: var(--kage-border-subtle);
 }
 .kdp-hint {
     flex: 1;

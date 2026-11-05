@@ -21,6 +21,9 @@ export const MARKER_STATUSES = Object.freeze([
     'error',
     // Host-side only: no extension can answer (none installed/enabled).
     'no_provider',
+    // Host-side only: a calendar extension is enabled but predates the
+    // picker (no onDateSelected) → "update the Calendar extension" hint.
+    'provider_outdated',
 ]);
 
 const MAX_COUNT = 999;

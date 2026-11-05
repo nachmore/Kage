@@ -13,7 +13,11 @@
  * Busy-day dots come from `loadMarkers(start, end)` (one call per visible
  * grid; see date-markers.js for validation + caching). The picker paints
  * immediately and fills dots in when the promise resolves — a slow calendar
- * never blocks it.
+ * never blocks it. Each lookup can spawn an OS calendar query (EventKit
+ * helper / PowerShell + Outlook COM), so while the user pages: a cached
+ * range (`peekMarkers`) paints at once, an uncached one is requested only
+ * after `markerDebounceMs` without another page, and at most one lookup is
+ * in flight — superseded months never reach the backend.
  *
  * Implementation note: every interactive element is created ONCE and
  * updated in place. Rebuilding the grid on each page would destroy the
@@ -73,6 +77,10 @@ export class DatePicker {
      * @param {string} [o.today]      ISO day (defaults to the local date)
      * @param {string} [o.selected]   ISO day to highlight + open on
      * @param {(start: string, end: string) => Promise<{status: string, days: Map}>} [o.loadMarkers]
+     * @param {(start: string, end: string) => ({status: string, days: Map}|null)} [o.peekMarkers]
+     *   synchronous cache lookup; a hit paints without waiting or debouncing
+     * @param {number} [o.markerDebounceMs]  quiet time after paging before an
+     *   uncached range is requested (the first range is requested at once)
      * @param {(iso: string) => void} [o.onSelect]
      * @param {() => void} [o.onClose]
      * @param {(key: string, vars?: object) => string} [o.t]
@@ -85,6 +93,10 @@ export class DatePicker {
         this.today = isValidIsoDate(o.today) ? o.today : todayIso();
         this.selected = isValidIsoDate(o.selected) ? o.selected : null;
         this.loadMarkers = o.loadMarkers || null;
+        this.peekMarkers = typeof o.peekMarkers === 'function' ? o.peekMarkers : null;
+        this.markerDebounceMs = Number.isFinite(o.markerDebounceMs)
+            ? Math.max(0, o.markerDebounceMs)
+            : 180;
         this.onSelect = o.onSelect || (() => {});
         this.onClose = o.onClose || (() => {});
         this.t = o.t || hostT;
@@ -100,8 +112,11 @@ export class DatePicker {
         this.pageYear = this.viewYear;
 
         this.markers = null; // { status, days } for the visible grid, once loaded
-        this._markerRange = '';
-        this._markerGen = 0;
+        this._markerRange = ''; // `start|end` of the visible grid
+        this._markerTimer = null; // pending debounced request
+        this._markerInFlight = null; // range key of the lookup in flight
+        this._markerAsked = false; // the first range skips the debounce
+        this._destroyed = false;
 
         this._id = `kdp-${++_instanceSeq}`;
         this._build();
@@ -123,8 +138,27 @@ export class DatePicker {
         return this.root.contains(this.doc.activeElement);
     }
 
+    /**
+     * Swap the weekday headers to their narrow forms when any short name
+     * overflows its column (fa's short names are whole words; ar/bn/ur run
+     * a pixel or two over). Measures, so call it once the picker is in the
+     * DOM. The full name stays in each header's `abbr`.
+     * @returns {boolean} whether the headers were narrowed
+     */
+    fitWeekdayHeaders() {
+        const overflows = this.weekdayThs.some((th) => th.scrollWidth > th.clientWidth + 0.5);
+        if (!overflows) return false;
+        this.weekdayThs.forEach((th, i) => {
+            th.textContent = this.weekdays[i].narrow;
+            th.title = this.weekdays[i].long;
+        });
+        return true;
+    }
+
     destroy() {
-        this._markerGen++;
+        this._destroyed = true;
+        clearTimeout(this._markerTimer);
+        this._markerTimer = null;
         this.root.remove();
     }
 
@@ -169,12 +203,14 @@ export class DatePicker {
         });
         const thead = this._el('thead');
         const headRow = this._el('tr');
-        for (const wd of weekdayHeaders(this.locale, this.weekStart)) {
+        this.weekdays = weekdayHeaders(this.locale, this.weekStart);
+        this.weekdayThs = this.weekdays.map((wd) => {
             const th = this._el('th', 'kdp-weekday', { scope: 'col', abbr: wd.long });
             if (wd.weekday === 0 || wd.weekday === 6) th.classList.add('kdp-weekend');
             th.textContent = wd.short;
             headRow.appendChild(th);
-        }
+            return th;
+        });
         thead.appendChild(headRow);
         const tbody = this._el('tbody');
         /** @type {Array<{ td: HTMLElement, btn: HTMLButtonElement, num: HTMLElement, dots: HTMLElement }>} */
@@ -240,14 +276,17 @@ export class DatePicker {
 
         // Events
         root.addEventListener('keydown', (e) => this._onKeyDown(e));
-        // Mouse clicks must not move focus onto chrome buttons (prev/next/
-        // title/today): focus stays on the grid cell, so the arrow keys keep
-        // working after a click and nothing focused is ever torn down.
+        // A mouse press anywhere but a grid cell must not move focus — not
+        // onto the chrome buttons (prev/next/title/today), and not to <body>
+        // when it lands on the weekday row, the gaps between days, the
+        // padding or the footer. Focus stays on the grid cell, so the arrow
+        // keys keep working after a click, Escape still reaches the picker
+        // (on <body> it would hit the window's own Escape → hide), and
+        // nothing focused is ever torn down.
         root.addEventListener('mousedown', (e) => {
-            const btn = e.target.closest?.('button');
-            if (btn && !btn.classList.contains('kdp-day') && !btn.classList.contains('kdp-pick')) {
-                e.preventDefault();
-            }
+            if (e.target.closest?.('.kdp-day, .kdp-pick')) return;
+            e.preventDefault();
+            if (!this.containsFocus()) this.focus();
         });
         this.prevBtn.addEventListener('click', () => this._page(-1));
         this.nextBtn.addEventListener('click', () => this._page(1));
@@ -537,10 +576,44 @@ export class DatePicker {
         });
     }
 
+    /** The visible grid changed to `[start, end)`: paint cached dots or schedule a lookup. */
     _requestMarkers(start, end) {
         if (!this.loadMarkers) return;
-        const gen = ++this._markerGen;
+        clearTimeout(this._markerTimer);
+        this._markerTimer = null;
+        if (this._receiveCached(start, end)) return;
         this.daysView.setAttribute('aria-busy', 'true');
+        const first = !this._markerAsked;
+        this._markerAsked = true;
+        if (first || this.markerDebounceMs === 0) {
+            this._flushMarkers();
+            return;
+        }
+        this._markerTimer = setTimeout(() => {
+            this._markerTimer = null;
+            this._flushMarkers();
+        }, this.markerDebounceMs);
+    }
+
+    /** Paint a synchronous cache hit for `[start, end)`; true if there was one. */
+    _receiveCached(start, end) {
+        const hit = this.peekMarkers ? this.peekMarkers(start, end) : null;
+        if (!hit || !(hit.days instanceof Map)) return false;
+        this._receiveMarkers(hit);
+        return true;
+    }
+
+    /** Look up the visible grid's markers — unless a lookup is already running. */
+    _flushMarkers() {
+        if (this._destroyed || !this._markerRange) return;
+        // One lookup at a time: when it lands, it re-flushes for whatever
+        // range is visible by then (see below), skipping every month paged
+        // past in between.
+        if (this._markerInFlight) return;
+        const range = this._markerRange;
+        const [start, end] = range.split('|');
+        if (this._receiveCached(start, end)) return;
+        this._markerInFlight = range;
         let pending;
         try {
             pending = Promise.resolve(this.loadMarkers(start, end));
@@ -548,15 +621,27 @@ export class DatePicker {
             pending = Promise.reject(e);
         }
         pending
-            .catch(() => ({ status: 'error', days: new Map() }))
+            .catch(() => null)
             .then((m) => {
-                if (gen !== this._markerGen) return; // paged away meanwhile
-                this.markers =
-                    m && m.days instanceof Map ? m : { status: 'error', days: new Map() };
-                this.daysView.removeAttribute('aria-busy');
-                this._applyMarkers();
-                this._renderHint();
+                this._markerInFlight = null;
+                if (this._destroyed) return;
+                if (range === this._markerRange) {
+                    clearTimeout(this._markerTimer);
+                    this._markerTimer = null;
+                    this._receiveMarkers(m);
+                } else if (!this._markerTimer) {
+                    // Paged away meanwhile and the debounce has already
+                    // elapsed: fetch the month that's on screen now.
+                    this._flushMarkers();
+                }
             });
+    }
+
+    _receiveMarkers(m) {
+        this.markers = m && m.days instanceof Map ? m : { status: 'error', days: new Map() };
+        this.daysView.removeAttribute('aria-busy');
+        this._applyMarkers();
+        this._renderHint();
     }
 
     /** Paint dots + accessible names from the loaded markers (or just dates). */
@@ -591,6 +676,9 @@ export class DatePicker {
         let text = '';
         if (status === 'permission_denied') text = this.t('shared.date_picker.hint.permission');
         else if (status === 'no_provider') text = this.t('shared.date_picker.hint.no_provider');
+        else if (status === 'provider_outdated') {
+            text = this.t('shared.date_picker.hint.update_provider');
+        }
         if (this.hint.textContent !== text) this.hint.textContent = text;
         this.hint.hidden = !text;
     }

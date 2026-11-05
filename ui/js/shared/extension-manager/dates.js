@@ -23,6 +23,7 @@
 
 import { applyMixin } from '../mixin.js';
 import { emptyMarkers, normalizeMarkers } from '../date-markers.js';
+import { HOST_FEATURE_DATE_PICKER } from '../extension-sandbox-host.js';
 import { isValidIsoDate } from '../month-grid.js';
 import { t } from '../i18n.js';
 
@@ -70,6 +71,28 @@ export function installExtensionDateMethods(ExtensionManager) {
                 if (this._isDateProvider(id)) return id;
             }
             return null;
+        },
+
+        /**
+         * Why `getDateProvider()` came back empty, as the picker's marker
+         * status: `'provider_outdated'` when an enabled extension holding
+         * `calendar` was offered the picker but doesn't implement it (a
+         * Calendar extension from before the picker existed — "update it",
+         * not "turn it on"), else `'no_provider'`.
+         */
+        missingDateProviderStatus() {
+            if (!this.extensions) return 'no_provider';
+            for (const [id, ext] of this.extensions) {
+                const sb = ext?.sandbox;
+                if (!sb?.hasSearch || sb.hasDateProvider || !this._isEnabled(id)) continue;
+                if (!Array.isArray(ext.capabilities) || !ext.capabilities.includes('calendar')) {
+                    continue;
+                }
+                if (sb.hostFeatures?.includes?.(HOST_FEATURE_DATE_PICKER)) {
+                    return 'provider_outdated';
+                }
+            }
+            return 'no_provider';
         },
 
         /**
@@ -131,12 +154,17 @@ export function installExtensionDateMethods(ExtensionManager) {
         /**
          * Register the window's "open the date picker" callback. Only windows
          * that host the popup (the floating window) set one; elsewhere every
-         * affordance is unwrapped to text.
+         * affordance is unwrapped to text. `onWired` hears about every opener
+         * as it's wired — re-renders (a widget's periodic refresh) replace
+         * the button an open popup is anchored to.
          *
          * @param {((req: { anchor: HTMLElement, date: string, extensionId: string }) => void) | null} fn
+         * @param {{ onWired?: (el: HTMLElement, info: { date: string, extensionId: string }) => void }} [opts]
          */
-        setDateAffordanceHandler(fn) {
+        setDateAffordanceHandler(fn, { onWired } = {}) {
             this._dateAffordanceHandler = typeof fn === 'function' ? fn : null;
+            this._dateAffordanceOnWired =
+                this._dateAffordanceHandler && typeof onWired === 'function' ? onWired : null;
         },
 
         /** Wire (or unwrap) every `data-kage-date` affordance under `root`. */
@@ -166,6 +194,7 @@ export function installExtensionDateMethods(ExtensionManager) {
                     ev.stopPropagation();
                     this._dateAffordanceHandler?.({ anchor: el, date: iso, extensionId: id });
                 });
+                this._dateAffordanceOnWired?.(el, { date: iso, extensionId: id });
             }
         },
     });

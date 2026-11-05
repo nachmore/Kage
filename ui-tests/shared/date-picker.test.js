@@ -38,6 +38,21 @@ const key = (el, k, extra = {}) => {
     return ev;
 };
 
+describe('DatePicker — weekday headers', () => {
+    it('narrow names when a short one overflows its column; full name kept for AT', () => {
+        const p = make({ locale: 'en-US' });
+        const ths = [...p.element.querySelectorAll('th')];
+        // jsdom has no layout: nothing overflows.
+        expect(p.fitWeekdayHeaders()).toBe(false);
+        expect(ths[0].textContent).toBe('Sun');
+        Object.defineProperty(ths[3], 'scrollWidth', { configurable: true, get: () => 39 });
+        Object.defineProperty(ths[3], 'clientWidth', { configurable: true, get: () => 35 });
+        expect(p.fitWeekdayHeaders()).toBe(true);
+        expect(ths.map((th) => th.textContent)).toEqual(['S', 'M', 'T', 'W', 'T', 'F', 'S']);
+        expect(ths[0].getAttribute('abbr')).toBe('Sunday');
+    });
+});
+
 describe('DatePicker — day grid', () => {
     it('renders a 6×7 grid with locale weekday headers from the week start', () => {
         const p = make({ weekStart: 1 });
@@ -116,17 +131,54 @@ describe('DatePicker — busy-day dots', () => {
     it('paints without waiting for markers, and ignores a stale answer after paging', async () => {
         const resolvers = [];
         const loadMarkers = vi.fn(() => new Promise((r) => resolvers.push(r)));
-        const p = make({ loadMarkers });
+        const p = make({ loadMarkers, markerDebounceMs: 0 });
         expect(dayBtn(p, '2026-11-05')).not.toBeNull(); // painted already
         p.element.querySelector('.kdp-next').click(); // → December
-        expect(loadMarkers).toHaveBeenCalledTimes(2);
-        // November's answer arrives late: must not paint into December.
+        // One lookup at a time: December waits for November's to land.
+        expect(loadMarkers).toHaveBeenCalledTimes(1);
+        // November's answer arrives late: must not paint into December…
         resolvers[0](normalizeMarkers({ days: { '2026-12-01': 9 } }, '2026-11-01', '2026-12-13'));
         await flush();
         expect(dayBtn(p, '2026-12-01').classList.contains('has-events')).toBe(false);
+        // …and December is asked for as soon as it does.
+        expect(loadMarkers).toHaveBeenCalledTimes(2);
+        expect(loadMarkers).toHaveBeenLastCalledWith('2026-11-29', '2027-01-10');
         resolvers[1](normalizeMarkers({ days: { '2026-12-01': 1 } }, '2026-11-29', '2027-01-10'));
         await flush();
         expect(dayBtn(p, '2026-12-01').classList.contains('has-events')).toBe(true);
+    });
+
+    it('debounces paging: only the month the user stops on is looked up', async () => {
+        vi.useFakeTimers();
+        try {
+            const loadMarkers = vi.fn(async () => ({ status: 'ok', days: new Map() }));
+            const p = make({ loadMarkers, markerDebounceMs: 200 });
+            expect(loadMarkers).toHaveBeenCalledTimes(1); // the first range: at once
+            await vi.advanceTimersByTimeAsync(0);
+            for (let i = 0; i < 6; i++) {
+                p.element.querySelector('.kdp-next').click();
+                await vi.advanceTimersByTimeAsync(100);
+            }
+            expect(loadMarkers).toHaveBeenCalledTimes(1);
+            expect(p.element.querySelector('table').getAttribute('aria-busy')).toBe('true');
+            await vi.advanceTimersByTimeAsync(200);
+            expect(loadMarkers).toHaveBeenCalledTimes(2);
+            expect(loadMarkers).toHaveBeenLastCalledWith('2027-04-25', '2027-06-06'); // May 2027
+            expect(p.element.querySelector('table').hasAttribute('aria-busy')).toBe(false);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('a cached range paints at once, with no lookup and no debounce', () => {
+        const cached = { status: 'ok', days: new Map([['2026-12-02', { count: 1, colors: [] }]]) };
+        const loadMarkers = vi.fn(async () => ({ status: 'ok', days: new Map() }));
+        const peekMarkers = vi.fn((start) => (start === '2026-11-29' ? cached : null));
+        const p = make({ loadMarkers, peekMarkers, markerDebounceMs: 10_000 });
+        expect(loadMarkers).toHaveBeenCalledTimes(1); // November: not cached
+        p.element.querySelector('.kdp-next').click(); // December: cached
+        expect(dayBtn(p, '2026-12-02').classList.contains('has-events')).toBe(true);
+        expect(loadMarkers).toHaveBeenCalledTimes(1);
     });
 
     it('shows the permission hint, and nothing for plain errors', async () => {
@@ -145,6 +197,12 @@ describe('DatePicker — busy-day dots', () => {
         const p = make({ loadMarkers: async () => ({ status: 'no_provider', days: new Map() }) });
         await flush();
         expect(p.element.querySelector('.kdp-hint').textContent).toBe('shared.date_picker.hint.no_provider');
+    });
+
+    it('shows the update hint for an outdated provider', async () => {
+        const p = make({ loadMarkers: async () => ({ status: 'provider_outdated', days: new Map() }) });
+        await flush();
+        expect(p.element.querySelector('.kdp-hint').textContent).toBe('shared.date_picker.hint.update_provider');
     });
 });
 
@@ -269,6 +327,36 @@ describe('DatePicker — keyboard', () => {
         expect(p.element.querySelector('.kdp-title').textContent).toBe('2027');
         key(document.activeElement, 'ArrowLeft');
         expect(document.activeElement.dataset.month).toBe('0');
+    });
+
+    it('a press on the weekday row, a cell gap or the footer keeps focus on the grid', () => {
+        const p = make();
+        p.focus();
+        const before = document.activeElement;
+        for (const el of [
+            p.element.querySelector('th'),
+            p.element.querySelector('td'),
+            p.element.querySelector('.kdp-footer'),
+            p.element,
+        ]) {
+            const md = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+            el.dispatchEvent(md);
+            expect(md.defaultPrevented).toBe(true);
+        }
+        expect(document.activeElement).toBe(before);
+        // A day itself may take focus (it's the click target).
+        const md = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+        dayBtn(p, '2026-11-10').dispatchEvent(md);
+        expect(md.defaultPrevented).toBe(false);
+    });
+
+    it('a press inside pulls focus back in if it had left the picker', () => {
+        const p = make();
+        document.body.focus();
+        p.element.querySelector('.kdp-footer').dispatchEvent(
+            new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+        );
+        expect(document.activeElement.dataset.date).toBe('2026-11-04');
     });
 
     it('keeps focus on a grid cell when chrome buttons are clicked', () => {

@@ -147,6 +147,25 @@ export const InputMethods = {
     },
 
     async handleKeyDown(event) {
+        // Alt+↓ / ⌥↓ opens the month calendar (the WAI-ARIA date-picker key).
+        // Its openers can't be reached with Tab — Tab cycles suggestions
+        // here — so this is the keyboard path to them. Declined (input has
+        // text, no dated row highlighted) it falls through to the textarea.
+        if (
+            event.key === 'ArrowDown' &&
+            event.altKey &&
+            !event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.isComposing
+        ) {
+            const rows = this.elements.appSuggestions?.querySelectorAll('.app-suggestion-item');
+            const selectedRow = this.selectedIndex >= 0 ? rows?.[this.selectedIndex] || null : null;
+            if (this.calendarPicker?.openFromKeyboard({ selectedRow })) {
+                event.preventDefault();
+                return;
+            }
+        }
         if (event.key === 'Tab') {
             event.preventDefault();
             // Cycle through suggestions on repeated Tab presses

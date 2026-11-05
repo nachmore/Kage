@@ -9352,5 +9352,17 @@
     "description": "Tooltip on a date in an extension's row or bar that opens the calendar",
     "_machine_translated": true,
     "_source_hash": "078da0bb606f6e74"
+  },
+  "settings.hotkey.shortcut.open_calendar.action": {
+    "message": "کیلنڈر کھولیں",
+    "description": "Shortcut reference — Alt+Down (⌥↓ on macOS): opens the month-calendar date picker from the launcher",
+    "_machine_translated": true,
+    "_source_hash": "5318a14197d77df3"
+  },
+  "shared.date_picker.hint.update_provider": {
+    "message": "اپنی میٹنگز یہاں دیکھنے کے لیے Calendar ایکسٹینشن اپ ڈیٹ کریں۔",
+    "description": "Date-picker footer hint when the installed Calendar extension is too old to support the month calendar",
+    "_machine_translated": true,
+    "_source_hash": "be6573cadb5adc4c"
   }
 }

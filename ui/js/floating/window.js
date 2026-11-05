@@ -203,19 +203,26 @@ export class WindowManager {
     }
 
     /**
-     * Physical-px height the visible suggestions dropdown contributes (0 when
-     * hidden). Callers add this to `userSetHeight` so the transient typeahead
-     * list expands/collapses the window on top of the user's chosen size, and
-     * the resize handle subtracts it when capturing a manual resize so the
-     * stored budget stays dropdown-free.
+     * Physical-px height the transient rows contribute: the visible
+     * suggestions dropdown plus an open month-calendar popup row
+     * (calendar-picker.js; 0 for whatever isn't showing). Callers add this to
+     * `userSetHeight` so transient UI expands/collapses the window on top of
+     * the user's chosen size instead of being clipped by it, and the resize
+     * handle subtracts it when capturing a manual resize so the stored budget
+     * stays free of it. While the popup sits over the result list the list
+     * is display:none, so it measures 0 and only the popup counts.
      *
      * @param {number} scale - device pixel ratio
-     * @returns {number} physical-px dropdown height
+     * @returns {number} physical-px transient height
      */
     _suggestionsPhys(scale) {
+        let logical = 0;
         const el = document.getElementById('appSuggestions');
-        if (!el?.classList.contains('visible')) return 0;
-        return Math.round(this._measureFlow(el) * scale);
+        if (el?.classList.contains('visible')) logical += this._measureFlow(el);
+        for (const row of document.querySelectorAll('.speech-bubble > .kage-date-popover-row')) {
+            logical += this._measureFlow(row);
+        }
+        return Math.round(logical * scale);
     }
 
     _measureFlow(el) {

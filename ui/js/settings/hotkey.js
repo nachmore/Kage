@@ -104,6 +104,11 @@ export class HotkeySettingsModule extends SettingsModule {
                 t('settings.hotkey.scope.launcher')
             ) +
             this.shortcutRow(
+                platformKeyLabel('Alt+↓'),
+                t('settings.hotkey.shortcut.open_calendar.action'),
+                t('settings.hotkey.scope.launcher')
+            ) +
+            this.shortcutRow(
                 platformKeyLabel('Escape'),
                 t('settings.hotkey.shortcut.escape.action'),
                 t('settings.hotkey.scope.launcher')

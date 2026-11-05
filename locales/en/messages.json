@@ -797,6 +797,10 @@
     "message": "Send to agent (bypass suggestions)",
     "description": "Shortcut reference — Ctrl+Enter"
   },
+  "settings.hotkey.shortcut.open_calendar.action": {
+    "message": "Open the calendar",
+    "description": "Shortcut reference — Alt+Down (⌥↓ on macOS): opens the month-calendar date picker from the launcher"
+  },
   "settings.hotkey.shortcut.escape.action": {
     "message": "Stop generating / Hide window",
     "description": "Shortcut reference — Escape"
@@ -4360,6 +4364,10 @@
   "shared.date_picker.hint.no_provider": {
     "message": "Turn on the Calendar extension to see your meetings here.",
     "description": "Calendar popup footer when no extension provides calendar data"
+  },
+  "shared.date_picker.hint.update_provider": {
+    "message": "Update the Calendar extension to see your meetings here.",
+    "description": "Date-picker footer hint when the installed Calendar extension is too old to support the month calendar"
   },
   "shared.date_picker.open_for": {
     "message": "{date} — open calendar",

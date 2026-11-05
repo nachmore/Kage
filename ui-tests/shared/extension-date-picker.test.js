@@ -170,6 +170,21 @@ describe('_wireDateAffordances', () => {
         expect(handler).toHaveBeenCalledTimes(2);
     });
 
+    it('reports each newly wired opener, so an open popup can follow a re-render', () => {
+        const mgr = manager([{ id: 'calendar', sandbox: stubSandbox() }]);
+        const onWired = vi.fn();
+        mgr.setDateAffordanceHandler(vi.fn(), { onWired });
+        const bar = rendered('<span><button data-kage-date="2026-11-05">Tomorrow</button></span>');
+        mgr._wireDateAffordances('calendar', bar);
+        const btn = bar.querySelector('button');
+        expect(onWired).toHaveBeenCalledWith(btn, { date: '2026-11-05', extensionId: 'calendar' });
+        mgr._wireDateAffordances('calendar', bar); // already wired: not reported again
+        expect(onWired).toHaveBeenCalledTimes(1);
+        // Unwrapped (ineligible) affordances aren't openers, so aren't reported.
+        mgr._wireDateAffordances('nobody', rendered('<b><button data-kage-date="2026-11-05">x</button></b>'));
+        expect(onWired).toHaveBeenCalledTimes(1);
+    });
+
     it.each([
         ['no calendar grant', [{ id: 'x', capabilities: ['urls'], sandbox: stubSandbox() }], true],
         ['not a date provider', [{ id: 'x', sandbox: stubSandbox({}, { hasDateProvider: false }) }], true],
@@ -193,6 +208,24 @@ describe('date provider lookups', () => {
         ]);
         expect(mgr.getDateProvider()).toBe('calendar');
         expect(manager([{ id: 'a', capabilities: [], sandbox: stubSandbox() }]).getDateProvider()).toBeNull();
+    });
+
+    it('tells an outdated calendar extension apart from none at all', () => {
+        const old = stubSandbox({}, { hasDateProvider: false, hostFeatures: [HOST_FEATURE_DATE_PICKER] });
+        expect(manager([{ id: 'calendar', sandbox: old }]).missingDateProviderStatus()).toBe(
+            'provider_outdated'
+        );
+        // Disabled, no calendar grant, not offered the picker, no search
+        // provider: none of those is "outdated".
+        for (const ext of [
+            { id: 'calendar', sandbox: old, enabled: false },
+            { id: 'calendar', capabilities: ['urls'], sandbox: old },
+            { id: 'calendar', sandbox: stubSandbox({}, { hasDateProvider: false, hostFeatures: [] }) },
+            { id: 'calendar', sandbox: { ...old, hasSearch: false } },
+        ]) {
+            expect(manager([ext]).missingDateProviderStatus()).toBe('no_provider');
+        }
+        expect(manager([]).missingDateProviderStatus()).toBe('no_provider');
     });
 
     it('fetchDateMarkers validates the payload and never throws', async () => {
