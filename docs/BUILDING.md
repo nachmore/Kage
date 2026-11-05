@@ -2,6 +2,16 @@
 
 Everything you need to build, test and release Kage from source. For using Kage, see the [README](../README.md).
 
+## Quick start
+
+Once the [prerequisites](#prerequisites) are installed, this builds and runs Kage in development mode from a fresh clone:
+
+```bash
+cargo install tauri-cli --version "^2" --locked
+cd ui-vendor && npm install && cd ..
+cargo tauri dev
+```
+
 ## Prerequisites
 
 All platforms:
@@ -86,7 +96,7 @@ Output per platform:
 - **Windows**: NSIS installer at `target/release/bundle/nsis/kage_<version>_x64-setup.exe`. MSI is disabled; NSIS is the only distributable.
 - **macOS**: `.app` bundle at `target/release/bundle/macos/Kage.app` and DMG at `target/release/bundle/dmg/Kage_<version>_<arch>.dmg`. The calendar helper is bundled inside `Kage.app/Contents/MacOS/` via Tauri's `externalBin` mechanism.
 
-For a universal-binary macOS release covering both Apple Silicon and Intel, either run `cargo tauri build --target universal-apple-darwin` (requires both toolchains installed) or build per-arch and merge with `lipo`.
+Published releases are built for Apple Silicon (`aarch64-apple-darwin`) only; Intel Mac builds were dropped on 2026-05-31 (see the build matrix in `.github/workflows/release.yml`). For a universal-binary macOS build of your own covering both Apple Silicon and Intel, either run `cargo tauri build --target universal-apple-darwin` (requires both toolchains installed) or build per-arch and merge with `lipo`.
 
 ## Common commands
 
