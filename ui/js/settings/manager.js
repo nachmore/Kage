@@ -5,6 +5,7 @@
 
 import { onConfigChange } from '../shared/config-cache.js';
 import { errLabel } from '../shared/error-message.js';
+import { resolveExtensionConfig } from '../shared/extension-config.js';
 import {
     applyManifestI18n,
     fetchExtensionLocaleViaInvoke,
@@ -31,8 +32,15 @@ import { registerSettingsActions, setSettingsManager } from './module-registry.j
 // the rest of SettingsManager treats it like any other module.
 
 export class SandboxedExtensionSettingsModule {
-    constructor({ extensionId, manifest, sandbox, rendered, capabilities }) {
+    /**
+     * @param {object} args
+     * @param {object} [args.sandboxConfig] - the config the settings sandbox
+     *   was booted with, so load() only pushes an update when it changed
+     */
+    constructor({ extensionId, manifest, sandbox, rendered, capabilities, sandboxConfig }) {
         this._extensionId = extensionId;
+        // Its `config` block is the source of every default (extension-config.js).
+        this._manifest = manifest;
         this._extensionVersion = manifest.version || '';
         this._capabilities = capabilities;
         this._legacyPermissions = false; // enforced: no legacy path in sandbox mode
@@ -42,6 +50,7 @@ export class SandboxedExtensionSettingsModule {
         this.title = manifest.name || extensionId;
         this.icon = manifest.icon || '📦';
         this.description = manifest.description || '';
+        this._sandboxConfigJson = sandboxConfig ? JSON.stringify(sandboxConfig) : null;
     }
 
     renderContent() {
@@ -56,14 +65,42 @@ export class SandboxedExtensionSettingsModule {
         return this.renderContent();
     }
 
+    /**
+     * Show the effective config: the same values the extension runs with
+     * (manifest defaults overlaid with saved values, plus the host's
+     * `enabled`), and hand them to the settings provider too so its
+     * `context.config` matches what's on screen.
+     */
     load(config) {
-        const stored = config.extensions?.[this._extensionId] || {};
-        this._rendered.load(stored);
+        const effective = resolveExtensionConfig(config, this._extensionId, this._manifest);
+        this._rendered.load(effective);
+        this._pushSandboxConfig(effective);
     }
 
+    /**
+     * Fold this page into config.extensions[id] (`config` is fresh from
+     * get_config). Keys this page has no control for are kept, values equal
+     * to the manifest default are dropped, and an extension left with no
+     * overrides has no entry at all.
+     */
     save(config) {
         if (!config.extensions) config.extensions = {};
-        config.extensions[this._extensionId] = this._rendered.save();
+        const next = this._rendered.save(config.extensions[this._extensionId]);
+        if (Object.keys(next).length > 0) config.extensions[this._extensionId] = next;
+        else delete config.extensions[this._extensionId];
+    }
+
+    /** The header's Disable/Enable button changed the (unsaved) on/off state. */
+    setHostEnabled(enabled) {
+        this._rendered.setHostEnabled?.(enabled);
+    }
+
+    _pushSandboxConfig(effective) {
+        const json = JSON.stringify(effective);
+        if (json === this._sandboxConfigJson) return;
+        this._sandboxConfigJson = json;
+        // Best-effort: updateConfig logs its own failures.
+        this._sandbox?.updateConfig?.(effective);
     }
 
     async validate() {
@@ -109,8 +146,9 @@ export async function buildSandboxedSettingsModule({
         ? await fetchSharedSourcesViaInvoke(invoke, manifest.id, sources)
         : undefined;
 
-    // Extension config values the provider should see.
-    const extConfig = currentConfig?.extensions?.[manifest.id] || {};
+    // The provider's context.config: the same effective config the runtime
+    // hands the extension's other providers.
+    const extConfig = resolveExtensionConfig(currentConfig, manifest.id, manifest);
 
     // Fetch the extension's _locales/ catalog and apply __MSG_*__ token
     // resolution to the manifest. Without this the section header,
@@ -156,6 +194,7 @@ export async function buildSandboxedSettingsModule({
         schema,
         container,
         sandbox,
+        manifest,
     });
 
     return new SandboxedExtensionSettingsModule({
@@ -164,6 +203,7 @@ export async function buildSandboxedSettingsModule({
         sandbox,
         rendered,
         capabilities,
+        sandboxConfig: extConfig,
     });
 }
 
@@ -774,6 +814,9 @@ export function registerManagerActions() {
             const nowEnabled = hiddenInput.value !== 'true';
             hiddenInput.value = nowEnabled ? 'true' : 'false';
             _updateExtToggleUI(extId, nowEnabled);
+            _getMgr()
+                ?.modules.find((m) => m._extensionId === extId)
+                ?.setHostEnabled?.(nowEnabled);
         },
         openStore: () => {
             if (window.__TAURI__?.core) {

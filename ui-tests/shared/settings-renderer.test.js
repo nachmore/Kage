@@ -549,7 +549,7 @@ describe('persisting values', () => {
 
     const controls = [
         { type: 'text', id: 'trigger', label: 'Trigger', default: 'sp' },
-        { type: 'checkbox', id: 'enabled', label: 'Enabled', default: true },
+        { type: 'checkbox', id: 'show_bar', label: 'Show bar', default: true },
         { type: 'text', id: '__setup_client_id', label: 'Client ID', default: 'from-extension' },
     ];
 
@@ -560,10 +560,10 @@ describe('persisting values', () => {
     it('never persists scratch (__) fields, but actions still receive them', async () => {
         const sandbox = stubSandbox({ runSettingsAction: () => ({}) });
         const inst = render('pv1', sandbox);
-        inst.load({ trigger: 'sp', enabled: true });
+        inst.load({ trigger: 'sp', show_bar: true });
         container.querySelector('#ext-ctrl-pv1-__setup_client_id').value = 'typed';
 
-        expect(inst.save()).toEqual({ trigger: 'sp', enabled: true });
+        expect(inst.save()).toEqual({ trigger: 'sp', show_bar: true });
         expect(inst.currentValues()).toMatchObject({ __setup_client_id: 'typed' });
 
         const btnSchema = { type: 'action', id: 'save_id', label: 'Save', action: 'save_id' };
@@ -583,9 +583,9 @@ describe('persisting values', () => {
 
     it('ignores scratch values an older host already wrote to config', () => {
         const inst = render('pv2');
-        inst.load({ trigger: 'x', enabled: false, __setup_client_id: 'stale' });
+        inst.load({ trigger: 'x', show_bar: false, __setup_client_id: 'stale' });
         expect(container.querySelector('#ext-ctrl-pv2-__setup_client_id').value).toBe('from-extension');
-        expect(inst.save()).toEqual({ trigger: 'x', enabled: false });
+        expect(inst.save()).toEqual({ trigger: 'x', show_bar: false });
     });
 
     it('saves what normalize() rewrote and keeps the keys it left out', async () => {
@@ -597,19 +597,19 @@ describe('persisting values', () => {
             }),
         });
         const inst = render('pv3', sandbox);
-        inst.load({ trigger: '  SP ', enabled: false });
+        inst.load({ trigger: '  SP ', show_bar: false });
 
         expect((await inst.validate()).valid).toBe(true);
         expect(container.querySelector('#ext-ctrl-pv3-trigger').value).toBe('sp');
-        // `enabled` is kept at its live value, not erased from config;
+        // `show_bar` is kept at its live value, not erased from config;
         // `injected` isn't a control; scratch is never saved.
-        expect(inst.save()).toEqual({ trigger: 'sp', enabled: false });
+        expect(inst.save()).toEqual({ trigger: 'sp', show_bar: false });
 
         // An edit after validate() is saved as-is.
-        const cb = container.querySelector('#ext-ctrl-pv3-enabled');
+        const cb = container.querySelector('#ext-ctrl-pv3-show_bar');
         cb.checked = true;
         cb.dispatchEvent(new Event('change'));
-        expect(inst.save()).toEqual({ trigger: 'sp', enabled: true });
+        expect(inst.save()).toEqual({ trigger: 'sp', show_bar: true });
     });
 
     it('a refresh carries in-progress scratch values across the re-render', async () => {
@@ -628,5 +628,176 @@ describe('persisting values', () => {
         await new Promise((r) => setTimeout(r, 0));
         expect(sandbox.calls.some((c) => c.method === 'getSettings')).toBe(true);
         expect(container.querySelector('#ext-ctrl-pv4-__setup_client_id').value).toBe('half-typed');
+    });
+});
+
+describe('manifest defaults', () => {
+    let container;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    const manifest = {
+        config: {
+            enabled: { type: 'boolean', default: true },
+            precision: { type: 'number', default: 2 },
+            trigger: { type: 'string', default: 'calc' },
+        },
+    };
+
+    function render(extensionId, controls, { logger, sandbox = stubSandbox() } = {}) {
+        return renderSchema({
+            extensionId,
+            container,
+            sandbox,
+            manifest,
+            logger: logger || { warn: vi.fn() },
+            schema: { sections: [{ controls }] },
+        });
+    }
+
+    it("uses the manifest default, not the control's, for a declared id", () => {
+        const inst = render('md1', [
+            { type: 'number', id: 'precision', label: 'P', default: 0 },
+            { type: 'text', id: 'trigger', label: 'T' }, // no control default at all
+        ]);
+        inst.load({});
+        expect(container.querySelector('#ext-ctrl-md1-precision').value).toBe('2');
+        expect(container.querySelector('#ext-ctrl-md1-trigger').value).toBe('calc');
+    });
+
+    it('an emptied number field falls back to the manifest default', () => {
+        const inst = render('md2', [{ type: 'number', id: 'precision', label: 'P', default: 0 }]);
+        inst.load({ precision: 5 });
+        container.querySelector('#ext-ctrl-md2-precision').value = '';
+        expect(inst.currentValues().precision).toBe(2);
+    });
+
+    it('keeps the control default for ids the manifest does not declare', () => {
+        const inst = render('md3', [
+            { type: 'text', id: 'legacy', label: 'L', default: 'own' },
+            { type: 'text', id: '__scratch', label: 'S', default: 'scratch' },
+        ]);
+        inst.load({});
+        expect(container.querySelector('#ext-ctrl-md3-legacy').value).toBe('own');
+        expect(container.querySelector('#ext-ctrl-md3-__scratch').value).toBe('scratch');
+    });
+
+    it('warns once per extension and id when a control default disagrees', async () => {
+        const warn = vi.fn();
+        const controls = [
+            { type: 'number', id: 'precision', label: 'P', default: 0 },
+            // Same value once shown: no warning.
+            { type: 'text', id: 'trigger', label: 'T', default: 'calc' },
+        ];
+        const sandbox = stubSandbox({ getSettings: () => ({ sections: [{ controls }] }) });
+        const inst = render('md4', controls, { logger: { warn }, sandbox });
+        await inst.refresh();
+        render('md4', controls, { logger: { warn } });
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toMatch(/md4.*precision.*0.*manifest config default 2/);
+        // A different extension with the same mismatch gets its own warning.
+        render('md4b', controls, { logger: { warn } });
+        expect(warn).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not modify the schema object the extension returned', () => {
+        const ctrl = { type: 'number', id: 'precision', label: 'P', default: 0 };
+        render('md5', [ctrl]);
+        expect(ctrl.default).toBe(0);
+    });
+
+    it('save() is sparse and keeps stored keys the page has no control for', () => {
+        const inst = render('md6', [
+            { type: 'number', id: 'precision', label: 'P', default: 0 },
+            { type: 'text', id: 'trigger', label: 'T', default: 'calc' },
+        ]);
+        const stored = { precision: 4, other_page: true, __stale: 'x' };
+        inst.load({ ...stored, trigger: 'calc' });
+        const t = container.querySelector('#ext-ctrl-md6-trigger');
+        t.value = '=';
+        t.dispatchEvent(new Event('input'));
+        expect(inst.save(stored)).toEqual({
+            precision: 4,
+            other_page: true,
+            __stale: 'x',
+            trigger: '=',
+        });
+
+        const p = container.querySelector('#ext-ctrl-md6-precision');
+        p.value = '2';
+        p.dispatchEvent(new Event('input'));
+        t.value = 'calc';
+        t.dispatchEvent(new Event('input'));
+        // Back to the defaults: none of this page's keys are stored.
+        expect(inst.save(stored)).toEqual({ other_page: true, __stale: 'x' });
+    });
+});
+
+describe('the enabled control', () => {
+    let container;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    const controls = [
+        { type: 'checkbox', id: 'enabled', label: 'Enable', default: true },
+        { type: 'text', id: 'trigger', label: 'Trigger', default: 'sp' },
+        { type: 'text', id: 'only_when_on', label: 'X', showWhen: { id: 'enabled', equals: true } },
+    ];
+
+    function render(extensionId) {
+        return renderSchema({
+            extensionId,
+            container,
+            sandbox: stubSandbox(),
+            manifest: { config: { enabled: { type: 'boolean', default: true } } },
+            schema: { sections: [{ controls }] },
+        });
+    }
+
+    it('is never shown: the section header switch replaces it', () => {
+        const inst = render('en1');
+        inst.load({ enabled: true, trigger: 'sp' });
+        expect(container.querySelector('#ext-row-en1-enabled').style.display).toBe('none');
+        expect(container.querySelector('#ext-row-en1-trigger').style.display).toBe('');
+    });
+
+    it('holds the host state, which showWhen clauses follow', () => {
+        const inst = render('en2');
+        inst.load({ enabled: false, trigger: 'sp' });
+        const row = container.querySelector('#ext-row-en2-only_when_on');
+        expect(row.style.display).toBe('none');
+        expect(inst.currentValues().enabled).toBe(false);
+
+        inst.setHostEnabled(true);
+        expect(row.style.display).toBe('');
+        expect(container.querySelector('#ext-row-en2-enabled').style.display).toBe('none');
+        expect(inst.currentValues().enabled).toBe(true);
+    });
+
+    it('is never saved, and a stale saved value is removed', () => {
+        const inst = render('en3');
+        inst.load({ enabled: false, trigger: 'x' });
+        expect(inst.save({ enabled: false, trigger: 'x' })).toEqual({
+            trigger: 'x',
+            only_when_on: '',
+        });
+    });
+
+    it('setHostEnabled is a no-op for a page without one', () => {
+        const inst = renderSchema({
+            extensionId: 'en4',
+            container,
+            sandbox: stubSandbox(),
+            schema: { sections: [{ controls: [{ type: 'text', id: 'a', label: 'A' }] }] },
+        });
+        inst.load({});
+        expect(() => inst.setHostEnabled(false)).not.toThrow();
+        expect(inst.currentValues()).toEqual({ a: '' });
     });
 });

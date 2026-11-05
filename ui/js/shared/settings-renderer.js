@@ -9,8 +9,17 @@
  *
  * Used by ui/js/settings/manager.js to replace the old
  * `SettingsModule` extension-authored class.
+ *
+ * Defaults come from the manifest. When the manifest's `config` block
+ * declares a default for a control's id, the control shows the effective
+ * value (the manifest default unless the user saved something else) and its
+ * own `default` is ignored. Only controls for ids the manifest doesn't
+ * declare (scratch fields, legacy extensions) use their own `default`. A
+ * control with id `enabled` belongs to the host: it is never shown, holds
+ * the host's on/off state, and is never saved. See extension-config.js.
  */
 
+import { ENABLED_KEY, manifestConfigDefaults, mergeSettingsSave } from './extension-config.js';
 import {
     copyTextError,
     forEachValueControl,
@@ -28,6 +37,13 @@ import { t } from './i18n.js';
 const COPIED_STATUS_MS = 2000;
 
 /**
+ * `extensionId\0controlId` pairs already warned about a control default
+ * that disagrees with the manifest, so a page that re-renders (refresh,
+ * reload) warns once per control rather than on every render.
+ */
+const warnedDefaultMismatch = new Set();
+
+/**
  * Timeout for a settings action RPC. Far longer than the default 10s
  * sandbox RPC cap because settings actions legitimately block on the
  * *user* — the longest is Spotify's OAuth flow, whose loopback listener
@@ -40,7 +56,7 @@ const ACTION_RPC_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * Rendered settings instance. Produced by renderSchema().
- * Callers interact with it via `load(config)`, `save(config)`, and `validate()`
+ * Callers interact with it via `load(config)`, `save(stored)`, and `validate()`
  * to plug into the existing SettingsModule interface.
  */
 export class RenderedSettings {
@@ -50,14 +66,19 @@ export class RenderedSettings {
      * @param {object} args.schema
      * @param {HTMLElement} args.container - host div to render into
      * @param {object} args.sandbox - ExtensionSandbox instance (for action RPCs)
+     * @param {object} [args.manifest] - the extension manifest; its `config`
+     *   block supplies the defaults and the declared types used on save
      * @param {object} [args.logger] - optional { warn, error } logger
      */
-    constructor({ extensionId, schema, container, sandbox, logger }) {
+    constructor({ extensionId, schema, container, sandbox, manifest, logger }) {
         this.extensionId = extensionId;
-        this.schema = schema;
+        this.manifest = manifest || null;
+        /** Manifest-declared defaults, id → value. */
+        this.defaults = manifestConfigDefaults(this.manifest);
         this.container = container;
         this.sandbox = sandbox;
         this.log = logger || console;
+        this.schema = this._withManifestDefaults(schema);
         /** Current values map, id → value. */
         this.values = {};
         /** DOM nodes per control id, for updates. */
@@ -131,7 +152,7 @@ export class RenderedSettings {
         // Tear down old listeners before we replace the DOM.
         this.destroy();
 
-        this.schema = r.schema;
+        this.schema = this._withManifestDefaults(r.schema);
         this.values = {};
         this.render();
         this._applyValues(carried, { fromConfig: false });
@@ -145,9 +166,26 @@ export class RenderedSettings {
         }
     }
 
-    load(stored) {
-        // `stored` is the raw extension config object (config.extensions[id]).
-        this._applyValues(stored, { fromConfig: true });
+    /**
+     * Show `config`: the effective extension config (resolveExtensionConfig
+     * in extension-config.js), i.e. manifest defaults overlaid with saved
+     * values plus the host's `enabled`.
+     */
+    load(config) {
+        this._applyValues(config, { fromConfig: true });
+    }
+
+    /**
+     * Mirror the host's on/off state (the Settings header's Disable/Enable
+     * button) into a hidden `enabled` control, so `showWhen` clauses that
+     * reference it follow the header.
+     */
+    setHostEnabled(enabled) {
+        const ctrl = this._controlsById.get(ENABLED_KEY);
+        if (!isValueControl(ctrl)) return;
+        this.values[ENABLED_KEY] = coerceValue(ctrl, !!enabled);
+        this._writeToControl(ctrl, this.values[ENABLED_KEY]);
+        this._applyVisibility();
     }
 
     /**
@@ -178,20 +216,18 @@ export class RenderedSettings {
     }
 
     /**
-     * The values to persist to config.extensions[id]: every value
-     * control's live value except scratch (`__`) fields. validate() has
-     * already written normalize()'s rewrites into the controls; a key
-     * normalize() left out keeps its live value, because the result
-     * replaces the whole stored object and older extensions return only
-     * the keys they changed.
+     * The new config.extensions[id] after saving this page, given what is
+     * stored now (mergeSettingsSave in extension-config.js). Only this
+     * page's keys change. Values equal to the manifest default are left
+     * out, and scratch (`__`) and `enabled` values are never stored.
+     * validate() has already written normalize()'s rewrites into the
+     * controls. A key normalize() left out keeps its live value, because
+     * older extensions return only the keys they changed.
+     *
+     * @param {object} [stored] - config.extensions[id] before the save
      */
-    save() {
-        const live = this.currentValues();
-        const out = {};
-        forEachValueControl(this.schema, (ctrl) => {
-            if (!isScratchId(ctrl.id)) out[ctrl.id] = live[ctrl.id];
-        });
-        return out;
+    save(stored) {
+        return mergeSettingsSave(this.manifest, stored, this.currentValues());
     }
 
     /**
@@ -275,6 +311,45 @@ export class RenderedSettings {
     }
 
     // --- Rendering ---------------------------------------------------------
+
+    /**
+     * `schema` with each value control's `default` replaced by the manifest
+     * default for its id, if the manifest declares one. Every fallback in
+     * this file (an unsaved value, an emptied number field) reads
+     * `ctrl.default`, so they all use the manifest default. Warns once per
+     * control whose own default would show something different. That's
+     * harmless here, but older hosts show the control's default. Returns a
+     * copy and leaves the extension's object alone.
+     */
+    _withManifestDefaults(schema) {
+        if (!schema || !Array.isArray(schema.sections)) return schema;
+        const sections = schema.sections.map((section) => {
+            if (!section || !Array.isArray(section.controls)) return section;
+            const controls = section.controls.map((ctrl) => {
+                if (!isValueControl(ctrl) || !Object.hasOwn(this.defaults, ctrl.id)) return ctrl;
+                const manifestDefault = this.defaults[ctrl.id];
+                this._warnDefaultMismatch(ctrl, manifestDefault);
+                return { ...ctrl, default: manifestDefault };
+            });
+            return { ...section, controls };
+        });
+        return { ...schema, sections };
+    }
+
+    _warnDefaultMismatch(ctrl, manifestDefault) {
+        if (ctrl.default === undefined) return;
+        const shown = coerceValue(ctrl, ctrl.default);
+        const declared = coerceValue({ ...ctrl, default: manifestDefault }, manifestDefault);
+        if (shown === declared) return;
+        const key = `${this.extensionId}\0${ctrl.id}`;
+        if (warnedDefaultMismatch.has(key)) return;
+        warnedDefaultMismatch.add(key);
+        this.log.warn?.(
+            `[settings] extension '${this.extensionId}': control '${ctrl.id}' default ` +
+                `${JSON.stringify(ctrl.default)} differs from the manifest config default ` +
+                `${JSON.stringify(manifestDefault)}; using the manifest default`
+        );
+    }
 
     _renderSection(section) {
         const labelHtml = section.label
@@ -668,7 +743,10 @@ export class RenderedSettings {
                 const rowId = this._rowId(ctrl);
                 const row = this.container.querySelector(`#${cssEscapeId(rowId)}`);
                 if (!row) continue;
-                const show = isVisible(ctrl.showWhen, this.values);
+                // The host's own enable switch (the section header) replaces
+                // an extension's `enabled` checkbox.
+                const hostOwned = isValueControl(ctrl) && ctrl.id === ENABLED_KEY;
+                const show = !hostOwned && isVisible(ctrl.showWhen, this.values);
                 row.style.display = show ? '' : 'none';
             }
         }
@@ -760,6 +838,11 @@ function cssEscapeId(id) {
     }
     // Minimal fallback: backslash-escape anything not alphanumeric, _ or -.
     return String(id).replace(/[^a-zA-Z0-9_-]/g, (c) => '\\' + c);
+}
+
+/** A control that carries a value (not an action button or info block). */
+function isValueControl(ctrl) {
+    return !!ctrl?.id && ctrl.type !== 'info' && ctrl.type !== 'action';
 }
 
 function coerceValue(ctrl, v) {
