@@ -65,13 +65,6 @@ export class RenderedSettings {
         this._controlsById = new Map();
         /** Action control per button element id, for the click handler. */
         this._actionsByButtonId = new Map();
-        /**
-         * The last normalize() result and the live values it was written
-         * back as. save() persists it while the controls still show exactly
-         * that, so keys normalize() dropped aren't re-read from the DOM.
-         * @type {{values: object, snapshot: string} | null}
-         */
-        this._lastNormalized = null;
         /** Pending "Copied" status-clear timers. */
         this._statusTimers = new Set();
     }
@@ -140,7 +133,6 @@ export class RenderedSettings {
 
         this.schema = r.schema;
         this.values = {};
-        this._lastNormalized = null;
         this.render();
         this._applyValues(carried, { fromConfig: false });
 
@@ -155,7 +147,6 @@ export class RenderedSettings {
 
     load(stored) {
         // `stored` is the raw extension config object (config.extensions[id]).
-        this._lastNormalized = null;
         this._applyValues(stored, { fromConfig: true });
     }
 
@@ -187,25 +178,18 @@ export class RenderedSettings {
     }
 
     /**
-     * The values to persist to config.extensions[id]. Never includes
-     * scratch (`__`) fields. While the controls still show the last
-     * normalize() result, that result is what's saved — so a key normalize()
-     * dropped stays dropped instead of being re-read from its control.
-     * normalize() can drop or rewrite keys but not add new ones: only ids
-     * of value controls in the schema are ever saved.
+     * The values to persist to config.extensions[id]: every value
+     * control's live value except scratch (`__`) fields. validate() has
+     * already written normalize()'s rewrites into the controls; a key
+     * normalize() left out keeps its live value, because the result
+     * replaces the whole stored object and older extensions return only
+     * the keys they changed.
      */
     save() {
         const live = this.currentValues();
-        const n = this._lastNormalized;
-        const normalized = n && n.snapshot === JSON.stringify(live) ? n.values : null;
         const out = {};
         forEachValueControl(this.schema, (ctrl) => {
-            if (isScratchId(ctrl.id)) return;
-            if (!normalized) {
-                out[ctrl.id] = live[ctrl.id];
-            } else if (Object.hasOwn(normalized, ctrl.id)) {
-                out[ctrl.id] = coerceValue(ctrl, normalized[ctrl.id]);
-            }
+            if (!isScratchId(ctrl.id)) out[ctrl.id] = live[ctrl.id];
         });
         return out;
     }
@@ -216,13 +200,12 @@ export class RenderedSettings {
      */
     async validate() {
         let current = this.currentValues();
-        this._lastNormalized = null;
 
         // Optional normalization — extensions can return a canonicalized
         // values map (e.g. trimming whitespace, adding implicit trailing
-        // delimiters, dropping helper keys). If the sandbox returns an
-        // object with a `values` field, we adopt it and the next save()
-        // persists it (see save()).
+        // delimiters). If the sandbox returns an object with a `values`
+        // field, its keys are written back into the controls, which is
+        // where the next save() reads them from.
         if (this.sandbox) {
             try {
                 const normalized = await this.sandbox.call('normalizeSettings', {
@@ -242,12 +225,6 @@ export class RenderedSettings {
                         this.values[ctrl.id] = coerceValue(ctrl, current[ctrl.id]);
                         this._writeToControl(ctrl, this.values[ctrl.id]);
                     });
-                    // Remember what the controls now show, so save() can
-                    // tell whether this result is still current.
-                    this._lastNormalized = {
-                        values: { ...current },
-                        snapshot: JSON.stringify(this.currentValues()),
-                    };
                 }
             } catch {
                 // No normalize() implemented — proceed with raw values.
@@ -591,8 +568,11 @@ export class RenderedSettings {
         if (Object.hasOwn(ctrl.copy, 'value')) {
             text = ctrl.copy.value;
         } else {
+            // The raw field text, not _readFromControl(): that turns an
+            // empty number field into its default (or 0), which would copy
+            // a value the user can't see.
             const source = this._controlsById.get(ctrl.copy.from);
-            const raw = source ? this._readFromControl(source) : '';
+            const raw = source ? this._inputEl(source)?.value : '';
             text = raw == null ? '' : String(raw);
         }
         if (text === '') return '';

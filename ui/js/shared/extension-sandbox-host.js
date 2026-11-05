@@ -300,6 +300,13 @@ export class ExtensionSandbox {
         this.formatterOptsInStreaming = false;
         /** @type {string[]} ids of widgets the extension declared, post-init */
         this.widgetIds = [];
+
+        /**
+         * OAuth loopback listeners this extension started and hasn't
+         * finished with. destroy() cancels them (see there).
+         * @type {Set<string>}
+         */
+        this._oauthListeners = new Set();
     }
 
     /**
@@ -438,6 +445,13 @@ export class ExtensionSandbox {
         // A hint is a lease on a shared, visible thing — drop it immediately
         // rather than letting the mascot hold the pose until the TTL expires.
         this.clearMascotActivity();
+
+        // Nobody can redeem an OAuth callback once the extension is gone,
+        // so stop its listeners rather than let a later consent in the
+        // browser be told "You're authorized". (The in-flight await command
+        // isn't dropped with us, so the backend can't tell on its own.)
+        for (const listenerId of this._oauthListeners) this._cancelOauthListener(listenerId);
+        this._oauthListeners.clear();
 
         // Best-effort: ask the extension to clean up inside the sandbox
         // before we tear the iframe out from under it.
@@ -671,8 +685,13 @@ export class ExtensionSandbox {
 
         try {
             const result = await this._rawInvoke(command, forwardedArgs);
+            this._trackOauthListener(command, forwardedArgs, { result });
+            // Destroyed while the command ran: the port is gone.
+            if (this._destroyed) return;
             this._port.postMessage({ type: 'invoke-response', id, result });
         } catch (e) {
+            this._trackOauthListener(command, forwardedArgs, { error: e });
+            if (this._destroyed) return;
             // A Rust AppError arrives as `{ kind, key, message }`. Forward
             // kind + key so the extension can branch on them (e.g. an OAuth
             // `timeout` vs `cancelled`) instead of on the localised message.
@@ -681,6 +700,37 @@ export class ExtensionSandbox {
             if (typeof e?.key === 'string') response.errorKey = e.key;
             this._port.postMessage(response);
         }
+    }
+
+    /**
+     * Keep `_oauthListeners` current from a finished oauth_loopback_* invoke:
+     * a started listener is ours until an await settles it or a cancel
+     * stops it. A rejected second await (`already_awaited`) leaves the
+     * listener running, so it stays tracked.
+     */
+    _trackOauthListener(command, args, { result, error }) {
+        if (command === 'oauth_loopback_start') {
+            const listenerId = result?.listener_id;
+            if (typeof listenerId !== 'string' || !listenerId) return;
+            // Started after destroy(): the extension will never see the id.
+            if (this._destroyed) this._cancelOauthListener(listenerId);
+            else this._oauthListeners.add(listenerId);
+            return;
+        }
+        if (command !== 'oauth_loopback_await' && command !== 'oauth_loopback_cancel') return;
+        if (command === 'oauth_loopback_await' && error?.key === 'errors.oauth.already_awaited')
+            return;
+        const listenerId = args?.args?.listener_id;
+        if (typeof listenerId === 'string') this._oauthListeners.delete(listenerId);
+    }
+
+    /** Fire-and-forget oauth_loopback_cancel (idempotent on the backend). */
+    _cancelOauthListener(listenerId) {
+        try {
+            Promise.resolve(
+                this._rawInvoke('oauth_loopback_cancel', { args: { listener_id: listenerId } })
+            ).catch(() => {});
+        } catch {}
     }
 
     /**

@@ -8831,18 +8831,6 @@
     "_machine_translated": true,
     "_source_hash": "b3d8aa115c03cd7c"
   },
-  "errors.oauth.timed_out": {
-    "message": "Время ожидания OAuth истекло до получения обратного вызова",
-    "description": "An extension's OAuth sign-in listener gave up because the browser never redirected back in time (error kind: timeout)",
-    "_machine_translated": true,
-    "_source_hash": "ec59ab4ef0c99369"
-  },
-  "errors.oauth.cancelled": {
-    "message": "Прослушивание OAuth отменено до получения обратного вызова",
-    "description": "An extension's OAuth sign-in listener was stopped (the sign-in was cancelled) before the browser redirected back (error kind: cancelled)",
-    "_machine_translated": true,
-    "_source_hash": "77215e102e3729c5"
-  },
   "errors.oauth.unknown_listener": {
     "message": "Неизвестный ID прослушивателя (время истекло, он отменён или уже использован)",
     "description": "An extension waited on an OAuth sign-in listener that no longer exists",

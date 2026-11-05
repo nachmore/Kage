@@ -213,10 +213,14 @@ other than tab and newlines, and no bidi overrides, so a "Copy" button
 can't put terminal escape sequences, or text that displays differently,
 on the clipboard.
 
-`oauth` listeners bind `127.0.0.1` on an ephemeral port, serve one
-matching request, and close on timeout or `oauth_loopback_cancel` —
-including while an await is in flight — so a sign-in the user
-abandoned can't be completed later in the browser.
+`oauth` listeners bind `127.0.0.1` on an ephemeral port and serve one
+matching request. They close on timeout (at most 10 minutes), on
+`oauth_loopback_cancel` (including while an await is in flight), and
+when the sandbox that started them is torn down, which the host
+handles by cancelling them. So a sign-in the extension cancelled, or
+can no longer finish, can't be completed later in the browser. A
+webview that dies without tearing its sandboxes down (a crash or
+reload) leaves its listeners running until they time out.
 
 ## Content Security Policy (CSP)
 

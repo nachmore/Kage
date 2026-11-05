@@ -470,6 +470,25 @@ describe('copy actions', () => {
             .toBe('settings.ext_settings.action.copy_empty');
     });
 
+    it('says there is nothing to copy for an empty number field, not its default', async () => {
+        render('cp3n', [
+            { type: 'number', id: 'port', label: 'Port', default: 8080 },
+            { type: 'action', id: 'copy_port', label: 'Copy', copy: { from: 'port' } },
+        ]);
+        const input = container.querySelector('#ext-ctrl-cp3n-port');
+        expect(input.value).toBe('8080');
+        container.querySelector('#ext-ctrl-cp3n-copy_port').click();
+        expect(writeText).toHaveBeenLastCalledWith('8080');
+        await flush();
+
+        input.value = '';
+        container.querySelector('#ext-ctrl-cp3n-copy_port').click();
+        await flush();
+        expect(writeText).toHaveBeenCalledTimes(1);
+        expect(container.querySelector('#ext-ctrl-cp3n-copy_port__status').textContent)
+            .toBe('settings.ext_settings.action.copy_empty');
+    });
+
     it('refuses a typed value that is too long for the clipboard', async () => {
         const { inst } = render('cp4', [
             { type: 'text', id: 'src', label: 'Src', default: '' },
@@ -569,26 +588,28 @@ describe('persisting values', () => {
         expect(inst.save()).toEqual({ trigger: 'x', enabled: false });
     });
 
-    it('saves the normalize() result, including keys it dropped', async () => {
+    it('saves what normalize() rewrote and keeps the keys it left out', async () => {
         const sandbox = stubSandbox({
-            // Drops `enabled` and rewrites `trigger`; tries to add a key.
+            // Returns only the key it changed (older extensions do this),
+            // plus one that isn't a control.
             normalizeSettings: ({ values }) => ({
                 values: { trigger: values.trigger.trim().toLowerCase(), injected: 'nope' },
             }),
         });
         const inst = render('pv3', sandbox);
-        inst.load({ trigger: '  SP ', enabled: true });
+        inst.load({ trigger: '  SP ', enabled: false });
 
         expect((await inst.validate()).valid).toBe(true);
-        // `enabled` was dropped, `injected` isn't a control, scratch never saved.
-        expect(inst.save()).toEqual({ trigger: 'sp' });
-
-        // An edit after validate() makes the normalized result stale: save()
-        // goes back to the live values.
-        const cb = container.querySelector('#ext-ctrl-pv3-enabled');
-        cb.checked = false;
-        cb.dispatchEvent(new Event('change'));
+        expect(container.querySelector('#ext-ctrl-pv3-trigger').value).toBe('sp');
+        // `enabled` is kept at its live value, not erased from config;
+        // `injected` isn't a control; scratch is never saved.
         expect(inst.save()).toEqual({ trigger: 'sp', enabled: false });
+
+        // An edit after validate() is saved as-is.
+        const cb = container.querySelector('#ext-ctrl-pv3-enabled');
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change'));
+        expect(inst.save()).toEqual({ trigger: 'sp', enabled: true });
     });
 
     it('a refresh carries in-progress scratch values across the re-render', async () => {

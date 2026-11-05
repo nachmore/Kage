@@ -99,7 +99,7 @@ describe('ExtensionSandbox._handleInvoke', () => {
     it('forwards an AppError kind and key so the extension can branch on them', async () => {
         const rawInvoke = vi.fn().mockRejectedValue({
             kind: 'timeout',
-            key: 'errors.oauth.timed_out',
+            key: 'errors.passthrough',
             message: 'OAuth flow timed out before a callback arrived',
         });
         const { sb, sent } = makeSandbox({ capabilities: ['oauth'], rawInvoke });
@@ -115,7 +115,7 @@ describe('ExtensionSandbox._handleInvoke', () => {
             id: 7,
             error: 'OAuth flow timed out before a callback arrived',
             errorKind: 'timeout',
-            errorKey: 'errors.oauth.timed_out',
+            errorKey: 'errors.passthrough',
         });
     });
 
@@ -297,6 +297,77 @@ describe('ExtensionSandbox._handleInvoke', () => {
 
         expect(rawInvoke).not.toHaveBeenCalled();
         expect(sent[0].error).toMatch(/no 'url' argument/);
+    });
+});
+
+describe('ExtensionSandbox OAuth listener cleanup', () => {
+    const cancels = (rawInvoke) =>
+        rawInvoke.mock.calls
+            .filter(([cmd]) => cmd === 'oauth_loopback_cancel')
+            .map(([, args]) => args.args.listener_id);
+
+    it('cancels the listeners the extension left open when it is destroyed', async () => {
+        let nextId = 0;
+        const rawInvoke = vi.fn(async (cmd) => {
+            if (cmd === 'oauth_loopback_start') {
+                nextId += 1;
+                return { listener_id: `L${nextId}`, redirect_uri: 'http://127.0.0.1:1/cb', port: 1 };
+            }
+            if (cmd === 'oauth_loopback_await') return { params: { code: 'c' } };
+            return null;
+        });
+        const { sb } = makeSandbox({ capabilities: ['oauth'], rawInvoke });
+        const start = (id) =>
+            sb._handleInvoke({ id, command: 'oauth_loopback_start', args: { args: { redirect_path: '/cb' } } });
+
+        await start(1); // L1: still waiting for the browser
+        await start(2); // L2: awaited to completion
+        await start(3); // L3: cancelled by the extension
+        await sb._handleInvoke({ id: 4, command: 'oauth_loopback_await', args: { args: { listener_id: 'L2' } } });
+        await sb._handleInvoke({ id: 5, command: 'oauth_loopback_cancel', args: { args: { listener_id: 'L3' } } });
+        expect(cancels(rawInvoke)).toEqual(['L3']);
+
+        sb.destroy();
+        expect(cancels(rawInvoke)).toEqual(['L3', 'L1']);
+    });
+
+    it('keeps tracking a listener whose second await was rejected', async () => {
+        const rawInvoke = vi.fn(async (cmd) => {
+            if (cmd === 'oauth_loopback_start') return { listener_id: 'L1', redirect_uri: 'x', port: 1 };
+            if (cmd === 'oauth_loopback_await') {
+                throw { kind: 'internal', key: 'errors.oauth.already_awaited', message: 'busy' };
+            }
+            return null;
+        });
+        const { sb } = makeSandbox({ capabilities: ['oauth'], rawInvoke });
+        await sb._handleInvoke({ id: 1, command: 'oauth_loopback_start', args: { args: { redirect_path: '/cb' } } });
+        await sb._handleInvoke({ id: 2, command: 'oauth_loopback_await', args: { args: { listener_id: 'L1' } } });
+        sb.destroy();
+        expect(cancels(rawInvoke)).toEqual(['L1']);
+    });
+
+    it('drops the response of an await that settles after destroy, and cancels a late start', async () => {
+        let settleAwait;
+        let settleStart;
+        const rawInvoke = vi.fn((cmd) => {
+            if (cmd === 'oauth_loopback_await') return new Promise((r) => { settleAwait = r; });
+            if (cmd === 'oauth_loopback_start') return new Promise((r) => { settleStart = r; });
+            return Promise.resolve(null);
+        });
+        const { sb, sent } = makeSandbox({ capabilities: ['oauth'], rawInvoke });
+        const awaiting = sb._handleInvoke({ id: 1, command: 'oauth_loopback_await', args: { args: { listener_id: 'L0' } } });
+        const starting = sb._handleInvoke({ id: 2, command: 'oauth_loopback_start', args: { args: { redirect_path: '/cb' } } });
+
+        sb.destroy();
+        settleAwait({ params: {} });
+        settleStart({ listener_id: 'L9', redirect_uri: 'x', port: 1 });
+        await expect(awaiting).resolves.toBeUndefined();
+        await expect(starting).resolves.toBeUndefined();
+
+        // Only destroy()'s own cleanup RPC went out; no invoke-response.
+        expect(sent.filter((m) => m.type === 'invoke-response')).toEqual([]);
+        // The extension never learned L9's id, so the host stops it.
+        expect(cancels(rawInvoke)).toEqual(['L9']);
     });
 });
 

@@ -12,12 +12,12 @@ describe('sandbox runtime host API', () => {
         const err = invokeError({
             error: 'OAuth listener was cancelled before a callback arrived',
             errorKind: 'cancelled',
-            errorKey: 'errors.oauth.cancelled',
+            errorKey: 'errors.passthrough',
         });
         expect(err).toBeInstanceOf(Error);
         expect(err.message).toBe('OAuth listener was cancelled before a callback arrived');
         expect(err.kind).toBe('cancelled');
-        expect(err.key).toBe('errors.oauth.cancelled');
+        expect(err.key).toBe('errors.passthrough');
     });
 
     it('leaves kind / key unset for plain host errors', () => {

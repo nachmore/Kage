@@ -217,31 +217,36 @@ The `oauth` capability gives you a one-shot HTTP listener on
    pending await rejects with `cancelled`.
 
 The listener stops after the first request to `redirect_path` (other
-paths get a 404), on timeout, or on cancel. A result that arrives
-before you await is kept for a minute. `oauth_loopback_await` rejects
-with:
+paths get a 404), on timeout, on cancel, or when the sandbox that
+started it is torn down (your extension is disabled, updated, or
+uninstalled). Closing the Settings window only hides it, so a sign-in
+started there keeps running. A result that arrives before you await
+is kept for a minute. `oauth_loopback_await` rejects with:
 
 | `err.kind`  | `err.key`                       | Meaning |
 |-------------|---------------------------------|---------|
-| `timeout`   | `errors.oauth.timed_out`        | No redirect within `timeout_secs`. Often the provider showed its own error page (unknown client, unregistered redirect URI) and never redirected. |
-| `cancelled` | `errors.oauth.cancelled`        | `oauth_loopback_cancel` stopped the listener. |
+| `timeout`   | `errors.passthrough`            | No redirect within `timeout_secs`. Often the provider showed its own error page (unknown client, unregistered redirect URI) and never redirected. |
+| `cancelled` | `errors.passthrough`            | `oauth_loopback_cancel` stopped the listener. |
 | `internal`  | `errors.oauth.unknown_listener` | Unknown id: never started, already awaited to completion, cancelled before the await, or a result left unclaimed for over a minute. |
 | `internal`  | `errors.oauth.already_awaited`  | Another await on the same id is in flight. |
 | `internal`  | `errors.oauth.listener_failed`  | The socket failed while waiting. |
 
+Branch on `kind` for `timeout` and `cancelled`; their `key` is the
+generic `errors.passthrough`. Their `message` is fixed English in
+every language — "OAuth flow timed out before a callback arrived" and
+"OAuth listener was cancelled before a callback arrived" — because
+extensions written before kinds existed match on it.
+
 **Older hosts** (no `invoke.error_kind` in
 [`context.hostFeatures`](#feature-detection)) set no `kind`, report a
-timeout as the English text "OAuth listener was cancelled before a
-callback arrived", and can't cancel an await that's already in flight.
-Current hosts keep that English text for `cancelled` (and use "OAuth
-flow timed out before a callback arrived" for `timeout`), but
-translate both in other languages — so match text only when there's
-no `kind`:
+timeout as "OAuth listener was cancelled before a callback arrived",
+and can't cancel an await that's already in flight. To support them,
+match the text only when there's no `kind`:
 
 ```js
 function loopbackFailure(e) {
     if (e?.kind === 'timeout' || e?.kind === 'cancelled') return e.kind;
-    // Older hosts: no kind, always English, and a timeout looked like a cancel.
+    // Older hosts: no kind, and a timeout looked like a cancel.
     if (!e?.kind && /before a callback arrived/i.test(String(e?.message))) return 'timeout';
     return null;
 }
@@ -349,13 +354,16 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 ### Errors from `invoke()`
 
 A rejected `invoke()` gives you an `Error` whose `message` is
-human-readable text **in the user's language** — fine to log or show,
-never something to match on. When the backend returned a structured
-error, the `Error` also carries:
+human-readable text, usually **in the user's language** — fine to log
+or show, never something to match on. When the backend returned a
+structured error, the `Error` also carries:
 
 - `err.kind` — a stable category: `timeout`, `cancelled`,
   `connection_lost`, `rate_limited`, `internal`, …
-- `err.key` — the stable message key, e.g. `errors.oauth.timed_out`.
+- `err.key` — the stable message key, e.g.
+  `errors.oauth.unknown_listener`. Free-form backend errors share the
+  generic key `errors.passthrough`, so for those only `kind` tells
+  them apart.
 
 Branch on `kind` (or `key`). Errors the host raises itself (missing
 capability, forbidden command, rate limit) have no `kind`. Hosts
@@ -737,8 +745,8 @@ export default class MyExtSettingsProvider {
     /**
      * Optional normalization — canonicalize values (trim whitespace, add
      * implicit delimiters, etc.) before they are persisted. Return
-     * `{ values: <canonical map> }`; keys you leave out aren't saved.
-     * See "Scratch fields and what gets saved".
+     * `{ values: <canonical map> }`; keys you leave out keep their current
+     * value. See "Scratch fields and what gets saved".
      */
     normalize(values) {
         return { values: { ...values, trigger: values.trigger.trim() } };
@@ -857,11 +865,13 @@ When the user clicks Save, the host validates (`normalize()`, then
   at its `default`. Use them for inputs that feed an action — a "paste
   your Client ID" box whose action stores the value itself — rather than
   settings.
-- **What `normalize()` returns is what's saved**: a key it rewrites is
-  saved rewritten, and a key it leaves out isn't saved at all. It can't
-  add keys: only ids of value controls in your schema are ever saved. If
-  the user edits a field after validation, the live values are used
-  instead.
+- **`normalize()` rewrites values; it can't add or remove them.** Each
+  key it returns is written back into its control (so the user sees
+  it) and saved from there. A key it leaves out keeps the value its
+  control shows, so returning only the keys you changed is fine. Only
+  ids of value controls in your schema are ever saved, so it can't add
+  keys either. To keep a value out of your config, make it a scratch
+  field.
 - A `refresh` keeps whatever the user has typed, scratch fields
   included.
 

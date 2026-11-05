@@ -205,14 +205,6 @@
     "message": "Extension locale file is invalid ({language}): {reason}",
     "description": "Extension's _locales/<lang>/messages.json had a JSON parse error"
   },
-  "errors.oauth.timed_out": {
-    "message": "OAuth flow timed out before a callback arrived",
-    "description": "An extension's OAuth sign-in listener gave up because the browser never redirected back in time (error kind: timeout)"
-  },
-  "errors.oauth.cancelled": {
-    "message": "OAuth listener was cancelled before a callback arrived",
-    "description": "An extension's OAuth sign-in listener was stopped (the sign-in was cancelled) before the browser redirected back (error kind: cancelled)"
-  },
   "errors.oauth.unknown_listener": {
     "message": "Unknown listener id (timed out, cancelled, or already consumed)",
     "description": "An extension waited on an OAuth sign-in listener that no longer exists"

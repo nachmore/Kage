@@ -20,7 +20,7 @@ export const HOST_FEATURES = Object.freeze([
 
 /**
  * The Error an extension's `invoke()` promise rejects with. `message` is
- * the (localised) text; `kind` / `key` are set when the backend returned a
+ * the human-readable text; `kind` / `key` are set when the backend returned a
  * structured AppError, e.g. `kind: 'timeout'` vs `kind: 'cancelled'` from
  * `oauth_loopback_await`.
  *

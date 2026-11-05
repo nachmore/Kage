@@ -14,7 +14,10 @@
 //!    for the failure path.
 //! 4. Call [`oauth_loopback_cancel`] if the user abandons the flow. It works
 //!    whether or not an await is in flight: the listener stops (the port is
-//!    closed by the time cancel resolves) and a pending await rejects.
+//!    closed by the time cancel resolves) and a pending await rejects. The
+//!    extension host also cancels a sandbox's outstanding listeners when it
+//!    tears the sandbox down: Tauri doesn't drop an in-flight await command
+//!    when its caller goes away, so this side can't tell on its own.
 //!
 //! The listener is single-shot: as soon as the callback arrives, the timeout
 //! expires, or the flow is cancelled, the listener is dropped, the port is
@@ -22,19 +25,22 @@
 //! are fine — each gets its own port and id.
 //!
 //! Failures are distinct [`AppError`] kinds so callers can branch on `kind`
-//! rather than the (localised) message:
+//! rather than the message:
 //!
 //! | kind        | key                            | when                                    |
 //! |-------------|--------------------------------|-----------------------------------------|
-//! | `timeout`   | `errors.oauth.timed_out`       | no callback within the timeout          |
-//! | `cancelled` | `errors.oauth.cancelled`       | `oauth_loopback_cancel` stopped it      |
+//! | `timeout`   | `errors.passthrough`           | no callback within the timeout          |
+//! | `cancelled` | `errors.passthrough`           | `oauth_loopback_cancel` stopped it      |
 //! | `internal`  | `errors.oauth.unknown_listener`| unknown / finished / cancelled id       |
 //! | `internal`  | `errors.oauth.already_awaited` | a second await on the same id           |
 //! | `internal`  | `errors.oauth.listener_failed` | the socket failed while accepting       |
 //!
-//! The English text of `timed_out` and `cancelled` is the free-form message
-//! these errors carried before they had kinds, so extensions that match on
-//! it keep working in the English locale.
+//! `timeout` and `cancelled` deliberately aren't localised: their message is
+//! the fixed English text they carried before they had kinds
+//! ([`TIMED_OUT_MESSAGE`], [`CANCELLED_MESSAGE`]), in every locale. Shipped
+//! extensions (Spotify 0.4.0) tell a timeout apart by matching that text,
+//! and a translated message would send their users to a generic error
+//! instead of the timeout guidance. New code should branch on `kind`.
 //!
 //! Why we can't reuse `tauri-plugin-shell`'s `open_url` here: the redirect
 //! `code` lives in a query string the user's browser hits, not in our
@@ -154,12 +160,20 @@ impl Failure {
     }
 }
 
+/// Message of a `timeout` rejection. Fixed English in every locale: see the
+/// module docs. Extensions match on "callback arrived" / "timed out".
+const TIMED_OUT_MESSAGE: &str = "OAuth flow timed out before a callback arrived";
+
+/// Message of a `cancelled` rejection. Fixed English in every locale: see
+/// the module docs.
+const CANCELLED_MESSAGE: &str = "OAuth listener was cancelled before a callback arrived";
+
 fn cancelled_error() -> AppError {
-    AppError::keyed(ErrorKind::Cancelled, "errors.oauth.cancelled", &[])
+    AppError::raw(ErrorKind::Cancelled, CANCELLED_MESSAGE)
 }
 
 fn timed_out_error() -> AppError {
-    AppError::keyed(ErrorKind::Timeout, "errors.oauth.timed_out", &[])
+    AppError::raw(ErrorKind::Timeout, TIMED_OUT_MESSAGE)
 }
 
 /// What the accept loop reports through the oneshot.
@@ -597,7 +611,7 @@ mod tests {
 
         let err = join_err(waiter).await;
         assert!(matches!(err.kind, ErrorKind::Cancelled), "{:?}", err.kind);
-        assert_eq!(err.key, "errors.oauth.cancelled");
+        assert_eq!(err.to_string(), CANCELLED_MESSAGE);
         assert!(!registry().contains_key(&id), "the entry should be gone");
     }
 
@@ -661,7 +675,7 @@ mod tests {
             .expect("the await should resolve after the 1s timeout")
             .expect_err("the await should time out");
         assert!(matches!(err.kind, ErrorKind::Timeout), "{:?}", err.kind);
-        assert_eq!(err.key, "errors.oauth.timed_out");
+        assert_eq!(err.to_string(), TIMED_OUT_MESSAGE);
 
         // The port was released with the timeout.
         let response = send_callback(started.port, "/t/timeout?code=abc").await;
@@ -730,18 +744,30 @@ mod tests {
     }
 
     #[test]
-    fn english_messages_keep_the_legacy_text() {
-        // Extensions written before errors carried a kind matched on these
-        // strings ("…before a callback arrived" / "timed out"). Display is
-        // always English.
+    fn timeout_and_cancel_messages_stay_english_in_every_locale() {
+        // Extensions written before errors carried a kind tell a timeout
+        // apart by matching "…before a callback arrived" / "timed out" in
+        // the message, so it must not be translated. Rendered per locale
+        // through the catalog, the way serialisation does it.
         crate::i18n::init(Some("en"));
-        assert_eq!(
-            cancelled_error().to_string(),
-            "OAuth listener was cancelled before a callback arrived"
-        );
-        assert_eq!(
-            timed_out_error().to_string(),
-            "OAuth flow timed out before a callback arrived"
-        );
+        for (err, text) in [
+            (cancelled_error(), CANCELLED_MESSAGE),
+            (timed_out_error(), TIMED_OUT_MESSAGE),
+        ] {
+            let params: Vec<(&str, &str)> = err
+                .params
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            for lang in ["en", "de", "ja", "ar"] {
+                assert_eq!(
+                    crate::i18n::translate_in(lang, &err.key, &params),
+                    text,
+                    "{lang}"
+                );
+            }
+        }
+        assert!(CANCELLED_MESSAGE.contains("callback arrived"));
+        assert!(TIMED_OUT_MESSAGE.contains("timed out"));
     }
 }
