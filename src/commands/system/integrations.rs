@@ -179,6 +179,98 @@ pub async fn get_calendar_events_for_date(
     }
 }
 
+/// One day of the month view that has at least one calendar event.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CalendarBusyDay {
+    /// Local date, `YYYY-MM-DD`.
+    pub date: String,
+    /// Events touching that day (timed or all-day).
+    pub count: u32,
+}
+
+/// Which days in the local-date range `[start, end)` (`YYYY-MM-DD`, end
+/// exclusive, at most `MAX_RANGE_DAYS` wide) have calendar events, and how
+/// many. One call per month view backs the date picker's busy-day dots.
+///
+/// Only dates and counts cross the IPC boundary — never titles, attendees or
+/// locations — so the dots can't leak more than the user already sees by
+/// clicking a day. Capability-gated as `calendar` for extensions, like the
+/// other calendar reads. Errors carry stable keys so the picker can tell a
+/// missing OS permission (`errors.calendar.access_denied` → "grant access"
+/// hint) from a backend that's just failing (no dots, no hint).
+#[tauri::command]
+pub async fn get_calendar_busy_days(
+    start: String,
+    end: String,
+) -> Result<Vec<CalendarBusyDay>, AppError> {
+    use crate::os::calendar::{self, CalendarQueryError};
+    let (start_day, end_day) = calendar::parse_day_range(&start, &end).map_err(|e| {
+        warn!("[get_calendar_busy_days] rejected range {start:?}..{end:?}: {e:?}");
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.calendar.invalid_range",
+            &[("max", &calendar::MAX_RANGE_DAYS.to_string())],
+        )
+    })?;
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        calendar::get_events_in_range(start_day, end_day)
+    });
+    let events = match tokio::time::timeout(QUERY_TIMEOUT, task).await {
+        Ok(Ok(Ok(events))) => events,
+        Ok(Ok(Err(CalendarQueryError::PermissionDenied))) => {
+            return Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.calendar.access_denied",
+                &[],
+            ));
+        }
+        Ok(Ok(Err(CalendarQueryError::Failed(msg)))) => {
+            warn!("[get_calendar_busy_days] backend failed: {msg}");
+            return Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.calendar.query_failed",
+                &[],
+            ));
+        }
+        Ok(Err(join)) => {
+            warn!("[get_calendar_busy_days] task failed: {join}");
+            return Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.calendar.query_failed",
+                &[],
+            ));
+        }
+        Err(_) => {
+            warn!(
+                "[get_calendar_busy_days] timed out after {}s",
+                QUERY_TIMEOUT.as_secs()
+            );
+            return Err(AppError::keyed(
+                ErrorKind::Timeout,
+                "errors.calendar.timed_out",
+                &[("seconds", &QUERY_TIMEOUT.as_secs().to_string())],
+            ));
+        }
+    };
+    Ok(busy_days(&events, start_day, end_day, &chrono::Local))
+}
+
+/// Per-day counts → the wire list (ascending dates, busy days only).
+fn busy_days<Tz: chrono::TimeZone>(
+    events: &[crate::os::calendar::CalendarEvent],
+    start: chrono::NaiveDate,
+    end: chrono::NaiveDate,
+    tz: &Tz,
+) -> Vec<CalendarBusyDay> {
+    crate::os::calendar::count_events_per_day(events, start, end, tz)
+        .into_iter()
+        .map(|(date, count)| CalendarBusyDay {
+            date: date.format("%Y-%m-%d").to_string(),
+            count,
+        })
+        .collect()
+}
+
 /// Strict YYYY-MM-DD validator. The date is interpolated into a PowerShell
 /// command on Windows, so anything more permissive is an injection vector.
 /// Lifted out of the command body so it can be unit-tested.
@@ -578,6 +670,50 @@ mod tests {
         assert!(!is_valid_iso_date("abcd-05-27"));
         assert!(!is_valid_iso_date("2026-AB-27"));
         assert!(!is_valid_iso_date("2026-05-AB"));
+    }
+
+    #[test]
+    fn busy_days_serialise_as_sorted_date_count_pairs() {
+        let fake = |start_time: &str, duration_minutes: u32| crate::os::calendar::CalendarEvent {
+            id: "fake".into(),
+            subject: "Fake".into(),
+            location: String::new(),
+            organizer: String::new(),
+            start_time: start_time.into(),
+            duration_minutes,
+            all_day: false,
+            online_url: None,
+        };
+        let day = |s: &str| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
+        let events = [
+            fake("2026-11-20T10:00:00Z", 30),
+            fake("2026-11-02T10:00:00Z", 30),
+            fake("2026-11-02T14:00:00Z", 30),
+        ];
+        let utc = chrono::FixedOffset::east_opt(0).unwrap();
+        let out = busy_days(&events, day("2026-10-26"), day("2026-12-07"), &utc);
+        assert_eq!(
+            serde_json::to_value(&out).unwrap(),
+            serde_json::json!([
+                { "date": "2026-11-02", "count": 2 },
+                { "date": "2026-11-20", "count": 1 },
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn busy_days_rejects_bad_ranges_before_touching_the_calendar() {
+        for (start, end) in [
+            ("2026-11-01", "2026-11-01"),
+            ("2026-11-01", "2027-01-15"),
+            ("2026-11-01'", "2026-12-01"),
+            ("2026-02-30", "2026-03-10"),
+        ] {
+            let err = get_calendar_busy_days(start.into(), end.into())
+                .await
+                .expect_err("invalid range must be rejected");
+            assert_eq!(err.key, "errors.calendar.invalid_range", "{start}..{end}");
+        }
     }
 
     #[test]

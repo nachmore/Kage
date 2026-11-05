@@ -17,8 +17,9 @@
  *     follow-up.
  */
 
-import { ExtensionSandboxPool } from './extension-sandbox-host.js';
+import { ExtensionSandboxPool, hostFeaturesFor } from './extension-sandbox-host.js';
 import { applyManifestI18n, extensionDisplay } from './extension-manager/i18n.js';
+import { installExtensionDateMethods } from './extension-manager/dates.js';
 import { installExtensionSourceMethods } from './extension-manager/sources.js';
 import { installExtensionSearchMethods } from './extension-manager/search.js';
 import { installExtensionUiMethods } from './extension-manager/ui.js';
@@ -42,9 +43,15 @@ export class ExtensionManager {
     /**
      * @param {Function} invoke - the raw Tauri invoke (the host, not the
      *   extension, will use it after permission checks).
+     * @param {object} [opts]
+     * @param {string[]} [opts.hostFeatures] - host UI features this window
+     *   implements (e.g. `HOST_FEATURE_DATE_PICKER` in the floating
+     *   window). Each extension is offered the subset its capabilities
+     *   allow — see `hostFeaturesFor` in extension-sandbox-host.js.
      */
-    constructor(invoke) {
+    constructor(invoke, opts = {}) {
         this.invoke = invoke;
+        this._hostFeatures = Array.isArray(opts.hostFeatures) ? opts.hostFeatures.slice() : [];
         /** @type {Map<string, LoadedExtension>} */
         this.extensions = new Map();
         this._configCache = null;
@@ -147,6 +154,9 @@ export class ExtensionManager {
                     // sandbox host rejects any hint the extension didn't
                     // declare here.
                     mascotActivities: manifest.contributes?.mascotActivities,
+                    // Host UI features this window offers, narrowed to what
+                    // the granted capabilities allow (date picker ⇒ calendar).
+                    hostFeatures: hostFeaturesFor(this._hostFeatures, capabilities),
                 });
                 ext.sandbox.onReformatRequest = () => this.requestReformat(id);
             } catch (e) {
@@ -592,3 +602,4 @@ export class ExtensionManager {
 installExtensionSourceMethods(ExtensionManager);
 installExtensionSearchMethods(ExtensionManager);
 installExtensionUiMethods(ExtensionManager);
+installExtensionDateMethods(ExtensionManager);

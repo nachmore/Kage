@@ -311,7 +311,9 @@ body.clipboard-mode .floating-banner {
     font-family: "SF Mono", "Consolas", "Monaco", monospace;
     font-size: 18px;
     font-weight: 600;
-    color: var(--kage-text-primary, #e5e7eb);
+    /* --kage-text follows the theme; the old --kage-text-primary was never
+       defined, so light themes painted #e5e7eb on white. */
+    color: var(--kage-text, #e5e7eb);
     font-variant-numeric: tabular-nums;
     min-width: 60px;
 }
@@ -548,9 +550,41 @@ body.light-theme .app-mode-chip:hover {
     line-height: 1.3;
     opacity: 0.8;
 }
+/* The date is a button that opens the month calendar. The display around it
+   stays click-through (pointer-events: none) so the input keeps the rest. */
+button.datetime-date {
+    display: block;
+    margin: 0 0 0 auto;
+    padding: 0 3px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    font-family: inherit;
+    text-align: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+}
+.input-container.rtl button.datetime-date {
+    margin: 0 auto 0 0;
+}
+button.datetime-date:hover,
+button.datetime-date[aria-expanded="true"] {
+    opacity: 1;
+    color: var(--kage-accent);
+    background: var(--kage-accent-glow);
+}
+button.datetime-date:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 1px;
+}
 body.dark-theme .datetime-time,
 body.dark-theme .datetime-date {
     color: #938f9b;
+}
+body.dark-theme button.datetime-date:hover,
+body.dark-theme button.datetime-date[aria-expanded="true"] {
+    color: var(--kage-accent-light);
 }
 
 /* Stop generating button */

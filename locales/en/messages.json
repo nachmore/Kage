@@ -89,6 +89,22 @@
     "message": "Couldn't write to the clipboard — another app may be using it. Nothing was pasted; try again.",
     "description": "Clipboard write failed so a paste was skipped to avoid pasting stale content"
   },
+  "errors.calendar.invalid_range": {
+    "message": "Invalid calendar date range — use YYYY-MM-DD dates, end after start, at most {max} days apart.",
+    "description": "get_calendar_busy_days rejected its start/end arguments"
+  },
+  "errors.calendar.access_denied": {
+    "message": "Calendar access denied — allow Kage to use your calendar in System Settings.",
+    "description": "The OS refused calendar access when counting meetings per day"
+  },
+  "errors.calendar.query_failed": {
+    "message": "Couldn't read your calendar.",
+    "description": "The calendar backend failed while counting meetings per day"
+  },
+  "errors.calendar.timed_out": {
+    "message": "Calendar query timed out after {seconds}s.",
+    "description": "Counting meetings per day took too long"
+  },
   "errors.permission.dismiss_failed": {
     "message": "Could not dismiss permission prompt: {reason}",
     "description": "Pending tool-permission prompt failed to clear"
@@ -1036,6 +1052,10 @@
   "floating.offline_message": {
     "message": "No internet — local features still work",
     "description": "Banner shown when network connectivity is lost"
+  },
+  "floating.datetime.open_calendar_title": {
+    "message": "Show calendar",
+    "description": "Tooltip on the date shown in the launcher's input bar; clicking it opens a month calendar"
   },
   "permission.dialog.title": {
     "message": "Tool Permission Required",
@@ -4280,6 +4300,74 @@
   "shared.shell.chip_label": {
     "message": "shell",
     "description": "Label of the chip under an agent response that groups the shell commands the agent ran (like the agent's 'shell' tool name). Clicking it lists the commands. Keep short; lowercase is fine."
+  },
+  "shared.date_picker.dialog_label": {
+    "message": "Calendar",
+    "description": "Accessible name of the month-calendar popup"
+  },
+  "shared.date_picker.prev_month": {
+    "message": "Previous month",
+    "description": "Calendar popup: button that pages back one month"
+  },
+  "shared.date_picker.next_month": {
+    "message": "Next month",
+    "description": "Calendar popup: button that pages forward one month"
+  },
+  "shared.date_picker.prev_year": {
+    "message": "Previous year",
+    "description": "Calendar popup, month list: button that pages back one year"
+  },
+  "shared.date_picker.next_year": {
+    "message": "Next year",
+    "description": "Calendar popup, month list: button that pages forward one year"
+  },
+  "shared.date_picker.prev_decade": {
+    "message": "Previous years",
+    "description": "Calendar popup, year list: button that pages back ten years"
+  },
+  "shared.date_picker.next_decade": {
+    "message": "Later years",
+    "description": "Calendar popup, year list: button that pages forward ten years"
+  },
+  "shared.date_picker.title_days": {
+    "message": "{title} — choose a month",
+    "description": "Calendar popup: accessible name of the month/year title button in the day view; {title} is e.g. 'November 2026'"
+  },
+  "shared.date_picker.title_months": {
+    "message": "{title} — choose a year",
+    "description": "Calendar popup: accessible name of the title button in the month list; {title} is a year"
+  },
+  "shared.date_picker.title_years": {
+    "message": "{title} — back to days",
+    "description": "Calendar popup: accessible name of the title button in the year list; {title} is a range of years"
+  },
+  "shared.date_picker.today": {
+    "message": "Today",
+    "description": "Calendar popup: button that jumps back to the current month"
+  },
+  "shared.date_picker.today_label": {
+    "message": "Go to today, {date}",
+    "description": "Calendar popup: accessible name of the Today button; {date} is today's full date"
+  },
+  "shared.date_picker.day_meetings": {
+    "message": "{date}, {count, plural, =0 {no meetings} one {1 meeting} other {# meetings}}",
+    "description": "Calendar popup: accessible name of a day; {date} is the full date"
+  },
+  "shared.date_picker.hint.permission": {
+    "message": "Allow calendar access to see which days have meetings.",
+    "description": "Calendar popup footer when the OS denied calendar access"
+  },
+  "shared.date_picker.hint.no_provider": {
+    "message": "Turn on the Calendar extension to see your meetings here.",
+    "description": "Calendar popup footer when no extension provides calendar data"
+  },
+  "shared.date_picker.open_for": {
+    "message": "{date} — open calendar",
+    "description": "Accessible name of a date in an extension's row or bar that opens the calendar; {date} is the visible date text"
+  },
+  "shared.date_picker.open_title": {
+    "message": "Pick another day",
+    "description": "Tooltip on a date in an extension's row or bar that opens the calendar"
   },
   "shared.shell.chip_title": {
     "message": "{count, plural, one {# shell command} other {# shell commands}}",

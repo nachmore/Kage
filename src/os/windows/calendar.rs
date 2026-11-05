@@ -105,7 +105,7 @@ pub fn get_upcoming_events_impl(hours: u32) -> Result<Vec<CalendarEvent>, String
         "$start = Get-Date; $end = $start.AddHours({hours})",
         hours = hours,
     );
-    run_on_sta(move || query_outlook(&time_range, "upcoming"))
+    run_on_sta(move || query_outlook(&time_range, "upcoming", LIST_QUERY))
 }
 
 pub fn get_events_for_date_impl(date: &str) -> Result<Vec<CalendarEvent>, String> {
@@ -121,7 +121,23 @@ pub fn get_events_for_date_impl(date: &str) -> Result<Vec<CalendarEvent>, String
         "$start = [DateTime]::Parse(\"{date}\"); $end = $start.AddDays(1)",
         date = date,
     );
-    run_on_sta(move || query_outlook(&time_range, &format!("date {}", time_range)))
+    run_on_sta(move || query_outlook(&time_range, &format!("date {}", time_range), LIST_QUERY))
+}
+
+/// Events overlapping the local days `[start, end)`. The bounds are typed
+/// dates formatted here, so nothing caller-supplied reaches the PowerShell
+/// literal (the command layer has already validated the strings).
+pub fn get_events_in_range_impl(
+    start: chrono::NaiveDate,
+    end: chrono::NaiveDate,
+) -> Result<Vec<CalendarEvent>, crate::os::calendar::CalendarQueryError> {
+    let time_range = format!(
+        "$start = [DateTime]::Parse(\"{start}\"); $end = [DateTime]::Parse(\"{end}\")",
+        start = start.format("%Y-%m-%d"),
+        end = end.format("%Y-%m-%d"),
+    );
+    run_on_sta(move || query_outlook(&time_range, "range", RANGE_QUERY))
+        .map_err(crate::os::calendar::CalendarQueryError::Failed)
 }
 
 /// Strict YYYY-MM-DD check. No surrogate pairs, only ASCII digits and dashes,
@@ -159,10 +175,36 @@ where
         .unwrap_or_else(|_| Err("Calendar worker thread panicked".to_string()))
 }
 
+/// How much of each Outlook item a query reads.
+#[derive(Clone, Copy)]
+struct QueryShape {
+    /// Stop after this many items.
+    max_items: u32,
+    /// Read the (slow, large) item body. Only needed to sniff join URLs.
+    read_body: bool,
+}
+
+/// The launcher lists: a handful of events, join URLs included.
+const LIST_QUERY: QueryShape = QueryShape {
+    max_items: 50,
+    read_body: true,
+};
+
+/// The month view's busy-day dots: only start/duration/all-day matter, but a
+/// 6-week grid can hold far more than 50 events.
+const RANGE_QUERY: QueryShape = QueryShape {
+    max_items: 1000,
+    read_body: false,
+};
+
 /// Core Outlook COM query. `time_range_setup` is a PowerShell snippet that sets
 /// `$start` and `$end` variables. Everything else (COM init, filter, iteration,
 /// JSON output) is shared.
-fn query_outlook(time_range_setup: &str, label: &str) -> Result<Vec<CalendarEvent>, String> {
+fn query_outlook(
+    time_range_setup: &str,
+    label: &str,
+    shape: QueryShape,
+) -> Result<Vec<CalendarEvent>, String> {
     let ps_script = format!(
         r#"
 try {{
@@ -193,13 +235,16 @@ try {{
         return $s
     }}
     $jsonItems = @()
+    $readBody = ${read_body}
     foreach ($item in $restricted) {{
-        if ($jsonItems.Count -ge 50) {{ break }}
+        if ($jsonItems.Count -ge {max_items}) {{ break }}
         $body = ""
-        try {{
-            $body = [string]$item.Body
-            if ($body.Length -gt 4000) {{ $body = $body.Substring(0, 4000) }}
-        }} catch {{}}
+        if ($readBody) {{
+            try {{
+                $body = [string]$item.Body
+                if ($body.Length -gt 4000) {{ $body = $body.Substring(0, 4000) }}
+            }} catch {{}}
+        }}
         $ad = if ($item.AllDayEvent) {{ "true" }} else {{ "false" }}
         $j = '{{' + '"id":"' + (esc $item.EntryID) + '",'
         $j += '"subject":"' + (esc $item.Subject) + '",'
@@ -218,6 +263,8 @@ try {{
 }}
 "#,
         time_range = time_range_setup,
+        max_items = shape.max_items,
+        read_body = if shape.read_body { "true" } else { "false" },
     );
 
     let mut cmd = Command::new("powershell");

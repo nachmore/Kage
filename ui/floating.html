@@ -93,7 +93,8 @@
                 ></textarea>
                 <div class="datetime-display" id="datetimeDisplay" style="display:none">
                     <div class="datetime-time" id="datetimeTime"></div>
-                    <div class="datetime-date" id="datetimeDate"></div>
+                    <!-- A real button: opens the month calendar (calendar-picker.js). -->
+                    <button type="button" class="datetime-date" id="datetimeDate" aria-haspopup="dialog" data-i18n-title="floating.datetime.open_calendar_title" title="Show calendar"></button>
                 </div>
                 <button class="floating-stop-btn" id="floatingStopBtn" style="display:none" data-i18n-title="floating.stop_btn_title" title="Stop generating (Esc)">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>

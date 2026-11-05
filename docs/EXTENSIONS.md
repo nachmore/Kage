@@ -168,7 +168,7 @@ for users.
 | `window`        | 🪟  | Kage-owned window chrome: `resize_floating_window`, `set_floating_opacity`, `start_drag_window`, `save_window_position`, `save_chat_window_geometry`, `apply_chat_window_size`. |
 | `windows`       | 🧿  | Other apps' windows: `list_open_windows`, `get_window_icons`, `focus_open_window`, `get_process_name`, `get_source_window`, `get_app_icon`. |
 | `notifications` | 🔔  | `notify_frontend_ready`. |
-| `calendar`      | 📅  | `get_calendar_events`, `get_calendar_events_for_date`. |
+| `calendar`      | 📅  | `get_calendar_events`, `get_calendar_events_for_date`, `get_calendar_busy_days` (per-day counts). Also unlocks the host [date picker](#date-picker). |
 | `session`       | 💬  | `list_sessions`, `load_session`, `get_window_session`, `get_session_stream_snapshot`, `get_sessions_directory`. |
 | `agent`         | 🤖  | LLM communication: `send_message_streaming`, `cancel_generation`, `send_steering_message`, `extension_tool_response`, `open_chat_with_message`, `get_available_models`, `get_slash_commands`. |
 | `activity`      | 📊  | `start_activity_tracker`, `stop_activity_tracker`, `get_activity_report`, `is_activity_tracker_running`. |
@@ -322,6 +322,10 @@ the remaining gaps.
   see [Mascot activity hints](#mascot-activity-hints).
 - `context.formatter.requestReformat()` asks the host to re-run your
   message formatter — see [Progressive formatting](#progressive-formatting).
+- `context.hostFeatures` is a frozen array of host UI features this
+  window offers *your* extension (e.g. `'date-picker'`, only with the
+  `calendar` grant). It's `undefined` on hosts that predate it, which is
+  how you feature-detect — see [Date picker](#date-picker).
 - `context.log` writes to the main Kage log via the bridge; it's
   a structured logger (`log.info`, `log.warn`, etc.) not a
   `console.log` replacement. Regular `console.log` inside the
@@ -1174,7 +1178,9 @@ sanitizer before injection.
 - All `on*` event handler attributes (`onclick`, `onmouseover`, …).
 - The `id` attribute on any element (to prevent selector collisions
   with host-owned ids).
-- `data-*` attributes other than `data-ext-action`.
+- `data-*` attributes other than `data-ext-action` and (on a `<button>`,
+  with a real `YYYY-MM-DD` value) `data-kage-date` — see
+  [Date picker](#date-picker).
 - URLs using `javascript:`, `vbscript:`, `data:`, `file:`, `blob:`
   schemes. Only `http(s):`, `mailto:`, and in-page `#anchors` are
   allowed on `<a href>`. `<img src>` only allows `http(s):`.
@@ -1455,6 +1461,80 @@ Several extensions can hint at once. The mascot side owns the
 arbiter — it picks a single winner by its own priority rules and
 handles expiry. Your extension can't influence that beyond declaring
 its activity, and shouldn't assume its hint is the one being shown.
+
+## Date picker
+
+The floating window has a host-owned month calendar (prev/next month,
+month and year lists, Today, full keyboard support, busy-day dots). It
+opens from the date in the input bar, and an extension holding the
+**`calendar`** capability can open it from its own date labels and feed
+it data. The popup is host UI: your code never renders into it or sees
+its DOM. You take part through three narrow channels, available only
+when `context.hostFeatures` includes `'date-picker'`:
+
+```js
+const canPick = Array.isArray(context.hostFeatures)
+    && context.hostFeatures.includes('date-picker');
+```
+
+**1. Openers.** Mark a date label in your widget or result HTML as a
+button with an ISO day:
+
+```html
+<button type="button" data-kage-date="2026-11-26">Thu, Nov 26</button>
+```
+
+The host styles it, labels it for screen readers, and opens the
+calendar anchored to it on that day. The attribute survives
+sanitization only on a `<button>` with a real date; where your extension
+may not use the picker (no `calendar` grant, not a date provider, or a
+window without the popup) the button is unwrapped to plain text. On an
+older host (`hostFeatures` undefined) emit plain text yourself.
+
+**2. Busy-day dots.** The search provider's optional
+`getDateMarkers(start, end)` answers which days in `[start, end)`
+(ISO, end exclusive — one call per visible 6-week grid) have events:
+
+```js
+async getDateMarkers(start, end) {
+    try {
+        // [{ date: 'YYYY-MM-DD', count }] — counts only, never titles.
+        const days = await this.ctx.invoke('get_calendar_busy_days', { start, end });
+        return { status: 'ok', days };
+    } catch (e) {
+        if (e.key === 'errors.calendar.access_denied') return { status: 'permission_denied', days: [] };
+        return { status: 'error', days: [] };
+    }
+}
+```
+
+`days` may also be an object keyed by date, and each entry may carry up
+to three `colors` (`#rgb`/`#rrggbb` hex) for per-calendar dots. The host
+drops anything outside the range, clamps counts, ignores non-hex
+colours, and maps `status` (`ok` / `permission_denied` / `error`) to its
+OWN hint text — you can't put words in the popup. Answers are cached
+for a minute per range, so paging back and forth is free.
+`get_calendar_busy_days` takes at most 62 days and needs `calendar`.
+
+**3. Selection.** Implementing `onDateSelected(date)` on the search
+provider is what makes you a date provider. Return the launcher query
+that lists that day:
+
+```js
+onDateSelected(date) {
+    return { query: `cal ${date}` };
+}
+```
+
+The host fills the input with it and runs the search, so the day's
+results (or your empty state) render through your normal result rows.
+The query must be a single line that starts with one of **your own**
+registered keywords (`getKeywords`), or it's ignored. For a pick made
+from the input bar's date, the first enabled date provider answers.
+
+The calendar extension is the reference implementation
+(`Kage-Extensions/extensions/calendar/`: `dates.js`, `search.js`,
+`widget.js`).
 
 ## Theme Format
 

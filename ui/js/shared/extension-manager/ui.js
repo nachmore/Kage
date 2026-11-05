@@ -287,6 +287,8 @@ export function installExtensionUiMethods(ExtensionManager) {
                     }
                     controller.host.style.display = '';
                     controller.host.appendChild(frag);
+                    // Date labels the extension marked as date-picker openers.
+                    this._wireDateAffordances(controller.extensionId, controller.host);
 
                     // Wire declared action buttons. We enumerate all
                     // data-ext-action elements in the widget and match by
@@ -645,6 +647,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                     neutralizeLinks(container);
                     // Wire any declared extension actions in the new DOM.
                     this._wireExtActionsFor(id, container);
+                    this._wireDateAffordances(id, container);
                 }
             } catch (e) {
                 console.warn(`message formatter in '${id}' failed:`, e);

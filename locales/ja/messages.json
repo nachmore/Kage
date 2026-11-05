@@ -9220,5 +9220,137 @@
     "description": "Accessible name / tooltip of a tool chip (or the 'shell' chip) under an agent response while at least one of the calls it groups hasn't finished yet. {label} is the chip's own name, e.g. '3 calls to read' or '2 shell commands'.",
     "_machine_translated": true,
     "_source_hash": "8b6b3aaad5115edb"
+  },
+  "errors.calendar.invalid_range": {
+    "message": "カレンダーの日付範囲が無効です。YYYY-MM-DD 形式の日付を使用し、終了日を開始日より後にして、間隔を {max} 日以内にしてください。",
+    "description": "get_calendar_busy_days rejected its start/end arguments",
+    "_machine_translated": true,
+    "_source_hash": "f95188b58711eab0"
+  },
+  "errors.calendar.access_denied": {
+    "message": "カレンダーへのアクセスが拒否されました。システム設定で Kage にカレンダーの使用を許可してください。",
+    "description": "The OS refused calendar access when counting meetings per day",
+    "_machine_translated": true,
+    "_source_hash": "a5d1c395f94352b4"
+  },
+  "errors.calendar.query_failed": {
+    "message": "カレンダーを読み込めませんでした。",
+    "description": "The calendar backend failed while counting meetings per day",
+    "_machine_translated": true,
+    "_source_hash": "6040832b841bf05e"
+  },
+  "errors.calendar.timed_out": {
+    "message": "カレンダーの照会が {seconds} 秒後にタイムアウトしました。",
+    "description": "Counting meetings per day took too long",
+    "_machine_translated": true,
+    "_source_hash": "5d57cdfc093e9127"
+  },
+  "floating.datetime.open_calendar_title": {
+    "message": "カレンダーを表示",
+    "description": "Tooltip on the date shown in the launcher's input bar; clicking it opens a month calendar",
+    "_machine_translated": true,
+    "_source_hash": "428b6c23ad10149c"
+  },
+  "shared.date_picker.dialog_label": {
+    "message": "カレンダー",
+    "description": "Accessible name of the month-calendar popup",
+    "_machine_translated": true,
+    "_source_hash": "d2ddcea142da9cc3"
+  },
+  "shared.date_picker.prev_month": {
+    "message": "前の月",
+    "description": "Calendar popup: button that pages back one month",
+    "_machine_translated": true,
+    "_source_hash": "28ac5f13c15ca23e"
+  },
+  "shared.date_picker.next_month": {
+    "message": "次の月",
+    "description": "Calendar popup: button that pages forward one month",
+    "_machine_translated": true,
+    "_source_hash": "5d42513b196f0ecf"
+  },
+  "shared.date_picker.prev_year": {
+    "message": "前の年",
+    "description": "Calendar popup, month list: button that pages back one year",
+    "_machine_translated": true,
+    "_source_hash": "732d1176f63d9931"
+  },
+  "shared.date_picker.next_year": {
+    "message": "次の年",
+    "description": "Calendar popup, month list: button that pages forward one year",
+    "_machine_translated": true,
+    "_source_hash": "048639e8433af30e"
+  },
+  "shared.date_picker.prev_decade": {
+    "message": "以前の年",
+    "description": "Calendar popup, year list: button that pages back ten years",
+    "_machine_translated": true,
+    "_source_hash": "34b391dd67515192"
+  },
+  "shared.date_picker.next_decade": {
+    "message": "以降の年",
+    "description": "Calendar popup, year list: button that pages forward ten years",
+    "_machine_translated": true,
+    "_source_hash": "693138df87d89192"
+  },
+  "shared.date_picker.title_days": {
+    "message": "{title} — 月を選択",
+    "description": "Calendar popup: accessible name of the month/year title button in the day view; {title} is e.g. 'November 2026'",
+    "_machine_translated": true,
+    "_source_hash": "561134525ad963a1"
+  },
+  "shared.date_picker.title_months": {
+    "message": "{title} — 年を選択",
+    "description": "Calendar popup: accessible name of the title button in the month list; {title} is a year",
+    "_machine_translated": true,
+    "_source_hash": "0f23781bce02afa7"
+  },
+  "shared.date_picker.title_years": {
+    "message": "{title} — 日の表示に戻る",
+    "description": "Calendar popup: accessible name of the title button in the year list; {title} is a range of years",
+    "_machine_translated": true,
+    "_source_hash": "c578b1dbd508ba5a"
+  },
+  "shared.date_picker.today": {
+    "message": "今日",
+    "description": "Calendar popup: button that jumps back to the current month",
+    "_machine_translated": true,
+    "_source_hash": "c91a05e60a2ecf04"
+  },
+  "shared.date_picker.today_label": {
+    "message": "今日 ({date}) に移動",
+    "description": "Calendar popup: accessible name of the Today button; {date} is today's full date",
+    "_machine_translated": true,
+    "_source_hash": "f40df757f9ada186"
+  },
+  "shared.date_picker.day_meetings": {
+    "message": "{date}、{count, plural, =0 {会議なし} other {会議 # 件}}",
+    "description": "Calendar popup: accessible name of a day; {date} is the full date",
+    "_machine_translated": true,
+    "_source_hash": "8f65083ce3c252d8"
+  },
+  "shared.date_picker.hint.permission": {
+    "message": "会議のある日を表示するには、カレンダーへのアクセスを許可してください。",
+    "description": "Calendar popup footer when the OS denied calendar access",
+    "_machine_translated": true,
+    "_source_hash": "8c4eae59538f86f3"
+  },
+  "shared.date_picker.hint.no_provider": {
+    "message": "ここに会議を表示するには、カレンダー拡張機能をオンにしてください。",
+    "description": "Calendar popup footer when no extension provides calendar data",
+    "_machine_translated": true,
+    "_source_hash": "b71cce211cf8ba97"
+  },
+  "shared.date_picker.open_for": {
+    "message": "{date} — カレンダーを開く",
+    "description": "Accessible name of a date in an extension's row or bar that opens the calendar; {date} is the visible date text",
+    "_machine_translated": true,
+    "_source_hash": "8abbcb8266e12470"
+  },
+  "shared.date_picker.open_title": {
+    "message": "別の日を選択",
+    "description": "Tooltip on a date in an extension's row or bar that opens the calendar",
+    "_machine_translated": true,
+    "_source_hash": "078da0bb606f6e74"
   }
 }

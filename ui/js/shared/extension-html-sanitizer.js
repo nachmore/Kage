@@ -33,6 +33,8 @@
  * elements that look like interactive targets (button, a).
  */
 
+import { isValidIsoDate } from './month-grid.js';
+
 // --- Tag allow-lists --------------------------------------------------------
 
 const RICH_TAGS = new Set([
@@ -374,15 +376,23 @@ function processElement(el, opts) {
             continue;
         }
 
-        // data-ext-action is the only recognised extension-side hook;
-        // other data-* attributes are dropped so extensions can't
-        // quietly pass state through the DOM.
+        // data-ext-action and data-kage-date are the only recognised
+        // extension-side hooks; other data-* attributes are dropped so
+        // extensions can't quietly pass state through the DOM.
         if (name === 'data-ext-action') {
             // Keep only on interactive-looking elements so a click
             // listener makes sense.
             if (tag !== 'BUTTON' && tag !== 'A' && tag !== 'SPAN' && tag !== 'DIV') {
                 toRemove.push(attr.name);
             }
+            continue;
+        }
+        // Date-picker affordance (see extension-manager/dates.js): an inert
+        // ISO day on a <button>. Kept only when it's a real date — the
+        // capability check happens where it's wired, which unwraps it when
+        // the extension may not use the host date picker.
+        if (name === 'data-kage-date') {
+            if (tag !== 'BUTTON' || !isValidIsoDate(attr.value)) toRemove.push(attr.name);
             continue;
         }
         if (name.startsWith('data-')) {

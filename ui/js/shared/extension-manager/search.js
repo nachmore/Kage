@@ -198,6 +198,7 @@ export function installExtensionSearchMethods(ExtensionManager) {
                 element.classList.add(...cached.className.split(/\s+/).filter(Boolean));
             element.appendChild(frag);
             this._wireExtActionsFor(id, element);
+            this._wireDateAffordances(id, element);
             return true;
         },
 

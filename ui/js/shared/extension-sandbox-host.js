@@ -225,7 +225,51 @@ const IDENTITY_SCOPED_COMMANDS = Object.freeze({
  * @property {string[]} [mascotActivities] - the manifest's
  *   `contributes.mascotActivities`. An extension may only hint an activity it
  *   declared here; anything else is rejected host-side.
+ * @property {string[]} [hostFeatures] - host UI features this window offers
+ *   the extension, already filtered by {@link hostFeaturesFor}. Surfaced to
+ *   extension code as the frozen `context.hostFeatures` array so it can feature-
+ *   detect (older hosts send nothing → `undefined`).
  */
+
+// --- Host features ----------------------------------------------------------
+
+/**
+ * Host-rendered date picker. An extension holding the `calendar` capability
+ * may mark date labels in its widget / result HTML as
+ * `<button data-kage-date="YYYY-MM-DD">`; the host turns each into an opener
+ * for its own month-calendar popup (the extension never touches that DOM).
+ * Its search provider answers `getDateMarkers(start, end)` for the busy-day
+ * dots and `onDateSelected(date)` with the launcher query that lists that
+ * day. See docs/EXTENSIONS.md § Date picker.
+ */
+export const HOST_FEATURE_DATE_PICKER = 'date-picker';
+
+/** Capability each host feature requires. A feature with no entry needs none. */
+const HOST_FEATURE_CAPABILITY = Object.freeze({
+    [HOST_FEATURE_DATE_PICKER]: 'calendar',
+});
+
+/**
+ * Which of the features a window offers (`offered`) this extension may use,
+ * given its granted capabilities. Unknown names are dropped, so a window
+ * can't advertise something the boundary has no rules for.
+ *
+ * @param {string[]} offered
+ * @param {Iterable<string>} capabilities
+ * @returns {string[]}
+ */
+export function hostFeaturesFor(offered, capabilities) {
+    if (!Array.isArray(offered)) return [];
+    const held = new Set(capabilities || []);
+    const out = [];
+    for (const f of offered) {
+        if (!Object.hasOwn(HOST_FEATURE_CAPABILITY, f)) continue;
+        const needs = HOST_FEATURE_CAPABILITY[f];
+        if (needs && !held.has(needs)) continue;
+        if (!out.includes(f)) out.push(f);
+    }
+    return out;
+}
 
 /**
  * One running sandbox. Wraps the iframe, the host-side message port, and
@@ -263,6 +307,13 @@ export class ExtensionSandbox {
         this.mascotActivities = new Set(
             normalizeMascotActivities(spec.mascotActivities, spec.extensionId)
         );
+        /**
+         * Host features offered to this extension — re-filtered against the
+         * capabilities here, so a caller that skipped `hostFeaturesFor`
+         * still can't hand a feature to an extension that may not use it.
+         * @type {string[]}
+         */
+        this.hostFeatures = hostFeaturesFor(spec.hostFeatures, this.capabilities);
         /** The activity we last forwarded and haven't cleared, else null. */
         this._mascotActivity = null;
         /**
@@ -296,6 +347,12 @@ export class ExtensionSandbox {
         this.hasSettings = false;
         this.hasToolbar = false;
         this.hasFormatter = false;
+        /**
+         * Search provider implements `onDateSelected` AND this window
+         * offered it the date picker. Only then does the host route date
+         * picks (and busy-day lookups) to it.
+         */
+        this.hasDateProvider = false;
         /** If true, formatMessage RPCs fire on streaming chunks too. */
         this.formatterOptsInStreaming = false;
         /** @type {string[]} ids of widgets the extension declared, post-init */
@@ -373,6 +430,7 @@ export class ExtensionSandbox {
                 i18nFallback: this.i18nFallback || {},
                 i18nLanguage: this.i18nLanguage || 'en',
                 i18nRtl: !!this.i18nRtl,
+                hostFeatures: this.hostFeatures.slice(),
             },
             { ackType: 'init-ack' }
         );
@@ -386,6 +444,12 @@ export class ExtensionSandbox {
         this.hasSettings = !!initResult.result?.hasSettings;
         this.hasToolbar = !!initResult.result?.hasToolbar;
         this.hasFormatter = !!initResult.result?.hasFormatter;
+        // The sandbox's claim is ANDed with what the host offered: an
+        // extension can't become a date provider in a window that never
+        // gave it the feature (or without the `calendar` grant behind it).
+        this.hasDateProvider =
+            !!initResult.result?.hasDateProvider &&
+            this.hostFeatures.includes(HOST_FEATURE_DATE_PICKER);
         this.formatterOptsInStreaming = !!initResult.result?.formatterOptsInStreaming;
         this.widgetIds = Array.isArray(initResult.result?.widgetIds)
             ? initResult.result.widgetIds.slice()

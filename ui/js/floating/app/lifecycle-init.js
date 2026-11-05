@@ -10,6 +10,7 @@ import {
     t,
     trackEvent,
 } from './dependencies.js';
+import { FloatingCalendarPicker } from '../calendar-picker.js';
 
 export const LifecycleInitMethods = {
     async init() {
@@ -41,6 +42,13 @@ export const LifecycleInitMethods = {
 
     _setupSyncWiring() {
         this.cacheElements();
+        // Month-calendar popup: opened from the built-in date label and from
+        // extension date affordances (registered on the extension manager).
+        this.calendarPicker = new FloatingCalendarPicker({
+            extensionManager: this.extensionManager,
+            input: this.elements.input,
+        });
+        this.calendarPicker.attachBuiltInDate(document.getElementById('datetimeDate'));
         // Before setupStreamingListeners — its tool_call_update handler feeds
         // this tracker. (It would survive a later assignment, but only because
         // the handler reads it lazily.)

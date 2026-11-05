@@ -59,6 +59,14 @@ let i18nState = { catalog: {}, fallback: {}, language: 'en', rtl: false };
  *  to inject allow-listed libraries into per-call Workers. */
 let vendorSourcesCache = {};
 
+/**
+ * Host UI features this window offers the extension (e.g. `'date-picker'`),
+ * as a frozen array on `context.hostFeatures`. The host already filtered it
+ * by capability; extensions use it purely to feature-detect, so an older
+ * host (which sends nothing) leaves `context.hostFeatures` undefined.
+ */
+let hostFeatures;
+
 /** RPC id → { resolve, reject } for outbound invoke() calls. */
 const pendingInvokes = new Map();
 let nextInvokeId = 1;
@@ -149,8 +157,10 @@ function buildContext() {
         i18n,
         mascot,
         formatter,
-        // Feature detection for optional host behaviour (see host-api.js).
-        hostFeatures: HOST_FEATURES,
+        // Feature detection for optional host behaviour: what this runtime
+        // always supports (host-api.js) plus what the host granted this
+        // extension at init (e.g. 'date-picker', capability-filtered).
+        hostFeatures: Object.freeze([...new Set([...HOST_FEATURES, ...(hostFeatures || [])])]),
     };
 }
 
@@ -331,6 +341,9 @@ async function initExtension(init) {
         language: init.i18nLanguage || 'en',
         rtl: !!init.i18nRtl,
     };
+    hostFeatures = Array.isArray(init.hostFeatures)
+        ? Object.freeze(init.hostFeatures.filter((f) => typeof f === 'string'))
+        : undefined;
 
     const context = buildContext();
     const sources = init.sources || {};
@@ -431,6 +444,9 @@ async function initExtension(init) {
         hasSettings: !!providers.settingsProvider,
         hasToolbar: !!providers.toolbarProvider,
         hasFormatter: !!providers.messageFormatter,
+        // Date-picker routing (see `onDateSelected` below). The host ANDs
+        // this with whether it offered the feature at all.
+        hasDateProvider: typeof providers.searchProvider?.onDateSelected === 'function',
         formatterOptsInStreaming: formatterOptsIn,
         widgetIds: Object.keys(providers.widgets),
     };
@@ -550,6 +566,28 @@ async function dispatchMethod(method, params) {
                 html: out.html,
                 className: typeof out.className === 'string' ? out.className : '',
             };
+        }
+        case 'getDateMarkers': {
+            // Optional. Busy-day dots for the host's date picker: which days
+            // in [start, end) have events. The host validates the shape and
+            // renders only dates, counts and colours — never extension text.
+            const p = providers.searchProvider;
+            if (!p || typeof p.getDateMarkers !== 'function') return null;
+            const out = await p.getDateMarkers(
+                String(params?.start ?? ''),
+                String(params?.end ?? '')
+            );
+            return out && typeof out === 'object' ? out : null;
+        }
+        case 'onDateSelected': {
+            // The user picked a day in the host's date picker. Answer with
+            // `{ query }` — a launcher query starting with one of this
+            // provider's own keywords — and the host runs it.
+            const p = providers.searchProvider;
+            if (!p || typeof p.onDateSelected !== 'function') return null;
+            const out = await p.onDateSelected(String(params?.date ?? ''));
+            if (!out || typeof out !== 'object' || typeof out.query !== 'string') return null;
+            return { query: out.query };
         }
         case 'onResultAction': {
             const p = providers.searchProvider;

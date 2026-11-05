@@ -3276,3 +3276,320 @@ body.light-theme button.shell-chip {
         transition: none;
     }
 }
+
+/* ===== Date picker (ui/js/shared/date-picker.js) =========================
+   Host-owned month calendar. Colours come from the theme tokens so light,
+   dark and custom themes all apply; the grid mirrors under dir="rtl"
+   because it's a real table and the header is a flex row. */
+
+/* Date labels an extension marked as calendar openers
+   (<button data-kage-date>, wired in extension-manager/dates.js). Styled by
+   the host so every extension's dates look and behave the same. */
+button.kage-date-affordance {
+    display: inline;
+    margin: 0 -2px;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--kage-text-muted);
+    text-underline-offset: 2px;
+}
+button.kage-date-affordance:hover,
+button.kage-date-affordance[aria-expanded="true"] {
+    background: var(--kage-accent-glow);
+    color: var(--kage-accent-light);
+    text-decoration-color: currentColor;
+}
+button.kage-date-affordance:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 1px;
+}
+
+/* The floating window's in-flow popup row (calendar-picker.js). Forced LTR
+   so the inline margin that lines the popup up with its opener is a
+   physical offset; the picker itself carries the locale's dir. */
+.kage-date-popover-row {
+    display: flex;
+    direction: ltr;
+    flex-shrink: 0;
+    padding: 2px 0 8px;
+}
+body.kage-date-picker-over-suggestions #appSuggestions {
+    display: none !important;
+}
+
+.kage-date-picker {
+    width: 268px;
+    box-sizing: border-box;
+    padding: 8px 10px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--kage-border);
+    background: var(--kage-bg-elevated);
+    color: var(--kage-text);
+    box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.38),
+        0 1px 0 rgba(255, 255, 255, 0.04) inset;
+    font-family: var(--kage-font);
+    font-size: 12px;
+    line-height: 1.3;
+    user-select: none;
+    -webkit-user-select: none;
+}
+body.light-theme .kage-date-picker {
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+}
+.kage-date-picker [hidden] {
+    display: none !important;
+}
+.kage-date-picker button {
+    font-family: inherit;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+}
+.kage-date-picker button:focus {
+    outline: none;
+}
+.kage-date-picker button:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 1px;
+}
+.kdp-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.kdp-header {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-bottom: 4px;
+}
+.kdp-nav,
+.kdp-title,
+.kdp-today {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 7px;
+}
+.kdp-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    color: var(--kage-text-muted);
+}
+.kdp-next svg {
+    transform: scaleX(-1);
+}
+.kage-date-picker[dir="rtl"] .kdp-prev svg {
+    transform: scaleX(-1);
+}
+.kage-date-picker[dir="rtl"] .kdp-next svg {
+    transform: none;
+}
+.kdp-title {
+    flex: 1;
+    min-width: 0;
+    height: 28px;
+    padding: 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--kage-text-bright);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.kdp-nav:hover,
+.kdp-title:hover,
+.kdp-today:hover,
+.kdp-day:hover,
+.kdp-pick:hover {
+    background: var(--kage-accent-glow);
+}
+
+.kdp-grid {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 1px;
+    table-layout: fixed;
+}
+.kdp-grid th {
+    padding: 2px 0 4px;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--kage-text-muted);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+.kdp-grid td {
+    padding: 0;
+    text-align: center;
+}
+.kdp-day {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0 0 3px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+.kdp-day.is-outside {
+    color: var(--kage-text-muted);
+    opacity: 0.55;
+}
+.kdp-day.is-today {
+    color: var(--kage-accent-light);
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1.5px var(--kage-accent);
+}
+.kdp-day.is-selected {
+    background: var(--kage-accent);
+    color: #fff;
+    font-weight: 600;
+    opacity: 1;
+}
+.kdp-day.is-selected.is-today {
+    box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55);
+}
+.kdp-day.is-selected:hover {
+    background: var(--kage-accent-hover);
+}
+.kdp-dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 4px;
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    pointer-events: none;
+}
+.kdp-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--kage-accent);
+}
+body.dark-theme .kdp-dot {
+    background: var(--kage-accent-light);
+}
+.kdp-day.is-selected .kdp-dot {
+    background: #fff;
+}
+
+/* Same height as the 6-week day grid (weekday row + 6 × 33px), so switching
+   views doesn't resize the floating window. */
+.kdp-cells {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    height: 222px;
+    box-sizing: border-box;
+    padding: 4px 0 2px;
+}
+.kdp-cells-row {
+    flex: 1;
+    display: flex;
+    gap: 4px;
+}
+.kdp-cells-cell {
+    flex: 1;
+    display: flex;
+}
+.kdp-pick {
+    flex: 1;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+.kdp-pick.is-outside {
+    color: var(--kage-text-muted);
+    opacity: 0.6;
+}
+.kdp-pick.is-today {
+    color: var(--kage-accent-light);
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1.5px var(--kage-accent);
+}
+.kdp-pick.is-selected {
+    background: var(--kage-accent);
+    color: #fff;
+    font-weight: 600;
+}
+
+.kdp-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid var(--kage-border-subtle);
+}
+.kdp-hint {
+    flex: 1;
+    min-width: 0;
+    font-size: 10.5px;
+    line-height: 1.3;
+    color: var(--kage-text-muted);
+}
+.kdp-today {
+    margin-inline-start: auto;
+    padding: 3px 9px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--kage-accent-light);
+}
+body.light-theme .kdp-today,
+body.light-theme .kdp-day.is-today:not(.is-selected),
+body.light-theme .kdp-pick.is-today:not(.is-selected),
+body.light-theme button.kage-date-affordance:hover,
+body.light-theme button.kage-date-affordance[aria-expanded="true"] {
+    color: var(--kage-accent-active);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .kage-date-picker {
+        animation: kdp-in 0.12s ease-out;
+    }
+}
+@keyframes kdp-in {
+    from {
+        opacity: 0;
+        transform: translateY(-3px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}

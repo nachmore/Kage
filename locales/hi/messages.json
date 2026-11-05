@@ -9220,5 +9220,137 @@
     "description": "Accessible name / tooltip of a tool chip (or the 'shell' chip) under an agent response while at least one of the calls it groups hasn't finished yet. {label} is the chip's own name, e.g. '3 calls to read' or '2 shell commands'.",
     "_machine_translated": true,
     "_source_hash": "8b6b3aaad5115edb"
+  },
+  "errors.calendar.invalid_range": {
+    "message": "कैलेंडर की तारीख सीमा अमान्य है — YYYY-MM-DD फ़ॉर्मैट में तारीखें इस्तेमाल करें, समाप्ति तारीख शुरुआत के बाद हो, और दोनों के बीच ज़्यादा से ज़्यादा {max} दिन का अंतर हो।",
+    "description": "get_calendar_busy_days rejected its start/end arguments",
+    "_machine_translated": true,
+    "_source_hash": "f95188b58711eab0"
+  },
+  "errors.calendar.access_denied": {
+    "message": "कैलेंडर ऐक्सेस अस्वीकार किया गया — सिस्टम सेटिंग्स में Kage को अपना कैलेंडर इस्तेमाल करने की अनुमति दें।",
+    "description": "The OS refused calendar access when counting meetings per day",
+    "_machine_translated": true,
+    "_source_hash": "a5d1c395f94352b4"
+  },
+  "errors.calendar.query_failed": {
+    "message": "आपका कैलेंडर पढ़ा नहीं जा सका।",
+    "description": "The calendar backend failed while counting meetings per day",
+    "_machine_translated": true,
+    "_source_hash": "6040832b841bf05e"
+  },
+  "errors.calendar.timed_out": {
+    "message": "कैलेंडर क्वेरी {seconds} सेकंड के बाद टाइम आउट हो गई।",
+    "description": "Counting meetings per day took too long",
+    "_machine_translated": true,
+    "_source_hash": "5d57cdfc093e9127"
+  },
+  "floating.datetime.open_calendar_title": {
+    "message": "कैलेंडर दिखाएँ",
+    "description": "Tooltip on the date shown in the launcher's input bar; clicking it opens a month calendar",
+    "_machine_translated": true,
+    "_source_hash": "428b6c23ad10149c"
+  },
+  "shared.date_picker.dialog_label": {
+    "message": "कैलेंडर",
+    "description": "Accessible name of the month-calendar popup",
+    "_machine_translated": true,
+    "_source_hash": "d2ddcea142da9cc3"
+  },
+  "shared.date_picker.prev_month": {
+    "message": "पिछला महीना",
+    "description": "Calendar popup: button that pages back one month",
+    "_machine_translated": true,
+    "_source_hash": "28ac5f13c15ca23e"
+  },
+  "shared.date_picker.next_month": {
+    "message": "अगला महीना",
+    "description": "Calendar popup: button that pages forward one month",
+    "_machine_translated": true,
+    "_source_hash": "5d42513b196f0ecf"
+  },
+  "shared.date_picker.prev_year": {
+    "message": "पिछला साल",
+    "description": "Calendar popup, month list: button that pages back one year",
+    "_machine_translated": true,
+    "_source_hash": "732d1176f63d9931"
+  },
+  "shared.date_picker.next_year": {
+    "message": "अगला साल",
+    "description": "Calendar popup, month list: button that pages forward one year",
+    "_machine_translated": true,
+    "_source_hash": "048639e8433af30e"
+  },
+  "shared.date_picker.prev_decade": {
+    "message": "पिछले साल",
+    "description": "Calendar popup, year list: button that pages back ten years",
+    "_machine_translated": true,
+    "_source_hash": "34b391dd67515192"
+  },
+  "shared.date_picker.next_decade": {
+    "message": "आगे के साल",
+    "description": "Calendar popup, year list: button that pages forward ten years",
+    "_machine_translated": true,
+    "_source_hash": "693138df87d89192"
+  },
+  "shared.date_picker.title_days": {
+    "message": "{title} — महीना चुनें",
+    "description": "Calendar popup: accessible name of the month/year title button in the day view; {title} is e.g. 'November 2026'",
+    "_machine_translated": true,
+    "_source_hash": "561134525ad963a1"
+  },
+  "shared.date_picker.title_months": {
+    "message": "{title} — साल चुनें",
+    "description": "Calendar popup: accessible name of the title button in the month list; {title} is a year",
+    "_machine_translated": true,
+    "_source_hash": "0f23781bce02afa7"
+  },
+  "shared.date_picker.title_years": {
+    "message": "{title} — दिनों पर वापस जाएँ",
+    "description": "Calendar popup: accessible name of the title button in the year list; {title} is a range of years",
+    "_machine_translated": true,
+    "_source_hash": "c578b1dbd508ba5a"
+  },
+  "shared.date_picker.today": {
+    "message": "आज",
+    "description": "Calendar popup: button that jumps back to the current month",
+    "_machine_translated": true,
+    "_source_hash": "c91a05e60a2ecf04"
+  },
+  "shared.date_picker.today_label": {
+    "message": "आज पर जाएँ, {date}",
+    "description": "Calendar popup: accessible name of the Today button; {date} is today's full date",
+    "_machine_translated": true,
+    "_source_hash": "f40df757f9ada186"
+  },
+  "shared.date_picker.day_meetings": {
+    "message": "{date}, {count, plural, =0 {कोई मीटिंग नहीं} one {1 मीटिंग} other {# मीटिंग}}",
+    "description": "Calendar popup: accessible name of a day; {date} is the full date",
+    "_machine_translated": true,
+    "_source_hash": "8f65083ce3c252d8"
+  },
+  "shared.date_picker.hint.permission": {
+    "message": "किन दिनों में मीटिंग हैं, यह देखने के लिए कैलेंडर ऐक्सेस की अनुमति दें।",
+    "description": "Calendar popup footer when the OS denied calendar access",
+    "_machine_translated": true,
+    "_source_hash": "8c4eae59538f86f3"
+  },
+  "shared.date_picker.hint.no_provider": {
+    "message": "अपनी मीटिंग यहाँ देखने के लिए Calendar एक्सटेंशन चालू करें।",
+    "description": "Calendar popup footer when no extension provides calendar data",
+    "_machine_translated": true,
+    "_source_hash": "b71cce211cf8ba97"
+  },
+  "shared.date_picker.open_for": {
+    "message": "{date} — कैलेंडर खोलें",
+    "description": "Accessible name of a date in an extension's row or bar that opens the calendar; {date} is the visible date text",
+    "_machine_translated": true,
+    "_source_hash": "8abbcb8266e12470"
+  },
+  "shared.date_picker.open_title": {
+    "message": "कोई दूसरा दिन चुनें",
+    "description": "Tooltip on a date in an extension's row or bar that opens the calendar",
+    "_machine_translated": true,
+    "_source_hash": "078da0bb606f6e74"
   }
 }

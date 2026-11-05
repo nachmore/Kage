@@ -3,6 +3,9 @@
 // Usage:
 //   kage-calendar-helper upcoming <hours>
 //   kage-calendar-helper date <yyyy-MM-dd>
+//   kage-calendar-helper range <yyyy-MM-dd> <yyyy-MM-dd>
+//     (local days [start, end), end exclusive — backs the month view's
+//     busy-day dots)
 //
 // Output (stdout): JSON array of CalendarEvent (see kage-core/src/calendar.rs
 // — { id, subject, location, organizer, start_time (ISO8601),
@@ -25,7 +28,9 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mode = match parse_mode(&args) {
         Some(m) => m,
-        None => emit_error("usage: kage-calendar-helper {upcoming <hours> | date <yyyy-MM-dd>}"),
+        None => emit_error(
+            "usage: kage-calendar-helper {upcoming <hours> | date <yyyy-MM-dd> | range <yyyy-MM-dd> <yyyy-MM-dd>}",
+        ),
     };
     imp::run(mode)
 }
@@ -33,9 +38,11 @@ fn main() {
 // The non-macOS stub never reads the parsed values — parsing still runs
 // so the usage error is identical on every platform.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[derive(Debug, PartialEq)]
 enum Mode {
     Upcoming { hours: u32 },
     Date { iso: String },
+    Range { start: String, end: String },
 }
 
 fn parse_mode(args: &[String]) -> Option<Mode> {
@@ -49,6 +56,10 @@ fn parse_mode(args: &[String]) -> Option<Mode> {
         },
         "date" => Some(Mode::Date {
             iso: args[2].clone(),
+        }),
+        "range" if args.len() >= 4 => Some(Mode::Range {
+            start: args[2].clone(),
+            end: args[3].clone(),
         }),
         _ => None,
     }
@@ -92,19 +103,15 @@ mod imp {
         let (start, end): (DateTime<Utc>, DateTime<Utc>) = match mode {
             Mode::Upcoming { hours } => (now, now + chrono::Duration::hours(i64::from(hours))),
             Mode::Date { ref iso } => {
-                let Ok(day) = NaiveDate::parse_from_str(iso, "%Y-%m-%d") else {
-                    emit_error(&format!("invalid date '{iso}' — expected yyyy-MM-dd"));
-                };
-                // Local midnight, matching the Swift original's DateFormatter
-                // with TimeZone.current.
-                let local_start = chrono::Local
-                    .from_local_datetime(&day.and_hms_opt(0, 0, 0).expect("00:00:00 is valid"))
-                    .earliest()
-                    .unwrap_or_else(|| {
-                        emit_error(&format!("date '{iso}' has no valid local midnight"))
-                    });
-                let start = local_start.with_timezone(&Utc);
+                let start = local_midnight(iso);
                 (start, start + chrono::Duration::hours(24))
+            }
+            Mode::Range { ref start, ref end } => {
+                let (start, end) = (local_midnight(start), local_midnight(end));
+                if end <= start {
+                    emit_error("range end must be after its start");
+                }
+                (start, end)
             }
         };
 
@@ -114,6 +121,20 @@ mod imp {
             serde_json::to_string(&events).unwrap_or_else(|_| "[]".into())
         );
         std::process::exit(0);
+    }
+
+    /// Local midnight of a `yyyy-MM-dd` day, as UTC — matching the Swift
+    /// original's DateFormatter with TimeZone.current. `earliest` so a
+    /// midnight inside a DST gap still resolves.
+    fn local_midnight(iso: &str) -> DateTime<Utc> {
+        let Ok(day) = NaiveDate::parse_from_str(iso, "%Y-%m-%d") else {
+            emit_error(&format!("invalid date '{iso}' — expected yyyy-MM-dd"));
+        };
+        chrono::Local
+            .from_local_datetime(&day.and_hms_opt(0, 0, 0).expect("00:00:00 is valid"))
+            .earliest()
+            .unwrap_or_else(|| emit_error(&format!("date '{iso}' has no valid local midnight")))
+            .with_timezone(&Utc)
     }
 
     /// Request calendar access, blocking until the user answers the TCC
@@ -216,5 +237,46 @@ mod imp {
             .single()
             .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(v: &[&str]) -> Vec<String> {
+        std::iter::once("kage-calendar-helper")
+            .chain(v.iter().copied())
+            .map(String::from)
+            .collect()
+    }
+
+    #[test]
+    fn parses_every_mode() {
+        assert_eq!(
+            parse_mode(&args(&["upcoming", "8"])),
+            Some(Mode::Upcoming { hours: 8 })
+        );
+        assert_eq!(
+            parse_mode(&args(&["date", "2026-11-05"])),
+            Some(Mode::Date {
+                iso: "2026-11-05".into()
+            })
+        );
+        assert_eq!(
+            parse_mode(&args(&["range", "2026-10-26", "2026-12-07"])),
+            Some(Mode::Range {
+                start: "2026-10-26".into(),
+                end: "2026-12-07".into()
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_incomplete_or_unknown_modes() {
+        assert_eq!(parse_mode(&args(&["range", "2026-10-26"])), None);
+        assert_eq!(parse_mode(&args(&["upcoming", "0"])), None);
+        assert_eq!(parse_mode(&args(&["week", "2026-10-26"])), None);
+        assert_eq!(parse_mode(&args(&[])), None);
     }
 }

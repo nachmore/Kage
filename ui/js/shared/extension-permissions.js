@@ -130,6 +130,10 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // --- calendar ----------------------------------------------------------
     get_calendar_events: 'calendar',
     get_calendar_events_for_date: 'calendar',
+    // Per-day event COUNTS for a ≤62-day range (the date picker's busy-day
+    // dots). Strictly less than the two reads above — no titles — but it
+    // still reveals when the user is busy, so it's the same capability.
+    get_calendar_busy_days: 'calendar',
 
     // --- session (chat sessions) -------------------------------------------
     list_sessions: 'session',

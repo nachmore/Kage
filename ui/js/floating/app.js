@@ -29,6 +29,7 @@ import { SearchMethods } from './app/search.js';
 import { InputMethods } from './app/input.js';
 import { ResponseUiMethods } from './app/response-ui.js';
 import { applyMixin } from '../shared/mixin.js';
+import { HOST_FEATURE_DATE_PICKER } from '../shared/extension-sandbox-host.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -89,7 +90,11 @@ export class FloatingApp {
         this._noBlurTools = new Set(); // MCP tools that should prevent window hide on blur
         this._promptGeneration = 0; // incremented each time we send a user message
         this.attachmentManager = new AttachmentManager();
-        this.extensionManager = new ExtensionManager(invoke);
+        // The floating window hosts the month-calendar date picker, so it
+        // offers that feature to (calendar-capable) extensions.
+        this.extensionManager = new ExtensionManager(invoke, {
+            hostFeatures: [HOST_FEATURE_DATE_PICKER],
+        });
         this.extensionToolController = new ExtensionToolController({
             invoke,
             getSessionId: () => this.floatingSessionId,

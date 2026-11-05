@@ -107,6 +107,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::search_files,
         crate::commands::get_calendar_events,
         crate::commands::get_calendar_events_for_date,
+        crate::commands::get_calendar_busy_days,
         crate::commands::show_context_menu,
         crate::commands::set_floating_opacity,
         crate::commands::apply_chat_window_size,

@@ -28,3 +28,11 @@ pub fn get_events_for_date_impl(_date: &str) -> Result<Vec<CalendarEvent>, Strin
     warn_once();
     Ok(vec![])
 }
+
+pub fn get_events_in_range_impl(
+    _start: chrono::NaiveDate,
+    _end: chrono::NaiveDate,
+) -> Result<Vec<CalendarEvent>, crate::os::calendar::CalendarQueryError> {
+    warn_once();
+    Ok(vec![])
+}

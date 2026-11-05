@@ -285,6 +285,8 @@ export const LifecycleVisibilityMethods = {
             // every show would directly inflate time-to-paint, which
             // is the headline metric for this window.
             window._kageFloatingHidden = true;
+            // A calendar popup left open would greet the next show.
+            this.calendarPicker?.close({ restoreFocus: false, immediate: true });
             if (window._kageMascot) {
                 try {
                     window._kageMascot.pause();

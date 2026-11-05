@@ -63,6 +63,35 @@ pub fn get_events_for_date_impl(date: &str) -> Result<Vec<CalendarEvent>, String
     Ok(vec![])
 }
 
+/// Events overlapping the local days `[start, end)`. Same backend chain as
+/// the other entry points; the helper's `range` mode takes both bounds as
+/// local dates. A helper too old to know `range` answers with its usage
+/// error, which lands in `OtherFailure` and falls through like any other
+/// helper problem.
+pub fn get_events_in_range_impl(
+    start: NaiveDate,
+    end: NaiveDate,
+) -> Result<Vec<CalendarEvent>, crate::os::calendar::CalendarQueryError> {
+    use crate::os::calendar::CalendarQueryError;
+    let (start_s, end_s) = (
+        start.format("%Y-%m-%d").to_string(),
+        end.format("%Y-%m-%d").to_string(),
+    );
+    match run_eventkit_helper(&["range", &start_s, &end_s]) {
+        HelperResult::Ok(events) => return Ok(events),
+        HelperResult::PermissionDenied(_) => return Err(CalendarQueryError::PermissionDenied),
+        HelperResult::OtherFailure => {} // fall through to icalBuddy
+    }
+    if icalbuddy_is_available() {
+        // icalBuddy's `to:` date is inclusive.
+        let last = end.pred_opt().unwrap_or(end).format("%Y-%m-%d");
+        let range = format!("eventsFrom:{start_s} to:{last}");
+        return Ok(run_icalbuddy(&icalbuddy_args(&range)));
+    }
+    warn_unavailable_once();
+    Ok(vec![])
+}
+
 // ---------------------------------------------------------------------------
 // EventKit helper (preferred backend)
 // ---------------------------------------------------------------------------
