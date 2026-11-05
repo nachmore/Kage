@@ -16,6 +16,11 @@ export const HOST_FEATURES = Object.freeze([
     'settings.copy_action',
     // invoke() rejections carry the Rust AppError's `kind` and `key`.
     'invoke.error_kind',
+    // `context.config` is the manifest `config` defaults overlaid with the
+    // user's saved values, and `config.enabled` is the host's on/off switch.
+    // Settings controls whose id the manifest declares take that default and
+    // ignore their own.
+    'config.manifest_defaults',
 ]);
 
 /**

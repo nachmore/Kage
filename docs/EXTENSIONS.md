@@ -85,14 +85,55 @@ my-extension/
 | `author` | No | Author name. |
 | `permissions` | **Yes** | Capabilities the extension needs. See [Permissions](#permissions). Use `[]` if the extension needs nothing. Omitting this field means the extension gets zero capabilities and every `invoke()` will be rejected. |
 | `sandboxVendor` | No | Array of allow-listed vendor library names to load into the sandbox before provider code runs. See [Vendor libraries](#vendor-libraries). Only built-in extensions may use this today. |
-| `config` | No | Config schema — keys become the extension's config object. |
+| `config` | No | Config schema: your settings and their defaults, the only place defaults are declared. Keys become the extension's config object. See [Config Schema](#config-schema). |
 | `contributes` | No | What the extension provides (see below). |
 
 ### Config Schema
 
-Each key in `config` defines a setting with a type and default value. The framework stores extension configs in `config.extensions["<id>"]` as a JSON object. Extensions read their config via the `context.config` object passed to `initialize()`.
+Each key in `config` defines a setting with a type and default value.
+The manifest's `config` block is **the only place an extension's setting
+defaults are declared**. Everything else reads them from here: your
+providers' `context.config`, the Settings page, and anything the host
+itself reads.
 
 Supported types: `"boolean"`, `"string"`, `"number"`.
+
+**What your code sees.** `context.config` (and every `onConfigUpdate`
+payload) is the *effective* config: the manifest defaults, overlaid with
+whatever the user saved. Every declared key is always present, even one
+added in a later version for a user who saved settings long ago, and one
+no settings control shows. So code fallbacks like `config.x ?? 2` are
+only needed for keys the manifest doesn't declare. The host reads saved
+values as the declared type: `"5"` for a `number` key becomes `5`, and a
+value that can't be read as one (a hand-edited config, or a key whose type
+you changed) is ignored, so the default applies. Saved keys the manifest
+doesn't declare are passed through unchanged.
+
+**What gets stored.** `config.extensions["<id>"]` holds only the user's
+overrides: the values that differ from the manifest default. When you
+ship a new default, it reaches every user who never changed that
+setting. Saving your Settings page writes only the keys its controls own.
+Other saved keys are kept (see
+[Scratch fields and what gets saved](#scratch-fields-and-what-gets-saved)).
+Configs saved by older hosts, which stored every control's value, keep
+working: a stored value equal to the default changes nothing, and it's
+removed the next time the user saves that page. `get_extension_config`
+(capability `storage`) returns that stored object as-is, so use
+`context.config` to read your settings.
+
+**`enabled` is the host's.** `config.enabled` is always present and is
+whether the user has your extension switched on, which they change with
+the Disable/Enable button in its Settings header. A saved `enabled` value
+is ignored, and the host never stores one. A disabled extension that
+stays loaded (the user switched it off in this session) gets an
+`onConfigUpdate` with `enabled: false`, so you can stop background work
+there. You don't need an "Enable" checkbox on your settings page. If you
+have one (older hosts show it), current hosts hide it and keep its value
+equal to the header's state, so `showWhen: { id: 'enabled', … }` follows
+the header. You don't need to declare `enabled` in `config` either.
+
+Hosts that work this way list `config.manifest_defaults` in
+[`context.hostFeatures`](#feature-detection).
 
 ### Contributes
 
@@ -354,6 +395,7 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 |------------------------|---------|
 | `settings.copy_action` | Settings `action` controls accept `copy` (see [Copy to clipboard](#copy-to-clipboard)). |
 | `invoke.error_kind`    | `invoke()` rejections carry `err.kind` / `err.key` (see [Errors from `invoke()`](#errors-from-invoke)). |
+| `config.manifest_defaults` | `context.config` is the manifest defaults overlaid with saved values, `config.enabled` is the host's on/off switch, saving stores only overrides, and settings controls take their defaults from the manifest (see [Config Schema](#config-schema)). |
 
 ### Errors from `invoke()`
 
@@ -509,7 +551,8 @@ export default class MySearchProvider {
      * Called once when the extension loads.
      * @param {object} context - { invoke, config, log, runSandboxed }
      *   invoke: Tauri invoke function for IPC (host enforces capabilities)
-     *   config: The extension's config object (from manifest defaults or user overrides)
+     *   config: The extension's config: manifest defaults overlaid with the user's
+     *           saved values, plus the host's `enabled` (see "Config Schema")
      *   log: Structured logger routing to the main Kage log ({ debug, info, warn, error })
      *   runSandboxed: Terminable compute helper (see "Terminable compute" above)
      */
@@ -710,7 +753,13 @@ export default class MyExtSettingsProvider {
         this.config = config || {};
     }
 
-    /** Declarative description of the settings UI. */
+    /**
+     * Declarative description of the settings UI. Each value control's `id`
+     * names a key in the manifest's `config` block, which supplies its
+     * default. The `default`s below are only for hosts older than
+     * `config.manifest_defaults`, and must equal the manifest's (see
+     * "Defaults" below).
+     */
     getSettings() {
         return {
             description: 'Optional text shown below the header.',
@@ -718,8 +767,8 @@ export default class MyExtSettingsProvider {
                 {
                     label: 'Display',                  // optional
                     controls: [
-                        { type: 'checkbox', id: 'enabled', label: 'Enable', default: true,
-                          description: 'Turn the extension on or off.' },
+                        { type: 'checkbox', id: 'show_badge', label: 'Show badge', default: true,
+                          description: 'Show a count badge on results.' },
                         { type: 'text', id: 'trigger', label: 'Trigger word',
                           default: 'example', placeholder: 'example', maxWidth: 120 },
                         { type: 'number', id: 'limit', label: 'Max items',
@@ -788,6 +837,9 @@ export default class MyExtSettingsProvider {
 
 ### Control types
 
+`default?` is deprecated for ids the manifest declares; see
+[Defaults](#defaults).
+
 | Type       | Props                                                                 |
 |------------|-----------------------------------------------------------------------|
 | `checkbox` | `id`, `label`, `description?`, `default?`, `showWhen?`                |
@@ -803,6 +855,27 @@ An unknown control `type` (or any other validation error) fails the
 `refresh` that returns such a schema leaves the old page in place. New
 capabilities therefore arrive as optional props on existing types (like
 `copy` below), which older hosts ignore, rather than as new types.
+
+### Defaults
+
+A value control's `id` refers to a key in your manifest's
+[`config`](#config-schema) block, and that's where its default comes from.
+The control shows the effective value: the manifest default, or what the
+user saved instead. **A control's own `default` is deprecated.** Current
+hosts ignore it for any id the manifest declares, and log a console
+warning when it would show something different. It is still used for:
+
+- **ids the manifest doesn't declare**: scratch (`__`) fields, and older
+  extensions that never declared their settings; and
+- **older hosts**, which don't list `config.manifest_defaults` in
+  [`context.hostFeatures`](#feature-detection). They show the control's
+  `default` for a value that was never saved, and give your code the
+  saved object without the manifest defaults merged in.
+
+So until your extension's minimum supported host includes
+`config.manifest_defaults`, keep every control's `default` equal to the
+manifest default. In the Kage-Extensions repo, `npm run check:defaults`
+enforces that.
 
 ### Action options
 
@@ -860,15 +933,27 @@ the click, then shows "Copied" next to the button:
 ### Scratch fields and what gets saved
 
 When the user clicks Save, the host validates (`normalize()`, then
-`validate()`) and writes the value controls into your config:
+`validate()`) and folds the page's value controls into your stored
+config:
 
+- **Only this page's keys change.** Saved keys that no control on the
+  page owns are kept, whether another step of a setup wizard shows them
+  or no control does. A control whose value equals the manifest default
+  is not stored, and removes any override it had. A value for a declared
+  key is stored as the declared type. Values for ids the manifest doesn't
+  declare are stored as they are. If nothing is left to store, the
+  extension has no entry in `config.extensions`.
 - **Ids starting with `__` are scratch fields.** They render, and their
   values reach `runAction`, `normalize()`, `validate()`, and
   `onFileSelected`, but the host never saves them, and ignores any
-  saved value (older hosts did save them), so the control always starts
-  at its `default`. Use them for inputs that feed an action — a "paste
-  your Client ID" box whose action stores the value itself — rather than
-  settings.
+  saved value (older hosts did save them; Save removes such a value for a
+  control on the page), so the control always starts at its `default`.
+  Use them for inputs that feed an action — a "paste your Client ID" box
+  whose action stores the value itself — rather than settings.
+- **A control with id `enabled` is the host's** (see
+  [Config Schema](#config-schema)): it's hidden, holds the extension's
+  on/off state, and is never saved. The header's Disable/Enable button
+  is the switch.
 - **`normalize()` rewrites values; it can't add or remove them.** Each
   key it returns is written back into its control (so the user sees
   it) and saved from there. A key it leaves out keeps the value its
