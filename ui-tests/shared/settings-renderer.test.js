@@ -5,7 +5,7 @@
  * the real iframe transport.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderSchema } from '../../ui/js/shared/settings-renderer.js';
 
 function stubSandbox(responses = {}) {
@@ -363,5 +363,249 @@ describe('renderSchema', () => {
         } finally {
             lh.disposeLinkHandler();
         }
+    });
+
+    it('shows the localised "working" status while an action runs', async () => {
+        // i18n isn't initialised in tests, so t() returns the key itself.
+        let finish;
+        const sandbox = stubSandbox({
+            runSettingsAction: () => new Promise((r) => { finish = r; }),
+        });
+        const inst = renderSchema({
+            extensionId: 'wrk',
+            container,
+            sandbox,
+            schema: { sections: [{ controls: [{ type: 'action', id: 'go', label: 'Go', action: 'go' }] }] },
+        });
+        inst.load({});
+        container.querySelector('#ext-ctrl-wrk-go').click();
+        const status = container.querySelector('#ext-ctrl-wrk-go__status');
+        expect(status.textContent).toBe('settings.ext_settings.action.working');
+        expect(status.getAttribute('aria-live')).toBe('polite');
+        finish({ status: 'done' });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(status.textContent).toBe('done');
+    });
+
+    it('refresh keeps the status on the action control even when its id differs from its RPC name', async () => {
+        const schema = {
+            sections: [{ controls: [{ type: 'action', id: 'check_btn', label: 'Check', action: 'check_connection' }] }],
+        };
+        const sandbox = stubSandbox({
+            getSettings: () => schema,
+            runSettingsAction: () => ({ status: 'still connected', host: { type: 'refresh' } }),
+        });
+        const inst = renderSchema({ extensionId: 'rid', container, sandbox, schema });
+        inst.load({});
+        container.querySelector('#ext-ctrl-rid-check_btn').click();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(container.querySelector('#ext-ctrl-rid-check_btn__status').textContent).toBe('still connected');
+    });
+});
+
+describe('copy actions', () => {
+    let container;
+    let writeText;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+        writeText = vi.fn(() => Promise.resolve());
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText },
+            configurable: true,
+        });
+    });
+
+    afterEach(() => {
+        delete navigator.clipboard;
+        vi.useRealTimers();
+    });
+
+    function render(extensionId, controls, sandbox = stubSandbox()) {
+        const inst = renderSchema({ extensionId, container, sandbox, schema: { sections: [{ controls }] } });
+        inst.load({});
+        return { inst, sandbox };
+    }
+
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    it('writes a literal value synchronously inside the click, with no sandbox round-trip', async () => {
+        const { sandbox } = render('cp1', [
+            { type: 'action', id: 'copy_uri', label: 'Copy', action: 'legacy_copy',
+              copy: { value: 'http://127.0.0.1:43821/spotify/callback' } },
+        ]);
+        container.querySelector('#ext-ctrl-cp1-copy_uri').click();
+        // Already called by the time click() returns: no await happened first,
+        // so the click's user activation is still live.
+        expect(writeText).toHaveBeenCalledWith('http://127.0.0.1:43821/spotify/callback');
+
+        await flush();
+        expect(sandbox.calls.some((c) => c.method === 'runSettingsAction')).toBe(false);
+        expect(container.querySelector('#ext-ctrl-cp1-copy_uri__status').textContent)
+            .toBe('settings.ext_settings.action.copied');
+    });
+
+    it('copies the live value of the referenced control', async () => {
+        render('cp2', [
+            { type: 'text', id: '__client_id', label: 'Client ID', default: '' },
+            { type: 'action', id: 'copy_id', label: 'Copy', copy: { from: '__client_id' } },
+        ]);
+        const input = container.querySelector('#ext-ctrl-cp2-__client_id');
+        input.value = 'abc123';
+        input.dispatchEvent(new Event('input'));
+        container.querySelector('#ext-ctrl-cp2-copy_id').click();
+        expect(writeText).toHaveBeenCalledWith('abc123');
+    });
+
+    it('says there is nothing to copy when the source control is empty', async () => {
+        render('cp3', [
+            { type: 'text', id: 'src', label: 'Src', default: '' },
+            { type: 'action', id: 'copy_src', label: 'Copy', copy: { from: 'src' } },
+        ]);
+        container.querySelector('#ext-ctrl-cp3-copy_src').click();
+        await flush();
+        expect(writeText).not.toHaveBeenCalled();
+        expect(container.querySelector('#ext-ctrl-cp3-copy_src__status').textContent)
+            .toBe('settings.ext_settings.action.copy_empty');
+    });
+
+    it('refuses a typed value that is too long for the clipboard', async () => {
+        const { inst } = render('cp4', [
+            { type: 'text', id: 'src', label: 'Src', default: '' },
+            { type: 'action', id: 'copy_src', label: 'Copy', copy: { from: 'src' } },
+        ]);
+        inst.log = { warn: vi.fn() };
+        container.querySelector('#ext-ctrl-cp4-src').value = 'x'.repeat(5000);
+        container.querySelector('#ext-ctrl-cp4-copy_src').click();
+        await flush();
+        expect(writeText).not.toHaveBeenCalled();
+        expect(container.querySelector('#ext-ctrl-cp4-copy_src__status').textContent)
+            .toBe('settings.ext_settings.action.copy_failed');
+    });
+
+    it('reports a failed clipboard write', async () => {
+        writeText.mockImplementation(() => Promise.reject(new Error('denied')));
+        const { inst } = render('cp5', [
+            { type: 'action', id: 'cp', label: 'Copy', copy: { value: 'x' } },
+        ]);
+        inst.log = { warn: vi.fn() };
+        container.querySelector('#ext-ctrl-cp5-cp').click();
+        await flush();
+        expect(container.querySelector('#ext-ctrl-cp5-cp__status').textContent)
+            .toBe('settings.ext_settings.action.copy_failed');
+    });
+
+    it('reports failure when there is no clipboard API at all', async () => {
+        delete navigator.clipboard;
+        const { inst } = render('cp6', [
+            { type: 'action', id: 'cp', label: 'Copy', copy: { value: 'x' } },
+        ]);
+        inst.log = { warn: vi.fn() };
+        container.querySelector('#ext-ctrl-cp6-cp').click();
+        await flush();
+        expect(container.querySelector('#ext-ctrl-cp6-cp__status').textContent)
+            .toBe('settings.ext_settings.action.copy_failed');
+    });
+
+    it('clears the "Copied" status after a moment', async () => {
+        vi.useFakeTimers();
+        render('cp7', [{ type: 'action', id: 'cp', label: 'Copy', copy: { value: 'x' } }]);
+        container.querySelector('#ext-ctrl-cp7-cp').click();
+        await vi.advanceTimersByTimeAsync(0);
+        const status = container.querySelector('#ext-ctrl-cp7-cp__status');
+        expect(status.textContent).toBe('settings.ext_settings.action.copied');
+        await vi.advanceTimersByTimeAsync(2500);
+        expect(status.textContent).toBe('');
+    });
+});
+
+describe('persisting values', () => {
+    let container;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    const controls = [
+        { type: 'text', id: 'trigger', label: 'Trigger', default: 'sp' },
+        { type: 'checkbox', id: 'enabled', label: 'Enabled', default: true },
+        { type: 'text', id: '__setup_client_id', label: 'Client ID', default: 'from-extension' },
+    ];
+
+    function render(extensionId, sandbox = stubSandbox()) {
+        return renderSchema({ extensionId, container, sandbox, schema: { sections: [{ controls }] } });
+    }
+
+    it('never persists scratch (__) fields, but actions still receive them', async () => {
+        const sandbox = stubSandbox({ runSettingsAction: () => ({}) });
+        const inst = render('pv1', sandbox);
+        inst.load({ trigger: 'sp', enabled: true });
+        container.querySelector('#ext-ctrl-pv1-__setup_client_id').value = 'typed';
+
+        expect(inst.save()).toEqual({ trigger: 'sp', enabled: true });
+        expect(inst.currentValues()).toMatchObject({ __setup_client_id: 'typed' });
+
+        const btnSchema = { type: 'action', id: 'save_id', label: 'Save', action: 'save_id' };
+        const inst2 = renderSchema({
+            extensionId: 'pv1b',
+            container,
+            sandbox,
+            schema: { sections: [{ controls: [...controls, btnSchema] }] },
+        });
+        inst2.load({});
+        container.querySelector('#ext-ctrl-pv1b-__setup_client_id').value = 'typed';
+        container.querySelector('#ext-ctrl-pv1b-save_id').click();
+        await new Promise((r) => setTimeout(r, 0));
+        const call = sandbox.calls.find((c) => c.method === 'runSettingsAction');
+        expect(call.params.values.__setup_client_id).toBe('typed');
+    });
+
+    it('ignores scratch values an older host already wrote to config', () => {
+        const inst = render('pv2');
+        inst.load({ trigger: 'x', enabled: false, __setup_client_id: 'stale' });
+        expect(container.querySelector('#ext-ctrl-pv2-__setup_client_id').value).toBe('from-extension');
+        expect(inst.save()).toEqual({ trigger: 'x', enabled: false });
+    });
+
+    it('saves the normalize() result, including keys it dropped', async () => {
+        const sandbox = stubSandbox({
+            // Drops `enabled` and rewrites `trigger`; tries to add a key.
+            normalizeSettings: ({ values }) => ({
+                values: { trigger: values.trigger.trim().toLowerCase(), injected: 'nope' },
+            }),
+        });
+        const inst = render('pv3', sandbox);
+        inst.load({ trigger: '  SP ', enabled: true });
+
+        expect((await inst.validate()).valid).toBe(true);
+        // `enabled` was dropped, `injected` isn't a control, scratch never saved.
+        expect(inst.save()).toEqual({ trigger: 'sp' });
+
+        // An edit after validate() makes the normalized result stale: save()
+        // goes back to the live values.
+        const cb = container.querySelector('#ext-ctrl-pv3-enabled');
+        cb.checked = false;
+        cb.dispatchEvent(new Event('change'));
+        expect(inst.save()).toEqual({ trigger: 'sp', enabled: false });
+    });
+
+    it('a refresh carries in-progress scratch values across the re-render', async () => {
+        const schema = { sections: [{ controls: [
+            ...controls,
+            { type: 'action', id: 'next', label: 'Next', action: 'next' },
+        ] }] };
+        const sandbox = stubSandbox({
+            getSettings: () => schema,
+            runSettingsAction: () => ({ host: { type: 'refresh' } }),
+        });
+        const inst = renderSchema({ extensionId: 'pv4', container, sandbox, schema });
+        inst.load({});
+        container.querySelector('#ext-ctrl-pv4-__setup_client_id').value = 'half-typed';
+        container.querySelector('#ext-ctrl-pv4-next').click();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(sandbox.calls.some((c) => c.method === 'getSettings')).toBe(true);
+        expect(container.querySelector('#ext-ctrl-pv4-__setup_client_id').value).toBe('half-typed');
     });
 });

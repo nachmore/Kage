@@ -8830,5 +8830,83 @@
     "description": "Briefly replaces a copy button's label after copying succeeded",
     "_machine_translated": true,
     "_source_hash": "b3d8aa115c03cd7c"
+  },
+  "errors.oauth.timed_out": {
+    "message": "Час очікування OAuth минув до отримання зворотного виклику",
+    "description": "An extension's OAuth sign-in listener gave up because the browser never redirected back in time (error kind: timeout)",
+    "_machine_translated": true,
+    "_source_hash": "ec59ab4ef0c99369"
+  },
+  "errors.oauth.cancelled": {
+    "message": "Прослуховувач OAuth скасовано до отримання зворотного виклику",
+    "description": "An extension's OAuth sign-in listener was stopped (the sign-in was cancelled) before the browser redirected back (error kind: cancelled)",
+    "_machine_translated": true,
+    "_source_hash": "77215e102e3729c5"
+  },
+  "errors.oauth.unknown_listener": {
+    "message": "Невідомий ID прослуховувача (час очікування минув, його скасовано або вже використано)",
+    "description": "An extension waited on an OAuth sign-in listener that no longer exists",
+    "_machine_translated": true,
+    "_source_hash": "853822a52e56e71b"
+  },
+  "errors.oauth.already_awaited": {
+    "message": "Цей прослуховувач OAuth уже очікується",
+    "description": "An extension waited twice at the same time on one OAuth sign-in listener",
+    "_machine_translated": true,
+    "_source_hash": "3006462600e60513"
+  },
+  "errors.oauth.listener_failed": {
+    "message": "Прослуховувач OAuth неочікувано зупинився: {reason}",
+    "description": "The local socket an extension's OAuth sign-in listens on failed. {reason} is the operating-system error text",
+    "_machine_translated": true,
+    "_source_hash": "d2097455e406f9f5"
+  },
+  "errors.oauth.invalid_redirect_path": {
+    "message": "redirect_path має починатися з '/' і не може містити пробілів",
+    "description": "Developer-facing: an extension asked for an OAuth callback path that isn't a plain URL path. Keep 'redirect_path' and '/' as-is",
+    "_machine_translated": true,
+    "_source_hash": "49946acb2c5bdb24"
+  },
+  "errors.oauth.bind_failed": {
+    "message": "Не вдалося прив’язати локальний прослуховувач: {reason}",
+    "description": "Kage couldn't open a local port for an extension's OAuth sign-in. {reason} is the operating-system error text",
+    "_machine_translated": true,
+    "_source_hash": "6fae996e1000cb55"
+  },
+  "settings.manager.ext.disable": {
+    "message": "Вимкнути",
+    "description": "Button in an extension's Settings page header that turns the extension off",
+    "_machine_translated": true,
+    "_source_hash": "12f23a4e37a48817"
+  },
+  "settings.manager.ext.enable": {
+    "message": "Увімкнути",
+    "description": "Button in an extension's Settings page header that turns a disabled extension back on",
+    "_machine_translated": true,
+    "_source_hash": "1335a00872324940"
+  },
+  "settings.ext_settings.action.working": {
+    "message": "Виконується…",
+    "description": "Status shown next to a button on an extension's Settings page while the extension handles the click",
+    "_machine_translated": true,
+    "_source_hash": "ab029be3c556631c"
+  },
+  "settings.ext_settings.action.copied": {
+    "message": "Скопійовано",
+    "description": "Status shown briefly next to a Copy button on an extension's Settings page after the text was copied to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "6a9a9509531ba9a2"
+  },
+  "settings.ext_settings.action.copy_failed": {
+    "message": "Не вдалося скопіювати в буфер обміну",
+    "description": "Status next to a Copy button on an extension's Settings page when the clipboard write failed",
+    "_machine_translated": true,
+    "_source_hash": "9998094c5dcf1db0"
+  },
+  "settings.ext_settings.action.copy_empty": {
+    "message": "Нічого копіювати",
+    "description": "Status next to a Copy button on an extension's Settings page when the field it copies from is empty",
+    "_machine_translated": true,
+    "_source_hash": "c6bb153a964d0626"
   }
 }

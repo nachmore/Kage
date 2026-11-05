@@ -205,6 +205,19 @@ with per-capability descriptions. Summary:
 `filesystem` · `window` · `windows` · `notifications` · `calendar` ·
 `session` · `agent` · `activity` · `automation` · `tts`
 
+`clipboard` is read access. Writing needs no capability but only ever
+happens on a user's click, through the host: a search result's `copy`
+action, or a settings `action` with `copy`. The settings path accepts
+plain text only — at most 2048 characters, with no control characters
+other than tab and newlines, and no bidi overrides, so a "Copy" button
+can't put terminal escape sequences, or text that displays differently,
+on the clipboard.
+
+`oauth` listeners bind `127.0.0.1` on an ephemeral port, serve one
+matching request, and close on timeout or `oauth_loopback_cancel` —
+including while an await is in flight — so a sign-in the user
+abandoned can't be completed later in the browser.
+
 ## Content Security Policy (CSP)
 
 The Tauri webview runs with `"csp": null` (CSP disabled). The

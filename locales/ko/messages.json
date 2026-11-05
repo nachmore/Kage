@@ -8830,5 +8830,83 @@
     "description": "Briefly replaces a copy button's label after copying succeeded",
     "_machine_translated": true,
     "_source_hash": "b3d8aa115c03cd7c"
+  },
+  "errors.oauth.timed_out": {
+    "message": "콜백을 받기 전에 OAuth 흐름 시간이 초과되었습니다",
+    "description": "An extension's OAuth sign-in listener gave up because the browser never redirected back in time (error kind: timeout)",
+    "_machine_translated": true,
+    "_source_hash": "ec59ab4ef0c99369"
+  },
+  "errors.oauth.cancelled": {
+    "message": "콜백을 받기 전에 OAuth 리스너가 취소되었습니다",
+    "description": "An extension's OAuth sign-in listener was stopped (the sign-in was cancelled) before the browser redirected back (error kind: cancelled)",
+    "_machine_translated": true,
+    "_source_hash": "77215e102e3729c5"
+  },
+  "errors.oauth.unknown_listener": {
+    "message": "알 수 없는 리스너 ID입니다(시간 초과, 취소 또는 이미 사용됨)",
+    "description": "An extension waited on an OAuth sign-in listener that no longer exists",
+    "_machine_translated": true,
+    "_source_hash": "853822a52e56e71b"
+  },
+  "errors.oauth.already_awaited": {
+    "message": "이 OAuth 리스너는 이미 대기 중입니다",
+    "description": "An extension waited twice at the same time on one OAuth sign-in listener",
+    "_machine_translated": true,
+    "_source_hash": "3006462600e60513"
+  },
+  "errors.oauth.listener_failed": {
+    "message": "OAuth 리스너가 예기치 않게 중지되었습니다: {reason}",
+    "description": "The local socket an extension's OAuth sign-in listens on failed. {reason} is the operating-system error text",
+    "_machine_translated": true,
+    "_source_hash": "d2097455e406f9f5"
+  },
+  "errors.oauth.invalid_redirect_path": {
+    "message": "redirect_path는 '/'로 시작해야 하며 공백을 포함할 수 없습니다",
+    "description": "Developer-facing: an extension asked for an OAuth callback path that isn't a plain URL path. Keep 'redirect_path' and '/' as-is",
+    "_machine_translated": true,
+    "_source_hash": "49946acb2c5bdb24"
+  },
+  "errors.oauth.bind_failed": {
+    "message": "루프백 리스너를 바인딩하지 못했습니다: {reason}",
+    "description": "Kage couldn't open a local port for an extension's OAuth sign-in. {reason} is the operating-system error text",
+    "_machine_translated": true,
+    "_source_hash": "6fae996e1000cb55"
+  },
+  "settings.manager.ext.disable": {
+    "message": "비활성화",
+    "description": "Button in an extension's Settings page header that turns the extension off",
+    "_machine_translated": true,
+    "_source_hash": "12f23a4e37a48817"
+  },
+  "settings.manager.ext.enable": {
+    "message": "활성화",
+    "description": "Button in an extension's Settings page header that turns a disabled extension back on",
+    "_machine_translated": true,
+    "_source_hash": "1335a00872324940"
+  },
+  "settings.ext_settings.action.working": {
+    "message": "처리 중…",
+    "description": "Status shown next to a button on an extension's Settings page while the extension handles the click",
+    "_machine_translated": true,
+    "_source_hash": "ab029be3c556631c"
+  },
+  "settings.ext_settings.action.copied": {
+    "message": "복사됨",
+    "description": "Status shown briefly next to a Copy button on an extension's Settings page after the text was copied to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "6a9a9509531ba9a2"
+  },
+  "settings.ext_settings.action.copy_failed": {
+    "message": "클립보드에 복사할 수 없습니다",
+    "description": "Status next to a Copy button on an extension's Settings page when the clipboard write failed",
+    "_machine_translated": true,
+    "_source_hash": "9998094c5dcf1db0"
+  },
+  "settings.ext_settings.action.copy_empty": {
+    "message": "복사할 내용이 없습니다",
+    "description": "Status next to a Copy button on an extension's Settings page when the field it copies from is empty",
+    "_machine_translated": true,
+    "_source_hash": "c6bb153a964d0626"
   }
 }

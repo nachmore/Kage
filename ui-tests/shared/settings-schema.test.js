@@ -4,6 +4,9 @@ import {
     sanitizeInfoHtml,
     defaultValues,
     isVisible,
+    copyTextError,
+    isScratchId,
+    MAX_COPY_LENGTH,
 } from '../../ui/js/shared/settings-schema.js';
 
 describe('validateSchema', () => {
@@ -87,6 +90,77 @@ describe('validateSchema', () => {
             }],
         });
         expect(r.ok).toBe(false);
+    });
+});
+
+describe('validateSchema — copy actions', () => {
+    const one = (ctrl, ...rest) => validateSchema({ sections: [{ controls: [ctrl, ...rest] }] });
+    const copyAction = (copy, extra = {}) => ({ type: 'action', id: 'cp', label: 'Copy', copy, ...extra });
+
+    it('accepts a literal copy value without an RPC name', () => {
+        expect(one(copyAction({ value: 'http://127.0.0.1:43821/spotify/callback' })).ok).toBe(true);
+    });
+
+    it('accepts a copy action that keeps an RPC fallback for older hosts', () => {
+        expect(one(copyAction({ value: 'x' }, { action: 'copy_fallback' })).ok).toBe(true);
+    });
+
+    it('still rejects an empty RPC name when one is given', () => {
+        expect(one(copyAction({ value: 'x' }, { action: '' })).ok).toBe(false);
+    });
+
+    it('accepts copy.from pointing at a text / number / select control, even later in the schema', () => {
+        const r = validateSchema({
+            sections: [
+                { controls: [copyAction({ from: 'client_id' })] },
+                { controls: [{ type: 'text', id: 'client_id', label: 'Client ID' }] },
+            ],
+        });
+        expect(r.ok).toBe(true);
+        expect(one(copyAction({ from: 'n' }), { type: 'number', id: 'n', label: 'N' }).ok).toBe(true);
+        expect(one(copyAction({ from: 's' }), {
+            type: 'select', id: 's', label: 'S', options: [{ value: 'a', label: 'A' }],
+        }).ok).toBe(true);
+    });
+
+    it('rejects copy.from naming a missing or non-text control', () => {
+        expect(one(copyAction({ from: 'nope' })).error).toMatch(/copy\.from/);
+        expect(one(copyAction({ from: 'flag' }), { type: 'checkbox', id: 'flag', label: 'F' }).ok).toBe(false);
+        expect(one(copyAction({ from: 'cp' })).ok).toBe(false); // itself (an action)
+        expect(one(copyAction({ from: '../x' })).ok).toBe(false);
+    });
+
+    it('needs exactly one of value / from', () => {
+        expect(one(copyAction({})).error).toMatch(/exactly one/);
+        expect(one(copyAction({ value: 'a', from: 'b' })).error).toMatch(/exactly one/);
+        expect(one(copyAction('text')).error).toMatch(/copy must be an object/);
+        expect(one(copyAction(['x'])).ok).toBe(false);
+    });
+
+    it('rejects non-string, empty, oversized, or rich copy values', () => {
+        expect(one(copyAction({ value: 42 })).error).toMatch(/must be a string/);
+        expect(one(copyAction({ value: { html: '<b>x</b>' } })).error).toMatch(/must be a string/);
+        expect(one(copyAction({ value: '' })).error).toMatch(/must not be empty/);
+        expect(one(copyAction({ value: 'x'.repeat(MAX_COPY_LENGTH) })).ok).toBe(true);
+        expect(one(copyAction({ value: 'x'.repeat(MAX_COPY_LENGTH + 1) })).error).toMatch(/at most/);
+        // Terminal escape sequence (pastejacking) and a bidi override.
+        expect(one(copyAction({ value: 'ls\u001b[2J' })).error).toMatch(/plain text/);
+        expect(one(copyAction({ value: 'abc\u202edef' })).error).toMatch(/plain text/);
+    });
+
+    it('copyTextError allows tabs and newlines', () => {
+        expect(copyTextError('line one\nline two\tend\r\n')).toBeNull();
+        expect(copyTextError('\u0000')).not.toBeNull();
+        expect(copyTextError('\u0085')).not.toBeNull();
+    });
+});
+
+describe('isScratchId', () => {
+    it('is true only for ids starting with a double underscore', () => {
+        expect(isScratchId('__setup_client_id')).toBe(true);
+        expect(isScratchId('_private')).toBe(false);
+        expect(isScratchId('client_id')).toBe(false);
+        expect(isScratchId(undefined)).toBe(false);
     });
 });
 

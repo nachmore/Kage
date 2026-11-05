@@ -154,6 +154,7 @@ let _runtimeSourceCache = null;
 export const RUNTIME_SOURCE_PATHS = [
     'js/shared/icu-message.js',
     'js/extension-sandbox/runtime/sandboxed-worker.js',
+    'js/extension-sandbox/runtime/host-api.js',
     'js/extension-sandbox/runtime.js',
 ];
 
@@ -672,11 +673,13 @@ export class ExtensionSandbox {
             const result = await this._rawInvoke(command, forwardedArgs);
             this._port.postMessage({ type: 'invoke-response', id, result });
         } catch (e) {
-            this._port.postMessage({
-                type: 'invoke-response',
-                id,
-                error: String(e?.message || e),
-            });
+            // A Rust AppError arrives as `{ kind, key, message }`. Forward
+            // kind + key so the extension can branch on them (e.g. an OAuth
+            // `timeout` vs `cancelled`) instead of on the localised message.
+            const response = { type: 'invoke-response', id, error: String(e?.message || e) };
+            if (typeof e?.kind === 'string') response.errorKind = e.kind;
+            if (typeof e?.key === 'string') response.errorKey = e.key;
+            this._port.postMessage(response);
         }
     }
 

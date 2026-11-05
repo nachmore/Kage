@@ -307,7 +307,7 @@ export class SettingsManager {
                 // this window has full __TAURI__ access — always escape.
                 html += `<h2 class="settings-section-header ext-section-header">
                     <span>${escapeHtml(module.icon)} ${escapeHtml(module.title)}</span>
-                    <button class="setting-button" id="ext-toggle-btn-${extId}" style="min-width:80px;font-size:12px;" data-action="toggleExtension" data-arg="${extId}">Disable</button>
+                    <button class="setting-button" id="ext-toggle-btn-${extId}" style="min-width:80px;font-size:12px;" data-action="toggleExtension" data-arg="${extId}">${escapeHtml(t('settings.manager.ext.disable'))}</button>
                     <input type="hidden" id="ext-enabled-${extId}" value="true">
                 </h2>`;
                 if (module.description) {
@@ -734,7 +734,9 @@ function _updateExtToggleUI(extId, enabled) {
     const btn = document.getElementById('ext-toggle-btn-' + extId);
     const content = document.getElementById('ext-content-' + extId);
     if (btn) {
-        btn.textContent = enabled ? 'Disable' : 'Enable';
+        btn.textContent = enabled
+            ? t('settings.manager.ext.disable')
+            : t('settings.manager.ext.enable');
         btn.style.background = enabled ? 'var(--kage-error)' : 'var(--kage-accent)';
         btn.style.color = 'white';
         btn.style.border = 'none';

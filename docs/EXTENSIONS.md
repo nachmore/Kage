@@ -163,7 +163,7 @@ for users.
 | `urls`          | 🔗  | `open_url` for web links and a small allowlist of safe schemes (http, https, mailto, tel, sms, facetime, x-apple.systempreferences, ms-settings, prefs). Custom app URI schemes (`spotify://`, `vscode://`, etc.) are explicitly rejected — they need `launch`. |
 | `launch`        | 🚀  | `open_path` (open arbitrary files in their default OS handler) and `launch_app_by_name`. Distinct from `urls` because the blast radius is "execute external code on the user's behalf." Only request this when an extension genuinely needs to start programs. |
 | `network`       | 📡  | Outbound HTTP from the Rust runtime: `fetch_favicon`, `fetch_link_metadata`. Bypasses CORS and can reach intranet endpoints, so it's a separate capability from `urls`. |
-| `oauth`         | 🔐  | One-shot loopback HTTP listener for OAuth callbacks: `oauth_loopback_start`, `oauth_loopback_await`, `oauth_loopback_cancel`. |
+| `oauth`         | 🔐  | One-shot loopback HTTP listener for OAuth callbacks: `oauth_loopback_start`, `oauth_loopback_await`, `oauth_loopback_cancel`. See [OAuth loopback](#oauth-loopback). |
 | `filesystem`    | 📂  | Discovery only: `pick_folder`, `scan_folder`, `get_common_folders`, `search_files`, `resolve_directories`. `execute_folder_plan` (move/rename/trash) is host-only. |
 | `window`        | 🪟  | Kage-owned window chrome: `resize_floating_window`, `set_floating_opacity`, `start_drag_window`, `save_window_position`, `save_chat_window_geometry`, `apply_chat_window_size`. |
 | `windows`       | 🧿  | Other apps' windows: `list_open_windows`, `get_window_icons`, `focus_open_window`, `get_process_name`, `get_source_window`, `get_app_icon`. |
@@ -195,6 +195,57 @@ tool-permission policy commands, `read_extension_file`,
 `open_devtools`, MCP config commands, updater commands, inline
 assist, the shortcut executor, and more. See
 `extension-permissions.js` for the full list.
+
+### OAuth loopback
+
+The `oauth` capability gives you a one-shot HTTP listener on
+`127.0.0.1` for native (PKCE) sign-in flows:
+
+1. `invoke('oauth_loopback_start', { args: { redirect_path: '/myext/callback', timeout_secs: 300, success_label: 'My Service' } })`
+   → `{ listener_id, redirect_uri, port }`. Use `redirect_uri`
+   verbatim as the OAuth `redirect_uri`. `timeout_secs` defaults to
+   300 and is capped at 600.
+2. Open the provider's authorize URL (`open_url`, `urls` capability).
+3. `invoke('oauth_loopback_await', { args: { listener_id } })` resolves
+   with `{ params }` — every query parameter of the redirect (`code`,
+   `state`, or `error`, …). Check `state` yourself.
+4. If the user abandons the flow, call
+   `invoke('oauth_loopback_cancel', { args: { listener_id } })`. It
+   works whether or not an await is in flight, and it's idempotent. By
+   the time it resolves the port is closed, so a consent the user gives
+   later is refused instead of being told "You're authorized", and a
+   pending await rejects with `cancelled`.
+
+The listener stops after the first request to `redirect_path` (other
+paths get a 404), on timeout, or on cancel. A result that arrives
+before you await is kept for a minute. `oauth_loopback_await` rejects
+with:
+
+| `err.kind`  | `err.key`                       | Meaning |
+|-------------|---------------------------------|---------|
+| `timeout`   | `errors.oauth.timed_out`        | No redirect within `timeout_secs`. Often the provider showed its own error page (unknown client, unregistered redirect URI) and never redirected. |
+| `cancelled` | `errors.oauth.cancelled`        | `oauth_loopback_cancel` stopped the listener. |
+| `internal`  | `errors.oauth.unknown_listener` | Unknown id: never started, already awaited to completion, cancelled before the await, or a result left unclaimed for over a minute. |
+| `internal`  | `errors.oauth.already_awaited`  | Another await on the same id is in flight. |
+| `internal`  | `errors.oauth.listener_failed`  | The socket failed while waiting. |
+
+**Older hosts** (no `invoke.error_kind` in
+[`context.hostFeatures`](#feature-detection)) set no `kind`, report a
+timeout as the English text "OAuth listener was cancelled before a
+callback arrived", and can't cancel an await that's already in flight.
+Current hosts keep that English text for `cancelled` (and use "OAuth
+flow timed out before a callback arrived" for `timeout`), but
+translate both in other languages — so match text only when there's
+no `kind`:
+
+```js
+function loopbackFailure(e) {
+    if (e?.kind === 'timeout' || e?.kind === 'cancelled') return e.kind;
+    // Older hosts: no kind, always English, and a timeout looked like a cancel.
+    if (!e?.kind && /before a callback arrived/i.test(String(e?.message))) return 'timeout';
+    return null;
+}
+```
 
 ## Vendor libraries
 
@@ -256,7 +307,11 @@ the remaining gaps.
   the parent window or to other extensions.
 - `context.invoke(command, args)` round-trips through a
   MessagePort. The host validates the command against your
-  granted capabilities before calling Tauri.
+  granted capabilities before calling Tauri. See
+  [Errors from `invoke()`](#errors-from-invoke) for what a rejection
+  carries.
+- `context.hostFeatures` lists optional host behaviour you can
+  feature-detect — see [Feature detection](#feature-detection).
 - `context.mascot` lets you hint what the user is *doing* so the
   mascot can react. It's not an `invoke` and needs no capability —
   see [Mascot activity hints](#mascot-activity-hints).
@@ -271,6 +326,41 @@ the remaining gaps.
   manipulate parent DOM. `document.*` inside the sandbox exists
   but it's the sandbox's own empty document — writes have no
   visible effect.
+- You can't write the clipboard from the sandbox (and an RPC to the
+  host would arrive after the click's user activation has expired).
+  On a settings page, use a [copy action](#copy-to-clipboard) instead.
+
+### Feature detection
+
+`context.hostFeatures` is a frozen array of strings naming optional
+host behaviour. Names are only ever added, never repurposed. Hosts
+that predate the list don't set it at all, so treat a missing list as
+"none of these":
+
+```js
+const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.includes(f);
+```
+
+| Feature                | Meaning |
+|------------------------|---------|
+| `settings.copy_action` | Settings `action` controls accept `copy` (see [Copy to clipboard](#copy-to-clipboard)). |
+| `invoke.error_kind`    | `invoke()` rejections carry `err.kind` / `err.key` (see [Errors from `invoke()`](#errors-from-invoke)). |
+
+### Errors from `invoke()`
+
+A rejected `invoke()` gives you an `Error` whose `message` is
+human-readable text **in the user's language** — fine to log or show,
+never something to match on. When the backend returned a structured
+error, the `Error` also carries:
+
+- `err.kind` — a stable category: `timeout`, `cancelled`,
+  `connection_lost`, `rate_limited`, `internal`, …
+- `err.key` — the stable message key, e.g. `errors.oauth.timed_out`.
+
+Branch on `kind` (or `key`). Errors the host raises itself (missing
+capability, forbidden command, rate limit) have no `kind`. Hosts
+without `invoke.error_kind` never set either field — see
+[OAuth loopback](#oauth-loopback) for a fallback that works on both.
 
 ### Your extension runs as MULTIPLE instances — design for it
 
@@ -628,6 +718,9 @@ export default class MyExtSettingsProvider {
                           default: 3, min: 1, max: 10, unit: '×' },
                         { type: 'action', id: 'test', label: 'Test',
                           action: 'run_test' },               // → runAction('run_test', values)
+                        { type: 'action', id: 'copy_trigger', label: 'Copy',
+                          copy: { from: 'trigger' },          // host copies it, no RPC
+                          action: 'copy_trigger' },           // older hosts: runAction fallback
                         { type: 'info', html: 'Sanitized HTML. <code>tags</code> allowed: a, b, br, code, em, i, li, ol, p, span, strong, ul, div.' },
                     ],
                 },
@@ -644,7 +737,8 @@ export default class MyExtSettingsProvider {
     /**
      * Optional normalization — canonicalize values (trim whitespace, add
      * implicit delimiters, etc.) before they are persisted. Return
-     * `{ values: <canonical map> }`.
+     * `{ values: <canonical map> }`; keys you leave out aren't saved.
+     * See "Scratch fields and what gets saved".
      */
     normalize(values) {
         return { values: { ...values, trigger: values.trigger.trim() } };
@@ -689,8 +783,87 @@ export default class MyExtSettingsProvider {
 | `number`   | `id`, `label`, `description?`, `default?`, `min?`, `max?`, `step?`, `maxWidth?`, `showWhen?` |
 | `select`   | `id`, `label`, `description?`, `default?`, `options: [{value, label}]`, `maxWidth?`, `showWhen?` |
 | `range`    | `id`, `label`, `description?`, `default?`, `min`, `max`, `step?`, `unit?`, `showWhen?` |
-| `action`   | `id`, `label` (button text), `description?`, `action` (RPC name), `variant?: 'default'|'danger'|'primary'`, `confirm?`, `showWhen?` |
+| `action`   | `id`, `label` (button text), `description?`, `action` (RPC name; optional only with `copy`), `copy?`, `variant?: 'default'|'danger'|'primary'`, `confirm?`, `disabled?`, `showWhen?` |
 | `info`     | `label?`, `html` (sanitized), `showWhen?`                             |
+
+An unknown control `type` (or any other validation error) fails the
+**whole schema**: your page doesn't show up in Settings at all, and a
+`refresh` that returns such a schema leaves the old page in place. New
+capabilities therefore arrive as optional props on existing types (like
+`copy` below), which older hosts ignore, rather than as new types.
+
+### Action options
+
+- `disabled: true` renders the button greyed out and unclickable. Use it
+  for actions that don't apply right now (e.g. "Sign out" when signed
+  out); return a [`refresh`](#host-side-effects) effect when the state
+  changes so the button updates.
+- `confirm: 'Really delete?'` asks for confirmation with a native dialog
+  before `runAction` runs. Ignored by copy actions.
+- `variant: 'primary' | 'danger'` styles the button; the default is
+  plain.
+- While `runAction` runs, the button is disabled and its status line
+  reads "Working…". Whatever `{ status }` you return replaces it;
+  `{ error }` shows as `❌ <error>`. A thrown error shows its message.
+
+### Copy to clipboard
+
+The sandbox can't write the clipboard, and routing a click through
+`runAction` loses the user activation the clipboard API needs. Give an
+`action` a `copy` instead, and the host copies the text itself, inside
+the click, then shows "Copied" next to the button:
+
+```js
+// A literal value…
+{ type: 'action', id: 'copy_redirect', label: 'Copy',
+  copy: { value: 'http://127.0.0.1:43821/myext/callback' },
+  action: 'copy_redirect' },            // fallback for older hosts, see below
+// …or the current value of another control.
+{ type: 'text', id: 'api_key', label: 'API key' },
+{ type: 'action', id: 'copy_key', label: 'Copy', copy: { from: 'api_key' } },
+```
+
+- `copy` needs exactly one of `value` (a string) or `from` (the id of a
+  `text`, `number`, or `select` control in the same schema; it's read
+  when clicked).
+- The text must be plain: 1–2048 characters, no control characters
+  other than tab and newlines, and no bidi-override characters. A
+  literal `value` that breaks this fails schema validation; a `from`
+  value that breaks it at click time shows "Couldn't copy to the
+  clipboard". An empty `from` shows "Nothing to copy".
+- With `copy`, current hosts never call `runAction`, and `confirm` is
+  ignored. `disabled`, `variant`, and `showWhen` work as usual.
+
+**Older hosts** (no `settings.copy_action` in
+[`context.hostFeatures`](#feature-detection)) ignore `copy`, and require
+`action`. Without it, they reject the whole schema. So either:
+
+- keep an `action` on every copy control and handle it in `runAction` —
+  older hosts call it on click, so return something useful such as
+  `{ status: 'Copy this: http://127.0.0.1:43821/myext/callback' }`; or
+- only emit copy controls when `context.hostFeatures` includes
+  `settings.copy_action`, and render the text another way (an `info`
+  block) otherwise.
+
+### Scratch fields and what gets saved
+
+When the user clicks Save, the host validates (`normalize()`, then
+`validate()`) and writes the value controls into your config:
+
+- **Ids starting with `__` are scratch fields.** They render, and their
+  values reach `runAction`, `normalize()`, `validate()`, and
+  `onFileSelected`, but the host never saves them, and ignores any
+  saved value (older hosts did save them), so the control always starts
+  at its `default`. Use them for inputs that feed an action — a "paste
+  your Client ID" box whose action stores the value itself — rather than
+  settings.
+- **What `normalize()` returns is what's saved**: a key it rewrites is
+  saved rewritten, and a key it leaves out isn't saved at all. It can't
+  add keys: only ids of value controls in your schema are ever saved. If
+  the user edits a field after validation, the live values are used
+  instead.
+- A `refresh` keeps whatever the user has typed, scratch fields
+  included.
 
 ### Conditional visibility
 
@@ -712,9 +885,23 @@ download) that the sandbox can't perform. Return a `host` object from
 
 | Effect                | Fields                                                     | Callback                     |
 |-----------------------|------------------------------------------------------------|------------------------------|
+| `refresh`             | —                                                          | `getSettings`                |
 | `download`            | `filename`, `content`, `mime?`                             | —                            |
 | `pick_file`           | `accept?` (e.g. `.json`), `action?` (routed back)          | `onFileSelected`             |
 | `play_timer_sound`    | `soundId`, `customPath?`, `repeats?`                       | —                            |
+
+`refresh` re-fetches `getSettings()` and re-renders the page in place,
+so an action that changed derived state (signed in/out, a step of a
+setup wizard, which buttons are `disabled`, an `info` block's text)
+shows up everywhere, not just in the status line. What the user has
+typed is kept, scratch fields included, and the `status` you returned
+alongside the effect stays on the button:
+
+```js
+return { status: '✅ Connected', host: { type: 'refresh' } };
+```
+
+Unknown effect types are ignored.
 
 ### Info block HTML sanitization
 

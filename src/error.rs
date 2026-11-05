@@ -52,6 +52,9 @@ pub enum ErrorKind {
     ConnectionLost,
     /// Request timed out waiting for response
     Timeout,
+    /// The operation was cancelled before it completed (e.g. an OAuth
+    /// loopback listener stopped by `oauth_loopback_cancel`)
+    Cancelled,
     /// Session is corrupted or invalid
     SessionCorrupted,
     /// Rate limit exceeded

@@ -4,6 +4,7 @@
 // single-line and pointing at self-contained modules.
 import { formatIcu } from '../shared/icu-message.js';
 import { createSandboxedRunner } from './runtime/sandboxed-worker.js';
+import { HOST_FEATURES, invokeError } from './runtime/host-api.js';
 
 /**
  * Kage extension sandbox runtime.
@@ -148,6 +149,8 @@ function buildContext() {
         i18n,
         mascot,
         formatter,
+        // Feature detection for optional host behaviour (see host-api.js).
+        hostFeatures: HOST_FEATURES,
     };
 }
 
@@ -690,7 +693,7 @@ function handleHostMessage(ev) {
             const entry = pendingInvokes.get(msg.id);
             if (!entry) return;
             pendingInvokes.delete(msg.id);
-            if (msg.error) entry.reject(new Error(msg.error));
+            if (msg.error) entry.reject(invokeError(msg));
             else entry.resolve(msg.result);
             break;
         }

@@ -93,6 +93,30 @@ describe('ExtensionSandbox._handleInvoke', () => {
 
         expect(rawInvoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com' });
         expect(sent[0].error).toMatch(/backend boom/);
+        expect(sent[0]).not.toHaveProperty('errorKind');
+    });
+
+    it('forwards an AppError kind and key so the extension can branch on them', async () => {
+        const rawInvoke = vi.fn().mockRejectedValue({
+            kind: 'timeout',
+            key: 'errors.oauth.timed_out',
+            message: 'OAuth flow timed out before a callback arrived',
+        });
+        const { sb, sent } = makeSandbox({ capabilities: ['oauth'], rawInvoke });
+
+        await sb._handleInvoke({
+            id: 7,
+            command: 'oauth_loopback_await',
+            args: { args: { listener_id: 'abc' } },
+        });
+
+        expect(sent[0]).toEqual({
+            type: 'invoke-response',
+            id: 7,
+            error: 'OAuth flow timed out before a callback arrived',
+            errorKind: 'timeout',
+            errorKey: 'errors.oauth.timed_out',
+        });
     });
 
     it('does not trust args to override the extension identity', async () => {

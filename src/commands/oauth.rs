@@ -12,11 +12,29 @@
 //!    the query parameters from the first matching request — typically
 //!    `{ code, state }` for the success path or `{ error, error_description }`
 //!    for the failure path.
+//! 4. Call [`oauth_loopback_cancel`] if the user abandons the flow. It works
+//!    whether or not an await is in flight: the listener stops (the port is
+//!    closed by the time cancel resolves) and a pending await rejects.
 //!
-//! The listener is single-shot: as soon as the callback arrives (or the
-//! timeout expires) the listener is dropped, the port is released, and
-//! the session id is invalidated. Multiple concurrent flows are fine —
-//! each gets its own port and id.
+//! The listener is single-shot: as soon as the callback arrives, the timeout
+//! expires, or the flow is cancelled, the listener is dropped, the port is
+//! released, and the session id is invalidated. Multiple concurrent flows
+//! are fine — each gets its own port and id.
+//!
+//! Failures are distinct [`AppError`] kinds so callers can branch on `kind`
+//! rather than the (localised) message:
+//!
+//! | kind        | key                            | when                                    |
+//! |-------------|--------------------------------|-----------------------------------------|
+//! | `timeout`   | `errors.oauth.timed_out`       | no callback within the timeout          |
+//! | `cancelled` | `errors.oauth.cancelled`       | `oauth_loopback_cancel` stopped it      |
+//! | `internal`  | `errors.oauth.unknown_listener`| unknown / finished / cancelled id       |
+//! | `internal`  | `errors.oauth.already_awaited` | a second await on the same id           |
+//! | `internal`  | `errors.oauth.listener_failed` | the socket failed while accepting       |
+//!
+//! The English text of `timed_out` and `cancelled` is the free-form message
+//! these errors carried before they had kinds, so extensions that match on
+//! it keep working in the English locale.
 //!
 //! Why we can't reuse `tauri-plugin-shell`'s `open_url` here: the redirect
 //! `code` lives in a query string the user's browser hits, not in our
@@ -31,23 +49,27 @@
 //! - The port is randomly chosen by the OS via port 0, so the listener
 //!   isn't guessable across runs.
 //! - We accept exactly one matching request (the first GET to the
-//!   registered path) and immediately shut down. A second hit returns
-//!   404. This prevents a browser-prefetcher / curl tab from
+//!   registered path) and immediately shut down, so a second hit is
+//!   refused. Non-matching paths get a 404 and the listener keeps
+//!   waiting. This prevents a browser-prefetcher / curl tab from
 //!   accidentally double-firing.
+//! - A cancelled flow stops listening at once, so a consent the user
+//!   gives afterwards can't be told "You're authorized" for a sign-in Kage
+//!   has already abandoned.
 //! - The listener has a hard timeout (configured by the caller; we cap
 //!   at 10 minutes so a forgotten flow doesn't tie up a port forever).
 //! - The capability `oauth` gates the commands. Existing storage /
 //!   shell capabilities don't unlock loopback — listening on a port is
 //!   a distinct primitive.
 
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 use tokio::time;
 
 /// 10 minutes — twice the typical OAuth `code` lifetime, well under any
@@ -56,6 +78,17 @@ const MAX_TIMEOUT_SECS: u64 = 600;
 
 /// Default timeout when the caller passes 0 / nothing.
 const DEFAULT_TIMEOUT_SECS: u64 = 300;
+
+/// How long a finished listener's outcome waits for an
+/// [`oauth_loopback_await`] that hasn't been called yet (a callback can land
+/// before the extension gets round to awaiting). After this the entry is
+/// dropped so a flow that is never awaited or cancelled doesn't leak.
+const UNCLAIMED_OUTCOME_TTL: Duration = Duration::from_secs(60);
+
+/// Upper bound on how long [`oauth_loopback_cancel`] waits for the accept
+/// loop to close the port. The loop selects on the cancel signal, so in
+/// practice this is a single scheduler hop.
+const CANCEL_STOP_WAIT: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Serialize)]
 pub struct OauthLoopbackStart {
@@ -95,20 +128,71 @@ pub struct OauthLoopbackAwaitArgs {
     pub listener_id: String,
 }
 
-/// One pending listener.
+/// Why a listener stopped without delivering a callback.
+#[derive(Debug)]
+enum Failure {
+    /// `oauth_loopback_cancel` stopped it, or nobody is left to receive the
+    /// callback (the waiter went away).
+    Cancelled,
+    /// The configured timeout elapsed first.
+    TimedOut,
+    /// `accept()` failed; the listener can't continue.
+    Listener(String),
+}
+
+impl Failure {
+    fn into_error(self) -> AppError {
+        match self {
+            Failure::Cancelled => cancelled_error(),
+            Failure::TimedOut => timed_out_error(),
+            Failure::Listener(reason) => AppError::keyed(
+                ErrorKind::Internal,
+                "errors.oauth.listener_failed",
+                &[("reason", &reason)],
+            ),
+        }
+    }
+}
+
+fn cancelled_error() -> AppError {
+    AppError::keyed(ErrorKind::Cancelled, "errors.oauth.cancelled", &[])
+}
+
+fn timed_out_error() -> AppError {
+    AppError::keyed(ErrorKind::Timeout, "errors.oauth.timed_out", &[])
+}
+
+/// What the accept loop reports through the oneshot.
+type Outcome = Result<OauthLoopbackResult, Failure>;
+
+/// One registered listener. The entry lives from `start` until the flow is
+/// awaited to completion, cancelled, or (never awaited) reaped.
 struct PendingListener {
-    rx: oneshot::Receiver<OauthLoopbackResult>,
+    /// The waiter's end of the outcome channel. [`oauth_loopback_await`]
+    /// takes it but leaves the entry in place, so [`oauth_loopback_cancel`]
+    /// can still reach the accept loop while the await is in flight.
+    rx: Option<oneshot::Receiver<Outcome>>,
+    /// Cancel signal for the accept loop. Sending `true` stops it; so does
+    /// dropping this sender along with the entry.
+    cancel: watch::Sender<bool>,
+    /// Flips to `true` (or the sender drops) once the accept loop has
+    /// exited and the port is closed.
+    stopped: watch::Receiver<bool>,
     timeout: Duration,
 }
 
 /// Process-wide registry of in-flight listeners.
-type Registry = Arc<Mutex<HashMap<String, PendingListener>>>;
+type Registry = HashMap<String, PendingListener>;
 
-fn registry() -> Registry {
-    static REGISTRY: std::sync::OnceLock<Registry> = std::sync::OnceLock::new();
+fn registry() -> MutexGuard<'static, Registry> {
+    static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
+    // Every critical section is a plain map operation, so a poisoned lock
+    // can't hold a half-updated entry; recover it rather than wedging every
+    // later sign-in.
     REGISTRY
-        .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
-        .clone()
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
 }
 
 fn make_listener_id() -> String {
@@ -125,11 +209,15 @@ fn make_listener_id() -> String {
 pub async fn oauth_loopback_start(
     args: OauthLoopbackStartArgs,
 ) -> Result<OauthLoopbackStart, AppError> {
-    if !args.redirect_path.starts_with('/') {
-        return Err("redirect_path must start with '/'".into());
-    }
-    if args.redirect_path.contains(' ') || args.redirect_path.contains('\n') {
-        return Err("redirect_path must not contain whitespace".into());
+    if !args.redirect_path.starts_with('/')
+        || args.redirect_path.contains(' ')
+        || args.redirect_path.contains('\n')
+    {
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.oauth.invalid_redirect_path",
+            &[],
+        ));
     }
 
     let timeout_secs = if args.timeout_secs == 0 {
@@ -139,63 +227,61 @@ pub async fn oauth_loopback_start(
     };
     let timeout = Duration::from_secs(timeout_secs);
 
+    let bind_failed = |e: std::io::Error| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.oauth.bind_failed",
+            &[("reason", &e.to_string())],
+        )
+    };
     // Bind to an OS-chosen ephemeral port on the loopback address.
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
-        .map_err(|e| format!("Failed to bind loopback listener: {}", e))?;
-    let port = listener
-        .local_addr()
-        .map_err(|e| format!("Failed to read local addr: {}", e))?
-        .port();
+        .map_err(bind_failed)?;
+    let port = listener.local_addr().map_err(bind_failed)?.port();
 
     let listener_id = make_listener_id();
     let redirect_uri = format!("http://127.0.0.1:{}{}", port, args.redirect_path);
 
-    let (tx, rx) = oneshot::channel::<OauthLoopbackResult>();
-    let path = args.redirect_path.clone();
-    let label = args.success_label.clone();
+    let (mut tx, rx) = oneshot::channel::<Outcome>();
+    let (cancel_tx, cancel_rx) = watch::channel(false);
+    let (stopped_tx, stopped_rx) = watch::channel(false);
+    let path = args.redirect_path;
+    let label = args.success_label;
 
-    // Spawn the accept loop. It exits as soon as a matching callback
-    // arrives or the listener is dropped.
+    registry().insert(
+        listener_id.clone(),
+        PendingListener {
+            rx: Some(rx),
+            cancel: cancel_tx,
+            stopped: stopped_rx,
+            timeout,
+        },
+    );
+
+    let id = listener_id.clone();
     tokio::spawn(async move {
-        let result = time::timeout(timeout, async {
-            // Loop because the browser may make probe requests (favicon.ico,
-            // etc.) before the real callback. We answer non-matching
-            // requests with 404 and keep waiting.
-            loop {
-                match listener.accept().await {
-                    Ok((stream, _)) => {
-                        if let Some(params) =
-                            handle_one_request(stream, &path, label.as_deref()).await
-                        {
-                            return Ok::<_, ()>(OauthLoopbackResult { params });
-                        }
-                    }
-                    Err(e) => {
-                        log::warn!("oauth_loopback: accept failed: {}", e);
-                        return Err(());
-                    }
-                }
-            }
-        })
+        let outcome = run_listener(
+            listener,
+            &path,
+            label.as_deref(),
+            timeout,
+            cancel_rx,
+            &mut tx,
+        )
         .await;
+        // `run_listener` owned the socket, so the port is already closed.
+        let _ = stopped_tx.send(true);
+        // Fails only if nobody can receive it any more — nothing to do.
+        let _ = tx.send(outcome);
 
-        match result {
-            Ok(Ok(payload)) => {
-                let _ = tx.send(payload);
-            }
-            Ok(Err(_)) | Err(_) => {
-                // Channel closed implicitly when tx drops; await side
-                // gets a "channel closed" error which we translate into
-                // the right user-facing message.
-            }
-        }
-        // The listener is dropped at end of scope, releasing the port.
+        // An outcome nobody has claimed yet (callback or timeout before the
+        // extension awaited) waits a while, then the entry goes. A claimed
+        // outcome has been delivered by now, and its waiter removed the
+        // entry itself; removing again is a no-op.
+        time::sleep(UNCLAIMED_OUTCOME_TTL).await;
+        registry().remove(&id);
     });
-
-    let registry = registry();
-    let mut reg = registry.lock().expect("oauth_loopback registry poisoned");
-    reg.insert(listener_id.clone(), PendingListener { rx, timeout });
 
     Ok(OauthLoopbackStart {
         listener_id,
@@ -204,38 +290,102 @@ pub async fn oauth_loopback_start(
     })
 }
 
+/// Serve the listener until a callback arrives, the timeout elapses, the
+/// flow is cancelled, or nobody is left to receive the result. Takes the
+/// listener by value so the port is closed by the time this returns.
+async fn run_listener(
+    listener: TcpListener,
+    path: &str,
+    label: Option<&str>,
+    timeout: Duration,
+    mut cancel: watch::Receiver<bool>,
+    tx: &mut oneshot::Sender<Outcome>,
+) -> Outcome {
+    tokio::select! {
+        // Cancellation is checked first, so once it's requested a callback
+        // that becomes ready in the same poll isn't served as a success.
+        biased;
+        // `wait_for` errors when the sender is dropped — the registry entry
+        // is gone, which is a cancel too.
+        _ = cancel.wait_for(|cancelled| *cancelled) => Err(Failure::Cancelled),
+        // The receiver is gone (the awaiting command was dropped, or the
+        // unclaimed entry was removed): there's no one to hand a callback
+        // to, so don't keep a port open to tell the browser it worked.
+        _ = tx.closed() => Err(Failure::Cancelled),
+        _ = time::sleep(timeout) => Err(Failure::TimedOut),
+        outcome = accept_callback(&listener, path, label) => outcome,
+    }
+}
+
+/// Accept connections until one hits the registered path.
+async fn accept_callback(listener: &TcpListener, path: &str, label: Option<&str>) -> Outcome {
+    // Loop because the browser may make probe requests (favicon.ico, etc.)
+    // before the real callback. We answer non-matching requests with 404
+    // and keep waiting.
+    loop {
+        let (stream, _) = listener.accept().await.map_err(|e| {
+            log::warn!("oauth_loopback: accept failed: {}", e);
+            Failure::Listener(e.to_string())
+        })?;
+        if let Some(params) = handle_one_request(stream, path, label).await {
+            return Ok(OauthLoopbackResult { params });
+        }
+    }
+}
+
 /// Wait for the matching browser redirect. Resolves with the query
-/// parameters, or errors out on timeout / cancellation.
+/// parameters, or rejects with a `timeout` / `cancelled` error (see the
+/// module docs for the full list).
 #[tauri::command]
 pub async fn oauth_loopback_await(
     args: OauthLoopbackAwaitArgs,
 ) -> Result<OauthLoopbackResult, AppError> {
-    let pending = {
-        let registry = registry();
-        let mut reg = registry.lock().expect("oauth_loopback registry poisoned");
-        reg.remove(&args.listener_id)
-            .ok_or("Unknown listener id (timed out, cancelled, or already consumed)")?
+    let (rx, timeout) = {
+        let mut reg = registry();
+        let entry = reg.get_mut(&args.listener_id).ok_or_else(|| {
+            AppError::keyed(ErrorKind::Internal, "errors.oauth.unknown_listener", &[])
+        })?;
+        let rx = entry.rx.take().ok_or_else(|| {
+            AppError::keyed(ErrorKind::Internal, "errors.oauth.already_awaited", &[])
+        })?;
+        (rx, entry.timeout)
     };
 
-    // Use the same timeout the start call configured. The accept-loop
-    // spawn enforces it independently, but adding an outer timeout
-    // protects against the (theoretical) case where the listener task
-    // is alive but the channel is wedged.
-    match time::timeout(pending.timeout + Duration::from_secs(2), pending.rx).await {
-        Ok(Ok(result)) => Ok(result),
-        Ok(Err(_)) => Err("OAuth listener was cancelled before a callback arrived".into()),
-        Err(_) => Err("OAuth flow timed out before a callback arrived".into()),
+    // The accept loop enforces the timeout and reports it as an outcome;
+    // this outer bound only guards against a wedged listener task.
+    let waited = time::timeout(timeout + Duration::from_secs(2), rx).await;
+    // The id is finished whichever way this went. Dropping the entry also
+    // drops the cancel sender, which stops a listener that's still running
+    // after the backstop fired.
+    registry().remove(&args.listener_id);
+
+    match waited {
+        Ok(Ok(Ok(result))) => Ok(result),
+        Ok(Ok(Err(failure))) => Err(failure.into_error()),
+        // The listener task ended without reporting (it panicked).
+        Ok(Err(_)) => Err(cancelled_error()),
+        Err(_) => Err(timed_out_error()),
     }
 }
 
-/// Cancel a pending listener. Idempotent.
+/// Cancel a listener. Idempotent; safe whether or not an
+/// [`oauth_loopback_await`] is in flight. The accept loop selects on the
+/// cancel signal, so the port is closed by the time this resolves, and an
+/// in-flight await rejects with a `cancelled` error.
 #[tauri::command]
 pub async fn oauth_loopback_cancel(args: OauthLoopbackAwaitArgs) -> Result<(), AppError> {
-    let registry = registry();
-    let mut reg = registry.lock().expect("oauth_loopback registry poisoned");
-    reg.remove(&args.listener_id);
-    // The receiver drop in the spawned task closes the channel, which
-    // unblocks the accept loop on its next iteration.
+    let Some(entry) = registry().remove(&args.listener_id) else {
+        return Ok(());
+    };
+    let PendingListener {
+        cancel,
+        mut stopped,
+        ..
+    } = entry;
+    let _ = cancel.send(true);
+    // `wait_for` also returns (with an error) once the task has dropped its
+    // sender, i.e. it's finished either way.
+    let _ = time::timeout(CANCEL_STOP_WAIT, stopped.wait_for(|stopped| *stopped)).await;
     Ok(())
 }
 
@@ -374,4 +524,224 @@ async fn write_response(
     stream.flush().await?;
     let _ = stream.shutdown().await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn start(path: &str, timeout_secs: u64) -> OauthLoopbackStart {
+        oauth_loopback_start(OauthLoopbackStartArgs {
+            redirect_path: path.to_string(),
+            timeout_secs,
+            success_label: Some("Test".to_string()),
+        })
+        .await
+        .expect("loopback should start")
+    }
+
+    fn id_args(id: &str) -> OauthLoopbackAwaitArgs {
+        OauthLoopbackAwaitArgs {
+            listener_id: id.to_string(),
+        }
+    }
+
+    /// Play the browser: send `GET <target>` and return the raw response,
+    /// or "" when the connection is refused or closed without one.
+    async fn send_callback(port: u16, target: &str) -> String {
+        let connect = TcpStream::connect(("127.0.0.1", port));
+        let Ok(Ok(mut stream)) = time::timeout(Duration::from_secs(2), connect).await else {
+            return String::new();
+        };
+        let request = format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+        if stream.write_all(request.as_bytes()).await.is_err() {
+            return String::new();
+        }
+        let mut buf = Vec::new();
+        let _ = time::timeout(Duration::from_secs(2), stream.read_to_end(&mut buf)).await;
+        String::from_utf8_lossy(&buf).into_owned()
+    }
+
+    type Waiter = tokio::task::JoinHandle<Result<OauthLoopbackResult, AppError>>;
+
+    /// Spawn an await and return once it has claimed the listener's
+    /// receiver, i.e. the await is genuinely in flight.
+    async fn spawn_waiter(id: &str) -> Waiter {
+        let waiter = tokio::spawn(oauth_loopback_await(id_args(id)));
+        for _ in 0..200 {
+            if registry().get(id).is_some_and(|e| e.rx.is_none()) {
+                return waiter;
+            }
+            time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("the await never claimed the listener");
+    }
+
+    async fn join_err(waiter: Waiter) -> AppError {
+        time::timeout(Duration::from_secs(3), waiter)
+            .await
+            .expect("the waiter should wake promptly")
+            .expect("the waiter task should not panic")
+            .expect_err("the await should reject")
+    }
+
+    #[tokio::test]
+    async fn cancel_while_awaiting_wakes_the_waiter_with_cancelled() {
+        let started = start("/t/cancel-in-flight", 30).await;
+        let id = started.listener_id.clone();
+        let waiter = spawn_waiter(&id).await;
+
+        oauth_loopback_cancel(id_args(&id))
+            .await
+            .expect("cancel ok");
+
+        let err = join_err(waiter).await;
+        assert!(matches!(err.kind, ErrorKind::Cancelled), "{:?}", err.kind);
+        assert_eq!(err.key, "errors.oauth.cancelled");
+        assert!(!registry().contains_key(&id), "the entry should be gone");
+    }
+
+    #[tokio::test]
+    async fn late_callback_after_cancel_is_not_authorized() {
+        let started = start("/t/late", 30).await;
+        let id = started.listener_id.clone();
+        let waiter = spawn_waiter(&id).await;
+
+        oauth_loopback_cancel(id_args(&id))
+            .await
+            .expect("cancel ok");
+
+        // The user approves in the browser after Kage gave up: the port is
+        // already closed, so the redirect is refused rather than answered
+        // with "You're authorized".
+        let response = send_callback(started.port, "/t/late?code=abc&state=s").await;
+        assert!(
+            !response.starts_with("HTTP/1.1 200"),
+            "late callback was served: {response:?}"
+        );
+        assert!(!response.contains("authorized"), "{response:?}");
+
+        let err = join_err(waiter).await;
+        assert!(matches!(err.kind, ErrorKind::Cancelled), "{:?}", err.kind);
+    }
+
+    #[tokio::test]
+    async fn cancel_before_await_stops_the_listener() {
+        // No await yet, so the registry still holds the receiver. Cancel
+        // must still shut the accept loop down.
+        let started = start("/t/no-waiter", 30).await;
+        let id = started.listener_id.clone();
+
+        oauth_loopback_cancel(id_args(&id))
+            .await
+            .expect("cancel ok");
+
+        let response = send_callback(started.port, "/t/no-waiter?code=abc").await;
+        assert!(
+            !response.starts_with("HTTP/1.1 200"),
+            "callback after cancel was served: {response:?}"
+        );
+        let err = oauth_loopback_await(id_args(&id))
+            .await
+            .expect_err("await after cancel should reject");
+        assert_eq!(err.key, "errors.oauth.unknown_listener");
+        // Cancel is idempotent.
+        oauth_loopback_cancel(id_args(&id))
+            .await
+            .expect("second cancel ok");
+    }
+
+    #[tokio::test]
+    async fn timeout_is_reported_as_timeout_not_cancelled() {
+        let started = start("/t/timeout", 1).await;
+        let id = started.listener_id.clone();
+
+        let err = time::timeout(Duration::from_secs(5), oauth_loopback_await(id_args(&id)))
+            .await
+            .expect("the await should resolve after the 1s timeout")
+            .expect_err("the await should time out");
+        assert!(matches!(err.kind, ErrorKind::Timeout), "{:?}", err.kind);
+        assert_eq!(err.key, "errors.oauth.timed_out");
+
+        // The port was released with the timeout.
+        let response = send_callback(started.port, "/t/timeout?code=abc").await;
+        assert!(!response.starts_with("HTTP/1.1 200"), "{response:?}");
+    }
+
+    #[tokio::test]
+    async fn timeout_before_await_is_kept_for_the_waiter() {
+        // The extension may only call await after the listener has already
+        // given up; it should still learn *why*, not get "unknown id".
+        let started = start("/t/timeout-unclaimed", 1).await;
+        time::sleep(Duration::from_millis(1500)).await;
+        let err = oauth_loopback_await(id_args(&started.listener_id))
+            .await
+            .expect_err("the await should report the timeout");
+        assert!(matches!(err.kind, ErrorKind::Timeout), "{:?}", err.kind);
+    }
+
+    #[tokio::test]
+    async fn a_second_concurrent_await_is_rejected() {
+        let started = start("/t/double-await", 30).await;
+        let id = started.listener_id.clone();
+        let waiter = spawn_waiter(&id).await;
+
+        let err = oauth_loopback_await(id_args(&id))
+            .await
+            .expect_err("a second await should reject");
+        assert_eq!(err.key, "errors.oauth.already_awaited");
+
+        // The first await is unaffected and still cancellable.
+        oauth_loopback_cancel(id_args(&id))
+            .await
+            .expect("cancel ok");
+        assert!(matches!(join_err(waiter).await.kind, ErrorKind::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn callback_while_awaiting_resolves_with_params() {
+        let started = start("/t/ok", 30).await;
+        let id = started.listener_id.clone();
+        let waiter = spawn_waiter(&id).await;
+
+        let response = send_callback(started.port, "/t/ok?code=abc&state=xyz").await;
+        assert!(response.starts_with("HTTP/1.1 200"), "{response:?}");
+
+        let result = time::timeout(Duration::from_secs(3), waiter)
+            .await
+            .expect("resolves")
+            .expect("no panic")
+            .expect("callback params");
+        assert_eq!(result.params.get("code").map(String::as_str), Some("abc"));
+        assert_eq!(result.params.get("state").map(String::as_str), Some("xyz"));
+        assert!(!registry().contains_key(&id));
+    }
+
+    #[tokio::test]
+    async fn invalid_redirect_path_is_a_keyed_error() {
+        let err = oauth_loopback_start(OauthLoopbackStartArgs {
+            redirect_path: "no-slash".to_string(),
+            timeout_secs: 5,
+            success_label: None,
+        })
+        .await
+        .expect_err("should reject");
+        assert_eq!(err.key, "errors.oauth.invalid_redirect_path");
+    }
+
+    #[test]
+    fn english_messages_keep_the_legacy_text() {
+        // Extensions written before errors carried a kind matched on these
+        // strings ("…before a callback arrived" / "timed out"). Display is
+        // always English.
+        crate::i18n::init(Some("en"));
+        assert_eq!(
+            cancelled_error().to_string(),
+            "OAuth listener was cancelled before a callback arrived"
+        );
+        assert_eq!(
+            timed_out_error().to_string(),
+            "OAuth flow timed out before a callback arrived"
+        );
+    }
 }

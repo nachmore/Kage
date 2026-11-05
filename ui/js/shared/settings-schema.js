@@ -89,14 +89,24 @@
  * @property {string} id            Host-local identifier for the button row
  * @property {string} label         Button text
  * @property {string} [description]
- * @property {string} action        RPC name to call on the extension's settings provider
+ * @property {string} [action]      RPC name to call on the extension's settings
+ *                                  provider. Required unless `copy` is set; with
+ *                                  `copy` it's only the fallback for older hosts.
+ * @property {SchemaCopy} [copy]    Copy text to the clipboard on click, host-side
  * @property {'default'|'danger'|'primary'} [variant]
- * @property {string} [confirm]     Native confirm() prompt before running
+ * @property {string} [confirm]     Native confirm() prompt before running (ignored with `copy`)
+ * @property {boolean} [disabled]   Render the button disabled
  * @property {SchemaShowWhen} [showWhen]
+ *
+ * @typedef {object} SchemaCopy
+ *   What a copy action puts on the clipboard. Exactly one of:
+ * @property {string} [value]       Literal plain text (see copyTextError)
+ * @property {string} [from]        Id of a text / number / select control whose
+ *                                  current value is copied
  *
  * @typedef {object} SchemaInfo
  *   Static informational block. `html` is passed through a strict
- *   sanitizer that only allows a small whitelist (see sanitizeInfoHtml).
+ *   sanitizer that only allows a small allowlist (see sanitizeInfoHtml).
  *   Use it for attribution, help text, or command references.
  * @property {'info'} type
  * @property {string} [label]
@@ -116,6 +126,47 @@ export const CONTROL_TYPES = Object.freeze([
 
 export const ACTION_VARIANTS = Object.freeze(['default', 'danger', 'primary']);
 
+/** Longest text a copy action may put on the clipboard. */
+export const MAX_COPY_LENGTH = 2048;
+
+/** Control types a copy action's `copy.from` may point at. */
+export const COPY_SOURCE_TYPES = Object.freeze(['text', 'number', 'select']);
+
+const ID_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/;
+
+/**
+ * Ids starting with `__` are scratch fields: inputs that feed an action
+ * (Spotify's "paste your Client ID" box) rather than real settings. They
+ * render and their values reach runAction / validate / normalize, but the
+ * host never writes them to config.json and ignores any stored value.
+ */
+export function isScratchId(id) {
+    return typeof id === 'string' && id.startsWith('__');
+}
+
+/**
+ * Why `text` can't go on the clipboard from a copy action, or null if it
+ * can. Plain text only: no rich content, and no control / bidi-override
+ * characters, so a value can't smuggle terminal escape sequences or render
+ * differently from what gets pasted. Tab and newlines are fine.
+ *
+ * @param {unknown} text
+ * @returns {string|null}
+ */
+export function copyTextError(text) {
+    if (typeof text !== 'string') return 'must be a string';
+    if (text.length === 0) return 'must not be empty';
+    if (text.length > MAX_COPY_LENGTH) return `must be at most ${MAX_COPY_LENGTH} characters`;
+    for (let i = 0; i < text.length; i++) {
+        const c = text.charCodeAt(i);
+        const control =
+            (c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) || (c >= 0x7f && c <= 0x9f);
+        const bidi = (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069);
+        if (control || bidi) return 'must be plain text (no control or bidi-override characters)';
+    }
+    return null;
+}
+
 /**
  * Validate a schema object before we render it, so we fail fast with a
  * clear error rather than rendering broken UI.
@@ -131,6 +182,8 @@ export function validateSchema(schema) {
         return { ok: false, error: 'schema.sections must be an array' };
     }
     const seenIds = new Set();
+    const typesById = new Map();
+    const copyRefs = [];
     for (let si = 0; si < schema.sections.length; si++) {
         const section = schema.sections[si];
         if (!section || typeof section !== 'object') {
@@ -144,9 +197,39 @@ export function validateSchema(schema) {
             const where = `section[${si}].controls[${ci}]`;
             const err = validateControl(ctrl, where, seenIds);
             if (err) return { ok: false, error: err };
+            if (ctrl.id) typesById.set(ctrl.id, ctrl.type);
+            if (ctrl.type === 'action' && typeof ctrl.copy?.from === 'string') {
+                copyRefs.push({ where, from: ctrl.copy.from });
+            }
+        }
+    }
+    // `copy.from` may point forwards, so resolve once every id is known.
+    for (const { where, from } of copyRefs) {
+        if (!COPY_SOURCE_TYPES.includes(typesById.get(from))) {
+            return {
+                ok: false,
+                error: `${where}.copy.from must name a ${COPY_SOURCE_TYPES.join(' / ')} control in this schema`,
+            };
         }
     }
     return { ok: true, schema };
+}
+
+function validateCopy(copy, where) {
+    if (!copy || typeof copy !== 'object' || Array.isArray(copy)) {
+        return `${where}.copy must be an object`;
+    }
+    const hasValue = Object.hasOwn(copy, 'value');
+    const hasFrom = Object.hasOwn(copy, 'from');
+    if (hasValue === hasFrom) return `${where}.copy needs exactly one of .value or .from`;
+    if (hasValue) {
+        const reason = copyTextError(copy.value);
+        return reason ? `${where}.copy.value ${reason}` : null;
+    }
+    if (typeof copy.from !== 'string' || !ID_PATTERN.test(copy.from)) {
+        return `${where}.copy.from must be a control id`;
+    }
+    return null;
 }
 
 function validateControl(ctrl, where, seenIds) {
@@ -158,7 +241,7 @@ function validateControl(ctrl, where, seenIds) {
         return `${where}.id must be a string`;
     }
     if (ctrl.id) {
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(ctrl.id)) {
+        if (!ID_PATTERN.test(ctrl.id)) {
             return `${where}.id must be a simple identifier (alphanumeric + underscore, up to 64 chars)`;
         }
         if (seenIds.has(ctrl.id)) {
@@ -193,7 +276,15 @@ function validateControl(ctrl, where, seenIds) {
             break;
         }
         case 'action': {
-            if (typeof ctrl.action !== 'string' || !ctrl.action) {
+            // A copy action runs entirely in the host, so its RPC name is
+            // optional — it's only there for hosts that predate `copy` (they
+            // require it, and route the click to runAction instead).
+            if (ctrl.copy !== undefined) {
+                const err = validateCopy(ctrl.copy, where);
+                if (err) return err;
+            }
+            const needsRpc = ctrl.copy === undefined || ctrl.action !== undefined;
+            if (needsRpc && (typeof ctrl.action !== 'string' || !ctrl.action)) {
                 return `${where}.action must be a non-empty RPC name`;
             }
             if (ctrl.variant && !ACTION_VARIANTS.includes(ctrl.variant)) {
@@ -214,7 +305,7 @@ function validateControl(ctrl, where, seenIds) {
 }
 
 /**
- * Strict sanitizer for the `info` control's HTML. Only whitelisted tags
+ * Strict sanitizer for the `info` control's HTML. Only allow-listed tags
  * and attributes are allowed. Unknown tags are stripped; unknown
  * attributes are dropped. Used on host side before injecting into the DOM.
  *

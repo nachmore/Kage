@@ -8830,5 +8830,83 @@
     "description": "Briefly replaces a copy button's label after copying succeeded",
     "_machine_translated": true,
     "_source_hash": "b3d8aa115c03cd7c"
+  },
+  "errors.oauth.timed_out": {
+    "message": "কলব্যাক আসার আগেই OAuth প্রক্রিয়ার সময় শেষ হয়ে গেছে",
+    "description": "An extension's OAuth sign-in listener gave up because the browser never redirected back in time (error kind: timeout)",
+    "_machine_translated": true,
+    "_source_hash": "ec59ab4ef0c99369"
+  },
+  "errors.oauth.cancelled": {
+    "message": "কলব্যাক আসার আগেই OAuth লিসেনার বাতিল করা হয়েছে",
+    "description": "An extension's OAuth sign-in listener was stopped (the sign-in was cancelled) before the browser redirected back (error kind: cancelled)",
+    "_machine_translated": true,
+    "_source_hash": "77215e102e3729c5"
+  },
+  "errors.oauth.unknown_listener": {
+    "message": "অজানা লিসেনার ID (সময় শেষ, বাতিল, অথবা আগেই ব্যবহৃত)",
+    "description": "An extension waited on an OAuth sign-in listener that no longer exists",
+    "_machine_translated": true,
+    "_source_hash": "853822a52e56e71b"
+  },
+  "errors.oauth.already_awaited": {
+    "message": "এই OAuth লিসেনারের জন্য ইতিমধ্যে অপেক্ষা করা হচ্ছে",
+    "description": "An extension waited twice at the same time on one OAuth sign-in listener",
+    "_machine_translated": true,
+    "_source_hash": "3006462600e60513"
+  },
+  "errors.oauth.listener_failed": {
+    "message": "OAuth লিসেনার অপ্রত্যাশিতভাবে বন্ধ হয়ে গেছে: {reason}",
+    "description": "The local socket an extension's OAuth sign-in listens on failed. {reason} is the operating-system error text",
+    "_machine_translated": true,
+    "_source_hash": "d2097455e406f9f5"
+  },
+  "errors.oauth.invalid_redirect_path": {
+    "message": "redirect_path অবশ্যই '/' দিয়ে শুরু হতে হবে এবং এতে কোনো ফাঁকা স্থান থাকা যাবে না",
+    "description": "Developer-facing: an extension asked for an OAuth callback path that isn't a plain URL path. Keep 'redirect_path' and '/' as-is",
+    "_machine_translated": true,
+    "_source_hash": "49946acb2c5bdb24"
+  },
+  "errors.oauth.bind_failed": {
+    "message": "লুপব্যাক লিসেনার বাইন্ড করা যায়নি: {reason}",
+    "description": "Kage couldn't open a local port for an extension's OAuth sign-in. {reason} is the operating-system error text",
+    "_machine_translated": true,
+    "_source_hash": "6fae996e1000cb55"
+  },
+  "settings.manager.ext.disable": {
+    "message": "নিষ্ক্রিয় করুন",
+    "description": "Button in an extension's Settings page header that turns the extension off",
+    "_machine_translated": true,
+    "_source_hash": "12f23a4e37a48817"
+  },
+  "settings.manager.ext.enable": {
+    "message": "সক্রিয় করুন",
+    "description": "Button in an extension's Settings page header that turns a disabled extension back on",
+    "_machine_translated": true,
+    "_source_hash": "1335a00872324940"
+  },
+  "settings.ext_settings.action.working": {
+    "message": "কাজ চলছে…",
+    "description": "Status shown next to a button on an extension's Settings page while the extension handles the click",
+    "_machine_translated": true,
+    "_source_hash": "ab029be3c556631c"
+  },
+  "settings.ext_settings.action.copied": {
+    "message": "কপি হয়েছে",
+    "description": "Status shown briefly next to a Copy button on an extension's Settings page after the text was copied to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "6a9a9509531ba9a2"
+  },
+  "settings.ext_settings.action.copy_failed": {
+    "message": "ক্লিপবোর্ডে কপি করা যায়নি",
+    "description": "Status next to a Copy button on an extension's Settings page when the clipboard write failed",
+    "_machine_translated": true,
+    "_source_hash": "9998094c5dcf1db0"
+  },
+  "settings.ext_settings.action.copy_empty": {
+    "message": "কপি করার মতো কিছু নেই",
+    "description": "Status next to a Copy button on an extension's Settings page when the field it copies from is empty",
+    "_machine_translated": true,
+    "_source_hash": "c6bb153a964d0626"
   }
 }

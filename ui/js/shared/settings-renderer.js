@@ -12,7 +12,9 @@
  */
 
 import {
+    copyTextError,
     forEachValueControl,
+    isScratchId,
     isVisible,
     sanitizeInfoHtml,
     validateSchema,
@@ -20,6 +22,10 @@ import {
 import { escapeAttr, escapeHtml } from './tool-utils.js';
 import { runSettingsHostSideEffect } from './settings-host-effects.js';
 import { neutralizeLinks } from './link-handler.js';
+import { t } from './i18n.js';
+
+/** How long a copy action's "Copied" status stays up. */
+const COPIED_STATUS_MS = 2000;
 
 /**
  * Timeout for a settings action RPC. Far longer than the default 10s
@@ -57,6 +63,17 @@ export class RenderedSettings {
         /** DOM nodes per control id, for updates. */
         this._rowsById = new Map();
         this._controlsById = new Map();
+        /** Action control per button element id, for the click handler. */
+        this._actionsByButtonId = new Map();
+        /**
+         * The last normalize() result and the live values it was written
+         * back as. save() persists it while the controls still show exactly
+         * that, so keys normalize() dropped aren't re-read from the DOM.
+         * @type {{values: object, snapshot: string} | null}
+         */
+        this._lastNormalized = null;
+        /** Pending "Copied" status-clear timers. */
+        this._statusTimers = new Set();
     }
 
     render() {
@@ -92,7 +109,7 @@ export class RenderedSettings {
      * edit (e.g. a half-typed trigger word) isn't lost to the re-render.
      *
      * @param {object} [opts]
-     * @param {string} [opts.preserveStatusFor] - action id whose status span
+     * @param {string} [opts.preserveStatusFor] - id of the action control whose status span
      *        should keep showing `opts.status` after the rebuild.
      * @param {string} [opts.status] - status text to re-apply.
      */
@@ -114,16 +131,18 @@ export class RenderedSettings {
             return;
         }
 
-        // Snapshot live values so the rebuild doesn't reset them to defaults.
-        const carried = this.save();
+        // Snapshot live values (scratch fields included) so the rebuild
+        // doesn't reset them to defaults.
+        const carried = this.currentValues();
 
         // Tear down old listeners before we replace the DOM.
         this.destroy();
 
         this.schema = r.schema;
         this.values = {};
+        this._lastNormalized = null;
         this.render();
-        this.load(carried);
+        this._applyValues(carried, { fromConfig: false });
 
         // Re-apply the status message on the originating action's status
         // span — the rebuild created a fresh (empty) one.
@@ -136,22 +155,31 @@ export class RenderedSettings {
 
     load(stored) {
         // `stored` is the raw extension config object (config.extensions[id]).
-        // Controls with a stored value adopt it; others keep their default.
-        for (const section of this.schema.sections || []) {
-            for (const ctrl of section.controls || []) {
-                if (!ctrl.id) continue;
-                if (ctrl.type === 'info' || ctrl.type === 'action') continue;
-                const has = stored && Object.hasOwn(stored, ctrl.id);
-                const v = has ? stored[ctrl.id] : ctrl.default;
-                this.values[ctrl.id] = coerceValue(ctrl, v);
-                this._writeToControl(ctrl, this.values[ctrl.id]);
-            }
-        }
+        this._lastNormalized = null;
+        this._applyValues(stored, { fromConfig: true });
+    }
+
+    /**
+     * Controls with a value in `source` adopt it; others take their default.
+     * Scratch (`__`) fields never take a value from stored config — they
+     * were never meant to be there (older hosts persisted them), and their
+     * default is what the extension wants shown.
+     */
+    _applyValues(source, { fromConfig }) {
+        forEachValueControl(this.schema, (ctrl) => {
+            const usable =
+                source && Object.hasOwn(source, ctrl.id) && !(fromConfig && isScratchId(ctrl.id));
+            this.values[ctrl.id] = coerceValue(ctrl, usable ? source[ctrl.id] : ctrl.default);
+            this._writeToControl(ctrl, this.values[ctrl.id]);
+        });
         this._applyVisibility();
     }
 
-    save() {
-        // Read current control values back into `values` and return them.
+    /**
+     * Every value control's live value, scratch fields included. This is
+     * what actions, validate() and normalize() see.
+     */
+    currentValues() {
         forEachValueControl(this.schema, (ctrl) => {
             this.values[ctrl.id] = this._readFromControl(ctrl);
         });
@@ -159,16 +187,42 @@ export class RenderedSettings {
     }
 
     /**
+     * The values to persist to config.extensions[id]. Never includes
+     * scratch (`__`) fields. While the controls still show the last
+     * normalize() result, that result is what's saved — so a key normalize()
+     * dropped stays dropped instead of being re-read from its control.
+     * normalize() can drop or rewrite keys but not add new ones: only ids
+     * of value controls in the schema are ever saved.
+     */
+    save() {
+        const live = this.currentValues();
+        const n = this._lastNormalized;
+        const normalized = n && n.snapshot === JSON.stringify(live) ? n.values : null;
+        const out = {};
+        forEachValueControl(this.schema, (ctrl) => {
+            if (isScratchId(ctrl.id)) return;
+            if (!normalized) {
+                out[ctrl.id] = live[ctrl.id];
+            } else if (Object.hasOwn(normalized, ctrl.id)) {
+                out[ctrl.id] = coerceValue(ctrl, normalized[ctrl.id]);
+            }
+        });
+        return out;
+    }
+
+    /**
      * Ask the sandbox to validate. If the extension doesn't implement
      * validateSettings, we fall back to schema-level min/max checks.
      */
     async validate() {
-        let current = this.save();
+        let current = this.currentValues();
+        this._lastNormalized = null;
 
         // Optional normalization — extensions can return a canonicalized
         // values map (e.g. trimming whitespace, adding implicit trailing
-        // delimiters). If the sandbox returns an object with a `values`
-        // field, we adopt it and surface through subsequent save().
+        // delimiters, dropping helper keys). If the sandbox returns an
+        // object with a `values` field, we adopt it and the next save()
+        // persists it (see save()).
         if (this.sandbox) {
             try {
                 const normalized = await this.sandbox.call('normalizeSettings', {
@@ -183,16 +237,17 @@ export class RenderedSettings {
                     current = normalized.values;
                     // Write the normalized values back into the UI so the
                     // user sees what will actually be saved.
-                    for (const section of this.schema.sections || []) {
-                        for (const ctrl of section.controls || []) {
-                            if (!ctrl.id) continue;
-                            if (ctrl.type === 'info' || ctrl.type === 'action') continue;
-                            if (Object.hasOwn(current, ctrl.id)) {
-                                this.values[ctrl.id] = current[ctrl.id];
-                                this._writeToControl(ctrl, current[ctrl.id]);
-                            }
-                        }
-                    }
+                    forEachValueControl(this.schema, (ctrl) => {
+                        if (!Object.hasOwn(current, ctrl.id)) return;
+                        this.values[ctrl.id] = coerceValue(ctrl, current[ctrl.id]);
+                        this._writeToControl(ctrl, this.values[ctrl.id]);
+                    });
+                    // Remember what the controls now show, so save() can
+                    // tell whether this result is still current.
+                    this._lastNormalized = {
+                        values: { ...current },
+                        snapshot: JSON.stringify(this.currentValues()),
+                    };
                 }
             } catch {
                 // No normalize() implemented — proceed with raw values.
@@ -237,6 +292,9 @@ export class RenderedSettings {
         this._cleanup = [];
         this._rowsById.clear();
         this._controlsById.clear();
+        this._actionsByButtonId.clear();
+        for (const timer of this._statusTimers) clearTimeout(timer);
+        this._statusTimers.clear();
     }
 
     // --- Rendering ---------------------------------------------------------
@@ -365,12 +423,12 @@ export class RenderedSettings {
                 ${ctrl.description ? `<div class="setting-description">${escapeHtml(ctrl.description)}</div>` : ''}
                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
                     <button class="setting-button${variantClass}" id="${btnId}" data-ext-action
-                        data-ext-action-name="${escapeAttr(ctrl.action)}"
+                        data-ext-action-name="${escapeAttr(ctrl.action || '')}"
                         ${ctrl.disabled ? 'disabled' : ''}
                         ${ctrl.confirm ? `data-ext-action-confirm="${escapeAttr(ctrl.confirm)}"` : ''}>
                         ${escapeHtml(ctrl.label)}
                     </button>
-                    <span id="${statusId}" class="setting-description ext-action-status"></span>
+                    <span id="${statusId}" class="setting-description ext-action-status" aria-live="polite"></span>
                 </div>
             </div>`;
     }
@@ -443,6 +501,13 @@ export class RenderedSettings {
         });
 
         // Action buttons.
+        for (const section of this.schema.sections || []) {
+            for (const ctrl of section.controls || []) {
+                if (ctrl.type !== 'action') continue;
+                const btn = this._inputEl(ctrl);
+                if (btn) this._actionsByButtonId.set(btn.id, ctrl);
+            }
+        }
         const buttons = this.container.querySelectorAll('[data-ext-action]');
         buttons.forEach((btn) => {
             const onClick = (ev) => this._handleActionClick(btn, ev);
@@ -451,19 +516,99 @@ export class RenderedSettings {
         });
     }
 
-    async _handleActionClick(btn, _ev) {
+    _statusEl(btn) {
+        return this.container.querySelector(`#${cssEscapeId(btn.id)}__status`);
+    }
+
+    _statusSetter(btn) {
+        const statusEl = this._statusEl(btn);
+        return (text) => {
+            if (statusEl) statusEl.textContent = text || '';
+        };
+    }
+
+    /**
+     * Not `async` on purpose: a copy action has to reach
+     * navigator.clipboard.writeText() synchronously inside the click.
+     * Returns a promise either way, settled once the action is done.
+     */
+    _handleActionClick(btn, _ev) {
+        const ctrl = this._actionsByButtonId.get(btn.id);
+        if (ctrl?.copy) return this._handleCopyClick(btn, ctrl);
+        return this._runAction(btn, ctrl);
+    }
+
+    /**
+     * Copy actions run entirely in the host. The sandbox iframe can't write
+     * the clipboard, and a round-trip through it would lose the click's
+     * user activation, which the clipboard API needs — so the text is
+     * resolved and written synchronously, before any await.
+     */
+    _handleCopyClick(btn, ctrl) {
+        const statusEl = this._statusEl(btn);
+        const setStatus = this._statusSetter(btn);
+        const text = this._copyText(ctrl);
+        if (text === '') {
+            setStatus(t('settings.ext_settings.action.copy_empty'));
+            return Promise.resolve();
+        }
+        let written;
+        try {
+            written =
+                text === null
+                    ? Promise.reject(new Error('copy text is not plain text'))
+                    : navigator.clipboard.writeText(text);
+        } catch (e) {
+            // No clipboard API at all (navigator.clipboard undefined).
+            written = Promise.reject(e);
+        }
+        return Promise.resolve(written).then(
+            () => {
+                const copied = t('settings.ext_settings.action.copied');
+                setStatus(copied);
+                const timer = setTimeout(() => {
+                    this._statusTimers.delete(timer);
+                    // Leave anything that replaced it (another click) alone.
+                    if (statusEl?.textContent === copied) statusEl.textContent = '';
+                }, COPIED_STATUS_MS);
+                this._statusTimers.add(timer);
+            },
+            (e) => {
+                this.log.warn?.(`copy action '${ctrl.id}' failed:`, e);
+                setStatus(t('settings.ext_settings.action.copy_failed'));
+            }
+        );
+    }
+
+    /**
+     * The text a copy action should write: '' when its source control is
+     * empty, null when the text isn't allowed on the clipboard (a source
+     * value can be anything the user typed, so it's checked here, not just
+     * by the schema validator).
+     */
+    _copyText(ctrl) {
+        let text;
+        if (Object.hasOwn(ctrl.copy, 'value')) {
+            text = ctrl.copy.value;
+        } else {
+            const source = this._controlsById.get(ctrl.copy.from);
+            const raw = source ? this._readFromControl(source) : '';
+            text = raw == null ? '' : String(raw);
+        }
+        if (text === '') return '';
+        return copyTextError(text) ? null : text;
+    }
+
+    async _runAction(btn, ctrl) {
         const action = btn.getAttribute('data-ext-action-name');
         const confirmMsg = btn.getAttribute('data-ext-action-confirm');
         if (confirmMsg && !window.confirm(confirmMsg)) return;
 
-        const statusEl = this.container.querySelector(`#${cssEscapeId(btn.id)}__status`);
-        const setStatus = (text) => {
-            if (statusEl) statusEl.textContent = text || '';
-        };
+        const setStatus = this._statusSetter(btn);
 
         const prevText = btn.textContent;
         btn.disabled = true;
-        setStatus('Working…');
+        setStatus(t('settings.ext_settings.action.working'));
 
         try {
             // Action handlers run inside the sandbox. The current values
@@ -479,7 +624,7 @@ export class RenderedSettings {
             // button disabled forever.
             const result = await this.sandbox.call(
                 'runSettingsAction',
-                { action, values: this.save() },
+                { action, values: this.currentValues() },
                 { timeoutMs: ACTION_RPC_TIMEOUT_MS }
             );
 
@@ -491,11 +636,13 @@ export class RenderedSettings {
                     // onFileSelected's return value needs to update the
                     // same button's status. We pass the status setter
                     // down so the effect can call it. `refresh` also needs
-                    // the just-set status preserved across the re-render.
+                    // the just-set status preserved across the re-render,
+                    // keyed by the control id (not the RPC name — the two
+                    // can differ).
                     await this._runHostSideEffect(result.host, {
                         setStatus,
                         status: result.status ? String(result.status) : '',
-                        sourceAction: action,
+                        sourceAction: ctrl?.id ?? action,
                     });
                 }
                 if (result.error) setStatus(`❌ ${result.error}`);

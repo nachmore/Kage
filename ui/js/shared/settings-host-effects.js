@@ -35,7 +35,7 @@ export async function runSettingsHostSideEffect(renderer, host, ctx, pickFileCon
                     action: host.action || null,
                     filename: content.filename,
                     content: content.text,
-                    values: renderer.save(),
+                    values: renderer.currentValues(),
                 });
                 if (result && typeof result === 'object' && result.status) {
                     setStatus(String(result.status));

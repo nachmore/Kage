@@ -205,6 +205,34 @@
     "message": "Extension locale file is invalid ({language}): {reason}",
     "description": "Extension's _locales/<lang>/messages.json had a JSON parse error"
   },
+  "errors.oauth.timed_out": {
+    "message": "OAuth flow timed out before a callback arrived",
+    "description": "An extension's OAuth sign-in listener gave up because the browser never redirected back in time (error kind: timeout)"
+  },
+  "errors.oauth.cancelled": {
+    "message": "OAuth listener was cancelled before a callback arrived",
+    "description": "An extension's OAuth sign-in listener was stopped (the sign-in was cancelled) before the browser redirected back (error kind: cancelled)"
+  },
+  "errors.oauth.unknown_listener": {
+    "message": "Unknown listener id (timed out, cancelled, or already consumed)",
+    "description": "An extension waited on an OAuth sign-in listener that no longer exists"
+  },
+  "errors.oauth.already_awaited": {
+    "message": "This OAuth listener is already being awaited",
+    "description": "An extension waited twice at the same time on one OAuth sign-in listener"
+  },
+  "errors.oauth.listener_failed": {
+    "message": "OAuth listener stopped unexpectedly: {reason}",
+    "description": "The local socket an extension's OAuth sign-in listens on failed. {reason} is the operating-system error text"
+  },
+  "errors.oauth.invalid_redirect_path": {
+    "message": "redirect_path must start with '/' and must not contain whitespace",
+    "description": "Developer-facing: an extension asked for an OAuth callback path that isn't a plain URL path. Keep 'redirect_path' and '/' as-is"
+  },
+  "errors.oauth.bind_failed": {
+    "message": "Failed to bind loopback listener: {reason}",
+    "description": "Kage couldn't open a local port for an extension's OAuth sign-in. {reason} is the operating-system error text"
+  },
   "tray.show": {
     "message": "Show",
     "description": "Tray menu — show the floating window"
@@ -4120,6 +4148,30 @@
   "settings.manager.status.unknown_error": {
     "message": "Unknown error",
     "description": "Fallback when an error has no message"
+  },
+  "settings.manager.ext.disable": {
+    "message": "Disable",
+    "description": "Button in an extension's Settings page header that turns the extension off"
+  },
+  "settings.manager.ext.enable": {
+    "message": "Enable",
+    "description": "Button in an extension's Settings page header that turns a disabled extension back on"
+  },
+  "settings.ext_settings.action.working": {
+    "message": "Working…",
+    "description": "Status shown next to a button on an extension's Settings page while the extension handles the click"
+  },
+  "settings.ext_settings.action.copied": {
+    "message": "Copied",
+    "description": "Status shown briefly next to a Copy button on an extension's Settings page after the text was copied to the clipboard"
+  },
+  "settings.ext_settings.action.copy_failed": {
+    "message": "Couldn't copy to the clipboard",
+    "description": "Status next to a Copy button on an extension's Settings page when the clipboard write failed"
+  },
+  "settings.ext_settings.action.copy_empty": {
+    "message": "Nothing to copy",
+    "description": "Status next to a Copy button on an extension's Settings page when the field it copies from is empty"
   },
   "store.uninstall.confirm.title": {
     "message": "Uninstall {name}?",
