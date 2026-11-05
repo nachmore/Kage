@@ -208,6 +208,14 @@ html[dir="rtl"] .floating-banner-action {
    floating window's banner uses absolute top:0; left:0; right:0 which
    spans full width and doesn't need flipping. */
 
+/* The "open full chat" button sits in the bubble's top corner away from
+   the mascot strip. In RTL the strip moves to the right, so the button
+   moves to the left; left in place it crowds the start of the reply. */
+html[dir="rtl"] .expand-btn {
+    right: auto;
+    left: 6px;
+}
+
 /* ===== Tool / extension chips =========================================== */
 /* Source chips render as an inline row; flex-direction inherits direction
    so they read right-to-left automatically. Status icons (⏳ / ✅) flip

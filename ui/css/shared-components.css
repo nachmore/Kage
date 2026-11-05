@@ -25,6 +25,24 @@ body.dark-theme .message-content th:hover {
     background: rgba(255, 255, 255, 0.06);
 }
 
+/* Markdown tables in replies: without cell padding adjacent columns run
+   together ("Installers3.4"). Logical properties so RTL mirrors. The date
+   picker's grid is a table too and keeps its own spacing. */
+.response-text table:not(.kdp-grid),
+.message-content table:not(.kdp-grid) {
+    border-collapse: collapse;
+    margin: 4px 0 10px;
+}
+.response-text table:not(.kdp-grid) :is(th, td),
+.message-content table:not(.kdp-grid) :is(th, td) {
+    padding-block: 3px;
+    padding-inline: 0 18px;
+}
+.response-text table:not(.kdp-grid) :is(th, td):last-child,
+.message-content table:not(.kdp-grid) :is(th, td):last-child {
+    padding-inline-end: 0;
+}
+
 /* Response Text */
 .response-text {
     font-size: 14px;
@@ -249,6 +267,9 @@ body.dark-theme .message-content th:hover {
     padding: 20px 24px;
     background: #252525;
     border-top: 1px solid #333;
+    /* Follow the modal's rounded corners (12px minus its 1px border);
+       otherwise this bar's background squares them off. */
+    border-radius: 0 0 11px 11px;
     flex-shrink: 0;
 }
 
