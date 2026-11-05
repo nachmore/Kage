@@ -133,6 +133,6 @@ Background reading for contributors:
 - [OS Abstraction Layer](OS_ABSTRACTION_GUIDE.md): how platform code is split, and spawning user-installed tools.
 - [Computer Control MCP: why it's a separate binary](COMPUTER_CONTROL_MCP.md).
 - [Release & Update System](RELEASE.md): channels, signing and the updater.
-- [Internationalisation](I18N.md): adding strings and languages.
+- [Translations (i18n)](I18N.md): adding strings and languages.
 - [Tool Permissions](TOOL_PERMISSIONS.md) and the [Security Model](SECURITY_MODEL.md).
 - [Debug Mode Guide](DEBUG_MODE.md).
