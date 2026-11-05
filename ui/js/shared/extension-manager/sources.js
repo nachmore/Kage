@@ -1,3 +1,4 @@
+import { isExtensionEnabled, resolveExtensionConfig } from '../extension-config.js';
 import { normalizePermissions } from '../extension-permissions.js';
 import { resolveExtensionCatalog } from './i18n.js';
 import { applyMixin } from '../mixin.js';
@@ -613,21 +614,18 @@ export function installExtensionSourceMethods(ExtensionManager) {
             }
         },
 
+        /**
+         * The config the extension's providers see (`context.config` and
+         * every onConfigUpdate payload): manifest defaults overlaid with
+         * the user's saved values, plus the host's `enabled`. The Settings
+         * window resolves it the same way. See extension-config.js.
+         */
         _getExtensionConfig(id, manifest) {
-            const saved = this._configCache?.extensions?.[id];
-            if (saved) return saved;
-            const defaults = {};
-            if (manifest.config) {
-                for (const [key, schema] of Object.entries(manifest.config)) {
-                    defaults[key] = schema.default;
-                }
-            }
-            return defaults;
+            return resolveExtensionConfig(this._configCache, id, manifest);
         },
 
         _isEnabled(id) {
-            const states = this._configCache?.extension_states || {};
-            return states[id] !== false;
+            return isExtensionEnabled(this._configCache, id);
         },
     });
 }

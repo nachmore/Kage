@@ -22,6 +22,7 @@ import {
     updateTimerBar,
     WINDOW,
 } from './dependencies.js';
+import { resolveExtensionConfig } from '../../shared/extension-config.js';
 import { presentOverlayWindow } from '../../shared/overlay-window.js';
 
 export const CommandsMethods = {
@@ -72,10 +73,14 @@ export const CommandsMethods = {
     async _onTimerComplete() {
         updateTimerBar('timer', '0:00', 1, false);
 
+        // The timer extension's effective config (manifest defaults overlaid
+        // with saved values). The fallbacks below only apply when the
+        // extension isn't loaded in this window, so there's no manifest.
         let config = {};
         try {
             const fullConfig = await getConfig(this.invoke);
-            config = fullConfig.extensions?.timer || {};
+            const manifest = this.extensionManager?.extensions?.get('timer')?.manifest;
+            config = resolveExtensionConfig(fullConfig, 'timer', manifest);
         } catch {}
 
         if (config.show_window_on_complete !== false) {
