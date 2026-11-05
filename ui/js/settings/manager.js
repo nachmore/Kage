@@ -79,8 +79,9 @@ export class SandboxedExtensionSettingsModule {
 
     /**
      * Fold this page into config.extensions[id] (`config` is fresh from
-     * get_config). Keys this page has no control for are kept, values equal
-     * to the manifest default are dropped, and an extension left with no
+     * get_config). Keys this page has no control for are kept (except
+     * scratch and `enabled` keys, which are removed), values equal to the
+     * manifest default are dropped, and an extension left with no
      * overrides has no entry at all.
      */
     save(config) {

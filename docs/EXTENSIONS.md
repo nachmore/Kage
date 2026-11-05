@@ -98,28 +98,40 @@ itself reads.
 
 Supported types: `"boolean"`, `"string"`, `"number"`.
 
-**What your code sees.** `context.config` (and every `onConfigUpdate`
-payload) is the *effective* config: the manifest defaults, overlaid with
-whatever the user saved. Every declared key is always present, even one
-added in a later version for a user who saved settings long ago, and one
-no settings control shows. So code fallbacks like `config.x ?? 2` are
-only needed for keys the manifest doesn't declare. The host reads saved
-values as the declared type: `"5"` for a `number` key becomes `5`, and a
-value that can't be read as one (a hand-edited config, or a key whose type
-you changed) is ignored, so the default applies. Saved keys the manifest
-doesn't declare are passed through unchanged.
+Hosts that work as described below list `config.manifest_defaults` in
+[`context.hostFeatures`](#feature-detection). Older hosts hand your code
+the saved object as it is, or the manifest defaults only when nothing was
+saved at all, so most of what follows doesn't hold there. Kage has no way
+for an extension to declare a minimum host version, so while you support
+older hosts, keep your code fallbacks and keep each settings control's
+`default` equal to the manifest's (see [Defaults](#defaults)), or branch
+on `context.hostFeatures`.
 
-**What gets stored.** `config.extensions["<id>"]` holds only the user's
-overrides: the values that differ from the manifest default. When you
-ship a new default, it reaches every user who never changed that
-setting. Saving your Settings page writes only the keys its controls own.
-Other saved keys are kept (see
+**What your code sees.** On hosts with `config.manifest_defaults`,
+`context.config` (and every `onConfigUpdate` payload) is the *effective*
+config: the manifest defaults, overlaid with whatever the user saved.
+Every declared key is always present, even one added in a later version
+for a user who saved settings long ago, and one no settings control
+shows. On these hosts, code fallbacks like `config.x ?? 2` are only
+needed for keys the manifest doesn't declare; older hosts still need
+them. The host reads saved values as the declared type: `"5"` for a
+`number` key becomes `5`, and a value that can't be read as one (a
+hand-edited config, or a key whose type you changed) is ignored, so the
+default applies. Saved keys the manifest doesn't declare are passed
+through unchanged.
+
+**What gets stored.** On hosts with `config.manifest_defaults`,
+`config.extensions["<id>"]` holds only the user's overrides: the values
+that differ from the manifest default. Saving your Settings page writes
+only the keys its controls own. Other saved keys are kept (see
 [Scratch fields and what gets saved](#scratch-fields-and-what-gets-saved)).
-Configs saved by older hosts, which stored every control's value, keep
-working: a stored value equal to the default changes nothing, and it's
-removed the next time the user saves that page. `get_extension_config`
-(capability `storage`) returns that stored object as-is, so use
-`context.config` to read your settings.
+When you ship a new default, it reaches every user with no stored value
+for that setting. Older hosts stored every control's value on Save, so a
+user who saved your page there has the old default stored as their own
+value, and keeps it until they next save that page on a current host
+(Save then removes a stored value equal to the *new* default, not one
+equal to the old). `get_extension_config` (capability `storage`) returns
+the stored object as-is, so use `context.config` to read your settings.
 
 **`enabled` is the host's.** `config.enabled` is always present and is
 whether the user has your extension switched on, which they change with
@@ -132,8 +144,13 @@ have one (older hosts show it), current hosts hide it and keep its value
 equal to the header's state, so `showWhen: { id: 'enabled', … }` follows
 the header. You don't need to declare `enabled` in `config` either.
 
-Hosts that work this way list `config.manifest_defaults` in
-[`context.hostFeatures`](#feature-detection).
+Older hosts saved such a checkbox's value. When Kage loads its config, a
+saved `enabled: false` (the user unticked your checkbox) switches the
+extension off with the header's switch, so the user's choice still holds,
+and a saved `true` is dropped. **If your `enabled` control meant
+something other than "this extension is on"**, such as one feature of
+it, this is a breaking change: current hosts hide the control, ignore its
+value, and may switch your extension off. Give that setting another id.
 
 ### Contributes
 
@@ -741,6 +758,19 @@ DOM**. Instead, it returns a JSON schema describing the settings UI, and
 the host renders it. Action buttons route back through the provider as
 RPC calls.
 
+The example's value controls are backed by this manifest `config` block
+(see [Config Schema](#config-schema) and [Defaults](#defaults)):
+
+```json
+"config": {
+  "show_badge": { "type": "boolean", "default": true },
+  "trigger":    { "type": "string",  "default": "example" },
+  "limit":      { "type": "number",  "default": 10 },
+  "mode":       { "type": "string",  "default": "a" },
+  "volume":     { "type": "number",  "default": 3 }
+}
+```
+
 ```js
 export default class MyExtSettingsProvider {
     initialize(context) {
@@ -755,8 +785,8 @@ export default class MyExtSettingsProvider {
 
     /**
      * Declarative description of the settings UI. Each value control's `id`
-     * names a key in the manifest's `config` block, which supplies its
-     * default. The `default`s below are only for hosts older than
+     * names a key in the manifest's `config` block (above), which supplies
+     * its default. The `default`s below are only for hosts older than
      * `config.manifest_defaults`, and must equal the manifest's (see
      * "Defaults" below).
      */
@@ -863,7 +893,9 @@ A value control's `id` refers to a key in your manifest's
 The control shows the effective value: the manifest default, or what the
 user saved instead. **A control's own `default` is deprecated.** Current
 hosts ignore it for any id the manifest declares, and log a console
-warning when it would show something different. It is still used for:
+warning when it would show something different (text that differs only
+in leading or trailing whitespace isn't flagged, since `normalize()`
+often accounts for that). It is still used for:
 
 - **ids the manifest doesn't declare**: scratch (`__`) fields, and older
   extensions that never declared their settings; and
@@ -872,10 +904,17 @@ warning when it would show something different. It is still used for:
   `default` for a value that was never saved, and give your code the
   saved object without the manifest defaults merged in.
 
-So until your extension's minimum supported host includes
-`config.manifest_defaults`, keep every control's `default` equal to the
-manifest default. In the Kage-Extensions repo, `npm run check:defaults`
-enforces that.
+Kage has no way for an extension to declare a minimum host version, so
+in practice keep every control's `default` equal to the manifest default
+for as long as you support older hosts. In the Kage-Extensions repo,
+`npm run check:defaults` enforces that.
+
+Because the control always shows the effective value, a control's
+`default` can no longer change how a declared value is displayed. If the
+stored form of a setting isn't what the user should see (a trigger
+stored with its trailing delimiter, `"w "`), store the display form and
+add the rest in code, rather than computing a trimmed `default` from
+`context.config`.
 
 ### Action options
 
@@ -936,9 +975,10 @@ When the user clicks Save, the host validates (`normalize()`, then
 `validate()`) and folds the page's value controls into your stored
 config:
 
-- **Only this page's keys change.** Saved keys that no control on the
-  page owns are kept, whether another step of a setup wizard shows them
-  or no control does. A control whose value equals the manifest default
+- **Only this page's keys change** (apart from the scratch and `enabled`
+  keys below, which Save always removes). Saved keys that no control on
+  the page owns are kept, whether another step of a setup wizard shows
+  them or no control does. A control whose value equals the manifest default
   is not stored, and removes any override it had. A value for a declared
   key is stored as the declared type. Values for ids the manifest doesn't
   declare are stored as they are. If nothing is left to store, the
@@ -946,14 +986,16 @@ config:
 - **Ids starting with `__` are scratch fields.** They render, and their
   values reach `runAction`, `normalize()`, `validate()`, and
   `onFileSelected`, but the host never saves them, and ignores any
-  saved value (older hosts did save them; Save removes such a value for a
-  control on the page), so the control always starts at its `default`.
-  Use them for inputs that feed an action — a "paste your Client ID" box
-  whose action stores the value itself — rather than settings.
+  saved value, so the control always starts at its `default`. Older
+  hosts did save them, so every Save removes all `__` keys from your
+  stored config, whether or not the page has a control for them. Don't
+  store your own data under such keys; use `save_extension_data`. Use
+  scratch fields for inputs that feed an action — a "paste your Client
+  ID" box whose action stores the value itself — rather than settings.
 - **A control with id `enabled` is the host's** (see
   [Config Schema](#config-schema)): it's hidden, holds the extension's
   on/off state, and is never saved. The header's Disable/Enable button
-  is the switch.
+  is the switch. Save also removes a stored `enabled` key.
 - **`normalize()` rewrites values; it can't add or remove them.** Each
   key it returns is written back into its control (so the user sees
   it) and saved from there. A key it leaves out keeps the value its
@@ -962,7 +1004,9 @@ config:
   keys either. To keep a value out of your config, make it a scratch
   field.
 - A `refresh` keeps whatever the user has typed, scratch fields
-  included.
+  included. A control that only the refreshed page has (the next step
+  of a setup wizard) shows the user's saved value, like any control on
+  the first render, so a Save from that step doesn't reset it.
 
 ### Conditional visibility
 

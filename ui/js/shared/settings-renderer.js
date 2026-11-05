@@ -121,6 +121,10 @@ export class RenderedSettings {
      *
      * Current value-control values are carried across so an in-progress
      * edit (e.g. a half-typed trigger word) isn't lost to the re-render.
+     * A control only the refreshed schema has (the next step of a setup
+     * wizard) shows the config load() was given, like every control did
+     * on first render. Falling back to its default instead would show the
+     * wrong value, and Save would then delete the user's override.
      *
      * @param {object} [opts]
      * @param {string} [opts.preserveStatusFor] - id of the action control whose status span
@@ -155,7 +159,7 @@ export class RenderedSettings {
         this.schema = this._withManifestDefaults(r.schema);
         this.values = {};
         this.render();
-        this._applyValues(carried, { fromConfig: false });
+        this._applyValues(this._refreshSource(carried), { fromConfig: false });
 
         // Re-apply the status message on the originating action's status
         // span — the rebuild created a fresh (empty) one.
@@ -172,7 +176,27 @@ export class RenderedSettings {
      * values plus the host's `enabled`.
      */
     load(config) {
+        // Kept for refresh(): a control that only a refreshed schema has
+        // takes its value from here.
+        this._loaded = config && typeof config === 'object' ? { ...config } : null;
         this._applyValues(config, { fromConfig: true });
+    }
+
+    /**
+     * What refresh() applies: the loaded config (minus scratch values,
+     * which never come from config), then the live values `carried` from
+     * the old page, then the host's current on/off state.
+     */
+    _refreshSource(carried) {
+        const source = {};
+        for (const [key, value] of Object.entries(this._loaded || {})) {
+            if (!isScratchId(key)) source[key] = value;
+        }
+        Object.assign(source, carried);
+        if (this._loaded && Object.hasOwn(this._loaded, ENABLED_KEY)) {
+            source[ENABLED_KEY] = this._loaded[ENABLED_KEY];
+        }
+        return source;
     }
 
     /**
@@ -181,6 +205,8 @@ export class RenderedSettings {
      * reference it follow the header.
      */
     setHostEnabled(enabled) {
+        // Also for a page without the control: a refresh may add one.
+        this._loaded = { ...(this._loaded || {}), [ENABLED_KEY]: !!enabled };
         const ctrl = this._controlsById.get(ENABLED_KEY);
         if (!isValueControl(ctrl)) return;
         this.values[ENABLED_KEY] = coerceValue(ctrl, !!enabled);
@@ -219,7 +245,8 @@ export class RenderedSettings {
      * The new config.extensions[id] after saving this page, given what is
      * stored now (mergeSettingsSave in extension-config.js). Only this
      * page's keys change. Values equal to the manifest default are left
-     * out, and scratch (`__`) and `enabled` values are never stored.
+     * out, and scratch (`__`) and `enabled` values are never stored (stored
+     * ones are removed).
      * validate() has already written normalize()'s rewrites into the
      * controls. A key normalize() left out keeps its live value, because
      * older extensions return only the keys they changed.
@@ -336,11 +363,19 @@ export class RenderedSettings {
         return { ...schema, sections };
     }
 
+    /**
+     * A text control whose default differs only in leading or trailing
+     * whitespace isn't flagged. normalize() often trims or re-adds a
+     * delimiter before an older host saves the shown default (window-walker
+     * shows "w" and stores "w "), and this check can't run normalize().
+     * Kage-Extensions' `check:defaults`, which does, is the real gate.
+     */
     _warnDefaultMismatch(ctrl, manifestDefault) {
         if (ctrl.default === undefined) return;
         const shown = coerceValue(ctrl, ctrl.default);
         const declared = coerceValue({ ...ctrl, default: manifestDefault }, manifestDefault);
         if (shown === declared) return;
+        if (ctrl.type === 'text' && String(shown).trim() === String(declared).trim()) return;
         const key = `${this.extensionId}\0${ctrl.id}`;
         if (warnedDefaultMismatch.has(key)) return;
         warnedDefaultMismatch.add(key);

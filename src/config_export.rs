@@ -359,6 +359,11 @@ pub fn sanitise_imported_config(mut imported: Config, local: &Config) -> Config 
     // back on and run them at once.
     imported.acp.agent.import_login_shell_env = local.acp.agent.import_login_shell_env;
 
+    // A backup from an older build can carry an extension's own
+    // `enabled: false`, which this build would otherwise ignore. Same fold
+    // as `Config::load`.
+    imported.fold_legacy_extension_enabled();
+
     imported
 }
 
@@ -601,6 +606,24 @@ mod tests {
         local.system.auto_start = false;
         let merged = sanitise_imported_config(imported, &local);
         assert!(!merged.system.auto_start);
+    }
+
+    #[test]
+    fn sanitise_folds_a_legacy_extension_enabled_false() {
+        let mut imported = fake_config();
+        imported.extensions.insert(
+            "link-preview".to_string(),
+            serde_json::json!({ "enabled": false, "max_previews": 3 }),
+        );
+        imported
+            .extension_states
+            .insert("link-preview".to_string(), true);
+        let merged = sanitise_imported_config(imported, &fake_config());
+        assert_eq!(merged.extension_states.get("link-preview"), Some(&false));
+        assert_eq!(
+            merged.extensions.get("link-preview"),
+            Some(&serde_json::json!({ "max_previews": 3 }))
+        );
     }
 
     #[test]

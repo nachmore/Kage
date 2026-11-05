@@ -14,8 +14,10 @@
  * `enabled` belongs to the host. In the effective config it is whether
  * the extension is switched on (`extension_states`, the same state the
  * Settings header's Disable/Enable button sets). A saved `enabled` value is
- * ignored. Older hosts saved one from extensions' own "Enable" checkboxes,
- * and the host never used it to switch anything off.
+ * ignored. Older hosts saved one from extensions' own "Enable" checkboxes;
+ * a saved `false` (the user's "off") is moved to `extension_states` when the
+ * backend loads config (`Config::fold_legacy_extension_enabled` in
+ * src/config.rs), so it is still honoured.
  *
  * Pure functions with no DOM or Tauri access, so every window (and the
  * tests) use the same code. See docs/EXTENSIONS.md § Config Schema.
@@ -175,8 +177,11 @@ export function resolveExtensionConfig(appConfig, id, manifest) {
  *   reaches everyone who never changed the setting.
  * - A value for a declared, typed key is stored as that type when it can
  *   be read as one.
- * - Scratch (`__`) and `enabled` values are never stored. A stale one an
- *   older host saved for a control on this page is removed.
+ * - Scratch (`__`) and `enabled` values are never stored, and every stored
+ *   one is removed, whether or not this page has a control for it. Nothing
+ *   reads them (effectiveExtensionConfig skips them), and a scratch field
+ *   an older host saved may hold a secret, such as a pasted token from a
+ *   field a later version renamed.
  * - Values for keys the manifest doesn't declare are stored as is. With no
  *   manifest default to compare against, leaving one out would change what
  *   the extension sees.
@@ -187,13 +192,15 @@ export function resolveExtensionConfig(appConfig, id, manifest) {
  * @returns {Record<string, unknown>} the new config.extensions[id]
  */
 export function mergeSettingsSave(manifest, stored, pageValues) {
-    const out = isPlainObject(stored) ? { ...stored } : {};
+    const out = {};
+    if (isPlainObject(stored)) {
+        for (const [key, value] of Object.entries(stored)) {
+            if (!isHostManagedKey(key)) out[key] = value;
+        }
+    }
     const defaults = manifestConfigDefaults(manifest);
     for (const [key, value] of Object.entries(pageValues || {})) {
-        if (isHostManagedKey(key)) {
-            delete out[key];
-            continue;
-        }
+        if (isHostManagedKey(key)) continue;
         const type = declaredType(manifest, key);
         const typed = type ? asDeclaredType(type, value) : undefined;
         const toStore = typed !== undefined ? typed : value;

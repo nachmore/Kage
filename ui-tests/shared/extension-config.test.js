@@ -197,11 +197,27 @@ describe('mergeSettingsSave', () => {
         });
     });
 
-    it('never stores scratch or enabled values, and removes stale ones for its controls', () => {
-        const stored = { enabled: false, __setup_client_id: 'stale', __other_page: 'left' };
+    it('never stores scratch or enabled values', () => {
+        const stored = { enabled: false, __setup_client_id: 'stale' };
         expect(
             mergeSettingsSave(MATH, stored, page({ enabled: false, __setup_client_id: 'typed' }))
-        ).toEqual({ __other_page: 'left' });
+        ).toEqual({});
+    });
+
+    it('removes stale scratch and enabled values even with no control for them on the page', () => {
+        // A scratch field an older host saved, which a later version renamed
+        // (Spotify's pre-0.4 `__client_id_input`), and a stale `enabled`.
+        const stored = { __client_id_input: 'secret', enabled: true, precision: 5, kept: 'x' };
+        expect(mergeSettingsSave(MATH, stored, { auto_copy: false })).toEqual({
+            precision: 5,
+            kept: 'x',
+            auto_copy: false,
+        });
+        const polluted = JSON.parse('{"__proto__":{"polluted":true},"precision":3}');
+        const out = mergeSettingsSave(MATH, polluted, {});
+        expect(out).toEqual({ precision: 3 });
+        expect(Object.hasOwn(out, '__proto__')).toBe(false);
+        expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
     });
 
     it('stores values for undeclared ids as is', () => {

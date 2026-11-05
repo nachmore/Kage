@@ -199,18 +199,20 @@ describe('Settings Save', () => {
     }
 
     it('stores only overrides and keeps saved keys the page has no control for', async () => {
-        // What an older host wrote: every control's value, a stale `enabled`,
-        // and a scratch value; plus a key with no control.
+        // What an older host wrote: every control's value and a stale
+        // `enabled: true`; plus a key with no control and a scratch value no
+        // control owns any more. (A legacy `enabled: false` never gets here:
+        // Config::load moves it to extension_states, see src/config.rs.)
         const { mgr } = await mount(
             appConfig({
                 precision: 2,
                 auto_copy: true,
                 thousands_separator: false,
-                enabled: false,
+                enabled: true,
                 legacy_key: 'keep',
+                __renamed_token_input: 'secret',
             })
         );
-        // The stale `enabled: false` is ignored: the page follows extension_states.
         expect(ctrl('enabled').checked).toBe(true);
 
         setChecked('thousands_separator', true);
@@ -220,6 +222,18 @@ describe('Settings Save', () => {
         const out = saved.at(-1);
         expect(out.extensions.math).toEqual({ legacy_key: 'keep', thousands_separator: true });
         expect(out.extension_states.math).toBe(true);
+    });
+
+    it('a saved enabled is ignored: the page and the runtime follow extension_states', async () => {
+        const config = appConfig({ enabled: false, precision: 3 });
+        const { mgr } = await mount(config);
+        expect(ctrl('enabled').checked).toBe(true);
+        expect(document.getElementById('ext-enabled-math').value).toBe('true');
+        expect((await loadRuntime(MATH, config)).bootConfig.enabled).toBe(true);
+
+        setNumber('precision', 4);
+        expect(await mgr.save()).toBe(true);
+        expect(saved.at(-1).extensions.math).toEqual({ precision: 4 });
     });
 
     it('drops the entry when nothing differs from the defaults any more', async () => {

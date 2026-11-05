@@ -719,10 +719,10 @@ describe('manifest defaults', () => {
         const t = container.querySelector('#ext-ctrl-md6-trigger');
         t.value = '=';
         t.dispatchEvent(new Event('input'));
+        // The stale scratch value goes: nothing reads it.
         expect(inst.save(stored)).toEqual({
             precision: 4,
             other_page: true,
-            __stale: 'x',
             trigger: '=',
         });
 
@@ -732,7 +732,59 @@ describe('manifest defaults', () => {
         t.value = 'calc';
         t.dispatchEvent(new Event('input'));
         // Back to the defaults: none of this page's keys are stored.
-        expect(inst.save(stored)).toEqual({ other_page: true, __stale: 'x' });
+        expect(inst.save(stored)).toEqual({ other_page: true });
+    });
+
+    it('a control that only the refreshed page has shows the loaded value, so Save keeps it', async () => {
+        // A setup wizard: the first step has no value controls, the next
+        // shows the display settings the user already changed.
+        const stepTwo = [
+            { type: 'number', id: 'precision', label: 'P', default: 2 },
+            { type: 'text', id: 'trigger', label: 'T', default: 'calc' },
+            { type: 'text', id: '__client_id', label: 'C', default: 'scratch' },
+            { type: 'checkbox', id: 'enabled', label: 'Enable', default: true },
+            { type: 'text', id: 'undeclared', label: 'U', default: 'own' },
+        ];
+        const sandbox = stubSandbox({ getSettings: () => ({ sections: [{ controls: stepTwo }] }) });
+        const inst = render('md7', [{ type: 'action', id: 'next', label: 'Next', action: 'next' }], {
+            sandbox,
+        });
+        const stored = { precision: 5, trigger: 'music' };
+        // load() gets the effective config, as the Settings window passes it.
+        inst.load({ ...stored, enabled: true, __client_id: 'stale' });
+        // The header switched the extension off before the step changed.
+        inst.setHostEnabled(false);
+
+        await inst.refresh();
+
+        expect(container.querySelector('#ext-ctrl-md7-precision').value).toBe('5');
+        expect(container.querySelector('#ext-ctrl-md7-trigger').value).toBe('music');
+        expect(container.querySelector('#ext-ctrl-md7-__client_id').value).toBe('scratch');
+        expect(container.querySelector('#ext-ctrl-md7-undeclared').value).toBe('own');
+        expect(inst.currentValues().enabled).toBe(false);
+        expect(inst.save(stored)).toEqual({ precision: 5, trigger: 'music', undeclared: 'own' });
+    });
+
+    it('a refresh still prefers what the user typed over the loaded value', async () => {
+        const controls = [{ type: 'text', id: 'trigger', label: 'T' }];
+        const sandbox = stubSandbox({ getSettings: () => ({ sections: [{ controls }] }) });
+        const inst = render('md8', controls, { sandbox });
+        inst.load({ trigger: 'music', precision: 2, enabled: true });
+        container.querySelector('#ext-ctrl-md8-trigger').value = 'half';
+        await inst.refresh();
+        expect(container.querySelector('#ext-ctrl-md8-trigger').value).toBe('half');
+    });
+
+    it('does not warn when a text default differs only by whitespace normalize() changes', () => {
+        const warn = vi.fn();
+        render('md9', [{ type: 'text', id: 'trigger', label: 'T', default: '  calc' }], {
+            logger: { warn },
+        });
+        render('md9b', [{ type: 'text', id: 'trigger', label: 'T', default: 'calcs' }], {
+            logger: { warn },
+        });
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toMatch(/md9b.*trigger/);
     });
 });
 

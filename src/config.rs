@@ -269,7 +269,7 @@ impl Config {
 
         // Deserialize from a borrow so the salvage path below still has
         // the original value when the strict parse fails.
-        let config: Config = match Config::deserialize(&migrated) {
+        let mut config: Config = match Config::deserialize(&migrated) {
             Ok(c) => c,
             Err(e) => {
                 // One bad section (an unknown variant from a newer build,
@@ -278,12 +278,13 @@ impl Config {
                 // keeps the original for anything that was dropped. Not
                 // saved here — the next regular save persists the result.
                 Self::backup_corrupt(config_path, "schema-mismatch");
-                if let Some((salvaged, dropped)) = Self::deserialize_salvaging(&migrated) {
+                if let Some((mut salvaged, dropped)) = Self::deserialize_salvaging(&migrated) {
                     log::warn!(
                         "Config did not match current schema ({}); reset only section(s) {:?}",
                         e,
                         dropped
                     );
+                    salvaged.fold_legacy_extension_enabled();
                     return Ok((salvaged, false));
                 }
                 log::warn!("Post-migration config did not match current schema ({}); backing up and resetting", e);
@@ -293,16 +294,69 @@ impl Config {
             }
         };
 
-        // If migrations bumped the version, persist the upgrade so we
-        // don't rerun them every launch.
+        // If migrations bumped the version or the legacy fold changed
+        // something, persist the upgrade so we don't rerun them every launch.
+        let mut upgraded = config.fold_legacy_extension_enabled();
         if config.version < config_migrations::CURRENT_VERSION {
-            let mut upgraded = config.clone();
-            upgraded.version = config_migrations::CURRENT_VERSION;
-            let _ = upgraded.save_to(config_path);
-            return Ok((upgraded, false));
+            config.version = config_migrations::CURRENT_VERSION;
+            upgraded = true;
+        }
+        if upgraded {
+            let _ = config.save_to(config_path);
         }
 
         Ok((config, false))
+    }
+
+    /// Move a legacy per-extension `enabled: false` to the host's switch.
+    ///
+    /// Older hosts let extensions show their own "Enable" checkbox, saved
+    /// as `extensions[id].enabled`, next to the Settings header's
+    /// Disable/Enable button (`extension_states[id]`). The host now owns
+    /// `enabled` and ignores a saved one (ui/js/shared/extension-config.js),
+    /// so a user who unticked such a checkbox would silently get the
+    /// extension back (link-preview's checkbox really did stop its
+    /// previews). Their choice was "off", so a saved `false` becomes
+    /// `extension_states[id] = false`, even over a `true` there: older
+    /// Saves always wrote the header's state alongside the checkbox. A
+    /// saved `true` is dropped (it's ignored, and the host never stores
+    /// `enabled` now), and so is an entry left empty, which older hosts
+    /// would hand the extension instead of its manifest defaults. Values
+    /// that aren't booleans aren't the checkbox's, so they stay.
+    ///
+    /// Unversioned and idempotent: once folded there's nothing left to
+    /// fold. A schema-version bump would make every older build (a
+    /// channel switch, a rollback) refuse this config and run on defaults.
+    ///
+    /// Returns whether anything changed.
+    pub fn fold_legacy_extension_enabled(&mut self) -> bool {
+        let mut changed = false;
+        let mut emptied = Vec::new();
+        for (id, value) in self.extensions.iter_mut() {
+            let Some(obj) = value.as_object_mut() else {
+                continue;
+            };
+            let Some(enabled) = obj.get("enabled").and_then(serde_json::Value::as_bool) else {
+                continue;
+            };
+            obj.remove("enabled");
+            changed = true;
+            if !enabled {
+                log::info!(
+                    "Extension '{}' was switched off by its own Enable checkbox; \
+                     moving that to the extension's enabled state",
+                    id
+                );
+                self.extension_states.insert(id.clone(), false);
+            }
+            if obj.is_empty() {
+                emptied.push(id.clone());
+            }
+        }
+        for id in emptied {
+            self.extensions.remove(&id);
+        }
+        changed
     }
 
     /// Deserialize `value`, defaulting only the top-level keys that fail
@@ -1148,6 +1202,61 @@ mod load_resilience_tests {
         assert!(!preserve);
         assert!(cfg.debug_mode, "valid sections survive");
         assert_eq!(cfg.hotkey.key, "Space", "bad section falls back to default");
+    }
+
+    #[test]
+    fn legacy_extension_enabled_false_moves_to_extension_states_and_is_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        // What an older host saved: link-preview's own Enable checkbox
+        // unticked while the header (always written too) said enabled.
+        let path = write(
+            dir.path(),
+            r#"{
+                "version": 1,
+                "extensions": {
+                    "link-preview": { "enabled": false, "max_previews": 3 },
+                    "weather": { "enabled": true, "units": "metric" },
+                    "emoji": { "enabled": true },
+                    "custom": { "enabled": "auto" },
+                    "math": { "precision": 4 }
+                },
+                "extension_states": { "link-preview": true, "weather": true }
+            }"#,
+        );
+
+        let (cfg, preserve) = Config::load_from(&path).unwrap();
+        assert!(!preserve);
+        assert_eq!(cfg.extension_states.get("link-preview"), Some(&false));
+        assert_eq!(cfg.extension_states.get("weather"), Some(&true));
+        assert_eq!(cfg.extension_states.get("emoji"), None);
+        assert_eq!(
+            cfg.extensions.get("link-preview"),
+            Some(&serde_json::json!({ "max_previews": 3 }))
+        );
+        assert_eq!(
+            cfg.extensions.get("weather"),
+            Some(&serde_json::json!({ "units": "metric" }))
+        );
+        assert!(
+            !cfg.extensions.contains_key("emoji"),
+            "an emptied entry is removed"
+        );
+        assert_eq!(
+            cfg.extensions.get("custom"),
+            Some(&serde_json::json!({ "enabled": "auto" })),
+            "a non-boolean `enabled` isn't the old checkbox's"
+        );
+        assert_eq!(
+            cfg.extensions.get("math"),
+            Some(&serde_json::json!({ "precision": 4 }))
+        );
+
+        // Persisted, and a second load has nothing left to fold.
+        let on_disk = fs::read_to_string(&path).unwrap();
+        let (mut again, _) = Config::load_from(&path).unwrap();
+        assert_eq!(again.extension_states.get("link-preview"), Some(&false));
+        assert_eq!(fs::read_to_string(&path).unwrap(), on_disk);
+        assert!(!again.fold_legacy_extension_enabled());
     }
 
     #[test]
