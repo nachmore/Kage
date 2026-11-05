@@ -33,3 +33,14 @@ pub fn is_panel(ns_window: *mut std::ffi::c_void) -> bool {
 pub fn present_without_activating(ns_window: *mut std::ffi::c_void) {
     crate::os::platform::window_spaces::present_without_activating_impl(ns_window)
 }
+
+/// Put the window on the pop-up-menu level, above the other overlays.
+/// The floating launcher and the context menu are both floating panels
+/// (the same level), and ordering within a level isn't something we can
+/// rely on — the menu opened *behind* the launcher it was invoked from.
+/// A context menu belongs above everything it can be opened from. Main
+/// thread only; no-op off macOS (topmost-window order already works).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn use_popup_menu_level(ns_window: *mut std::ffi::c_void) {
+    crate::os::platform::window_spaces::use_popup_menu_level_impl(ns_window)
+}

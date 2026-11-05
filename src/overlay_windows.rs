@@ -105,6 +105,10 @@ pub fn configure<R: Runtime>(window: &WebviewWindow<R>) {
                 }
             }
             crate::os::window_spaces::make_overlay_window(ns_window);
+            // After the panel conversion, which sets the floating level.
+            if target.label() == crate::window_labels::CONTEXT_MENU {
+                crate::os::window_spaces::use_popup_menu_level(ns_window);
+            }
         }) {
             log::error!("[overlay] failed to configure {}: {}", window.label(), e);
         }

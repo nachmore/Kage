@@ -1,7 +1,7 @@
 //! macOS: opt an overlay window into every Space, including full-screen ones.
 
 use objc2::ClassType;
-use objc2_app_kit::{NSPanel, NSWindow, NSWindowCollectionBehavior};
+use objc2_app_kit::{NSPanel, NSPopUpMenuWindowLevel, NSWindow, NSWindowCollectionBehavior};
 use objc2_foundation::NSObjectProtocol;
 
 pub fn make_overlay_window_impl(ns_window: *mut std::ffi::c_void) {
@@ -32,6 +32,15 @@ pub fn is_panel_impl(ns_window: *mut std::ffi::c_void) -> bool {
     // runtime query.
     let window: &NSWindow = unsafe { &*(ns_window as *const NSWindow) };
     window.isKindOfClass(NSPanel::class())
+}
+
+pub fn use_popup_menu_level_impl(ns_window: *mut std::ffi::c_void) {
+    if ns_window.is_null() {
+        return;
+    }
+    // SAFETY: live NSWindow* from Tauri, called on the main thread.
+    let window: &NSWindow = unsafe { &*(ns_window as *const NSWindow) };
+    window.setLevel(NSPopUpMenuWindowLevel);
 }
 
 pub fn present_without_activating_impl(ns_window: *mut std::ffi::c_void) {

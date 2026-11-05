@@ -1,6 +1,5 @@
 //! Settings, context-menu, and window-state commands.
 
-use super::floating::{clamp_into_monitor, find_monitor_at_position};
 use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use crate::window_labels;
@@ -218,44 +217,134 @@ pub async fn show_context_menu<R: tauri::Runtime>(
 
     let window = ensure_context_menu_window(&app)?;
 
-    let mut final_x = x;
-    let mut final_y = y;
-
-    // Find which monitor the click is on and clamp to its bounds
-    if let Some(monitor) = find_monitor_at_position(&window, x, y) {
-        let scale = monitor.scale_factor();
-
-        // outer_size() can be 0×0 on a freshly-built window that hasn't
-        // rendered yet. Fall back to the configured logical size in that
-        // case so first-show clamping still works.
-        let outer = window.outer_size().unwrap_or(tauri::PhysicalSize {
-            width: 0,
-            height: 0,
-        });
-        let menu_w = if outer.width > 0 {
-            (outer.width as f64 / scale) as i32
-        } else {
-            CONTEXT_MENU_LOGICAL_W as i32
-        };
-        let menu_h = if outer.height > 0 {
-            (outer.height as f64 / scale) as i32
-        } else {
-            CONTEXT_MENU_LOGICAL_H as i32
-        };
-
-        // Flip the menu left/up if it would overflow the right/bottom edge.
-        (final_x, final_y) = clamp_into_monitor(&monitor, final_x, final_y, menu_w, menu_h);
-    }
-
+    // `(x, y)` is the click in *logical* screen coordinates. Positioning
+    // with those as physical pixels put the menu at half the distance from
+    // the screen origin on a 2× display — up and to the left of the cursor.
+    let position = context_menu_position(&window, x, y);
     window
-        .set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-            x: final_x,
-            y: final_y,
-        }))
+        .set_position(position)
         .map_err(|e| format!("Failed to position context menu: {}", e))?;
     crate::overlay_windows::present(&window)
         .map_err(|e| format!("Failed to show context menu: {}", e))?;
     Ok(())
+}
+
+/// Where to put the context menu's top-left for a click at logical screen
+/// point `(x, y)`, flipped left/up to stay on the click's monitor.
+///
+/// macOS: global window coordinates *are* points, so position logically —
+/// exact on every monitor regardless of its scale (a physical position is
+/// converted back with the menu window's current scale, which is wrong
+/// whenever the menu last sat on a display with a different one).
+/// Windows/Linux: physical pixels are native, and the OS cursor position is
+/// already physical and exact; the click is the fallback.
+fn context_menu_position<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    x: i32,
+    y: i32,
+) -> tauri::Position {
+    let monitors = window.available_monitors().unwrap_or_default();
+    #[cfg(target_os = "macos")]
+    {
+        let (lx, ly) = (x as f64, y as f64);
+        let mut pos = (lx, ly);
+        if let Some(m) = monitors.iter().find(|m| logical_rect(m).contains(lx, ly)) {
+            let r = logical_rect(m);
+            let s = m.scale_factor();
+            let (w, h) = menu_size_logical(window, s);
+            pos = clamp_rect(r, lx, ly, w, h);
+        }
+        tauri::Position::Logical(tauri::LogicalPosition { x: pos.0, y: pos.1 })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let (px, py) = match window.cursor_position() {
+            Ok(p) => (p.x.round(), p.y.round()),
+            Err(e) => {
+                log::debug!("[context-menu] cursor_position failed ({e}); using the click");
+                let s = monitors
+                    .iter()
+                    .find(|m| logical_rect(m).contains(x as f64, y as f64))
+                    .map(|m| m.scale_factor())
+                    .or_else(|| window.scale_factor().ok())
+                    .unwrap_or(1.0);
+                ((x as f64 * s).round(), (y as f64 * s).round())
+            }
+        };
+        let mut pos = (px, py);
+        if let Some(m) = monitors.iter().find(|m| physical_rect(m).contains(px, py)) {
+            let s = m.scale_factor();
+            let (w, h) = menu_size_logical(window, s);
+            pos = clamp_rect(physical_rect(m), px, py, w * s, h * s);
+        }
+        tauri::Position::Physical(tauri::PhysicalPosition {
+            x: pos.0.round() as i32,
+            y: pos.1.round() as i32,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Rect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+impl Rect {
+    fn contains(&self, x: f64, y: f64) -> bool {
+        x >= self.x && x < self.x + self.w && y >= self.y && y < self.y + self.h
+    }
+}
+
+/// A monitor's rect in its own logical units (physical ÷ its scale).
+fn logical_rect(m: &tauri::Monitor) -> Rect {
+    let s = m.scale_factor();
+    Rect {
+        x: m.position().x as f64 / s,
+        y: m.position().y as f64 / s,
+        w: m.size().width as f64 / s,
+        h: m.size().height as f64 / s,
+    }
+}
+
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn physical_rect(m: &tauri::Monitor) -> Rect {
+    Rect {
+        x: m.position().x as f64,
+        y: m.position().y as f64,
+        w: m.size().width as f64,
+        h: m.size().height as f64,
+    }
+}
+
+/// The menu's logical size: its rendered size if known, else the
+/// configured one (a freshly built window can still report 0×0).
+fn menu_size_logical<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    scale: f64,
+) -> (f64, f64) {
+    match window.outer_size() {
+        Ok(s) if s.width > 0 && s.height > 0 => (s.width as f64 / scale, s.height as f64 / scale),
+        _ => (CONTEXT_MENU_LOGICAL_W, CONTEXT_MENU_LOGICAL_H),
+    }
+}
+
+/// Keep a `w`×`h` box whose top-left is `(x, y)` inside `r`: shift it back
+/// from the right/bottom edge, never past the top-left.
+fn clamp_rect(r: Rect, x: f64, y: f64, w: f64, h: f64) -> (f64, f64) {
+    let cx = if x + w > r.x + r.w {
+        (r.x + r.w - w).max(r.x)
+    } else {
+        x
+    };
+    let cy = if y + h > r.y + r.h {
+        (r.y + r.h - h).max(r.y)
+    } else {
+        y
+    };
+    (cx, cy)
 }
 
 pub async fn set_floating_opacity<R: tauri::Runtime>(
@@ -505,5 +594,59 @@ pub async fn get_screen_context(
             log::warn!("Screen context capture failed: {}", e);
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod context_menu_tests {
+    use super::{clamp_rect, Rect};
+
+    const SCREEN: Rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        w: 1512.0,
+        h: 982.0,
+    };
+
+    #[test]
+    fn stays_at_the_click_when_it_fits() {
+        assert_eq!(
+            clamp_rect(SCREEN, 300.0, 200.0, 160.0, 220.0),
+            (300.0, 200.0)
+        );
+    }
+
+    #[test]
+    fn flips_back_from_the_right_and_bottom_edges() {
+        assert_eq!(
+            clamp_rect(SCREEN, 1500.0, 900.0, 160.0, 220.0),
+            (1352.0, 762.0)
+        );
+    }
+
+    #[test]
+    fn never_moves_past_the_monitor_origin() {
+        let tiny = Rect {
+            x: 100.0,
+            y: 50.0,
+            w: 120.0,
+            h: 100.0,
+        };
+        assert_eq!(clamp_rect(tiny, 150.0, 60.0, 160.0, 220.0), (100.0, 50.0));
+    }
+
+    #[test]
+    fn works_on_a_secondary_monitor_with_negative_origin() {
+        let left = Rect {
+            x: -1920.0,
+            y: 0.0,
+            w: 1920.0,
+            h: 1080.0,
+        };
+        assert!(left.contains(-10.0, 500.0));
+        assert_eq!(
+            clamp_rect(left, -10.0, 500.0, 160.0, 220.0),
+            (-160.0, 500.0)
+        );
     }
 }
