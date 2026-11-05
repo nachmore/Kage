@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { marked } from 'marked';
 import { isShellCommandExpanded, setShellCommandExpanded } from '../../ui/js/shared/shell-command-view.js';
+import { isToolCallExpanded, setToolCallExpanded } from '../../ui/js/shared/tool-call-view.js';
 
 let FloatingApp;
 beforeAll(async () => {
@@ -90,7 +91,10 @@ const slotBlocks = () => [...(slot()?.querySelectorAll('.shell-cmd') ?? [])];
 const row = () => document.getElementById('toolSources');
 const listBlocks = () => [...row().querySelectorAll('.shell-cmd-list .shell-cmd')];
 const commandText = (block) => block.querySelector('.shell-cmd-text').textContent;
-const plainChips = () => [...row().querySelectorAll('.tool-sources-static .tool-chip')];
+// Chips of tools other than shell: static (extension tools) and toggles.
+const plainChips = () => [
+    ...row().querySelectorAll('.tool-sources-static .tool-chip, .tool-call-chips .tool-chip'),
+];
 
 describe('floating window shell commands', () => {
     it('shows the running command, then settles every call into the chip list at the end', async () => {
@@ -147,7 +151,7 @@ describe('floating window shell commands', () => {
         const app = makeApp();
         chunk(app, 'Let me check.');
         tool(app, { sessionUpdate: 'tool_call', toolCallId: 'k', title: 'shell' });
-        expect(plainChips().map((c) => c.textContent.replace(/\s+/g, ' ').trim())).toEqual(['🔧 shell']);
+        expect(plainChips().map((c) => c.textContent.replace(/\s+/g, ' ').trim())).toEqual(['shell']);
 
         tool(app, { sessionUpdate: 'tool_call_update', toolCallId: 'k', kind: 'execute', rawInput: { command: 'ls' } });
         expect(plainChips()).toHaveLength(0);
@@ -175,5 +179,39 @@ describe('floating window shell commands', () => {
         await app.messageStreamController.host.onError({ payload: 'boom' }, true);
         expect(document.querySelector('.shell-cmd-spinner')).toBeNull();
         expect(listBlocks()[0].dataset.state).toBe('unknown');
+    });
+});
+
+describe('floating window: other tools', () => {
+    const toolChip = (label) =>
+        [...row().querySelectorAll('.tool-call-chip')].find(
+            (c) => c.querySelector('.tool-call-chip-label').textContent === label
+        );
+
+    it('an open call refreshes in place while the turn streams, and settles at the end', async () => {
+        const app = makeApp();
+        chunk(app, 'Reading.');
+        tool(app, { sessionUpdate: 'tool_call', toolCallId: 'r', title: 'read', kind: 'read', status: 'in_progress', rawInput: { path: '/a' } });
+        tool(app, { sessionUpdate: 'tool_call', toolCallId: 'g', title: 'grep', kind: 'search', status: 'in_progress', rawInput: { pattern: 'x' } });
+        const chip = toolChip('read');
+        chip.click();
+        const list = document.getElementById(chip.getAttribute('aria-controls'));
+        const block = list.querySelector('.tool-call');
+        setToolCallExpanded(block, true);
+        expect(block.dataset.state).toBe('running');
+
+        tool(app, { sessionUpdate: 'tool_call_update', toolCallId: 'r', status: 'completed', rawOutput: { items: [{ Text: 'contents' }] } });
+        expect(block.dataset.state).toBe('success');
+        expect(block.querySelector('.tool-call-text').textContent).toBe('contents');
+        chunk(app, ' More text.');
+        // Streaming re-renders leave the open list and block alone.
+        expect(list.hidden).toBe(false);
+        expect(isToolCallExpanded(block)).toBe(true);
+
+        await completeTurn(app);
+        expect(row().querySelector('.tool-call')).toBe(block);
+        expect(isToolCallExpanded(block)).toBe(true);
+        const grepList = document.getElementById(toolChip('grep').getAttribute('aria-controls'));
+        expect(grepList.querySelector('.tool-call').dataset.state).toBe('unknown');
     });
 });

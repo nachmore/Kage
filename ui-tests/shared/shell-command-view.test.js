@@ -14,7 +14,6 @@ import {
     handOffShellActivity,
     isShellCommandExpanded,
     pruneShellActivity,
-    renderToolSources,
     setShellCommandExpanded,
     SHELL_LAYOUT_EVENT,
     shellOutputText,
@@ -22,6 +21,7 @@ import {
     syncShellCommandList,
     updateShellCommandBlock,
 } from '../../ui/js/shared/shell-command-view.js';
+import { renderToolSources } from '../../ui/js/shared/tool-call-view.js';
 import { processToolCallUpdate } from '../../ui/js/shared/streaming-utils.js';
 
 const XSS = '<img src=x onerror="window.__pwned=1">';
@@ -467,10 +467,10 @@ describe('tool sources chip row', () => {
         return { state, container };
     }
 
-    it('keeps non-shell chips and sources, and groups shell calls into one toggle chip', () => {
+    it('keeps other tools\' chips and sources, and groups shell calls into one toggle chip', () => {
         const { container } = setup();
         const chips = container.querySelector('.tool-sources-static');
-        expect(chips.textContent).toContain('read_file');
+        expect(container.querySelector('.tool-call-chips').textContent).toContain('read_file');
         expect(chips.textContent).not.toContain('shell');
         expect(chips.querySelector('a.source-chip[data-url]')).not.toBeNull();
         const chip = container.querySelector('button.shell-chip');
@@ -521,7 +521,7 @@ describe('tool sources chip row', () => {
         expect(blocks).toHaveLength(3);
         expect(blocks[0]).toBe(block);
         expect(isShellCommandExpanded(blocks[0])).toBe(true);
-        expect(container.querySelector('.tool-sources-static').textContent).toContain('web_search');
+        expect(container.querySelector('.tool-call-chips').textContent).toContain('web_search');
         expect(container.querySelector('.tool-sources-static .source-chip[data-url]')).toBeNull();
     });
 

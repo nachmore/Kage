@@ -365,6 +365,7 @@ export class FloatingApp {
                 this.windowManager.resizeWindow();
             },
             showShellCommand: (record) => this._showShellCommand(record),
+            onToolCallChanged: () => this._refreshToolCall(),
             onToolCallTracked: (update, updated) => {
                 // Detect computer-control tool usage and keep window visible
                 if (update?.title) {

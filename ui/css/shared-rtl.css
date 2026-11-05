@@ -237,7 +237,9 @@ html[dir="rtl"] [data-icon-start] {
    `text-align: left` themselves, so an RTL ancestor's inherited
    `text-align: right` (e.g. `.response-text.rtl`) can't flip them. Only the
    "shell" chip — translated UI chrome — follows the page direction. */
-html[dir="rtl"] .shell-chip[aria-expanded="false"] .shell-chip-chevron {
+/* The same holds for every tool's call blocks (dir="ltr") and its chip. */
+html[dir="rtl"] .shell-chip[aria-expanded="false"] .shell-chip-chevron,
+html[dir="rtl"] .tool-call-chip[aria-expanded="false"] .shell-chip-chevron {
     /* "Expand" points toward the reading direction. */
     transform: scaleX(-1);
 }

@@ -4361,6 +4361,214 @@
     "message": "Copied",
     "description": "Briefly replaces a copy button's label after copying succeeded"
   },
+  "shared.tool.chip_title": {
+    "message": "{count, plural, one {# call to {name}} other {# calls to {name}}}",
+    "description": "Tooltip / accessible name of a tool's chip under an agent response; clicking it shows or hides the list of those calls. {count} is how many times the agent used the tool in that response, {name} the tool's name (an identifier such as 'read' or 'grep') or a kind of tool such as 'edit'."
+  },
+  "shared.tool.chip_title_mcp": {
+    "message": "{count, plural, one {# call to the {server} MCP server} other {# calls to the {server} MCP server}}",
+    "description": "Tooltip / accessible name of the chip that groups an agent response's calls to the tools of one MCP server (a plugin that gives the agent extra tools). {server} is the server's name, an identifier such as 'builder-mcp'. Keep 'MCP' as is."
+  },
+  "shared.tool.kind.read": {
+    "message": "read",
+    "description": "Chip label for an agent's file-reading tool calls when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.kind.edit": {
+    "message": "edit",
+    "description": "Chip label for an agent's file-editing tool calls when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.kind.delete": {
+    "message": "delete",
+    "description": "Chip label for an agent's file-deleting tool calls when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.kind.move": {
+    "message": "move",
+    "description": "Chip label for an agent's file-moving / renaming tool calls when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.kind.search": {
+    "message": "search",
+    "description": "Chip label for an agent's search tool calls (searching files or the web) when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.kind.fetch": {
+    "message": "fetch",
+    "description": "Chip label for an agent's tool calls that download a web page when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.kind.think": {
+    "message": "think",
+    "description": "Chip label for an agent's planning / note-taking tool calls (e.g. updating its to-do list) when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.kind.switch_mode": {
+    "message": "mode",
+    "description": "Chip label for an agent's tool calls that switch its working mode when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.kind.other": {
+    "message": "tool",
+    "description": "Chip label for other agent tool calls when the tool has no short name of its own. Keep short; lowercase is fine."
+  },
+  "shared.tool.unknown_call": {
+    "message": "Tool call",
+    "description": "Shown in place of what a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) was about when the agent did not say"
+  },
+  "shared.tool.status.running": {
+    "message": "Running",
+    "description": "Status of a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) that is still running (accessible label of the spinner)"
+  },
+  "shared.tool.status.success": {
+    "message": "Succeeded",
+    "description": "Status of a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) that finished successfully (accessible label of the check mark)"
+  },
+  "shared.tool.status.failed": {
+    "message": "Failed",
+    "description": "Status of a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) that failed"
+  },
+  "shared.tool.status.unknown": {
+    "message": "Status not reported",
+    "description": "Status of a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) when the agent's turn ended without saying whether or how the call finished"
+  },
+  "shared.tool.label.file": {
+    "message": "File",
+    "description": "Label next to the path of the file an agent's tool call read or changed, in the call's details"
+  },
+  "shared.tool.label.lines": {
+    "message": "Lines",
+    "description": "Label next to the line range (such as 10–20) of a file an agent read, in the tool call details"
+  },
+  "shared.tool.label.query": {
+    "message": "Query",
+    "description": "Label next to what an agent searched for (search text or pattern), in the tool call details"
+  },
+  "shared.tool.label.scope": {
+    "message": "In",
+    "description": "Label next to where an agent searched (a folder, a file pattern, a site), in the tool call details. Short, like the preposition in \"searched for X in Y\""
+  },
+  "shared.tool.label.url": {
+    "message": "URL",
+    "description": "Label next to the web address an agent fetched, in the tool call details"
+  },
+  "shared.tool.label.server": {
+    "message": "Server",
+    "description": "Label next to the name of the MCP server (a plugin that provides tools) whose tool the agent called, in the tool call details"
+  },
+  "shared.tool.label.tool": {
+    "message": "Tool",
+    "description": "Label next to the name of the tool the agent called, in the tool call details"
+  },
+  "shared.tool.label.arguments": {
+    "message": "Arguments",
+    "description": "Heading of the list of values (parameters) the agent passed to a tool, in the tool call details"
+  },
+  "shared.tool.label.sources": {
+    "message": "Results",
+    "description": "Heading of the list of results (web pages, matching files) an agent's search returned, in the tool call details"
+  },
+  "shared.tool.result_label": {
+    "message": "Result",
+    "description": "Heading (and accessible name) of the area that shows what a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) returned"
+  },
+  "shared.tool.error_label": {
+    "message": "Error",
+    "description": "Heading of the area that shows what a failed agent tool call returned (usually an error message)"
+  },
+  "shared.tool.lines": {
+    "message": "Lines {range}",
+    "description": "Accessible wording of the line range shown next to a file an agent read. {range} is like 10–20"
+  },
+  "shared.tool.more_files": {
+    "message": "{count, plural, one {and # more file} other {and # more files}}",
+    "description": "Accessible wording of a short \"+N\" note next to the first file of a tool call that names several files"
+  },
+  "shared.tool.more_urls": {
+    "message": "{count, plural, one {and # more address} other {and # more addresses}}",
+    "description": "Accessible wording of a short \"+N\" note next to the first web address of a tool call that fetched several"
+  },
+  "shared.tool.result_count": {
+    "message": "{count, plural, one {# result} other {# results}}",
+    "description": "How many results an agent's search returned (web pages or matching files)"
+  },
+  "shared.tool.matches": {
+    "message": "{count, plural, one {# match} other {# matches}}",
+    "description": "Next to a file in the results of a text search: how many matching lines the file has"
+  },
+  "shared.tool.more_results": {
+    "message": "{count, plural, one {… and # more result} other {… and # more results}}",
+    "description": "Under a long list of an agent's search results: how many more were left out"
+  },
+  "shared.tool.json.keys": {
+    "message": "{count, plural, one {# field} other {# fields}}",
+    "description": "Summary of a collapsed structured value (a JSON object) in tool call details; click to expand. {count} is how many named fields it has"
+  },
+  "shared.tool.json.items": {
+    "message": "{count, plural, one {# item} other {# items}}",
+    "description": "Summary of a collapsed list value (a JSON array) in tool call details; click to expand. {count} is how many entries it has"
+  },
+  "shared.tool.no_output": {
+    "message": "No result reported by the agent",
+    "description": "Shown in expanded tool call details when the agent did not report what the call returned"
+  },
+  "shared.tool.still_running": {
+    "message": "Still running…",
+    "description": "Shown in expanded tool call details while the call is running and nothing has come back yet"
+  },
+  "shared.tool.output_dropped": {
+    "message": "Result not kept — this response already holds a lot of tool output",
+    "description": "Shown in expanded tool call details when Kage didn't keep what the call returned because the response's other tool calls already returned the maximum amount"
+  },
+  "shared.tool.result_shortened": {
+    "message": "Result shortened",
+    "description": "Note under a structured tool result that was too long and was cut"
+  },
+  "shared.tool.arguments_shortened": {
+    "message": "Arguments shortened",
+    "description": "Note under the list of values passed to a tool when it was too long and was cut"
+  },
+  "shared.tool.copy_path": {
+    "message": "Copy path",
+    "description": "Button in tool call details that copies the file path to the clipboard"
+  },
+  "shared.tool.copy_url": {
+    "message": "Copy URL",
+    "description": "Button in tool call details that copies the web address to the clipboard"
+  },
+  "shared.tool.copy_arguments": {
+    "message": "Copy arguments",
+    "description": "Button in tool call details that copies the values passed to the tool to the clipboard"
+  },
+  "shared.tool.copy_result": {
+    "message": "Copy result",
+    "description": "Button in tool call details that copies what the tool returned to the clipboard"
+  },
+  "shared.tool.diff.stat": {
+    "message": "{added, plural, one {# line added} other {# lines added}}, {removed, plural, one {# line removed} other {# lines removed}}",
+    "description": "Accessible wording of the \"+3 −1\" note on a file edit: how many lines the agent added and removed"
+  },
+  "shared.tool.diff.added_line": {
+    "message": "Added:",
+    "description": "Read by screen readers before a line the agent added to a file, in the change view of an edit"
+  },
+  "shared.tool.diff.removed_line": {
+    "message": "Removed:",
+    "description": "Read by screen readers before a line the agent removed from a file, in the change view of an edit"
+  },
+  "shared.tool.diff.unchanged": {
+    "message": "{count, plural, one {⋯ # unchanged line} other {⋯ # unchanged lines}}",
+    "description": "Marker in the change view of a file edit where unchanged lines between the changes are folded away"
+  },
+  "shared.tool.diff.more_changes": {
+    "message": "{count, plural, one {… # more changed line not shown} other {… # more changed lines not shown}}",
+    "description": "Marker at the end of a long change view of a file edit: how many changed lines were left out"
+  },
+  "shared.tool.diff.new_file": {
+    "message": "New file",
+    "description": "Small badge on the change view of a file the agent created"
+  },
+  "shared.tool.diff.too_large": {
+    "message": "Change too large to show",
+    "description": "Shown instead of the change view when the edited file was too large to compare"
+  },
+  "shared.tool.diff.no_changes": {
+    "message": "No changes",
+    "description": "Shown in the change view of a file edit that left the file as it was"
+  },
   "shared.tts.bar.pause": {
     "message": "Pause/Resume",
     "description": "Tooltip on the TTS bar pause/resume button"

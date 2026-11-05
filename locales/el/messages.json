@@ -8896,5 +8896,317 @@
     "description": "Status next to a Copy button on an extension's Settings page when the field it copies from is empty",
     "_machine_translated": true,
     "_source_hash": "c6bb153a964d0626"
+  },
+  "shared.tool.chip_title": {
+    "message": "{count, plural, one {# κλήση στο {name}} other {# κλήσεις στο {name}}}",
+    "description": "Tooltip / accessible name of a tool's chip under an agent response; clicking it shows or hides the list of those calls. {count} is how many times the agent used the tool in that response, {name} the tool's name (an identifier such as 'read' or 'grep') or a kind of tool such as 'edit'.",
+    "_machine_translated": true,
+    "_source_hash": "e520928ae3d13566"
+  },
+  "shared.tool.chip_title_mcp": {
+    "message": "{count, plural, one {# κλήση στον διακομιστή MCP {server}} other {# κλήσεις στον διακομιστή MCP {server}}}",
+    "description": "Tooltip / accessible name of the chip that groups an agent response's calls to the tools of one MCP server (a plugin that gives the agent extra tools). {server} is the server's name, an identifier such as 'builder-mcp'. Keep 'MCP' as is.",
+    "_machine_translated": true,
+    "_source_hash": "607bb3f91ec14e6a"
+  },
+  "shared.tool.kind.read": {
+    "message": "ανάγνωση",
+    "description": "Chip label for an agent's file-reading tool calls when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "c50ec61bb8ad480c"
+  },
+  "shared.tool.kind.edit": {
+    "message": "επεξεργασία",
+    "description": "Chip label for an agent's file-editing tool calls when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "ec7b5c7ef43dd4b5"
+  },
+  "shared.tool.kind.delete": {
+    "message": "διαγραφή",
+    "description": "Chip label for an agent's file-deleting tool calls when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "af1ec3f36d2e2989"
+  },
+  "shared.tool.kind.move": {
+    "message": "μετακίνηση",
+    "description": "Chip label for an agent's file-moving / renaming tool calls when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "b22a872412fa269d"
+  },
+  "shared.tool.kind.search": {
+    "message": "αναζήτηση",
+    "description": "Chip label for an agent's search tool calls (searching files or the web) when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "b9415b886e113b51"
+  },
+  "shared.tool.kind.fetch": {
+    "message": "λήψη",
+    "description": "Chip label for an agent's tool calls that download a web page when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "597e2a0568be5e1e"
+  },
+  "shared.tool.kind.think": {
+    "message": "σκέψη",
+    "description": "Chip label for an agent's planning / note-taking tool calls (e.g. updating its to-do list) when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "fc4dee9812100ad6"
+  },
+  "shared.tool.kind.switch_mode": {
+    "message": "λειτουργία",
+    "description": "Chip label for an agent's tool calls that switch its working mode when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "e77c4b759cf35fcd"
+  },
+  "shared.tool.kind.other": {
+    "message": "εργαλείο",
+    "description": "Chip label for other agent tool calls when the tool has no short name of its own. Keep short; lowercase is fine.",
+    "_machine_translated": true,
+    "_source_hash": "6484076971026304"
+  },
+  "shared.tool.unknown_call": {
+    "message": "Κλήση εργαλείου",
+    "description": "Shown in place of what a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) was about when the agent did not say",
+    "_machine_translated": true,
+    "_source_hash": "7c81d6b5151e9ff4"
+  },
+  "shared.tool.status.running": {
+    "message": "Σε εξέλιξη",
+    "description": "Status of a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) that is still running (accessible label of the spinner)",
+    "_machine_translated": true,
+    "_source_hash": "65c7b4c6c3ec4112"
+  },
+  "shared.tool.status.success": {
+    "message": "Ολοκληρώθηκε",
+    "description": "Status of a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) that finished successfully (accessible label of the check mark)",
+    "_machine_translated": true,
+    "_source_hash": "d401b2c0f9253df5"
+  },
+  "shared.tool.status.failed": {
+    "message": "Απέτυχε",
+    "description": "Status of a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) that failed",
+    "_machine_translated": true,
+    "_source_hash": "8f9e3473a633c08a"
+  },
+  "shared.tool.status.unknown": {
+    "message": "Δεν αναφέρθηκε κατάσταση",
+    "description": "Status of a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) when the agent's turn ended without saying whether or how the call finished",
+    "_machine_translated": true,
+    "_source_hash": "55181e82b4704c90"
+  },
+  "shared.tool.label.file": {
+    "message": "Αρχείο",
+    "description": "Label next to the path of the file an agent's tool call read or changed, in the call's details",
+    "_machine_translated": true,
+    "_source_hash": "438b43fcbae40691"
+  },
+  "shared.tool.label.lines": {
+    "message": "Γραμμές",
+    "description": "Label next to the line range (such as 10–20) of a file an agent read, in the tool call details",
+    "_machine_translated": true,
+    "_source_hash": "ab6597547a431a8e"
+  },
+  "shared.tool.label.query": {
+    "message": "Ερώτημα",
+    "description": "Label next to what an agent searched for (search text or pattern), in the tool call details",
+    "_machine_translated": true,
+    "_source_hash": "fb5daa2787294291"
+  },
+  "shared.tool.label.scope": {
+    "message": "Σε",
+    "description": "Label next to where an agent searched (a folder, a file pattern, a site), in the tool call details. Short, like the preposition in \"searched for X in Y\"",
+    "_machine_translated": true,
+    "_source_hash": "ab4b3477379d9c50"
+  },
+  "shared.tool.label.url": {
+    "message": "URL",
+    "description": "Label next to the web address an agent fetched, in the tool call details",
+    "_machine_translated": true,
+    "_source_hash": "786f89b4c0dc3de3"
+  },
+  "shared.tool.label.server": {
+    "message": "Διακομιστής",
+    "description": "Label next to the name of the MCP server (a plugin that provides tools) whose tool the agent called, in the tool call details",
+    "_machine_translated": true,
+    "_source_hash": "11af087591b1b4fc"
+  },
+  "shared.tool.label.tool": {
+    "message": "Εργαλείο",
+    "description": "Label next to the name of the tool the agent called, in the tool call details",
+    "_machine_translated": true,
+    "_source_hash": "a21a25c8986ed142"
+  },
+  "shared.tool.label.arguments": {
+    "message": "Ορίσματα",
+    "description": "Heading of the list of values (parameters) the agent passed to a tool, in the tool call details",
+    "_machine_translated": true,
+    "_source_hash": "d9cce0062c03d2a7"
+  },
+  "shared.tool.label.sources": {
+    "message": "Αποτελέσματα",
+    "description": "Heading of the list of results (web pages, matching files) an agent's search returned, in the tool call details",
+    "_machine_translated": true,
+    "_source_hash": "a959388f3ec0d479"
+  },
+  "shared.tool.result_label": {
+    "message": "Αποτέλεσμα",
+    "description": "Heading (and accessible name) of the area that shows what a tool call the AI agent made (reading a file, editing a file, searching, fetching a web page, calling a tool from an MCP server, ...) returned",
+    "_machine_translated": true,
+    "_source_hash": "c957f76872357302"
+  },
+  "shared.tool.error_label": {
+    "message": "Σφάλμα",
+    "description": "Heading of the area that shows what a failed agent tool call returned (usually an error message)",
+    "_machine_translated": true,
+    "_source_hash": "e50063a4825c65f8"
+  },
+  "shared.tool.lines": {
+    "message": "Γραμμές {range}",
+    "description": "Accessible wording of the line range shown next to a file an agent read. {range} is like 10–20",
+    "_machine_translated": true,
+    "_source_hash": "c35863f80ab35399"
+  },
+  "shared.tool.more_files": {
+    "message": "{count, plural, one {και # ακόμη αρχείο} other {και # ακόμη αρχεία}}",
+    "description": "Accessible wording of a short \"+N\" note next to the first file of a tool call that names several files",
+    "_machine_translated": true,
+    "_source_hash": "5789b5c538f5b2b3"
+  },
+  "shared.tool.more_urls": {
+    "message": "{count, plural, one {και # ακόμη διεύθυνση} other {και # ακόμη διευθύνσεις}}",
+    "description": "Accessible wording of a short \"+N\" note next to the first web address of a tool call that fetched several",
+    "_machine_translated": true,
+    "_source_hash": "1398e1087347e53f"
+  },
+  "shared.tool.result_count": {
+    "message": "{count, plural, one {# αποτέλεσμα} other {# αποτελέσματα}}",
+    "description": "How many results an agent's search returned (web pages or matching files)",
+    "_machine_translated": true,
+    "_source_hash": "5d52b5d2fead8290"
+  },
+  "shared.tool.matches": {
+    "message": "{count, plural, one {# αντιστοιχία} other {# αντιστοιχίες}}",
+    "description": "Next to a file in the results of a text search: how many matching lines the file has",
+    "_machine_translated": true,
+    "_source_hash": "49e421f35fcf06bc"
+  },
+  "shared.tool.more_results": {
+    "message": "{count, plural, one {… και # ακόμη αποτέλεσμα} other {… και # ακόμη αποτελέσματα}}",
+    "description": "Under a long list of an agent's search results: how many more were left out",
+    "_machine_translated": true,
+    "_source_hash": "ee16f704a80acb3a"
+  },
+  "shared.tool.json.keys": {
+    "message": "{count, plural, one {# πεδίο} other {# πεδία}}",
+    "description": "Summary of a collapsed structured value (a JSON object) in tool call details; click to expand. {count} is how many named fields it has",
+    "_machine_translated": true,
+    "_source_hash": "9d624b2ee265e562"
+  },
+  "shared.tool.json.items": {
+    "message": "{count, plural, one {# στοιχείο} other {# στοιχεία}}",
+    "description": "Summary of a collapsed list value (a JSON array) in tool call details; click to expand. {count} is how many entries it has",
+    "_machine_translated": true,
+    "_source_hash": "b2df3aab5bdeb179"
+  },
+  "shared.tool.no_output": {
+    "message": "Ο πράκτορας δεν ανέφερε αποτέλεσμα",
+    "description": "Shown in expanded tool call details when the agent did not report what the call returned",
+    "_machine_translated": true,
+    "_source_hash": "1ddde6091151fd4b"
+  },
+  "shared.tool.still_running": {
+    "message": "Εκτελείται ακόμη…",
+    "description": "Shown in expanded tool call details while the call is running and nothing has come back yet",
+    "_machine_translated": true,
+    "_source_hash": "7a165cf5b16ef03e"
+  },
+  "shared.tool.output_dropped": {
+    "message": "Το αποτέλεσμα δεν διατηρήθηκε — αυτή η απάντηση περιέχει ήδη πολλή έξοδο εργαλείων",
+    "description": "Shown in expanded tool call details when Kage didn't keep what the call returned because the response's other tool calls already returned the maximum amount",
+    "_machine_translated": true,
+    "_source_hash": "00c20fd4215841b3"
+  },
+  "shared.tool.result_shortened": {
+    "message": "Το αποτέλεσμα συντομεύτηκε",
+    "description": "Note under a structured tool result that was too long and was cut",
+    "_machine_translated": true,
+    "_source_hash": "910a6d451588c5b0"
+  },
+  "shared.tool.arguments_shortened": {
+    "message": "Τα ορίσματα συντομεύτηκαν",
+    "description": "Note under the list of values passed to a tool when it was too long and was cut",
+    "_machine_translated": true,
+    "_source_hash": "890aa55800836cf5"
+  },
+  "shared.tool.copy_path": {
+    "message": "Αντιγραφή διαδρομής",
+    "description": "Button in tool call details that copies the file path to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "3649fb18290303c5"
+  },
+  "shared.tool.copy_url": {
+    "message": "Αντιγραφή URL",
+    "description": "Button in tool call details that copies the web address to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "a86ca9722748092c"
+  },
+  "shared.tool.copy_arguments": {
+    "message": "Αντιγραφή ορισμάτων",
+    "description": "Button in tool call details that copies the values passed to the tool to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "56e7a2975d06807a"
+  },
+  "shared.tool.copy_result": {
+    "message": "Αντιγραφή αποτελέσματος",
+    "description": "Button in tool call details that copies what the tool returned to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "34d8f19fa765f461"
+  },
+  "shared.tool.diff.stat": {
+    "message": "{added, plural, one {# γραμμή προστέθηκε} other {# γραμμές προστέθηκαν}}, {removed, plural, one {# γραμμή αφαιρέθηκε} other {# γραμμές αφαιρέθηκαν}}",
+    "description": "Accessible wording of the \"+3 −1\" note on a file edit: how many lines the agent added and removed",
+    "_machine_translated": true,
+    "_source_hash": "709fab269a00d272"
+  },
+  "shared.tool.diff.added_line": {
+    "message": "Προστέθηκε:",
+    "description": "Read by screen readers before a line the agent added to a file, in the change view of an edit",
+    "_machine_translated": true,
+    "_source_hash": "3e995edbfd41ae39"
+  },
+  "shared.tool.diff.removed_line": {
+    "message": "Αφαιρέθηκε:",
+    "description": "Read by screen readers before a line the agent removed from a file, in the change view of an edit",
+    "_machine_translated": true,
+    "_source_hash": "dc4982e0e0e93c37"
+  },
+  "shared.tool.diff.unchanged": {
+    "message": "{count, plural, one {⋯ # αμετάβλητη γραμμή} other {⋯ # αμετάβλητες γραμμές}}",
+    "description": "Marker in the change view of a file edit where unchanged lines between the changes are folded away",
+    "_machine_translated": true,
+    "_source_hash": "738b2041ba3f8035"
+  },
+  "shared.tool.diff.more_changes": {
+    "message": "{count, plural, one {… # ακόμη αλλαγμένη γραμμή δεν εμφανίζεται} other {… # ακόμη αλλαγμένες γραμμές δεν εμφανίζονται}}",
+    "description": "Marker at the end of a long change view of a file edit: how many changed lines were left out",
+    "_machine_translated": true,
+    "_source_hash": "eba610cda3dc05c8"
+  },
+  "shared.tool.diff.new_file": {
+    "message": "Νέο αρχείο",
+    "description": "Small badge on the change view of a file the agent created",
+    "_machine_translated": true,
+    "_source_hash": "0976ab9cf2a794c4"
+  },
+  "shared.tool.diff.too_large": {
+    "message": "Η αλλαγή είναι πολύ μεγάλη για εμφάνιση",
+    "description": "Shown instead of the change view when the edited file was too large to compare",
+    "_machine_translated": true,
+    "_source_hash": "b3243b29738bc452"
+  },
+  "shared.tool.diff.no_changes": {
+    "message": "Καμία αλλαγή",
+    "description": "Shown in the change view of a file edit that left the file as it was",
+    "_machine_translated": true,
+    "_source_hash": "977871c487463b3b"
   }
 }

@@ -60,6 +60,11 @@
     --kage-term-mark: #fbd38d;
     --kage-term-mark-bg: rgba(251, 211, 141, 0.12);
     --kage-term-mark-border: rgba(251, 211, 141, 0.45);
+    /* Diff lines in tool call blocks. */
+    --kage-term-diff-add: #9ae6b4;
+    --kage-term-diff-add-bg: rgba(72, 187, 120, 0.14);
+    --kage-term-diff-del: #feb2b2;
+    --kage-term-diff-del-bg: rgba(245, 101, 101, 0.14);
 
     /* Mascot */
     --kage-mascot-outline: #319795; /* matches --kage-accent */
@@ -103,4 +108,8 @@ body.light-theme {
     --kage-term-mark: #7b341e;
     --kage-term-mark-bg: rgba(221, 107, 32, 0.1);
     --kage-term-mark-border: rgba(156, 66, 33, 0.45);
+    --kage-term-diff-add: #276749;
+    --kage-term-diff-add-bg: rgba(47, 133, 90, 0.16);
+    --kage-term-diff-del: #9b2c2c;
+    --kage-term-diff-del-bg: rgba(197, 48, 48, 0.12);
 }

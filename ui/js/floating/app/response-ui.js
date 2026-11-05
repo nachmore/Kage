@@ -14,7 +14,7 @@ import {
     showShellActivity,
     signalMascot,
     signalMascotRecovered,
-    syncShellCommandList,
+    syncToolSources,
     t,
 } from './dependencies.js';
 
@@ -208,8 +208,8 @@ export const ResponseUiMethods = {
 
         sourcesEl.style.display = 'flex';
         this.elements.contentArea.classList.add('visible');
-        // Updates the chip row in place: an open "shell" command list
-        // survives the re-render on every new tool call.
+        // Updates the chip row in place: an open tool list (and any call
+        // expanded in it) survives the re-render on every new tool call.
         renderToolSources(sourcesEl, this.toolUsages, this.toolSources);
         attachSourceClickHandler(sourcesEl, this.invoke);
         this._wireShellLayout();
@@ -232,7 +232,7 @@ export const ResponseUiMethods = {
         return slot;
     },
 
-    /** Re-measure the window when a command block or the shell list opens/closes. */
+    /** Re-measure the window when a tool block or a tool list opens/closes. */
     _wireShellLayout() {
         const area = this.elements.contentArea;
         if (!area || area._kageShellLayoutWired) return;
@@ -246,9 +246,20 @@ export const ResponseUiMethods = {
         if (spinner) spinner.remove();
         showShellActivity(this._shellActivitySlot(true), record);
         const sourcesEl = document.getElementById('toolSources');
-        if (sourcesEl) syncShellCommandList(sourcesEl, this.toolUsages);
+        if (sourcesEl) syncToolSources(sourcesEl, this.toolUsages);
         this.elements.contentArea.classList.add('visible');
         this.windowManager.resizeWindow();
+    },
+
+    /**
+     * Another tool's call changed (status, arguments, output): refresh its
+     * block under its chip, if the chip row is showing. New calls and
+     * calls that changed chip come through renderSources instead.
+     */
+    _refreshToolCall() {
+        const sourcesEl = document.getElementById('toolSources');
+        if (!sourcesEl || sourcesEl.style.display === 'none') return;
+        syncToolSources(sourcesEl, this.toolUsages);
     },
 
     _pruneShellActivity() {

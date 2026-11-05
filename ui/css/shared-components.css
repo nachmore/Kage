@@ -2872,6 +2872,349 @@ button.shell-chip {
     display: none;
 }
 
+/* ===== Tool call blocks (shared/tool-call-view.js) =====
+   Every other tool's calls, listed under their chip ("read ×3",
+   "builder-mcp ×2"): the same surface as the shell blocks, a one-line
+   header (kind icon, subject, note, status) and a details panel. Tool data
+   inside is LTR; translated labels take their own direction. */
+.tool-call {
+    direction: ltr;
+    text-align: left;
+    min-width: 0;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 8px;
+    background: var(--kage-term-bg);
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    font-size: 12px;
+    line-height: 1.45;
+    overflow: hidden;
+}
+.tool-call[data-state="failed"] {
+    border-color: color-mix(in srgb, var(--kage-term-error) 50%, var(--kage-term-border));
+}
+.tool-call-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.tool-call.expanded .tool-call-header {
+    border-radius: 7px 7px 0 0;
+}
+.tool-call-header:hover {
+    background: var(--kage-term-hover);
+}
+.tool-call-header:focus-visible,
+.tool-call-output:focus-visible,
+.tool-diff:focus-visible,
+.tool-json-summary:focus-visible,
+.tool-call-chip:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: -2px;
+}
+.tool-call-icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--kage-term-prompt);
+}
+.tool-call-summary {
+    /* Zero preferred width, like .shell-cmd-text: a long path or URL must
+       not widen the window through ancestors' min-content sizes. */
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tool-call-summary.is-placeholder {
+    color: var(--kage-term-muted);
+    font-style: italic;
+}
+.tool-call-meta {
+    flex: 0 1 auto;
+    max-width: 40%;
+    overflow: hidden;
+    color: var(--kage-term-muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tool-call-meta[hidden] {
+    display: none;
+}
+.tool-call.expanded .shell-cmd-chevron {
+    transform: rotate(90deg);
+}
+.tool-call-panel {
+    border-top: 1px solid var(--kage-term-border);
+}
+.tool-call-panel[hidden] {
+    display: none;
+}
+.tool-call-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+}
+.tool-call-purpose {
+    color: var(--kage-term-muted);
+    font-family: var(--kage-font);
+    font-style: italic;
+}
+.tool-call-fields {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 2px 10px;
+    align-items: baseline;
+}
+.tool-call-field {
+    display: contents;
+}
+.tool-call-label,
+.tool-call-section-label {
+    color: var(--kage-term-muted);
+    font-family: var(--kage-font);
+    font-size: 11px;
+}
+.tool-call-section-label {
+    display: block;
+    margin-bottom: 3px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.tool-call-value,
+.tool-call-arg-value,
+.tool-diff-path,
+.tool-call-source-url,
+.tool-call-source-path {
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+.tool-call-args {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 3px 10px;
+    align-items: baseline;
+}
+.tool-call-arg {
+    display: contents;
+}
+.tool-call-arg-key {
+    color: var(--kage-term-prompt);
+    overflow-wrap: anywhere;
+}
+.tool-call-arg-value {
+    display: block;
+    max-height: 160px;
+    overflow: auto;
+}
+.tool-json {
+    min-width: 0;
+}
+.tool-json-summary {
+    color: var(--kage-term-muted);
+    font-family: var(--kage-font);
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+}
+.tool-json-body,
+.tool-call-text {
+    margin: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+.tool-json-body {
+    max-height: 240px;
+    margin-top: 3px;
+    overflow: auto;
+}
+/* Inside a result box the box scrolls; no second scrollbar. */
+.tool-call-output .tool-json-body {
+    max-height: none;
+    overflow: visible;
+}
+.tool-call-output {
+    max-height: 240px;
+    padding: 6px 8px;
+    overflow: auto;
+    border: 1px dashed var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg-strong);
+}
+.tool-call-output > * + * {
+    margin-top: 6px;
+}
+.tool-call-note {
+    font-size: 11px;
+}
+/* Qualified so a host's `.message-content ul` / `li` rules can't indent it. */
+.tool-call ul.tool-call-sources {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.tool-call li.tool-call-source {
+    margin: 0;
+    padding: 0;
+}
+.tool-call-source {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 8px;
+    min-width: 0;
+}
+.tool-call-source-title {
+    font-family: var(--kage-font);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.tool-call-source-url,
+.tool-call-source-count {
+    color: var(--kage-term-muted);
+}
+.tool-call-footer {
+    margin: 0 -10px -8px;
+}
+
+/* Compact unified diff of an edit. */
+.tool-diff-file + .tool-diff-file {
+    margin-top: 4px;
+}
+.tool-diff-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    margin-bottom: 3px;
+}
+.tool-diff-badge {
+    padding: 0 6px;
+    border: 1px solid var(--kage-term-diff-add);
+    border-radius: 999px;
+    color: var(--kage-term-diff-add);
+    font-family: var(--kage-font);
+    font-size: 10px;
+}
+.tool-diff {
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg-strong);
+}
+.tool-diff-line {
+    display: flex;
+    min-width: max-content;
+    white-space: pre;
+}
+.tool-diff-line[data-op="add"] {
+    background: var(--kage-term-diff-add-bg);
+}
+.tool-diff-line[data-op="del"] {
+    background: var(--kage-term-diff-del-bg);
+}
+.tool-diff-num {
+    flex: 0 0 auto;
+    box-sizing: content-box;
+    width: var(--tool-diff-num-width, 3ch);
+    padding: 0 6px;
+    color: var(--kage-term-muted);
+    text-align: right;
+    user-select: none;
+}
+.tool-diff-sign {
+    flex-shrink: 0;
+    width: 2ch;
+    padding-left: 4px;
+    color: var(--kage-term-muted);
+    user-select: none;
+}
+.tool-diff-line[data-op="add"] .tool-diff-sign {
+    color: var(--kage-term-diff-add);
+}
+.tool-diff-line[data-op="del"] .tool-diff-sign {
+    color: var(--kage-term-diff-del);
+}
+.tool-diff-text {
+    padding-right: 8px;
+    user-select: text;
+}
+.tool-diff-gap,
+.tool-diff-more {
+    padding: 1px 8px;
+    color: var(--kage-term-muted);
+    font-family: var(--kage-font);
+    font-size: 11px;
+    font-style: italic;
+    user-select: none;
+}
+.tool-diff-gap {
+    border-block: 1px dashed var(--kage-term-border);
+    background: var(--kage-term-hover);
+}
+
+/* Tool chips: a toggle for the response's calls of that tool. */
+.tool-call-chips,
+.tool-call-lists {
+    display: contents;
+}
+button.tool-call-chip {
+    border: 0;
+    font: inherit;
+    font-size: 12px;
+    line-height: inherit;
+    cursor: pointer;
+}
+.tool-call-chip .tool-call-chip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--kage-term-prompt);
+}
+.tool-call-chip[aria-expanded="true"] .shell-chip-chevron {
+    transform: rotate(90deg);
+}
+.tool-call-chip[data-state="failed"] .shell-chip-dot {
+    display: inline-block;
+    background: var(--kage-term-error);
+}
+.tool-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* Permission prompt: the command an execute request wants to run. The
    modal is dark in both themes, so pin the dark terminal tokens. No
    max-height: the user approves what this shows, so all of it is laid out

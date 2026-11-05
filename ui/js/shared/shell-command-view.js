@@ -13,9 +13,11 @@
  * the same reason:
  *   - the "activity slot" (`showShellActivity` & co.) is where a running
  *     command replaces the generic tool spinner while the turn streams;
- *   - `renderToolSources` renders the tool/source chip row, where all of a
- *     response's shell calls collapse into one "shell ×N" toggle chip that
- *     reveals the list of commands.
+ *   - in the response's tool/source chip row (`renderToolSources` in
+ *     tool-call-view.js), all of its shell calls collapse into one
+ *     "shell ×N" toggle chip that reveals the list of commands
+ *     (`syncShellCommandList`). Other tools get the same treatment from
+ *     tool-call-view.js; the shell block is that view's `execute` kind.
  *
  * Command and output are untrusted: they only ever reach the DOM through
  * textContent / text nodes. A command is shown exactly as it will run, with
@@ -25,6 +27,7 @@
  */
 
 import { t } from './i18n.js';
+import { copyButton, el, icon, layoutChanged, TOOL_LAYOUT_EVENT, uid } from './tool-call-dom.js';
 import {
     getShellCalls,
     joinCapped,
@@ -34,44 +37,15 @@ import {
     shellCommandDisplayText,
     shellOutputOf,
 } from './shell-commands.js';
-import { renderSourceChipsHtml, renderToolChipsHtml } from './streaming-utils.js';
+import { settleToolCalls } from './tool-calls.js';
 
 /** Bubbling event fired from a block or the chip when its height changes. */
-export const SHELL_LAYOUT_EVENT = 'kage:shell-layout';
+export const SHELL_LAYOUT_EVENT = TOOL_LAYOUT_EVENT;
 
-// Constant, trusted SVG markup only — never interpolate data into these.
-const ICONS = Object.freeze({
-    terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
-    check: '<polyline points="20 6 9 17 4 12"/>',
-    cross: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
-    dash: '<circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/>',
-    chevron: '<polyline points="9 18 15 12 9 6"/>',
-    copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
-});
-
-let _uid = 0;
-const COPIED_FLASH_MS = 1500;
 const TOOLTIP_MAX = 500;
 // The header shows one ellipsised line: laying out more than this of a
 // huge command would be wasted work. The panel shows all of it.
 const HEADER_COMMAND_MAX = 1000;
-
-function el(tag, className) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    return node;
-}
-
-function icon(name, className, size = 14) {
-    const span = el('span', className || 'shell-cmd-icon');
-    span.setAttribute('aria-hidden', 'true');
-    span.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
-    return span;
-}
-
-function layoutChanged(node) {
-    node.dispatchEvent(new CustomEvent(SHELL_LAYOUT_EVENT, { bubbles: true }));
-}
 
 function omittedMarker(count) {
     return t('shared.shell.omitted', { count });
@@ -132,40 +106,6 @@ export function shellOutputText(record) {
     return [joinCapped(out.stdout, omittedMarker), joinCapped(out.stderr, omittedMarker)]
         .filter(Boolean)
         .join('\n');
-}
-
-function writeClipboard(text) {
-    try {
-        const p = navigator.clipboard?.writeText(text);
-        return p ? p.then(() => true).catch(() => false) : Promise.resolve(false);
-    } catch {
-        return Promise.resolve(false);
-    }
-}
-
-function copyButton(getLabel, getText) {
-    const btn = el('button', 'shell-cmd-copy');
-    btn.type = 'button';
-    const label = el('span', 'shell-cmd-copy-label');
-    label.dir = 'auto';
-    label.textContent = getLabel();
-    btn.append(icon('copy', 'shell-cmd-icon', 12), label);
-    btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const text = getText();
-        if (!text) return;
-        writeClipboard(text).then((ok) => {
-            if (!ok) return;
-            label.textContent = t('shared.shell.copied');
-            btn.classList.add('copied');
-            clearTimeout(btn._kageCopiedTimer);
-            btn._kageCopiedTimer = setTimeout(() => {
-                label.textContent = getLabel();
-                btn.classList.remove('copied');
-            }, COPIED_FLASH_MS);
-        });
-    });
-    return btn;
 }
 
 function renderStatus(statusEl, state, out) {
@@ -348,7 +288,7 @@ export function updateShellCommandBlock(root, record) {
 
 /** A new block for `record` (collapsed). */
 export function createShellCommandBlock(record) {
-    const id = `kage-shell-${++_uid}`;
+    const id = uid('kage-shell');
     const root = el('div', 'shell-cmd');
     root.dir = 'ltr';
 
@@ -444,12 +384,14 @@ export function showShellActivity(slot, record) {
 
 /**
  * The turn ended: calls that never reported a terminal status stop showing
- * as running, every block repaints and finished collapsed ones go. Blocks
+ * as running (shell and every other tool's), every block repaints and finished collapsed ones go. Blocks
  * the user has open stay until `handOffShellActivity` moves them into the
  * response's command list.
  */
 export function finishShellActivity(slot, toolUsages) {
     settleShellCalls(toolUsages);
+    // Other tools' calls end with the turn too (tool-call-view.js).
+    settleToolCalls(toolUsages);
     for (const b of blocksOf(slot)) updateShellCommandBlock(b, b._kageShell.record);
     pruneShellActivity(slot);
 }
@@ -542,7 +484,7 @@ export function syncShellCommandList(container, toolUsages) {
     if (!chip || !list) {
         chip?.remove();
         list?.remove();
-        const listId = `kage-shell-list-${++_uid}`;
+        const listId = uid('kage-shell-list');
         chip = createShellChip(listId);
         list = el('div', 'shell-cmd-list');
         list.id = listId;
@@ -579,26 +521,4 @@ export function syncShellCommandList(container, toolUsages) {
         if (at !== block) list.insertBefore(block, at);
     });
     for (const stale of existing.values()) stale.remove();
-}
-
-/**
- * Render a response's tool/source chip row into `container`: non-shell
- * tool chips and source chips exactly as before (one wrapper, re-rendered
- * each time), plus the persistent shell chip and command list. Pair with
- * `attachSourceClickHandler(container, invoke)` for the source links.
- */
-export function renderToolSources(container, toolUsages, toolSources) {
-    if (!container) return;
-    const usages = Array.isArray(toolUsages) ? toolUsages : [];
-    let chips = container.querySelector(':scope > .tool-sources-static');
-    if (!chips) {
-        // Anything else in here predates this renderer (plain innerHTML).
-        container.textContent = '';
-        chips = el('div', 'tool-sources-static');
-        container.append(chips);
-    }
-    chips.innerHTML =
-        renderToolChipsHtml(usages.filter((u) => !u?.shell)) +
-        renderSourceChipsHtml(Array.isArray(toolSources) ? toolSources : []);
-    syncShellCommandList(container, usages);
 }

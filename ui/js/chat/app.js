@@ -50,9 +50,9 @@ import {
     finishShellActivity,
     handOffShellActivity,
     pruneShellActivity,
-    renderToolSources,
     showShellActivity,
 } from '../shared/shell-command-view.js';
+import { renderToolSources } from '../shared/tool-call-view.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';

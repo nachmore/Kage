@@ -58,6 +58,10 @@
  *                                     (status/output): show its command
  *                                     block in place of the spinner. A
  *                                     host without it gets the spinner.
+ *   - onToolCallChanged(call)         optional — any other tool's call
+ *                                     record changed (status, arguments,
+ *                                     output): refresh its block in place
+ *                                     if the chip row is on screen
  *   - onToolCallTracked(update, updated)  after processToolCallUpdate
  */
 
@@ -156,7 +160,7 @@ export class MessageStreamController {
         const evtSessionId = event?.payload?.params?.sessionId;
         if (evtSessionId && !host.acceptSessionId(evtSessionId)) return;
 
-        const { updated, update, shell } = processToolCallUpdate(event, host);
+        const { updated, update, shell, call } = processToolCallUpdate(event, host);
 
         // Note: we deliberately do NOT call host.flushPendingMarkdown() here
         // any more. Tool-call updates fire on every kind/title change and
@@ -176,6 +180,7 @@ export class MessageStreamController {
         } else if (update?.title) {
             host.showToolRunningSpinner?.(getToolFriendlyName(update.title));
         }
+        if (call) host.onToolCallChanged?.(call);
 
         host.onToolCallTracked?.(update, updated);
     }

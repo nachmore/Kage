@@ -26,11 +26,10 @@ import {
     finishShellActivity,
     handOffShellActivity,
     pruneShellActivity,
-    renderToolSources,
     SHELL_LAYOUT_EVENT,
     showShellActivity,
-    syncShellCommandList,
 } from '../../shared/shell-command-view.js';
+import { renderToolSources, syncToolSources } from '../../shared/tool-call-view.js';
 import { sendAppNotification } from '../../shared/notify.js';
 import { EVT } from '../../shared/events.js';
 import { WINDOW } from '../../shared/window-labels.js';
@@ -185,7 +184,7 @@ export {
     startTimer,
     stopSlot,
     submitSelection,
-    syncShellCommandList,
+    syncToolSources,
     t,
     trackEvent,
     unifiedSearch,
