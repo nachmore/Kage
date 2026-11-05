@@ -112,7 +112,7 @@ Channels: **Stable** and **Preview** (coming later) and **Nightly**. Only Nightl
 - **Windows:** Settings → Apps → Installed apps (Apps & features on Windows 10) → Kage → Uninstall.
 - **macOS:** quit Kage from the menu bar, then move `/Applications/Kage.app` to the Trash. If you used the ⌘Space option, Kage hands the shortcut back to Spotlight when it quits.
 
-To remove your settings and extension data too, delete Kage's config folder (Settings → About Kage → Config folder opens it): `%APPDATA%\kage` on Windows, plus `%LOCALAPPDATA%\kage` for logs, and `~/Library/Application Support/kage` on macOS.
+To remove your settings and extension data too, delete Kage's config folder (Settings → About Kage → Config folder opens it): `%APPDATA%\kage` (and `%LOCALAPPDATA%\kage` for logs) on Windows, `~/Library/Application Support/kage` on macOS.
 
 </details>
 
