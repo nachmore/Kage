@@ -136,7 +136,9 @@ pub async fn open_auto_steering_file() -> Result<String, AppError> {
             fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
         }
         let header = "<!-- AUTO-GENERATED STEERING DOCUMENT\n     Any manual changes will be overridden the next time this document is generated.\n     To add your own persistent instructions, use a User Steering Document instead. -->\n\n";
-        fs::write(&auto_path, header)
+        // Owner-only, like every other write of the auto doc: the user's
+        // notes go in here.
+        crate::atomic_write::write(&auto_path, header, crate::atomic_write::Perms::Private)
             .map_err(|e| format!("Failed to create auto steering file: {}", e))?;
     }
 

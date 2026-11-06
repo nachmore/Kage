@@ -157,11 +157,21 @@ pub fn write_lines(kind: SteeringKind, config: &Config, lines: &[String]) -> Res
         }
         SteeringKind::User => body,
     };
-    // Atomic so a crash mid-save can't truncate the document. Inherit: the
-    // user doc can live anywhere the user pointed it, with their own mode.
-    crate::atomic_write::write(&path, to_write, crate::atomic_write::Perms::Inherit)
+    // Atomic so a crash mid-save can't truncate the document.
+    crate::atomic_write::write(&path, to_write, write_perms(kind))
         .with_context(|| format!("Failed to write steering doc at {:?}", path))?;
     Ok(path)
+}
+
+/// Permissions a save gives the doc. The auto doc is Kage's own and holds
+/// what it learned about the user, so it stays owner-only (`0600`), the
+/// same as `auto_steering`'s writes of it. The user doc can live anywhere
+/// the user pointed it, so it keeps their mode.
+fn write_perms(kind: SteeringKind) -> crate::atomic_write::Perms {
+    match kind {
+        SteeringKind::Auto => crate::atomic_write::Perms::Private,
+        SteeringKind::User => crate::atomic_write::Perms::Inherit,
+    }
 }
 
 /// Read an arbitrary file the user picked via the file dialog, strip
@@ -263,6 +273,47 @@ mod tests {
         let trimmed = body.trim_start_matches('\n');
         let rewritten = format!("{}{}", auto_steering_header(), trimmed);
         assert_eq!(rewritten, raw);
+    }
+
+    #[test]
+    fn auto_doc_saves_owner_only_and_user_doc_keeps_its_mode() {
+        assert_eq!(
+            write_perms(SteeringKind::Auto),
+            crate::atomic_write::Perms::Private
+        );
+        assert_eq!(
+            write_perms(SteeringKind::User),
+            crate::atomic_write::Perms::Inherit
+        );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode =
+                |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+            // The auto doc lives in the (test-isolated) config dir. Editing
+            // it must not leave it readable to others, whatever it was.
+            let config = Config::default();
+            let auto = resolve_path(SteeringKind::Auto, &config).unwrap();
+            assert!(crate::paths::is_under_isolation_root(&auto));
+            std::fs::create_dir_all(auto.parent().unwrap()).unwrap();
+            std::fs::write(&auto, "old").unwrap();
+            std::fs::set_permissions(&auto, std::fs::Permissions::from_mode(0o644)).unwrap();
+            let written = write_lines(SteeringKind::Auto, &config, &["- a".to_string()]).unwrap();
+            assert_eq!(written, auto);
+            assert_eq!(mode(&auto), 0o600);
+
+            // The user doc keeps the mode the user gave it.
+            let dir = tempfile::tempdir().unwrap();
+            let user = dir.path().join("mine.md");
+            std::fs::write(&user, "old").unwrap();
+            std::fs::set_permissions(&user, std::fs::Permissions::from_mode(0o644)).unwrap();
+            let mut config = Config::default();
+            config.acp.agent.user_steering_path = Some(user.to_string_lossy().into_owned());
+            write_lines(SteeringKind::User, &config, &["- b".to_string()]).unwrap();
+            assert_eq!(mode(&user), 0o644);
+            assert_eq!(std::fs::read_to_string(&user).unwrap(), "- b\n");
+        }
     }
 
     #[test]

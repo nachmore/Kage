@@ -47,8 +47,13 @@ export class ExtensionToolController {
         this.host = host;
         this.handled = false;
         this.executing = false;
-        /** Block this window last delivered ('' = none, or "no tools" sent). */
-        this._steeringSent = '';
+        /**
+         * Block this window last published: `null` before its first one, ''
+         * for "no tools". The first publication goes out even when empty, so
+         * the backend steers this window's sessions with "no tools" rather
+         * than with another window's list.
+         */
+        this._steeringSent = null;
         this._steeringRun = null;
         this._steeringPending = false;
         /** A queued rerun must fetch fresh definitions (not just re-render). */
@@ -146,9 +151,10 @@ export class ExtensionToolController {
 
     /**
      * Build the steering block from the extension manager and ship it to the
-     * agent if it differs from what this window last sent. An empty block
-     * after a non-empty one is sent too: the backend turns it into a
-     * "tools withdrawn" notice for sessions that had tools.
+     * agent if it differs from what this window last sent. An empty block is
+     * sent too (the first one and any after tools): the backend records that
+     * this window has no tools, and turns it into a "tools withdrawn" notice
+     * for sessions that were sent tools.
      *
      * Single-flight with one trailing rerun, so this window's claims reach
      * the backend in order (the backend then delivers per session in claim

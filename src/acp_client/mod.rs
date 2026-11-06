@@ -11,7 +11,7 @@ pub mod transport;
 pub mod types;
 
 // Re-export public types so callers can still use `crate::acp_client::AcpRequest` etc.
-pub use transport::AcpTransport;
+pub use transport::{AcpTransport, PromptLimits};
 #[allow(unused_imports)]
 pub use types::{
     format_acp_error, AcpConnectionMode, AcpError, AcpNotification, AcpRequest, AcpResponse,
@@ -519,6 +519,125 @@ impl AcpClient {
             .send_prompt_request("session/prompt", params)
             .map(Some)
     }
+}
+
+/// How a [`AcpClient::send_hidden_prompt_bounded`] prompt ended.
+#[derive(Debug)]
+pub enum HiddenPromptOutcome {
+    /// Never reached the agent. `None`: the caller's `before_send` declined
+    /// it or `yield_queue` gave the slot up; `Some`: the write failed.
+    NotSent(Option<anyhow::Error>),
+    /// The agent finished the turn.
+    Completed,
+    /// The agent answered with an error (busy, unknown session, …): it
+    /// didn't take the prompt.
+    Rejected(String),
+    /// Cut short by a Stop (or another `session/cancel`): the agent may or
+    /// may not have kept it.
+    Stopped,
+    /// Cancelled at its deadline: the agent got it but didn't finish in
+    /// time. The detail says whether it acknowledged the cancel.
+    TimedOut(String),
+    /// The connection dropped while it ran.
+    Lost(String),
+}
+
+/// How often a hidden prompt queued for a session's prompt slot checks
+/// whether it should make way.
+const PROMPT_SLOT_POLL: std::time::Duration = std::time::Duration::from_millis(10);
+
+impl AcpClient {
+    /// `send_prompt_muted` for a hidden prompt that must not hold its
+    /// session for long (extension tool steering, which a user prompt may
+    /// be waiting on):
+    ///
+    /// - While queued for the session's prompt slot it gives up, unsent, as
+    ///   soon as `yield_queue` returns true.
+    /// - With the slot held, `before_send` gets the last word right before
+    ///   `params` is built and written: the limits to send under, or `None`
+    ///   (not sent).
+    /// - Once written, the turn has its budget in absolute time; see
+    ///   [`AcpTransport::send_prompt_request_bounded`]. A Stop is measured
+    ///   from `cancel_baseline` (the session's cancel epoch; `None`: as of
+    ///   the write), so one pressed while it was queued still counts. A
+    ///   cut-short turn's prompt slot is released either way, after the
+    ///   cancel's grace.
+    ///
+    /// The reply is muted and discarded.
+    fn send_prompt_muted_bounded(
+        &self,
+        session_id: &str,
+        cancel_baseline: Option<u64>,
+        yield_queue: &dyn Fn() -> bool,
+        before_send: &mut dyn FnMut() -> Option<PromptLimits>,
+        params: &dyn Fn() -> serde_json::Value,
+    ) -> HiddenPromptOutcome {
+        let lock = self.prompt_lock_for(session_id);
+        // Polled rather than blocked on, so a queued hidden prompt can make
+        // way. Declared before the marker so it drops AFTER it (see
+        // `send_prompt_muted`).
+        let _guard = loop {
+            match lock.try_lock() {
+                Ok(g) => break g,
+                Err(std::sync::TryLockError::Poisoned(p)) => break p.into_inner(),
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    if yield_queue() {
+                        return HiddenPromptOutcome::NotSent(None);
+                    }
+                    std::thread::sleep(PROMPT_SLOT_POLL);
+                }
+            }
+        };
+        let Some(limits) = before_send() else {
+            return HiddenPromptOutcome::NotSent(None);
+        };
+        self.reset_session_accumulator(session_id);
+        let _bg = BackgroundPromptGuard::new(&self.background_prompt_sessions, session_id);
+        let cancel_epoch = cancel_baseline.unwrap_or_else(|| self.cancel_epoch(session_id));
+        let stopped = || self.cancel_epoch(session_id) != cancel_epoch;
+        let cancel = || {
+            if let Err(e) = self.cancel_session(session_id) {
+                log::warn!("Failed to cancel hidden prompt on {}: {}", session_id, e);
+            }
+        };
+        let reply = self.transport.send_prompt_request_bounded(
+            "session/prompt",
+            params(),
+            limits,
+            &stopped,
+            &cancel,
+        );
+        self.reset_session_accumulator(session_id);
+        match reply {
+            transport::BoundedPromptReply::NotSent(e) => HiddenPromptOutcome::NotSent(Some(e)),
+            transport::BoundedPromptReply::Replied(response) => {
+                if let Some(error) = response.error {
+                    HiddenPromptOutcome::Rejected(format_acp_error(&error))
+                } else if stopped() || stop_reason(&response) == Some("cancelled") {
+                    HiddenPromptOutcome::Stopped
+                } else {
+                    HiddenPromptOutcome::Completed
+                }
+            }
+            transport::BoundedPromptReply::CutShort(_) if stopped() => HiddenPromptOutcome::Stopped,
+            transport::BoundedPromptReply::CutShort(reply) => {
+                HiddenPromptOutcome::TimedOut(if reply.is_some() {
+                    format!("cancelled after {:?}", limits.budget)
+                } else {
+                    format!(
+                        "abandoned: no reply within {:?} of its cancel",
+                        limits.cancel_grace
+                    )
+                })
+            }
+            transport::BoundedPromptReply::Lost(e) => HiddenPromptOutcome::Lost(e.to_string()),
+        }
+    }
+}
+
+/// A `session/prompt` result's `stopReason` (`end_turn`, `cancelled`, …).
+fn stop_reason(response: &AcpResponse) -> Option<&str> {
+    response.result.as_ref()?.get("stopReason")?.as_str()
 }
 
 /// RAII marker for `AcpClient::background_prompt_sessions`; clears on drop

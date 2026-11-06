@@ -221,12 +221,21 @@ describe('ExtensionToolController.sendSteering', () => {
         });
     });
 
-    it('skips the IPC when buildToolSteeringBlock returns falsy', async () => {
+    it('publishes "no tools" once when buildToolSteeringBlock returns falsy', async () => {
+        // The first publication goes out even when empty: the backend then
+        // steers this window's sessions with "no tools" instead of borrowing
+        // another window's list.
         const host = makeHost();
         host.extensionManager.buildToolSteeringBlock = vi.fn().mockResolvedValue(null);
         const c = new ExtensionToolController(host);
         await c.sendSteering();
-        expect(host.invoke).not.toHaveBeenCalled();
+        expect(host.invoke).toHaveBeenCalledTimes(1);
+        expect(host.invoke).toHaveBeenCalledWith('send_extension_tool_steering', {
+            sessionId: 'sess-1',
+            toolSteering: '',
+        });
+        await c.sendSteering();
+        expect(host.invoke).toHaveBeenCalledTimes(1);
     });
 
     it('publishes without a session when the host has none', async () => {

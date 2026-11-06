@@ -284,11 +284,18 @@ mod tests {
         // the temp of a save that a crash, force quit, or the updater's
         // exit cut off half-way.
         std::fs::write(&path, r#"{"apiKey":"sk-123"}"#).unwrap();
-        let stale = path.with_file_name(format!(
-            "settings.json.tmp.{}.0",
-            std::process::id().wrapping_add(1)
-        ));
+        let stale = path.with_file_name(".settings.json.kage-tmp-0123456789abcdef");
         std::fs::write(&stale, r#"{"apiK"#).unwrap();
+        // Old enough that no live writer can still own it.
+        std::fs::File::options()
+            .write(true)
+            .open(&stale)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
+            .unwrap();
+        // A user's file that merely looks like a temp is never touched.
+        let lookalike = path.with_file_name("settings.json.tmp.1.0");
+        std::fs::write(&lookalike, "mine").unwrap();
 
         assert_eq!(
             load(ext, "settings").as_deref(),
@@ -301,6 +308,8 @@ mod tests {
             Some(r#"{"apiKey":"sk-456"}"#)
         );
         assert!(!stale.exists(), "the first save cleans up the stale temp");
+        assert_eq!(std::fs::read_to_string(&lookalike).unwrap(), "mine");
+        std::fs::remove_file(&lookalike).unwrap();
         let leftovers: Vec<_> = std::fs::read_dir(path.parent().unwrap())
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())

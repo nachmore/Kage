@@ -8,9 +8,9 @@
 //! `mcp.json` reads as `{}` and the next registration wipes the user's
 //! other servers).
 //!
-//! [`write`] instead writes a sibling temp file, fsyncs it, and renames
-//! it over the target. A reader sees either the old contents or the new
-//! ones, never a mix:
+//! [`write`] instead writes a sibling temp file, fsyncs it, renames it
+//! over the target and fsyncs the directory. A reader sees either the old
+//! contents or the new ones, never a mix:
 //!
 //! - The temp file lives in the target's directory, so the rename never
 //!   crosses volumes (a cross-volume "rename" is a copy, which isn't
@@ -21,22 +21,34 @@
 //!   fails while another process (antivirus, the indexer, a sync client)
 //!   has the fresh temp or the target open without delete sharing, which
 //!   usually clears quickly, so it is retried for up to about a second.
+//! - `Ok` means the new contents are durable: the temp's data is synced
+//!   before the rename and, on Unix, the directory entry after it. The
+//!   directory is opened before anything is written, so one that can't be
+//!   synced (no read permission) fails the write without touching the
+//!   target. Sync errors fail the write too, except on a filesystem that
+//!   can't sync at all, where the step is skipped explicitly
+//!   ([`sync_file`]); Windows has no directory fsync (see [`DirSync`]).
 //! - A symlinked target (dotfiles setups) is resolved first so the link
 //!   survives and the file it points at is the one replaced. A dangling
 //!   link is followed the way `fs::write` would: the file is created where
 //!   it points, or the write fails; the link is never replaced.
-//! - Temp names are `<file name>.tmp.<pid>.<seq>`. A crash can leave one
-//!   behind; the first write of each target in a process removes any left
-//!   by other processes ([`remove_stale_temps`]). On the failure path this
-//!   process removes its own temp (retrying while it is in use); one that
-//!   still can't be removed is swept by the next launch.
+//! - Temp names are `.<file name>.kage-tmp-<16 random hex digits>`, a
+//!   namespace of Kage's own (see [`temp_target`]). While a temp exists its
+//!   writer holds an exclusive advisory lock on it. A crash can leave one
+//!   behind; writes of the same target sweep those up
+//!   ([`remove_stale_temps`]), but only temps that are Kage's (that name
+//!   shape, a regular file, owned by this user), at least
+//!   [`STALE_TEMP_AGE`] old, and not locked by a live writer (where the
+//!   filesystem has advisory locks; elsewhere the age decides). On the
+//!   failure path a writer removes its own temp (retrying while it is in
+//!   use); one that still can't be removed is swept later.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 /// Permissions given to the replaced file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,95 +62,182 @@ pub enum Perms {
     Inherit,
 }
 
-/// Infix between the target's file name and the `<pid>.<seq>` suffix.
-const TMP_INFIX: &str = ".tmp.";
+/// Marker between the target's name and the random suffix of a temp.
+const TMP_MARKER: &str = ".kage-tmp-";
+/// Hex digits in a temp's random suffix (64 bits).
+const TMP_SUFFIX_LEN: usize = 16;
 
-static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+/// How old a temp must be before a sweep may remove it. A write takes
+/// milliseconds, so anything this old was left by a crash; the age check
+/// also covers the moments a live writer's temp is unlocked (between
+/// creating and locking it, and on Windows between closing and renaming
+/// it), and is all there is on filesystems without advisory locks.
+pub const STALE_TEMP_AGE: Duration = Duration::from_secs(10 * 60);
 
 /// Atomically replace `path` with `contents`. The parent directory must
 /// exist. See the module docs for the guarantees.
 pub fn write(path: &Path, contents: impl AsRef<[u8]>, perms: Perms) -> io::Result<()> {
     let target = resolve_symlink(path)?;
     let (dir, name) = split(&target)?;
-    sweep_once(&dir, &name);
+    // Before anything is written: a directory we can't sync can't make the
+    // rename durable, so fail while the target is still untouched.
+    let dir_sync = DirSync::open(&dir)?;
+    sweep_if_due(&dir, &name);
 
-    let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
-    let tmp = dir.join(format!("{name}{TMP_INFIX}{}.{seq}", std::process::id()));
-    let result = write_temp(&tmp, &target, contents.as_ref(), perms)
-        .and_then(|()| rename_replacing(&tmp, &target));
+    let tmp = dir.join(temp_name(&name));
+    let result = write_temp(&tmp, &target, contents.as_ref(), perms).and_then(|file| {
+        // Windows won't rename a file with an open handle. Elsewhere the
+        // handle, and with it the lock, is held until the temp is gone.
+        #[cfg(windows)]
+        drop(file);
+        let renamed = rename_replacing(&tmp, &target);
+        #[cfg(not(windows))]
+        drop(file);
+        renamed
+    });
     if result.is_err() {
-        // Don't leave our own temp behind: only a later process sweeps it.
+        // Don't leave our own temp behind for a sweep to find.
         remove_temp(&tmp);
         return result;
     }
-    sync_dir(&dir);
-    Ok(())
+    dir_sync.sync()
 }
 
-/// Remove temp files that an interrupted [`write`] by another process left
-/// next to `<dir>/<file_name>`. Temps of the current process are left
-/// alone: one may belong to a write in flight on another thread.
+/// Remove temps an interrupted [`write`] of `<dir>/<file_name>` left
+/// behind: Kage's own (see [`temp_target`]), at least [`STALE_TEMP_AGE`]
+/// old, and not locked by a writer that's still running.
 pub fn remove_stale_temps(dir: &Path, file_name: &str) {
+    remove_stale_temps_older_than(dir, file_name, STALE_TEMP_AGE);
+}
+
+fn remove_stale_temps_older_than(dir: &Path, file_name: &str, min_age: Duration) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
-    let me = std::process::id();
     for entry in entries.flatten() {
         let entry_name = entry.file_name();
-        let Some(entry_name) = entry_name.to_str() else {
-            continue;
-        };
-        if temp_owner_pid(entry_name, file_name).is_none_or(|pid| pid == me) {
+        if entry_name.to_str().and_then(temp_target) != Some(file_name) {
             continue;
         }
-        match fs::remove_file(entry.path()) {
-            Ok(()) => log::info!("Removed stale temp file {:?}", entry.path()),
+        let path = entry.path();
+        match remove_if_stale(&path, min_age) {
+            Ok(true) => log::info!("Removed stale temp file {:?}", path),
+            Ok(false) => {}
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => log::warn!("Failed to remove stale temp {:?}: {}", entry.path(), e),
+            Err(e) => log::warn!("Failed to remove stale temp {:?}: {}", path, e),
         }
     }
+}
+
+/// Remove the temp at `path` if no live writer can still own it. Returns
+/// whether it was removed.
+fn remove_if_stale(path: &Path, min_age: Duration) -> io::Result<bool> {
+    // Not followed: a link planted at a temp's name is never ours.
+    let meta = fs::symlink_metadata(path)?;
+    if !meta.file_type().is_file() || !owned_by_current_user(&meta) {
+        return Ok(false);
+    }
+    // A clock that went backwards reads as brand new: keep it.
+    let age = meta.modified()?.elapsed().unwrap_or(Duration::ZERO);
+    if age < min_age {
+        return Ok(false);
+    }
+    // Read-write where allowed: NFS emulates flock with fcntl locks, which
+    // need a writable descriptor for an exclusive lock.
+    let file = match open_no_follow(path, true).or_else(|_| open_no_follow(path, false)) {
+        Ok(f) => f,
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+            // Can't open it at all (an Inherit temp of a target with no
+            // owner access): its lock can't be checked, the age has to do.
+            fs::remove_file(path)?;
+            return Ok(true);
+        }
+        Err(e) => return Err(e),
+    };
+    match file.try_lock() {
+        Ok(()) => {}
+        // A writer is still in the middle of it.
+        Err(fs::TryLockError::WouldBlock) => return Ok(false),
+        // No advisory locks here: the age alone has to rule a writer out.
+        Err(fs::TryLockError::Error(e)) => {
+            log::debug!("Can't lock temp {:?} ({}); going by its age", path, e);
+        }
+    }
+    // Removed while still locked, so no writer can take it over meanwhile.
+    fs::remove_file(path)?;
+    Ok(true)
+}
+
+#[cfg(unix)]
+fn owned_by_current_user(meta: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: geteuid has no preconditions and can't fail.
+    meta.uid() == unsafe { libc::geteuid() }
+}
+
+#[cfg(not(unix))]
+fn owned_by_current_user(_meta: &fs::Metadata) -> bool {
+    // The directories Kage writes are per user; ACLs keep others out.
+    true
+}
+
+fn open_no_follow(path: &Path, write: bool) -> io::Result<fs::File> {
+    let mut opts = fs::OpenOptions::new();
+    opts.read(true).write(write);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.custom_flags(libc::O_NOFOLLOW);
+    }
+    opts.open(path)
 }
 
 /// Whether `file_name` is a temp file [`write`] creates (for any target).
 /// Directory walkers (backup export) use this to skip leftovers.
 pub fn is_temp_file_name(file_name: &str) -> bool {
-    // `<target>.tmp.<pid>.<seq>`: split at the last TMP_INFIX so a target
-    // name that itself contains ".tmp." still parses.
-    file_name
-        .rfind(TMP_INFIX)
-        .is_some_and(|i| i > 0 && parse_suffix(&file_name[i + TMP_INFIX.len()..]).is_some())
+    temp_target(file_name).is_some()
 }
 
-/// The pid embedded in `entry_name` if it is a temp file of `target_name`.
-fn temp_owner_pid(entry_name: &str, target_name: &str) -> Option<u32> {
-    let suffix = entry_name
-        .strip_prefix(target_name)?
-        .strip_prefix(TMP_INFIX)?;
-    parse_suffix(suffix)
+/// The target a temp named `entry_name` belongs to: `Some("k.json")` for
+/// `.k.json.kage-tmp-0123456789abcdef`. Only that exact shape matches
+/// (leading dot, the marker, 16 lowercase hex digits, nothing after), so
+/// a file a user named isn't mistaken for one.
+fn temp_target(entry_name: &str) -> Option<&str> {
+    let rest = entry_name.strip_prefix('.')?;
+    let (target, suffix) = rest.rsplit_once(TMP_MARKER)?;
+    let is_suffix = suffix.len() == TMP_SUFFIX_LEN
+        && suffix
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+    (!target.is_empty() && is_suffix).then_some(target)
 }
 
-/// Parse `<pid>.<seq>` (both all-digit). Returns the pid.
-fn parse_suffix(suffix: &str) -> Option<u32> {
-    let (pid, seq) = suffix.split_once('.')?;
-    let all_digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
-    if !all_digits(pid) || !all_digits(seq) {
-        return None;
-    }
-    pid.parse().ok()
+fn temp_name(target_name: &str) -> String {
+    format!(".{target_name}{TMP_MARKER}{:016x}", rand::random::<u64>())
 }
 
-/// Sweep each target's directory once per process. Later writes can't
-/// meet a stale temp from another process: Kage is single-instance, and
-/// this process cleans up its own temps on every failure path.
-fn sweep_once(dir: &Path, name: &str) {
-    static SWEPT: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+/// Sweep a target's directory for its stale temps at most once per
+/// [`STALE_TEMP_AGE`] per process: often enough that a temp left by a
+/// crash goes soon after it is old enough to remove, rarely enough that
+/// a busy file doesn't pay a directory scan on every write.
+fn sweep_if_due(dir: &Path, name: &str) {
+    static LAST_SWEEP: OnceLock<Mutex<HashMap<PathBuf, Instant>>> = OnceLock::new();
     let key = dir.join(name);
-    let first = SWEPT
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(key);
-    if first {
+    let due = {
+        let mut last = LAST_SWEEP
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let now = Instant::now();
+        match last.get(&key) {
+            Some(at) if now.duration_since(*at) < STALE_TEMP_AGE => false,
+            _ => {
+                last.insert(key, now);
+                true
+            }
+        }
+    };
+    if due {
         remove_stale_temps(dir, name);
     }
 }
@@ -209,7 +308,9 @@ fn split(target: &Path) -> io::Result<(PathBuf, String)> {
     Ok((dir, name))
 }
 
-fn write_temp(tmp: &Path, target: &Path, contents: &[u8], perms: Perms) -> io::Result<()> {
+/// Create the temp, lock it, and write and sync `contents`. Returns the
+/// still-open (still-locked) handle.
+fn write_temp(tmp: &Path, target: &Path, contents: &[u8], perms: Perms) -> io::Result<fs::File> {
     let mut opts = fs::OpenOptions::new();
     // create_new: never write through a file someone else put at our name.
     opts.write(true).create_new(true);
@@ -219,6 +320,13 @@ fn write_temp(tmp: &Path, target: &Path, contents: &[u8], perms: Perms) -> io::R
         opts.mode(0o600);
     }
     let mut f = opts.open(tmp)?;
+    // Tells a sweep in another process that this temp is live. A fresh
+    // file nobody else has opened: the only failure is a filesystem
+    // without advisory locks, where the sweep's age check still protects
+    // it.
+    if let Err(e) = f.try_lock() {
+        log::debug!("Can't lock temp {:?}: {}", tmp, e);
+    }
     #[cfg(unix)]
     if perms == Perms::Inherit {
         if let Ok(meta) = fs::metadata(target) {
@@ -228,10 +336,46 @@ fn write_temp(tmp: &Path, target: &Path, contents: &[u8], perms: Perms) -> io::R
     #[cfg(not(unix))]
     let _ = (target, perms);
     f.write_all(contents)?;
-    f.sync_all()?;
-    // `f` drops (closes) here: Windows won't rename a file with an open
-    // handle.
+    sync_file(&f)?;
+    Ok(f)
+}
+
+/// `File::sync_all`, except on a filesystem that can't sync. On macOS
+/// `sync_all` issues `F_FULLFSYNC` (a flush through the drive's cache),
+/// which some filesystems refuse (SMB, some FUSE mounts); a plain `fsync`
+/// is tried then. Where the filesystem can't sync at all (EINVAL /
+/// ENOTSUP / EOPNOTSUPP / ENOTTY) the step is skipped: there is nothing
+/// more this process can do, and failing would leave such a volume
+/// unwritable (`fs::write`, which never syncs, worked there). Any other
+/// error is returned.
+#[cfg(unix)]
+fn sync_file(f: &fs::File) -> io::Result<()> {
+    let err = match f.sync_all() {
+        Ok(()) => return Ok(()),
+        Err(e) => e,
+    };
+    if !sync_unsupported(&err) {
+        return Err(err);
+    }
+    #[cfg(target_vendor = "apple")]
+    {
+        use std::os::fd::AsRawFd;
+        // SAFETY: `f` owns this open descriptor for the whole call.
+        if unsafe { libc::fsync(f.as_raw_fd()) } == 0 {
+            return Ok(());
+        }
+        let plain = io::Error::last_os_error();
+        if !sync_unsupported(&plain) {
+            return Err(plain);
+        }
+    }
+    log::debug!("Filesystem can't sync ({}); skipped", err);
     Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_file(f: &fs::File) -> io::Result<()> {
+    f.sync_all()
 }
 
 /// Windows' "the file is open elsewhere" family: ACCESS_DENIED (mapped to
@@ -269,31 +413,97 @@ fn remove_temp(tmp: &Path) {
         Ok(()) => {}
         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
         Err(e) => log::warn!(
-            "Failed to remove temp file {:?} ({}); the next launch removes it",
+            "Failed to remove temp file {:?} ({}); a later write removes it",
             tmp,
             e
         ),
     }
 }
 
-/// Persist the rename itself (the directory entry) on Unix. Best-effort:
-/// the data is already safe in the temp file's inode either way.
-fn sync_dir(dir: &Path) {
+/// Makes the rename durable by syncing the directory that holds it.
+///
+/// Unix: an `fsync` of the directory ([`sync_file`]). Opening or syncing
+/// it fails the write, except on a filesystem that has no directory sync,
+/// which says so with EINVAL / ENOTSUP / EOPNOTSUPP (/ ENOTTY for
+/// `F_FULLFSYNC`): that one step is skipped, because there is nothing more
+/// this process can do.
+///
+/// Windows: skipped. A directory can't be opened for a flush through std,
+/// and NTFS records the rename in its metadata journal, so there is no
+/// directory step to take.
+struct DirSync {
     #[cfg(unix)]
-    if let Ok(d) = fs::File::open(dir) {
-        let _ = d.sync_all();
+    dir: fs::File,
+}
+
+impl DirSync {
+    #[cfg(unix)]
+    fn open(dir: &Path) -> io::Result<Self> {
+        let dir = fs::File::open(dir).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("can't open {} to sync it: {}", dir.display(), e),
+            )
+        })?;
+        Ok(Self { dir })
     }
+
     #[cfg(not(unix))]
-    let _ = dir;
+    fn open(_dir: &Path) -> io::Result<Self> {
+        Ok(Self {})
+    }
+
+    #[cfg(unix)]
+    fn sync(&self) -> io::Result<()> {
+        sync_file(&self.dir)
+    }
+
+    #[cfg(not(unix))]
+    fn sync(&self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+fn sync_unsupported(e: &io::Error) -> bool {
+    // Compared, not matched: ENOTSUP and EOPNOTSUPP are one value on Linux.
+    e.kind() == io::ErrorKind::Unsupported
+        || e.raw_os_error().is_some_and(|c| {
+            [libc::EINVAL, libc::ENOTSUP, libc::EOPNOTSUPP, libc::ENOTTY].contains(&c)
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::SystemTime;
 
     fn tempdir() -> tempfile::TempDir {
         tempfile::tempdir().unwrap()
     }
+
+    fn names(dir: &Path) -> Vec<String> {
+        let mut v: Vec<_> = fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        v.sort();
+        v
+    }
+
+    /// Create `path` with an mtime an hour ago: past the stale age.
+    fn old_file(path: &Path, body: &[u8]) {
+        fs::write(path, body).unwrap();
+        let hour_ago = SystemTime::now() - Duration::from_secs(3600);
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(hour_ago)
+            .unwrap();
+    }
+
+    const SUFFIX: &str = "0123456789abcdef";
 
     #[test]
     fn writes_new_and_replaces_existing() {
@@ -303,11 +513,7 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "{\"v\":1}");
         write(&path, b"{\"v\":2}", Perms::Inherit).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), "{\"v\":2}");
-        let names: Vec<_> = fs::read_dir(dir.path())
-            .unwrap()
-            .map(|e| e.unwrap().file_name())
-            .collect();
-        assert_eq!(names, vec![std::ffi::OsString::from("data.json")]);
+        assert_eq!(names(dir.path()), vec!["data.json"]);
     }
 
     #[test]
@@ -320,72 +526,123 @@ mod tests {
         fs::write(target.join("x"), b"x").unwrap();
         assert!(write(&target, b"new", Perms::Inherit).is_err());
         assert_eq!(fs::read_to_string(target.join("x")).unwrap(), "x");
-        let names: Vec<_> = fs::read_dir(dir.path())
-            .unwrap()
-            .map(|e| e.unwrap().file_name())
-            .collect();
-        assert_eq!(
-            names,
-            vec![std::ffi::OsString::from("blocked")],
-            "temp left behind"
-        );
+        assert_eq!(names(dir.path()), vec!["blocked"], "temp left behind");
     }
 
     #[test]
-    fn stale_temps_from_other_processes_are_removed() {
+    fn stale_unlocked_temps_are_removed_and_nothing_else() {
         let dir = tempdir();
         let path = dir.path().join("k.json");
         fs::write(&path, b"{\"intact\":true}").unwrap();
-        // An interrupted write by an earlier process: a truncated temp.
-        let other_pid = std::process::id().wrapping_add(1);
-        let stale = dir.path().join(format!("k.json.tmp.{other_pid}.7"));
-        fs::write(&stale, b"{\"inta").unwrap();
-        // Our own in-flight temp and look-alikes must survive the sweep.
-        let mine = dir
+        // Left by a crashed writer an hour ago: a truncated temp.
+        let stale = dir.path().join(format!(".k.json{TMP_MARKER}{SUFFIX}"));
+        old_file(&stale, b"{\"inta");
+        // A crash a minute ago, or a writer between creating and locking
+        // its temp: too young to be sure, kept.
+        let fresh = dir
             .path()
-            .join(format!("k.json.tmp.{}.3", std::process::id()));
-        fs::write(&mine, b"x").unwrap();
-        let not_a_temp = dir.path().join("k.json.tmp.backup");
-        fs::write(&not_a_temp, b"x").unwrap();
-        let other_target = dir.path().join(format!("j.json.tmp.{other_pid}.1"));
-        fs::write(&other_target, b"x").unwrap();
+            .join(format!(".k.json{TMP_MARKER}fedcba9876543210"));
+        fs::write(&fresh, b"x").unwrap();
+        // User files that look a bit like temps, all old enough.
+        let lookalikes = [
+            "k.json.tmp.123.4".to_string(), // the shape temps used to have
+            "k.json.tmp.backup".to_string(),
+            format!("k.json{TMP_MARKER}{SUFFIX}"), // no leading dot
+            format!(".k.json{TMP_MARKER}notes"),
+            // Uppercase hex. (Not SUFFIX uppercased: on a case-insensitive
+            // volume that would be the stale temp itself.)
+            format!(".k.json{TMP_MARKER}ABCDEF0123456789"),
+            format!(".k.json{TMP_MARKER}{SUFFIX}.bak"),
+            format!(".k.json{TMP_MARKER}{SUFFIX}0"),
+            format!(".j.json{TMP_MARKER}{SUFFIX}"), // another target's temp
+        ];
+        for n in &lookalikes {
+            old_file(&dir.path().join(n), b"mine");
+        }
+        // A directory at a temp's name is never ours either.
+        let dir_at_name = dir
+            .path()
+            .join(format!(".k.json{TMP_MARKER}aaaaaaaaaaaaaaaa"));
+        fs::create_dir(&dir_at_name).unwrap();
 
         // The reader never sees the torn temp.
         assert_eq!(fs::read_to_string(&path).unwrap(), "{\"intact\":true}");
 
         remove_stale_temps(dir.path(), "k.json");
         assert!(!stale.exists());
-        assert!(mine.exists());
-        assert!(not_a_temp.exists());
-        assert!(other_target.exists(), "only k.json's temps are swept");
+        assert!(fresh.exists());
+        assert!(dir_at_name.is_dir());
+        for n in &lookalikes {
+            assert_eq!(
+                fs::read(dir.path().join(n)).unwrap(),
+                b"mine",
+                "{n} removed"
+            );
+        }
     }
 
     #[test]
-    fn first_write_of_a_target_sweeps_its_stale_temps() {
+    fn a_live_writers_locked_temp_survives_a_sweep() {
+        // The regression: a second writer's sweep deleted a live writer's
+        // fsynced temp, whose rename then failed with ENOENT.
+        let dir = tempdir();
+        let path = dir.path().join("live.json");
+        fs::write(&path, b"old").unwrap();
+        let tmp = dir.path().join(format!(".live.json{TMP_MARKER}{SUFFIX}"));
+        old_file(&tmp, b"new");
+        // The first writer holds its lock while the temp exists. Old mtime
+        // on purpose: the lock alone must protect it (a slow disk, a
+        // clock change).
+        let writer = fs::File::options().write(true).open(&tmp).unwrap();
+        writer.try_lock().unwrap();
+
+        // A second writer of the same target sweeps on its first write.
+        write(&path, b"second", Perms::Private).unwrap();
+        assert!(tmp.exists(), "the live writer's temp was removed");
+
+        // The first writer finishes: its rename still works.
+        rename_replacing(&tmp, &path).unwrap();
+        drop(writer);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+        assert_eq!(names(dir.path()), vec!["live.json"]);
+    }
+
+    #[test]
+    fn writes_sweep_their_targets_stale_temps() {
         let dir = tempdir();
         let path = dir.path().join("s.json");
-        let stale = dir.path().join(format!(
-            "s.json.tmp.{}.0",
-            std::process::id().wrapping_add(9)
-        ));
-        fs::write(&stale, b"").unwrap();
+        let stale = dir.path().join(format!(".s.json{TMP_MARKER}{SUFFIX}"));
+        old_file(&stale, b"");
         write(&path, b"{}", Perms::Inherit).unwrap();
         assert!(!stale.exists());
         assert_eq!(fs::read_to_string(&path).unwrap(), "{}");
     }
 
     #[test]
-    fn temp_name_parsing() {
-        assert!(is_temp_file_name("config.json.tmp.123.0"));
-        assert!(is_temp_file_name("a.tmp.b.json.tmp.1.2"));
+    fn temp_names_are_in_kages_namespace() {
+        let name = temp_name("config.json");
+        assert_eq!(temp_target(&name), Some("config.json"));
+        assert!(name.starts_with(".config.json.kage-tmp-"));
+        assert_ne!(name, temp_name("config.json"), "random suffix");
+
+        assert!(is_temp_file_name(&format!(
+            ".a.kage-tmp-x.json{TMP_MARKER}{SUFFIX}"
+        )));
+        assert_eq!(
+            temp_target(&format!("..hidden{TMP_MARKER}{SUFFIX}")),
+            Some(".hidden")
+        );
         assert!(!is_temp_file_name("config.json"));
-        assert!(!is_temp_file_name("config.json.tmp"));
-        assert!(!is_temp_file_name("config.json.tmp.1"));
-        assert!(!is_temp_file_name("config.json.tmp.1.json"));
-        assert!(!is_temp_file_name(".tmp.1.2"));
-        assert_eq!(temp_owner_pid("x.json.tmp.42.9", "x.json"), Some(42));
-        assert_eq!(temp_owner_pid("x.json.tmp.42.9", "y.json"), None);
-        assert_eq!(temp_owner_pid("x.json.tmp.4a.9", "x.json"), None);
+        assert!(!is_temp_file_name("config.json.tmp.123.0"));
+        assert!(!is_temp_file_name(&format!(".{TMP_MARKER}{SUFFIX}")));
+        assert!(!is_temp_file_name(&format!(
+            ".x{TMP_MARKER}{}",
+            &SUFFIX[1..]
+        )));
+        assert!(!is_temp_file_name(&format!(
+            ".x{TMP_MARKER}{}g",
+            &SUFFIX[1..]
+        )));
     }
 
     #[cfg(unix)]
@@ -406,6 +663,42 @@ mod tests {
         write(&shared, b"new", Perms::Inherit).unwrap();
         let mode = fs::metadata(&shared).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o640);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_that_cannot_be_synced_fails_the_write_untouched() {
+        // The regression: in a write-only (0300) directory the rename went
+        // through, the directory couldn't be opened for its fsync, and the
+        // write still reported success.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir();
+        let sub = dir.path().join("wx-only");
+        fs::create_dir(&sub).unwrap();
+        let path = sub.join("c.json");
+        fs::write(&path, b"old").unwrap();
+        fs::set_permissions(&sub, fs::Permissions::from_mode(0o300)).unwrap();
+        let readable = fs::File::open(&sub).is_ok(); // root reads anything
+        let result = write(&path, b"new", Perms::Private);
+        fs::set_permissions(&sub, fs::Permissions::from_mode(0o700)).unwrap();
+        if readable {
+            return;
+        }
+        let err = result.expect_err("an unsyncable directory must fail the write");
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied, "{err}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "old", "target touched");
+        assert_eq!(names(&sub), vec!["c.json"], "temp left behind");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unsupported_directory_sync_is_told_apart_from_real_errors() {
+        for code in [libc::EINVAL, libc::ENOTSUP, libc::EOPNOTSUPP, libc::ENOTTY] {
+            assert!(sync_unsupported(&io::Error::from_raw_os_error(code)));
+        }
+        for code in [libc::EIO, libc::EACCES, libc::ENOSPC, libc::EBADF] {
+            assert!(!sync_unsupported(&io::Error::from_raw_os_error(code)));
+        }
     }
 
     #[cfg(unix)]
@@ -431,6 +724,19 @@ mod tests {
             .unwrap()
             .file_type()
             .is_symlink());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_at_a_temps_name_is_never_removed() {
+        let dir = tempdir();
+        let victim = dir.path().join("victim.txt");
+        fs::write(&victim, b"keep").unwrap();
+        let link = dir.path().join(format!(".k.json{TMP_MARKER}{SUFFIX}"));
+        std::os::unix::fs::symlink(&victim, &link).unwrap();
+        remove_stale_temps_older_than(dir.path(), "k.json", Duration::ZERO);
+        assert!(fs::symlink_metadata(&link).is_ok());
+        assert_eq!(fs::read(&victim).unwrap(), b"keep");
     }
 
     #[test]

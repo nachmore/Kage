@@ -509,56 +509,131 @@ pub async fn send_extension_tool_steering<R: tauri::Runtime>(
 ) -> Result<(), AppError> {
     let Some(session_id) = session_id.filter(|s| !s.is_empty()) else {
         acp.tool_steering
-            .lock_or_recover()
+            .lock()
             .publish(window.label(), &tool_steering);
         return Ok(());
     };
     // Deduplicate per session: skip if THIS session already has (or is
     // receiving) this exact block, and turn an empty block into a
-    // withdrawal for sessions that were told about tools (see
-    // ToolSteeringState). The claim is released if the send fails.
-    let Some(claim) =
-        acp.tool_steering
-            .lock_or_recover()
-            .claim(window.label(), &session_id, &tool_steering)
+    // withdrawal for sessions that were sent tools (see ToolSteeringState).
+    // The delivery settles the claim however it ends.
+    let Some(claim) = acp
+        .tool_steering
+        .lock()
+        .claim(window.label(), &session_id, &tool_steering)
     else {
         return Ok(());
     };
 
     let client = acp.client.clone();
-    let state = acp.tool_steering.clone();
+    let steering = acp.tool_steering.clone();
 
     async_runtime::spawn_blocking(move || {
-        deliver_tool_steering(&client, &state, &session_id, &claim);
+        deliver_tool_steering(&client, &steering, &session_id, &claim);
     });
 
     Ok(())
 }
 
+/// Absolute time a hidden steering turn gets once sent, tied to its own
+/// session: activity on other sessions doesn't extend it (the ACP idle
+/// watchdog's does). An "ack" takes a few seconds; past this the agent is
+/// stuck on it, and a user prompt may be queued behind it.
+pub(crate) const STEERING_TURN_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// After a steering turn is cancelled, how long the agent gets to end it
+/// before the prompt slot is released regardless.
+pub(crate) const STEERING_CANCEL_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
+
+pub(crate) const STEERING_LIMITS: crate::acp_client::PromptLimits =
+    crate::acp_client::PromptLimits {
+        budget: STEERING_TURN_BUDGET,
+        cancel_grace: STEERING_CANCEL_GRACE,
+    };
+
+/// Most a user prompt is held for steering in all: one steering turn and
+/// its cancel grace, plus a margin (see [`steer_before_user_prompt`]).
+pub(crate) const USER_PROMPT_STEERING_LIMIT: std::time::Duration = STEERING_TURN_BUDGET
+    .saturating_add(STEERING_CANCEL_GRACE)
+    .saturating_add(std::time::Duration::from_secs(1));
+
+/// Shortest steering turn worth starting for a user prompt, as a share of
+/// a full turn's budget (4 s of 10 s); with less of its limit left, the
+/// prompt goes without (the block is sent before the next one).
+const MIN_PROMPT_STEERING_TURN_SHARE: f64 = 0.4;
+
 /// Send a claimed extension tool steering block on `session_id` as a muted
-/// prompt (its "ack" never streams into a window). Releases the claim when
-/// the send doesn't happen, so the next attempt retries. Blocking: waits
-/// for any delivery already under way on the session, then skips if a
-/// newer claim replaced this one while it waited.
+/// prompt (its "ack" never streams into a window), then settle the claim
+/// with how that went, so a send that didn't happen or didn't finish is
+/// retried. Blocking: waits for any delivery already under way on the
+/// session, and skips if a newer claim replaced this one or a user prompt
+/// took over meanwhile. The turn itself is bounded by [`STEERING_LIMITS`].
 pub(super) fn deliver_tool_steering(
     client: &crate::acp_client::AcpClient,
-    state: &std::sync::Mutex<crate::state::ToolSteeringState>,
+    steering: &crate::state::ToolSteering,
     session_id: &str,
     claim: &crate::state::SteeringClaim,
-) {
-    // Bound first: the state guard must not live across the send.
-    let delivery_lock = state.lock_or_recover().delivery_lock(session_id);
-    let _delivering = delivery_lock.lock_or_recover();
-    if !state.lock_or_recover().is_current(session_id, claim) {
+) -> crate::state::SteeringOutcome {
+    deliver_tool_steering_within(client, steering, session_id, claim, STEERING_LIMITS, None)
+}
+
+/// A user prompt's own steering delivery: ended by the prompt's Stop, and
+/// fitted into what is left of its steering limit.
+struct ForPrompt {
+    /// The session's cancel epoch when the user sent.
+    cancel_epoch: u64,
+    deadline: std::time::Instant,
+}
+
+impl ForPrompt {
+    fn stopped(&self, client: &crate::acp_client::AcpClient, session_id: &str) -> bool {
+        client.cancel_epoch(session_id) != self.cancel_epoch
+    }
+
+    /// The budget a steering turn started now would get, or `None` if too
+    /// little is left to be worth it.
+    fn budget(&self, full: crate::acp_client::PromptLimits) -> Option<std::time::Duration> {
+        let left = self
+            .deadline
+            .saturating_duration_since(std::time::Instant::now());
+        let budget = left.saturating_sub(full.cancel_grace).min(full.budget);
+        (budget >= full.budget.mul_f64(MIN_PROMPT_STEERING_TURN_SHARE)).then_some(budget)
+    }
+}
+
+fn deliver_tool_steering_within(
+    client: &crate::acp_client::AcpClient,
+    steering: &crate::state::ToolSteering,
+    session_id: &str,
+    claim: &crate::state::SteeringClaim,
+    limits: crate::acp_client::PromptLimits,
+    for_prompt: Option<&ForPrompt>,
+) -> crate::state::SteeringOutcome {
+    use crate::acp_client::HiddenPromptOutcome;
+    use crate::state::SteeringOutcome;
+
+    let stopped = || for_prompt.is_some_and(|p| p.stopped(client, session_id));
+    // The budget to send under right now (`None`: don't).
+    let budget = || match for_prompt {
+        Some(p) => p.budget(limits),
+        None => Some(limits.budget),
+    };
+
+    // Before taking the delivery slot: a compaction can take a while, and
+    // nothing else should wait on this delivery meanwhile.
+    client.wait_for_compaction();
+    let slot = steering.begin_delivery(session_id);
+    if !steering.lock().is_current(session_id, claim) || stopped() || budget().is_none() {
         info!(
-            "Extension tool steering on {} superseded before it was sent",
+            "Extension tool steering on {} not sent (superseded, stopped or out of time)",
             session_id
         );
-        return;
+        steering.settle(session_id, claim, SteeringOutcome::NotSent);
+        return SteeringOutcome::NotSent;
     }
     if !client.is_connected() {
-        state.lock_or_recover().release(session_id, claim);
-        return;
+        steering.settle(session_id, claim, SteeringOutcome::NotSent);
+        return SteeringOutcome::NotSent;
     }
 
     info!(
@@ -572,72 +647,171 @@ pub(super) fn deliver_tool_steering(
         claim.body
     );
 
-    // A Stop on this session ends this prompt early (still Ok, stop reason
-    // "cancelled") and the agent may not have kept it: release, so the next
-    // prompt replays it, whichever thread is sending that prompt.
-    let cancel_epoch = client.cancel_epoch(session_id);
-    match client.send_chat_streaming_background(session_id, &msg, false) {
-        Ok(()) if client.cancel_epoch(session_id) != cancel_epoch => {
+    // The budget it went out with: one cut short to fit a prompt's limit
+    // and then timed out says nothing about the agent being slow.
+    let sent_budget = std::cell::Cell::new(limits.budget);
+    let outcome = match client.send_hidden_prompt_bounded(
+        session_id,
+        &msg,
+        for_prompt.map(|p| p.cancel_epoch),
+        // While queued for the session: stop as soon as a newer claim
+        // replaces this one, a user prompt takes the steering over, or (for
+        // a prompt's own) the user stops or the prompt runs out of time.
+        &|| !steering.lock().is_current(session_id, claim) || stopped() || budget().is_none(),
+        &mut || {
+            if stopped() {
+                return None;
+            }
+            let budget = budget()?;
+            if !steering.lock().begin_transmit(session_id, claim) {
+                return None;
+            }
+            sent_budget.set(budget);
+            Some(crate::acp_client::PromptLimits { budget, ..limits })
+        },
+    ) {
+        HiddenPromptOutcome::Completed => {
+            info!("Extension tool steering sent");
+            SteeringOutcome::Delivered
+        }
+        HiddenPromptOutcome::NotSent(None) => {
+            info!(
+                "Extension tool steering on {} not sent (superseded, taken over, stopped or out of time)",
+                session_id
+            );
+            SteeringOutcome::NotSent
+        }
+        HiddenPromptOutcome::NotSent(Some(e)) => {
+            warn!("Failed to send extension tool steering: {}", e);
+            SteeringOutcome::NotSent
+        }
+        HiddenPromptOutcome::Rejected(e) => {
+            warn!("Agent rejected extension tool steering: {}", e);
+            SteeringOutcome::NotSent
+        }
+        // The agent may or may not have kept it: re-sent before the
+        // session's next prompt, whichever thread sends that.
+        HiddenPromptOutcome::Stopped => {
             info!(
                 "Extension tool steering on {} cancelled; will replay",
                 session_id
             );
-            state.lock_or_recover().release(session_id, claim);
+            SteeringOutcome::Unknown
         }
-        Ok(()) => {
-            state.lock_or_recover().confirm(session_id, claim);
-            info!("Extension tool steering sent");
+        HiddenPromptOutcome::Lost(e) => {
+            warn!(
+                "Extension tool steering on {} lost ({}); will replay",
+                session_id, e
+            );
+            SteeringOutcome::Unknown
         }
-        Err(e) => {
-            warn!("Failed to send extension tool steering: {}", e);
-            state.lock_or_recover().release(session_id, claim);
-            // The idle watchdog only trips after total silence on every
-            // session, so the connection is wedged. It still reads as
-            // connected, though, and a user send queued behind this (the
-            // replay in send_message_streaming) would sit out a second idle
-            // timeout before its recovery ladder respawns the agent. Drop the
-            // connection so that send fails fast straight into recovery.
-            if e.to_string().contains("Timeout waiting for response") {
-                warn!("Tool steering timed out; dropping the wedged ACP connection");
-                client.force_disconnect();
+        HiddenPromptOutcome::TimedOut(why) => {
+            warn!(
+                "Extension tool steering on {} timed out ({})",
+                session_id, why
+            );
+            if sent_budget.get() < limits.budget {
+                SteeringOutcome::Unknown
+            } else {
+                SteeringOutcome::TimedOut
+            }
+        }
+    };
+    steering.settle(session_id, claim, outcome);
+    drop(slot);
+    outcome
+}
+
+/// Before a user prompt from `window` goes out on `session_id`: get the
+/// window's current extension tool steering to the agent first, since the
+/// prompt may need the new tools. `cancel_epoch` is the session's cancel
+/// epoch when the user sent; a Stop since then ends this. Returns whether
+/// steering held the session (or the user stopped), so the caller can
+/// honour a Stop pressed meanwhile. Blocking.
+///
+/// Bounded by `total` in all, and by `limits` per steering turn:
+///
+/// - Steering only queued (claimed, or waiting for the session's prompt
+///   slot) costs no wait: the prompt takes it over and sends it itself,
+///   ahead of its own turn, and other deliveries on the session step aside
+///   until it is done. That send is fitted into what is left of `total`.
+/// - A steering turn already on the wire holds the agent's prompt slot, so
+///   it is waited out (the prompt couldn't go before it anyway). Its own
+///   deadline ends it; a block whose full-length turn ran out of time isn't
+///   retried for prompts.
+/// - A Stop ends the wait at once, and no steering turn starts after it.
+pub(super) fn steer_before_user_prompt(
+    client: &crate::acp_client::AcpClient,
+    steering: &crate::state::ToolSteering,
+    window: &str,
+    session_id: &str,
+    cancel_epoch: u64,
+    limits: crate::acp_client::PromptLimits,
+    total: std::time::Duration,
+) -> bool {
+    use crate::state::{PromptSteering, SteeringOutcome};
+    // Each pass either waits out the turn on the wire or sends the block;
+    // more than one is needed only when a turn ends with an older block.
+    const PASSES: usize = 4;
+    let own = ForPrompt {
+        cancel_epoch,
+        deadline: std::time::Instant::now() + total,
+    };
+    let stopped = || own.stopped(client, session_id);
+    let _prompting = steering.begin_prompt(session_id);
+    let mut held = false;
+    for _ in 0..PASSES {
+        if stopped() {
+            return true;
+        }
+        let next = steering.lock().claim_for_prompt(window, session_id);
+        match next {
+            PromptSteering::Ready => return held,
+            PromptSteering::Transmitting => {
+                held = true;
+                if !steering.wait_while_transmitting(session_id, own.deadline, &stopped) {
+                    if !stopped() {
+                        warn!(
+                            "Extension tool steering on {} still sending; prompt goes after it",
+                            session_id
+                        );
+                    }
+                    return true;
+                }
+            }
+            PromptSteering::Send(claim) => {
+                held = true;
+                if own.budget(limits).is_none() {
+                    steering.lock().abandon(session_id, &claim);
+                    warn!(
+                        "No time left to steer {} before the prompt; sending it next time",
+                        session_id
+                    );
+                    return true;
+                }
+                let outcome = deliver_tool_steering_within(
+                    client,
+                    steering,
+                    session_id,
+                    &claim,
+                    limits,
+                    Some(&own),
+                );
+                // Unsent because of a Stop or the clock: the next pass
+                // would only find the same.
+                if outcome == SteeringOutcome::NotSent
+                    && (stopped() || own.budget(limits).is_none())
+                {
+                    return true;
+                }
             }
         }
     }
-}
-
-/// Block until no steering delivery is claimed or under way on
-/// `session_id`. Returns whether there was one to wait for. Blocking.
-pub(super) fn wait_for_tool_steering(
-    state: &std::sync::Mutex<crate::state::ToolSteeringState>,
-    session_id: &str,
-) -> bool {
-    // A claim's delivery thread may not have taken the delivery lock yet;
-    // that gap is milliseconds, so poll it briefly. The wait on the lock
-    // itself can be a whole agent turn and isn't bounded.
-    const GAP: std::time::Duration = std::time::Duration::from_secs(2);
-    let mut gap_deadline = std::time::Instant::now() + GAP;
-    let mut waited = false;
-    loop {
-        let delivery_lock = state.lock_or_recover().delivery_lock(session_id);
-        if delivery_lock.try_lock().is_err() {
-            waited = true;
-            drop(delivery_lock.lock_or_recover());
-            // Only time spent with the lock free counts as the gap.
-            gap_deadline = std::time::Instant::now() + GAP;
-        }
-        if !state.lock_or_recover().has_in_flight(session_id) {
-            return waited;
-        }
-        if std::time::Instant::now() >= gap_deadline {
-            warn!(
-                "Extension tool steering on {} still claimed but not delivering; sending anyway",
-                session_id
-            );
-            return waited;
-        }
-        waited = true;
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
+    warn!(
+        "Extension tool steering on {} kept changing; sending the prompt",
+        session_id
+    );
+    held
 }
 
 /// Check the permission policy for an extension tool call.
@@ -724,37 +898,421 @@ pub async fn check_extension_tool_permission(
 
 #[cfg(test)]
 mod tests {
-    use super::wait_for_tool_steering;
-    use crate::state::ToolSteeringState;
-    use kage_core::lock_ext::LockExt;
+    use super::{deliver_tool_steering_within, steer_before_user_prompt};
+    use crate::acp_client::{AcpClient, AcpConnectionMode, PromptLimits};
+    use crate::state::{SteeringOutcome, ToolSteering};
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
-    #[test]
-    fn prompt_waits_for_a_claimed_steering_delivery() {
-        let state = Arc::new(Mutex::new(ToolSteeringState::default()));
-        let claim = state.lock_or_recover().claim("main", "S", "tools").unwrap();
-        let (st, c) = (state.clone(), claim.clone());
-        let delivery = std::thread::spawn(move || {
-            // The spawned delivery hasn't taken the lock yet...
-            std::thread::sleep(Duration::from_millis(30));
-            let lock = st.lock_or_recover().delivery_lock("S");
-            let _held = lock.lock_or_recover();
-            // ...then holds it for the length of an agent turn.
-            std::thread::sleep(Duration::from_millis(30));
-            st.lock_or_recover().confirm("S", &c);
-        });
-        assert!(wait_for_tool_steering(&state, "S"));
-        assert!(
-            !state.lock_or_recover().has_in_flight("S"),
-            "delivered first"
+    /// One request the fake agent received.
+    #[derive(Debug, Clone)]
+    struct Seen {
+        method: String,
+        session: String,
+        /// The prompt's text, for session/prompt.
+        text: String,
+    }
+
+    impl Seen {
+        fn is_steering(&self) -> bool {
+            self.method == "session/prompt"
+                && self
+                    .text
+                    .contains(crate::commands::system::STEERING_MSG_PREFIX)
+        }
+    }
+
+    /// A fake agent on loopback (ephemeral port, test-only). Steering
+    /// prompts are answered after `steering_reply` (never if `None`, and
+    /// session/cancel is ignored: wedged on them); any other prompt is
+    /// answered at once. Session "T" streams updates all the while, so the
+    /// connection is never idle.
+    struct FakeAgent {
+        port: u16,
+        seen: Arc<Mutex<Vec<Seen>>>,
+    }
+
+    impl FakeAgent {
+        fn start(steering_reply: Option<Duration>) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let seen = Arc::new(Mutex::new(Vec::new()));
+            let log = seen.clone();
+            std::thread::spawn(move || {
+                let Ok((stream, _)) = listener.accept() else {
+                    return;
+                };
+                let writer = Arc::new(Mutex::new(stream.try_clone().unwrap()));
+                let ticker = writer.clone();
+                let until = Instant::now() + Duration::from_secs(20);
+                std::thread::spawn(move || {
+                    while Instant::now() < until {
+                        let update = serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "method": "session/update",
+                            "params": { "sessionId": "T", "update": {
+                                "sessionUpdate": "agent_message_chunk",
+                                "content": { "type": "text", "text": "." } } }
+                        });
+                        if writeln!(ticker.lock().unwrap(), "{update}").is_err() {
+                            return;
+                        }
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
+                });
+                for line in BufReader::new(stream).lines() {
+                    let Ok(line) = line else { return };
+                    let msg: serde_json::Value = serde_json::from_str(&line).unwrap();
+                    let seen = Seen {
+                        method: msg["method"].as_str().unwrap_or("").to_string(),
+                        session: msg["params"]["sessionId"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string(),
+                        text: msg["params"]["prompt"].to_string(),
+                    };
+                    log.lock().unwrap().push(seen.clone());
+                    if seen.method != "session/prompt" {
+                        continue;
+                    }
+                    let reply = serde_json::json!({
+                        "jsonrpc": "2.0", "id": msg["id"],
+                        "result": { "stopReason": "end_turn" }
+                    });
+                    let delay = if seen.is_steering() {
+                        match steering_reply {
+                            Some(d) => d,
+                            None => continue,
+                        }
+                    } else if seen.text.contains("slow title") {
+                        // Another prompt holding the session's slot (the
+                        // titler, auto-steering, a peer window).
+                        Duration::from_millis(400)
+                    } else {
+                        Duration::ZERO
+                    };
+                    let w = writer.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(delay);
+                        let _ = writeln!(w.lock().unwrap(), "{reply}");
+                    });
+                }
+            });
+            Self { port, seen }
+        }
+
+        fn client(&self) -> Arc<AcpClient> {
+            let client = Arc::new(AcpClient::new(AcpConnectionMode::Remote {
+                host: "127.0.0.1".to_string(),
+                port: self.port,
+            }));
+            client.connect().unwrap();
+            client
+        }
+
+        fn seen(&self) -> Vec<Seen> {
+            self.seen.lock().unwrap().clone()
+        }
+
+        /// session/prompt requests on `session`, as "steer:<text>" or "user".
+        fn prompts(&self, session: &str) -> Vec<String> {
+            self.seen()
+                .iter()
+                .filter(|s| s.method == "session/prompt" && s.session == session)
+                .map(|s| {
+                    if s.is_steering() {
+                        format!("steer:{}", if s.text.contains("B2") { "B2" } else { "B1" })
+                    } else {
+                        "user".to_string()
+                    }
+                })
+                .collect()
+        }
+
+        fn wait_for(&self, what: &str, pred: impl Fn(&[Seen]) -> bool) {
+            let start = Instant::now();
+            while !pred(&self.seen()) {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "never saw {what}"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+    }
+
+    const LIMITS: PromptLimits = PromptLimits {
+        budget: Duration::from_millis(600),
+        cancel_grace: Duration::from_millis(200),
+    };
+    /// What the user path is allowed in all, as in production: one turn,
+    /// its grace and a margin.
+    const TOTAL: Duration = Duration::from_millis(600 + 200 + 300);
+
+    /// The user send path as send_message_streaming runs it: steering, the
+    /// Stop check, then the prompt. Returns whether the prompt was sent.
+    fn user_send(
+        client: &AcpClient,
+        steering: &ToolSteering,
+        window: &str,
+        session: &str,
+        cancel_epoch: u64,
+    ) -> bool {
+        let held = steer_before_user_prompt(
+            client,
+            steering,
+            window,
+            session,
+            cancel_epoch,
+            LIMITS,
+            TOTAL,
         );
-        delivery.join().unwrap();
+        if held && client.cancel_epoch(session) != cancel_epoch {
+            return false;
+        }
+        client.send_chat_streaming(session, "hello", None).unwrap();
+        true
+    }
+
+    fn background(
+        client: &Arc<AcpClient>,
+        steering: &Arc<ToolSteering>,
+        claim: &crate::state::SteeringClaim,
+    ) -> std::thread::JoinHandle<SteeringOutcome> {
+        let (c, st, cl) = (client.clone(), steering.clone(), claim.clone());
+        std::thread::spawn(move || deliver_tool_steering_within(&c, &st, "S", &cl, LIMITS, None))
     }
 
     #[test]
-    fn prompt_does_not_wait_when_nothing_is_claimed() {
-        let state = Mutex::new(ToolSteeringState::default());
-        assert!(!wait_for_tool_steering(&state, "S"));
+    fn stuck_steering_turn_does_not_hold_a_user_prompt_with_another_session_active() {
+        // The regression: a steering turn the agent never answered held the
+        // session forever (the idle watchdog kept resetting on session T's
+        // updates), and the user's prompt waited on it without a deadline.
+        let agent = FakeAgent::start(None);
+        let client = agent.client();
+        let steering = Arc::new(ToolSteering::default());
+        let claim = steering.lock().claim("main", "S", "B1 tools").unwrap();
+        let delivery = background(&client, &steering, &claim);
+        agent.wait_for("the steering turn", |s| s.iter().any(Seen::is_steering));
+
+        let start = Instant::now();
+        assert!(user_send(&client, &steering, "main", "S", 0));
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < TOTAL + Duration::from_millis(500),
+            "held for {elapsed:?}"
+        );
+
+        assert_eq!(delivery.join().unwrap(), SteeringOutcome::TimedOut);
+        let cancels: Vec<_> = agent
+            .seen()
+            .into_iter()
+            .filter(|s| s.method == "session/cancel")
+            .map(|s| s.session)
+            .collect();
+        assert_eq!(
+            cancels,
+            vec!["S"],
+            "only the stuck session's turn is cancelled"
+        );
+        // The timed-out block isn't retried for the prompt, now or next time.
+        assert!(user_send(&client, &steering, "main", "S", 0));
+        assert_eq!(agent.prompts("S"), vec!["steer:B1", "user", "user"]);
+        // It still counts as sent: turning the tools off withdraws them.
+        assert!(steering.lock().claim("main", "S", "").is_some());
+    }
+
+    #[test]
+    fn prompt_takes_over_queued_steering_and_sends_it_first() {
+        let agent = FakeAgent::start(Some(Duration::ZERO));
+        let client = agent.client();
+        let steering = ToolSteering::default();
+        // Claimed by a window, its delivery not started yet.
+        let queued = steering.lock().claim("main", "S", "B1 tools").unwrap();
+        let start = Instant::now();
+        assert!(user_send(&client, &steering, "main", "S", 0));
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            start.elapsed()
+        );
+        assert_eq!(agent.prompts("S"), vec!["steer:B1", "user"]);
+        // The queued delivery, once it runs, finds it was taken over.
+        assert_eq!(
+            deliver_tool_steering_within(&client, &steering, "S", &queued, LIMITS, None),
+            SteeringOutcome::NotSent
+        );
+        assert_eq!(agent.prompts("S").len(), 2);
+    }
+
+    #[test]
+    fn a_newer_block_queued_behind_a_sending_turn_still_goes_before_the_prompt() {
+        // The review's case: B1 on the wire, B2 claimed behind it, then the
+        // user sends. The prompt must not overtake B2.
+        let agent = FakeAgent::start(Some(Duration::from_millis(300)));
+        let client = agent.client();
+        let steering = Arc::new(ToolSteering::default());
+        let b1 = steering.lock().claim("main", "S", "B1 tools").unwrap();
+        let d1 = background(&client, &steering, &b1);
+        agent.wait_for("B1", |s| s.iter().any(Seen::is_steering));
+        let b2 = steering.lock().claim("main", "S", "B2 tools").unwrap();
+        let d2 = background(&client, &steering, &b2);
+
+        assert!(user_send(&client, &steering, "main", "S", 0));
+        assert_eq!(d1.join().unwrap(), SteeringOutcome::Delivered);
+        assert_eq!(d2.join().unwrap(), SteeringOutcome::NotSent, "taken over");
+        assert_eq!(agent.prompts("S"), vec!["steer:B1", "steer:B2", "user"]);
+        assert!(steering.lock().claim_latest("main", "S").is_none());
+    }
+
+    #[test]
+    fn stop_while_a_prompt_waits_on_steering_sends_nothing_more() {
+        // The review's case: Stop pressed while the prompt waited on a
+        // steering turn. Neither a fresh steering turn nor the prompt may
+        // go out after it.
+        let agent = FakeAgent::start(None);
+        let client = agent.client();
+        let steering = Arc::new(ToolSteering::default());
+        let claim = steering.lock().claim("main", "S", "B1 tools").unwrap();
+        let delivery = background(&client, &steering, &claim);
+        agent.wait_for("the steering turn", |s| s.iter().any(Seen::is_steering));
+
+        let epoch = client.cancel_epoch("S");
+        let c = client.clone();
+        let stopper = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            // What cancel_generation does on Stop.
+            c.note_cancel("S");
+            c.cancel_session("S").unwrap();
+        });
+        let start = Instant::now();
+        assert!(
+            !user_send(&client, &steering, "main", "S", epoch),
+            "prompt sent after Stop"
+        );
+        assert!(
+            start.elapsed() < Duration::from_millis(500),
+            "{:?}",
+            start.elapsed()
+        );
+        stopper.join().unwrap();
+        assert_eq!(delivery.join().unwrap(), SteeringOutcome::Unknown);
+        assert_eq!(agent.prompts("S"), vec!["steer:B1"]);
+        // The slot is free again, and a Stop that cut short the session's
+        // first tool list still leaves it one that "no tools" applies to.
+        client.send_chat_streaming("S", "later", None).unwrap();
+        assert!(steering.lock().claim("main", "S", "").is_some());
+    }
+
+    #[test]
+    fn stop_while_a_prompts_own_steering_waits_for_the_slot_starts_no_turn() {
+        // The second review's case: the prompt's own steering is queued
+        // behind another prompt on the session when the user presses Stop.
+        // It must give up, not start a hidden turn once the slot frees.
+        let agent = FakeAgent::start(Some(Duration::ZERO));
+        let client = agent.client();
+        let steering = ToolSteering::default();
+        steering.lock().publish("main", "B1 tools");
+        let c = client.clone();
+        let other = std::thread::spawn(move || c.send_chat_streaming("S", "slow title", None));
+        agent.wait_for("the other prompt", |s| {
+            s.iter().any(|s| s.text.contains("slow title"))
+        });
+
+        let epoch = client.cancel_epoch("S");
+        let c = client.clone();
+        let stopper = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            c.note_cancel("S");
+        });
+        assert!(
+            !user_send(&client, &steering, "main", "S", epoch),
+            "prompt sent after Stop"
+        );
+        stopper.join().unwrap();
+        other.join().unwrap().unwrap();
+        assert_eq!(
+            agent.prompts("S"),
+            vec!["user"],
+            "only the other prompt went out"
+        );
+        // Not sent, so the next prompt sends it.
+        assert!(user_send(
+            &client,
+            &steering,
+            "main",
+            "S",
+            client.cancel_epoch("S")
+        ));
+        assert_eq!(agent.prompts("S"), vec!["user", "steer:B1", "user"]);
+    }
+
+    #[test]
+    fn a_turn_shortened_to_fit_a_prompt_that_times_out_is_retried() {
+        // Cut to fit what was left of a prompt's limit: running out of that
+        // says nothing about the agent being too slow.
+        let agent = FakeAgent::start(None);
+        let client = agent.client();
+        let steering = ToolSteering::default();
+        steering.lock().publish("main", "B1 tools");
+        let crate::state::PromptSteering::Send(claim) =
+            steering.lock().claim_for_prompt("main", "S")
+        else {
+            panic!("nothing to send");
+        };
+        let own = super::ForPrompt {
+            cancel_epoch: client.cancel_epoch("S"),
+            deadline: Instant::now() + Duration::from_millis(500),
+        };
+        let guard = steering.begin_prompt("S");
+        let outcome =
+            deliver_tool_steering_within(&client, &steering, "S", &claim, LIMITS, Some(&own));
+        drop(guard);
+        assert_eq!(outcome, SteeringOutcome::Unknown);
+        assert!(matches!(
+            steering.lock().claim_for_prompt("main", "S"),
+            crate::state::PromptSteering::Send(_)
+        ));
+    }
+
+    #[test]
+    fn steering_without_a_connection_is_not_sent_and_is_retried() {
+        // Never connected.
+        let client = AcpClient::new(AcpConnectionMode::Remote {
+            host: "127.0.0.1".to_string(),
+            port: 9,
+        });
+        let steering = ToolSteering::default();
+        let claim = steering.lock().claim("main", "S", "tools").unwrap();
+        let outcome = super::deliver_tool_steering(&client, &steering, "S", &claim);
+        assert_eq!(outcome, SteeringOutcome::NotSent);
+        // Nothing was transmitted, so there's nothing to withdraw...
+        assert!(steering.lock().claim("main", "S", "").is_none());
+        // ...and with the tools back they are claimed again.
+        assert!(steering.lock().claim("main", "S", "tools").is_some());
+    }
+
+    #[test]
+    fn prompt_does_not_wait_when_there_is_no_steering() {
+        let client = AcpClient::new(AcpConnectionMode::Remote {
+            host: "127.0.0.1".to_string(),
+            port: 9,
+        });
+        let steering = ToolSteering::default();
+        let long = Duration::from_secs(60);
+        let limits = PromptLimits {
+            budget: long,
+            cancel_grace: long,
+        };
+        assert!(!steer_before_user_prompt(
+            &client, &steering, "main", "S", 0, limits, long
+        ));
+        // A window with no tools, and a session never sent any.
+        steering.lock().publish("main", "");
+        assert!(!steer_before_user_prompt(
+            &client, &steering, "main", "S", 0, limits, long
+        ));
     }
 }

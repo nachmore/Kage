@@ -207,12 +207,13 @@ fn save_to_atomic_writes_full_payload_and_leaves_no_temp_file() {
     // The temp sibling that the atomic write went through must not be
     // left behind on the success path. (It would accumulate over time
     // and a stale .tmp could survive a crash.)
-    // Temp names are `config.json.tmp.<pid>.<seq>`, so scan by prefix.
+    // Anything but the config itself is a leftover (temps are hidden
+    // `.config.json.kage-tmp-<hex>` files).
     let leftovers: Vec<String> = std::fs::read_dir(dir.path())
         .expect("read tempdir")
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|name| name.starts_with("config.json.tmp."))
+        .filter(|name| name != "config.json")
         .collect();
     assert!(
         leftovers.is_empty(),

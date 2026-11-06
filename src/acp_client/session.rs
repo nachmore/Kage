@@ -268,6 +268,35 @@ impl AcpClient {
         self.send_chat_prompt(session_id, content, None, Some(keep_reply))
     }
 
+    /// A hidden steering prompt (its reply muted and discarded) that can't
+    /// hold the session for long: see `send_prompt_muted_bounded` for
+    /// `cancel_baseline`, `yield_queue` and `before_send`. Unlike the
+    /// senders above it doesn't wait for a compaction in progress: call
+    /// `wait_for_compaction` first. Blocking.
+    pub fn send_hidden_prompt_bounded(
+        &self,
+        session_id: &str,
+        content: &str,
+        cancel_baseline: Option<u64>,
+        yield_queue: &dyn Fn() -> bool,
+        before_send: &mut dyn FnMut() -> Option<super::PromptLimits>,
+    ) -> super::HiddenPromptOutcome {
+        // Built lazily, once the prompt is surely going out, so a prompt
+        // that steps aside doesn't use up the periodic time stamp.
+        self.send_prompt_muted_bounded(
+            session_id,
+            cancel_baseline,
+            yield_queue,
+            before_send,
+            &|| {
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "prompt": self.prompt_blocks(session_id, content, None),
+                })
+            },
+        )
+    }
+
     /// Shared body of the two senders above. `muted` is `None` for a
     /// visible prompt, `Some(keep_reply)` for a background one.
     fn send_chat_prompt(
@@ -280,6 +309,31 @@ impl AcpClient {
         // Wait for any in-progress compaction to finish before sending
         self.wait_for_compaction();
 
+        let params = serde_json::json!({
+            "sessionId": session_id,
+            "prompt": self.prompt_blocks(session_id, content, attachments)
+        });
+        let response = match muted {
+            None => self.send_prompt(session_id, params)?,
+            Some(keep_reply) => self.send_prompt_muted(session_id, params, keep_reply)?,
+        };
+
+        if let Some(error) = response.error {
+            return Err(bail_acp_error("ACP error", &error));
+        }
+
+        info!("Prompt completed");
+        Ok(())
+    }
+
+    /// The `prompt` content blocks for `content` (plus attachments), with
+    /// the periodic current-time stamp in front when one is due.
+    fn prompt_blocks(
+        &self,
+        session_id: &str,
+        content: &str,
+        attachments: Option<&[serde_json::Value]>,
+    ) -> Vec<serde_json::Value> {
         let debug = *self.transport.debug_mode.lock_or_recover();
 
         if debug {
@@ -337,22 +391,7 @@ impl AcpClient {
         if prompt.is_empty() {
             prompt.push(serde_json::json!({ "type": "text", "text": "" }));
         }
-
-        let params = serde_json::json!({
-            "sessionId": session_id,
-            "prompt": prompt
-        });
-        let response = match muted {
-            None => self.send_prompt(session_id, params)?,
-            Some(keep_reply) => self.send_prompt_muted(session_id, params, keep_reply)?,
-        };
-
-        if let Some(error) = response.error {
-            return Err(bail_acp_error("ACP error", &error));
-        }
-
-        info!("Prompt completed");
-        Ok(())
+        prompt
     }
 
     // --- Recovery ---

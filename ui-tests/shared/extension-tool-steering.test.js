@@ -156,13 +156,17 @@ describe('extension tool steering follows tool changes', () => {
         const h = makeHarness({ allowAgentTools: false });
         await h.mgr.getToolDefinitions(); // initialize() primes the cache
         await h.controller.startSteering();
-        expect(h.steeringSends()).toHaveLength(0); // no tools yet: nothing to say
+        // No tools yet: the window publishes that once ("no tools" is never
+        // sent to a session that had none), so the backend doesn't steer
+        // its sessions with another window's tools.
+        expect(h.steeringSends()).toHaveLength(1);
+        expect(h.steeringSends()[0][1]).toEqual({ sessionId: 'sess-1', toolSteering: '' });
 
         h.appConfig.extensions.stocks.allowAgentTools = true;
         await h.configUpdated();
         await settle();
-        expect(h.steeringSends()).toHaveLength(1);
-        const [, args] = h.steeringSends()[0];
+        expect(h.steeringSends()).toHaveLength(2);
+        const [, args] = h.steeringSends()[1];
         expect(args.sessionId).toBe('sess-1');
         expect(args.toolSteering).toContain('get_quote');
         expect(args.toolSteering).toContain('replaces any extension tool list');
@@ -171,7 +175,7 @@ describe('extension tool steering follows tool changes', () => {
         // same toggle applied again).
         await h.configUpdated();
         await settle();
-        expect(h.steeringSends()).toHaveLength(1);
+        expect(h.steeringSends()).toHaveLength(2);
     });
 
     it('setting toggled off → an empty block is sent once (backend withdraws the tools)', async () => {
@@ -195,29 +199,30 @@ describe('extension tool steering follows tool changes', () => {
         const h = makeHarness({ allowAgentTools: false });
         await h.mgr.getToolDefinitions();
         await h.controller.startSteering();
+        expect(h.steeringSends()).toHaveLength(1); // the initial "no tools"
 
         h.appConfig.extensions.stocks.allowAgentTools = true;
         await h.configUpdated();
         h.appConfig.extensions.stocks.allowAgentTools = false;
         await h.configUpdated();
         await settle();
-        expect(h.steeringSends()).toHaveLength(0);
+        expect(h.steeringSends()).toHaveLength(1);
     });
 
     it('a failed send is retried on the next change', async () => {
         const h = makeHarness({ allowAgentTools: false });
         await h.mgr.getToolDefinitions();
-        await h.controller.startSteering();
+        await h.controller.startSteering(); // the initial "no tools"
         h.hostInvoke.mockRejectedValueOnce(new Error('ipc down'));
 
         h.appConfig.extensions.stocks.allowAgentTools = true;
         await h.configUpdated();
         await settle();
-        expect(h.steeringSends()).toHaveLength(1); // failed
+        expect(h.steeringSends()).toHaveLength(2); // failed
 
         await h.controller.sendSteering(); // any later refresh
-        expect(h.steeringSends()).toHaveLength(2);
-        expect(h.steeringSends()[1][1].toolSteering).toContain('get_quote');
+        expect(h.steeringSends()).toHaveLength(3);
+        expect(h.steeringSends()[2][1].toolSteering).toContain('get_quote');
     });
 
     it('stopSteering() stops re-sends', async () => {
@@ -225,11 +230,12 @@ describe('extension tool steering follows tool changes', () => {
         await h.mgr.getToolDefinitions();
         await h.controller.startSteering();
         h.controller.stopSteering();
+        expect(h.steeringSends()).toHaveLength(1); // the initial "no tools"
 
         h.appConfig.extensions.stocks.allowAgentTools = true;
         await h.configUpdated();
         await settle();
-        expect(h.steeringSends()).toHaveLength(0);
+        expect(h.steeringSends()).toHaveLength(1);
     });
 
     it('startSteering() twice subscribes once', async () => {
