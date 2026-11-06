@@ -53,6 +53,103 @@ function extensionConfigSignature(config) {
     );
 }
 
+/**
+ * Render tool definitions (getToolDefinitions() shape) as the agent-facing
+ * steering block; '' when there are none. Agent-facing, so English. Reads
+ * only the fields it renders and tolerates malformed sandbox data.
+ * @param {object[]} defs
+ * @returns {string}
+ */
+export function formatToolSteeringBlock(defs) {
+    const list = (Array.isArray(defs) ? defs : []).filter(
+        (d) => d && Array.isArray(d.tools) && d.tools.some(isToolEntry)
+    );
+    if (list.length === 0) return '';
+
+    let block = '<extension_tools>\n';
+    block += "You have access to local extension tools that run instantly on the user's machine.\n";
+    block +=
+        'This list is complete and replaces any extension tool list given earlier in this conversation.\n';
+    block += 'To call one, emit a JSON block with this exact format:\n\n';
+    block += '```extension_tool_call\n';
+    block += '{"extension": "<extension_id>", "tool": "<tool_name>", "params": {<parameters>}}\n';
+    block += '```\n\n';
+    block +=
+        'IMPORTANT: After emitting the tool call block, STOP generating and wait for the result.\n';
+    block += 'The result will be provided as a follow-up message. Then continue your response.\n';
+    block += 'Only call ONE tool at a time. Do not call multiple tools in a single message.\n\n';
+    block += 'Available extension tools:\n\n';
+
+    for (const def of list) {
+        block += `Extension: ${def.extensionId} (${def.extensionIcon} ${def.extensionName})\n`;
+        for (const tool of def.tools.filter(isToolEntry)) {
+            block += `  - ${safeText(tool.name)}: ${safeText(tool.description)}\n`;
+            const params =
+                tool.parameters !== null && typeof tool.parameters === 'object'
+                    ? Object.entries(tool.parameters)
+                    : [];
+            if (params.length > 0) {
+                const paramDescs = params.map(([k, v]) => describeParam(k, v)).join('; ');
+                block += `    Parameters: ${paramDescs}\n`;
+            }
+        }
+        block += '\n';
+    }
+
+    block += '</extension_tools>\n\n';
+
+    block += '<suggested_actions_format>\n';
+    block += 'When your response presents options or asks the user what to do next, ';
+    block += 'you can emit a hidden actions block at the END of your response. ';
+    block +=
+        'The frontend will strip this from the visible text and render the actions as clickable buttons.\n\n';
+    block += '```suggested_actions\n';
+    block += '[{"label": "Short button text", "prompt": "The message to send when clicked"}]\n';
+    block += '```\n\n';
+    block += 'Rules:\n';
+    block += '- Place this block at the very end of your response, after all visible text.\n';
+    block += '- Keep labels short (2-5 words). Use an emoji prefix if appropriate.\n';
+    block += "- The prompt is what gets sent as the user's next message when they click.\n";
+    block +=
+        '- Include 2-4 actions max. Always include one that proceeds with the proposed plan.\n';
+    block += '- Only use this when you are asking the user to choose between options.\n';
+    block += '</suggested_actions_format>';
+
+    return block;
+}
+
+function isToolEntry(tool) {
+    return tool !== null && typeof tool === 'object';
+}
+
+/** Steering text for one parameter declaration (a sandbox may send junk). */
+function describeParam(name, spec) {
+    const v = spec !== null && typeof spec === 'object' ? spec : {};
+    const def = v.default !== undefined ? `, default: ${safeText(v.default)}` : '';
+    const desc = v.description ? ` — ${safeText(v.description)}` : '';
+    return `${name} (${safeText(v.type)}${def})${desc}`;
+}
+
+/**
+ * Text for a sandbox-supplied value. Never throws: a structured-clone reply
+ * can carry objects whose toString/valueOf aren't callable, which make
+ * String() and template literals throw.
+ */
+function safeText(value) {
+    if (typeof value === 'string') return value;
+    try {
+        return String(value);
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * How many consecutive getTools() failures still report an extension's last
+ * known tools (see getToolDefinitions).
+ */
+const MAX_REUSED_TOOL_FAILURES = 5;
+
 export class ExtensionManager {
     /**
      * @param {Function} invoke - the raw Tauri invoke (the host, not the
@@ -72,6 +169,15 @@ export class ExtensionManager {
         this._pool = new ExtensionSandboxPool(invoke);
         /** Synchronous snapshot of tool definitions; refreshed by getToolDefinitions(). */
         this._toolDefsCache = [];
+        /** Steering text of `_toolDefsCache`, to tell a real change from a refresh. */
+        this._toolDefsSignature = '';
+        /** Bumped per getToolDefinitions() call; see there. */
+        this._toolDefsGen = 0;
+        this._toolDefsAppliedGen = 0;
+        /** @type {Set<(defs: object[]) => void>} */
+        this._toolDefsListeners = new Set();
+        /** Extension id → consecutive getTools() failures. */
+        this._toolFailures = new Map();
     }
 
     /**
@@ -311,12 +417,16 @@ export class ExtensionManager {
      * snapshot without hitting the sandbox on every render.
      */
     async getToolDefinitions() {
+        const gen = ++this._toolDefsGen;
         const result = [];
-        for (const [id, ext] of this.extensions) {
+        // Snapshot: a reload during the awaits below re-inserts an id at the
+        // end of the live Map, which a live iteration would visit twice.
+        for (const [id, ext] of [...this.extensions]) {
             if (!ext.sandbox?.hasTools) continue;
             if (!this._isEnabled(id)) continue;
             try {
                 const tools = await ext.sandbox.call('getTools', {});
+                this._toolFailures.delete(id);
                 if (Array.isArray(tools) && tools.length > 0) {
                     const display = extensionDisplay(ext, id);
                     result.push({
@@ -328,10 +438,75 @@ export class ExtensionManager {
                 }
             } catch (e) {
                 console.warn(`getTools() in '${id}' failed:`, e);
+                // A failed call (timeout, sandbox busy) doesn't mean the
+                // tools are gone. If the extension is still the same loaded,
+                // enabled one, keep what it last reported, so a hiccup
+                // doesn't tell the agent its tools were removed. Not
+                // forever: a provider that keeps failing loses its tools.
+                const failures = (this._toolFailures.get(id) || 0) + 1;
+                this._toolFailures.set(id, failures);
+                const previous = this._toolDefsCache.find((d) => d.extensionId === id);
+                if (
+                    previous &&
+                    failures <= MAX_REUSED_TOOL_FAILURES &&
+                    this.extensions.get(id) === ext &&
+                    this._isEnabled(id)
+                ) {
+                    result.push(previous);
+                }
             }
         }
-        this._toolDefsCache = result;
+        // Stable order, so the steering text depends on the tools only,
+        // not on which extension was (re)loaded last.
+        result.sort((a, b) =>
+            a.extensionId < b.extensionId ? -1 : a.extensionId > b.extensionId ? 1 : 0
+        );
+        // Calls overlap (a config update, a reload, and a tool call can all
+        // ask at once). Only a newer call than the last one applied may
+        // replace the cache, so a slow stale result can't flip it back.
+        if (gen > this._toolDefsAppliedGen) {
+            this._toolDefsAppliedGen = gen;
+            this._toolDefsCache = result;
+            try {
+                this._noteToolDefinitions(result);
+            } catch (e) {
+                // Never fail the caller (tool calls await this) over a
+                // change notification.
+                console.warn('Tool-definitions change check failed:', e);
+            }
+        }
         return result;
+    }
+
+    /**
+     * Subscribe to changes in the tool definitions the agent is told about —
+     * a setting that turns an extension's agent tools on, an extension
+     * enabled, disabled, installed or removed, or getTools() simply
+     * answering differently. Compared by their steering text, so it fires
+     * only when that text would change, never for a refresh that found the
+     * same tools.
+     * @param {(defs: object[]) => void} listener
+     * @returns {() => void} unsubscribe
+     */
+    onToolDefinitionsChanged(listener) {
+        this._toolDefsListeners.add(listener);
+        return () => this._toolDefsListeners.delete(listener);
+    }
+
+    _noteToolDefinitions(defs) {
+        // The rendered text, not JSON: it covers exactly what the agent
+        // sees, and can't throw on the cycles or BigInts a sandbox's
+        // structured-clone reply may carry.
+        const signature = formatToolSteeringBlock(defs);
+        if (signature === this._toolDefsSignature) return;
+        this._toolDefsSignature = signature;
+        for (const listener of [...this._toolDefsListeners]) {
+            try {
+                listener(defs);
+            } catch (e) {
+                console.warn('Tool-definitions listener failed:', e);
+            }
+        }
     }
 
     /**
@@ -397,64 +572,11 @@ export class ExtensionManager {
     /**
      * Steering text describing available extension tools to the LLM.
      * Resolves to the empty string if no extensions expose tools.
+     * @param {object[]} [defs] - render these instead of fetching fresh
+     *   ones (e.g. `getToolDefinitionsCached()`).
      */
-    async buildToolSteeringBlock() {
-        const defs = await this.getToolDefinitions();
-        if (defs.length === 0) return '';
-
-        let block = '<extension_tools>\n';
-        block +=
-            "You have access to local extension tools that run instantly on the user's machine.\n";
-        block += 'To call one, emit a JSON block with this exact format:\n\n';
-        block += '```extension_tool_call\n';
-        block +=
-            '{"extension": "<extension_id>", "tool": "<tool_name>", "params": {<parameters>}}\n';
-        block += '```\n\n';
-        block +=
-            'IMPORTANT: After emitting the tool call block, STOP generating and wait for the result.\n';
-        block +=
-            'The result will be provided as a follow-up message. Then continue your response.\n';
-        block +=
-            'Only call ONE tool at a time. Do not call multiple tools in a single message.\n\n';
-        block += 'Available extension tools:\n\n';
-
-        for (const def of defs) {
-            block += `Extension: ${def.extensionId} (${def.extensionIcon} ${def.extensionName})\n`;
-            for (const tool of def.tools) {
-                block += `  - ${tool.name}: ${tool.description}\n`;
-                if (tool.parameters && Object.keys(tool.parameters).length > 0) {
-                    const paramDescs = Object.entries(tool.parameters)
-                        .map(
-                            ([k, v]) =>
-                                `${k} (${v.type}${v.default !== undefined ? ', default: ' + v.default : ''})${v.description ? ' — ' + v.description : ''}`
-                        )
-                        .join('; ');
-                    block += `    Parameters: ${paramDescs}\n`;
-                }
-            }
-            block += '\n';
-        }
-
-        block += '</extension_tools>\n\n';
-
-        block += '<suggested_actions_format>\n';
-        block += 'When your response presents options or asks the user what to do next, ';
-        block += 'you can emit a hidden actions block at the END of your response. ';
-        block +=
-            'The frontend will strip this from the visible text and render the actions as clickable buttons.\n\n';
-        block += '```suggested_actions\n';
-        block += '[{"label": "Short button text", "prompt": "The message to send when clicked"}]\n';
-        block += '```\n\n';
-        block += 'Rules:\n';
-        block += '- Place this block at the very end of your response, after all visible text.\n';
-        block += '- Keep labels short (2-5 words). Use an emoji prefix if appropriate.\n';
-        block += "- The prompt is what gets sent as the user's next message when they click.\n";
-        block +=
-            '- Include 2-4 actions max. Always include one that proceeds with the proposed plan.\n';
-        block += '- Only use this when you are asking the user to choose between options.\n';
-        block += '</suggested_actions_format>';
-
-        return block;
+    async buildToolSteeringBlock(defs) {
+        return formatToolSteeringBlock(defs ?? (await this.getToolDefinitions()));
     }
 
     // --- Trigger providers -------------------------------------------------
@@ -588,6 +710,15 @@ export class ExtensionManager {
             }
         } catch (e) {
             console.warn('Failed to reload extensions:', e);
+        }
+
+        // The roster may have changed (install, uninstall, enable, update):
+        // refresh the tool definitions so the cache is current and
+        // onToolDefinitionsChanged listeners (agent steering) hear about it.
+        try {
+            await this.getToolDefinitions();
+        } catch (e) {
+            console.warn('Tool-defs refresh after reload failed:', e);
         }
     }
 

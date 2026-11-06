@@ -492,9 +492,9 @@ fn persist_to_disk(p: &PersistedState) -> bool {
             return false;
         }
     };
-    // Write-then-rename so a crash mid-write can't lose the `owned` list.
-    let tmp = path.with_extension("json.tmp");
-    match std::fs::write(&tmp, body).and_then(|_| std::fs::rename(&tmp, &path)) {
+    // Atomic (fsynced temp + rename) so a crash mid-write can't lose the
+    // `owned` list.
+    match crate::atomic_write::write(&path, body, crate::atomic_write::Perms::Private) {
         Ok(()) => true,
         Err(e) => {
             warn!(

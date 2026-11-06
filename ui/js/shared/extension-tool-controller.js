@@ -8,6 +8,9 @@
  * and has no hidden coupling to either window.
  *
  * Lifecycle the host drives:
+ *   - `controller.startSteering()` once extensions are loaded and the window
+ *     has a session — sends the tool steering and re-sends it whenever the
+ *     extension tools change (`stopSteering()` on teardown)
  *   - `controller.reset()` when starting a new prompt
  *   - `controller.maybeHandleChunk(text)` from each chunk handler — returns
  *     `{ handled: true }` if the controller has taken over rendering/execution
@@ -31,11 +34,27 @@
 import { getExtensionToolFriendlyName } from './tool-utils.js';
 import { detectExtensionToolCall, detectExtensionToolCallIncremental } from './streaming-utils.js';
 
+/**
+ * Quiet period after a tool-definitions change before the steering is
+ * re-sent. One config save can surface as two changes (config update, then
+ * extension reload), and a setting flicked on and off again settles back to
+ * what the agent already has — neither should cost an agent turn.
+ */
+export const STEERING_REFRESH_DEBOUNCE_MS = 500;
+
 export class ExtensionToolController {
     constructor(host) {
         this.host = host;
         this.handled = false;
         this.executing = false;
+        /** Block this window last delivered ('' = none, or "no tools" sent). */
+        this._steeringSent = '';
+        this._steeringRun = null;
+        this._steeringPending = false;
+        /** A queued rerun must fetch fresh definitions (not just re-render). */
+        this._steeringPendingFetch = false;
+        this._steeringTimer = null;
+        this._unwatchTools = null;
     }
 
     reset() {
@@ -85,20 +104,108 @@ export class ExtensionToolController {
         return { handled: false };
     }
 
-    /** Build the steering block from the extension manager and ship it to the agent. */
-    async sendSteering() {
-        const block = await this.host.extensionManager.buildToolSteeringBlock();
-        if (!block) return;
-        const sessionId = this.host.getSessionId?.();
-        if (!sessionId) {
-            console.warn('Skipping extension tool steering — no session id from host');
+    /**
+     * Send the extension tool steering for the host's session, then keep the
+     * agent in sync: whenever the extension manager reports different tool
+     * definitions, re-send (debounced). Safe to call more than once.
+     */
+    startSteering() {
+        if (!this._unwatchTools) {
+            const em = this.host.extensionManager;
+            if (typeof em?.onToolDefinitionsChanged === 'function') {
+                this._unwatchTools = em.onToolDefinitionsChanged(() =>
+                    this.scheduleSteeringRefresh()
+                );
+            }
+        }
+        return this.sendSteering();
+    }
+
+    /** Stop following tool-definition changes (window teardown). */
+    stopSteering() {
+        clearTimeout(this._steeringTimer);
+        this._steeringTimer = null;
+        this._unwatchTools?.();
+        this._unwatchTools = null;
+    }
+
+    /**
+     * Re-send the steering once the tool definitions settle. Renders the
+     * definitions the manager just reported (its cache) instead of fetching
+     * again: a fetch notifies listeners itself, so an extension whose
+     * getTools() answers differently on every call would otherwise keep
+     * this loop, and an agent turn per lap, going forever.
+     */
+    scheduleSteeringRefresh() {
+        clearTimeout(this._steeringTimer);
+        this._steeringTimer = setTimeout(() => {
+            this._steeringTimer = null;
+            this.sendSteering({ fetch: false });
+        }, STEERING_REFRESH_DEBOUNCE_MS);
+    }
+
+    /**
+     * Build the steering block from the extension manager and ship it to the
+     * agent if it differs from what this window last sent. An empty block
+     * after a non-empty one is sent too: the backend turns it into a
+     * "tools withdrawn" notice for sessions that had tools.
+     *
+     * Single-flight with one trailing rerun, so this window's claims reach
+     * the backend in order (the backend then delivers per session in claim
+     * order and drops superseded blocks).
+     *
+     * @param {{ fetch?: boolean }} [opts] - `fetch: false` renders the
+     *   manager's cached definitions rather than asking every extension.
+     */
+    sendSteering({ fetch = true } = {}) {
+        if (this._steeringRun) {
+            this._steeringPending = true;
+            this._steeringPendingFetch ||= fetch;
+            return this._steeringRun;
+        }
+        this._steeringRun = (async () => {
+            try {
+                let fetchNow = fetch;
+                do {
+                    this._steeringPending = false;
+                    await this._sendSteeringOnce(fetchNow);
+                    fetchNow = this._steeringPendingFetch;
+                    this._steeringPendingFetch = false;
+                } while (this._steeringPending);
+            } finally {
+                this._steeringRun = null;
+            }
+        })();
+        return this._steeringRun;
+    }
+
+    async _sendSteeringOnce(fetch) {
+        const em = this.host.extensionManager;
+        let block;
+        try {
+            const cached =
+                !fetch && typeof em.getToolDefinitionsCached === 'function'
+                    ? em.getToolDefinitionsCached()
+                    : undefined;
+            block = (await em.buildToolSteeringBlock(cached)) || '';
+        } catch (e) {
+            console.warn('Failed to build extension tool steering:', e);
             return;
         }
+        // Unchanged since this window's last send. The backend replays the
+        // latest block to the window's other sessions before their next
+        // prompt, so there's nothing to do on a session switch either.
+        if (block === this._steeringSent) return;
+        // No session right now (none adopted yet, the active chat deleted):
+        // still publish, so the backend replays this window's current block
+        // to whichever session it prompts next.
+        const sessionId = this.host.getSessionId?.() || null;
         try {
             await this.host.invoke('send_extension_tool_steering', {
                 sessionId,
                 toolSteering: block,
             });
+            this._steeringSent = block;
         } catch (e) {
             console.warn('Failed to send extension tool steering:', e);
         }
@@ -211,7 +318,13 @@ export class ExtensionToolController {
         // comes from untrusted sandbox code, so it may only skip the host
         // prompt (the extension confirms itself) — never override a deny.
         if (policy !== 'ask') return policy;
-        const toolDefs = await this.host.extensionManager.getToolDefinitions();
+        let toolDefs;
+        try {
+            toolDefs = await this.host.extensionManager.getToolDefinitions();
+        } catch (e) {
+            console.warn('Failed to refresh extension tool definitions:', e);
+            toolDefs = this.host.extensionManager.getToolDefinitionsCached?.() || [];
+        }
         const extDef = toolDefs.find((d) => d.extensionId === extension);
         const toolDef = extDef?.tools?.find((t) => t.name === tool);
         return toolDef?.hasBuiltInConfirmation === true ? 'allow' : policy;

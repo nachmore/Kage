@@ -42,14 +42,68 @@ pub struct AcpHandles {
 /// Keyed by session because every window sends the same block on its own
 /// session: a single process-wide hash let whichever window sent first
 /// starve every other session of the tool definitions.
+///
+/// Windows re-publish whenever their extension tools change (a setting
+/// toggled, an extension enabled or installed), so a session that already
+/// has a block is sent the replacement once, and a session that already
+/// has exactly the current block is sent nothing. When a window's last tool
+/// goes away it publishes an empty block; that becomes
+/// [`TOOLS_WITHDRAWN_BLOCK`], delivered only to sessions that were told
+/// about tools before.
+///
+/// Blocks are kept per publishing window: the window that prompts a session
+/// is the one that runs the tool calls the reply asks for, so a session is
+/// steered with that window's tools, and one window losing its tools can't
+/// withdraw them from another window's sessions.
 #[derive(Debug, Default)]
 pub struct ToolSteeringState {
-    /// Latest block any window sent. Replayed to sessions that haven't had
-    /// it (new chats, recovered sessions) before their next user prompt.
-    latest: Option<(u64, String)>,
-    /// Session id → hash of the block delivered (or in flight) on it.
-    sent: HashMap<String, u64>,
+    /// Window label → latest block that window published.
+    latest: HashMap<String, LatestSteering>,
+    /// The window that published most recently. Its block stands in for a
+    /// window that hasn't published (yet), e.g. one still loading its
+    /// extensions.
+    last_publisher: Option<String>,
+    /// Session id → hash of the block the agent was sent on it.
+    delivered: HashMap<String, u64>,
+    /// Session id → hash of a claimed block not yet delivered or released.
+    in_flight: HashMap<String, u64>,
+    /// Session id → lock held while a block is delivered on it, so blocks
+    /// reach the agent in claim order and a user prompt goes out only after
+    /// a delivery already under way.
+    delivery_locks: HashMap<String, Arc<std::sync::Mutex<()>>>,
 }
+
+#[derive(Debug, Clone)]
+struct LatestSteering {
+    hash: u64,
+    body: String,
+    /// The tools-withdrawn notice rather than a tool list.
+    withdrawal: bool,
+}
+
+/// Agent-facing replacement for a tool list once no extension tools are
+/// left. English on purpose: steering is for the agent, not the user.
+pub const TOOLS_WITHDRAWN_BLOCK: &str = "<extension_tools>\n\
+No local extension tools are available any more. The extension tools listed \
+earlier in this conversation were turned off or removed: do not emit \
+extension_tool_call blocks for them.\n\
+</extension_tools>";
+
+/// One session claimed for one steering delivery. Hand it to
+/// [`ToolSteeringState::confirm`] once sent, or to
+/// [`ToolSteeringState::release`] if the send didn't happen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SteeringClaim {
+    pub hash: u64,
+    /// The steering text to send.
+    pub body: String,
+}
+
+/// `delivered` value for a session whose last block may or may not have
+/// landed (its prompt was cancelled): the agent has *some* steering, so a
+/// withdrawal still applies, and any published block differs from it, so
+/// the next prompt re-sends.
+const UNKNOWN_DELIVERY: u64 = 0;
 
 impl ToolSteeringState {
     fn hash_block(block: &str) -> u64 {
@@ -59,37 +113,104 @@ impl ToolSteeringState {
         hasher.finish()
     }
 
-    /// Record `block` as the latest and claim `session_id` for it. Returns
-    /// the hash to send under, or `None` if this session already has (or is
-    /// receiving) exactly this block. Claiming before the send is what stops
-    /// two windows sharing a session from both sending it.
-    pub fn claim(&mut self, session_id: &str, block: &str) -> Option<u64> {
-        let hash = Self::hash_block(block);
-        self.latest = Some((hash, block.to_string()));
-        if self.sent.get(session_id) == Some(&hash) {
-            return None;
-        }
-        self.sent.insert(session_id.to_string(), hash);
-        Some(hash)
+    /// Publish `block` as `window`'s current extension tool steering and
+    /// claim `session_id` for it. An empty block means "no tools now".
+    /// Returns `None` if this session already has (or is receiving) exactly
+    /// this block, or if it's a withdrawal for a session that never had
+    /// tools. Claiming before the send is what stops two windows sharing a
+    /// session from both sending it.
+    pub fn claim(&mut self, window: &str, session_id: &str, block: &str) -> Option<SteeringClaim> {
+        self.publish(window, block);
+        self.claim_latest(window, session_id)
     }
 
-    /// Claim `session_id` for the latest known block if it hasn't had it.
-    /// Returns the hash and block to send.
-    pub fn claim_latest(&mut self, session_id: &str) -> Option<(u64, String)> {
-        let (hash, block) = self.latest.clone()?;
-        if self.sent.get(session_id) == Some(&hash) {
-            return None;
-        }
-        self.sent.insert(session_id.to_string(), hash);
-        Some((hash, block))
+    /// Record `block` as `window`'s current steering without claiming a
+    /// session (the window has none right now). Its sessions get it replayed
+    /// before their next prompt.
+    pub fn publish(&mut self, window: &str, block: &str) {
+        let latest = if !block.trim().is_empty() {
+            LatestSteering {
+                hash: Self::hash_block(block),
+                body: block.to_string(),
+                withdrawal: false,
+            }
+        } else if self.latest.contains_key(window) {
+            // No tools now, but this window's sessions may have been told
+            // about some.
+            LatestSteering {
+                hash: Self::hash_block(TOOLS_WITHDRAWN_BLOCK),
+                body: TOOLS_WITHDRAWN_BLOCK.to_string(),
+                withdrawal: true,
+            }
+        } else {
+            // Nothing published by this window yet: nothing to withdraw.
+            return;
+        };
+        self.latest.insert(window.to_string(), latest);
+        self.last_publisher = Some(window.to_string());
     }
 
-    /// Undo a claim whose send failed so a later call retries. Leaves a
-    /// newer claim (different hash) alone.
-    pub fn release(&mut self, session_id: &str, hash: u64) {
-        if self.sent.get(session_id) == Some(&hash) {
-            self.sent.remove(session_id);
+    /// Claim `session_id` for the latest block `window` published (or, if
+    /// it hasn't published, the most recent one any window did) if the
+    /// session doesn't have it.
+    pub fn claim_latest(&mut self, window: &str, session_id: &str) -> Option<SteeringClaim> {
+        let latest = self
+            .latest
+            .get(window)
+            .or_else(|| self.latest.get(self.last_publisher.as_deref()?))?;
+        let (hash, withdrawal) = (latest.hash, latest.withdrawal);
+        let current = self
+            .in_flight
+            .get(session_id)
+            .or_else(|| self.delivered.get(session_id))
+            .copied();
+        if current == Some(hash) || (withdrawal && current.is_none()) {
+            return None;
         }
+        let body = latest.body.clone();
+        self.in_flight.insert(session_id.to_string(), hash);
+        Some(SteeringClaim { hash, body })
+    }
+
+    /// Whether `claim` is still the newest claim on `session_id`. A newer
+    /// one carries the current tools, so a superseded claim isn't sent.
+    pub fn is_current(&self, session_id: &str, claim: &SteeringClaim) -> bool {
+        self.in_flight.get(session_id) == Some(&claim.hash)
+    }
+
+    /// Whether a claimed block is still on its way on `session_id`.
+    pub fn has_in_flight(&self, session_id: &str) -> bool {
+        self.in_flight.contains_key(session_id)
+    }
+
+    /// Record that `claim` reached the agent.
+    pub fn confirm(&mut self, session_id: &str, claim: &SteeringClaim) {
+        if self.in_flight.get(session_id) == Some(&claim.hash) {
+            self.in_flight.remove(session_id);
+        }
+        self.delivered.insert(session_id.to_string(), claim.hash);
+    }
+
+    /// Undo a claim whose send failed or may not have landed (cancelled),
+    /// so a later call retries. Leaves a newer claim alone. A block already
+    /// recorded as delivered becomes "unknown": the agent may have it.
+    pub fn release(&mut self, session_id: &str, claim: &SteeringClaim) {
+        if self.in_flight.get(session_id) == Some(&claim.hash) {
+            self.in_flight.remove(session_id);
+        }
+        if self.delivered.get(session_id) == Some(&claim.hash) {
+            self.delivered
+                .insert(session_id.to_string(), UNKNOWN_DELIVERY);
+        }
+    }
+
+    /// The lock serialising steering deliveries on `session_id`. Lock it
+    /// after dropping the state guard: it's held across a whole agent turn.
+    pub fn delivery_lock(&mut self, session_id: &str) -> Arc<std::sync::Mutex<()>> {
+        self.delivery_locks
+            .entry(session_id.to_string())
+            .or_default()
+            .clone()
     }
 }
 
@@ -305,52 +426,243 @@ pub struct AcpModel {
 
 #[cfg(test)]
 mod tests {
-    use super::ToolSteeringState;
+    use super::{ToolSteeringState, TOOLS_WITHDRAWN_BLOCK};
+
+    // Window labels.
+    const FL: &str = "floating";
+    const MAIN: &str = "main";
+
+    /// Claim and deliver successfully, returning the body sent.
+    fn send(
+        st: &mut ToolSteeringState,
+        window: &str,
+        session: &str,
+        block: &str,
+    ) -> Option<String> {
+        let c = st.claim(window, session, block)?;
+        st.confirm(session, &c);
+        Some(c.body)
+    }
+
+    fn replay(st: &mut ToolSteeringState, window: &str, session: &str) -> Option<String> {
+        let c = st.claim_latest(window, session)?;
+        st.confirm(session, &c);
+        Some(c.body)
+    }
 
     #[test]
     fn tool_steering_is_deduplicated_per_session_not_globally() {
         // The regression: floating sent on F first, and the main window's
         // identical block for M was swallowed by a process-wide hash.
         let mut st = ToolSteeringState::default();
-        assert!(st.claim("F", "tools").is_some());
-        assert!(st.claim("M", "tools").is_some());
-        assert!(st.claim("F", "tools").is_none());
-        assert!(st.claim("M", "tools").is_none());
+        assert!(send(&mut st, FL, "F", "tools").is_some());
+        assert!(send(&mut st, MAIN, "M", "tools").is_some());
+        assert!(st.claim(FL, "F", "tools").is_none());
+        assert!(st.claim(MAIN, "M", "tools").is_none());
     }
 
     #[test]
     fn changed_block_is_resent() {
         let mut st = ToolSteeringState::default();
-        assert!(st.claim("F", "v1").is_some());
-        assert!(st.claim("F", "v2").is_some());
+        send(&mut st, FL, "F", "v1").unwrap();
+        assert_eq!(send(&mut st, FL, "F", "v2").as_deref(), Some("v2"));
     }
 
     #[test]
     fn released_claim_is_retried() {
         // A failed or disconnected send must not mark the session done.
         let mut st = ToolSteeringState::default();
-        let h = st.claim("F", "tools").unwrap();
-        st.release("F", h);
-        assert!(st.claim("F", "tools").is_some());
+        let c = st.claim(FL, "F", "tools").unwrap();
+        st.release("F", &c);
+        assert!(st.claim(FL, "F", "tools").is_some());
+    }
+
+    #[test]
+    fn in_flight_claim_is_not_claimed_twice() {
+        let mut st = ToolSteeringState::default();
+        let _c = st.claim(FL, "F", "tools").unwrap();
+        assert!(st.claim(MAIN, "F", "tools").is_none(), "already on its way");
+        assert!(st.claim_latest(FL, "F").is_none());
     }
 
     #[test]
     fn release_leaves_a_newer_claim_alone() {
         let mut st = ToolSteeringState::default();
-        let old = st.claim("F", "v1").unwrap();
-        st.claim("F", "v2").unwrap();
-        st.release("F", old);
-        assert!(st.claim("F", "v2").is_none());
+        let old = st.claim(FL, "F", "v1").unwrap();
+        st.claim(FL, "F", "v2").unwrap();
+        st.release("F", &old);
+        assert!(st.claim(FL, "F", "v2").is_none());
+    }
+
+    #[test]
+    fn a_newer_claim_supersedes_one_still_waiting() {
+        // Two changes while the session is busy: only the newest list may
+        // reach the agent, whichever delivery thread wakes first.
+        let mut st = ToolSteeringState::default();
+        let t1 = st.claim(FL, "F", "v1").unwrap();
+        let t2 = st.claim(FL, "F", "v2").unwrap();
+        assert!(!st.is_current("F", &t1), "t1 is skipped");
+        assert!(st.is_current("F", &t2));
+        st.confirm("F", &t2);
+        assert!(st.claim_latest(FL, "F").is_none());
+    }
+
+    #[test]
+    fn failed_claims_fall_back_to_what_was_delivered() {
+        // Both in-flight claims fail: the session must end up with the
+        // block it actually got, not an undelivered one.
+        let mut st = ToolSteeringState::default();
+        send(&mut st, FL, "F", "v0").unwrap();
+        let t1 = st.claim(FL, "F", "v1").unwrap();
+        let t2 = st.claim(FL, "F", "v2").unwrap();
+        st.release("F", &t1);
+        st.release("F", &t2);
+        // Toggling back to v1 must still send it: F only ever had v0.
+        assert_eq!(send(&mut st, FL, "F", "v1").as_deref(), Some("v1"));
+    }
+
+    #[test]
+    fn cancelled_delivery_is_replayed() {
+        // Stop pressed during a replayed steering prompt: it may not have
+        // landed, so the next send replays it.
+        let mut st = ToolSteeringState::default();
+        send(&mut st, FL, "F", "v0").unwrap();
+        st.claim(FL, "X", "v1").unwrap(); // F's window now publishes v1
+        let c = st.claim_latest(FL, "F").unwrap();
+        st.confirm("F", &c);
+        st.release("F", &c);
+        assert_eq!(replay(&mut st, FL, "F").as_deref(), Some("v1"));
+    }
+
+    #[test]
+    fn cancelled_block_still_counts_as_having_tools() {
+        // Another claim confirmed while this one waited; then Stop cancels
+        // this one. The agent was told about tools either way.
+        let mut st = ToolSteeringState::default();
+        let old = st.claim(FL, "S", "v1").unwrap();
+        let replayed = st.claim(MAIN, "S", "v2").unwrap();
+        st.confirm("S", &old);
+        st.confirm("S", &replayed);
+        st.release("S", &replayed);
+        // A later withdrawal must still go out...
+        assert_eq!(
+            send(&mut st, MAIN, "S", "").as_deref(),
+            Some(TOOLS_WITHDRAWN_BLOCK)
+        );
+        // ...and with the tools back, the next prompt re-sends them.
+        let mut st2 = ToolSteeringState::default();
+        let c = st2.claim(MAIN, "S", "v2").unwrap();
+        st2.confirm("S", &c);
+        st2.release("S", &c);
+        assert_eq!(replay(&mut st2, MAIN, "S").as_deref(), Some("v2"));
+    }
+
+    #[test]
+    fn publishing_without_a_session_updates_that_windows_replay() {
+        let mut st = ToolSteeringState::default();
+        send(&mut st, MAIN, "S1", "v1").unwrap();
+        st.publish(MAIN, "v2"); // main had no session when its tools changed
+        assert_eq!(replay(&mut st, MAIN, "S_new").as_deref(), Some("v2"));
+        assert_eq!(replay(&mut st, MAIN, "S1").as_deref(), Some("v2"));
     }
 
     #[test]
     fn claim_latest_replays_to_sessions_that_never_got_it() {
         let mut st = ToolSteeringState::default();
-        assert!(st.claim_latest("new").is_none(), "nothing sent yet");
-        st.claim("F", "tools").unwrap();
-        let (_, block) = st.claim_latest("new").expect("new session needs the block");
-        assert_eq!(block, "tools");
-        assert!(st.claim_latest("new").is_none(), "claimed once");
-        assert!(st.claim_latest("F").is_none(), "F already has it");
+        assert!(st.claim_latest(FL, "new").is_none(), "nothing sent yet");
+        send(&mut st, FL, "F", "tools").unwrap();
+        assert_eq!(replay(&mut st, FL, "new").as_deref(), Some("tools"));
+        assert!(st.claim_latest(FL, "new").is_none(), "claimed once");
+        assert!(st.claim_latest(FL, "F").is_none(), "F already has it");
+    }
+
+    #[test]
+    fn a_window_that_has_not_published_gets_the_most_recent_block() {
+        let mut st = ToolSteeringState::default();
+        send(&mut st, MAIN, "M", "tools").unwrap();
+        assert_eq!(replay(&mut st, FL, "F").as_deref(), Some("tools"));
+    }
+
+    #[test]
+    fn setting_toggled_on_resends_once_and_unchanged_does_not() {
+        // Start with no tools (the setting is off): nothing to send.
+        let mut st = ToolSteeringState::default();
+        assert!(st.claim(FL, "F", "").is_none());
+        // Setting on: the tools appear and go out once.
+        assert!(send(&mut st, FL, "F", "with-stocks").is_some());
+        // A later config save that leaves the tools as they were.
+        assert!(st.claim(FL, "F", "with-stocks").is_none());
+        // Another session picks up the current block before its next prompt.
+        assert_eq!(replay(&mut st, FL, "S2").as_deref(), Some("with-stocks"));
+        assert!(st.claim_latest(FL, "S2").is_none());
+    }
+
+    #[test]
+    fn withdrawal_reaches_only_sessions_that_had_tools() {
+        let mut st = ToolSteeringState::default();
+        send(&mut st, FL, "F", "tools").unwrap();
+        replay(&mut st, FL, "S2").unwrap();
+        assert_eq!(
+            send(&mut st, FL, "F", "").as_deref(),
+            Some(TOOLS_WITHDRAWN_BLOCK)
+        );
+        assert!(st.claim(FL, "F", "").is_none(), "withdrawn once");
+        assert_eq!(
+            replay(&mut st, FL, "S2").as_deref(),
+            Some(TOOLS_WITHDRAWN_BLOCK)
+        );
+        assert!(
+            st.claim_latest(FL, "fresh").is_none(),
+            "a session that never had tools needs no withdrawal"
+        );
+        // Tools come back: everyone who had the withdrawal gets the list.
+        assert_eq!(send(&mut st, FL, "F", "tools").as_deref(), Some("tools"));
+        assert_eq!(replay(&mut st, FL, "S2").as_deref(), Some("tools"));
+        assert_eq!(replay(&mut st, FL, "fresh").as_deref(), Some("tools"));
+    }
+
+    #[test]
+    fn one_window_losing_its_tools_does_not_withdraw_another_windows() {
+        let mut st = ToolSteeringState::default();
+        send(&mut st, FL, "F", "tools").unwrap();
+        send(&mut st, MAIN, "M", "tools").unwrap();
+        // The floating window alone ends up with no tools.
+        assert_eq!(
+            send(&mut st, FL, "F", "").as_deref(),
+            Some(TOOLS_WITHDRAWN_BLOCK)
+        );
+        assert!(
+            st.claim_latest(MAIN, "M").is_none(),
+            "main's session keeps its tools"
+        );
+        // A session the main window prompts is steered with main's tools.
+        assert!(st.claim_latest(MAIN, "F").is_some());
+    }
+
+    #[test]
+    fn failed_withdrawal_is_retried() {
+        let mut st = ToolSteeringState::default();
+        send(&mut st, FL, "F", "tools").unwrap();
+        let w = st.claim(FL, "F", "").unwrap();
+        st.release("F", &w);
+        assert_eq!(
+            replay(&mut st, FL, "F").as_deref(),
+            Some(TOOLS_WITHDRAWN_BLOCK)
+        );
+    }
+
+    #[test]
+    fn empty_block_before_any_tools_is_ignored() {
+        let mut st = ToolSteeringState::default();
+        assert!(st.claim(FL, "F", "  ").is_none());
+        assert!(st.claim_latest(MAIN, "M").is_none());
+    }
+
+    #[test]
+    fn delivery_lock_is_per_session() {
+        let mut st = ToolSteeringState::default();
+        let a = st.delivery_lock("A");
+        assert!(std::sync::Arc::ptr_eq(&a, &st.delivery_lock("A")));
+        assert!(!std::sync::Arc::ptr_eq(&a, &st.delivery_lock("B")));
     }
 }

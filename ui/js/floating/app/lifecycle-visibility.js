@@ -369,6 +369,7 @@ export const LifecycleVisibilityMethods = {
                     window._kageMascot = null;
                 }
                 this._stopOllamaStatusPoll();
+                this.extensionToolController?.stopSteering?.();
                 this.extensionManager?.destroy?.();
             } catch (e) {
                 console.warn('floating close-requested cleanup failed:', e);

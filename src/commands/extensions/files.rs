@@ -203,6 +203,10 @@ pub(super) fn purge_extension_data(extension_id: &str) -> Result<(), String> {
 
 /// Save arbitrary JSON data for an extension.
 /// Stored at: <config_dir>/kage/extension-data/<extension_id>/<key>.json
+///
+/// Atomic and owner-only (`crate::atomic_write`): extensions keep API keys
+/// here, and a write torn by a crash or the updater's exit would leave a
+/// file the extension can never parse again.
 #[tauri::command]
 pub async fn save_extension_data(
     extension_id: String,
@@ -210,7 +214,7 @@ pub async fn save_extension_data(
     data: String,
 ) -> Result<(), AppError> {
     let path = resolve_data_path(&extension_id, &key)?;
-    std::fs::write(&path, &data).map_err(|e| {
+    crate::atomic_write::write(&path, &data, crate::atomic_write::Perms::Private).map_err(|e| {
         format!(
             "Failed to save extension data '{}/{}': {}",
             extension_id, key, e
@@ -247,5 +251,100 @@ pub async fn delete_extension_data(extension_id: String, key: String) -> Result<
             "Failed to delete extension data '{}/{}': {}",
             extension_id, key, e
         ))?,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(f)
+    }
+
+    fn save(ext: &str, key: &str, data: &str) {
+        block_on(save_extension_data(ext.into(), key.into(), data.into())).unwrap();
+    }
+
+    fn load(ext: &str, key: &str) -> Option<String> {
+        block_on(load_extension_data(ext.into(), key.into())).unwrap()
+    }
+
+    #[test]
+    fn interrupted_write_never_reaches_the_reader() {
+        // crate::paths isolates unit tests to a scratch dir on first lookup.
+        let _ = crate::paths::config_dir();
+        assert!(crate::paths::is_isolated());
+        let ext = "atomic-test-interrupted";
+        let path = resolve_data_path(ext, "settings").unwrap();
+        // State an earlier run left behind: the last complete save, plus
+        // the temp of a save that a crash, force quit, or the updater's
+        // exit cut off half-way.
+        std::fs::write(&path, r#"{"apiKey":"sk-123"}"#).unwrap();
+        let stale = path.with_file_name(format!(
+            "settings.json.tmp.{}.0",
+            std::process::id().wrapping_add(1)
+        ));
+        std::fs::write(&stale, r#"{"apiK"#).unwrap();
+
+        assert_eq!(
+            load(ext, "settings").as_deref(),
+            Some(r#"{"apiKey":"sk-123"}"#)
+        );
+
+        save(ext, "settings", r#"{"apiKey":"sk-456"}"#);
+        assert_eq!(
+            load(ext, "settings").as_deref(),
+            Some(r#"{"apiKey":"sk-456"}"#)
+        );
+        assert!(!stale.exists(), "the first save cleans up the stale temp");
+        let leftovers: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert_eq!(leftovers, vec!["settings.json".to_string()]);
+    }
+
+    #[test]
+    fn concurrent_saves_always_leave_a_complete_file() {
+        let ext = "atomic-test-concurrent";
+        let big_a = format!(r#"{{"v":"{}"}}"#, "a".repeat(64 * 1024));
+        let big_b = format!(r#"{{"v":"{}"}}"#, "b".repeat(64 * 1024));
+        save(ext, "blob", &big_a);
+        let path = resolve_data_path(ext, "blob").unwrap();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let reader = {
+            let stop = stop.clone();
+            let (path, a, b) = (path.clone(), big_a.clone(), big_b.clone());
+            std::thread::spawn(move || {
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    let got = std::fs::read_to_string(&path).unwrap();
+                    assert!(
+                        got == a || got == b,
+                        "reader saw a torn file ({} bytes)",
+                        got.len()
+                    );
+                }
+            })
+        };
+        for i in 0..40 {
+            save(ext, "blob", if i % 2 == 0 { &big_b } else { &big_a });
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        reader.join().unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extension_data_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let ext = "atomic-test-perms";
+        save(ext, "secret", "{}");
+        let path = resolve_data_path(ext, "secret").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 }

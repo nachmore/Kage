@@ -171,7 +171,7 @@ pub fn ensure_registered() {
     // Write back preserving all other content
     match serde_json::to_string_pretty(&config) {
         Ok(json) => {
-            if let Err(e) = std::fs::write(&mcp_json_path, json) {
+            if let Err(e) = write_mcp_file(&mcp_json_path, &json) {
                 warn!("Failed to write mcp.json: {}", e);
             }
         }
@@ -216,7 +216,7 @@ pub fn unregister() {
     if remove_server_entry(&mut config, MCP_SERVER_KEY) {
         info!("Unregistered {} MCP server", MCP_SERVER_KEY);
         if let Ok(json) = serde_json::to_string_pretty(&config) {
-            if let Err(e) = std::fs::write(&mcp_json_path, json) {
+            if let Err(e) = write_mcp_file(&mcp_json_path, &json) {
                 warn!("Failed to write mcp.json: {}", e);
             }
         }
@@ -253,7 +253,15 @@ pub fn write_mcp_json(path: Option<&str>, config: &serde_json::Value) -> Result<
         let _ = std::fs::create_dir_all(parent);
     }
     let json = serde_json::to_string_pretty(config).map_err(|e| format!("Serialize: {}", e))?;
-    std::fs::write(&mcp_path, json).map_err(|e| format!("Write: {}", e))
+    write_mcp_file(&mcp_path, &json).map_err(|e| format!("Write: {}", e))
+}
+
+/// Replace an agent's `mcp.json` atomically. The readers above parse a
+/// torn file as `{}`, so the next registration would write back only our
+/// entry and drop every server the user configured. Inherit: the file
+/// belongs to the agent, keep its mode (and any symlink to it).
+fn write_mcp_file(path: &std::path::Path, json: &str) -> std::io::Result<()> {
+    crate::atomic_write::write(path, json, crate::atomic_write::Perms::Inherit)
 }
 
 #[cfg(test)]

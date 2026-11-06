@@ -450,6 +450,14 @@ fn walk_files(root: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
             if ft.is_dir() {
                 stack.push(path);
             } else if ft.is_file() {
+                // Leftover of an interrupted atomic write: not user data.
+                if entry
+                    .file_name()
+                    .to_str()
+                    .is_some_and(crate::atomic_write::is_temp_file_name)
+                {
+                    continue;
+                }
                 let rel = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
                 out.push((rel, path));
             }

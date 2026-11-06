@@ -16,6 +16,7 @@ mod app_log;
 mod app_setup;
 #[path = "main/app_startup.rs"]
 mod app_startup;
+mod atomic_write;
 mod auto_steering;
 mod automation;
 mod chunk_batcher;

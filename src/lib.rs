@@ -16,6 +16,7 @@ pub mod agent_presets;
 pub mod agent_sessions;
 pub mod app_launcher;
 pub mod app_log;
+pub mod atomic_write;
 pub mod auto_steering;
 pub mod chunk_batcher;
 pub mod config;

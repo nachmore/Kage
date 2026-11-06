@@ -494,24 +494,33 @@ pub async fn extension_tool_response<R: tauri::Runtime>(
 }
 
 /// Send extension tool definitions to the agent as a hidden steering message.
-/// Called by the frontend after extensions are loaded, so the agent knows
-/// which local extension tools are available.
+/// Called by the frontend after extensions load and again whenever the
+/// window's extension tools change (settings, enable/disable, install), so
+/// the agent knows which local extension tools are available right now.
+/// An empty block means the window has no extension tools any more. With
+/// no session id (the window has none right now) the block is only
+/// recorded, and replayed to the window's sessions before their next prompt.
 #[tauri::command]
-pub async fn send_extension_tool_steering(
-    session_id: String,
+pub async fn send_extension_tool_steering<R: tauri::Runtime>(
+    session_id: Option<String>,
     tool_steering: String,
     acp: State<'_, AcpHandles>,
+    window: tauri::WebviewWindow<R>,
 ) -> Result<(), AppError> {
-    if tool_steering.trim().is_empty() {
+    let Some(session_id) = session_id.filter(|s| !s.is_empty()) else {
+        acp.tool_steering
+            .lock_or_recover()
+            .publish(window.label(), &tool_steering);
         return Ok(());
-    }
-
+    };
     // Deduplicate per session: skip if THIS session already has (or is
-    // receiving) this exact block. The claim is released if the send fails.
-    let Some(hash) = acp
-        .tool_steering
-        .lock_or_recover()
-        .claim(&session_id, &tool_steering)
+    // receiving) this exact block, and turn an empty block into a
+    // withdrawal for sessions that were told about tools (see
+    // ToolSteeringState). The claim is released if the send fails.
+    let Some(claim) =
+        acp.tool_steering
+            .lock_or_recover()
+            .claim(window.label(), &session_id, &tool_steering)
     else {
         return Ok(());
     };
@@ -520,7 +529,7 @@ pub async fn send_extension_tool_steering(
     let state = acp.tool_steering.clone();
 
     async_runtime::spawn_blocking(move || {
-        deliver_tool_steering(&client, &state, &session_id, hash, &tool_steering);
+        deliver_tool_steering(&client, &state, &session_id, &claim);
     });
 
     Ok(())
@@ -528,35 +537,60 @@ pub async fn send_extension_tool_steering(
 
 /// Send a claimed extension tool steering block on `session_id` as a muted
 /// prompt (its "ack" never streams into a window). Releases the claim when
-/// the send doesn't happen, so the next attempt retries. Blocking.
+/// the send doesn't happen, so the next attempt retries. Blocking: waits
+/// for any delivery already under way on the session, then skips if a
+/// newer claim replaced this one while it waited.
 pub(super) fn deliver_tool_steering(
     client: &crate::acp_client::AcpClient,
     state: &std::sync::Mutex<crate::state::ToolSteeringState>,
     session_id: &str,
-    hash: u64,
-    tool_steering: &str,
+    claim: &crate::state::SteeringClaim,
 ) {
+    // Bound first: the state guard must not live across the send.
+    let delivery_lock = state.lock_or_recover().delivery_lock(session_id);
+    let _delivering = delivery_lock.lock_or_recover();
+    if !state.lock_or_recover().is_current(session_id, claim) {
+        info!(
+            "Extension tool steering on {} superseded before it was sent",
+            session_id
+        );
+        return;
+    }
     if !client.is_connected() {
-        state.lock_or_recover().release(session_id, hash);
+        state.lock_or_recover().release(session_id, claim);
         return;
     }
 
     info!(
         "Sending extension tool steering on {} ({} chars)",
         session_id,
-        tool_steering.len()
+        claim.body.len()
     );
     let msg = format!(
         "{} {}\n\n---\n\n<instructions>Respond with only \"ack\" to confirm receipt. Do not summarize or comment on the content above.</instructions>",
         crate::commands::system::STEERING_MSG_PREFIX,
-        tool_steering
+        claim.body
     );
 
+    // A Stop on this session ends this prompt early (still Ok, stop reason
+    // "cancelled") and the agent may not have kept it: release, so the next
+    // prompt replays it, whichever thread is sending that prompt.
+    let cancel_epoch = client.cancel_epoch(session_id);
     match client.send_chat_streaming_background(session_id, &msg, false) {
-        Ok(()) => info!("Extension tool steering sent"),
+        Ok(()) if client.cancel_epoch(session_id) != cancel_epoch => {
+            info!(
+                "Extension tool steering on {} cancelled; will replay",
+                session_id
+            );
+            state.lock_or_recover().release(session_id, claim);
+        }
+        Ok(()) => {
+            state.lock_or_recover().confirm(session_id, claim);
+            info!("Extension tool steering sent");
+        }
         Err(e) => {
             warn!("Failed to send extension tool steering: {}", e);
-            state.lock_or_recover().release(session_id, hash);
+            state.lock_or_recover().release(session_id, claim);
             // The idle watchdog only trips after total silence on every
             // session, so the connection is wedged. It still reads as
             // connected, though, and a user send queued behind this (the
@@ -568,6 +602,41 @@ pub(super) fn deliver_tool_steering(
                 client.force_disconnect();
             }
         }
+    }
+}
+
+/// Block until no steering delivery is claimed or under way on
+/// `session_id`. Returns whether there was one to wait for. Blocking.
+pub(super) fn wait_for_tool_steering(
+    state: &std::sync::Mutex<crate::state::ToolSteeringState>,
+    session_id: &str,
+) -> bool {
+    // A claim's delivery thread may not have taken the delivery lock yet;
+    // that gap is milliseconds, so poll it briefly. The wait on the lock
+    // itself can be a whole agent turn and isn't bounded.
+    const GAP: std::time::Duration = std::time::Duration::from_secs(2);
+    let mut gap_deadline = std::time::Instant::now() + GAP;
+    let mut waited = false;
+    loop {
+        let delivery_lock = state.lock_or_recover().delivery_lock(session_id);
+        if delivery_lock.try_lock().is_err() {
+            waited = true;
+            drop(delivery_lock.lock_or_recover());
+            // Only time spent with the lock free counts as the gap.
+            gap_deadline = std::time::Instant::now() + GAP;
+        }
+        if !state.lock_or_recover().has_in_flight(session_id) {
+            return waited;
+        }
+        if std::time::Instant::now() >= gap_deadline {
+            warn!(
+                "Extension tool steering on {} still claimed but not delivering; sending anyway",
+                session_id
+            );
+            return waited;
+        }
+        waited = true;
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
 }
 
@@ -651,4 +720,41 @@ pub async fn check_extension_tool_permission(
     }
 
     Ok(policy_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wait_for_tool_steering;
+    use crate::state::ToolSteeringState;
+    use kage_core::lock_ext::LockExt;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    #[test]
+    fn prompt_waits_for_a_claimed_steering_delivery() {
+        let state = Arc::new(Mutex::new(ToolSteeringState::default()));
+        let claim = state.lock_or_recover().claim("main", "S", "tools").unwrap();
+        let (st, c) = (state.clone(), claim.clone());
+        let delivery = std::thread::spawn(move || {
+            // The spawned delivery hasn't taken the lock yet...
+            std::thread::sleep(Duration::from_millis(30));
+            let lock = st.lock_or_recover().delivery_lock("S");
+            let _held = lock.lock_or_recover();
+            // ...then holds it for the length of an agent turn.
+            std::thread::sleep(Duration::from_millis(30));
+            st.lock_or_recover().confirm("S", &c);
+        });
+        assert!(wait_for_tool_steering(&state, "S"));
+        assert!(
+            !state.lock_or_recover().has_in_flight("S"),
+            "delivered first"
+        );
+        delivery.join().unwrap();
+    }
+
+    #[test]
+    fn prompt_does_not_wait_when_nothing_is_claimed() {
+        let state = Mutex::new(ToolSteeringState::default());
+        assert!(!wait_for_tool_steering(&state, "S"));
+    }
 }

@@ -98,32 +98,42 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
         }
 
         // Extension tool steering is sent per session by the window that
-        // loaded the extensions, at init. Sessions created or adopted since
-        // (new chat, peer window, recovery) never got it, so replay the
-        // latest block here, muted, before the first prompt that could use
-        // a tool. Bound first: an `if let` scrutinee would hold the lock
-        // across the send, which takes it again on failure.
-        let pending_steering = tool_steering.lock_or_recover().claim_latest(&session_id);
-        if let Some((hash, block)) = pending_steering {
-            super::permissions::deliver_tool_steering(
-                &client,
-                &tool_steering,
-                &session_id,
-                hash,
-                &block,
-            );
-
-            // Stop pressed while the steering prompt held the session: the
+        // loaded the extensions, at init and whenever its tools change.
+        // Sessions created or adopted since (new chat, peer window,
+        // recovery), or that the change was published from another window
+        // for, don't have the latest block, so replay it here, muted,
+        // before the first prompt that could use a tool. Bound first: an
+        // `if let` scrutinee would hold the lock across the send, which
+        // takes it again on failure.
+        let pending_steering = tool_steering
+            .lock_or_recover()
+            .claim_latest(&window_label, &session_id);
+        let steering_held_session = if let Some(claim) = &pending_steering {
+            super::permissions::deliver_tool_steering(&client, &tool_steering, &session_id, claim);
+            // A newer block claimed meanwhile supersedes this one; wait it out
+            // too.
+            super::permissions::wait_for_tool_steering(&tool_steering, &session_id);
+            true
+        } else {
+            // A window may be delivering a changed block on this session
+            // right now (send_extension_tool_steering): let it reach the
+            // agent before this prompt, which may need the new tools.
+            super::permissions::wait_for_tool_steering(&tool_steering, &session_id)
+        };
+        if steering_held_session {
+            // Stop pressed while a steering prompt held the session: the
             // agent's session/cancel ended that prompt, and the user's has
             // not been sent yet. Honour the Stop by not sending it, and
-            // unclaim the block (it may have been cancelled before it
-            // landed) so the next send replays it.
+            // unclaim a replayed block (it may have been cancelled before
+            // it landed) so the next send replays it.
             if client.cancel_epoch(&session_id) != cancel_epoch {
                 info!(
                     "Send on {} cancelled during tool steering; prompt not sent",
                     session_id
                 );
-                tool_steering.lock_or_recover().release(&session_id, hash);
+                if let Some(claim) = &pending_steering {
+                    tool_steering.lock_or_recover().release(&session_id, claim);
+                }
                 super::notifications::flush_session_chunks(&app_for_send, &client, &session_id);
                 // The originator already finalised on Stop; peers only hear
                 // broadcasts, so clear their activity badge.

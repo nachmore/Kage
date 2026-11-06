@@ -157,7 +157,9 @@ pub fn write_lines(kind: SteeringKind, config: &Config, lines: &[String]) -> Res
         }
         SteeringKind::User => body,
     };
-    std::fs::write(&path, to_write)
+    // Atomic so a crash mid-save can't truncate the document. Inherit: the
+    // user doc can live anywhere the user pointed it, with their own mode.
+    crate::atomic_write::write(&path, to_write, crate::atomic_write::Perms::Inherit)
         .with_context(|| format!("Failed to write steering doc at {:?}", path))?;
     Ok(path)
 }

@@ -3,15 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use crate::config_migrations;
 
 /// Serialises `save_to`'s write+rename across threads. See `save_to`.
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
-/// Suffix counter for unique temp file names.
-static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 /// Set by `load` when config.json was written by a newer build: `save()`
 /// becomes a no-op so this build's defaults can't overwrite it.
 static PRESERVE_NEWER_FILE: AtomicBool = AtomicBool::new(false);
@@ -396,14 +394,12 @@ impl Config {
         }
     }
 
-    /// Persist the config atomically: write to a sibling temp file in the
-    /// same directory, then rename over the destination. fs::rename is
-    /// atomic on POSIX and uses MoveFileExW with REPLACE_EXISTING on Windows
-    /// (effectively atomic for same-volume moves on NTFS), so a crash during
-    /// the write leaves either the old config intact or the new one fully
-    /// in place — never a half-written file. Tool permission policies,
-    /// hotkeys, and grants live in this file; truncating it via plain
-    /// fs::write meant a poorly-timed crash could lose all of them.
+    /// Persist the config atomically (`crate::atomic_write`): a crash
+    /// during the write leaves either the old config intact or the new
+    /// one fully in place — never a half-written file. Tool permission
+    /// policies, hotkeys, grants, and extension settings (which can hold
+    /// API keys, hence owner-only) live in this file; truncating it via
+    /// plain fs::write meant a poorly-timed crash could lose all of them.
     pub fn save(&self) -> Result<()> {
         if PRESERVE_NEWER_FILE.load(Ordering::SeqCst) {
             // Ok, not Err: callers `?` this into user-facing errors, and the
@@ -431,35 +427,12 @@ impl Config {
 
         // Several callers save a snapshot from another thread after
         // releasing the config mutex, so in-process saves can overlap.
-        // Serialise the write+rename so two of them can't interleave their
-        // bytes into one file. Leaf lock: nothing else is taken under it.
+        // Serialise them so renames land in the order the saves were
+        // made. Leaf lock: nothing else is taken under it.
         let _save_guard = SAVE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
-        // Sibling temp file so the rename is same-volume (cross-volume
-        // renames degrade to copy+delete, which loses atomicity). PID +
-        // per-process counter keeps the name unique across processes and
-        // across saves within this one.
-        let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
-        let tmp_path =
-            config_path.with_extension(format!("json.tmp.{}.{}", std::process::id(), seq));
-
-        // Write + flush, then close (drop) the file before renaming —
-        // Windows refuses to rename over an open handle.
-        {
-            use std::io::Write;
-            let mut f = fs::File::create(&tmp_path)
-                .with_context(|| format!("Failed to create temp config at {:?}", tmp_path))?;
-            f.write_all(content.as_bytes())
-                .context("Failed to write temp config")?;
-            f.sync_all()
-                .context("Failed to flush temp config to disk")?;
-        }
-
-        if let Err(e) = fs::rename(&tmp_path, config_path) {
-            // Best-effort cleanup so the temp file doesn't accumulate.
-            let _ = fs::remove_file(&tmp_path);
-            return Err(e).context("Failed to atomically replace config file");
-        }
+        crate::atomic_write::write(config_path, content, crate::atomic_write::Perms::Private)
+            .context("Failed to atomically replace config file")?;
 
         Ok(())
     }

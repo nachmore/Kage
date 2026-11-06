@@ -229,11 +229,15 @@ describe('ExtensionToolController.sendSteering', () => {
         expect(host.invoke).not.toHaveBeenCalled();
     });
 
-    it('skips the IPC when the host has no session id', async () => {
+    it('publishes without a session when the host has none', async () => {
+        // The backend records it and replays it to the next session.
         const host = makeHost({ getSessionId: vi.fn().mockReturnValue(null) });
         const c = new ExtensionToolController(host);
         await c.sendSteering();
-        expect(host.invoke).not.toHaveBeenCalled();
+        expect(host.invoke).toHaveBeenCalledWith('send_extension_tool_steering', {
+            sessionId: null,
+            toolSteering: 'STEER',
+        });
     });
 });
 

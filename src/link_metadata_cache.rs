@@ -101,10 +101,8 @@ fn save_file(file: &CacheFile) -> Result<()> {
         std::fs::create_dir_all(parent).context("failed to create kage config dir")?;
     }
     let body = serde_json::to_string(file).context("serialize link metadata cache")?;
-    // Best-effort atomic-ish write: write to a temp sibling then rename.
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, body).context("write temp link metadata cache")?;
-    std::fs::rename(&tmp, &path).context("rename temp link metadata cache")?;
+    crate::atomic_write::write(&path, body, crate::atomic_write::Perms::Private)
+        .context("write link metadata cache")?;
     Ok(())
 }
 
@@ -162,9 +160,9 @@ static CACHE: LazyLock<Mutex<InMemoryCache>> = LazyLock::new(|| {
 /// the `CACHE` mutex, so an idle app costs no periodic wakeups.
 static FLUSH_SIGNAL: Condvar = Condvar::new();
 
-/// Serialises disk writes between the flush thread and `clear()`. They
-/// share one `.tmp` sibling, and the generation check is only sound if
-/// no clear can slip in between it and the write. Always taken before
+/// Serialises disk writes between the flush thread and `clear()`. The
+/// generation check is only sound if no clear can slip in between it and
+/// the write. Always taken before
 /// `CACHE`, and `CACHE` is never held across the write itself, so
 /// lookups never block on disk I/O.
 static WRITE_LOCK: Mutex<()> = Mutex::new(());

@@ -463,7 +463,9 @@ pub fn generate_steering_document(
         );
     }
     let content = format!("{}{}", auto_steering_header(), compacted);
-    fs::write(&auto_path, &content)?;
+    // Atomic: this runs at quit, where a torn write would wipe the
+    // steering the agent has learned about the user.
+    crate::atomic_write::write(&auto_path, &content, crate::atomic_write::Perms::Private)?;
 
     info!(
         "Auto-steering document updated ({} bytes) at {:?}",

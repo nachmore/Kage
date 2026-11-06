@@ -267,7 +267,15 @@ pub async fn save_frecency(data: String) -> Result<(), AppError> {
         .ok_or("No config dir")?
         .join("kage")
         .join("search-frecency.json");
-    Ok(std::fs::write(&path, &data).map_err(|e| format!("Failed to save frecency: {}", e))?)
+    if let Some(dir) = path.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    // Atomic: a torn file reads back as garbage and the next save would
+    // replace the user's whole ranking history with a fresh one.
+    Ok(
+        crate::atomic_write::write(&path, &data, crate::atomic_write::Perms::Private)
+            .map_err(|e| format!("Failed to save frecency: {}", e))?,
+    )
 }
 
 #[tauri::command]
@@ -402,9 +410,13 @@ pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), 
     if let Some(dir) = path.parent() {
         let _ = fs::create_dir_all(dir);
     }
-    Ok(fs::write(
+    // Atomic and owner-only: the history holds the text the user typed,
+    // and a torn file would parse as empty and lose all of it on the next
+    // save (the read above falls back to an empty map).
+    Ok(crate::atomic_write::write(
         &path,
         serde_json::to_string_pretty(&history).unwrap_or_default(),
+        crate::atomic_write::Perms::Private,
     )
     .map_err(|e| format!("Failed to save shortcut history: {}", e))?)
 }

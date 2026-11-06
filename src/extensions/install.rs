@@ -263,7 +263,7 @@ fn rename_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     loop {
         match fs::rename(from, to) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                let budget = if is_file_in_use(&e) {
+                let budget = if crate::atomic_write::is_file_in_use(&e) {
                     IN_USE_RETRIES
                 } else {
                     RETRIES
@@ -277,14 +277,6 @@ fn rename_dir(from: &Path, to: &Path) -> std::io::Result<()> {
             result => return result,
         }
     }
-}
-
-/// Windows' "a file inside is open" family: ACCESS_DENIED (mapped to
-/// PermissionDenied), ERROR_SHARING_VIOLATION (32), ERROR_LOCK_VIOLATION (33).
-fn is_file_in_use(e: &std::io::Error) -> bool {
-    cfg!(windows)
-        && (e.kind() == std::io::ErrorKind::PermissionDenied
-            || matches!(e.raw_os_error(), Some(32 | 33)))
 }
 
 /// Clean up after a crash mid-swap for `id`: put the backup back if the live
