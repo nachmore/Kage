@@ -24,8 +24,17 @@
  * hidden characters made visible (`appendShellCommandText`). Expanding or
  * collapsing dispatches a bubbling SHELL_LAYOUT_EVENT so a window that
  * sizes itself to its content (the floating window) can re-measure.
+ *
+ * A failed command whose output shows the agent's own sandbox refused it
+ * (`shellSandboxDenial`) gets a notice under its header, open or not: Kage's
+ * approvals can't lift that sandbox, so the user is handed the command —
+ * Copy command, or Copy & open Terminal, which copies it and opens the
+ * terminal app without typing or running anything. Such a block stays in
+ * the activity slot, and opens the command list it's handed off to, so the
+ * notice stays in view.
  */
 
+import { errMessage } from './error-message.js';
 import { t } from './i18n.js';
 import {
     chipStateLabel,
@@ -35,6 +44,7 @@ import {
     layoutChanged,
     TOOL_LAYOUT_EVENT,
     uid,
+    writeClipboard,
 } from './tool-call-dom.js';
 import {
     getShellCalls,
@@ -44,6 +54,7 @@ import {
     shellCommandDisplayParts,
     shellCommandDisplayText,
     shellOutputOf,
+    shellSandboxDenial,
 } from './shell-commands.js';
 import { settleToolCalls } from './tool-calls.js';
 
@@ -245,6 +256,125 @@ function renderPanel(root) {
     st.panelRev = record.rev;
 }
 
+// --- Agent sandbox notice ---------------------------------------------------
+
+function setNoticeStatus(root, text, isError = false) {
+    const status = root._kageShell.notice?.status;
+    if (!status) return;
+    status.textContent = text;
+    status.classList.toggle('is-error', !!text && isError);
+    layoutChanged(root);
+}
+
+/**
+ * Copy the command, then open the user's terminal app — and nothing more:
+ * the command only goes on the clipboard, for the user to paste and run.
+ * `execute_system_command` "terminal" (src/commands/input.rs) launches the
+ * OS terminal with no arguments, after hiding the floating window, which
+ * suits both windows: the terminal is about to take focus, and the
+ * always-on-top floating window would otherwise sit over it.
+ */
+async function copyAndOpenTerminal(root, button) {
+    const command = root._kageShell.record?.command || '';
+    if (!command || button.disabled) return;
+    // One terminal per click, however fast the clicks come.
+    button.disabled = true;
+    setNoticeStatus(root, '');
+    try {
+        if (!(await writeClipboard(command))) {
+            setNoticeStatus(root, t('shared.shell.sandbox.copy_failed'), true);
+            return;
+        }
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (typeof invoke !== 'function') throw new Error('Tauri API unavailable');
+        await invoke('execute_system_command', { commandId: 'terminal' });
+        setNoticeStatus(root, t('shared.shell.sandbox.copied_paste'));
+    } catch (e) {
+        setNoticeStatus(
+            root,
+            t('shared.shell.sandbox.open_failed', { error: errMessage(e) }),
+            true
+        );
+    } finally {
+        button.disabled = false;
+    }
+}
+
+function buildSandboxNotice(root) {
+    const st = root._kageShell;
+    const notice = el('div', 'shell-cmd-sandbox');
+    notice.id = `${st.id}-sandbox`;
+    notice.setAttribute('role', 'group');
+    // Translated text inside an LTR block: the notice takes the direction of
+    // its own text (the title's — children without a `dir` of their own
+    // decide it), so in an RTL language its rows and buttons flip too.
+    notice.dir = 'auto';
+    const title = el('div', 'shell-cmd-sandbox-title');
+    title.id = `${st.id}-sandbox-title`;
+    const titleText = el('span');
+    titleText.textContent = t('shared.shell.sandbox.title');
+    title.append(icon('shield', 'shell-cmd-icon', 13), titleText);
+    notice.setAttribute('aria-labelledby', title.id);
+
+    const body = el('p', 'shell-cmd-sandbox-text');
+    body.textContent = t('shared.shell.sandbox.body');
+
+    const actions = el('div', 'shell-cmd-sandbox-actions');
+    const copy = copyButton(
+        () => t('shared.shell.copy_command'),
+        () => st.record?.command || ''
+    );
+    const open = el('button', 'shell-cmd-copy shell-cmd-open-terminal');
+    open.type = 'button';
+    const openLabel = el('span', 'shell-cmd-copy-label');
+    openLabel.dir = 'auto';
+    openLabel.textContent = t('shared.shell.sandbox.open_terminal');
+    open.append(icon('terminal', 'shell-cmd-icon', 12), openLabel);
+    open.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyAndOpenTerminal(root, open);
+    });
+    actions.append(copy, open);
+
+    // Outcome of Copy & open Terminal. Always in the DOM (empty when idle)
+    // so screen readers announce what lands in it.
+    const status = el('div', 'shell-cmd-sandbox-status');
+    status.dir = 'auto';
+    status.setAttribute('role', 'status');
+
+    notice.append(title, body, actions, status);
+    return { el: notice, titleId: title.id, actions, status };
+}
+
+/** Add, keep or drop the block's sandbox notice for `denial`. */
+function syncSandboxNotice(root, denial) {
+    const st = root._kageShell;
+    st.sandbox = denial || null;
+    if (!denial) {
+        if (!st.notice) return;
+        st.notice.el.remove();
+        st.notice = null;
+        st.header.removeAttribute('aria-describedby');
+        delete root.dataset.sandbox;
+        layoutChanged(root);
+        return;
+    }
+    root.dataset.sandbox = denial.reason;
+    if (!st.notice) {
+        st.notice = buildSandboxNotice(root);
+        st.header.after(st.notice.el);
+        st.header.setAttribute('aria-describedby', st.notice.titleId);
+        layoutChanged(root);
+    }
+    // Nothing to hand over without a command (only its title is known).
+    st.notice.actions.hidden = !st.record.command;
+}
+
+/** Whether the agent's own sandbox blocked a block's command (it shows the notice). */
+export function isShellSandboxBlocked(root) {
+    return !!root?._kageShell?.sandbox;
+}
+
 /** Whether a block's details panel is open. */
 export function isShellCommandExpanded(root) {
     return root?._kageShell?.header.getAttribute('aria-expanded') === 'true';
@@ -289,6 +419,7 @@ export function updateShellCommandBlock(root, record) {
         st.headerCommand = commandKey(record);
     }
     renderStatus(st.status, state, out);
+    syncSandboxNotice(root, shellSandboxDenial(record));
     if (isShellCommandExpanded(root)) renderPanel(root);
     st.renderedRev = record.rev;
     st.renderedState = state;
@@ -321,6 +452,7 @@ export function createShellCommandBlock(record) {
 
     root.append(header, panel);
     root._kageShell = {
+        id,
         record,
         header,
         text,
@@ -332,6 +464,8 @@ export function createShellCommandBlock(record) {
         panelRev: -1,
         headerCommand: null,
         panelCommand: null,
+        sandbox: null,
+        notice: null,
     };
     header.addEventListener('click', () => {
         setShellCommandExpanded(root, !isShellCommandExpanded(root));
@@ -361,13 +495,15 @@ export function createShellActivitySlot() {
 /**
  * Drop blocks that have nothing more to show live: finished and collapsed
  * (they stay listed under the response's "shell" chip). Running and
- * expanded blocks stay. `keepId` is never dropped.
+ * expanded blocks stay, and so do blocks with a sandbox notice — the user
+ * still has to act on those. `keepId` is never dropped.
  */
 export function pruneShellActivity(slot, keepId = null) {
     for (const b of blocksOf(slot)) {
         const rec = b._kageShell.record;
         if (rec.toolCallId === keepId) continue;
-        if (isShellCommandExpanded(b) || shellCallState(rec) === 'running') continue;
+        if (isShellCommandExpanded(b) || isShellSandboxBlocked(b)) continue;
+        if (shellCallState(rec) === 'running') continue;
         b.remove();
     }
 }
@@ -415,9 +551,9 @@ function scrollOffsets(block) {
  * After the turn, once the response's chip row (`container`) is rendered:
  * each block still in the activity slot replaces its twin in the command
  * list — the same element, so an open panel keeps its place — the list
- * opens if any of them is open, and the emptied slot goes. Each command is
- * then listed once, inside the response. Blocks without a twin (no list
- * yet) stay in the slot.
+ * opens if any of them is open or shows a sandbox notice, and the emptied
+ * slot goes. Each command is then listed once, inside the response. Blocks
+ * without a twin (no list yet) stay in the slot.
  */
 export function handOffShellActivity(slot, container) {
     if (!slot) return;
@@ -431,7 +567,7 @@ export function handOffShellActivity(slot, container) {
         const offsets = scrollOffsets(block);
         twin.replaceWith(block);
         for (const [node, top] of offsets) node.scrollTop = top;
-        opened = opened || isShellCommandExpanded(block);
+        opened = opened || isShellCommandExpanded(block) || isShellSandboxBlocked(block);
     }
     if (opened) setShellListOpen(chip, list, true);
     if (!blocksOf(slot).length) slot.remove();
@@ -478,8 +614,14 @@ function createShellChip(listId) {
  * Keep the "shell ×N" toggle chip and its command list in `container` (a
  * `.tool-sources` row) in sync with `toolUsages`. Blocks are reconciled by
  * tool call id, so open panels and the list's open state survive.
+ *
+ * `opts.revealSandboxBlocked` opens the list (once) when one of its
+ * commands shows a sandbox notice — for a response drawn whole, such as a
+ * reopened session's. A live response leaves that to
+ * `handOffShellActivity`: until the turn ends the block is in the activity
+ * slot, and an open list would show it twice.
  */
-export function syncShellCommandList(container, toolUsages) {
+export function syncShellCommandList(container, toolUsages, opts = {}) {
     if (!container) return;
     const calls = getShellCalls(toolUsages);
     let chip = container.querySelector(':scope > .shell-chip');
@@ -531,4 +673,11 @@ export function syncShellCommandList(container, toolUsages) {
         if (at !== block) list.insertBefore(block, at);
     });
     for (const stale of existing.values()) stale.remove();
+
+    if (opts?.revealSandboxBlocked && !list._kageSandboxRevealed && list.hidden) {
+        if (blocksOf(list).some(isShellSandboxBlocked)) {
+            list._kageSandboxRevealed = true;
+            setShellListOpen(chip, list, true);
+        }
+    }
 }

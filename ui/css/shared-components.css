@@ -2847,6 +2847,61 @@ body.light-theme .conn-edit-actions {
     display: none;
 }
 
+/* The agent's own sandbox refused the command (shell-commands.js
+   shellSandboxDenial): a notice right under the header, open or not, with
+   Copy command / Copy & open Terminal. Its text is translated, so it takes
+   its own direction (dir="auto" on the notice, text-align: start). */
+.shell-cmd[data-sandbox] .shell-cmd-header {
+    border-radius: 7px 7px 0 0;
+}
+.shell-cmd-sandbox {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--kage-term-mark-border);
+    background: var(--kage-term-mark-bg);
+    color: var(--kage-term-text);
+    font-family: var(--kage-font);
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: start;
+}
+.shell-cmd-sandbox-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--kage-term-mark);
+    font-weight: 600;
+}
+.shell-cmd-sandbox-text {
+    margin: 0;
+}
+.shell-cmd-sandbox-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.shell-cmd-sandbox-actions[hidden] {
+    display: none;
+}
+.shell-cmd-open-terminal:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+.shell-cmd-sandbox-status {
+    color: var(--kage-term-muted);
+    font-size: 11px;
+}
+/* Kept rendered while empty (a live region must exist before it's
+   updated); cancel the column gap it would add. */
+.shell-cmd-sandbox-status:empty {
+    margin-top: -6px;
+}
+.shell-cmd-sandbox-status.is-error {
+    color: var(--kage-term-error);
+}
+
 /* "shell ×N" chip: a toggle for the response's command list. */
 .tool-sources-static {
     display: contents;

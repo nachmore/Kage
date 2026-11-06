@@ -9364,5 +9364,41 @@
     "description": "Date-picker footer hint when the installed Calendar extension is too old to support the month calendar",
     "_machine_translated": true,
     "_source_hash": "be6573cadb5adc4c"
+  },
+  "shared.shell.sandbox.title": {
+    "message": "Agentin hiekkalaatikko esti komennon",
+    "description": "Heading of a notice under a failed shell command block. The AI agent (a separate program Kage talks to) runs every shell command inside its own security sandbox, and that sandbox refused this command. 'Sandbox' is the security term.",
+    "_machine_translated": true,
+    "_source_hash": "56759a9610c65640"
+  },
+  "shared.shell.sandbox.body": {
+    "message": "Agentti suorittaa komennot omassa hiekkalaatikossaan, ja hiekkalaatikko pysäytti tämän komennon. Hyväksyminen Kagessa ei muuta tätä – suorita komento itse päätteessä.",
+    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "5533adcf5b846d08"
+  },
+  "shared.shell.sandbox.open_terminal": {
+    "message": "Kopioi ja avaa pääte",
+    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS, Windows Terminal on Windows), without typing or running anything. 'Terminal' is the terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "ea62cd7887f4cfcd"
+  },
+  "shared.shell.sandbox.copied_paste": {
+    "message": "Kopioitu. Suorita komento liittämällä se päätteeseen.",
+    "description": "Shown in the sandbox notice after the command was copied and the terminal app opened. 'it' is the shell command.",
+    "_machine_translated": true,
+    "_source_hash": "57533e6dc28a0004"
+  },
+  "shared.shell.sandbox.copy_failed": {
+    "message": "Komentoa ei voitu kopioida.",
+    "description": "Shown in the sandbox notice when copying a blocked shell command to the clipboard failed (the terminal is then not opened)",
+    "_machine_translated": true,
+    "_source_hash": "0fb7f93c55db8fcf"
+  },
+  "shared.shell.sandbox.open_failed": {
+    "message": "Komento on kopioitu, mutta päätettä ei voitu avata: {error}",
+    "description": "Shown in the sandbox notice when the command was copied to the clipboard but opening the terminal app failed. {error} is the error message from the system.",
+    "_machine_translated": true,
+    "_source_hash": "b9fb9ef18bdf1274"
   }
 }

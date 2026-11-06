@@ -9364,5 +9364,41 @@
     "description": "Date-picker footer hint when the installed Calendar extension is too old to support the month calendar",
     "_machine_translated": true,
     "_source_hash": "be6573cadb5adc4c"
+  },
+  "shared.shell.sandbox.title": {
+    "message": "已被代理程式的沙盒封鎖",
+    "description": "Heading of a notice under a failed shell command block. The AI agent (a separate program Kage talks to) runs every shell command inside its own security sandbox, and that sandbox refused this command. 'Sandbox' is the security term.",
+    "_machine_translated": true,
+    "_source_hash": "56759a9610c65640"
+  },
+  "shared.shell.sandbox.body": {
+    "message": "代理程式會在自己的沙盒中執行指令，而該沙盒阻止了這個指令。在 Kage 中核准也無法改變這一點——請自行在終端機中執行此指令。",
+    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "5533adcf5b846d08"
+  },
+  "shared.shell.sandbox.open_terminal": {
+    "message": "複製並開啟終端機",
+    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS, Windows Terminal on Windows), without typing or running anything. 'Terminal' is the terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "ea62cd7887f4cfcd"
+  },
+  "shared.shell.sandbox.copied_paste": {
+    "message": "已複製。請貼到終端機中執行。",
+    "description": "Shown in the sandbox notice after the command was copied and the terminal app opened. 'it' is the shell command.",
+    "_machine_translated": true,
+    "_source_hash": "57533e6dc28a0004"
+  },
+  "shared.shell.sandbox.copy_failed": {
+    "message": "無法複製指令。",
+    "description": "Shown in the sandbox notice when copying a blocked shell command to the clipboard failed (the terminal is then not opened)",
+    "_machine_translated": true,
+    "_source_hash": "0fb7f93c55db8fcf"
+  },
+  "shared.shell.sandbox.open_failed": {
+    "message": "指令已複製，但無法開啟終端機：{error}",
+    "description": "Shown in the sandbox notice when the command was copied to the clipboard but opening the terminal app failed. {error} is the error message from the system.",
+    "_machine_translated": true,
+    "_source_hash": "b9fb9ef18bdf1274"
   }
 }

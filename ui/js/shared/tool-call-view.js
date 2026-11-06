@@ -994,9 +994,10 @@ export function syncToolCallLists(container, toolUsages) {
  * list per other tool, then extension-tool chips and source chips (one
  * wrapper, re-rendered each time). Everything but that wrapper is
  * reconciled in place. Pair with `attachSourceClickHandler(container,
- * invoke)` for the source links.
+ * invoke)` for the source links. `opts` goes to `syncShellCommandList`
+ * (`revealSandboxBlocked` for a response drawn whole, e.g. from history).
  */
-export function renderToolSources(container, toolUsages, toolSources) {
+export function renderToolSources(container, toolUsages, toolSources, opts = {}) {
     if (!container) return;
     const usages = Array.isArray(toolUsages) ? toolUsages : [];
     let chips = container.querySelector(':scope > .tool-sources-static');
@@ -1009,7 +1010,7 @@ export function renderToolSources(container, toolUsages, toolSources) {
     chips.innerHTML =
         renderToolChipsHtml(usages.filter((u) => !u?.shell && !u?.call)) +
         renderSourceChipsHtml(Array.isArray(toolSources) ? toolSources : []);
-    syncShellCommandList(container, usages);
+    syncShellCommandList(container, usages, opts);
     syncToolCallLists(container, usages);
 }
 

@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { marked } from 'marked';
 import { isShellCommandExpanded, setShellCommandExpanded } from '../../ui/js/shared/shell-command-view.js';
+import { buildHistoryTools } from '../../ui/js/shared/tool-call-history.js';
 
 let ChatApp;
 beforeAll(async () => {
@@ -125,6 +126,70 @@ describe('chat window shell commands', () => {
         expect(document.querySelectorAll('.shell-cmd')).toHaveLength(1);
         expect(listBlocks()[0]).toBe(live);
         expect(isShellCommandExpanded(live)).toBe(true);
+    });
+
+    it("keeps a command the agent's sandbox blocked in view, then lists it open in the message", async () => {
+        const app = makeApp();
+        chunk(app, 'Installing…');
+        start(app, 'a', 'brew install --cask betterdisplay');
+        tool(app, {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'a',
+            status: 'completed',
+            rawOutput: {
+                items: [
+                    {
+                        Json: {
+                            exit_status: 'exit status: 1',
+                            stdout: '',
+                            stderr: 'sandbox-exec: sandbox_apply: Operation not permitted\nError: betterdisplay: Download failed',
+                        },
+                    },
+                ],
+            },
+        });
+        const live = slot().querySelector('.shell-cmd');
+        expect(live.querySelector('.shell-cmd-sandbox')).not.toBeNull();
+        chunk(app, ' The install was blocked.');
+        expect(slot().querySelector('.shell-cmd')).toBe(live);
+        await completeTurn(app);
+
+        expect(slot()).toBeNull();
+        expect(listBlocks()).toEqual([live]);
+        expect(message().querySelector('.shell-cmd-list').hidden).toBe(false);
+        expect(document.querySelectorAll('.shell-cmd-sandbox')).toHaveLength(1);
+    });
+
+    it('a reopened session shows the same notice, its list open', () => {
+        const app = makeApp();
+        const { tools } = buildHistoryTools(
+            [{ toolUseId: 'h1', name: 'shell', input: { command: 'brew install --cask betterdisplay' } }],
+            new Map([
+                [
+                    'h1',
+                    {
+                        toolUseId: 'h1',
+                        status: 'error',
+                        content: [
+                            {
+                                kind: 'json',
+                                data: {
+                                    exit_status: 'exit status: 1',
+                                    stdout: '',
+                                    stderr: 'sandbox-exec: sandbox_apply: Operation not permitted',
+                                },
+                            },
+                        ],
+                    },
+                ],
+            ]),
+            new Map([['h1', { builtin: 'ExecuteCmd' }]])
+        );
+        document.querySelector('.message.assistant')?.remove();
+        app.addMessageFromHistory('assistant', 'It was blocked.', null, null, tools);
+        expect(message().querySelector('.shell-cmd-list').hidden).toBe(false);
+        expect(listBlocks()).toHaveLength(1);
+        expect(listBlocks()[0].querySelector('.shell-cmd-sandbox')).not.toBeNull();
     });
 
     it('stopping the response settles running commands', () => {

@@ -28,6 +28,7 @@ const ICONS = Object.freeze({
     mcp: '<path d="M9 2v6"/><path d="M15 2v6"/><path d="M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v4"/>',
     think: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V16h8v-1.3A7 7 0 0 0 12 2z"/>',
     other: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
 });
 
 export function el(tag, className) {
@@ -49,7 +50,8 @@ export function layoutChanged(node) {
     node.dispatchEvent(new CustomEvent(TOOL_LAYOUT_EVENT, { bubbles: true }));
 }
 
-function writeClipboard(text) {
+/** Put `text` on the clipboard; resolves to whether that worked. */
+export function writeClipboard(text) {
     try {
         const p = navigator.clipboard?.writeText(text);
         return p ? p.then(() => true).catch(() => false) : Promise.resolve(false);

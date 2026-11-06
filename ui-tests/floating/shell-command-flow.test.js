@@ -147,6 +147,39 @@ describe('floating window shell commands', () => {
         expect(row().querySelector('.shell-cmd-list').hidden).toBe(false);
     });
 
+    it("keeps a command the agent's sandbox blocked in view, live and after the turn", async () => {
+        const app = makeApp();
+        chunk(app, 'Installing…');
+        start(app, 'a', 'brew install --cask betterdisplay');
+        tool(app, {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'a',
+            status: 'completed',
+            rawOutput: {
+                items: [
+                    {
+                        Json: {
+                            exit_status: 'exit status: 1',
+                            stdout: '',
+                            stderr: 'sandbox-exec: sandbox_apply: Operation not permitted\nError: betterdisplay: Download failed',
+                        },
+                    },
+                ],
+            },
+        });
+        const live = slotBlocks()[0];
+        expect(live.querySelector('.shell-cmd-sandbox')).not.toBeNull();
+        // Text resuming drops finished blocks from the slot — not this one.
+        chunk(app, ' The install was blocked.');
+        expect(slotBlocks()).toEqual([live]);
+        await completeTurn(app);
+
+        expect(slot()).toBeNull();
+        expect(listBlocks()).toEqual([live]);
+        expect(row().querySelector('.shell-cmd-list').hidden).toBe(false);
+        expect(document.querySelectorAll('.shell-cmd-sandbox')).toHaveLength(1);
+    });
+
     it('moves a call whose kind arrives late from the plain chip to the shell chip', async () => {
         const app = makeApp();
         chunk(app, 'Let me check.');

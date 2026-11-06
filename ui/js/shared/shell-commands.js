@@ -751,6 +751,121 @@ export function shellCallState(record) {
     return record.settled ? 'unknown' : 'running';
 }
 
+// --- Agent sandbox denials -------------------------------------------------
+
+// Agents run shell commands inside a sandbox of their own (kiro-cli behind
+// a managed wrapper, Codex with Seatbelt / Landlock, Claude Code's sandbox
+// runtime). A command it blocks can work fine in the user's own terminal,
+// and Kage's tool approvals can't change that — so a failure that is
+// unmistakably the agent's sandbox gets a notice (shell-command-view.js).
+//
+// Only text a failing command doesn't print in a terminal counts. A bare
+// "Operation not permitted" / "Permission denied" never does: SIP, privacy
+// (TCC) prompts, file modes and root-owned paths fail exactly the same way
+// outside any sandbox. Signatures are matched at the start of a line (after
+// at most a few `name: ` prefixes such as `Error: `), so the same text
+// quoted inside other output — a grep hit, a test diff, a log line with a
+// timestamp in front — doesn't count either.
+
+// Up to four `name: ` prefixes (`Error: `, `brew: `, `sandbox error: `).
+// The class has no `:`, so each prefix ends at its own colon: no
+// backtracking blow-up on long lines.
+const LINE_PREFIX = String.raw`^[ \t]*(?:[A-Za-z][\w .-]{0,40}: ){0,4}`;
+
+const SANDBOX_SIGNATURES = Object.freeze([
+    // macOS Seatbelt, nested: the command (Homebrew, `swift build`, …)
+    // tried to apply its own sandbox-exec profile inside the agent's
+    // sandbox, which macOS refuses: "sandbox-exec: sandbox_apply: Operation
+    // not permitted". In a terminal the same profile applies fine.
+    {
+        reason: 'seatbelt',
+        re: new RegExp(`${LINE_PREFIX}sandbox_apply\\w*: Operation not permitted`, 'm'),
+    },
+    // A Seatbelt violation report: "Sandbox: curl(4242) deny(1)
+    // network-outbound …". The system log prints these with a timestamp
+    // first (that's what Homebrew's own build sandbox shows in verbose
+    // mode), which doesn't match.
+    {
+        reason: 'seatbelt',
+        re: /^[ \t]*Sandbox: [^\n()]{1,80}\(\d+\) deny\(\d+\) [a-z][\w*-]*/m,
+    },
+    // Claude Code's sandbox runtime appends what it denied to stderr as a
+    // <sandbox_violations> … </sandbox_violations> block.
+    {
+        reason: 'sandbox-runtime',
+        re: /^[ \t]*<sandbox_violations>[ \t]*\n[\s\S]*?^[ \t]*<\/sandbox_violations>/m,
+    },
+    // …and its network proxy tags a refused request (curl -i / -v).
+    {
+        reason: 'sandbox-runtime',
+        re: /^[ \t]*(?:< )?X-Proxy-Error: blocked-by-sandbox-runtime\b/im,
+    },
+    // bubblewrap (Linux sandboxes, Flatpak) failing to set up its
+    // namespaces — what a nested bwrap gets inside another sandbox.
+    {
+        reason: 'bubblewrap',
+        re: new RegExp(
+            '^[ \\t]*bwrap: (?:setting up [ug]id map|error writing to setgroups|' +
+                'Creating new namespace failed|No permissions to create (?:a )?new namespace|' +
+                'unshare (?:user|pid) ns|Setting userns2 failed|Failed to make / r?slave|' +
+                "Can't mount proc|mounting proc|pivot_root|loopback: Failed RTM_NEWADDR)",
+            'm'
+        ),
+    },
+    // Codex's own sandbox errors (codex-rs/protocol/src/error.rs).
+    {
+        reason: 'codex',
+        re: new RegExp(
+            `${LINE_PREFIX}(?:sandbox denied exec error|` +
+                'Landlock was not able to fully enforce all sandbox rules)',
+            'm'
+        ),
+    },
+]);
+
+const SANDBOX_LINE_MAX = 200;
+
+/**
+ * Whether command output shows the agent's own sandbox refusing the
+ * command: `{ reason, line }` — `reason` one of `seatbelt`,
+ * `sandbox-runtime`, `bubblewrap`, `codex`; `line` the (first) matching
+ * line, trimmed and clipped — or `null`. Pure; high precision by design
+ * (see above): plain permission errors never match. Callers decide that
+ * the command failed (`shellSandboxDenial`).
+ */
+export function detectSandboxDenial(output) {
+    if (typeof output !== 'string' || !output) return null;
+    const text =
+        output.includes(ESC) || output.includes('\r') ? sanitizeTerminalText(output) : output;
+    for (const { reason, re } of SANDBOX_SIGNATURES) {
+        const m = re.exec(text);
+        if (!m) continue;
+        // Every signature is anchored at a line start: report that line.
+        const start = text.lastIndexOf('\n', m.index) + 1;
+        const nl = text.indexOf('\n', m.index);
+        const end = Math.min(nl === -1 ? text.length : nl, start + SANDBOX_LINE_MAX * 2);
+        const line = text.slice(start, safeCut(text, end)).trim();
+        return { reason, line: line.slice(0, safeCut(line, SANDBOX_LINE_MAX)) };
+    }
+    return null;
+}
+
+/**
+ * `detectSandboxDenial` for a record: only a failed call counts, and its
+ * stored output (stderr first, head and tail of each) is what's checked.
+ */
+export function shellSandboxDenial(record) {
+    if (shellCallState(record) !== 'failed') return null;
+    const out = shellOutputOf(record);
+    if (!out) return null;
+    for (const seg of [out.stderr, out.stdout]) {
+        if (!seg) continue;
+        const hit = detectSandboxDenial(seg.head) || detectSandboxDenial(seg.tail);
+        if (hit) return hit;
+    }
+    return null;
+}
+
 /** Shell records of a response's tool usages, in call order. */
 export function getShellCalls(toolUsages) {
     if (!Array.isArray(toolUsages)) return [];

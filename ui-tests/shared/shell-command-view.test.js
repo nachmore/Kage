@@ -13,6 +13,7 @@ import {
     finishShellActivity,
     handOffShellActivity,
     isShellCommandExpanded,
+    isShellSandboxBlocked,
     pruneShellActivity,
     setShellCommandExpanded,
     SHELL_LAYOUT_EVENT,
@@ -568,5 +569,242 @@ describe('tool sources chip row', () => {
         container.querySelector('.shell-chip').click();
         expect(container.querySelector('img')).toBeNull();
         expect(container.querySelector('.shell-cmd-text').textContent).toBe(XSS);
+    });
+});
+
+describe('agent sandbox notice', () => {
+    const SANDBOXED = [
+        'sandbox-exec: sandbox_apply: Operation not permitted',
+        'Error: betterdisplay: Download failed',
+    ].join('\n');
+    const BREW = 'brew install --cask betterdisplay';
+
+    function blocked(state, id = 'a', command = BREW) {
+        const rec = startShell(state, id, command);
+        complete(state, id, '==> Downloading …', { exit: 1, stderr: SANDBOXED });
+        return rec;
+    }
+
+    const notice = (block) => block.querySelector('.shell-cmd-sandbox');
+    const openTerminalBtn = (block) => block.querySelector('.shell-cmd-open-terminal');
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    let writeText;
+    beforeEach(() => {
+        writeText = vi.fn(() => Promise.resolve());
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    });
+    afterEach(() => {
+        delete window.__TAURI__;
+    });
+
+    it('explains a command the agent sandbox blocked, without expanding the block', () => {
+        const state = makeState();
+        const block = createShellCommandBlock(blocked(state));
+        expect(isShellSandboxBlocked(block)).toBe(true);
+        expect(block.dataset.sandbox).toBe('seatbelt');
+        const n = notice(block);
+        expect(n).not.toBeNull();
+        // Under the header, outside the collapsed panel.
+        expect(header(block).nextElementSibling).toBe(n);
+        expect(panel(block).hidden).toBe(true);
+        expect(n.querySelector('.shell-cmd-sandbox-title').textContent).toBe(
+            'shared.shell.sandbox.title'
+        );
+        expect(n.querySelector('.shell-cmd-sandbox-text').textContent).toBe(
+            'shared.shell.sandbox.body'
+        );
+        // Translated text takes its own direction inside the LTR block: the
+        // notice decides it, from text without a `dir` of its own.
+        expect(block.dir).toBe('ltr');
+        expect(n.dir).toBe('auto');
+        expect(n.querySelector('.shell-cmd-sandbox-text').hasAttribute('dir')).toBe(false);
+        expect(n.querySelector('.shell-cmd-sandbox-title span').hasAttribute('dir')).toBe(false);
+        expect(header(block).getAttribute('aria-describedby')).toBe(
+            n.querySelector('.shell-cmd-sandbox-title').id
+        );
+        expect(n.querySelector('[role="status"]')).not.toBeNull();
+    });
+
+    it('shows nothing for a success, a plain permission error, or a running command', () => {
+        const state = makeState();
+        startShell(state, 'ok', 'cat build.log');
+        complete(state, 'ok', SANDBOXED, { exit: 0 });
+        startShell(state, 'perm', 'touch /System/x');
+        complete(state, 'perm', '', { exit: 1, stderr: 'touch: /System/x: Operation not permitted' });
+        startShell(state, 'run', BREW);
+        for (const u of state.toolUsages) {
+            const block = createShellCommandBlock(u.shell);
+            expect(notice(block), u.toolCallId).toBeNull();
+            expect(isShellSandboxBlocked(block)).toBe(false);
+        }
+    });
+
+    it('appears when the failure arrives and goes if the record stops matching', () => {
+        const state = makeState();
+        const rec = startShell(state, 'a', BREW);
+        const block = createShellCommandBlock(rec);
+        const onLayout = vi.fn();
+        document.body.append(block);
+        block.addEventListener(SHELL_LAYOUT_EVENT, onLayout);
+        expect(notice(block)).toBeNull();
+        complete(state, 'a', '', { exit: 1, stderr: SANDBOXED });
+        updateShellCommandBlock(block, rec);
+        expect(notice(block)).not.toBeNull();
+        expect(onLayout).toHaveBeenCalled();
+        complete(state, 'a', 'retried fine', { exit: 0 });
+        updateShellCommandBlock(block, rec);
+        expect(notice(block)).toBeNull();
+        expect(block.dataset.sandbox).toBeUndefined();
+        expect(header(block).hasAttribute('aria-describedby')).toBe(false);
+    });
+
+    it('Copy command copies exactly the command', async () => {
+        const state = makeState();
+        const cmd = 'brew install --cask betterdisplay && echo "done"';
+        const block = createShellCommandBlock(blocked(state, 'a', cmd));
+        notice(block).querySelector('.shell-cmd-copy:not(.shell-cmd-open-terminal)').click();
+        expect(writeText).toHaveBeenCalledWith(cmd);
+    });
+
+    it('Copy & open Terminal copies, then only opens the terminal app', async () => {
+        const invoke = vi.fn(() => Promise.resolve());
+        window.__TAURI__ = { core: { invoke } };
+        const state = makeState();
+        const block = createShellCommandBlock(blocked(state));
+        openTerminalBtn(block).click();
+        await flush();
+        await flush();
+        expect(writeText).toHaveBeenCalledWith(BREW);
+        expect(invoke).toHaveBeenCalledTimes(1);
+        // A constant: no part of the command reaches the backend.
+        expect(invoke).toHaveBeenCalledWith('execute_system_command', { commandId: 'terminal' });
+        const status = notice(block).querySelector('.shell-cmd-sandbox-status');
+        expect(status.textContent).toBe('shared.shell.sandbox.copied_paste');
+        expect(status.classList.contains('is-error')).toBe(false);
+    });
+
+    it('opens one terminal per click, even when clicked again before it opened', async () => {
+        let release;
+        const invoke = vi.fn(() => new Promise((r) => (release = r)));
+        window.__TAURI__ = { core: { invoke } };
+        const state = makeState();
+        const block = createShellCommandBlock(blocked(state));
+        const btn = openTerminalBtn(block);
+        btn.click();
+        await flush();
+        expect(btn.disabled).toBe(true);
+        btn.click();
+        await flush();
+        expect(invoke).toHaveBeenCalledTimes(1);
+        release();
+        await flush();
+        expect(btn.disabled).toBe(false);
+    });
+
+    it('does not open the terminal when copying failed', async () => {
+        writeText.mockImplementation(() => Promise.reject(new Error('denied')));
+        const invoke = vi.fn(() => Promise.resolve());
+        window.__TAURI__ = { core: { invoke } };
+        const state = makeState();
+        const block = createShellCommandBlock(blocked(state));
+        openTerminalBtn(block).click();
+        await flush();
+        await flush();
+        expect(invoke).not.toHaveBeenCalled();
+        const status = notice(block).querySelector('.shell-cmd-sandbox-status');
+        expect(status.textContent).toBe('shared.shell.sandbox.copy_failed');
+        expect(status.classList.contains('is-error')).toBe(true);
+    });
+
+    it('reports a failure to open the terminal through errMessage (AppError objects)', async () => {
+        const invoke = vi.fn(() =>
+            Promise.reject({ kind: 'internal', message: 'Failed to execute: wt.exe not found' })
+        );
+        window.__TAURI__ = { core: { invoke } };
+        const state = makeState();
+        const block = createShellCommandBlock(blocked(state));
+        openTerminalBtn(block).click();
+        await flush();
+        await flush();
+        const status = notice(block).querySelector('.shell-cmd-sandbox-status');
+        // t() returns the key in tests; the params never stringify to [object Object].
+        expect(status.textContent).toBe('shared.shell.sandbox.open_failed');
+        expect(status.classList.contains('is-error')).toBe(true);
+    });
+
+    it('offers no actions when only the title is known', () => {
+        const state = makeState();
+        const rec = feed(state, {
+            sessionUpdate: 'tool_call',
+            toolCallId: 't',
+            title: 'shell',
+            kind: 'execute',
+            status: 'in_progress',
+        });
+        complete(state, 't', '', { exit: 1, stderr: SANDBOXED });
+        const block = createShellCommandBlock(rec);
+        expect(notice(block)).not.toBeNull();
+        expect(notice(block).querySelector('.shell-cmd-sandbox-actions').hidden).toBe(true);
+    });
+
+    it('keeps the command text as text', () => {
+        const state = makeState();
+        const block = createShellCommandBlock(blocked(state, 'x', XSS));
+        expect(block.querySelector('img')).toBeNull();
+        expect(block.querySelector('.shell-cmd-text').textContent).toBe(XSS);
+    });
+
+    it('stays in the activity slot, and opens the list it is handed off to', () => {
+        const state = makeState();
+        const slot = createShellActivitySlot();
+        const container = document.createElement('div');
+        document.body.append(slot, container);
+        const a = blocked(state, 'a');
+        const live = showShellActivity(slot, a);
+        // The next command, and text resuming, would drop a plain finished block.
+        const b = startShell(state, 'b', 'echo next');
+        showShellActivity(slot, b);
+        complete(state, 'b', 'next');
+        showShellActivity(slot, b);
+        pruneShellActivity(slot);
+        expect([...slot.children]).toEqual([live]);
+
+        finishShellActivity(slot, state.toolUsages);
+        expect(slot.firstElementChild).toBe(live);
+        renderToolSources(container, state.toolUsages, []);
+        // While the turn streams the list stays shut (the block is in the slot).
+        expect(container.querySelector('.shell-cmd-list').hidden).toBe(true);
+        handOffShellActivity(slot, container);
+        expect(slot.isConnected).toBe(false);
+        expect(container.querySelector('.shell-cmd-list').hidden).toBe(false);
+        expect(document.querySelectorAll('.shell-cmd-sandbox')).toHaveLength(1);
+        expect(container.querySelector('.shell-cmd-sandbox')).toBe(notice(live));
+    });
+
+    it('a response drawn whole (history) opens its list once', () => {
+        const state = makeState();
+        startShell(state, 'ok', 'brew --version');
+        complete(state, 'ok', 'Homebrew 4.6.0');
+        blocked(state, 'a');
+        const container = document.createElement('div');
+        renderToolSources(container, state.toolUsages, [], { revealSandboxBlocked: true });
+        const list = container.querySelector('.shell-cmd-list');
+        const chip = container.querySelector('.shell-chip');
+        expect(list.hidden).toBe(false);
+        expect(chip.getAttribute('aria-expanded')).toBe('true');
+        expect(list.querySelectorAll('.shell-cmd-sandbox')).toHaveLength(1);
+        // Closing it sticks across re-renders.
+        chip.click();
+        renderToolSources(container, state.toolUsages, [], { revealSandboxBlocked: true });
+        expect(list.hidden).toBe(true);
+    });
+
+    it('a live chip row leaves the list shut', () => {
+        const state = makeState();
+        blocked(state, 'a');
+        const container = document.createElement('div');
+        renderToolSources(container, state.toolUsages, []);
+        expect(container.querySelector('.shell-cmd-list').hidden).toBe(true);
     });
 });

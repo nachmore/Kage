@@ -70,6 +70,27 @@ All default to off. Trust mode, terminator mode and trusted commands show
 a warning in Settings when enabled; trusted MCP servers are listed there,
 each with a Revoke button (Reset revokes them all).
 
+## Approvals and the agent's own sandbox
+
+Kage's policies only decide whether Kage asks before the agent runs a
+tool. Many agents also run every shell command inside a sandbox of their
+own (macOS Seatbelt, Linux Landlock or bubblewrap, a managed wrapper
+around the agent), and nothing Kage approves changes what that sandbox
+lets through. A command can be approved and still fail with, say,
+`sandbox-exec: sandbox_apply: Operation not permitted` (Homebrew applying
+its own sandbox inside the agent's), where the same command works in the
+user's terminal.
+
+Kage never works around that sandbox and never runs the command outside
+the agent. `detectSandboxDenial` (`ui/js/shared/shell-commands.js`)
+recognises unmistakable sandbox signatures in a failed command's output —
+never a bare "Operation not permitted" or "Permission denied", which SIP,
+privacy prompts and file modes produce in a terminal too — and the command
+block then explains it and offers **Copy command** and **Copy & open
+Terminal** (copies, then opens the terminal app with nothing typed or run).
+The built-in steering (`src/builtin_steering.md`) tells the agent the same:
+stop, don't try to get around any sandbox, and give the user the command.
+
 ## MCP server identification
 
 ACP's `ToolCall` has no MCP server field, and no agent we've seen sends a

@@ -467,7 +467,10 @@ export function createSessionHistoryMixin(dependencies) {
                     const sourcesEl = document.createElement('div');
                     sourcesEl.className = 'tool-sources';
                     contentDiv.appendChild(sourcesEl);
-                    renderToolSources(sourcesEl, usages, sources);
+                    // Drawn whole: a command the agent's sandbox blocked
+                    // opens its list so the notice shows (live turns do it
+                    // when the turn ends).
+                    renderToolSources(sourcesEl, usages, sources, { revealSandboxBlocked: true });
                     attachSourceClickHandler(sourcesEl, this.invoke);
                 }
             } else {

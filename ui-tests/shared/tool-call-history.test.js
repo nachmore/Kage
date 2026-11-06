@@ -217,6 +217,37 @@ describe('buildRenderQueue with tool calls', () => {
         expect(container.querySelector('.tool-sources-static a.source-chip[data-url]')).not.toBeNull();
     });
 
+    it("a reopened command the agent's sandbox blocked shows its notice, list open", () => {
+        const log = [
+            prompt('p1', 'Install BetterDisplay'),
+            assistant('a1', use('t_brew', 'shell', { command: 'brew install --cask betterdisplay' })),
+            results(
+                'r1',
+                [
+                    result(
+                        't_brew',
+                        'error',
+                        jsonOut({
+                            exit_status: 'exit status: 1',
+                            stdout: '==> Downloading https://example.com/BetterDisplay.dmg',
+                            stderr: 'sandbox-exec: sandbox_apply: Operation not permitted\nError: betterdisplay: Download failed',
+                        })
+                    ),
+                ],
+                { t_brew: { builtin: 'ExecuteCmd' } }
+            ),
+            assistant('a2', text('The agent sandbox blocked the install.')),
+        ];
+        const queue = buildRenderQueue(log, {}, {}, noImages);
+        const tools = queue.find((i) => i.tools).tools;
+        const container = document.createElement('div');
+        renderToolSources(container, tools.toolUsages, tools.toolSources, { revealSandboxBlocked: true });
+        expect(container.querySelector('.shell-cmd-list').hidden).toBe(false);
+        const block = container.querySelector('.shell-cmd');
+        expect(block.dataset.sandbox).toBe('seatbelt');
+        expect(block.querySelector('.shell-cmd-sandbox')).not.toBeNull();
+    });
+
     it('an MCP tool without a logged server is a plain tool, never guessed', () => {
         const msgs = [
             prompt('p', 'q'),

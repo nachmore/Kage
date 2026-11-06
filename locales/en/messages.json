@@ -4457,6 +4457,30 @@
     "message": "Copied",
     "description": "Briefly replaces a copy button's label after copying succeeded"
   },
+  "shared.shell.sandbox.title": {
+    "message": "Blocked by the agent's sandbox",
+    "description": "Heading of a notice under a failed shell command block. The AI agent (a separate program Kage talks to) runs every shell command inside its own security sandbox, and that sandbox refused this command. 'Sandbox' is the security term."
+  },
+  "shared.shell.sandbox.body": {
+    "message": "The agent runs commands inside its own sandbox, and that sandbox stopped this one. Approving it in Kage can't change that — run the command yourself in a terminal.",
+    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app."
+  },
+  "shared.shell.sandbox.open_terminal": {
+    "message": "Copy & open Terminal",
+    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS, Windows Terminal on Windows), without typing or running anything. 'Terminal' is the terminal app."
+  },
+  "shared.shell.sandbox.copied_paste": {
+    "message": "Copied. Paste it into the terminal to run it.",
+    "description": "Shown in the sandbox notice after the command was copied and the terminal app opened. 'it' is the shell command."
+  },
+  "shared.shell.sandbox.copy_failed": {
+    "message": "Couldn't copy the command.",
+    "description": "Shown in the sandbox notice when copying a blocked shell command to the clipboard failed (the terminal is then not opened)"
+  },
+  "shared.shell.sandbox.open_failed": {
+    "message": "The command is copied, but the terminal didn't open: {error}",
+    "description": "Shown in the sandbox notice when the command was copied to the clipboard but opening the terminal app failed. {error} is the error message from the system."
+  },
   "shared.tool.chip_title": {
     "message": "{count, plural, one {# call to {name}} other {# calls to {name}}}",
     "description": "Tooltip / accessible name of a tool's chip under an agent response; clicking it shows or hides the list of those calls. {count} is how many times the agent used the tool in that response, {name} the tool's name (an identifier such as 'read' or 'grep') or a kind of tool such as 'edit'."
