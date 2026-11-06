@@ -17,8 +17,9 @@ afterEach(() => {
 });
 
 function fixture(interval = 10_000) {
-    const config = { extension_states: { ext: true }, extensions: { ext: {} } };
+    const config = { extension_states: { ext: true }, extensions: { ext: { interval } } };
     const mgr = new ExtensionManager(vi.fn(async (cmd) => cmd === 'get_config' ? config : null));
+    mgr._configCache = structuredClone(config);
     managers.push(mgr);
     let ms = interval;
     const render = vi.fn(async () => ({ html: '<div>watchlist</div>' }));
@@ -42,7 +43,10 @@ function fixture(interval = 10_000) {
         await vi.advanceTimersByTimeAsync(0);
         return mgr._widgetInstances.get('ext:watchlist');
     };
-    return { mgr, ext, widget, config, slot, mount, render, readInterval, setInterval: (value) => { ms = value; } };
+    return { mgr, ext, widget, config, slot, mount, render, readInterval, setInterval: (value) => {
+        ms = value;
+        config.extensions.ext.interval = value;
+    } };
 }
 
 describe('widget slots and refresh lifecycle', () => {
@@ -110,6 +114,102 @@ describe('widget slots and refresh lifecycle', () => {
         expect(f.render).toHaveBeenCalledTimes(2);
     });
 
+    it('forces a fresh repaint after one second without postponing the 15-second poll', async () => {
+        const f = fixture(15_000);
+        await vi.advanceTimersByTimeAsync(1);
+        const ctrl = await f.mount();
+        const timer = ctrl.timer;
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(ctrl.lastSuccessRenderAt).toBe(1);
+        // A real successful paint (hasRendered), rather than a seeded empty controller.
+        await f.mgr.renderAllWidgets({ force: true });
+        expect(f.render).toHaveBeenCalledTimes(2);
+        expect(ctrl.lastSuccessRenderAt).toBe(1_001);
+        expect(ctrl.timer).toBe(timer);
+        await vi.advanceTimersByTimeAsync(13_999);
+        expect(f.render).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(f.render).toHaveBeenCalledTimes(3);
+    });
+
+    it.each([60_000, 300_000])('refreshes %ims content on show after five seconds, debouncing rapid summons', async (interval) => {
+        const f = fixture(interval);
+        await f.mount();
+        await f.mgr.setWidgetVisibility(false);
+        await vi.advanceTimersByTimeAsync(5_000);
+        await f.mgr.setWidgetVisibility(true);
+        expect(f.render).toHaveBeenCalledTimes(2);
+        for (let i = 0; i < 10; i++) {
+            await f.mgr.setWidgetVisibility(false);
+            await vi.advanceTimersByTimeAsync(100);
+            await f.mgr.setWidgetVisibility(true);
+        }
+        expect(f.render).toHaveBeenCalledTimes(2);
+        expect(vi.getTimerCount()).toBe(1);
+    });
+
+    it('does no widget or sandbox config work for an unrelated save or equivalent effective config', async () => {
+        const f = fixture();
+        await f.mount();
+        f.config.tool_permissions = { server: { trusted: true } };
+        await f.mgr.onConfigUpdate();
+        f.config.extensions.ext = { enabled: false, __scratch: 'ignored', interval: 10_000 };
+        await f.mgr.onConfigUpdate();
+        expect(f.render).toHaveBeenCalledTimes(1);
+        expect(f.readInterval).toHaveBeenCalledTimes(1);
+        expect(f.ext.sandbox.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('does not refresh when nested config objects only change key order', async () => {
+        const f = fixture();
+        f.config.extensions.ext.options = { a: 1, b: [2] };
+        f.mgr._configCache = structuredClone(f.config);
+        await f.mount();
+        await f.mgr.onConfigUpdate();
+        f.config.extensions.ext.options = { b: [2], a: 1 };
+        await f.mgr.onConfigUpdate();
+        expect(f.render).toHaveBeenCalledTimes(1);
+        expect(f.readInterval).toHaveBeenCalledTimes(1);
+        expect(f.ext.sandbox.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it.each(['interval', 'render'])('does not await a pending widget %s RPC on a changed config', async (pending) => {
+        const f = fixture();
+        await f.mount();
+        let release;
+        const rpc = pending === 'interval' ? f.readInterval : f.render;
+        rpc.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+        f.config.extensions.ext.label = 'changed';
+        await f.mgr.onConfigUpdate();
+        expect(release).toBeTypeOf('function');
+        expect(f.ext.sandbox.updateConfig).toHaveBeenCalledTimes(1);
+        release(pending === 'interval' ? 10_000 : { html: 'updated' });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(f.render).toHaveBeenCalledTimes(2);
+    });
+
+    it('refreshes only the widget whose extension config changed', async () => {
+        const f = fixture();
+        await f.mount();
+        const otherRender = vi.fn(async () => ({ html: 'other' }));
+        const other = {
+            manifest: { id: 'other', contributes: { widgets: [f.widget] } },
+            sandbox: {
+                widgetIds: ['watchlist'],
+                updateConfig: vi.fn(async () => {}),
+                call: vi.fn(async (method) => method === 'renderWidget' ? otherRender() : 10_000),
+            },
+        };
+        f.mgr.extensions.set('other', other);
+        await f.mgr._mountWidget('other', other, f.widget);
+        f.config.extensions.ext.label = 'changed';
+        await f.mgr.onConfigUpdate();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(f.render).toHaveBeenCalledTimes(2);
+        expect(otherRender).toHaveBeenCalledTimes(1);
+        expect(other.sandbox.updateConfig).not.toHaveBeenCalled();
+    });
+
     it('also pauses and resumes on document visibility changes', async () => {
         const f = fixture();
         const ctrl = await f.mount();
@@ -149,6 +249,7 @@ describe('widget slots and refresh lifecycle', () => {
         const f = fixture(0);
         await f.mount();
         await f.mgr.setWidgetVisibility(false);
+        f.config.extensions.ext.label = 'changed';
         await f.mgr._onConfigUpdateOnce();
         expect(f.render).toHaveBeenCalledTimes(1);
         await f.mgr.setWidgetVisibility(true);
@@ -201,6 +302,7 @@ describe('widget slots and refresh lifecycle', () => {
         f.render.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
         const rendering = f.mgr._renderWidget(ctrl);
         await f.mgr.setWidgetVisibility(false);
+        f.config.extensions.ext.label = 'changed';
         await f.mgr._onConfigUpdateOnce();
         release({ html: '<div>old config</div>' });
         await rendering;

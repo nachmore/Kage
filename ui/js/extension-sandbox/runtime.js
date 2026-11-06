@@ -238,57 +238,81 @@ const runSandboxed = createSandboxedRunner({
 
 /** Map from relative-path string ("./cache.js") to blob URL, built at init time. */
 const sharedModuleBlobs = new Map();
+/** Failed bundle paths remain available for precise provider-level diagnostics. */
+const sharedModuleFailures = new Map();
 
 /**
  * Rewrite imports and re-exports to the final blob URL for the bundle path,
- * relative to the importing file. Unknown relative imports are left alone — they'll
- * simply fail to resolve (and the failure surfaces through the provider
- * load error path).
+ * relative to the importing file. Runtime callers supply the failure map to
+ * reject missing or failed dependencies before importing the provider.
  *
  * Exported as a pure function (taking the map explicitly) for unit
  * testing; the runtime path uses the module-level `sharedModuleBlobs`
  * instance.
  */
-export function rewriteRelativeImportsWith(source, blobMap, importer = './') {
-    if (!blobMap || blobMap.size === 0) return source;
-    return rewriteExtensionModules(source, blobMap, importer);
+export function rewriteRelativeImportsWith(source, blobMap, importer = './', failures) {
+    if (!failures && (!blobMap || blobMap.size === 0)) return source;
+    return rewriteExtensionModules(source, blobMap, importer, failures);
 }
 
-async function importFromSource(sourceText, kind, importer) {
-    // Rewrite relative imports first so the blob URL we build below
-    // references sibling blobs via their registered URLs.
-    const rewritten = rewriteRelativeImportsWith(sourceText, sharedModuleBlobs, importer);
-    // Build a blob URL we own so module specifier resolution stays local.
-    const blob = new Blob([rewritten], { type: 'application/javascript' });
-    const url = URL.createObjectURL(blob);
-    // We deliberately DON'T revoke this URL after the import resolves.
-    // Revoking while the engine still holds a reference to the module
-    // (for dynamic source-map fetches, debugger stepping, or late child
-    // import resolution in throttled iframes) races with Blink's same-
-    // origin check and produces the "Unsafe attempt to load URL ..."
-    // warning in the console. Blob URLs are cheap and die with the
-    // sandbox iframe when it's torn down, so leaking them for the
-    // lifetime of the extension is fine.
-    const mod = await import(/* @vite-ignore */ url);
-    if (!mod?.default) {
-        throw new Error(`${kind}: module has no default export`);
+export async function importFromSource(
+    sourceText,
+    kind,
+    importer = kind,
+    blobMap = sharedModuleBlobs,
+    failures = sharedModuleFailures
+) {
+    try {
+        // Rewrite relative imports first so the blob URL we build below
+        // references sibling blobs via their registered URLs.
+        const rewritten = rewriteRelativeImportsWith(sourceText, blobMap, importer, failures);
+        // Build a blob URL we own so module specifier resolution stays local.
+        const blob = new Blob([rewritten], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        // We deliberately DON'T revoke this URL after the import resolves.
+        // Revoking while the engine still holds a reference to the module
+        // (for dynamic source-map fetches, debugger stepping, or late child
+        // import resolution in throttled iframes) races with Blink's same-
+        // origin check and produces the "Unsafe attempt to load URL ..."
+        // warning in the console. Blob URLs are cheap and die with the
+        // sandbox iframe when it's torn down, so leaking them for the
+        // lifetime of the extension is fine.
+        const mod = await import(/* @vite-ignore */ url);
+        if (!mod?.default) {
+            throw new Error(`${kind}: module has no default export`);
+        }
+        return mod.default;
+    } catch (e) {
+        throw new Error(`${kind} '${importer}': ${e?.message || e}`);
     }
-    return mod.default;
 }
 
 /**
- * Build each blob once, in dependency order. Validate cycles before allocating
- * any URLs. Keep final URLs alive for the sandbox lifetime, including late
+ * Build each healthy blob once, in dependency order. Failed modules affect only
+ * their dependents. Keep final URLs alive for the sandbox lifetime, including late
  * quoted dynamic imports; the iframe's teardown releases them.
  */
-export function registerSharedModules(sharedSources, blobMap = sharedModuleBlobs) {
-    const order = extensionModuleOrder(sharedSources);
+export function registerSharedModules(
+    sharedSources,
+    blobMap = sharedModuleBlobs,
+    failures = blobMap === sharedModuleBlobs ? sharedModuleFailures : new Map()
+) {
+    const order = extensionModuleOrder(sharedSources, failures);
     for (const path of order) {
-        const rewritten = rewriteRelativeImportsWith(sharedSources[path], blobMap, path);
-        blobMap.set(
-            path,
-            URL.createObjectURL(new Blob([rewritten], { type: 'application/javascript' }))
-        );
+        try {
+            const rewritten = rewriteRelativeImportsWith(
+                sharedSources[path],
+                blobMap,
+                path,
+                failures
+            );
+            blobMap.set(
+                path,
+                URL.createObjectURL(new Blob([rewritten], { type: 'application/javascript' }))
+            );
+        } catch (e) {
+            failures.set(path, new Error(`Extension module '${path}': ${e?.message || e}`));
+        }
     }
     return blobMap;
 }

@@ -53,24 +53,37 @@ export async function collectExtensionModules(entrySources, fetchText, sourcePat
     const visited = new Set();
     const collected = new Map();
     const scan = (source, importer) => {
-        for (const { specifier } of extensionModuleImports(source)) {
-            const path = resolveExtensionModule(specifier, importer);
-            if (path && !visited.has(path)) queue.add(path);
+        try {
+            // Validate the entire file before queueing any of its imports.
+            const paths = extensionModuleImports(source).map(({ specifier }) =>
+                resolveExtensionModule(specifier, importer)
+            );
+            for (const path of paths) {
+                if (path && !visited.has(path)) queue.add(path);
+            }
+        } catch (e) {
+            console.warn(`Failed to scan extension module '${importer}':`, e);
         }
     };
     for (const [kind, value] of Object.entries(entrySources || {})) {
         if (kind === 'widgets' && value && typeof value === 'object') {
             for (const [id, source] of Object.entries(value)) {
-                scan(source, sourcePaths.widgets?.[id]);
+                scan(source, sourcePaths.widgets?.[id] || `widget:${id}`);
             }
         } else {
-            scan(value, sourcePaths[kind]);
+            scan(value, sourcePaths[kind] || kind);
         }
     }
     // Discovery order doesn't matter; the runtime orders the finished graph.
     for (const path of queue) {
         visited.add(path);
-        const source = await fetchText(path);
+        let source;
+        try {
+            source = await fetchText(path);
+        } catch (e) {
+            console.warn(`Failed to read extension module '${path}':`, e);
+            continue;
+        }
         if (source == null) continue;
         collected.set(path, source);
         scan(source, path);
@@ -79,18 +92,22 @@ export async function collectExtensionModules(entrySources, fetchText, sourcePat
 }
 
 /** Replace only module specifier ranges, never import-like prose. */
-export function rewriteExtensionModules(source, blobMap, importer = './') {
+export function rewriteExtensionModules(source, blobMap, importer = './', failures) {
     let out = source;
     for (const { specifier, start, end } of extensionModuleImports(source).reverse()) {
         const path = resolveExtensionModule(specifier, importer);
+        if (path && failures?.has(path)) throw failures.get(path);
         const blob = path && blobMap.get(path);
+        if (path && failures && !blob) {
+            throw new Error(`Missing extension module '${path}' imported by '${importer}'`);
+        }
         if (blob) out = out.slice(0, start) + source[start] + blob + source[start] + out.slice(end);
     }
     return out;
 }
 
-/** Validate the whole graph before creating any blobs; dependencies first. */
-export function extensionModuleOrder(sharedSources) {
+/** Order healthy dependencies first; isolate malformed files and cycles. */
+export function extensionModuleOrder(sharedSources, failures = new Map()) {
     const sources = new Map(Object.entries(sharedSources || {}));
     const complete = new Set();
     const visiting = [];
@@ -100,18 +117,27 @@ export function extensionModuleOrder(sharedSources) {
         if (complete.has(path)) return;
         if (active.has(path)) {
             const cycle = [...visiting.slice(visiting.indexOf(path)), path];
-            throw new Error(`Extension module import cycle: ${cycle.join(' -> ')}`);
+            const error = new Error(`Extension module import cycle: ${cycle.join(' -> ')}`);
+            for (const member of cycle) failures.set(member, error);
+            return;
         }
         active.add(path);
         visiting.push(path);
-        for (const { specifier } of extensionModuleImports(sources.get(path))) {
-            const dependency = resolveExtensionModule(specifier, path);
-            if (dependency && sources.has(dependency)) visit(dependency);
+        try {
+            for (const { specifier } of extensionModuleImports(sources.get(path))) {
+                const dependency = resolveExtensionModule(specifier, path);
+                if (dependency && sources.has(dependency)) visit(dependency);
+                if (failures.has(dependency)) throw failures.get(dependency);
+            }
+        } catch (e) {
+            if (!failures.has(path)) {
+                failures.set(path, new Error(`Extension module '${path}': ${e?.message || e}`));
+            }
         }
         visiting.pop();
         active.delete(path);
         complete.add(path);
-        ordered.push(path);
+        if (!failures.has(path)) ordered.push(path);
     };
     for (const path of sources.keys()) visit(path);
     return ordered;

@@ -203,7 +203,9 @@ export const CommandsMethods = {
                 onRefreshWidgets: () => {
                     setTimeout(() => {
                         try {
-                            this.extensionManager?.renderAllWidgets();
+                            this.extensionManager?.renderAllWidgets({ force: true })?.catch((e) => {
+                                console.warn('renderAllWidgets on refresh_widgets failed:', e);
+                            });
                         } catch (e) {
                             console.warn('renderAllWidgets on refresh_widgets failed:', e);
                         }

@@ -34,7 +34,8 @@ export const LifecycleVisibilityMethods = {
 
     setupVisibilityTracking() {
         this._windowFocused = true; // assume focused at startup
-        window._kageFloatingHidden = true;
+        // Pause extension widgets independently. The global hidden flag also
+        // gates Ollama's initial status probe, which must run during startup.
         this.extensionManager?.setWidgetVisibility(false);
 
         // --- Pause CSS animations when hidden to stop GPU compositing ---
@@ -100,6 +101,9 @@ export const LifecycleVisibilityMethods = {
             // Mirrors the existing permission-modal pause/resume.
             const visible = await this._isWindowVisible();
             window._kageFloatingHidden = !visible;
+            // Startup may focus the still-hidden webview before post-init
+            // checks. Catch up its skipped Ollama probe on the actual show.
+            if (wasHidden && visible) this._pollOllamaStatusOnce().catch(() => {});
             if (window._kageMascot) {
                 try {
                     window._kageMascot.resume();

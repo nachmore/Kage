@@ -77,6 +77,7 @@ const WIDGET_SLOW_RENDER_MS = 5_000;
 const WIDGET_SLOW_RENDER_RATIO = 0.7;
 const WIDGET_FAILURE_TRIP_THRESHOLD = 3;
 const WIDGET_STALE_CONTENT_FLOOR_MS = 90_000;
+const WIDGET_SHOW_STALE_MS = 5_000;
 
 export function installExtensionUiMethods(ExtensionManager) {
     applyMixin(ExtensionManager.prototype, {
@@ -221,12 +222,18 @@ export function installExtensionUiMethods(ExtensionManager) {
                 controller.scheduleVersion !== version
             )
                 return;
+            // Keep the existing timer's phase when the cadence hasn't changed:
+            // explicit repaints must not postpone the next scheduled poll.
+            if (controller.refreshIntervalMs !== interval) {
+                if (controller.timer) clearInterval(controller.timer);
+                controller.timer = null;
+            }
             controller.refreshIntervalMs = interval;
-            if (controller.timer) clearInterval(controller.timer);
-            controller.timer = null;
             if (!this._widgetWindowVisible() || !controller.host.isConnected) return;
             const stale =
-                interval > 0 && performance.now() - controller.lastSuccessRenderAt >= interval;
+                interval > 0 &&
+                performance.now() - controller.lastSuccessRenderAt >=
+                    Math.min(interval, WIDGET_SHOW_STALE_MS);
             if (
                 (controller.needsRefresh || !controller.hasRendered || stale) &&
                 !controller.renderInFlight
@@ -239,7 +246,12 @@ export function installExtensionUiMethods(ExtensionManager) {
                 controller.scheduleVersion !== version
             )
                 return;
-            if (interval > 0 && this._widgetWindowVisible() && controller.host.isConnected) {
+            if (
+                interval > 0 &&
+                !controller.timer &&
+                this._widgetWindowVisible() &&
+                controller.host.isConnected
+            ) {
                 controller.timer = setInterval(() => this._renderWidget(controller), interval);
             }
         },
@@ -367,7 +379,9 @@ export function installExtensionUiMethods(ExtensionManager) {
                 // A config update during a render must still get its own
                 // refresh, including widgets whose new interval is zero.
                 if (controller.needsRefresh && controller.scheduleVersion !== scheduleVersion) {
-                    this._refreshWidgetSchedule(controller);
+                    this._refreshWidgetSchedule(controller).catch((e) =>
+                        console.warn('Widget pending refresh failed:', e)
+                    );
                 }
             }
         },
@@ -512,11 +526,13 @@ export function installExtensionUiMethods(ExtensionManager) {
             }
         },
 
-        /** Resume timers on show; refresh immediately only when content is
-         *  missing or older than the current interval. */ async renderAllWidgets() {
+        /** Resume timers on show, debouncing fresh content for at most five
+         *  seconds. Explicit state mutations can request a forced repaint. */ async renderAllWidgets({
+            force = false,
+        } = {}) {
             await Promise.all(
                 Array.from(this._widgetInstances?.values() || [], (ctrl) =>
-                    this._refreshWidgetSchedule(ctrl)
+                    this._refreshWidgetSchedule(ctrl, force)
                 )
             );
         },

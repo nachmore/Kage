@@ -142,18 +142,30 @@ describe('_fetchSharedSources', () => {
             './shared.js': 'export const X = 1;',
         });
         const fetch = vi.spyOn(mgr, '_fetchText');
-        await expect(mgr._fetchSharedSources({
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        expect(await mgr._fetchSharedSources({
             searchProvider: "import '../../other-extension/file.js';",
-        }, 'test', { searchProvider: './providers/search.js' })).rejects.toThrow('escapes bundle root');
+        }, 'test', { searchProvider: './providers/search.js' })).toBeUndefined();
+        expect(warn).toHaveBeenCalledWith(
+            "Failed to scan extension module './providers/search.js':",
+            expect.objectContaining({ message: expect.stringContaining('escapes bundle root') })
+        );
         expect(fetch).not.toHaveBeenCalled();
+        warn.mockRestore();
     });
 
     it('rejects encoded paths, URL fragments, schemes, and Windows separators', async () => {
         const mgr = makeManager({});
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         for (const path of ['./%2e%2e/other.js', './x.js#fragment', './x.js?query', './file:other.js', './dir\\\\\\\\other.js']) {
-            await expect(mgr._fetchSharedSources({ searchProvider: `import '${path}';` }, 'test'))
-                .rejects.toThrow('Invalid extension module path');
+            expect(await mgr._fetchSharedSources({ searchProvider: `import '${path}';` }, 'test'))
+                .toBeUndefined();
+            expect(warn).toHaveBeenLastCalledWith(
+                "Failed to scan extension module 'searchProvider':",
+                expect.objectContaining({ message: expect.stringContaining('Invalid extension module path') })
+            );
         }
+        warn.mockRestore();
     });
 });
 

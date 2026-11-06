@@ -2,11 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     registerSharedModules,
     rewriteRelativeImportsWith,
+    importFromSource,
 } from '../../ui/js/extension-sandbox/runtime.js';
-import { extensionModuleImports } from '../../ui/js/shared/extension-modules.js';
+import { collectExtensionModules, extensionModuleImports } from '../../ui/js/shared/extension-modules.js';
 import { ExtensionManager } from '../../ui/js/shared/extension-manager.js';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+});
 
 // Inspect the exact text supplied to each blob without requiring a browser's
 // module loader. Any link to an intermediate/raw/revoked blob fails this walk.
@@ -98,26 +102,108 @@ describe('shared module graph', () => {
         }, "import './client.js'; export default class {}");
     });
 
-    it('detects cycles before allocating or revoking any blob, with the full cycle path', async () => {
+    it('isolates cycle members and their dependents while building healthy modules', async () => {
         const mgr = new ExtensionManager(async () => undefined);
         const files = {
             './a.js': "export * from './b.js';",
             './b.js': "import './a.js';",
+            './consumer.js': "import './a.js';",
+            './good.js': 'export const good = 1;',
         };
         mgr._fetchText = vi.fn(async (_id, path) => files[path]);
-        const shared = await mgr._fetchSharedSources({ searchProvider: "import './a.js';" }, 'test');
+        const shared = await mgr._fetchSharedSources({
+            searchProvider: "import './a.js'; import './consumer.js';",
+            toolProvider: "import './good.js';",
+        }, 'test');
         const capture = captureBlobs();
-        expect(() => registerSharedModules(shared, new Map())).toThrow(
-            'Extension module import cycle: ./a.js -> ./b.js -> ./a.js'
-        );
-        expect(URL.createObjectURL).not.toHaveBeenCalled();
+        const failures = new Map();
+        const blobs = registerSharedModules(shared, new Map(), failures);
+        expect([...blobs.keys()]).toEqual(['./good.js']);
+        expect([...failures.keys()].sort()).toEqual(['./a.js', './b.js', './consumer.js']);
+        await expect(importFromSource(
+            "import './consumer.js'; export default class {}",
+            'searchProvider', './search.js', blobs, failures
+        )).rejects.toThrow("searchProvider './search.js': Extension module './consumer.js': Extension module import cycle: ./a.js -> ./b.js -> ./a.js");
+        expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
         expect(capture.revokeObjectURL).not.toHaveBeenCalled();
-        expect(mgr._fetchText).toHaveBeenCalledTimes(2);
+        expect(mgr._fetchText).toHaveBeenCalledTimes(4);
     });
 
     it('reports self-import cycles clearly', () => {
         captureBlobs();
-        expect(() => registerSharedModules({ './a.js': "import './a.js';" }, new Map()))
-            .toThrow('./a.js -> ./a.js');
+        const failures = new Map();
+        const blobs = registerSharedModules({ './a.js': "import './a.js';" }, new Map(), failures);
+        expect(blobs.size).toBe(0);
+        expect(failures.get('./a.js').message).toContain('./a.js -> ./a.js');
+    });
+
+    it.each([
+        ['lexer error', 'export const broken = "unterminated;', 'Parse error'],
+        ['rejected specifier', "import '../../escape.js';", 'Extension module path escapes bundle root'],
+    ])('isolates a shared-file %s and names it in the dependent provider error', async (_case, source, error) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const files = { './bad.js': source, './good.js': 'export const good = 1;' };
+        const shared = await collectExtensionModules({
+            searchProvider: "import './bad.js';",
+            toolProvider: "import './good.js';",
+        }, async (path) => files[path], { searchProvider: './search.js', toolProvider: './tools.js' });
+        expect(warn).toHaveBeenCalledWith(
+            "Failed to scan extension module './bad.js':", expect.any(Error)
+        );
+        captureBlobs();
+        const failures = new Map();
+        const blobs = registerSharedModules(shared, new Map(), failures);
+        expect([...blobs.keys()]).toEqual(['./good.js']);
+        await expect(importFromSource(
+            "import './bad.js'; export default class {}",
+            'searchProvider', './search.js', blobs, failures
+        )).rejects.toThrow(`searchProvider './search.js': Extension module './bad.js': ${error}`);
+    });
+
+    it('continues discovering healthy providers when another entry source is malformed', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const shared = await collectExtensionModules({
+            searchProvider: 'export default class { label() { return "unterminated; } }',
+            toolProvider: "import './good.js'; export default class {}",
+        }, async () => 'export const good = 1;', {
+            searchProvider: './providers/search.js', toolProvider: './tools.js',
+        });
+        expect(Object.keys(shared)).toEqual(['./good.js']);
+        expect(warn).toHaveBeenCalledWith(
+            "Failed to scan extension module './providers/search.js':", expect.any(Error)
+        );
+        await expect(importFromSource(
+            'export default class { label() { return "unterminated; } }',
+            'searchProvider', './providers/search.js', new Map(), new Map()
+        )).rejects.toThrow("searchProvider './providers/search.js': Parse error");
+    });
+
+    it('skips all imports of a rejected source before IPC and continues other sources', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const fetch = vi.fn(async () => 'export const good = 1;');
+        const shared = await collectExtensionModules({
+            searchProvider: "import './skipped.js'; import '../../escape.js';",
+            toolProvider: "import './good.js';",
+        }, fetch, { searchProvider: './search.js', toolProvider: './tools.js' });
+        expect(Object.keys(shared)).toEqual(['./good.js']);
+        expect(fetch).toHaveBeenCalledExactlyOnceWith('./good.js');
+    });
+
+    it('names missing shared files without preventing independent modules from loading', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const shared = await collectExtensionModules({
+            searchProvider: "import './missing.js';",
+            toolProvider: "import './good.js';",
+        }, async (path) => {
+            if (path === './missing.js') throw new Error('not found');
+            return 'export const good = 1;';
+        });
+        captureBlobs();
+        const failures = new Map();
+        const blobs = registerSharedModules(shared, new Map(), failures);
+        expect([...blobs.keys()]).toEqual(['./good.js']);
+        await expect(importFromSource(
+            "import './missing.js';", 'searchProvider', './search.js', blobs, failures
+        )).rejects.toThrow("Missing extension module './missing.js' imported by './search.js'");
     });
 });

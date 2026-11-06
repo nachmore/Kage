@@ -23,6 +23,7 @@ import { installExtensionDateMethods } from './extension-manager/dates.js';
 import { installExtensionSourceMethods } from './extension-manager/sources.js';
 import { installExtensionSearchMethods } from './extension-manager/search.js';
 import { installExtensionUiMethods } from './extension-manager/ui.js';
+import { resolveExtensionConfig } from './extension-config.js';
 export {
     applyManifestI18n,
     extensionDisplay,
@@ -37,6 +38,19 @@ function sameCapabilitySet(a, b) {
     const x = [...(a || [])].sort();
     const y = [...(b || [])].sort();
     return x.length === y.length && x.every((cap, i) => cap === y[i]);
+}
+
+/** Config is JSON; object key order must not turn an unrelated save into a refresh. */
+function extensionConfigSignature(config) {
+    return JSON.stringify(config, (_key, value) =>
+        value && typeof value === 'object' && !Array.isArray(value)
+            ? Object.fromEntries(
+                  Object.keys(value)
+                      .sort()
+                      .map((key) => [key, value[key]])
+              )
+            : value
+    );
 }
 
 export class ExtensionManager {
@@ -120,6 +134,7 @@ export class ExtensionManager {
             manifest,
             capabilities,
             sandbox: null,
+            configSignature: extensionConfigSignature(this._getExtensionConfig(id, manifest)),
         };
 
         const sources = await this._fetchProviderSources(id, manifest);
@@ -200,6 +215,7 @@ export class ExtensionManager {
     }
 
     async _onConfigUpdateOnce() {
+        const previousConfig = this._configCache;
         try {
             this._configCache = await this.invoke('get_config');
         } catch {
@@ -211,14 +227,21 @@ export class ExtensionManager {
         // Keyword hints can key off a user-configured trigger, so a config
         // change may change the registered words — drop the cache.
         this._keywordDefsCache = null;
+        const changedExtensions = new Set();
         for (const [id, ext] of this.extensions) {
             const config = this._getExtensionConfig(id, ext.manifest);
+            const signature = extensionConfigSignature(config);
+            const previousSignature =
+                ext.configSignature ??
+                extensionConfigSignature(resolveExtensionConfig(previousConfig, id, ext.manifest));
+            if (signature !== previousSignature) changedExtensions.add(id);
+            ext.configSignature = signature;
             if (ext.sandbox) {
                 // A disabled extension keeps its sandbox loaded (so re-enable
                 // is instant) but must not keep a mascot activity lease: its
                 // widgets are unmounted, so nothing would re-assert it.
                 if (!this._isEnabled(id)) ext.sandbox.clearMascotActivity?.();
-                await ext.sandbox.updateConfig(config);
+                if (changedExtensions.has(id)) await ext.sandbox.updateConfig(config);
             }
         }
         // If enabled-states changed, unmount widgets of newly-disabled
@@ -246,14 +269,16 @@ export class ExtensionManager {
                 const key = `${id}:${w.id}`;
                 const controller = this._widgetInstances?.get(key);
                 if (controller) {
-                    await this._refreshWidgetSchedule(controller, true);
+                    if (changedExtensions.has(id)) {
+                        this._refreshWidgetSchedule(controller, true).catch((e) =>
+                            console.warn(`Failed to refresh widget '${key}':`, e)
+                        );
+                    }
                     continue;
                 }
-                try {
-                    await this._mountWidget(id, ext, w);
-                } catch (e) {
-                    console.warn(`Failed to remount widget '${key}':`, e);
-                }
+                this._mountWidget(id, ext, w).catch((e) =>
+                    console.warn(`Failed to remount widget '${key}':`, e)
+                );
             }
         }
         // Tool definitions may change when config updates (e.g. a tool
