@@ -111,6 +111,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::show_context_menu,
         crate::commands::get_pending_context_menu,
         crate::commands::context_menu_ready,
+        crate::commands::hide_context_menu,
         crate::commands::launcher_actions::launcher_result_actions,
         crate::commands::launcher_actions::launcher_result_action,
         crate::commands::set_floating_opacity,

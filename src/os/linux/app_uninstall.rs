@@ -3,9 +3,14 @@
 // no single correct way to drive it. See `os::app_uninstall`.
 
 use crate::os::app_uninstall::{UninstallError, UninstallOutcome};
+use crate::os::file_ops::Preflight;
 use std::path::Path;
 
-pub fn uninstall_impl(_path: &Path, _name: &str) -> Result<UninstallOutcome, UninstallError> {
+pub fn uninstall_impl(
+    _path: &Path,
+    _name: &str,
+    _preflight: Preflight,
+) -> Result<UninstallOutcome, UninstallError> {
     Err(UninstallError::Unsupported)
 }
 

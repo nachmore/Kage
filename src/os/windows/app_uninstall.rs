@@ -1,10 +1,12 @@
-// Windows app uninstall: launch the app's own interactive UninstallString,
-// or open Settings → Installed apps (see `os::app_uninstall`).
+// Windows app uninstall: Windows Installer's own `msiexec /x`, or the
+// app's own plain uninstaller, or Settings → Installed apps — the allowlist
+// in `os::app_uninstall::plan_uninstall`.
 
 use crate::os::app_uninstall::{
-    expand_env_vars, has_silent_flag, match_uninstall_entry, normalize_win_path, own_install_root,
-    product_install_dirs, split_command_line, UninstallEntry, UninstallError, UninstallOutcome,
+    expand_env_vars, match_uninstall_entry, normalize_win_path, own_install, plan_uninstall,
+    product_install_dirs, UninstallEntry, UninstallError, UninstallOutcome, UninstallPlan,
 };
+use crate::os::file_ops::Preflight;
 use crate::os::platform::file_ops::{shell_execute, with_com_sta};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -25,65 +27,117 @@ pub fn bundle_identifier_impl(_bundle: &Path) -> Option<String> {
 
 /// Every product's own install folder from the Uninstall keys.
 pub fn installed_product_dirs_impl() -> Vec<PathBuf> {
-    product_install_dirs(&read_uninstall_entries(), &generic_dirs())
+    product_install_dirs(&read_uninstall_entries(), &shared_dirs())
         .into_iter()
         .map(PathBuf::from)
         .collect()
 }
 
-pub fn uninstall_impl(path: &Path, name: &str) -> Result<UninstallOutcome, UninstallError> {
+/// No file is removed by Kage here — an uninstaller is started, or
+/// Settings opened — so there's nothing for `_preflight` to guard.
+pub fn uninstall_impl(
+    path: &Path,
+    name: &str,
+    _preflight: Preflight,
+) -> Result<UninstallOutcome, UninstallError> {
     let raw = path.to_string_lossy();
     // Store/MSIX apps: Settings owns their removal.
     if raw.to_lowercase().starts_with(r"shell:appsfolder\") {
         return open_installed_apps();
     }
     let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase());
-    let target: Option<PathBuf> = match ext.as_deref() {
-        Some("lnk") => resolve_shortcut_target(path),
-        Some("exe") => Some(path.to_path_buf()),
+    let (target, shortcut_args): (Option<PathBuf>, bool) = match ext.as_deref() {
+        Some("lnk") => match resolve_shortcut(path) {
+            Some((target, args)) => (Some(target), args),
+            None => (None, false),
+        },
+        Some("exe") => (Some(path.to_path_buf()), false),
         _ => return Err(UninstallError::Unsupported),
     };
-    let own_root = own_install_root().map(|p| normalize_win_path(&p.to_string_lossy()));
-    let inside_own_root = |p: &str| {
+    let own = own_install();
+    let own_paths: Vec<String> = own
+        .paths()
+        .iter()
+        .map(|p| normalize_win_path(&p.to_string_lossy()))
+        .collect();
+    let is_own = |p: &str| {
         let p = normalize_win_path(p);
-        own_root
-            .as_deref()
-            .is_some_and(|root| p == root || p.starts_with(&format!("{root}\\")))
+        own_paths
+            .iter()
+            .any(|o| p == *o || p.starts_with(&format!("{o}\\")))
     };
     let target_str = target.as_ref().map(|t| t.to_string_lossy().into_owned());
-    if target_str.as_deref().is_some_and(inside_own_root) {
+    if target_str.as_deref().is_some_and(is_own) {
         return Err(UninstallError::IsKage);
     }
 
     let entries = read_uninstall_entries();
-    let Some(entry) = match_uninstall_entry(name, target_str.as_deref(), &entries, &generic_dirs())
-    else {
+    let Some(matched) = match_uninstall_entry(
+        name,
+        target_str.as_deref(),
+        shortcut_args,
+        &entries,
+        &shared_dirs(),
+    ) else {
         log::info!("[uninstall] no confident Uninstall entry for {name:?}; opening Settings");
         return open_installed_apps();
     };
+    let entry = matched.entry;
     let display = entry.display_name.as_deref().unwrap_or_default();
-    if display.trim().eq_ignore_ascii_case("kage")
-        || entry
-            .install_location
+    let own_root = own.root().map(|r| normalize_win_path(&r.to_string_lossy()));
+    let in_own_root = |p: &str| {
+        let p = normalize_win_path(p);
+        own_root
             .as_deref()
-            .is_some_and(inside_own_root)
+            .is_some_and(|r| p == r || p.starts_with(&format!("{r}\\")))
+    };
+    if display
+        .trim()
+        .eq_ignore_ascii_case(crate::launcher_actions::KAGE_PRODUCT_NAME)
+        || entry.install_location.as_deref().is_some_and(in_own_root)
     {
         return Err(UninstallError::IsKage);
     }
-    // Already `%VAR%`-expanded by `read_uninstall_entries`.
-    let command = entry.uninstall_string.clone().unwrap_or_default();
-    let exists = |p: &str| Path::new(p).is_file() || Path::new(&format!("{p}.exe")).is_file();
-    let Some((program, params)) = split_command_line(&command, exists) else {
-        return open_installed_apps();
-    };
-    if has_silent_flag(&params) {
-        log::warn!(
-            "[uninstall] {display:?}'s UninstallString runs unattended; opening Settings instead"
-        );
-        return open_installed_apps();
+
+    match plan_uninstall(&matched, |p| Path::new(p).is_file()) {
+        UninstallPlan::Msi { product_code } => {
+            let Some(msiexec) = msiexec_path() else {
+                log::warn!("[uninstall] msiexec.exe not found; opening Settings");
+                return open_installed_apps();
+            };
+            log::info!("[uninstall] {display:?}: msiexec /x {product_code}");
+            launch_uninstaller(&msiexec, &["/x", product_code.as_str()])?;
+        }
+        UninstallPlan::Run { program, arg } => {
+            // The allowlist compared paths as written; compare where they
+            // really lead too, so a junction in the product folder can't
+            // point the uninstaller somewhere else.
+            let real = |p: &Path| {
+                std::fs::canonicalize(p)
+                    .ok()
+                    .map(|c| normalize_win_path(&c.to_string_lossy()))
+            };
+            let dir = matched.install_dir.as_deref().map(Path::new).and_then(real);
+            let prog = real(Path::new(&program));
+            let inside =
+                matches!((&dir, &prog), (Some(d), Some(p)) if p.starts_with(&format!("{d}\\")));
+            if !inside {
+                log::warn!(
+                    "[uninstall] {display:?}'s uninstaller resolves outside its folder; opening Settings"
+                );
+                return open_installed_apps();
+            }
+            log::info!("[uninstall] launching {display:?}'s uninstaller: {program}");
+            let args: Vec<&str> = arg.as_deref().into_iter().collect();
+            launch_uninstaller(&program, &args)?;
+        }
+        UninstallPlan::Settings => {
+            log::info!(
+                "[uninstall] {display:?}'s UninstallString isn't on the allowlist; opening Settings"
+            );
+            return open_installed_apps();
+        }
     }
-    log::info!("[uninstall] launching {display:?}'s uninstaller: {program}");
-    launch_uninstaller(&program, &params)?;
     Ok(UninstallOutcome::UninstallerLaunched)
 }
 
@@ -92,17 +146,22 @@ fn open_installed_apps() -> Result<UninstallOutcome, UninstallError> {
     Ok(UninstallOutcome::SettingsOpened)
 }
 
+/// `%SystemRoot%\System32\msiexec.exe`, never a PATH lookup.
+fn msiexec_path() -> Option<String> {
+    let root = std::env::var("SystemRoot").ok()?;
+    let path = Path::new(&root).join("System32").join("msiexec.exe");
+    (path.is_absolute() && path.is_file()).then(|| path.to_string_lossy().into_owned())
+}
+
 /// Run the uninstaller outside Kage's kill-on-exit Job Object (so quitting
 /// Kage doesn't kill it). One whose manifest demands elevation fails
 /// `CreateProcess` with ERROR_ELEVATION_REQUIRED; the shell then shows the
-/// normal UAC prompt for it. Kage never elevates anything itself.
-fn launch_uninstaller(program: &str, params: &str) -> Result<(), UninstallError> {
-    use std::os::windows::process::CommandExt;
+/// normal UAC prompt for it. Kage never elevates anything itself. `args`
+/// come from the allowlist: no spaces or quotes to escape.
+fn launch_uninstaller(program: &str, args: &[&str]) -> Result<(), UninstallError> {
     let build = |breakaway: bool| {
         let mut cmd = std::process::Command::new(program);
-        if !params.is_empty() {
-            cmd.raw_arg(params);
-        }
+        cmd.args(args);
         if breakaway {
             crate::os::configure_breakaway_from_job(&mut cmd);
         }
@@ -117,7 +176,7 @@ fn launch_uninstaller(program: &str, params: &str) -> Result<(), UninstallError>
         Ok(_child) => Ok(()),
         Err(e) if e.raw_os_error() == Some(ERROR_ELEVATION_REQUIRED) => {
             let program = program.to_string();
-            let params = params.to_string();
+            let params = args.join(" ");
             let launched = with_com_sta(move || {
                 let params = (!params.is_empty()).then(|| OsStr::new(&params));
                 shell_execute(None, OsStr::new(&program), params, SEE_MASK_NOASYNC)
@@ -133,8 +192,11 @@ fn launch_uninstaller(program: &str, params: &str) -> Result<(), UninstallError>
     }
 }
 
-/// The file a Start Menu shortcut points at, via `IShellLinkW`.
-fn resolve_shortcut_target(lnk: &Path) -> Option<PathBuf> {
+/// The file a Start Menu shortcut points at, via `IShellLinkW`, and
+/// whether it passes that file arguments (a launcher starting something
+/// else — see `match_uninstall_entry`). Arguments that can't be read
+/// count as present.
+fn resolve_shortcut(lnk: &Path) -> Option<(PathBuf, bool)> {
     let lnk = lnk.to_path_buf();
     with_com_sta(move || unsafe {
         use windows::core::{Interface, HSTRING};
@@ -148,7 +210,19 @@ fn resolve_shortcut_target(lnk: &Path) -> Option<PathBuf> {
         let mut buf = [0u16; 1024];
         link.GetPath(&mut buf, std::ptr::null_mut(), 0).ok()?;
         let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-        (len > 0).then(|| PathBuf::from(String::from_utf16_lossy(&buf[..len])))
+        if len == 0 {
+            return None;
+        }
+        let target = PathBuf::from(String::from_utf16_lossy(&buf[..len]));
+        let mut args = [0u16; 1024];
+        let has_args = match link.GetArguments(&mut args) {
+            Ok(()) => args
+                .iter()
+                .take_while(|&&c| c != 0)
+                .any(|&c| !char::from_u32(u32::from(c)).is_some_and(char::is_whitespace)),
+            Err(_) => true,
+        };
+        Some((target, has_args))
     })
     .ok()
     .flatten()
@@ -183,14 +257,17 @@ fn read_uninstall_entries() -> Vec<UninstallEntry> {
             };
             let flag = |v: &str| sub.get_value::<u32, _>(v).ok() == Some(1);
             // REG_EXPAND_SZ values carry `%VAR%`s: expand them once, here,
-            // so locations compare with real paths and the command runs.
+            // so locations compare with real paths. One that stays
+            // unexpanded is never a usable path (`is_absolute_win_path`).
             let expanded =
                 |v: &str| text(v).map(|s| expand_env_vars(&s, |name| std::env::var(name).ok()));
             out.push(UninstallEntry {
+                key_name: name.clone(),
                 display_name: text("DisplayName"),
                 uninstall_string: expanded("UninstallString"),
                 install_location: expanded("InstallLocation"),
                 display_icon: expanded("DisplayIcon"),
+                windows_installer: flag("WindowsInstaller"),
                 system_component: flag("SystemComponent"),
                 no_remove: flag("NoRemove"),
                 parent_key_name: text("ParentKeyName"),
@@ -201,31 +278,77 @@ fn read_uninstall_entries() -> Vec<UninstallEntry> {
     out
 }
 
-/// Shared folders many products install under (normalised).
-fn generic_dirs() -> Vec<String> {
+/// This machine's shared folders (normalised) — never one product's own
+/// folder (see `is_shared_dir`; drive and share roots are always shared).
+fn shared_dirs() -> Vec<String> {
+    let env = |v: &str| std::env::var(v).ok().filter(|s| !s.trim().is_empty());
     let mut dirs: Vec<String> = [
         "ProgramFiles",
         "ProgramFiles(x86)",
         "ProgramW6432",
         "CommonProgramFiles",
         "CommonProgramFiles(x86)",
+        "CommonProgramW6432",
         "SystemRoot",
         "windir",
         "ProgramData",
+        "ALLUSERSPROFILE",
+        "PUBLIC",
+        "USERPROFILE",
         "LOCALAPPDATA",
         "APPDATA",
-        "USERPROFILE",
-        "PUBLIC",
+        "TEMP",
+        "TMP",
     ]
     .iter()
-    .filter_map(|v| std::env::var(v).ok())
+    .filter_map(|v| env(v))
     .collect();
-    if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        dirs.push(format!(r"{local}\Programs"));
+    if let Some(root) = env("SystemRoot") {
+        for sub in ["System32", "SysWOW64", "Installer", "Temp", "WinSxS"] {
+            dirs.push(format!(r"{root}\{sub}"));
+        }
     }
-    if let Ok(root) = std::env::var("SystemRoot") {
-        dirs.push(format!(r"{root}\System32"));
-        dirs.push(format!(r"{root}\SysWOW64"));
+    if let Some(data) = env("ProgramData") {
+        dirs.push(format!(r"{data}\Package Cache"));
+        dirs.push(format!(r"{data}\Microsoft\Windows\Start Menu\Programs"));
     }
-    dirs.iter().map(|d| normalize_win_path(d)).collect()
+    for var in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
+        if let Some(pf) = env(var) {
+            dirs.push(format!(r"{pf}\WindowsApps"));
+        }
+    }
+    if let Some(profile) = env("USERPROFILE") {
+        // The folder holding every user's profile (`C:\Users`).
+        if let Some(parent) = Path::new(&profile).parent() {
+            dirs.push(parent.to_string_lossy().into_owned());
+        }
+        for sub in ["AppData", r"AppData\LocalLow"] {
+            dirs.push(format!(r"{profile}\{sub}"));
+        }
+    }
+    if let Some(local) = env("LOCALAPPDATA") {
+        for sub in [
+            "Programs",
+            "Package Cache",
+            "Temp",
+            r"Microsoft\WindowsApps",
+        ] {
+            dirs.push(format!(r"{local}\{sub}"));
+        }
+    }
+    if let Some(public) = env("PUBLIC") {
+        if let Some(parent) = Path::new(&public).parent() {
+            dirs.push(parent.to_string_lossy().into_owned());
+        }
+    }
+    // Desktop, Documents, Downloads, … wherever they're redirected.
+    dirs.extend(
+        crate::commands::input::well_known_dirs()
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned()),
+    );
+    let mut out: Vec<String> = dirs.iter().map(|d| normalize_win_path(d)).collect();
+    out.sort();
+    out.dedup();
+    out
 }

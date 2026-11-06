@@ -2,7 +2,7 @@
 // NSFileManager trash. Raw objc runtime calls, like `clipboard.rs` — the
 // objc2-foundation NSFileManager/NSURL features aren't enabled.
 
-use crate::os::file_ops::TrashError;
+use crate::os::file_ops::{Preflight, TrashError};
 use objc2::msg_send;
 use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::{AnyClass, AnyObject, NSObject};
@@ -25,9 +25,14 @@ fn file_url(path: &Path) -> Option<Retained<AnyObject>> {
     unsafe { msg_send![cls, fileURLWithPath: &*s] }
 }
 
-pub fn copy_files_to_clipboard_impl(paths: &[PathBuf], cut: bool) -> anyhow::Result<()> {
+/// Copy only (macOS has no file cut), so nothing for `_preflight` to guard.
+pub fn copy_files_to_clipboard_impl(
+    paths: &[PathBuf],
+    cut: bool,
+    _preflight: Option<Preflight>,
+) -> Result<(), crate::os::file_ops::ClipboardFilesError> {
     if cut {
-        anyhow::bail!("macOS has no cut for files");
+        return Err(anyhow::anyhow!("macOS has no cut for files").into());
     }
     autoreleasepool(|_| {
         let pb_cls = AnyClass::get(c"NSPasteboard")
@@ -56,9 +61,11 @@ pub fn copy_files_to_clipboard_impl(paths: &[PathBuf], cut: bool) -> anyhow::Res
             anyhow::bail!("NSPasteboard refused the file URLs")
         }
     })
+    .map_err(Into::into)
 }
 
-pub fn move_to_trash_impl(path: &Path) -> Result<(), TrashError> {
+/// `preflight` runs on this thread right before `trashItemAtURL:`.
+pub fn move_to_trash_impl(path: &Path, preflight: Preflight) -> Result<(), TrashError> {
     autoreleasepool(|_| {
         let fm_cls = AnyClass::get(c"NSFileManager")
             .ok_or_else(|| TrashError::Other("NSFileManager unavailable".into()))?;
@@ -66,6 +73,7 @@ pub fn move_to_trash_impl(path: &Path) -> Result<(), TrashError> {
             .ok_or_else(|| TrashError::Other(format!("not a valid path: {}", path.display())))?;
         // SAFETY: +defaultManager returns the shared NSFileManager.
         let fm: Retained<AnyObject> = unsafe { msg_send![fm_cls, defaultManager] };
+        preflight().map_err(TrashError::Refused)?;
         // SAFETY: -trashItemAtURL:resultingItemURL:error: takes an NSURL, a
         // nullable `NSURL **` out-parameter (NULL: we don't need it) and
         // the error out-parameter `_` turns into the Result.

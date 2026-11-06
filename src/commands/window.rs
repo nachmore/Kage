@@ -119,6 +119,16 @@ pub async fn context_menu_ready<R: tauri::Runtime>(
     implementation::context_menu_ready(token, width, height, rtl.unwrap_or(false), app).await
 }
 
+/// The context-menu window is done with menu `token`; hide it unless a
+/// newer menu has been shown since.
+#[tauri::command]
+pub async fn hide_context_menu<R: tauri::Runtime>(
+    token: u64,
+    app: tauri::AppHandle<R>,
+) -> Result<bool, AppError> {
+    implementation::hide_context_menu(token, app).await
+}
+
 #[tauri::command]
 pub async fn set_floating_opacity<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,

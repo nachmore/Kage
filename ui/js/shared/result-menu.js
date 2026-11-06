@@ -71,20 +71,49 @@ export function resultActionLabelKey(action, platform) {
     }
 }
 
+/** Why-it's-disabled reasons the menu can show (`unavailable[].reason`). */
+const UNAVAILABLE_REASONS = Object.freeze(['path_too_long']);
+
 /**
- * Menu items for `info` (`{ platform, kind, name, path, actions }` from
- * `launcher_result_actions`), grouped and ordered per
- * RESULT_ACTION_GROUPS. Unknown action ids are ignored.
+ * The i18n key labelling `action` shown disabled for `reason` — the
+ * action's own wording plus why (`result_menu.unavailable.trash_path_too_long`).
+ */
+export function unavailableLabelKey(action, reason) {
+    return `result_menu.unavailable.${action}_${reason}`;
+}
+
+/**
+ * Menu items for `info` (`{ platform, kind, name, path, actions,
+ * unavailable }` from `launcher_result_actions`), grouped and ordered per
+ * RESULT_ACTION_GROUPS. `unavailable` lists actions shown disabled, with
+ * the reason in their label. Unknown action ids and reasons are ignored.
  */
 export function buildResultMenuItems(info) {
     const actions = new Set(Array.isArray(info?.actions) ? info.actions : []);
+    const unavailable = new Map();
+    for (const u of Array.isArray(info?.unavailable) ? info.unavailable : []) {
+        if (u && !actions.has(u.action) && UNAVAILABLE_REASONS.includes(u.reason)) {
+            unavailable.set(u.action, u.reason);
+        }
+    }
     const platform = info?.platform;
     const items = [];
     for (const group of RESULT_ACTION_GROUPS) {
-        const present = group.filter((a) => actions.has(a));
+        const present = group.filter((a) => actions.has(a) || unavailable.has(a));
         if (!present.length) continue;
         if (items.length) items.push(SEPARATOR);
         for (const action of present) {
+            const reason = unavailable.get(action);
+            if (reason) {
+                items.push({
+                    id: action,
+                    labelKey: unavailableLabelKey(action, reason),
+                    labelVars: { name: info.name || '' },
+                    enabled: false,
+                    danger: false,
+                });
+                continue;
+            }
             const item = {
                 id: action,
                 labelKey: resultActionLabelKey(action, platform),

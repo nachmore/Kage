@@ -9594,10 +9594,10 @@
     "_source_hash": "4b75f9431bf50029"
   },
   "result_menu.confirm.body_windows": {
-    "message": "O Kage vai abrir o desinstalador do próprio {name} — ou Configurações → Aplicativos instalados, se não encontrar um. Nada será removido até que você confirme lá.",
+    "message": "O Kage vai iniciar o desinstalador próprio de {name} ou, se não o conseguir usar, abrir Definições → Aplicações instaladas. Alguns desinstaladores removem a aplicação de imediato, sem voltar a perguntar.",
     "description": "Uninstall confirmation body on Windows",
     "_machine_translated": true,
-    "_source_hash": "37f1e04782643036"
+    "_source_hash": "ac9a520d2ecb4209"
   },
   "result_menu.confirm.cancel": {
     "message": "Cancelar",
@@ -9652,5 +9652,23 @@
     "description": "Launcher result menu: right before moving an item to the Trash, it no longer was the item that was checked (replaced, or a folder on its path swapped)",
     "_machine_translated": true,
     "_source_hash": "416114f7e2cd73cd"
+  },
+  "errors.launcher.trash_path_too_long": {
+    "message": "O caminho de “{name}” é demasiado longo para a Reciclagem. Encurte-o — mude o nome ou mova uma pasta acima dele — e tente novamente.",
+    "description": "Launcher result menu (Windows): the path is 260 characters or longer, more than the Recycle Bin API accepts (MAX_PATH, terminating NUL included)",
+    "_machine_translated": true,
+    "_source_hash": "cb85fe6a0610f346"
+  },
+  "errors.launcher.identity_unavailable": {
+    "message": "O Kage não conseguiu confirmar que “{name}” ainda é o item que escolheu, por isso não lhe tocou.",
+    "description": "Launcher result menu: right before moving or cutting an item, its file identity couldn't be read (then or now), so Kage refused rather than guess",
+    "_machine_translated": true,
+    "_source_hash": "5a50e999f32f021c"
+  },
+  "result_menu.unavailable.trash_path_too_long": {
+    "message": "Mover para a Reciclagem (caminho demasiado longo)",
+    "description": "Result right-click menu (Windows) — the Recycle Bin item, shown disabled because the path is 260 characters or longer, more than the Recycle Bin accepts",
+    "_machine_translated": true,
+    "_source_hash": "9ff84b7c31b30663"
   }
 }

@@ -10,6 +10,7 @@
 //! | copy file            | NSPasteboard URL | CF_HDROP + DropEffect=copy  | —                      |
 //! | cut file             | — (no file cut)  | CF_HDROP + DropEffect=move  | —                      |
 //! | move to trash        | NSFileManager    | SHFileOperation + ALLOWUNDO | gio / trash-cli / kio  |
+//! |                      |                  | (paths under MAX_PATH only) |                        |
 //! | run as administrator | —                | ShellExecuteEx "runas"      | —                      |
 //! | properties           | —                | ShellExecuteEx "properties" | —                      |
 //!
@@ -17,8 +18,41 @@
 //! uses `x-special/gnome-copied-files`, KDE `text/uri-list` plus its own
 //! cut marker) and `xclip` can only serve one of them, so copy and cut
 //! are left out there rather than half-working.
+//!
+//! # The last-moment check
+//!
+//! The destructive entry points (`move_to_trash`, a Cut through
+//! `copy_files_to_clipboard`) take a `Preflight`: the caller's re-check
+//! that the path still names the item it vetted (same canonical path, same
+//! file identity — see `launcher_actions::Resolved::verify_unchanged`).
+//! Each platform runs it **on the thread that makes the destructive call,
+//! immediately before it** — never on one thread with the call handed to
+//! another afterwards — and an `Err` aborts with nothing done.
+//!
+//! What remains is inherent to the OS APIs, which take paths, not handles:
+//!
+//! - The check and the call are still two steps. Something that swaps the
+//!   item (or a folder on its path) in the instant between them wins; the
+//!   check narrows that window to microseconds, it can't close it.
+//! - A Cut is pasted later, by the file manager, from the `CF_HDROP` path
+//!   list — path-based by design. Kage checks the item when it publishes
+//!   the list; what the path names when the user pastes is the file
+//!   manager's to resolve.
+//! - Linux trashes through `gio` / `trash-cli` / `kioclient`, separate
+//!   processes that are handed the path.
+//! - File identity is (volume, file index). On FAT and exFAT volumes
+//!   there is no stable file index — it is derived from where the
+//!   directory entry sits — so a replacement that reuses the same entry
+//!   can carry the same "identity"; and on ReFS (Windows Dev Drives) the
+//!   64-bit index Windows reports isn't guaranteed unique. The
+//!   canonical-path half of the check still applies there.
 
+use crate::error::AppError;
 use std::path::{Path, PathBuf};
+
+/// The caller's last check before a destructive call, run on the calling
+/// thread right before it (see the module docs). `Err` refuses.
+pub type Preflight<'a> = &'a (dyn Fn() -> Result<(), AppError> + Sync);
 
 /// Why a trash request failed.
 #[derive(Debug)]
@@ -28,6 +62,11 @@ pub enum TrashError {
     /// No trash implementation available (Linux without gio/trash-cli/kio).
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Unavailable,
+    /// Windows: the path is too long for the Recycle Bin API (`MAX_PATH`).
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    PathTooLong,
+    /// The preflight refused: the item isn't the one that was checked.
+    Refused(AppError),
     Other(String),
 }
 
@@ -36,23 +75,76 @@ impl std::fmt::Display for TrashError {
         match self {
             TrashError::PermissionDenied(s) => write!(f, "permission denied: {s}"),
             TrashError::Unavailable => write!(f, "no trash implementation available"),
+            TrashError::PathTooLong => write!(f, "path too long for the Recycle Bin"),
+            TrashError::Refused(e) => write!(f, "refused: {e}"),
             TrashError::Other(s) => write!(f, "{s}"),
         }
     }
 }
 
-/// Put `paths` on the clipboard as files. With `cut`, pasting in the file
-/// manager moves them (Windows only; macOS has no file cut).
-pub fn copy_files_to_clipboard(paths: &[PathBuf], cut: bool) -> anyhow::Result<()> {
-    if paths.is_empty() {
-        anyhow::bail!("no files to copy");
+/// Why putting files on the clipboard failed.
+#[derive(Debug)]
+pub enum ClipboardFilesError {
+    /// The preflight refused: nothing was published. (Only a Cut has
+    /// one, and only Windows cuts files.)
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    Refused(AppError),
+    Failed(anyhow::Error),
+}
+
+impl std::fmt::Display for ClipboardFilesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClipboardFilesError::Refused(e) => write!(f, "refused: {e}"),
+            ClipboardFilesError::Failed(e) => write!(f, "{e}"),
+        }
     }
-    crate::os::platform::file_ops::copy_files_to_clipboard_impl(paths, cut)
+}
+
+impl From<anyhow::Error> for ClipboardFilesError {
+    fn from(e: anyhow::Error) -> Self {
+        ClipboardFilesError::Failed(e)
+    }
+}
+
+/// Put `paths` on the clipboard as files. With `cut`, pasting in the file
+/// manager moves them (Windows only; macOS has no file cut). `preflight`
+/// runs right before the clipboard is replaced, with it already open (see
+/// the module docs); a Cut must pass one.
+pub fn copy_files_to_clipboard(
+    paths: &[PathBuf],
+    cut: bool,
+    preflight: Option<Preflight>,
+) -> Result<(), ClipboardFilesError> {
+    if paths.is_empty() {
+        return Err(anyhow::anyhow!("no files to copy").into());
+    }
+    if cut && preflight.is_none() {
+        return Err(anyhow::anyhow!("a cut needs a preflight check").into());
+    }
+    crate::os::platform::file_ops::copy_files_to_clipboard_impl(paths, cut, preflight)
 }
 
 /// Move `path` to the Trash / Recycle Bin, where the OS can restore it.
-pub fn move_to_trash(path: &Path) -> Result<(), TrashError> {
-    crate::os::platform::file_ops::move_to_trash_impl(path)
+/// `preflight` runs on the thread that trashes it, right before (see the
+/// module docs).
+pub fn move_to_trash(path: &Path, preflight: Preflight) -> Result<(), TrashError> {
+    crate::os::platform::file_ops::move_to_trash_impl(path, preflight)
+}
+
+/// The longest path (UTF-16 units) the Trash can take on this OS: Windows'
+/// `SHFileOperationW` is limited to `MAX_PATH` (260, the terminating NUL
+/// included). `None`: no limit Kage knows of.
+pub fn trash_path_limit() -> Option<usize> {
+    cfg!(target_os = "windows").then_some(WINDOWS_MAX_PATH - 1)
+}
+
+/// `MAX_PATH`, the terminating NUL included.
+pub const WINDOWS_MAX_PATH: usize = 260;
+
+/// Whether `path` is longer than `limit` UTF-16 units.
+pub fn exceeds_path_limit(path: &Path, limit: Option<usize>) -> bool {
+    limit.is_some_and(|max| path.as_os_str().to_string_lossy().encode_utf16().count() > max)
 }
 
 /// Whether `move_to_trash` can work at all on this machine.
@@ -183,6 +275,24 @@ mod tests {
         // header + "C:\a.txt\0" + "D:\b — ü.txt\0" + "\0", two bytes a unit
         let units = 8 + 1 + 12 + 1 + 1;
         assert_eq!(payload.len(), 20 + units * 2);
+    }
+
+    #[test]
+    fn path_limits_count_utf16_units() {
+        let at = |n: usize| PathBuf::from(format!("C:\\{}", "a".repeat(n - 3)));
+        let limit = Some(WINDOWS_MAX_PATH - 1);
+        assert!(!exceeds_path_limit(&at(259), limit));
+        assert!(exceeds_path_limit(&at(260), limit));
+        // An astral character is two UTF-16 units.
+        let astral = PathBuf::from(format!("C:\\{}\u{1F600}", "a".repeat(255)));
+        assert!(exceeds_path_limit(&astral, limit));
+        assert!(!exceeds_path_limit(&at(10_000), None));
+    }
+
+    #[test]
+    fn a_cut_without_a_preflight_is_refused() {
+        let err = copy_files_to_clipboard(&[PathBuf::from("/tmp/x")], true, None).unwrap_err();
+        assert!(matches!(err, ClipboardFilesError::Failed(_)), "{err}");
     }
 
     #[test]

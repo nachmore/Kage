@@ -9594,10 +9594,10 @@
     "_source_hash": "4b75f9431bf50029"
   },
   "result_menu.confirm.body_windows": {
-    "message": "Kage، {name} کا اپنا اَن انسٹالر کھولے گا — یا اگر وہ نہ ملے تو ترتیبات → انسٹال شدہ ایپس۔ جب تک آپ وہاں تصدیق نہ کریں، کچھ بھی نہیں ہٹایا جائے گا۔",
+    "message": "Kage، {name} کا اپنا ان انسٹالر شروع کرے گا — یا اگر وہ اسے استعمال نہ کر سکے تو ترتیبات ← انسٹال شدہ ایپس کھول دے گا۔ کچھ ان انسٹالر دوبارہ پوچھے بغیر ایپ کو فوراً ہٹا دیتے ہیں۔",
     "description": "Uninstall confirmation body on Windows",
     "_machine_translated": true,
-    "_source_hash": "37f1e04782643036"
+    "_source_hash": "ac9a520d2ecb4209"
   },
   "result_menu.confirm.cancel": {
     "message": "منسوخ کریں",
@@ -9652,5 +9652,23 @@
     "description": "Launcher result menu: right before moving an item to the Trash, it no longer was the item that was checked (replaced, or a folder on its path swapped)",
     "_machine_translated": true,
     "_source_hash": "416114f7e2cd73cd"
+  },
+  "errors.launcher.trash_path_too_long": {
+    "message": "“{name}” کا پاتھ ری سائیکل بن کے لیے بہت لمبا ہے۔ اسے چھوٹا کریں، یعنی اس سے اوپر والے کسی فولڈر کا نام بدلیں یا اسے منتقل کریں، اور دوبارہ کوشش کریں۔",
+    "description": "Launcher result menu (Windows): the path is 260 characters or longer, more than the Recycle Bin API accepts (MAX_PATH, terminating NUL included)",
+    "_machine_translated": true,
+    "_source_hash": "cb85fe6a0610f346"
+  },
+  "errors.launcher.identity_unavailable": {
+    "message": "Kage تصدیق نہیں کر سکا کہ “{name}” اب بھی وہی آئٹم ہے جو آپ نے منتخب کیا تھا، اس لیے اسے ویسے ہی چھوڑ دیا گیا۔",
+    "description": "Launcher result menu: right before moving or cutting an item, its file identity couldn't be read (then or now), so Kage refused rather than guess",
+    "_machine_translated": true,
+    "_source_hash": "5a50e999f32f021c"
+  },
+  "result_menu.unavailable.trash_path_too_long": {
+    "message": "ری سائیکل بن میں منتقل کریں (پاتھ بہت لمبا ہے)",
+    "description": "Result right-click menu (Windows) — the Recycle Bin item, shown disabled because the path is 260 characters or longer, more than the Recycle Bin accepts",
+    "_machine_translated": true,
+    "_source_hash": "9ff84b7c31b30663"
   }
 }
