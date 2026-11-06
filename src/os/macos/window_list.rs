@@ -690,6 +690,14 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
     Some((title, process_name))
 }
 
+/// Whether the frontmost application is this process, by PID. Covers both
+/// the bundled app and an unbundled dev binary.
+pub fn foreground_is_own_process() -> bool {
+    frontmost_app_info()
+        .and_then(|(pid, _)| u32::try_from(pid).ok())
+        .is_some_and(|pid| pid == std::process::id())
+}
+
 /// Ask NSWorkspace for the currently-frontmost running application.
 /// Returns (pid, localizedName). Permissionless — no TCC prompt.
 pub(crate) fn frontmost_app_info() -> Option<(i32, String)> {

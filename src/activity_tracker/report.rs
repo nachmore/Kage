@@ -50,7 +50,7 @@ fn report_for(conn: &Connection, period: &str, poll_interval: u64) -> Result<Act
 
     let start_str = start_date.format("%Y-%m-%d").to_string();
 
-    // Switches and streaks over the fine rows, in sample order.
+    // Switches, sessions and streaks over the fine rows, in sample order.
     let mut fine = SwitchSummary::default();
     for_each_streak(
         conn,
@@ -60,17 +60,22 @@ fn report_for(conn: &Connection, period: &str, poll_interval: u64) -> Result<Act
         |streak| fine.add(streak),
     )?;
 
-    // Days older than the fine window were rolled up with their switch
-    // counts and longest streak per app, so the switch figures cover the
-    // same days as the time figures. Days rolled up before those columns
-    // existed carry 0: their time still counts, their switches are gone.
+    // Days older than the fine window were rolled up with their switches,
+    // sessions and longest streak per app, so those figures cover the same
+    // days as the time figures. Days rolled up before those columns existed
+    // carry 0: their time still counts, their switches are gone. Marker rows
+    // (empty process name, 0 s) aren't apps.
     let mut stmt = conn.prepare(
-        "SELECT process_name, SUM(total) as total, SUM(switches) as switches FROM (
-             SELECT process_name, SUM(duration_secs) as total, 0 as switches
-             FROM activity_log WHERE timestamp >= ?1 GROUP BY process_name
+        "SELECT process_name, SUM(total) as total, SUM(switches) as switches,
+                SUM(sessions) as sessions FROM (
+             SELECT process_name, SUM(duration_secs) as total, 0 as switches, 0 as sessions
+             FROM activity_log WHERE timestamp >= ?1 AND process_name <> ''
+             GROUP BY process_name
              UNION ALL
-             SELECT process_name, SUM(duration_secs) as total, SUM(switches) as switches
-             FROM activity_daily WHERE day >= ?1 GROUP BY process_name
+             SELECT process_name, SUM(duration_secs) as total, SUM(switches) as switches,
+                    SUM(sessions) as sessions
+             FROM activity_daily WHERE day >= ?1 AND process_name <> ''
+             GROUP BY process_name
          )
          GROUP BY process_name
          ORDER BY total DESC",
@@ -84,14 +89,16 @@ fn report_for(conn: &Connection, period: &str, poll_interval: u64) -> Result<Act
             row.get::<_, String>(0)?,
             row.get::<_, u64>(1)?,
             row.get::<_, u64>(2)?,
+            row.get::<_, u64>(3)?,
         ))
     })?;
     for row in rows {
-        let (process_name, seconds, rolled_up_switches) = row?;
+        let (process_name, seconds, rolled_up_switches, rolled_up_sessions) = row?;
         total_seconds += seconds;
         context_switches += rolled_up_switches;
+        // `switches_to` carries sessions (see AppUsage).
         let switches_to =
-            rolled_up_switches + fine.switches_to.get(&process_name).copied().unwrap_or(0);
+            rolled_up_sessions + fine.sessions.get(&process_name).copied().unwrap_or(0);
         apps.push(AppUsage {
             display_name: prettify_process_name(&process_name),
             process_name,
@@ -313,13 +320,15 @@ mod tests {
         conn
     }
 
-    /// Fine rows 5 s apart from `start`, each credited 5 s.
+    /// Fine rows 5 s apart from `start`, each credited 5 s, except that an
+    /// empty name is a marker row (0 s), as the poll loop stores for Kage.
     fn seed_fine(conn: &Connection, start: chrono::DateTime<chrono::FixedOffset>, apps: &[&str]) {
         for (i, app) in apps.iter().enumerate() {
             let ts = start + ChronoDuration::seconds(i as i64 * 5);
+            let secs = if app.is_empty() { 0 } else { 5 };
             conn.execute(
-                "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, ?2, 't', 5)",
-                rusqlite::params![ts.to_rfc3339(), app],
+                "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, ?2, 't', ?3)",
+                rusqlite::params![ts.to_rfc3339(), app, secs],
             )
             .unwrap();
         }
@@ -349,11 +358,13 @@ mod tests {
         let report = report_for(&conn, "all", POLL).unwrap();
         // code → slack → code. Kage in between is seen through.
         assert_eq!(report.context_switches, 2);
-        assert_eq!(app(&report, "code").switches_to, 1);
+        // Sessions: code's first run, and its run after slack.
+        assert_eq!(app(&report, "code").switches_to, 2);
         assert_eq!(app(&report, "slack").switches_to, 1);
         assert_eq!(app(&report, "kage").switches_to, 0);
+        // One fresh start (the first sample) on top of the switches.
         let per_app: u64 = report.apps.iter().map(|a| a.switches_to).sum();
-        assert_eq!(per_app, report.context_switches);
+        assert_eq!(per_app, report.context_switches + 1);
         // Time is unchanged: every row still counts toward its app.
         assert_eq!(app(&report, "code").seconds, 70);
         assert_eq!(report.total_seconds, 90);
@@ -365,17 +376,19 @@ mod tests {
     fn report_adds_rolled_up_switches_and_streaks() {
         let conn = db();
         conn.execute_batch(
-            "INSERT INTO activity_daily (day, process_name, duration_secs, switches, longest_streak_secs) VALUES
-                 ('2026-01-10', 'code', 3600, 4, 1800),
-                 ('2026-01-10', 'slack', 600, 5, 300);",
+            "INSERT INTO activity_daily
+                 (day, process_name, duration_secs, switches, sessions, longest_streak_secs) VALUES
+                 ('2026-01-10', 'code', 3600, 4, 5, 1800),
+                 ('2026-01-10', 'slack', 600, 5, 5, 300);",
         )
         .unwrap();
         seed_fine(&conn, march_morning(), &["code", "slack", "code"]);
 
         let report = report_for(&conn, "all", POLL).unwrap();
-        assert_eq!(app(&report, "code").switches_to, 4 + 1);
+        // Sessions: rolled up plus fine (code twice, slack once).
+        assert_eq!(app(&report, "code").switches_to, 5 + 2);
         assert_eq!(app(&report, "slack").switches_to, 5 + 1);
-        assert_eq!(report.context_switches, 11);
+        assert_eq!(report.context_switches, 4 + 5 + 2);
         assert_eq!(report.longest_streak_seconds, 1800);
         assert_eq!(report.longest_streak_app, "VS Code");
     }
@@ -393,8 +406,36 @@ mod tests {
 
         let report = report_for(&conn, "all", POLL).unwrap();
         assert_eq!(app(&report, "code").seconds, 3605);
+        assert_eq!(app(&report, "code").switches_to, 1);
         assert_eq!(report.context_switches, 1);
         assert_eq!(report.longest_streak_app, "Slack");
+    }
+
+    #[test]
+    fn one_app_all_day_is_one_session_and_no_switches() {
+        let conn = db();
+        seed_fine(&conn, march_morning(), &["code"; 20]);
+
+        let report = report_for(&conn, "all", POLL).unwrap();
+        assert_eq!(report.context_switches, 0);
+        assert_eq!(app(&report, "code").switches_to, 1);
+    }
+
+    #[test]
+    fn marker_rows_bridge_kage_and_are_not_apps() {
+        let conn = db();
+        // A minute in Kage's chat between code and chrome.
+        let mut seq = vec!["code", "code"];
+        seq.extend([""; 12]);
+        seq.extend(["chrome", "chrome"]);
+        seed_fine(&conn, march_morning(), &seq);
+
+        let report = report_for(&conn, "all", POLL).unwrap();
+        assert_eq!(report.context_switches, 1);
+        assert_eq!(app(&report, "chrome").switches_to, 1);
+        assert!(report.apps.iter().all(|a| !a.process_name.is_empty()));
+        assert_eq!(report.apps.len(), 2);
+        assert_eq!(report.total_seconds, 20);
     }
 
     #[test]
@@ -423,6 +464,8 @@ mod tests {
 
         let after = report_for(&conn, "all", POLL).unwrap();
         assert_eq!(before.context_switches, 2);
+        // code: the first run, after slack, and after the lock.
+        assert_eq!(app(&before, "code").switches_to, 3);
         assert_eq!(after.context_switches, before.context_switches);
         assert_eq!(after.total_seconds, before.total_seconds);
         for process in ["code", "slack", "lockapp"] {

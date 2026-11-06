@@ -238,6 +238,25 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
     }
 }
 
+/// Whether the foreground window belongs to this process. Checks the PID
+/// only, so it holds for our windows whatever their title.
+pub fn foreground_is_own_process() -> bool {
+    #[allow(non_snake_case)]
+    extern "system" {
+        fn GetForegroundWindow() -> isize;
+    }
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd == 0 {
+            return false;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        is_own_process(pid)
+    }
+}
+
 /// On Windows, icons are already extracted during list_windows_impl and cached
 /// in the icon module. This function looks them up from a fresh window enumeration
 /// which populates icons as a side effect.

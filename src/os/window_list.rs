@@ -66,6 +66,14 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
     crate::os::platform::window_list::get_foreground_window_info()
 }
 
+/// True when the foreground window belongs to this process.
+/// [`get_foreground_window_info`] returns `None` both for our own windows
+/// and for no window at all; this tells the two apart. Always false on
+/// Linux, where foreground lookup isn't implemented.
+pub fn foreground_is_own_process() -> bool {
+    crate::os::platform::window_list::foreground_is_own_process()
+}
+
 /// Fetch app icons for a set of window handles (PIDs on macOS, HWNDs on Windows).
 /// Returns a map of handle → base64 data URI.
 /// This is designed to be called asynchronously after `list_windows()` so the

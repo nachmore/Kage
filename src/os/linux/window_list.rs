@@ -179,6 +179,10 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
     None // TODO: implement on Linux
 }
 
+pub fn foreground_is_own_process() -> bool {
+    false // Foreground lookup isn't implemented on Linux yet.
+}
+
 pub fn get_window_icons(_handles: &[u64]) -> std::collections::HashMap<u64, String> {
     std::collections::HashMap::new() // TODO: implement on Linux
 }

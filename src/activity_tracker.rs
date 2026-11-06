@@ -31,6 +31,11 @@ use report::prettify_process_name;
 
 /// How often to poll the foreground window (in seconds)
 const DEFAULT_POLL_INTERVAL_SECS: u64 = 5;
+/// Bounds on the poll interval a caller can ask for. The Focus Tracker's
+/// settings offer 2 to 60 s. The upper bound also caps what one row can be
+/// credited (see `switches::MAX_ROW_SECS`).
+const MIN_POLL_INTERVAL_SECS: u64 = 2;
+const MAX_POLL_INTERVAL_SECS: u64 = 60;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -46,8 +51,7 @@ pub struct ActivityReport {
     pub apps: Vec<AppUsage>,
     /// Moves from one app to a different app in the period. The first app
     /// isn't one, and neither is the first app after a break (sleep, lock).
-    /// Kage's own windows are seen through. Equals the sum of every app's
-    /// `switches_to`. Rules in `switches.rs`.
+    /// Kage's own windows are seen through. Rules in `switches.rs`.
     pub context_switches: u64,
     /// Longest unbroken run of one app, in credited seconds
     pub longest_streak_seconds: u64,
@@ -86,7 +90,12 @@ pub struct AppUsage {
     pub display_name: String,
     pub seconds: u64,
     pub percentage: f64,
-    /// Switches into this app from a different one (see `context_switches`)
+    /// Sessions: how many separate times this app was in front, one per
+    /// unbroken run of it. Unlike `context_switches` this includes the
+    /// first app of the period and the first app after a break, so a day
+    /// spent in one app is one session. The sum over apps is
+    /// `context_switches` plus the number of fresh starts. The Focus
+    /// Tracker shows it as "N sessions".
     pub switches_to: u64,
     /// For browsers: breakdown by website/page title
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -209,8 +218,9 @@ const ROLLUP_RETENTION_DAYS: i64 = 730;
 /// `CREATE TABLE IF NOT EXISTS` leaves an existing table as it is, so
 /// [`add_missing_daily_columns`] adds them. Rows rolled up before these
 /// existed keep the default 0, because the ordering they'd need is gone.
-const DAILY_ADDED_COLUMNS: [(&str, &str); 2] = [
+const DAILY_ADDED_COLUMNS: [(&str, &str); 3] = [
     ("switches", "INTEGER NOT NULL DEFAULT 0"),
+    ("sessions", "INTEGER NOT NULL DEFAULT 0"),
     ("longest_streak_secs", "INTEGER NOT NULL DEFAULT 0"),
 ];
 
@@ -230,6 +240,7 @@ fn init_db(conn: &Connection, poll_interval: u64) -> Result<()> {
             process_name TEXT NOT NULL,
             duration_secs INTEGER NOT NULL DEFAULT 0,
             switches INTEGER NOT NULL DEFAULT 0,
+            sessions INTEGER NOT NULL DEFAULT 0,
             longest_streak_secs INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (day, process_name)
         );
@@ -259,13 +270,15 @@ fn add_missing_daily_columns(conn: &Connection) -> Result<()> {
 /// [`RETENTION_DAYS`] are ROLLED UP into `activity_daily` before being
 /// deleted, so long-range reports (year / all-time) keep the same
 /// figures as the fine window: per-day, per-app time, switches into the
-/// app, and its longest streak (see `switches.rs`). Without the last two,
+/// app, its sessions, and its longest streak (see `switches.rs`). Without
+/// the switch figures,
 /// a year report would count switches over the last 90 days only while
 /// its time covered the whole year. What the rollup drops: window titles
 /// (site breakdowns) and row ordering. A streak running across a prune
-/// boundary is split in two, and the switch between the last rolled-up
-/// row and the first fine row isn't counted (at most one per Kage
-/// launch, on data 90+ days old). Rollup rows older than
+/// boundary is split in two (one extra session), and the switch between
+/// the last rolled-up row and the first fine row isn't counted (at most
+/// one per Kage launch, on data 90+ days old). Marker rows (empty process
+/// name, 0 s) aren't rolled up. Rollup rows older than
 /// [`ROLLUP_RETENTION_DAYS`] age out too.
 ///
 /// The rollup and the delete commit together, so a crash between them
@@ -307,25 +320,30 @@ fn roll_up_and_delete(conn: &Connection, cutoff: &str, poll_interval: u64) -> Re
     let tx = conn.unchecked_transaction()?;
 
     // Switches and streaks need the rows in order, so they're computed here
-    // rather than in SQL. Each streak is filed under the day it started,
-    // and its switch (if any) happened on that day too.
-    let mut per_day: std::collections::HashMap<(String, String), (u64, u64)> =
+    // rather than in SQL. Each streak is one session, filed under the day
+    // it started, and its switch (if any) happened on that day too.
+    #[derive(Default)]
+    struct DayStats {
+        switches: u64,
+        sessions: u64,
+        longest: u64,
+    }
+    let mut per_day: std::collections::HashMap<(String, String), DayStats> =
         std::collections::HashMap::new();
     switches::for_each_streak(&tx, "timestamp < ?1", cutoff, poll_interval, |streak| {
-        let (switches, longest) = per_day.entry((streak.day, streak.app)).or_default();
-        if streak.switched_in {
-            *switches += 1;
-        }
-        *longest = (*longest).max(streak.secs);
+        let day = per_day.entry((streak.day, streak.app)).or_default();
+        day.switches += u64::from(streak.switched_in);
+        day.sessions += 1;
+        day.longest = day.longest.max(streak.secs);
     })?;
 
     // Time per day and app. substr(ts,1,10) is the "YYYY-MM-DD" prefix of
     // the RFC3339 timestamp. UPSERT so a re-run (or rows landing on a day
-    // that already has rollup) adds.
+    // that already has rollup) adds. Marker rows carry no time.
     tx.execute(
         "INSERT INTO activity_daily (day, process_name, duration_secs)
          SELECT substr(timestamp, 1, 10), process_name, SUM(duration_secs)
-         FROM activity_log WHERE timestamp < ?1
+         FROM activity_log WHERE timestamp < ?1 AND process_name <> ''
          GROUP BY substr(timestamp, 1, 10), process_name
          ON CONFLICT(day, process_name)
          DO UPDATE SET duration_secs = duration_secs + excluded.duration_secs",
@@ -334,14 +352,21 @@ fn roll_up_and_delete(conn: &Connection, cutoff: &str, poll_interval: u64) -> Re
 
     {
         let mut upsert = tx.prepare(
-            "INSERT INTO activity_daily (day, process_name, switches, longest_streak_secs)
-             VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO activity_daily (day, process_name, switches, sessions, longest_streak_secs)
+             VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(day, process_name) DO UPDATE SET
                  switches = switches + excluded.switches,
+                 sessions = sessions + excluded.sessions,
                  longest_streak_secs = MAX(longest_streak_secs, excluded.longest_streak_secs)",
         )?;
-        for ((day, process_name), (switches, longest)) in &per_day {
-            upsert.execute(rusqlite::params![day, process_name, switches, longest])?;
+        for ((day, process_name), stats) in &per_day {
+            upsert.execute(rusqlite::params![
+                day,
+                process_name,
+                stats.switches,
+                stats.sessions,
+                stats.longest
+            ])?;
         }
     }
 
@@ -367,7 +392,8 @@ pub async fn start_tracker(
     };
 
     if let Some(interval) = poll_interval {
-        *state.poll_interval_secs.lock_or_recover() = interval.max(2);
+        *state.poll_interval_secs.lock_or_recover() =
+            interval.clamp(MIN_POLL_INTERVAL_SECS, MAX_POLL_INTERVAL_SECS);
     }
     let interval = *state.poll_interval_secs.lock_or_recover();
 
@@ -416,9 +442,44 @@ pub async fn stop_tracker(state: &Arc<ActivityTrackerState>) {
     }
 }
 
+/// One `activity_log` row: `(process_name, window_title, duration_secs)`.
+type TickRow = (String, String, u64);
+
+/// The row one tick stores, or `None` to store nothing.
+///
+/// - An app in front: its row, credited `credited` seconds.
+/// - Kage's own window or transient system UI in front: a marker row,
+///   empty process name and title, 0 s. It adds no time anywhere, but it
+///   tells `switches.rs` the machine was awake and in use, so a minute in
+///   Kage's chat doesn't read as a break. The platform layer returns `None`
+///   for our own windows on Windows (by PID) and on a bundled macOS build
+///   (by name), so `own_window_in_front` asks it separately.
+///   `is_own_process_name` also catches an unbundled macOS dev binary,
+///   which reports itself as lowercase `kage`.
+/// - No window, or a window with no process name: nothing. That's what
+///   the locked desktop on Windows looks like, so the gap it leaves is a
+///   break.
+fn row_for_tick(
+    foreground: Option<(String, String)>,
+    own_window_in_front: impl FnOnce() -> bool,
+    credited: u64,
+) -> Option<TickRow> {
+    let marker = || Some((String::new(), String::new(), 0));
+    match foreground {
+        Some((_, process))
+            if is_system_noise(&process) || switches::is_own_process_name(&process) =>
+        {
+            marker()
+        }
+        Some((title, process)) if !process.trim().is_empty() => Some((process, title, credited)),
+        Some(_) => None,
+        None if own_window_in_front() => marker(),
+        None => None,
+    }
+}
+
 async fn poll_loop(state: Arc<ActivityTrackerState>, generation: u64) {
     crate::os::set_current_thread_name("activity-tracker");
-    let mut last_process = String::new();
     let mut last_poll = std::time::Instant::now();
 
     while state.is_current(generation) {
@@ -433,37 +494,31 @@ async fn poll_loop(state: Arc<ActivityTrackerState>, generation: u64) {
         let elapsed_secs = credited_secs(now.duration_since(last_poll), interval);
         last_poll = now;
 
-        // Get foreground window
-        let info = crate::os::window_list::get_foreground_window_info();
-        let (title, process) = match info {
-            Some((t, p)) if !p.is_empty() => (t, p),
-            _ => continue,
+        let Some((process, title, credited)) = row_for_tick(
+            crate::os::window_list::get_foreground_window_info(),
+            crate::os::window_list::foreground_is_own_process,
+            elapsed_secs,
+        ) else {
+            continue;
         };
 
-        // Skip transient system UI processes (noise, not real app usage)
-        // and Kage itself. The platform layer already drops our own windows
-        // on Windows (by PID) and on a bundled macOS build (by name).
-        // `is_own_process_name` also catches an unbundled macOS dev binary,
-        // which reports itself as lowercase `kage`.
-        if is_system_noise(&process) || switches::is_own_process_name(&process) {
-            continue;
+        if process.is_empty() {
+            debug!("[ActivityTracker] Kage or system UI in front");
+        } else {
+            debug!("[ActivityTracker] Active: {} ({})", process, title);
         }
-
-        debug!("[ActivityTracker] Active: {} ({})", process, title);
 
         // Record to DB on the blocking pool so SQLite's disk I/O doesn't
         // stall the async scheduler. The lock is a std::sync::Mutex and is
         // only held for the duration of the insert.
         let state_for_insert = Arc::clone(&state);
-        let process_for_insert = process.clone();
-        let title_for_insert = title;
         let insert_result = tokio::task::spawn_blocking(move || {
             let guard = state_for_insert.db.lock_or_recover();
             if let Some(ref conn) = *guard {
                 let timestamp = Local::now().to_rfc3339();
                 conn.execute(
                     "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, ?2, ?3, ?4)",
-                    rusqlite::params![timestamp, process_for_insert, title_for_insert, elapsed_secs],
+                    rusqlite::params![timestamp, process, title, credited],
                 )?;
             }
             Ok::<(), rusqlite::Error>(())
@@ -474,10 +529,6 @@ async fn poll_loop(state: Arc<ActivityTrackerState>, generation: u64) {
             warn!("[ActivityTracker] insert task panicked: {}", e);
         } else if let Ok(Err(e)) = insert_result {
             warn!("[ActivityTracker] insert failed: {}", e);
-        }
-
-        if process != last_process {
-            last_process = process;
         }
     }
 }
@@ -494,12 +545,12 @@ pub(super) fn build_month_buckets(conn: &Connection, start_str: &str) -> Result<
         "SELECT month, process_name, SUM(total) as total FROM (
              SELECT substr(timestamp, 1, 7) as month, process_name,
                     SUM(duration_secs) as total
-             FROM activity_log WHERE timestamp >= ?1
+             FROM activity_log WHERE timestamp >= ?1 AND process_name <> ''
              GROUP BY month, process_name
              UNION ALL
              SELECT substr(day, 1, 7) as month, process_name,
                     SUM(duration_secs) as total
-             FROM activity_daily WHERE day >= ?1
+             FROM activity_daily WHERE day >= ?1 AND process_name <> ''
              GROUP BY month, process_name
          )
          GROUP BY month, process_name
@@ -631,6 +682,55 @@ mod lifecycle_tests {
         // Lid closed overnight: ~15h between ticks.
         assert_eq!(credited_secs(Duration::from_secs(54_000), 5), 5);
     }
+
+    #[test]
+    fn no_tick_is_credited_more_than_max_row_secs() {
+        // switches.rs reads anything above this as an older build's resume.
+        for interval in MIN_POLL_INTERVAL_SECS..=MAX_POLL_INTERVAL_SECS {
+            for elapsed in (0..=4 * MAX_POLL_INTERVAL_SECS).chain([54_000]) {
+                let credited = credited_secs(Duration::from_secs(elapsed), interval);
+                assert!(
+                    credited <= switches::MAX_ROW_SECS,
+                    "{interval}s / {elapsed}s"
+                );
+            }
+        }
+    }
+
+    fn fg(title: &str, process: &str) -> Option<(String, String)> {
+        Some((title.to_string(), process.to_string()))
+    }
+
+    fn marker() -> Option<TickRow> {
+        Some((String::new(), String::new(), 0))
+    }
+
+    #[test]
+    fn an_app_in_front_stores_its_row() {
+        let row = row_for_tick(fg("main.rs", "code"), || panic!("not asked"), 5);
+        assert_eq!(row, Some(("code".into(), "main.rs".into(), 5)));
+    }
+
+    #[test]
+    fn kage_and_system_ui_store_a_marker() {
+        for process in ["kage", "Kage", "SearchHost", "ShellExperienceHost"] {
+            assert_eq!(
+                row_for_tick(fg("x", process), || false, 5),
+                marker(),
+                "{process}"
+            );
+        }
+        // Our own window, which the platform layer reports as None.
+        assert_eq!(row_for_tick(None, || true, 5), marker());
+    }
+
+    #[test]
+    fn no_window_stores_nothing() {
+        assert_eq!(row_for_tick(None, || false, 5), None);
+        // A window whose process couldn't be named.
+        assert_eq!(row_for_tick(fg("title", ""), || true, 5), None);
+        assert_eq!(row_for_tick(fg("title", "  "), || true, 5), None);
+    }
 }
 
 #[cfg(test)]
@@ -727,30 +827,47 @@ mod retention_tests {
         assert_eq!(total, 12);
     }
 
-    /// Rows 5 s apart from noon `days` ago, each credited 5 s.
-    fn seed_old_run(conn: &Connection, days: i64, apps: &[&str]) {
-        let noon = (Local::now() - ChronoDuration::days(days))
+    fn noon_days_ago(days: i64) -> chrono::DateTime<Local> {
+        (Local::now() - ChronoDuration::days(days))
             .date_naive()
             .and_hms_opt(12, 0, 0)
             .unwrap()
             .and_local_timezone(Local)
             .earliest()
-            .unwrap();
+            .unwrap()
+    }
+
+    fn insert_row(conn: &Connection, ts: chrono::DateTime<Local>, process: &str, secs: u64) {
+        conn.execute(
+            "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, ?2, 't', ?3)",
+            rusqlite::params![ts.to_rfc3339(), process, secs],
+        )
+        .unwrap();
+    }
+
+    /// Rows 5 s apart from noon `days` ago, each credited 5 s. An empty
+    /// name is a marker row (0 s).
+    fn seed_old_run(conn: &Connection, days: i64, apps: &[&str]) {
+        let noon = noon_days_ago(days);
         for (i, app) in apps.iter().enumerate() {
             let ts = noon + ChronoDuration::seconds(i as i64 * 5);
-            conn.execute(
-                "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, ?2, 't', 5)",
-                rusqlite::params![ts.to_rfc3339(), app],
-            )
-            .unwrap();
+            insert_row(conn, ts, app, if app.is_empty() { 0 } else { 5 });
         }
     }
 
-    fn daily_stats(conn: &Connection, process: &str) -> (u64, u64, u64) {
+    /// `(duration_secs, switches, sessions, longest_streak_secs)`.
+    fn init_mem_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
+        conn
+    }
+
+    fn daily_stats(conn: &Connection, process: &str) -> (u64, u64, u64, u64) {
         conn.query_row(
-            "SELECT duration_secs, switches, longest_streak_secs FROM activity_daily WHERE process_name = ?1",
+            "SELECT duration_secs, switches, sessions, longest_streak_secs
+             FROM activity_daily WHERE process_name = ?1",
             [process],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .unwrap()
     }
@@ -767,9 +884,58 @@ mod retention_tests {
 
         prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
 
-        // code: first app (no switch), then one switch back from slack.
-        assert_eq!(daily_stats(&conn, "code"), (25, 1, 15));
-        assert_eq!(daily_stats(&conn, "slack"), (5, 1, 5));
+        // code: first app (no switch, one session), then one switch back
+        // from slack (a second session).
+        assert_eq!(daily_stats(&conn, "code"), (25, 1, 2, 15));
+        assert_eq!(daily_stats(&conn, "slack"), (5, 1, 1, 5));
+    }
+
+    #[test]
+    fn prune_reads_an_older_builds_overnight_credit_as_a_break() {
+        let conn = init_mem_db();
+        // Before the credit cap, the first row after a night's sleep held
+        // the whole night.
+        let noon = noon_days_ago(RETENTION_DAYS + 5);
+        let at = |secs: i64| noon + ChronoDuration::seconds(secs);
+        insert_row(&conn, at(0), "code", 5);
+        insert_row(&conn, at(5), "code", 5);
+        insert_row(&conn, at(54_005), "code", 54_000);
+        insert_row(&conn, at(54_010), "code", 5);
+
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
+
+        let (switches, sessions, longest): (u64, u64, u64) = conn
+            .query_row(
+                "SELECT SUM(switches), SUM(sessions), MAX(longest_streak_secs)
+                 FROM activity_daily WHERE process_name = 'code'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!((switches, sessions), (0, 2));
+        // Two 10 s streaks, not one of 54,015 s kept for two years.
+        assert_eq!(longest, 10);
+    }
+
+    #[test]
+    fn prune_drops_marker_rows_but_keeps_the_switch_they_bridge() {
+        let conn = init_mem_db();
+        let mut seq = vec!["code", "code"];
+        seq.extend([""; 12]);
+        seq.push("chrome");
+        seed_old_run(&conn, RETENTION_DAYS + 5, &seq);
+
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
+
+        let markers: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM activity_daily WHERE process_name = ''",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(markers, 0);
+        assert_eq!(daily_stats(&conn, "chrome"), (5, 1, 1, 5));
     }
 
     #[test]
@@ -786,11 +952,13 @@ mod retention_tests {
         seed_old_run(&conn, RETENTION_DAYS + 5, &["slack", "code"]);
         prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
 
-        let (_, code_switches, code_longest) = daily_stats(&conn, "code");
+        let (_, code_switches, code_sessions, code_longest) = daily_stats(&conn, "code");
         assert_eq!(code_switches, 2);
+        assert_eq!(code_sessions, 3);
         assert_eq!(code_longest, 10);
-        let (_, slack_switches, _) = daily_stats(&conn, "slack");
+        let (_, slack_switches, slack_sessions, _) = daily_stats(&conn, "slack");
         assert_eq!(slack_switches, 1);
+        assert_eq!(slack_sessions, 2);
     }
 
     #[test]
@@ -812,7 +980,7 @@ mod retention_tests {
         // Opening again is a no-op, not a duplicate-column error.
         init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
 
-        assert_eq!(daily_stats(&conn, "code"), (3600, 0, 0));
+        assert_eq!(daily_stats(&conn, "code"), (3600, 0, 0, 0));
     }
 }
 
