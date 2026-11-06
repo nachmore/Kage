@@ -90,6 +90,15 @@ HTML_PATTERN = re.compile(
 # inside a segment) — keeps the rule readable. Add a short comment when
 # adding entries here.
 KNOWN_DYNAMIC_KEYS: set[str] = {
+    # Popup menu items carry a `labelKey` the menu window passes to t():
+    # the default text menu builds `context_menu.${id}` (shared/popup-menu.js)
+    # and result menus pick an OS-specific `result_menu.<action>` key
+    # (shared/result-menu.js). Result-menu feedback and confirmation text is
+    # chosen by action/OS before the t() call (floating/app/result-menu.js).
+    "context_menu.*",
+    "result_menu.*",
+    "result_menu.feedback.*",
+    "result_menu.confirm.*",
     # Internal Sites settings render option labels, editor labels and test
     # rows via template literals (`settings.internal_sites.<group>.${v}`).
     "settings.internal_sites.editor.**",

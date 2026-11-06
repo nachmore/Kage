@@ -30,9 +30,12 @@ extern "system" {
     fn GlobalSize(hmem: *mut std::ffi::c_void) -> usize;
     fn GlobalFree(hmem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
     fn GetClipboardSequenceNumber() -> u32;
+    fn RegisterClipboardFormatW(name: *const u16) -> u32;
 }
 
 const CF_UNICODETEXT: u32 = 13;
+/// A file list (`DROPFILES`), what Explorer pastes as files.
+pub(crate) const CF_HDROP: u32 = 15;
 const GMEM_MOVEABLE: u32 = 0x0002;
 
 pub fn read_clipboard_impl() -> Option<String> {
@@ -110,6 +113,51 @@ pub fn write_clipboard_impl(text: &str) -> bool {
         } else {
             true
         };
+        CloseClipboard();
+        ok
+    }
+}
+
+/// Id of the registered clipboard format `name` (e.g. "Preferred
+/// DropEffect"), or 0 if registration failed.
+pub(crate) fn register_clipboard_format(name: &str) -> u32 {
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe { RegisterClipboardFormatW(wide.as_ptr()) }
+}
+
+/// Replace the clipboard's contents with `formats` — (format id, bytes)
+/// pairs written together under one open, so readers never see half of
+/// them. Returns `false` if the clipboard couldn't be opened or any
+/// format failed to land.
+pub(crate) fn set_clipboard_formats(formats: &[(u32, &[u8])]) -> bool {
+    unsafe {
+        if !open_clipboard_with_retry() {
+            log::warn!("set_clipboard_formats: OpenClipboard failed after retries");
+            return false;
+        }
+        EmptyClipboard();
+        let mut ok = true;
+        for (format, bytes) in formats {
+            let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes.len().max(1));
+            if hmem.is_null() {
+                ok = false;
+                break;
+            }
+            let dest = GlobalLock(hmem) as *mut u8;
+            if dest.is_null() {
+                GlobalFree(hmem);
+                ok = false;
+                break;
+            }
+            ptr::copy_nonoverlapping(bytes.as_ptr(), dest, bytes.len());
+            GlobalUnlock(hmem);
+            // On success the system owns hmem; on failure we free it.
+            if SetClipboardData(*format, hmem).is_null() {
+                GlobalFree(hmem);
+                ok = false;
+                break;
+            }
+        }
         CloseClipboard();
         ok
     }

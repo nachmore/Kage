@@ -28,6 +28,7 @@ import { CommandsMethods } from './app/commands.js';
 import { SearchMethods } from './app/search.js';
 import { InputMethods } from './app/input.js';
 import { ResponseUiMethods } from './app/response-ui.js';
+import { ResultMenuMethods } from './app/result-menu.js';
 import { applyMixin } from '../shared/mixin.js';
 import { HOST_FEATURE_DATE_PICKER } from '../shared/extension-sandbox-host.js';
 
@@ -476,6 +477,7 @@ for (const mixin of [
     SearchMethods,
     InputMethods,
     ResponseUiMethods,
+    ResultMenuMethods,
 ]) {
     applyMixin(FloatingApp.prototype, mixin);
 }

@@ -32,7 +32,9 @@ export const EVT = {
     // Sessions (formerly show-sessions)
     SHOW_SESSIONS: 'show_sessions',
 
-    // Context menu (formerly context-menu-action)
+    // Context menu (formerly context-menu-action). RENDER: backend → menu
+    // window; ACTION: menu window → the window that asked (JS-only).
+    CONTEXT_MENU_RENDER: 'context_menu_render',
     CONTEXT_MENU_ACTION: 'context_menu_action',
 
     // Hotkey-loop event names

@@ -147,6 +147,21 @@ export const InputMethods = {
     },
 
     async handleKeyDown(event) {
+        // An uninstall confirmation is showing (focus strayed back into the
+        // input): Esc cancels it, and Enter must never reach the normal
+        // Enter path — that would run the old selection or send the query.
+        if (this._resultConfirm) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                // Not the document's Esc-hides-the-window handler too.
+                event.stopPropagation();
+                this._cancelResultConfirm();
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                this._resultConfirm.cancelButton?.focus();
+            }
+            if (event.key === 'Escape' || event.key === 'Enter') return;
+        }
         // Alt+↓ / ⌥↓ opens the month calendar (the WAI-ARIA date-picker key).
         // Its openers can't be reached with Tab — Tab cycles suggestions
         // here — so this is the keyboard path to them. Declined (input has

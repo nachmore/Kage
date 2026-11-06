@@ -72,6 +72,9 @@ export const LifecycleVisibilityMethods = {
                 this.extensionManager?.setWidgetVisibility(false);
                 return;
             }
+            // An uninstall confirmation doesn't survive the launcher being
+            // hidden (e.g. by its hotkey): coming back starts fresh.
+            if (wasHidden) this._cancelResultConfirm?.();
             document.documentElement.classList.remove('animations-paused');
             // Resume before signaling: reopen resets the previous party hat,
             // summon pops in, and the banner check may then celebrate the update.
@@ -184,7 +187,10 @@ export const LifecycleVisibilityMethods = {
 
             // Don't reset UI if permission modal is open
             const permissionModal = document.getElementById('permissionModal');
-            if (!permissionModal || permissionModal.style.display === 'none') {
+            if (this._resultConfirm) {
+                // An uninstall confirmation keeps the keyboard, not the input.
+                setTimeout(() => this._resultConfirm?.cancelButton?.focus(), 50);
+            } else if (!permissionModal || permissionModal.style.display === 'none') {
                 if (this.isWaitingForResponse) {
                     setTimeout(() => this.elements.input.focus(), 50);
                 } else {
@@ -252,6 +258,11 @@ export const LifecycleVisibilityMethods = {
             }
             // Don't hide if context menu popup window is open
             if (window._contextMenuOpen) {
+                return;
+            }
+            // Don't hide while an uninstall confirmation, or the result
+            // action it started, is pending (app/result-menu.js)
+            if (this._resultConfirm || this._resultActionBusy) {
                 return;
             }
             // Don't hide if we just stopped generating (prevents accidental hide on Esc)

@@ -15,10 +15,12 @@ go through the cross-platform API.
 src/os/
 ├── mod.rs
 ├── accessibility.rs
+├── app_uninstall.rs ← launcher "Uninstall…": Trash the .app / run the app's own uninstaller
 ├── calendar.rs
 ├── clipboard.rs
 ├── clipboard_history.rs
 ├── cursor.rs
+├── file_ops.rs     ← files on the clipboard, Trash / Recycle Bin, run-as-admin, Properties
 ├── file_search.rs
 ├── hotkey.rs
 ├── icon.rs

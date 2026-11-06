@@ -74,6 +74,23 @@ impl AppLauncher {
         self.app_registry = registry;
     }
 
+    /// The registry entry for exactly this display name (case-insensitive),
+    /// as (display name, path). No fuzzy matching: callers acting on an app
+    /// (the result menu) must hit the app the user saw, or nothing.
+    pub fn get_by_name(&self, name: &str) -> Option<(String, PathBuf)> {
+        let app = self.app_registry.get(&name.trim().to_lowercase())?;
+        app.name
+            .trim()
+            .eq_ignore_ascii_case(name.trim())
+            .then(|| (app.name.clone(), app.path.clone()))
+    }
+
+    /// Drop the app at `path` right away (it was just moved to the Trash),
+    /// so it stops showing before the install watcher's rescan lands.
+    pub fn remove_app_at(&mut self, path: &std::path::Path) {
+        self.app_registry.retain(|_, app| app.path != path);
+    }
+
     /// Find applications matching the query using fuzzy matching.
     ///
     /// Scores by reference and clones only the final top 5.
@@ -165,5 +182,53 @@ impl AppLauncher {
     pub fn launch(&self, app: &Application) -> Result<()> {
         info!("Launching application: {} at {:?}", app.name, app.path);
         os::launch_application(&app.path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn launcher_with(apps: &[(&str, &str)]) -> AppLauncher {
+        let mut l = AppLauncher::new();
+        l.apply_registry(
+            apps.iter()
+                .map(|(name, path)| {
+                    (
+                        name.to_lowercase(),
+                        Application {
+                            name: name.to_string(),
+                            path: PathBuf::from(path),
+                            aliases: vec![name.to_lowercase()],
+                            icon_base64: None,
+                            emoji_icon: None,
+                        },
+                    )
+                })
+                .collect(),
+        );
+        l
+    }
+
+    #[test]
+    fn get_by_name_is_exact_not_fuzzy() {
+        let l = launcher_with(&[("Slack", "/Applications/Slack.app")]);
+        assert_eq!(
+            l.get_by_name("slack"),
+            Some(("Slack".into(), PathBuf::from("/Applications/Slack.app")))
+        );
+        assert_eq!(l.get_by_name("Slac"), None);
+        assert_eq!(l.get_by_name(""), None);
+    }
+
+    #[test]
+    fn remove_app_at_drops_only_that_path() {
+        let mut l = launcher_with(&[
+            ("Slack", "/Applications/Slack.app"),
+            ("Notes", "/System/Applications/Notes.app"),
+        ]);
+        l.remove_app_at(std::path::Path::new("/Applications/Slack.app"));
+        assert_eq!(l.get_by_name("Slack"), None);
+        assert!(l.get_by_name("Notes").is_some());
     }
 }

@@ -61,17 +61,12 @@ fn is_path(input: &str) -> Option<String> {
     None
 }
 
-/// Resolve well-known directory names to their actual paths.
-/// Supports prefix matching — "down" matches "downloads".
-/// Only matches if the input is a single word (no spaces).
-fn resolve_well_known_dir(input: &str) -> Option<String> {
-    let lower = input.to_lowercase();
-    if lower.contains(' ') || lower.is_empty() {
-        return None;
-    }
-
-    #[allow(clippy::type_complexity)]
-    let candidates: &[(&[&str], fn() -> Option<std::path::PathBuf>)] = &[
+/// The well-known folders the launcher resolves by name ("downloads",
+/// "docs", …): (names, resolver).
+#[allow(clippy::type_complexity)]
+fn well_known_dir_candidates() -> Vec<(&'static [&'static str], fn() -> Option<std::path::PathBuf>)>
+{
+    vec![
         (&["downloads", "download"], dirs::download_dir),
         (&["documents", "docs"], dirs::document_dir),
         (&["pictures", "photos"], dirs::picture_dir),
@@ -92,7 +87,29 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
         (&["cache"], dirs::cache_dir),
         (&["config", "configuration"], dirs::config_dir),
         (&["data"], dirs::data_dir),
-    ];
+    ]
+}
+
+/// Every folder `resolve_well_known_dir` can resolve to. The launcher's
+/// result menu refuses to move these (or their parents) to the Trash.
+pub(crate) fn well_known_dirs() -> Vec<std::path::PathBuf> {
+    well_known_dir_candidates()
+        .iter()
+        .filter_map(|(_, resolve)| resolve())
+        .chain(crate::os::fonts_dir())
+        .collect()
+}
+
+/// Resolve well-known directory names to their actual paths.
+/// Supports prefix matching — "down" matches "downloads".
+/// Only matches if the input is a single word (no spaces).
+fn resolve_well_known_dir(input: &str) -> Option<String> {
+    let lower = input.to_lowercase();
+    if lower.contains(' ') || lower.is_empty() {
+        return None;
+    }
+
+    let candidates = &well_known_dir_candidates();
 
     // Override "fonts"/"font" to use the system fonts directory
     {

@@ -15,50 +15,64 @@
             font-family: var(--kage-font);
             overflow: hidden;
             padding: 8px;
+            /* The menu's own size decides the window's (see menu-window.js),
+               so it must not stretch to whatever the window is now. */
+            width: max-content;
         }
         .menu {
+            width: max-content;
+            min-width: 150px;
+            max-width: 420px;
             background: #2a2a2e;
             border: 1px solid #555;
             border-radius: 8px;
             padding: 4px 0;
-            min-width: 150px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
             font-size: 13px;
+            outline: none;
         }
         .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 24px;
             padding: 7px 20px;
             color: #ddd;
             cursor: pointer;
+            white-space: nowrap;
+            text-align: start;
+            outline: none;
             transition: background 0.1s;
         }
-        .menu-item:hover { background: var(--kage-accent); color: #fff; }
+        .menu-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .menu-shortcut {
+            margin-inline-start: auto;
+            opacity: 0.6;
+            font-size: 12px;
+        }
+        .menu-item.highlighted { background: var(--kage-accent); color: #fff; }
+        .menu-item.danger { color: #ff8a80; }
+        .menu-item.danger.highlighted { background: #c62828; color: #fff; }
+        .menu-item.disabled { opacity: 0.45; cursor: default; }
+        .menu-item.disabled.highlighted { background: transparent; color: #ddd; }
         .menu-sep { height: 1px; background: #444; margin: 4px 0; }
-        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <div class="menu" id="menu">
-        <div class="menu-item" data-action="cut" data-i18n="context_menu.cut">Cut</div>
-        <div class="menu-item" data-action="copy" data-i18n="context_menu.copy">Copy</div>
-        <div class="menu-item" data-action="paste" data-i18n="context_menu.paste">Paste</div>
-        <div class="menu-sep"></div>
-        <div class="menu-item" data-action="settings" data-i18n="context_menu.settings">Settings</div>
-        <div class="menu-item" data-action="close" data-i18n="context_menu.close">Close</div>
-        <div class="menu-sep hidden" id="devSep"></div>
-        <div class="menu-item hidden" id="devInspect" data-action="inspect" data-i18n="context_menu.inspect">Inspect</div>
-    </div>
+    <div class="menu" id="menu" aria-label="Menu" data-i18n-aria-label="context_menu.aria_label"></div>
     <script type="module">
         import { applyTheme, initThemeListener, loadAndApplyTheme } from './js/shared/theme.js';
-        import { EVT } from './js/shared/events.js';
-        import { initI18n, applyStaticTranslations } from './js/shared/i18n.js';
+        import { initI18n, applyStaticTranslations, isRtl, t } from './js/shared/i18n.js';
         import { initLinkHandler } from './js/shared/link-handler.js';
+        import { startMenuWindow } from './js/context-menu/menu-window.js';
 
         (async function() {
             const { invoke } = window.__TAURI__.core;
+            const { listen, emitTo } = window.__TAURI__.event;
             initLinkHandler(invoke);
             const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
-            const LogicalSize = window.__TAURI__.dpi.LogicalSize;
-            const { emit } = window.__TAURI__.event;
 
             try { await initI18n(invoke); } catch (e) { console.warn('[context-menu] i18n init failed', e); }
             applyStaticTranslations(document);
@@ -66,68 +80,19 @@
             initThemeListener();
             loadAndApplyTheme(invoke).catch(() => applyTheme('system'));
 
-            // Check dev mode once at load
-            try {
-                const dev = await invoke('is_dev_mode');
-                if (dev) {
-                    document.getElementById('devSep').classList.remove('hidden');
-                    document.getElementById('devInspect').classList.remove('hidden');
-                }
-            } catch (e) {}
+            // Dev mode adds Inspect to the default text menu. Checked once.
+            let dev = false;
+            try { dev = !!(await invoke('is_dev_mode')); } catch (e) {}
 
-            // Auto-size once at load (account for 8px body padding on each side)
-            requestAnimationFrame(async () => {
-                const rect = document.getElementById('menu').getBoundingClientRect();
-                await appWindow.setSize(new LogicalSize(
-                    Math.ceil(rect.width) + 16,
-                    Math.ceil(rect.height) + 16
-                ));
-            });
-
-            document.addEventListener('contextmenu', (e) => e.preventDefault());
-
-            let actionTaken = false;
-
-            async function emitAndHide(action) {
-                if (actionTaken) return;
-                actionTaken = true;
-                await emit(EVT.CONTEXT_MENU_ACTION, action);
-                await appWindow.hide();
-            }
-
-            // Pending blur-dismiss timer. Cancelled on focus so a quick
-            // re-show (show_context_menu always re-focuses) isn't hidden
-            // by the previous blur's stale timer.
-            let blurTimer = null;
-
-            // Reset actionTaken each time the window becomes visible
-            appWindow.listen('tauri://focus', () => {
-                clearTimeout(blurTimer);
-                blurTimer = null;
-                actionTaken = false;
-            });
-
-            document.getElementById('menu').addEventListener('mousedown', (e) => {
-                const item = e.target.closest('.menu-item');
-                if (!item) return;
-                const action = item.dataset.action;
-                if (action) {
-                    e.preventDefault();
-                    emitAndHide(action);
-                }
-            });
-
-            // Hide on blur
-            appWindow.listen('tauri://blur', () => {
-                clearTimeout(blurTimer);
-                blurTimer = setTimeout(() => {
-                    blurTimer = null;
-                    if (!actionTaken) emitAndHide('dismissed');
-                }, 150);
-            });
-
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') emitAndHide('dismissed');
+            startMenuWindow({
+                invoke,
+                listen,
+                emitTo,
+                appWindow,
+                root: document.getElementById('menu'),
+                t,
+                devMode: () => dev,
+                isRtl,
             });
         })();
     </script>

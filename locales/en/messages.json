@@ -189,6 +189,58 @@
     "message": "Refusing to close non-chat window: {label}",
     "description": "Caller tried to close-by-label a window that isn't a chat-shaped window"
   },
+  "errors.window.menu_invalid": {
+    "message": "That menu couldn't be shown.",
+    "description": "show_context_menu / context_menu_ready rejected a malformed menu (no usable items, oversized context, bad size)"
+  },
+  "errors.launcher.invalid_target": {
+    "message": "That item isn't something Kage can act on.",
+    "description": "Launcher result menu: empty, relative or unknown target"
+  },
+  "errors.launcher.unknown_app": {
+    "message": "Kage can't find the app “{name}” any more — it may have been uninstalled.",
+    "description": "Launcher result menu: the app isn't in Kage's app list"
+  },
+  "errors.launcher.not_found": {
+    "message": "“{name}” no longer exists.",
+    "description": "Launcher result menu: the file, folder or app is gone from disk"
+  },
+  "errors.launcher.action_unavailable": {
+    "message": "That action isn't available for this item.",
+    "description": "Launcher result menu: the requested action doesn't apply to this result on this OS"
+  },
+  "errors.launcher.confirmation_required": {
+    "message": "Uninstalling needs your confirmation first.",
+    "description": "Launcher result menu: uninstall was requested without the user confirming"
+  },
+  "errors.launcher.protected": {
+    "message": "Kage won't remove “{name}” — it's part of the operating system.",
+    "description": "Launcher result menu: refused to uninstall a system / SIP-protected app"
+  },
+  "errors.launcher.uninstall_self": {
+    "message": "Kage can't uninstall itself from here. Use your system's app settings instead.",
+    "description": "Launcher result menu: refused to uninstall Kage"
+  },
+  "errors.launcher.app_running": {
+    "message": "Quit “{name}” first, then try again.",
+    "description": "Launcher result menu: macOS app can't be moved to the Trash while it's running"
+  },
+  "errors.launcher.trash_denied": {
+    "message": "You don't have permission to move “{name}” to the Trash.",
+    "description": "Launcher result menu: the OS refused to trash a file or folder"
+  },
+  "errors.launcher.trash_unavailable": {
+    "message": "No Trash tool was found. Install gio (GLib) or trash-cli and try again.",
+    "description": "Launcher result menu (Linux): no freedesktop Trash implementation on PATH"
+  },
+  "errors.launcher.clipboard_failed": {
+    "message": "Couldn't put that on the clipboard — another app may be using it. Try again.",
+    "description": "Launcher result menu: writing a path or file to the clipboard failed"
+  },
+  "errors.launcher.action_failed": {
+    "message": "Couldn't do that: {reason}",
+    "description": "Launcher result menu: an OS operation failed; reason is the OS error text"
+  },
   "errors.fs.read_failed": {
     "message": "Could not read file: {reason}",
     "description": "Filesystem read operation failed"
@@ -3260,6 +3312,106 @@
   "context_menu.inspect": {
     "message": "Inspect",
     "description": "Context menu — open devtools (dev mode only)"
+  },
+  "context_menu.aria_label": {
+    "message": "Menu",
+    "description": "Accessible name of the right-click menu"
+  },
+  "result_menu.open": {
+    "message": "Open",
+    "description": "Result right-click menu — open the app, file or folder"
+  },
+  "result_menu.run_as_admin": {
+    "message": "Run as administrator",
+    "description": "Result right-click menu (Windows) — launch elevated through the UAC prompt"
+  },
+  "result_menu.reveal_finder": {
+    "message": "Show in Finder",
+    "description": "Result right-click menu (macOS) — reveal the item in Finder"
+  },
+  "result_menu.reveal_explorer": {
+    "message": "Open file location",
+    "description": "Result right-click menu (Windows) — reveal the item (for apps, its Start menu shortcut) in File Explorer; same wording as the Start menu"
+  },
+  "result_menu.reveal_folder": {
+    "message": "Open containing folder",
+    "description": "Result right-click menu (Linux) — open the folder the item is in"
+  },
+  "result_menu.copy_path": {
+    "message": "Copy path",
+    "description": "Result right-click menu — copy the item's full path as text"
+  },
+  "result_menu.copy_as_path": {
+    "message": "Copy as path",
+    "description": "Result right-click menu (Windows) — copy the item's full path as text; same wording as File Explorer"
+  },
+  "result_menu.copy": {
+    "message": "Copy",
+    "description": "Result right-click menu — copy the file itself so it can be pasted in Finder / File Explorer"
+  },
+  "result_menu.cut": {
+    "message": "Cut",
+    "description": "Result right-click menu (Windows) — cut the file so pasting in File Explorer moves it"
+  },
+  "result_menu.move_to_trash": {
+    "message": "Move to Trash",
+    "description": "Result right-click menu (macOS/Linux) — move the file or folder to the Trash"
+  },
+  "result_menu.move_to_recycle_bin": {
+    "message": "Move to Recycle Bin",
+    "description": "Result right-click menu (Windows) — move the file or folder to the Recycle Bin"
+  },
+  "result_menu.uninstall": {
+    "message": "Uninstall…",
+    "description": "Result right-click menu — uninstall the app (asks for confirmation first)"
+  },
+  "result_menu.properties": {
+    "message": "Properties",
+    "description": "Result right-click menu (Windows) — open the shell Properties dialog"
+  },
+  "result_menu.confirm.title": {
+    "message": "Uninstall “{name}”?",
+    "description": "Uninstall confirmation title; name is the app"
+  },
+  "result_menu.confirm.body_macos": {
+    "message": "Kage will move {name} to the Trash. You can put it back from the Trash if you change your mind.",
+    "description": "Uninstall confirmation body on macOS"
+  },
+  "result_menu.confirm.body_windows": {
+    "message": "Kage will open {name}'s own uninstaller — or Settings → Installed apps if it can't find one. Nothing is removed until you confirm there.",
+    "description": "Uninstall confirmation body on Windows"
+  },
+  "result_menu.confirm.cancel": {
+    "message": "Cancel",
+    "description": "Uninstall confirmation — keep the app"
+  },
+  "result_menu.confirm.uninstall": {
+    "message": "Uninstall",
+    "description": "Uninstall confirmation — go ahead"
+  },
+  "result_menu.feedback.copied": {
+    "message": "Copied “{name}” — paste it in a folder to copy the file.",
+    "description": "Shown after copying a file to the clipboard"
+  },
+  "result_menu.feedback.cut": {
+    "message": "Cut “{name}” — paste it in a folder to move it there.",
+    "description": "Shown after cutting a file (Windows)"
+  },
+  "result_menu.feedback.copied_path": {
+    "message": "Path copied.",
+    "description": "Shown after copying an item's path"
+  },
+  "result_menu.feedback.trashed": {
+    "message": "Moved “{name}” to the Trash.",
+    "description": "Shown after moving a file, folder or app to the Trash (macOS/Linux)"
+  },
+  "result_menu.feedback.recycled": {
+    "message": "Moved “{name}” to the Recycle Bin.",
+    "description": "Shown after moving a file or folder to the Recycle Bin (Windows)"
+  },
+  "result_menu.feedback.manual_removal": {
+    "message": "macOS didn't let Kage move “{name}” to the Trash — it belongs to the system or an administrator, or came from the App Store. It's selected in Finder: drag it to the Trash there (Finder asks for your password if needed).",
+    "description": "Shown on macOS when uninstalling an app failed for permissions and the app was revealed in Finder instead"
   },
   "store.window_title": {
     "message": "Extension Store",

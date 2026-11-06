@@ -451,6 +451,78 @@ body.clipboard-mode .floating-banner {
     border-bottom: none;
 }
 
+/* Result right-click menu: inline uninstall confirmation and status
+   notices (ui/js/floating/app/result-menu.js). */
+.result-confirm {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.result-confirm-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+    overflow-wrap: anywhere;
+}
+
+.result-confirm-body {
+    font-size: 12px;
+    color: #6b7280;
+    overflow-wrap: anywhere;
+}
+
+.result-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.result-confirm-btn {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 14px;
+    min-width: 84px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #111827;
+    cursor: pointer;
+}
+
+.result-confirm-btn:hover {
+    background: #f3f4f6;
+}
+
+.result-confirm-btn:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 1px;
+}
+
+.result-confirm-btn.danger {
+    background: #c0392b;
+    border-color: #c0392b;
+    color: #fff;
+}
+
+.result-confirm-btn.danger:hover {
+    filter: brightness(1.08);
+}
+
+.result-action-notice {
+    padding: 8px 14px;
+    font-size: 12px;
+    color: #4b5563;
+    border-top: 1px solid #f3f4f6;
+    overflow-wrap: anywhere;
+}
+
+.result-action-notice.error {
+    color: #b91c1c;
+}
+
 .math-result-value {
     font-size: 16px;
     font-weight: 600;

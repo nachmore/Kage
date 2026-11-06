@@ -1,6 +1,14 @@
 /**
- * Custom right-click context menu using a cached Tauri popup window.
- * The window is pre-created at startup and repositioned/shown on demand.
+ * Right-click menu for the floating window, shown in the cached popup
+ * window (ui/js/shared/popup-menu.js has the protocol).
+ *
+ * - On an app / file / folder result row: that result's menu (Open, Show
+ *   in Finder / Open file location, Copy, Uninstall, …), built from what
+ *   the backend says the result supports on this OS.
+ * - Anywhere else, or for any other kind of row: the text menu (Cut, Copy,
+ *   Paste, Settings, Close, and Inspect in dev mode), as always.
+ * - Keyboard: Shift+F10 or the Menu key opens the selected result's menu
+ *   (Windows/Linux; macOS has no such convention).
  *
  * Tauri readiness:
  *   `window.__TAURI__` is injected by the runtime (`withGlobalTauri: true`),
@@ -12,39 +20,137 @@
  */
 
 import { waitForTauri } from '../shared/tauri-init.js';
-import { EVT } from '../shared/events.js';
+import { DISMISSED, createPopupMenuClient, isMenuKey } from '../shared/popup-menu.js';
+import { buildResultMenuItems, resultMenuTarget } from '../shared/result-menu.js';
+import { isMac } from '../shared/shortcuts.js';
 
 waitForTauri(({ invoke, appWindow, listen }) => {
     initContextMenu(invoke, appWindow, listen);
 });
 
+/** After a keyboard-opened menu, the browser may still fire `contextmenu`. */
+const KEYBOARD_CONTEXTMENU_SWALLOW_MS = 600;
+
 function initContextMenu(invoke, appWindow, listen) {
-    // Suppress default context menu, show cached popup window
+    const menu = createPopupMenuClient({ invoke, listen });
+    const mac = isMac();
+    // Menus being prepared or shown. `window._contextMenuOpen` (read by the
+    // floating window's blur handler) stays true while any is, so a menu
+    // replacing another doesn't briefly let the launcher hide.
+    let busy = 0;
+    const hold = () => {
+        busy++;
+        window._contextMenuOpen = true;
+    };
+    const release = () => {
+        busy = Math.max(0, busy - 1);
+        window._contextMenuOpen = busy > 0 || menu.isOpen();
+    };
+    let swallowUntil = 0;
+
+    /** A point in this window's CSS px → logical screen coordinates. */
+    async function screenPoint(clientX, clientY) {
+        const pos = await appWindow.outerPosition();
+        const scale = await appWindow.scaleFactor();
+        return { x: pos.x / scale + clientX, y: pos.y / scale + clientY };
+    }
+
+    /** Show `result`'s menu; false if it has none (caller falls back). */
+    async function openResultMenu(result, point, keyboard) {
+        const app = window._floatingApp;
+        const target = resultMenuTarget(result);
+        if (!app || !target) return false;
+        hold();
+        try {
+            let info;
+            try {
+                info = await invoke('launcher_result_actions', target);
+            } catch (e) {
+                console.warn('[context-menu] no result menu:', e);
+                return false;
+            }
+            const items = buildResultMenuItems(info);
+            if (!items.length) return false;
+            app.selectResultRow?.(result);
+            const choice = await menu.open({ ...point, items, context: target, keyboard });
+            window._contextMenuOpen = false;
+            if (choice.action !== DISMISSED) {
+                await app.runResultAction(target, info, choice.action);
+            }
+            return true;
+        } finally {
+            release();
+        }
+    }
+
+    async function openTextMenu(point) {
+        hold();
+        try {
+            const choice = await menu.open(point);
+            window._contextMenuOpen = false;
+            await runTextAction(choice.action);
+        } finally {
+            release();
+        }
+    }
+
     document.addEventListener('contextmenu', async (e) => {
         e.preventDefault();
-
+        if (Date.now() < swallowUntil) return;
+        // Guard the blur handler before the first await: the click that
+        // opens the menu can blur this window.
+        hold();
         try {
-            const windowPos = await appWindow.outerPosition();
-            const scaleFactor = await appWindow.scaleFactor();
-
-            const screenX = Math.round(windowPos.x / scaleFactor + e.clientX);
-            const screenY = Math.round(windowPos.y / scaleFactor + e.clientY);
-
-            // Prevent blur handler from hiding the floating window
-            window._contextMenuOpen = true;
-
-            await invoke('show_context_menu', { x: screenX, y: screenY });
+            const point = await screenPoint(e.clientX, e.clientY);
+            const row = e.target?.closest?.('.app-suggestion-item');
+            if (row?._kageResult && (await openResultMenu(row._kageResult, point, false))) {
+                return;
+            }
+            await openTextMenu(point);
         } catch (err) {
             console.error('Failed to show context menu:', err);
-            window._contextMenuOpen = false;
+        } finally {
+            release();
         }
     });
 
-    // Listen for actions from the context menu popup (global event)
-    listen(EVT.CONTEXT_MENU_ACTION, async (event) => {
-        window._contextMenuOpen = false;
-        const action = event.payload;
+    // Capture phase, so it runs before the input's own key handling.
+    document.addEventListener(
+        'keydown',
+        async (e) => {
+            if (!isMenuKey(e, { mac })) return;
+            const app = window._floatingApp;
+            const idx = app?.selectedIndex ?? -1;
+            const result = idx >= 0 ? app?.currentMatches?.[idx] : null;
+            const row =
+                app?.elements?.appSuggestions?.querySelectorAll('.app-suggestion-item')[idx];
+            // Nothing selected that has a menu: the browser's own
+            // contextmenu event brings up the text menu.
+            if (!row || !resultMenuTarget(result)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            swallowUntil = Date.now() + KEYBOARD_CONTEXTMENU_SWALLOW_MS;
+            hold();
+            try {
+                // Under the row, at its start edge (the backend aligns an
+                // RTL menu's right edge there).
+                const rect = row.getBoundingClientRect();
+                const rtl = document.documentElement.getAttribute('dir') === 'rtl';
+                const point = await screenPoint(
+                    rtl ? rect.right - 12 : rect.left + 12,
+                    rect.bottom
+                );
+                await openResultMenu(result, point, true);
+            } catch (err) {
+                console.error('Failed to show result menu:', err);
+            } finally {
+                release();
+            }
+        },
+        true
+    );
 
+    async function runTextAction(action) {
         switch (action) {
             case 'cut':
                 document.querySelector('.input-box')?.focus();
@@ -95,9 +201,9 @@ function initContextMenu(invoke, appWindow, listen) {
                     console.error(e);
                 }
                 break;
-            case 'dismissed':
-                // Menu closed without action
+            default:
+                // DISMISSED: menu closed without a choice.
                 break;
         }
-    });
+    }
 }
