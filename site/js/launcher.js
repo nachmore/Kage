@@ -1,15 +1,26 @@
 /* Kage site: the live launcher demo in the hero.
  *
  * A small timeline engine types queries into an HTML/CSS mock of the
- * floating launcher and plays out real behaviours: an app result, a unit
- * conversion, a timer, a folder, a streamed agent answer with a tool chip,
- * and a shell command that asks permission first.
+ * floating launcher and plays out real behaviours, in the order of the
+ * example chips: an app result, a streamed agent answer with a tool chip, a
+ * unit conversion, a shell command that asks permission first, a folder and
+ * a timer. The agent's answer starts streaming about 8 s after load.
  *
- * - Every wait goes through `wait()`, which honours pause (button, tab
- *   hidden, hero off screen) and cancellation (a newer run started).
+ * - The window is summoned once at the start (the hotkey beat) and is
+ *   dismissed and summoned again only after the shell command, so there is
+ *   one hide-and-summon beat per loop. Other scenes hand over by clearing
+ *   the query, the way typing over a selection does.
+ * - Every wait goes through `wait()`, which holds while the demo is blocked
+ *   (paused by the button, the hero scrolled out of view, or the tab hidden)
+ *   and throws when a newer run has started.
  * - The window resizes with transforms only: see fit().
- * - prefers-reduced-motion: nothing auto-plays; the chips show each scene's
- *   final state instantly. Pressing Play opts in to the animation.
+ * - `.demo-playing` on the hero is set while the loop is running, so the
+ *   hotkey's "press me" ring only pulses before the first summon and while
+ *   paused.
+ * - The toggle keeps its "Pause demo" label; aria-pressed says it's paused.
+ * - prefers-reduced-motion: nothing auto-plays; the demo shows the agent
+ *   scene's final state and the chips show each scene's final state
+ *   instantly. Pressing the toggle opts in to the animation.
  * - Broadcasts `kage:demo` events so the hero cat can react.
  */
 (() => {
@@ -22,6 +33,7 @@
     const ENTER = '⏎';
 
     const $ = (sel) => root.querySelector(sel);
+    const hero = root.closest('.hero');
     const content = $('[data-lm-content]');
     const answer = $('[data-lm-answer]');
     const results = $('[data-lm-results]');
@@ -70,16 +82,22 @@
     const CANCEL = Symbol('cancel');
     let runId = 0;
     let userPaused = false;
-    let offscreen = false;
+    // Two separate reasons to hold the timeline besides the button: the
+    // observer owns heroVisible and visibilitychange owns tabHidden, so
+    // neither can overwrite the other.
+    let heroVisible = true;
+    let tabHidden = document.hidden;
     let waiters = [];
 
-    const blocked = () => userPaused || offscreen;
+    const blocked = () => userPaused || !heroVisible || tabHidden;
 
     function gate() {
         if (!blocked()) return Promise.resolve();
         return new Promise((resolve) => waiters.push(resolve));
     }
 
+    // Wake every waiter. Without `force` this only happens once nothing is
+    // blocking; makeCtx forces it so a superseded run wakes up and cancels.
     function release(force) {
         if (blocked() && !force) return;
         const list = waiters;
@@ -126,6 +144,8 @@
         }
     }
 
+    // Back to an empty window. Also clears anything a cancelled run left
+    // half-done: a held hotkey, a key toast, a fade.
     function resetWindow() {
         setModes();
         answer.innerHTML = '';
@@ -134,6 +154,7 @@
         query.classList.remove('is-selected');
         root.classList.remove('has-query', 'is-typing', 'is-out');
         keyToast.classList.remove('is-on', 'is-down');
+        hotkeys.forEach((k) => k.classList.remove('is-pressed'));
         pose('idle');
     }
 
@@ -148,8 +169,8 @@
         emit('typing');
         for (const ch of text) {
             query.textContent += ch;
-            let d = rand(38, 92);
-            if (ch === ' ') d += rand(20, 70);
+            let d = rand(30, 72);
+            if (ch === ' ') d += rand(15, 45);
             await ctx.wait(d);
         }
         root.classList.remove('is-typing');
@@ -158,7 +179,7 @@
     async function clearQuery(ctx) {
         if (!query.textContent) return;
         query.classList.add('is-selected');
-        await ctx.wait(300);
+        await ctx.wait(280);
         query.textContent = '';
         query.classList.remove('is-selected');
         root.classList.remove('has-query');
@@ -168,11 +189,11 @@
         if (ctx.fast) return;
         keyToast.innerHTML = keys.map((k) => `<kbd>${k}</kbd>`).join('');
         keyToast.classList.add('is-on');
-        await ctx.wait(240);
+        await ctx.wait(220);
         keyToast.classList.add('is-down');
-        await ctx.wait(150);
+        await ctx.wait(140);
         keyToast.classList.remove('is-down');
-        await ctx.wait(260);
+        await ctx.wait(220);
         keyToast.classList.remove('is-on');
     }
 
@@ -187,29 +208,42 @@
         root.classList.remove('is-out');
     }
 
+    // Hand over to the next scene without dismissing the window: select the
+    // query, clear it and fade the old results out.
+    async function clearOut(ctx) {
+        await clearQuery(ctx);
+        await swap(ctx, () => {
+            results.innerHTML = '';
+            setModes();
+            pose('idle');
+        });
+        await ctx.wait(160);
+    }
+
     async function hideWindow(ctx) {
         if (ctx.fast) return;
         root.classList.add('is-hidden');
         emit('hide');
         await ctx.wait(260);
         resetWindow();
-        await ctx.wait(500);
+        await ctx.wait(480);
     }
 
+    // The summon beat: the hotkey goes down and the window appears.
     async function ensureShown(ctx) {
         if (!root.classList.contains('is-hidden')) return;
         if (ctx.fast) {
             reveal();
             return;
         }
+        resetWindow();
         hotkeys.forEach((k) => k.classList.add('is-pressed'));
         await ctx.wait(140);
-        resetWindow();
         root.classList.remove('is-hidden');
         emit('summon');
-        await ctx.wait(220);
+        await ctx.wait(200);
         hotkeys.forEach((k) => k.classList.remove('is-pressed'));
-        await ctx.wait(520);
+        await ctx.wait(380);
     }
 
     // Un-hide outside the summon beat (a chip click, a static scene).
@@ -344,21 +378,52 @@
         ['610M', '~/Downloads/old-installers'],
     ];
 
+    // Index n plays for the chip with data-scene="n" (same order as the
+    // chips in index.html).
     const SCENES = [
-        // calc → Calculator
+        // 0 · calc → Calculator
         async (ctx) => {
             await ensureShown(ctx);
             await type(ctx, 'calc');
-            await ctx.wait(160);
+            await ctx.wait(140);
             results.innerHTML = result({ icon: calcIcon, title: 'Calculator', sub: 'Application' });
             setModes('is-results');
             pose('happy');
             if (ctx.fast) return;
-            await ctx.wait(1700);
-            await press(ctx, [ENTER]);
-            await hideWindow(ctx);
+            await ctx.wait(1200);
+            await clearOut(ctx);
         },
-        // 12 km to mi → = 7.46 mi
+        // 1 · Ask the agent → streamed answer with a fetch chip
+        async (ctx) => {
+            const q = 'Plan an easy weekend in Lisbon';
+            await ensureShown(ctx);
+            await type(ctx, q);
+            await ctx.wait(200);
+            await press(ctx, [MOD, ENTER]);
+            let chat;
+            await swap(ctx, () => {
+                chat = startChat(q);
+            });
+            setContext(12);
+            pose('thinking');
+            emit('thinking');
+            await ctx.wait(600);
+            const fetchChip = chip(ICONS.globe, 'fetch');
+            chipRow().appendChild(fetchChip);
+            await ctx.wait(650);
+            chat.dots.remove();
+            emit('streaming');
+            await stream(ctx, chat.body, LISBON);
+            root.classList.remove('is-streaming');
+            pose('happy');
+            emit('done');
+            if (ctx.fast) return;
+            await ctx.wait(3200);
+            await press(ctx, [MOD, 'L']);
+            await swap(ctx, resetWindow);
+            await ctx.wait(300);
+        },
+        // 2 · 12 km to mi → = 7.46 mi
         async (ctx) => {
             await ensureShown(ctx);
             await type(ctx, '12 km to mi');
@@ -371,96 +436,21 @@
             setModes('is-results');
             pose('happy');
             if (ctx.fast) return;
-            await ctx.wait(1500);
+            await ctx.wait(1300);
             await press(ctx, [ENTER]);
             const sub = results.querySelector('[data-sub]');
             if (sub) sub.textContent = 'Copied to the clipboard';
             emit('done');
-            await ctx.wait(1300);
-            await clearQuery(ctx);
-            await swap(ctx, () => {
-                results.innerHTML = '';
-                setModes();
-                pose('idle');
-            });
-            await ctx.wait(350);
+            await ctx.wait(1100);
+            await clearOut(ctx);
         },
-        // timer 25m → countdown
-        async (ctx) => {
-            await ensureShown(ctx);
-            await type(ctx, 'timer 25m');
-            await ctx.wait(200);
-            await press(ctx, [ENTER]);
-            await swap(ctx, () => {
-                query.textContent = '';
-                root.classList.remove('has-query');
-                timeEl.textContent = ctx.fast ? '24:56' : '25:00';
-                setModes('is-timer', 'has-badge');
-                pose('idle');
-            });
-            if (ctx.fast) return;
-            emit('done');
-            for (let s = 59; s >= 55; s--) {
-                await ctx.wait(1000);
-                timeEl.textContent = `24:${s}`;
-            }
-            await ctx.wait(500);
-            await swap(ctx, () => setModes());
-            await ctx.wait(350);
-        },
-        // down → Downloads
-        async (ctx) => {
-            await ensureShown(ctx);
-            await type(ctx, 'down');
-            await ctx.wait(150);
-            results.innerHTML = result({
-                icon: folderIcon,
-                title: 'Open Folder',
-                sub: isMac ? '~/Downloads' : 'C:\\Users\\you\\Downloads',
-            });
-            setModes('is-results');
-            pose('happy');
-            if (ctx.fast) return;
-            await ctx.wait(1700);
-            await press(ctx, [ENTER]);
-            await hideWindow(ctx);
-        },
-        // Ask the agent → streamed answer with a fetch chip
-        async (ctx) => {
-            const q = 'Plan an easy weekend in Lisbon';
-            await ensureShown(ctx);
-            await type(ctx, q);
-            await ctx.wait(260);
-            await press(ctx, [MOD, ENTER]);
-            let chat;
-            await swap(ctx, () => {
-                chat = startChat(q);
-            });
-            setContext(12);
-            pose('thinking');
-            emit('thinking');
-            await ctx.wait(800);
-            const fetchChip = chip(ICONS.globe, 'fetch');
-            chipRow().appendChild(fetchChip);
-            await ctx.wait(900);
-            chat.dots.remove();
-            emit('streaming');
-            await stream(ctx, chat.body, LISBON);
-            root.classList.remove('is-streaming');
-            pose('happy');
-            emit('done');
-            if (ctx.fast) return;
-            await ctx.wait(3400);
-            await press(ctx, [MOD, 'L']);
-            await swap(ctx, resetWindow);
-            await ctx.wait(400);
-        },
-        // Run a command → permission, shell block, output
+        // 3 · Run a command → permission, shell block, output; then Esc
+        // dismisses the window (the loop's one hide-and-summon beat).
         async (ctx) => {
             const q = 'Which files are biggest in my Downloads folder?';
             await ensureShown(ctx);
             await type(ctx, q);
-            await ctx.wait(260);
+            await ctx.wait(200);
             await press(ctx, [MOD, ENTER]);
             let chat;
             await swap(ctx, () => {
@@ -469,7 +459,7 @@
             setContext(18);
             pose('thinking');
             emit('thinking');
-            await ctx.wait(700);
+            await ctx.wait(650);
             chat.dots.remove();
             await stream(ctx, chat.body, SHELL_INTRO);
 
@@ -501,7 +491,7 @@
                 perm.remove();
                 pose('thinking');
                 emit('thinking');
-                await ctx.wait(800);
+                await ctx.wait(700);
             }
 
             const out = document.createElement('div');
@@ -521,7 +511,7 @@
             exit.textContent = 'Exit code 0';
             block.appendChild(exit);
             chipRow().appendChild(chip(ICONS.term, 'shell'));
-            await ctx.wait(500);
+            await ctx.wait(450);
             emit('streaming');
             const tail = document.createElement('div');
             chat.body.appendChild(tail);
@@ -532,17 +522,66 @@
             pose('happy');
             emit('done');
             if (ctx.fast) return;
-            await ctx.wait(3600);
+            await ctx.wait(3200);
             await press(ctx, ['Esc']);
             await hideWindow(ctx);
+        },
+        // 4 · down → Downloads (summoned again after the Esc above)
+        async (ctx) => {
+            await ensureShown(ctx);
+            await type(ctx, 'down');
+            await ctx.wait(140);
+            results.innerHTML = result({
+                icon: folderIcon,
+                title: 'Open Folder',
+                sub: isMac ? '~/Downloads' : 'C:\\Users\\you\\Downloads',
+            });
+            setModes('is-results');
+            pose('happy');
+            if (ctx.fast) return;
+            await ctx.wait(1400);
+            await clearOut(ctx);
+        },
+        // 5 · timer 25m → a countdown, two ticks, then on to calc
+        async (ctx) => {
+            await ensureShown(ctx);
+            await type(ctx, 'timer 25m');
+            await ctx.wait(180);
+            await press(ctx, [ENTER]);
+            await swap(ctx, () => {
+                query.textContent = '';
+                root.classList.remove('has-query');
+                timeEl.textContent = ctx.fast ? '24:58' : '25:00';
+                setModes('is-timer', 'has-badge');
+                pose('idle');
+            });
+            if (ctx.fast) return;
+            emit('done');
+            for (const t of ['24:59', '24:58']) {
+                await ctx.wait(1000);
+                timeEl.textContent = t;
+            }
+            await ctx.wait(450);
+            await swap(ctx, () => setModes());
+            await ctx.wait(250);
         },
     ];
 
     // ─── driving the loop ─────────────────────────────────────────────
 
+    // With reduced motion, the scene the page shows (and the no-JS markup).
+    const STATIC_SCENE = 1;
+    // Lets the hero's CSS entrance settle before the first summon.
+    const START_DELAY = 700;
+
     let current = 0;
     let looping = false;
     let startTimer = 0;
+
+    // The hotkey's pulse ring is for while the demo isn't pressing it.
+    function syncPlaying() {
+        hero?.classList.toggle('demo-playing', looping && !userPaused);
+    }
 
     function markChip(i) {
         chips.forEach((c, n) => {
@@ -556,6 +595,7 @@
     async function loop(start) {
         const ctx = makeCtx(false);
         looping = true;
+        syncPlaying();
         let i = start;
         try {
             for (;;) {
@@ -572,6 +612,7 @@
     async function showFinal(i) {
         const ctx = makeCtx(true);
         looping = false;
+        syncPlaying();
         current = i;
         markChip(i);
         reveal();
@@ -584,12 +625,11 @@
         snapFit();
     }
 
+    // The label stays "Pause demo"; aria-pressed says whether it's paused.
     function setPaused(p) {
         userPaused = p;
-        if (toggle) {
-            toggle.setAttribute('aria-pressed', String(p));
-            toggle.setAttribute('aria-label', p ? 'Play the demo' : 'Pause the demo');
-        }
+        toggle?.setAttribute('aria-pressed', String(p));
+        syncPlaying();
         if (!p) release();
     }
 
@@ -604,19 +644,21 @@
 
         const io = new IntersectionObserver(
             (entries) => {
-                offscreen = !entries[0].isIntersecting || document.hidden;
-                if (!offscreen) release();
+                heroVisible = entries[entries.length - 1].isIntersecting;
+                release();
             },
             { threshold: 0.05 }
         );
         io.observe(root);
         document.addEventListener('visibilitychange', () => {
-            offscreen = document.hidden;
-            if (!offscreen) release();
+            tabHidden = document.hidden;
+            release();
         });
 
         chips.forEach((c, n) =>
             c.addEventListener('click', () => {
+                // A click before the first summon, or mid-scene, takes over:
+                // makeCtx cancels the pending start and the running scene.
                 if (userPaused) showFinal(n);
                 else {
                     reveal();
@@ -629,7 +671,12 @@
         toggle?.addEventListener('click', () => {
             const willPause = !userPaused;
             setPaused(willPause);
-            if (!willPause && !looping) {
+            if (willPause) {
+                // Paused while the window is away (before the first summon,
+                // or during the dismiss beat): show the scene's final state
+                // rather than an empty hero. Play restarts that scene.
+                if (root.classList.contains('is-hidden')) showFinal(current);
+            } else if (!looping) {
                 resetWindow();
                 loop(current);
             }
@@ -637,15 +684,15 @@
 
         if (reduceMotion.matches) {
             setPaused(true);
-            showFinal(4);
+            showFinal(STATIC_SCENE);
             return;
         }
-        // Start hidden: the first beat is Alt+Space summoning the window.
+        // Start hidden: the first beat is the hotkey summoning the window.
         root.classList.add('is-hidden');
         resetWindow();
         snapFit();
         looping = true;
-        startTimer = setTimeout(() => loop(0), 1100);
+        startTimer = setTimeout(() => loop(0), START_DELAY);
     }
 
     start();

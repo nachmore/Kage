@@ -8,8 +8,10 @@
  * Footer cat: sleeps until you hover, focus or tap it, then waves using the
  * app's own waving frames.
  *
- * All motion is transform/opacity. Pointer work is batched into one rAF.
- * prefers-reduced-motion keeps the faces but drops gaze, blinks and jumps.
+ * All motion is transform/opacity. Pointer work is batched into one rAF, and
+ * the hero cat does none of it (no gaze loop, glances or blinks) while it's
+ * off screen. prefers-reduced-motion keeps the faces but drops gaze, blinks
+ * and jumps.
  */
 (() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,53 +23,86 @@
     if (sleepy) initSleepy(sleepy);
 
     function initPeek(el) {
-        const pupils = el.querySelectorAll('.cat__pupil');
         const tilt = el.querySelector('.cat__tilt');
         const launcher = document.querySelector('[data-lm="hero"]');
-        const MAX_X = 3.4; // svg units the pupils may travel
-        const MAX_Y = 2.6;
+        // The irises are drawn looking inward: the cute cross-eyed rest pose.
+        // While the cat looks at something, each pupil first centres on its
+        // own eye (dx/dy: eye centre minus iris centre, in SVG units, read
+        // from the art), then moves from there; the clip-path keeps it
+        // inside the eye.
+        const num = (node, attr) => Number(node?.getAttribute(attr)) || 0;
+        const eyes = [...el.querySelectorAll('.cat__eye')]
+            .map((eye) => {
+                const white = eye.querySelector('.cat__white');
+                const iris = eye.querySelector('.cat__iris');
+                return {
+                    pupil: eye.querySelector('.cat__pupil'),
+                    dx: num(white, 'cx') - num(iris, 'cx'),
+                    dy: num(white, 'cy') - num(iris, 'cy'),
+                };
+            })
+            .filter((e) => e.pupil);
+        const MAX_X = 6; // svg units a pupil may travel from its eye's centre
+        const MAX_Y = 4;
+        const TILT = 1.4; // degrees of head tilt per unit of gaze
 
         const aim = { x: 0, y: 0, active: false };
-        const cur = { x: 0, y: 0 };
-        const target = { x: 0, y: 0 };
+        // x/y: gaze offset; e: 0 = resting (cross-eyed), 1 = looking.
+        const cur = { x: 0, y: 0, e: 0 };
+        const target = { x: 0, y: 0, e: 0 };
+        let rect = null; // measured at most once per scroll or resize
+        // Without IntersectionObserver, assume the cat is always on screen.
+        let onScreen = !('IntersectionObserver' in window);
         let lastPointer = 0;
         let frame = 0;
+        let glanceTimer = 0;
         let gazeUntil = 0;
         let happyTimer = 0;
 
+        function catBox() {
+            if (!rect) rect = el.getBoundingClientRect();
+            return rect;
+        }
+
         function setTargetToPoint(px, py) {
-            const r = el.getBoundingClientRect();
-            const cx = r.left + r.width / 2;
-            const cy = r.top + r.height * 0.36;
-            const dx = px - cx;
-            const dy = py - cy;
+            const r = catBox();
+            const dx = px - (r.left + r.width / 2);
+            const dy = py - (r.top + r.height * 0.36);
             const dist = Math.hypot(dx, dy) || 1;
             const reach = Math.min(1, dist / 240);
             target.x = (dx / dist) * MAX_X * reach;
             target.y = (dy / dist) * MAX_Y * reach;
+            target.e = 1;
         }
 
         function step() {
             frame = 0;
+            if (!onScreen) return;
             if (aim.active) setTargetToPoint(aim.x, aim.y);
             cur.x += (target.x - cur.x) * 0.18;
             cur.y += (target.y - cur.y) * 0.18;
-            const t = `translate(${cur.x.toFixed(2)}px, ${cur.y.toFixed(2)}px)`;
-            pupils.forEach((p) => {
-                p.style.transform = t;
-            });
-            tilt.style.transform = `rotate(${(cur.x * 0.8).toFixed(2)}deg)`;
-            if (Math.abs(target.x - cur.x) > 0.01 || Math.abs(target.y - cur.y) > 0.01) {
+            cur.e += (target.e - cur.e) * 0.18;
+            for (const { pupil, dx, dy } of eyes) {
+                const x = cur.e * dx + cur.x;
+                const y = cur.e * dy + cur.y;
+                pupil.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+            }
+            if (tilt) tilt.style.transform = `rotate(${(cur.x * TILT).toFixed(2)}deg)`;
+            if (
+                Math.abs(target.x - cur.x) > 0.01 ||
+                Math.abs(target.y - cur.y) > 0.01 ||
+                Math.abs(target.e - cur.e) > 0.005
+            ) {
                 frame = requestAnimationFrame(step);
             }
         }
 
         function kick() {
-            if (!frame) frame = requestAnimationFrame(step);
+            if (!frame && onScreen && !reduce) frame = requestAnimationFrame(step);
         }
 
         function lookAtElement(node, dx = 0.5, dy = 0.5, hold = 1600) {
-            if (!node || reduce) return;
+            if (!node || reduce || !onScreen) return;
             if (performance.now() - lastPointer < 2500) return;
             const r = node.getBoundingClientRect();
             aim.active = false;
@@ -76,17 +111,62 @@
             kick();
         }
 
+        // Back to the resting, cross-eyed look.
         function lookAhead() {
             target.x = 0;
             target.y = 0;
+            target.e = 0;
             kick();
+        }
+
+        // Pointer gone quiet: drift back, now and then glance around.
+        function glance() {
+            const now = performance.now();
+            if (now - lastPointer < 3000 || now < gazeUntil || document.hidden) return;
+            aim.active = false;
+            if (Math.random() < 0.55) lookAhead();
+            else {
+                target.x = (Math.random() * 2 - 1) * MAX_X;
+                target.y = (Math.random() * 2 - 1) * MAX_Y * 0.6;
+                target.e = 1;
+                kick();
+            }
+        }
+
+        // ── only while the cat is on screen ──
+        // Off screen there's no gaze loop, no glancing and no pointer work.
+        function setOnScreen(visible) {
+            if (visible === onScreen) return;
+            onScreen = visible;
+            rect = null;
+            if (visible) {
+                if (!reduce && !glanceTimer) glanceTimer = setInterval(glance, 2600);
+                kick();
+            } else {
+                cancelAnimationFrame(frame);
+                frame = 0;
+                clearInterval(glanceTimer);
+                glanceTimer = 0;
+            }
+        }
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(
+                (entries) => setOnScreen(entries[entries.length - 1].isIntersecting),
+                { rootMargin: '80px 0px' }
+            ).observe(el);
         }
 
         // ── pointer gaze ──
         if (!reduce) {
+            const invalidate = () => {
+                rect = null;
+            };
+            window.addEventListener('scroll', invalidate, { passive: true });
+            window.addEventListener('resize', invalidate, { passive: true });
             window.addEventListener(
                 'pointermove',
                 (e) => {
+                    if (!onScreen) return;
                     aim.x = e.clientX;
                     aim.y = e.clientY;
                     aim.active = true;
@@ -103,18 +183,7 @@
                 },
                 { passive: true }
             );
-            // Pointer gone quiet: drift back, now and then glance around.
-            setInterval(() => {
-                const now = performance.now();
-                if (now - lastPointer < 3000 || now < gazeUntil || document.hidden) return;
-                aim.active = false;
-                if (Math.random() < 0.55) lookAhead();
-                else {
-                    target.x = (Math.random() * 2 - 1) * MAX_X;
-                    target.y = (Math.random() * 2 - 1) * MAX_Y * 0.6;
-                    kick();
-                }
-            }, 2600);
+            if (onScreen) glanceTimer = setInterval(glance, 2600);
         }
 
         // ── blinking ──
@@ -125,7 +194,7 @@
         function scheduleBlink() {
             setTimeout(
                 () => {
-                    if (!document.hidden) {
+                    if (!document.hidden && onScreen) {
                         blink();
                         if (Math.random() < 0.2) setTimeout(blink, 260);
                     }

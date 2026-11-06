@@ -11,7 +11,7 @@
 .stage {
     position: relative;
     width: min(680px, 100%);
-    margin: clamp(40px, 5vw, 60px) auto 0;
+    margin: 0 auto;
     text-align: left;
 }
 
@@ -30,6 +30,19 @@
     }
 }
 
+/* Two-column hero: the stage is the right-hand column and leaves room above
+   for the cat. */
+@media (min-width: 1024px) {
+    .stage {
+        width: 100%;
+        padding-top: 40px;
+    }
+
+    .stage__win {
+        margin-bottom: 0;
+    }
+}
+
 /* ─── hotkey hint ─────────────────────────────────────────────────── */
 
 .hotkey {
@@ -42,6 +55,19 @@
     margin-bottom: 16px;
     color: var(--muted);
     font-size: 0.92rem;
+}
+
+@media (max-height: 1000px) {
+    .hotkey {
+        margin-bottom: 10px;
+    }
+}
+
+/* Phones can't press it, and the room is better spent on the demo. */
+@media (max-width: 560px) {
+    .hotkey {
+        display: none;
+    }
 }
 
 .hotkey__plus {
@@ -89,6 +115,11 @@
     border-radius: 14px;
     border: 1.5px solid rgba(129, 230, 217, 0.65);
     opacity: 0;
+}
+
+/* A gentle "press me" ring, only while the demo isn't pressing the keys
+   itself (before the first summon, or while paused). */
+.hero:not(.demo-playing) .key::after {
     animation: key-pulse 3.2s var(--ease-out) infinite;
 }
 
@@ -122,18 +153,6 @@
 
 .key.is-pressed::before {
     opacity: 1;
-}
-
-@media (max-width: 560px) {
-    .hotkey__label--rest {
-        display: none;
-    }
-}
-
-@media (max-width: 400px) {
-    .hotkey__label {
-        display: none;
-    }
 }
 
 /* ─── the peeking cat ─────────────────────────────────────────────── */
@@ -174,6 +193,12 @@
     transition:
         transform 0.3s ease-in,
         opacity 0.2s ease-in;
+}
+
+/* Never a focused control you can't see. */
+.peek.is-away:focus-visible {
+    --peek-y: -18px;
+    opacity: 1;
 }
 
 .peek__glow {
@@ -1238,10 +1263,33 @@
 
 /* the static themes demo */
 .lm--demo .lm__content {
-    min-height: 236px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+}
+
+/* Theme and language changes: main.js morphs the window with a view
+   transition where the browser has them; elsewhere the colours fade. */
+.lm--demo {
+    view-transition-name: theme-demo;
+}
+
+.lm--demo .lm__content,
+.lm--demo .lm-answer strong,
+.lm--demo .lm__placeholder {
+    transition: color 0.3s ease;
+}
+
+.lm--demo [data-i18n] {
+    transition: opacity 0.18s ease;
+}
+
+.lm--demo.is-swapping [data-i18n] {
+    opacity: 0;
+}
+
+::view-transition-group(theme-demo) {
+    animation-duration: 0.38s;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .lm__body--demo {
@@ -1286,14 +1334,24 @@
 
 /* ─── demo controls ───────────────────────────────────────────────── */
 
-/* Below the wide breakpoint the chips sit above the window; leave room for
-   the cat, which peeks up (and rises further on hover) right under them. */
+/* Centered layout: one row of chips (and the pause button) above the window,
+   with room under it for the cat, which peeks up (and rises further on
+   hover) right below. The head wrapper dissolves so the toggle sits at the
+   end of the row. */
 .demo-controls {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin-bottom: 76px;
+    margin: clamp(32px, 4vw, 48px) 0 76px;
+}
+
+.demo-controls__head {
+    display: contents;
+}
+
+.demo-controls .play-toggle {
+    order: 2;
 }
 
 .demo-label {
@@ -1305,32 +1363,9 @@
     text-transform: uppercase;
 }
 
-/* Wide screens: the examples become a vertical list beside the window, so
-   the window itself sits higher in the first screen. */
-@media (min-width: 1160px) {
+@media (min-width: 561px) and (max-width: 1023px) and (max-height: 1000px) {
     .demo-controls {
-        position: absolute;
-        z-index: 2;
-        top: 60px;
-        right: calc(100% + 40px);
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 10px;
-        margin: 0;
-    }
-
-    .demo-label {
-        display: block;
-        margin-bottom: 2px;
-    }
-
-    .demo-chips {
-        flex-direction: column;
-        align-items: flex-end;
-    }
-
-    .demo-toggle {
-        margin-top: 4px;
+        margin-top: 24px;
     }
 }
 
@@ -1350,35 +1385,83 @@
     font-weight: 550;
 }
 
-.demo-toggle {
+/* Two-column hero: the examples are a tidy grid under the calls to action,
+   with the label and the pause button on one row above it. */
+@media (min-width: 1024px) {
+    .demo-controls {
+        display: block;
+        max-width: 470px;
+        margin: 34px 0 0;
+    }
+
+    .demo-controls__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+
+    .demo-label {
+        display: block;
+    }
+
+    .demo-chips {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+    }
+
+    .demo-chips button {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* Play/pause button: the hero demo and every marquee. Its label stays the
+   same ("Pause …") and aria-pressed says whether it's paused. */
+.play-toggle {
     display: grid;
     place-items: center;
     flex: none;
     width: 38px;
     height: 38px;
+    padding: 0;
     border-radius: 50%;
     border: 1px solid var(--line-2);
     background: rgba(255, 255, 255, 0.04);
     color: var(--text);
     cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease;
 }
 
-.demo-toggle:hover {
+.play-toggle:hover {
     background: rgba(255, 255, 255, 0.09);
 }
 
-.demo-toggle .ico {
+.play-toggle .ico {
     grid-area: 1 / 1;
     width: 18px;
     height: 18px;
 }
 
-.demo-toggle .ico--play,
-.demo-toggle[aria-pressed="true"] .ico--pause {
+.play-toggle--sm {
+    width: 34px;
+    height: 34px;
+    color: var(--muted);
+}
+
+.play-toggle--sm .ico {
+    width: 15px;
+    height: 15px;
+}
+
+.play-toggle .ico--play,
+.play-toggle[aria-pressed="true"] .ico--pause {
     display: none;
 }
 
-.demo-toggle[aria-pressed="true"] .ico--play {
+.play-toggle[aria-pressed="true"] .ico--play {
     display: block;
 }
 
@@ -1437,7 +1520,7 @@
 
     .demo-controls {
         align-items: flex-start;
-        margin-bottom: 52px;
+        margin: 24px 0 52px;
     }
 
     .demo-chips {

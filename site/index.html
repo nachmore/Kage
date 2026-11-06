@@ -123,45 +123,52 @@
 
 <main id="main">
   <section class="hero" id="top" aria-labelledby="hero-title">
+    <!-- data-depth: how far a layer lags the page on scroll (bigger = farther
+         away); data-px: how far it moves with the pointer (bigger = nearer). -->
     <div class="sky" aria-hidden="true">
-      <div class="layer layer--aurora" data-depth="0.12" data-px="10"><div class="aurora"><span></span><span></span><span></span></div></div>
-      <div class="layer layer--stars-far" data-depth="0.18" data-px="6"></div>
-      <div class="layer layer--stars-near" data-depth="0.32" data-px="14"></div>
-      <div class="layer layer--shadow" data-depth="0.22" data-px="22"><svg class="shadow-cat" viewBox="0 0 150.181 119.455"><use href="#cat-body"/></svg></div>
-      <div class="layer layer--moon" data-depth="0.42" data-px="26"><img class="moon" src="assets/mascot/kage-moon.svg" width="200" height="190" alt=""></div>
-      <div class="layer layer--balloon" data-depth="0.62" data-px="34"><img class="balloon" src="assets/mascot/kage-balloon.svg" width="120" height="160" alt=""></div>
+      <div class="layer layer--aurora" data-depth="0.7" data-px="10"><div class="aurora"><span></span><span></span><span></span></div></div>
+      <div class="layer layer--stars-far" data-depth="0.6" data-px="6"></div>
+      <div class="layer layer--stars-near" data-depth="0.45" data-px="14"></div>
+      <div class="layer layer--shadow" data-depth="0.35" data-px="22"><svg class="shadow-cat" viewBox="0 0 150.181 119.455"><use href="#cat-body"/></svg></div>
+      <div class="layer layer--moon" data-depth="0.3" data-px="26"><img class="moon" src="assets/mascot/kage-moon.svg" width="200" height="190" alt=""></div>
+      <div class="layer layer--balloon" data-depth="0.15" data-px="34"><img class="balloon" src="assets/mascot/kage-balloon.svg" width="120" height="160" alt=""></div>
       <div class="layer layer--mist"></div>
     </div>
 
     <div class="hero__inner wrap">
-      <p class="eyebrow eyebrow--pill reveal"><span class="pulse-dot" aria-hidden="true"></span>Free and open source<span class="hide-sm"> · Windows and macOS</span></p>
-      <h1 id="hero-title" class="hero__title reveal" style="--d: 60ms">Your AI, <span class="grad">one keystroke away.</span></h1>
-      <p class="hero__lede reveal" style="--d: 120ms">A fast, extensible launcher for Windows and macOS. Open apps, convert units and start timers as you type, or ask the AI agent you already use and watch every step.</p>
-      <div class="hero__ctas reveal" style="--d: 180ms">
-        <a class="btn btn--primary btn--lg" href="#download" data-dl-label><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span>Download Kage</span></a>
-        <a class="btn btn--ghost btn--lg" href="https://github.com/nachmore/Kage"><svg class="ico ico--fill" aria-hidden="true"><use href="#i-github"/></svg><span>View on GitHub</span></a>
-      </div>
+      <div class="hero__copy">
+        <p class="eyebrow eyebrow--pill hero-in"><span class="dot" aria-hidden="true"></span>Free and open source<span class="hide-sm"> · Windows and macOS</span></p>
+        <h1 id="hero-title" class="hero__title hero-in" style="--d: 50ms">Your AI, <span class="grad">one keystroke away.</span></h1>
+        <p class="hero__lede hero-in" style="--d: 100ms"><span class="lede-long">A fast, extensible launcher for Windows and macOS. Open apps, convert units and start timers as you type, or ask the AI agent you already use and watch every step.</span><span class="lede-short">A fast, extensible launcher for Windows and macOS that works with the AI agent you already use.</span></p>
+        <div class="hero__ctas hero-in" style="--d: 150ms">
+          <a class="btn btn--primary btn--lg" href="#download" data-dl-label><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span>Download Kage</span></a>
+          <a class="btn btn--ghost btn--lg btn--gh" href="https://github.com/nachmore/Kage"><svg class="ico ico--fill" aria-hidden="true"><use href="#i-github"/></svg><span class="btn__label">View on GitHub</span></a>
+        </div>
 
-      <div class="stage reveal reveal--rise" style="--d: 260ms">
-        <div class="demo-controls needs-js" data-demo-controls>
-          <span class="demo-label" aria-hidden="true">Try</span>
+        <div class="demo-controls needs-js hero-in" style="--d: 220ms" data-demo-controls>
+          <div class="demo-controls__head">
+            <span class="demo-label" aria-hidden="true">Try</span>
+            <button type="button" class="play-toggle" data-demo-toggle aria-pressed="false" aria-label="Pause demo">
+              <svg class="ico ico--pause" aria-hidden="true"><use href="#i-pause"/></svg>
+              <svg class="ico ico--play ico--fill" aria-hidden="true"><use href="#i-play"/></svg>
+            </button>
+          </div>
           <div class="demo-chips" role="group" aria-label="Demo examples">
             <button type="button" data-scene="0">calc</button>
-            <button type="button" data-scene="1">12 km to mi</button>
-            <button type="button" data-scene="2">timer 25m</button>
-            <button type="button" data-scene="3">down</button>
-            <button type="button" data-scene="4">Ask the agent</button>
-            <button type="button" data-scene="5">Run a command</button>
+            <button type="button" data-scene="1">Ask the agent</button>
+            <button type="button" data-scene="2">12 km to mi</button>
+            <button type="button" data-scene="3">Run a command</button>
+            <button type="button" data-scene="4">down</button>
+            <button type="button" data-scene="5">timer 25m</button>
           </div>
-          <button type="button" class="demo-toggle" data-demo-toggle aria-pressed="false" aria-label="Pause the demo">
-            <svg class="ico ico--pause" aria-hidden="true"><use href="#i-pause"/></svg>
-            <svg class="ico ico--play ico--fill" aria-hidden="true"><use href="#i-play"/></svg>
-          </button>
         </div>
+      </div>
+
+      <div class="stage hero-in" style="--d: 180ms">
         <div class="stage__win">
         <div class="hotkey" data-hotkey>
           <span class="hotkey__label">Press</span>
-          <kbd class="key" data-key="mod"><span data-mod-label>Alt</span></kbd>
+          <kbd class="key" data-key="mod"><span data-mac="⌥ Option">Alt</span></kbd>
           <span class="hotkey__plus" aria-hidden="true">+</span>
           <kbd class="key key--wide" data-key="space">Space</kbd>
           <span class="hotkey__label hotkey__label--rest">over any app</span>
@@ -230,28 +237,28 @@
           </div>
         </div>
         </div>
-        <p class="sr-only">An animated demo of the Kage launcher. Typing "calc" finds the Calculator app, "12 km to mi" answers "= 7.46 mi", "timer 25m" starts a countdown, "down" offers to open the Downloads folder, a question about a Lisbon weekend streams an answer from the agent with a "fetch" tool chip, and a question about the biggest files in Downloads asks permission, then shows the shell command it ran and its output.</p>
-
+        <p class="sr-only">An animated demo of the Kage launcher. Typing "calc" finds the Calculator app, a question about a Lisbon weekend streams an answer from the agent with a "fetch" tool chip, "12 km to mi" answers "= 7.46 mi", a question about the biggest files in Downloads asks permission, then shows the shell command it ran and its output, "down" offers to open the Downloads folder, and "timer 25m" starts a countdown.</p>
       </div>
     </div>
   </section>
 
-  <section class="agents" id="agents" aria-labelledby="agents-title">
+  <section class="agents band" id="agents" aria-labelledby="agents-title">
     <div class="wrap">
-      <div class="section-head reveal">
+      <div class="section-head section-head--center reveal">
         <p class="eyebrow">Bring your own agent</p>
         <h2 id="agents-title">Works with the agent you already use.</h2>
         <p class="lede">Kage doesn't include a model or need an account. It's the front end; the thinking happens in an agent you run, connected over the <a href="https://agentclientprotocol.com">Agent Client Protocol</a> (ACP).</p>
       </div>
     </div>
+    <div class="marquee-group marquee-group--agents" data-marquee-group>
     <div class="marquee marquee--agents reveal" style="--d: 80ms">
       <div class="marquee__track">
-        <ul class="marquee__list">
-          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 168">K</span><span><strong>Kiro CLI</strong><small>kiro-cli acp</small></span></li>
-          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 22">C</span><span><strong>Claude Code</strong><small>ACP adapter</small></span></li>
-          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 205">O</span><span><strong>OpenAI Codex</strong><small>codex-acp</small></span></li>
-          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 285">L</span><span><strong>Ollama</strong><small>a local model</small></span></li>
-          <li class="agent-pill"><span class="agent-pill__mono" style="--h: 130">+</span><span><strong>Any ACP agent</strong><small>by command, host or port</small></span></li>
+        <ul class="marquee__list" aria-label="Agents Kage works with">
+          <li class="agent-pill" style="--i: 0"><span class="agent-pill__mono" style="--h: 168">K</span><span><strong>Kiro CLI</strong><small>kiro-cli acp</small></span></li>
+          <li class="agent-pill" style="--i: 1"><span class="agent-pill__mono" style="--h: 22">C</span><span><strong>Claude Code</strong><small>ACP adapter</small></span></li>
+          <li class="agent-pill" style="--i: 2"><span class="agent-pill__mono" style="--h: 205">O</span><span><strong>OpenAI Codex</strong><small>codex-acp</small></span></li>
+          <li class="agent-pill" style="--i: 3"><span class="agent-pill__mono" style="--h: 285">L</span><span><strong>Ollama</strong><small>a local model</small></span></li>
+          <li class="agent-pill" style="--i: 4"><span class="agent-pill__mono" style="--h: 130">+</span><span><strong>Any ACP agent</strong><small>by command, host or port</small></span></li>
         </ul>
         <ul class="marquee__list" aria-hidden="true">
           <li class="agent-pill"><span class="agent-pill__mono" style="--h: 168">K</span><span><strong>Kiro CLI</strong><small>kiro-cli acp</small></span></li>
@@ -262,10 +269,15 @@
         </ul>
       </div>
     </div>
+    <div class="wrap marquee-ctl needs-js"><button type="button" class="play-toggle play-toggle--sm" data-marquee-toggle aria-pressed="false" aria-label="Pause the agent list"><svg class="ico ico--pause" aria-hidden="true"><use href="#i-pause"/></svg><svg class="ico ico--play ico--fill" aria-hidden="true"><use href="#i-play"/></svg></button></div>
+    </div>
     <div class="wrap split split--agents">
       <figure class="shot shot--tilt-l reveal reveal--tilt" data-tilt>
+        <!-- Cropped to the Connections panel so its text stays legible. -->
         <div class="frame">
-          <img src="assets/shots/settings-agents-dark.png" width="1800" height="1240" data-sizes="(min-width: 1100px) 620px, 92vw" loading="lazy" decoding="async" alt="Kage Settings, Agents page, in the dark theme. Kiro CLI is the active connection; Claude Code and Ollama are saved with Make active buttons; an auto-detected OpenAI Codex has an Add button.">
+          <div class="crop" style="--x: 460; --y: 40; --w: 1300; --h: 1160; --iw: 1800">
+            <img src="assets/shots/settings-agents-dark.png" width="1800" height="1240" data-sizes="(min-width: 1100px) 900px, 130vw" loading="lazy" decoding="async" alt="Kage Settings, Agents page, in the dark theme. Kiro CLI is the active connection; Claude Code and Ollama are saved with Make active buttons; an auto-detected OpenAI Codex has an Add button.">
+          </div>
         </div>
       </figure>
       <ul class="points reveal" style="--d: 100ms">
@@ -284,38 +296,16 @@
         <h2 id="why-title">Out of sight until you call it.</h2>
         <p class="lede"><span lang="ja">影</span> (<i>kage</i>) is Japanese for "shadow". One keystroke and it's there, over whatever you're doing.</p>
       </div>
-      <div class="pillars">
-        <article class="card pillar reveal" style="--d: 0ms" data-spot>
-          <span class="pillar__icon"><svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg></span>
-          <h3>Fast first</h3>
-          <p>Apps, math, timers and folders answer as you type, on your machine. None of it goes to the AI.</p>
-        </article>
-        <article class="card pillar reveal" style="--d: 70ms" data-spot>
-          <span class="pillar__icon"><svg class="ico" aria-hidden="true"><use href="#i-plug"/></svg></span>
-          <h3>Your agent, not ours</h3>
-          <p>No bundled model and no account. Kiro CLI, Claude Code, OpenAI Codex, a local Ollama model, or any ACP agent.</p>
-        </article>
-        <article class="card pillar reveal" style="--d: 140ms" data-spot>
-          <span class="pillar__icon"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg></span>
-          <h3>Nothing hidden</h3>
-          <p>Every file read, edit, search and shell command appears under the reply, with its output. New tools need your OK.</p>
-        </article>
-        <article class="card pillar reveal" style="--d: 210ms" data-spot>
-          <span class="pillar__icon"><svg class="ico" aria-hidden="true"><use href="#i-sliders"/></svg></span>
-          <h3>Yours to shape</h3>
-          <p>Sandboxed extensions, themes, your own commands and automations, 32 languages, and a cat that reacts to what's going on.</p>
-        </article>
-      </div>
       <dl class="stats reveal" style="--d: 120ms">
         <div><dt>Keystroke to open</dt><dd data-count="1">1</dd></div>
         <div><dt>Languages</dt><dd data-count="32">32</dd></div>
         <div><dt>Extensions installed by setup</dt><dd data-count="10">10</dd></div>
-        <div><dt>Accounts needed</dt><dd data-count="0">0</dd></div>
+        <div><dt>Kage accounts needed</dt><dd data-count="0">0</dd></div>
       </dl>
     </div>
   </section>
 
-  <section class="feature" id="features" aria-labelledby="f-launcher">
+  <section class="feature feature--light" id="features" aria-labelledby="f-launcher">
     <div class="wrap">
       <div class="section-head reveal">
         <p class="eyebrow">A launcher first, AI second</p>
@@ -331,7 +321,7 @@
         <div class="mini reveal" style="--d: 0ms"><svg class="ico" aria-hidden="true"><use href="#i-apps"/></svg><h3>Apps by a few letters</h3><p>Kage learns which result you pick and sees new installs right away.</p></div>
         <div class="mini reveal" style="--d: 60ms"><svg class="ico" aria-hidden="true"><use href="#i-bolt"/></svg><h3>Instant answers</h3><p>Math and units, timers, UUIDs, hashes, base64, epoch times, JSON and colors.</p></div>
         <div class="mini reveal" style="--d: 120ms"><svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg><h3>Folders, files, system</h3><p><code>down</code> opens Downloads, <code>*.pdf</code> finds files, and <code>lock</code>, <code>sleep</code> or <code>terminal</code> do what they say.</p></div>
-        <div class="mini reveal" style="--d: 180ms"><svg class="ico" aria-hidden="true"><use href="#i-keyboard"/></svg><h3>Then, the AI</h3><p><kbd>Enter</kbd> on text that matches nothing asks your agent. <kbd data-send-label>Ctrl+Enter</kbd> always does.</p></div>
+        <div class="mini reveal" style="--d: 180ms"><svg class="ico" aria-hidden="true"><use href="#i-keyboard"/></svg><h3>Then, the AI</h3><p><kbd>Enter</kbd> on text that matches nothing asks your agent. <kbd data-mac="⌘+Enter">Ctrl+Enter</kbd> always does.</p></div>
       </div>
     </div>
   </section>
@@ -389,7 +379,7 @@
       <div class="section-head section-head--center reveal">
         <p class="eyebrow">Inline assist</p>
         <h2 id="f-inline">AI inside any app.</h2>
-        <p class="lede">Select text anywhere and press <span class="nowrap"><kbd data-inline-label>Ctrl+Shift+Space</kbd>.</span> Actions that suit the text appear at the cursor, or type your own.</p>
+        <p class="lede">Select text anywhere and press <span class="nowrap"><kbd data-mac="⌃⇧Space">Ctrl+Shift+Space</kbd>.</span> Actions that suit the text appear at the cursor, or type your own.</p>
       </div>
       <figure class="shot shot--wide reveal reveal--tilt" data-tilt data-parallax="0.06">
         <div class="frame">
@@ -405,21 +395,21 @@
   </section>
 
   <section class="feature" aria-labelledby="f-cal">
-    <div class="wrap split">
-      <div class="split__text">
+    <div class="wrap">
+      <div class="head-row">
         <div class="section-head reveal">
           <p class="eyebrow">Your day at a glance</p>
           <h2 id="f-cal">Your next meeting, one keystroke away.</h2>
         </div>
         <ul class="points reveal" style="--d: 80ms">
-          <li><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg><div><h3>A keyboard-friendly calendar</h3><p>Turn on the clock and date, then click the date or press <kbd>Alt+↓</kbd> for a month view.</p></div></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg><div><h3>A keyboard-friendly calendar</h3><p>Turn on the clock and date, then click the date or press <kbd data-mac="⌥↓">Alt+↓</kbd> for a month view.</p></div></li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg><div><h3>Join from the bar</h3><p>With the Calendar extension: a next-meeting bar with Join, busy-day dots, <code>cal</code> and <code>meetings</code>, and appointment lookups for your agent.</p></div></li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-window"/></svg><div><h3>Where your meetings live</h3><p>The Calendar app on macOS, and classic Outlook for desktop on Windows.</p></div></li>
         </ul>
       </div>
-      <figure class="shot shot--tilt-r reveal reveal--tilt" data-tilt data-parallax="0.05">
+      <figure class="shot shot--wide reveal reveal--tilt" data-tilt data-parallax="0.05">
         <div class="frame">
-          <img src="assets/shots/launcher-calendar-dark.png" width="1800" height="766" data-sizes="(min-width: 1100px) 640px, 92vw" loading="lazy" decoding="async" alt="The launcher in the Nord theme. Left: a next-meeting bar, '[in 5m] Design review' with a Join button, above a month calendar with dots on busy days. Right: three meetings for the chosen day with Join Meeting buttons.">
+          <img src="assets/shots/launcher-calendar-dark.png" width="1800" height="766" data-sizes="(min-width: 1240px) 1140px, 94vw" loading="lazy" decoding="async" alt="The launcher in the Nord theme. Left: a next-meeting bar, '[in 5m] Design review' with a Join button, above a month calendar with dots on busy days. Right: three meetings for the chosen day with Join Meeting buttons.">
         </div>
       </figure>
     </div>
@@ -462,7 +452,7 @@
           <div>
             <svg class="ico" aria-hidden="true"><use href="#i-tray"/></svg>
             <h3>Stays out of the way</h3>
-            <p>Lives in the tray or menu bar, runs as a single instance, can start at login, and can keep itself up to date with signed builds.</p>
+            <p>Lives in the tray or menu bar, runs as a single instance, can start at login, and can keep itself up to date, checking every update against a signing key built into the app.</p>
           </div>
           <div class="traymenu" aria-hidden="true">
             <div class="traymenu__bar"><span class="traymenu__dot"></span><span class="traymenu__dot"></span><img src="assets/icons/kage-icon-basic.svg" width="22" height="18" alt=""><span class="traymenu__clock">9:41</span></div>
@@ -473,7 +463,7 @@
     </div>
   </section>
 
-  <section class="extensions" id="extensions" aria-labelledby="ext-title">
+  <section class="extensions band" id="extensions" aria-labelledby="ext-title">
     <div class="wrap">
       <div class="section-head section-head--center reveal">
         <img class="section-cat" src="assets/mascot/kage-in-cute-box.svg" width="120" height="96" alt="" loading="lazy">
@@ -482,10 +472,10 @@
         <p class="lede">Setup installs ten favorites and three extra themes. Find more in the Extension Store, in Kage (<code>&gt;store</code>) or on the web.</p>
       </div>
     </div>
-    <div class="ext-rows reveal" style="--d: 80ms">
+    <div class="ext-rows marquee-group reveal" style="--d: 80ms" data-marquee-group>
       <div class="marquee marquee--ext">
         <div class="marquee__track">
-          <ul class="marquee__list">
+          <ul class="marquee__list" aria-label="Extensions setup installs">
             <li class="ext"><span class="ext__icon">🧮</span><span class="ext__name">Math Calculator</span><span class="ext__meta"><code>12 km to mi</code><span class="ext__tag">Setup</span></span></li>
             <li class="ext"><span class="ext__icon">⏱️</span><span class="ext__name">Timer &amp; Stopwatch</span><span class="ext__meta"><code>timer 5m</code><span class="ext__tag">Setup</span></span></li>
             <li class="ext"><span class="ext__icon">📅</span><span class="ext__name">Calendar</span><span class="ext__meta"><code>cal</code><span class="ext__tag">Setup</span></span></li>
@@ -513,7 +503,7 @@
       </div>
       <div class="marquee marquee--ext marquee--reverse">
         <div class="marquee__track">
-          <ul class="marquee__list">
+          <ul class="marquee__list" aria-label="More in the Extension Store">
             <li class="ext"><span class="ext__icon">💱</span><span class="ext__name">Currency Converter</span><span class="ext__meta"><code>100 usd to eur</code><span class="ext__tag ext__tag--online">Online</span></span></li>
             <li class="ext"><span class="ext__icon">🌤️</span><span class="ext__name">Weather</span><span class="ext__meta"><code>weather lisbon</code><span class="ext__tag ext__tag--online">Online</span></span></li>
             <li class="ext"><span class="ext__icon">😀</span><span class="ext__name">Emoji Picker</span><span class="ext__meta"><code>:fire</code><span class="ext__tag">Store</span></span></li>
@@ -535,6 +525,7 @@
           </ul>
         </div>
       </div>
+      <div class="wrap marquee-ctl needs-js"><button type="button" class="play-toggle play-toggle--sm" data-marquee-toggle aria-pressed="false" aria-label="Pause the extension list"><svg class="ico ico--pause" aria-hidden="true"><use href="#i-pause"/></svg><svg class="ico ico--play ico--fill" aria-hidden="true"><use href="#i-play"/></svg></button></div>
     </div>
     <div class="wrap split split--ext">
       <figure class="shot shot--tilt-l reveal reveal--tilt" data-tilt data-parallax="0.05">
@@ -563,7 +554,7 @@
         <div class="section-head reveal">
           <p class="eyebrow">Make it yours</p>
           <h2 id="themes-title">Your colors. Your language.</h2>
-          <p class="lede">Themes and languages switch everywhere at once, without a restart. Try it.</p>
+          <p class="lede">Themes and languages switch everywhere at once, without a restart.<span class="needs-js"> Try it.</span></p>
         </div>
         <ul class="points reveal" style="--d: 80ms">
           <li><svg class="ico" aria-hidden="true"><use href="#i-palette"/></svg><div><h3>Themes</h3><p>Kage Light, Kage Dark, or Auto, which follows your OS, plus Nord, Sunset and Kiro‑ish from setup.</p></div></li>
@@ -606,15 +597,18 @@
         <noscript><p class="note">The same reply in four themes and languages:</p><img class="noscript-shot" src="assets/shots/themes-languages.png" width="1800" height="919" alt="The same launcher reply four ways: Sunset theme in English, Kage Light in Japanese, Kage Dark in Arabic with a mirrored right-to-left layout, and Kiro-ish in German."></noscript>
       </div>
     </div>
-    <div class="marquee marquee--langs reveal" aria-label="Languages Kage speaks">
+    <div class="marquee-group marquee-group--langs" data-marquee-group>
+    <div class="marquee marquee--langs reveal">
       <div class="marquee__track">
-        <ul class="marquee__list">
+        <ul class="marquee__list" aria-label="Languages Kage speaks">
           <li lang="en">English</li><li lang="ar">العربية</li><li lang="bn">বাংলা</li><li lang="zh-Hans">简体中文</li><li lang="zh-Hant">繁體中文</li><li lang="cs">Čeština</li><li lang="da">Dansk</li><li lang="nl">Nederlands</li><li lang="fi">Suomi</li><li lang="fr">Français</li><li lang="de">Deutsch</li><li lang="el">Ελληνικά</li><li lang="he">עברית</li><li lang="hi">हिन्दी</li><li lang="hu">Magyar</li><li lang="id">Bahasa Indonesia</li><li lang="it">Italiano</li><li lang="ja">日本語</li><li lang="ko">한국어</li><li lang="no">Norsk</li><li lang="fa">فارسی</li><li lang="pl">Polski</li><li lang="pt">Português</li><li lang="ro">Română</li><li lang="ru">Русский</li><li lang="es">Español</li><li lang="sv">Svenska</li><li lang="th">ไทย</li><li lang="tr">Türkçe</li><li lang="uk">Українська</li><li lang="ur">اردو</li><li lang="vi">Tiếng Việt</li>
         </ul>
         <ul class="marquee__list" aria-hidden="true">
           <li>English</li><li>العربية</li><li>বাংলা</li><li>简体中文</li><li>繁體中文</li><li>Čeština</li><li>Dansk</li><li>Nederlands</li><li>Suomi</li><li>Français</li><li>Deutsch</li><li>Ελληνικά</li><li>עברית</li><li>हिन्दी</li><li>Magyar</li><li>Bahasa Indonesia</li><li>Italiano</li><li>日本語</li><li>한국어</li><li>Norsk</li><li>فارسی</li><li>Polski</li><li>Português</li><li>Română</li><li>Русский</li><li>Español</li><li>Svenska</li><li>ไทย</li><li>Türkçe</li><li>Українська</li><li>اردو</li><li>Tiếng Việt</li>
         </ul>
       </div>
+    </div>
+    <div class="wrap marquee-ctl needs-js"><button type="button" class="play-toggle play-toggle--sm" data-marquee-toggle aria-pressed="false" aria-label="Pause the language list"><svg class="ico ico--pause" aria-hidden="true"><use href="#i-pause"/></svg><svg class="ico ico--play ico--fill" aria-hidden="true"><use href="#i-play"/></svg></button></div>
     </div>
     <div class="wrap">
       <div class="cat-note reveal">
@@ -633,11 +627,18 @@
       </div>
       <div class="privacy__grid">
         <article class="card pcard reveal" data-spot><svg class="ico" aria-hidden="true"><use href="#i-user-off"/></svg><h3>No Kage account, no Kage cloud</h3><p>Your prompts go to the agent you connect, and from there to whichever model service it uses, or nowhere else with a local Ollama model.</p></article>
-        <article class="card pcard reveal" style="--d: 60ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg><h3>You approve the tools</h3><p>The agent asks before it uses a tool you haven't allowed, and every command it runs shows up under the reply.</p></article>
-        <article class="card pcard reveal" style="--d: 120ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg><h3>Sandboxed extensions</h3><p>Every extension is untrusted. Each request it makes is checked against the access it declared.</p></article>
-        <article class="card pcard reveal" data-spot><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg><h3>Signed updates</h3><p>Every download is verified against a signing key built into the app before it's installed.</p></article>
-        <article class="card pcard reveal" style="--d: 60ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-chart"/></svg><h3>Analytics you can switch off</h3><p>Anonymous usage events never include your messages, prompts, replies, file names or paths. Setup explains them with a switch that starts on; turn it off there or in Settings → Privacy.</p></article>
-        <article class="card pcard reveal" style="--d: 120ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-window"/></svg><h3>Screen context, disclosed</h3><p>By default, prompts include the name and window title of the app you came from. Turn it off in Settings → System Integration.</p></article>
+        <article class="card pcard reveal" style="--d: 60ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg><h3>Signed updates</h3><p>Every update is checked against a signing key built into the app before it's installed.</p></article>
+        <article class="card pcard reveal" data-spot><svg class="ico" aria-hidden="true"><use href="#i-chart"/></svg><h3>Analytics you can switch off</h3><p>Anonymous usage events never include your messages, prompts, replies, file names or paths. Setup explains them with a switch that starts on; turn it off there or in Settings → Privacy.</p></article>
+        <article class="card pcard reveal" style="--d: 60ms" data-spot><svg class="ico" aria-hidden="true"><use href="#i-window"/></svg><h3>Screen context, disclosed</h3><p>By default, prompts include the name and window title of the app you came from. Titles can contain document names, email subjects or file paths. Turn it off in Settings → System Integration.</p></article>
+        <article class="card pcard pcard--wide reveal" data-spot>
+          <svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>
+          <h3>What else goes online</h3>
+          <ul class="pcard__list">
+            <li>Empty connectivity checks to <code>www.msftconnecttest.com</code>, <code>www.cloudflare.com</code> and <code>www.google.com</code> at startup, when you open Kage, and while it thinks you're offline.</li>
+            <li>GitHub, for update checks, downloads and the changelog, and GitHub Pages (<code>nachmore.github.io</code>) for the Extension Store.</li>
+            <li>Extensions marked <span class="ext__tag ext__tag--online ext__tag--inline">Online</span>. Of the ones setup installs, Dictionary sends the words you look up, and Link Preview fetches pages linked in replies.</li>
+          </ul>
+        </article>
       </div>
       <p class="privacy__links reveal">Read the <a href="https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md">privacy policy</a>, the <a href="https://github.com/nachmore/Kage/blob/main/docs/SECURITY_MODEL.md">security model</a> and how <a href="https://github.com/nachmore/Kage/blob/main/docs/TOOL_PERMISSIONS.md">tool permissions</a> work.</p>
     </div>
@@ -667,7 +668,8 @@
           <p class="dl__note">The Mac builds aren't signed or notarized yet. <strong>Before you open the DMG</strong>, remove the quarantine flag in Terminal:</p>
           <div class="cmd">
             <code data-copy-src>xattr -d com.apple.quarantine ~/<wbr>Downloads/<wbr>Kage_*_aarch64.dmg</code>
-            <button type="button" class="cmd__copy needs-js" data-copy aria-label="Copy the command"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span data-copy-label>Copy</span></button>
+            <button type="button" class="cmd__copy needs-js" data-copy><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span data-copy-label>Copy</span><span class="sr-only"> the command</span></button>
+            <span class="sr-only" role="status" data-copy-status></span>
           </div>
           <p class="dl__note dl__note--small">Then open the DMG and drag Kage to Applications. Intel Macs aren't supported. Already seeing "damaged"? See the <a href="https://github.com/nachmore/Kage#macos">install guide</a>.</p>
         </article>
@@ -675,7 +677,7 @@
       <ol class="steps reveal" style="--d: 120ms">
         <li><span>1</span><div><h3>Install an agent</h3><p>Kage doesn't include a model, so <a href="#agents">pick an agent</a> and sign in to it the usual way.</p></div></li>
         <li><span>2</span><div><h3>Open Kage</h3><p>The setup wizard finds your agents and walks you through the rest, or choose <em>Set it up for me</em>.</p></div></li>
-        <li><span>3</span><div><h3>Press <kbd data-mod-label-kbd>Alt</kbd>+<kbd>Space</kbd></h3><p>Try <code>calc</code>, <code>12 km to mi</code> or <code>timer 25m</code>, then ask your agent anything.</p></div></li>
+        <li><span>3</span><div><h3>Press <kbd data-mac="Option">Alt</kbd>+<kbd>Space</kbd></h3><p>Try <code>calc</code>, <code>12 km to mi</code> or <code>timer 25m</code>, then ask your agent anything.</p></div></li>
       </ol>
       <p class="download__more reveal">No Linux build yet. Prefer to build it yourself? See <a href="https://github.com/nachmore/Kage/blob/main/docs/BUILDING.md">Building Kage</a>.</p>
     </div>
@@ -733,7 +735,7 @@
   </div>
   <div class="wrap footer__base">
     <p>Kage is free and open source under the Apache License 2.0.</p>
-    <p class="footer__build">Site built {{BUILD_DATE}} from <a href="https://github.com/nachmore/Kage/commit/{{BUILD_SHA}}">{{BUILD_SHA_SHORT}}</a> · Kage {{VERSION}}</p>
+    <p class="footer__build">Site built {{BUILD_DATE}} from <a href="https://github.com/nachmore/Kage/commit/{{BUILD_SHA}}">{{BUILD_SHA_SHORT}}</a></p>
   </div>
 </footer>
 </body>

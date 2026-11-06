@@ -1,12 +1,16 @@
 /* Kage site: page-level behaviour.
  *
- * - platform-aware labels (⌥ Option on a Mac, Alt elsewhere) and the
- *   recommended download card
- * - scroll reveals (IntersectionObserver), scroll progress, nav state
- * - multi-layer hero parallax (scroll + pointer), section parallax and
- *   3D tilt on screenshots, pointer spotlights on cards
- * - the live theme/language switcher, the copy button, and the latest
- *   Nightly's date from the GitHub API (silently skipped if it fails)
+ * - scroll reveals (IntersectionObserver). This runs first, and the CSS has
+ *   a failsafe that shows everything if this script never gets this far
+ *   (see .reveal-ready in site.css). The hero copy doesn't depend on it.
+ * - platform-aware labels ([data-mac] on a Mac) and the recommended
+ *   download card
+ * - scroll progress, nav state, multi-layer hero parallax (scroll +
+ *   pointer), section parallax and 3D tilt on screenshots, pointer
+ *   spotlights on cards
+ * - the mobile menu, the marquee pause buttons, the live theme/language
+ *   switcher, the copy button, and the latest Nightly's date from the
+ *   GitHub API (silently skipped if it fails)
  *
  * One rAF loop does all scroll/pointer work; listeners are passive and only
  * schedule it. Everything written per frame is a transform.
@@ -16,36 +20,25 @@
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const fine = window.matchMedia('(pointer: fine)').matches;
     const os = doc.dataset.os;
+    const isMac = os === 'mac';
     const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
-
-    // ─── platform labels ──────────────────────────────────────────────
-
-    if (os === 'mac') {
-        $$('[data-mod-label]').forEach((el) => {
-            el.textContent = '⌥ Option';
-        });
-        $$('[data-mod-label-kbd]').forEach((el) => {
-            el.textContent = 'Option';
-        });
-        $$('[data-send-label]').forEach((el) => {
-            el.textContent = '⌘+Enter';
-        });
-        $$('[data-inline-label]').forEach((el) => {
-            el.textContent = '⌃⇧Space';
-        });
-    }
-    const card = document.querySelector(`[data-platform="${os === 'mac' ? 'mac' : 'windows'}"]`);
-    if (os === 'mac' || os === 'windows') {
-        card?.classList.add('is-recommended');
-        const label = document.querySelector('[data-dl-label] span');
-        if (label) label.textContent = os === 'mac' ? 'Download for macOS' : 'Download for Windows';
-    }
 
     // ─── reveals ──────────────────────────────────────────────────────
 
     const reveals = $$('.reveal');
     const counters = $$('[data-count]');
-    if (reduce || !('IntersectionObserver' in window)) {
+
+    // Until <html> has .reveal-ready, a CSS animation shows every .reveal
+    // 2.5 s after it's first styled. If this script got here after that
+    // (slow network, busy CPU), keep everything shown instead of hiding it
+    // again only to fade it back in.
+    function failsafeFired() {
+        if (performance.now() < 2400) return false;
+        const probe = reveals.find((el) => !el.classList.contains('reveal--tilt'));
+        return !!probe && getComputedStyle(probe).opacity === '1';
+    }
+
+    if (reduce || !('IntersectionObserver' in window) || failsafeFired()) {
         reveals.forEach((el) => el.classList.add('is-in'));
     } else {
         const io = new IntersectionObserver(
@@ -61,6 +54,8 @@
         );
         reveals.forEach((el) => io.observe(el));
     }
+    // Cancels the failsafe: from here on the observer owns the reveals.
+    doc.classList.add('reveal-ready');
 
     function countUp() {
         for (const el of counters) {
@@ -77,18 +72,42 @@
         }
     }
 
+    // ─── platform labels ──────────────────────────────────────────────
+
+    if (isMac) {
+        for (const el of $$('[data-mac]')) el.textContent = el.dataset.mac;
+    }
+    const card = document.querySelector(`[data-platform="${isMac ? 'mac' : 'windows'}"]`);
+    if (isMac || os === 'windows') {
+        card?.classList.add('is-recommended');
+        const label = document.querySelector('[data-dl-label] span');
+        if (label) label.textContent = isMac ? 'Download for macOS' : 'Download for Windows';
+    }
+
     // ─── scroll + pointer loop ────────────────────────────────────────
 
     const nav = document.querySelector('[data-nav]');
     const bar = document.querySelector('.progress span');
     const hero = document.querySelector('.hero');
+    // data-depth is how far a layer lags the page on scroll (bigger =
+    // farther away); data-px is how far it follows the pointer (bigger =
+    // nearer). Walking from the nearest layer outwards, no layer may follow
+    // the pointer more than a nearer one, so the two cues always agree on
+    // the order even if the markup's numbers drift.
     const layers = reduce
         ? []
-        : $$('.sky [data-depth]').map((el) => ({
-              el,
-              depth: Number(el.dataset.depth) * (fine ? 1 : 0.6),
-              px: fine ? Number(el.dataset.px || 0) : 0,
-          }));
+        : $$('.sky [data-depth]')
+              .map((el) => ({
+                  el,
+                  depth: Number(el.dataset.depth) * (fine ? 1 : 0.6),
+                  px: fine ? Number(el.dataset.px || 0) : 0,
+              }))
+              .sort((a, b) => a.depth - b.depth);
+    let pxCap = Number.POSITIVE_INFINITY;
+    for (const l of layers) {
+        l.px = Math.min(l.px, pxCap);
+        pxCap = l.px;
+    }
     const pars =
         reduce || !fine
             ? []
@@ -251,6 +270,46 @@
         }
     }
 
+    // ─── mobile menu ──────────────────────────────────────────────────
+
+    // A <details> sheet: close it when a link in it is chosen, on Escape
+    // (focus goes back to its button) and on a press anywhere outside it.
+    const menu = document.querySelector('.nav__menu');
+    if (menu) {
+        const summary = menu.querySelector('summary');
+        menu.addEventListener('click', (e) => {
+            if (e.target instanceof Element && e.target.closest('.nav__sheet a')) menu.open = false;
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || !menu.open) return;
+            const hadFocus = menu.contains(document.activeElement);
+            menu.open = false;
+            if (hadFocus) summary?.focus();
+        });
+        document.addEventListener(
+            'pointerdown',
+            (e) => {
+                if (menu.open && !menu.contains(e.target)) menu.open = false;
+            },
+            { passive: true }
+        );
+    }
+
+    // ─── marquee pause buttons ────────────────────────────────────────
+
+    // Every auto-scrolling strip has a button (WCAG 2.2.2). Any of them
+    // pauses or plays all the strips; the label stays "Pause …" and
+    // aria-pressed says whether they're paused.
+    const marqueeGroups = $$('[data-marquee-group]');
+    const marqueeToggles = $$('[data-marquee-toggle]');
+    function pauseMarquees(paused) {
+        for (const g of marqueeGroups) g.classList.toggle('is-paused', paused);
+        for (const b of marqueeToggles) b.setAttribute('aria-pressed', String(paused));
+    }
+    for (const b of marqueeToggles) {
+        b.addEventListener('click', () => pauseMarquees(b.getAttribute('aria-pressed') !== 'true'));
+    }
+
     // ─── theme + language switcher ────────────────────────────────────
 
     const demo = document.querySelector('[data-lm="demo"]');
@@ -289,15 +348,39 @@
         $$('button', group).forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
     }
 
+    // Where the browser has view transitions, a change morphs the window
+    // (::view-transition-group(theme-demo) in launcher.css). Elsewhere the
+    // CSS fades the colours, and a language change fades the text out and
+    // back in. Reduced motion: an instant swap.
+    const morphs = !reduce && typeof document.startViewTransition === 'function';
+    let swapTimer = 0;
+
+    function change(update, fadeText) {
+        if (morphs) {
+            document.startViewTransition(update);
+        } else if (fadeText && !reduce && demo) {
+            demo.classList.add('is-swapping');
+            clearTimeout(swapTimer);
+            swapTimer = setTimeout(() => {
+                update();
+                demo.classList.remove('is-swapping');
+            }, 180);
+        } else {
+            update();
+        }
+    }
+
     for (const btn of $$('[data-theme-pick]')) {
         btn.addEventListener('click', () => {
             const t = btn.dataset.themePick;
-            // Like the app: one change, every window.
-            for (const lm of $$('.lm')) {
-                if (t === 'dark') lm.removeAttribute('data-theme');
-                else lm.dataset.theme = t;
-            }
             press(btn.parentElement, btn);
+            // Like the app: one change, every window.
+            change(() => {
+                for (const lm of $$('.lm')) {
+                    if (t === 'dark') lm.removeAttribute('data-theme');
+                    else lm.dataset.theme = t;
+                }
+            }, false);
         });
     }
 
@@ -306,22 +389,31 @@
             const lang = btn.dataset.langPick;
             const strings = COPY[lang];
             if (!demo || !strings) return;
-            for (const el of $$('[data-i18n]', demo)) el.textContent = strings[el.dataset.i18n];
-            demo.setAttribute('lang', lang);
-            if (lang === 'ar') demo.setAttribute('dir', 'rtl');
-            else demo.removeAttribute('dir');
             press(btn.parentElement, btn);
+            change(() => {
+                for (const el of $$('[data-i18n]', demo)) el.textContent = strings[el.dataset.i18n];
+                demo.setAttribute('lang', lang);
+                if (lang === 'ar') demo.setAttribute('dir', 'rtl');
+                else demo.removeAttribute('dir');
+            }, true);
         });
     }
 
     // ─── copy the quarantine command ──────────────────────────────────
 
+    // The button's name is its visible text ("Copy" plus a hidden "the
+    // command"); the result is announced through a polite status region.
+    const copyKey = isMac ? '⌘C' : 'Ctrl+C';
     for (const btn of $$('[data-copy]')) {
-        const src = btn.parentElement.querySelector('[data-copy-src]');
+        const box = btn.parentElement;
+        const src = box.querySelector('[data-copy-src]');
         const label = btn.querySelector('[data-copy-label]');
-        let t = 0;
+        const status = box.querySelector('[data-copy-status]');
+        let resetTimer = 0;
+        let sayTimer = 0;
         btn.addEventListener('click', async () => {
-            const text = src?.textContent.trim() || '';
+            if (!src) return;
+            const text = src.textContent.trim();
             let ok = false;
             try {
                 await navigator.clipboard.writeText(text);
@@ -338,13 +430,23 @@
                     ok = false;
                 }
             }
-            if (!label) return;
-            label.textContent = ok ? 'Copied' : 'Press Ctrl+C';
+            if (label) label.textContent = ok ? 'Copied' : `Press ${copyKey}`;
             btn.classList.toggle('is-copied', ok);
-            clearTimeout(t);
-            t = setTimeout(() => {
-                label.textContent = 'Copy';
+            if (status) {
+                // Empty it first so a second click is announced again.
+                status.textContent = '';
+                clearTimeout(sayTimer);
+                sayTimer = setTimeout(() => {
+                    status.textContent = ok
+                        ? 'Copied the command.'
+                        : `Couldn't copy. The command is selected; press ${copyKey} to copy it.`;
+                }, 60);
+            }
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => {
+                if (label) label.textContent = 'Copy';
                 btn.classList.remove('is-copied');
+                if (status) status.textContent = '';
             }, 2200);
         });
     }

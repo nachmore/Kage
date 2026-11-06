@@ -135,7 +135,7 @@ node site/scripts/build.mjs --base /
 python3 -m http.server 8000 --bind 127.0.0.1 --directory _site   # http://127.0.0.1:8000/
 ```
 
-[`site/README.md`](../site/README.md) covers the checks, the one-time Pages setup and how the build pulls in the README screenshots.
+[`site/README.md`](../site/README.md) covers the checks, how the deploy is set up, how the build pulls in the README screenshots and which output folders `--out` accepts (the build wipes its output first, so it refuses anything but `_site/`, a folder in `target/` or one in the temp directory).
 
 ## How Kage works inside
 

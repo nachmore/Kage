@@ -22,8 +22,10 @@
     --teal-3: #2c7a7b;
     --teal-light: #81e6d9;
     --teal-pale: #b2f5ea;
-    --indigo: #7f9cf5;
-    --grad: linear-gradient(100deg, #e6fffa 0%, #81e6d9 38%, #38b2ac 68%, #7f9cf5 110%);
+    /* The app's palette is teal only (ui/css/shared-kage-tokens.css); the
+       navy is the backdrop of the README screenshots. */
+    --navy: #3b5b8a;
+    --grad: linear-gradient(100deg, #e6fffa 0%, #81e6d9 40%, #38b2ac 76%, #319795 100%);
     --radius: 18px;
     --wrap: 1180px;
     --nav-h: 64px;
@@ -225,7 +227,7 @@ kbd {
 .progress span {
     display: block;
     height: 100%;
-    background: linear-gradient(90deg, var(--teal-2), var(--teal-light), var(--indigo));
+    background: linear-gradient(90deg, var(--teal-3), var(--teal-light), var(--teal));
     transform-origin: 0 50%;
     transform: scaleX(0);
     will-change: transform;
@@ -500,6 +502,12 @@ kbd {
 
 /* ─── reveal on scroll ────────────────────────────────────────────── */
 
+/* .reveal content is hidden from the first paint when JS is on, and main.js
+   fades it in as it scrolls into view. If main.js never runs (blocked,
+   failed, a script error), the failsafe animation shows everything after
+   2.5 s; main.js adds .reveal-ready once its observer is in place, which
+   cancels the failsafe. The hero's copy doesn't use .reveal at all (see
+   .hero-in), so the headline never waits for a script. */
 .js .reveal {
     opacity: 0;
     translate: 0 28px;
@@ -508,6 +516,32 @@ kbd {
         translate 0.9s var(--ease-out),
         scale 0.9s var(--ease-out);
     transition-delay: var(--d, 0ms);
+}
+
+.js:not(.reveal-ready) .reveal,
+.js:not(.reveal-ready) .reveal--tilt .frame {
+    animation: reveal-failsafe 0s 2.5s forwards;
+}
+
+@keyframes reveal-failsafe {
+    to {
+        opacity: 1;
+        translate: none;
+        rotate: none;
+        scale: none;
+    }
+}
+
+/* Above-the-fold hero content: a CSS-only entrance, no script needed. */
+.hero-in {
+    animation: hero-in 0.8s var(--ease-out) var(--d, 0ms) both;
+}
+
+@keyframes hero-in {
+    from {
+        opacity: 0;
+        translate: 0 18px;
+    }
 }
 
 .js .reveal.is-in {
@@ -555,7 +589,7 @@ kbd {
 
 section {
     position: relative;
-    padding: clamp(72px, 8.5vw, 124px) 0;
+    padding: clamp(56px, 6vw, 96px) 0;
 }
 
 .section-head {
@@ -586,7 +620,7 @@ h2,
     font-size: clamp(2rem, 1.1rem + 3.1vw, 3.35rem);
     font-weight: 780;
     line-height: 1.06;
-    letter-spacing: -0.032em;
+    letter-spacing: -0.022em;
 }
 
 .lede {
@@ -701,7 +735,7 @@ h2,
     top: 14%;
     width: 760px;
     height: 620px;
-    background: radial-gradient(closest-side, rgba(127, 156, 245, 0.16), transparent);
+    background: radial-gradient(closest-side, rgba(59, 91, 138, 0.24), transparent);
     animation: drift-b 26s ease-in-out infinite alternate;
 }
 
@@ -858,32 +892,12 @@ h2,
     letter-spacing: 0.08em;
 }
 
-.pulse-dot {
-    position: relative;
-    width: 8px;
-    height: 8px;
+.dot {
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: var(--teal-light);
-}
-
-.pulse-dot::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: var(--teal-light);
-    animation: ping 2.2s var(--ease-out) infinite;
-}
-
-@keyframes ping {
-    from {
-        transform: scale(1);
-        opacity: 0.7;
-    }
-    to {
-        transform: scale(3.2);
-        opacity: 0;
-    }
+    box-shadow: 0 0 10px rgba(129, 230, 217, 0.7);
 }
 
 .hero__title {
@@ -891,7 +905,7 @@ h2,
     font-size: clamp(2.5rem, 1rem + 5vw, 5.1rem);
     font-weight: 800;
     line-height: 1.02;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.025em;
     word-spacing: 0.04em;
 }
 
@@ -904,11 +918,16 @@ h2,
 }
 
 .hero__lede {
-    max-width: 730px;
+    max-width: 680px;
     margin: 20px auto 0;
     color: var(--muted);
     font-size: clamp(1.06rem, 0.96rem + 0.5vw, 1.3rem);
     line-height: 1.55;
+    text-wrap: balance;
+}
+
+.lede-short {
+    display: none;
 }
 
 .hero__ctas {
@@ -919,10 +938,149 @@ h2,
     margin-top: 30px;
 }
 
+/* Wide screens: copy on the left, the launcher on the right, so the whole
+   window (down to its footer row) fits in a laptop's first screen. */
+@media (min-width: 1024px) {
+    .hero {
+        /* Every demo scene fits the window from 520px up (--lm-max). A
+           narrower window leaves the copy column room for a two-line
+           headline and the two calls to action side by side. */
+        --stage-w: clamp(520px, 43vw, 620px);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: calc(var(--nav-h) + 24px) 0 40px;
+        text-align: left;
+    }
+
+    .hero__inner {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) var(--stage-w);
+        align-items: center;
+        column-gap: clamp(40px, 4.4vw, 72px);
+    }
+
+    .hero__title {
+        font-size: clamp(3rem, 0.6rem + 3.9vw, 4.1rem);
+        line-height: 1.03;
+    }
+
+    /* Keep the pill on one line in the narrower copy column. */
+    .eyebrow--pill {
+        white-space: nowrap;
+    }
+
+    .hero__lede {
+        margin-inline: 0;
+        font-size: clamp(1.06rem, 0.8rem + 0.4vw, 1.22rem);
+    }
+
+    .hero__ctas {
+        justify-content: flex-start;
+        gap: 12px;
+        margin-top: 28px;
+    }
+
+    /* The copy column is where the balloon used to float: move it up into
+       the open sky between the headline and the moon. */
+    .layer--balloon {
+        top: calc(var(--nav-h) + 4px);
+        left: 41%;
+    }
+}
+
+@media (min-width: 1024px) and (max-width: 1199px) {
+    .hero .hide-sm,
+    .hotkey__label--rest {
+        display: none;
+    }
+}
+
+/* Centered layout on a short screen: tighten the copy so the demo starts
+   higher. */
+@media (min-width: 561px) and (max-width: 1023px) and (max-height: 1000px) {
+    .hero {
+        padding-top: calc(var(--nav-h) + 16px);
+    }
+
+    .hero__title {
+        margin-top: 14px;
+        font-size: clamp(2.5rem, 1rem + 4vw, 4.2rem);
+    }
+
+    .hero__lede {
+        margin-top: 14px;
+    }
+
+    .hero__ctas {
+        margin-top: 22px;
+    }
+}
+
+/* Phones: a three-line lede, the two calls to action side by side (GitHub
+   as an icon button) and no hotkey row, so the demo's first result is on
+   the first screen. */
+@media (max-width: 560px) {
+    .hero {
+        padding-top: calc(var(--nav-h) + 20px);
+    }
+
+    .hero__title {
+        margin-top: 16px;
+    }
+
+    .hero__lede {
+        margin-top: 14px;
+    }
+
+    .lede-long {
+        display: none;
+    }
+
+    .lede-short {
+        display: inline;
+    }
+
+    .hero__ctas {
+        flex-wrap: nowrap;
+        gap: 10px;
+        margin-top: 22px;
+    }
+
+    .btn--gh {
+        width: 54px;
+        padding: 0;
+        flex: none;
+    }
+
+    .btn--gh .btn__label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
 /* ─── agents ──────────────────────────────────────────────────────── */
 
+/* Full-bleed anchor bands (Agents, Extensions): a stronger teal-to-navy
+   wash that fades into the sections around it. --band-top / --band-bottom
+   are the neighbours' colours. */
+.band {
+    --band-top: var(--bg);
+    --band-bottom: var(--bg);
+    background:
+        linear-gradient(180deg, var(--band-top), transparent 160px),
+        linear-gradient(0deg, var(--band-bottom), transparent 160px),
+        radial-gradient(70% 55% at 12% 30%, rgba(56, 178, 172, 0.26), transparent 70%),
+        radial-gradient(60% 60% at 92% 80%, rgba(59, 91, 138, 0.42), transparent 70%),
+        linear-gradient(165deg, #0a2228 0%, #0b1a2a 100%);
+}
+
 .agents {
-    background: var(--bg-2);
+    --band-top: var(--bg-2);
     padding-top: clamp(84px, 8vw, 110px);
 }
 
@@ -947,8 +1105,15 @@ h2,
 }
 
 .marquee:hover .marquee__track,
-.marquee:focus-within .marquee__track {
+.marquee-group.is-paused .marquee__track {
     animation-play-state: paused;
+}
+
+/* Every auto-scrolling strip has a visible pause button (WCAG 2.2.2). */
+.marquee-ctl {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
 }
 
 .marquee__list {
@@ -967,14 +1132,60 @@ h2,
 
 .marquee--agents {
     --dur: 34s;
-    margin-bottom: clamp(56px, 7vw, 88px);
+}
+
+.marquee-group--agents {
+    margin-bottom: clamp(48px, 6vw, 80px);
+}
+
+/* Five agents fit on one line on a desktop: show them as a still, centered
+   row that staggers in, and keep the marquee for narrow screens. */
+@media (min-width: 1100px) {
+    .marquee--agents {
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+
+    .marquee--agents .marquee__track {
+        width: auto;
+        justify-content: center;
+        animation: none;
+    }
+
+    .marquee--agents .marquee__list {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .marquee--agents .marquee__list[aria-hidden="true"],
+    .marquee-group--agents .marquee-ctl {
+        display: none;
+    }
+
+    .js .marquee--agents .agent-pill {
+        opacity: 0;
+        translate: 0 18px;
+        transition:
+            opacity 0.7s var(--ease-out),
+            translate 0.7s var(--ease-out);
+        transition-delay: calc(80ms + var(--i, 0) * 70ms);
+    }
+
+    .js .marquee--agents.is-in .agent-pill {
+        opacity: 1;
+        translate: none;
+    }
+
+    .js:not(.reveal-ready) .marquee--agents .agent-pill {
+        animation: reveal-failsafe 0s 2.5s forwards;
+    }
 }
 
 .agent-pill {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 14px 22px 14px 14px;
+    padding: 12px 20px 12px 12px;
     border-radius: 18px;
     border: 1px solid var(--line);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
@@ -1019,7 +1230,11 @@ h2,
 }
 
 .split--agents {
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr);
+}
+
+.split__text .section-head {
+    margin-bottom: 24px;
 }
 
 @media (max-width: 960px) {
@@ -1033,6 +1248,32 @@ h2,
     .split--agents .shot,
     .split--ext .shot {
         order: 2;
+    }
+
+    /* Stacked: keep lines to a readable length. */
+    .split__text,
+    .split > .points,
+    .head-row > * {
+        max-width: 640px;
+    }
+}
+
+/* A heading with its points beside it, and a full-width screenshot below. */
+.head-row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 24px clamp(40px, 6vw, 88px);
+    align-items: start;
+    margin-bottom: clamp(36px, 5vw, 56px);
+}
+
+.head-row .section-head {
+    margin-bottom: 0;
+}
+
+@media (max-width: 960px) {
+    .head-row {
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -1080,21 +1321,15 @@ h2,
     will-change: transform;
 }
 
+/* The README screenshots already have their own backdrop and window, so the
+   frame adds only a rounded clip, a shadow and the sheen. */
 .frame {
     position: relative;
-    padding: 9px;
-    border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: linear-gradient(
-        160deg,
-        rgba(255, 255, 255, 0.1),
-        rgba(255, 255, 255, 0.02) 40%,
-        rgba(129, 230, 217, 0.06)
-    );
+    border-radius: 20px;
+    background: #0d141c;
     box-shadow:
         0 50px 100px -40px rgba(0, 0, 0, 0.85),
-        0 30px 90px -50px rgba(56, 178, 172, 0.55),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        0 30px 90px -50px rgba(56, 178, 172, 0.55);
     transform-style: preserve-3d;
     transition: transform 0.6s var(--ease-out);
     overflow: hidden;
@@ -1107,8 +1342,22 @@ h2,
 .frame img {
     display: block;
     width: 100%;
-    border-radius: 16px;
-    background: #0d141c;
+}
+
+/* Show part of a screenshot: --x/--y/--w/--h is the crop in image pixels,
+   --iw the image's full width. */
+.crop {
+    position: relative;
+    aspect-ratio: var(--w) / var(--h);
+    overflow: hidden;
+}
+
+.frame .crop img {
+    position: absolute;
+    left: calc(var(--x) / var(--w) * -100%);
+    top: calc(var(--y) / var(--h) * -100%);
+    width: calc(var(--iw) / var(--w) * 100%);
+    max-width: none;
 }
 
 .frame::after {
@@ -1136,56 +1385,16 @@ h2,
     margin-inline: auto;
 }
 
-/* ─── why ─────────────────────────────────────────────────────────── */
+/* ─── why (a short interlude) ────────────────────────────────────── */
 
 .why {
+    padding-block: clamp(48px, 5vw, 80px);
     background:
         radial-gradient(60% 50% at 50% 0%, rgba(49, 151, 149, 0.12), transparent 70%), var(--bg);
 }
 
-.pillars {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 18px;
-}
-
-.pillar {
-    padding: 28px 24px 30px;
-}
-
-.pillar__icon {
-    display: grid;
-    place-items: center;
-    width: 48px;
-    height: 48px;
-    margin-bottom: 22px;
-    border-radius: 14px;
-    background: linear-gradient(140deg, rgba(178, 245, 234, 0.95), rgba(56, 178, 172, 0.9));
-    color: #04211f;
-    box-shadow: 0 10px 30px -10px rgba(56, 178, 172, 0.7);
-}
-
-.pillar h3 {
-    font-size: 1.16rem;
-    letter-spacing: -0.01em;
-}
-
-.pillar p {
-    margin-top: 8px;
-    color: var(--muted);
-    font-size: 0.97rem;
-}
-
-@media (max-width: 1020px) {
-    .pillars {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 560px) {
-    .pillars {
-        grid-template-columns: minmax(0, 1fr);
-    }
+.why .section-head {
+    margin-bottom: 0;
 }
 
 .stats {
@@ -1258,7 +1467,50 @@ h2,
         radial-gradient(50% 60% at 85% 50%, rgba(49, 151, 149, 0.1), transparent 70%), var(--bg-2);
 }
 
-.feature + .feature::before,
+/* The one light section, built around the Kage Light screenshot. Most of the
+   page's colours are variables, so it mostly re-points them. */
+.feature--light {
+    --text: #2d3748;
+    --text-bright: #111827;
+    --muted: #4a5568;
+    --dim: #64748b;
+    --line: rgba(15, 23, 42, 0.09);
+    --line-2: rgba(15, 23, 42, 0.16);
+    --teal-light: #2c7a7b;
+    --teal-pale: #234e52;
+    color: var(--text);
+    color-scheme: light;
+    background:
+        radial-gradient(55% 60% at 8% 0%, rgba(129, 230, 217, 0.45), transparent 70%),
+        radial-gradient(50% 60% at 96% 100%, rgba(190, 205, 235, 0.6), transparent 70%),
+        linear-gradient(180deg, #f2f7f8, #eef2f7);
+}
+
+.feature--light code {
+    background: rgba(49, 151, 149, 0.1);
+    border-color: rgba(49, 151, 149, 0.24);
+    color: #1d4044;
+}
+
+.feature--light kbd {
+    background: #fff;
+    color: var(--text-bright);
+}
+
+.feature--light .frame {
+    background: #eef2f7;
+    box-shadow:
+        0 40px 80px -40px rgba(15, 23, 42, 0.4),
+        0 24px 70px -44px rgba(49, 151, 149, 0.6);
+}
+
+.feature--light .mini {
+    background: rgba(255, 255, 255, 0.72);
+    border-color: rgba(15, 23, 42, 0.07);
+    box-shadow: 0 14px 34px -24px rgba(15, 23, 42, 0.35);
+}
+
+.feature:not(.feature--light) + .feature::before,
 .more::before,
 .privacy::before {
     content: "";
@@ -1535,8 +1787,7 @@ h2,
 /* ─── extensions ──────────────────────────────────────────────────── */
 
 .extensions {
-    background:
-        radial-gradient(70% 45% at 50% 30%, rgba(49, 151, 149, 0.13), transparent 70%), var(--bg-2);
+    padding-block: clamp(72px, 7vw, 112px);
 }
 
 .section-cat {
@@ -1556,7 +1807,7 @@ h2,
 .ext-rows {
     display: grid;
     gap: 6px;
-    margin-bottom: clamp(56px, 8vw, 96px);
+    margin-bottom: clamp(48px, 6vw, 80px);
 }
 
 .marquee--ext {
@@ -1730,11 +1981,16 @@ h2,
     transform: scale(0.96);
 }
 
-.picker button[aria-pressed="true"],
-.demo-chips button.is-active {
+.picker button[aria-pressed="true"] {
     color: #032322;
     background: var(--teal-light);
     border-color: var(--teal-light);
+}
+
+.demo-chips button.is-active {
+    color: var(--teal-pale);
+    background: rgba(129, 230, 217, 0.14);
+    border-color: rgba(129, 230, 217, 0.55);
 }
 
 .sw {
@@ -1819,13 +2075,57 @@ h2,
 
 .privacy {
     background:
-        radial-gradient(60% 50% at 50% 100%, rgba(127, 156, 245, 0.08), transparent 70%), var(--bg);
+        radial-gradient(60% 50% at 50% 100%, rgba(59, 91, 138, 0.14), transparent 70%), var(--bg);
 }
 
 .privacy__grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
+    max-width: 980px;
+    margin-inline: auto;
+}
+
+.pcard--wide {
+    grid-column: 1 / -1;
+}
+
+.pcard__list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 28px;
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.pcard__list li {
+    position: relative;
+    padding-left: 16px;
+}
+
+.pcard__list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+}
+
+.pcard__list code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+    .pcard__list {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 .pcard {
@@ -1854,12 +2154,6 @@ h2,
     margin-top: 36px;
     color: var(--muted);
     text-align: center;
-}
-
-@media (max-width: 960px) {
-    .privacy__grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
 }
 
 @media (max-width: 600px) {
@@ -2283,7 +2577,8 @@ h2,
         margin-inline: auto;
     }
 
-    .marquee__list[aria-hidden="true"] {
+    .marquee__list[aria-hidden="true"],
+    .marquee-ctl {
         display: none;
     }
 
