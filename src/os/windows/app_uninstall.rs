@@ -4,7 +4,8 @@
 
 use crate::os::app_uninstall::{
     expand_env_vars, match_uninstall_entry, normalize_win_path, own_install, plan_uninstall,
-    product_install_dirs, UninstallEntry, UninstallError, UninstallOutcome, UninstallPlan, WinFs,
+    product_install_dirs, Resolution, UninstallEntry, UninstallError, UninstallOutcome,
+    UninstallPlan, WinFs,
 };
 use crate::os::file_ops::Preflight;
 use crate::os::platform::file_ops::{shell_execute, with_com_sta};
@@ -253,13 +254,10 @@ fn read_uninstall_entries() -> Vec<UninstallEntry> {
 }
 
 /// This machine's shared folders, resolved through `canonicalize` (links,
-/// junctions, 8.3 names, trailing dots and spaces).
+/// junctions, 8.3 names, trailing dots and spaces): `NotFound` is missing,
+/// any other error unknown (`Resolution::of`).
 fn win_fs() -> WinFs {
-    WinFs::new(shared_dirs(), |p| {
-        std::fs::canonicalize(p)
-            .ok()
-            .map(|c| c.to_string_lossy().into_owned())
-    })
+    WinFs::new(shared_dirs(), |p| Resolution::of(std::fs::canonicalize(p)))
 }
 
 /// This machine's shared folders (normalised) — never one product's own
