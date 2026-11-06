@@ -149,6 +149,19 @@ const LOCAL_COMMANDS = [
         },
     },
     {
+        name: 'extensions',
+        get description() {
+            return t('command.extensions.description');
+        },
+        icon: '🧩',
+        // Settings → Extensions: the Extension Store page heads that group,
+        // with each installed extension's own page under it.
+        execute: async (invoke, appWindow) => {
+            await invoke('open_settings_window', { section: 'store' });
+            await appWindow.hide();
+        },
+    },
+    {
         name: 'session-folder',
         get description() {
             return t('command.session_folder.description');

@@ -9670,5 +9670,11 @@
     "description": "Result right-click menu (Windows) — the Recycle Bin item, shown disabled because the path is 260 characters or longer, more than the Recycle Bin accepts",
     "_machine_translated": true,
     "_source_hash": "9ff84b7c31b30663"
+  },
+  "command.extensions.description": {
+    "message": "Άνοιγμα της σελίδας Επεκτάσεις στις Ρυθμίσεις",
+    "description": ">extensions command description",
+    "_machine_translated": true,
+    "_source_hash": "31782aee63fb447e"
   }
 }

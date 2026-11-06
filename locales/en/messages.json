@@ -3937,6 +3937,10 @@
     "message": "Browse extensions, themes, and command packs",
     "description": ">store command description"
   },
+  "command.extensions.description": {
+    "message": "Open the Extensions page in Settings",
+    "description": ">extensions command description"
+  },
   "command.session_folder.description": {
     "message": "Open current session file in file explorer",
     "description": ">session-folder command description"

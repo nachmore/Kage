@@ -32,6 +32,18 @@ describe('matchCommands', () => {
     expect(result.some(c => c.name === 'clipboard')).toBe(true);
   });
 
+  it('>extensions opens Settings at the Extensions page', async () => {
+    const result = matchCommands('>extensions');
+    const cmd = result.find(c => c.name === 'extensions');
+    expect(cmd).toBeTruthy();
+    const calls = [];
+    const invoke = async (name, args) => { calls.push([name, args]); };
+    let hidden = false;
+    await cmd.execute(invoke, { hide: async () => { hidden = true; } });
+    expect(calls).toEqual([['open_settings_window', { section: 'store' }]]);
+    expect(hidden).toBe(true);
+  });
+
   it('matches version command', () => {
     const result = matchCommands('>ver');
     expect(result).not.toBeNull();

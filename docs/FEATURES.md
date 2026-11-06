@@ -74,6 +74,7 @@ You can also set a global hotkey for voice input and, on Windows, one for clipbo
 | `>chats` | Open the chat sessions window |
 | `>settings` | Open Settings |
 | `>store` | Open the Extension Store |
+| `>extensions` | Open Settings at the Extensions page |
 | `>find <name>` | Search for files |
 | `>cb` | Clipboard history (Windows) |
 | `>prompts` | Browse your saved prompts |
