@@ -609,6 +609,26 @@ pub async fn export_config_bundle(
     Ok(len)
 }
 
+/// The AppError for a failed `config_export::import`. A backup that would
+/// write outside Kage's folders gets its own message (nothing was written).
+fn import_error(e: anyhow::Error) -> AppError {
+    match e.downcast_ref::<crate::config_export::UnsafeImportPath>() {
+        Some(unsafe_path) => {
+            log::warn!("import_config_bundle: refused: {}", unsafe_path);
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.config.import_unsafe_path",
+                &[("path", &unsafe_path.path)],
+            )
+        }
+        None => AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_build_failed",
+            &[("message", &e.to_string())],
+        ),
+    }
+}
+
 /// Apply a backup bundle from disk. Returns the import summary (counts)
 /// so the UI can render a concrete success toast. The new config is
 /// written to disk + the in-memory state is replaced; a `config_updated`
@@ -659,13 +679,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
             &[("message", &e.to_string())],
         )
     })?
-    .map_err(|e| {
-        AppError::keyed(
-            ErrorKind::Internal,
-            "errors.config.import_build_failed",
-            &[("message", &e.to_string())],
-        )
-    })?;
+    .map_err(import_error)?;
 
     // Persist + swap the in-memory state under the same lock —
     // mirrors save_config so concurrent permission saves don't race.
@@ -856,6 +870,27 @@ mod tests {
             approved_version: "1.0.0".into(),
             approved_at: "2026-01-01T00:00:00Z".into(),
         }
+    }
+
+    #[test]
+    fn import_refusing_an_unsafe_path_gets_its_own_error() {
+        let refused = anyhow::Error::new(crate::config_export::UnsafeImportPath {
+            path: "extension-data/ext/CON".into(),
+            reason: "disallowed path component".into(),
+        });
+        let e = import_error(refused);
+        assert_eq!(e.key, "errors.config.import_unsafe_path");
+        assert_eq!(
+            e.params.get("path").map(String::as_str),
+            Some("extension-data/ext/CON")
+        );
+
+        let other = import_error(anyhow::anyhow!("Backup is missing config.json"));
+        assert_eq!(other.key, "errors.config.import_build_failed");
+        assert_eq!(
+            other.params.get("message").map(String::as_str),
+            Some("Backup is missing config.json")
+        );
     }
 
     #[test]

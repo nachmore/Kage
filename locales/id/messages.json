@@ -9412,5 +9412,11 @@
     "description": "Warning in the sandbox notice, right under the blocked shell command it shows, when the command is more than one line long. 'It' is the command.",
     "_machine_translated": true,
     "_source_hash": "36c2d11cd6238803"
+  },
+  "errors.config.import_unsafe_path": {
+    "message": "Cadangan ini tidak dapat diimpor: cadangan akan menulis di luar folder Kage ({path}). Tidak ada yang diubah.",
+    "description": "Returned when a backup archive entry has an unsafe name, or would be written through a symlink or other link on this machine. {path} is the archive entry name or the local path of the link. The import is refused before anything is written.",
+    "_machine_translated": true,
+    "_source_hash": "c7d1c9295a208bb4"
   }
 }

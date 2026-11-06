@@ -45,11 +45,23 @@
 //!     `updates.last_updated_version` — cache fields that just trigger
 //!     fresh checks. Reset to None.
 //!
-//! Sensitive paths (`user_steering_path`,
-//! `pocket_tts.custom_sound_path`, agent connection paths under
-//! `acp.connections[].mode.spawn_command`, …) are kept verbatim. They
-//! may not exist on the new machine — we let the user fix them rather
-//! than guess at silent rewrites.
+//!   - `acp.agent.user_steering_path` — where this machine keeps the
+//!     user's steering doc. The backup's `steering/user.md` is written to
+//!     this machine's choice, never to a path the backup names.
+//!
+//! Other paths (`pocket_tts.custom_sound_path`, agent connection paths
+//! under `acp.connections[].mode.spawn_command`, …) are kept verbatim.
+//! They may not exist on the new machine — we let the user fix them
+//! rather than guess at silent rewrites.
+//!
+//! ## Where import writes
+//!
+//! Only to this machine's steering docs and under its `extension-data/`
+//! root. Archive paths are validated ([`sanitise_archive_path`]), no
+//! symlink (or Windows reparse point) at or under the root is followed,
+//! every destination is checked before anything is written, and each file
+//! is written to a temp file and renamed into place. A refusal is an
+//! [`UnsafeImportPath`] error.
 
 use crate::config::Config;
 use anyhow::{Context, Result};
@@ -109,6 +121,34 @@ pub struct ImportSummary {
     pub steering_bytes: usize,
     pub kage_version: String,
     pub exported_at: String,
+}
+
+/// Import refused because an archive entry would be written somewhere other
+/// than under Kage's `extension-data/` root: a bad entry name, or a symlink
+/// (or Windows reparse point) on this machine along the way. Returned before
+/// anything is written. The import command maps it to
+/// `errors.config.import_unsafe_path`.
+#[derive(Debug)]
+pub struct UnsafeImportPath {
+    /// The offending archive entry name, or the local path of the link.
+    pub path: String,
+    /// Why (English, for logs).
+    pub reason: String,
+}
+
+impl std::fmt::Display for UnsafeImportPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Refusing to import {}: {}", self.path, self.reason)
+    }
+}
+
+impl std::error::Error for UnsafeImportPath {}
+
+fn unsafe_path(path: impl Into<String>, reason: impl std::fmt::Display) -> anyhow::Error {
+    anyhow::Error::new(UnsafeImportPath {
+        path: path.into(),
+        reason: reason.to_string(),
+    })
 }
 
 /// Produce a date-stamped filename suggestion for the export dialog.
@@ -254,7 +294,7 @@ fn unpack_archive(bytes: &[u8], local: &Config) -> Result<(Config, ImportSummary
             // `..` segments and we want a hard refusal rather than
             // potentially writing outside the extension-data root.
             let safe = sanitise_archive_path(rel)
-                .with_context(|| format!("Refusing unsafe archive path {}", name))?;
+                .map_err(|e| unsafe_path(name.escape_debug().to_string(), e))?;
             extension_files.push((safe, body));
         }
         // Unknown entries are ignored. Forward-compat: a future
@@ -278,31 +318,38 @@ fn unpack_archive(bytes: &[u8], local: &Config) -> Result<(Config, ImportSummary
 
     let merged = sanitise_imported_config(imported, local);
 
-    // Side-files: write atomically AFTER we've validated the config
-    // round-trip. If the parse failed above we'd have bailed without
-    // touching disk.
-    let mut steering_bytes = 0usize;
-    if let Ok(auto_path) = Config::get_auto_steering_path() {
-        if let Some(body) = steering_auto {
-            ensure_parent(&auto_path)?;
-            std::fs::write(&auto_path, &body).context("Failed to write auto-steering")?;
-            steering_bytes += body.len();
+    // Check every destination before writing anything: a refused path
+    // leaves the disk untouched. Steering goes where THIS machine keeps it
+    // (`local`, never the backup's `user_steering_path`).
+    let ext_root = extension_data_root();
+    check_no_file_folder_clash(extension_files.iter().map(|(rel, _)| rel.as_path()))?;
+    if let Some(root) = &ext_root {
+        for (rel, _) in &extension_files {
+            check_destination_under(root, rel)?;
         }
     }
-    if let Some(body) = steering_user {
-        if let Some(user_path) = resolve_user_steering_path(&merged) {
-            ensure_parent(&user_path)?;
-            std::fs::write(&user_path, &body).context("Failed to write user-steering")?;
-            steering_bytes += body.len();
+    let mut steering_writes: Vec<(PathBuf, Vec<u8>)> = Vec::new();
+    for (body, path) in [
+        (steering_auto, Config::get_auto_steering_path().ok()),
+        (steering_user, resolve_user_steering_path(local)),
+    ] {
+        if let (Some(body), Some(path)) = (body, path) {
+            steering_writes.push((steering_target(&path)?, body));
         }
     }
 
+    // Side-files: written AFTER the config round-trip validated. If the
+    // parse failed above we'd have bailed without touching disk.
+    let mut steering_bytes = 0usize;
+    for (target, body) in &steering_writes {
+        write_steering(target, body)?;
+        steering_bytes += body.len();
+    }
+
     let mut extensions_written = 0usize;
-    if let Some(ext_root) = extension_data_root() {
+    if let Some(root) = &ext_root {
         for (rel, body) in &extension_files {
-            let full = ext_root.join(rel);
-            ensure_parent(&full)?;
-            std::fs::write(&full, body).with_context(|| format!("Failed to write {:?}", full))?;
+            write_under(root, rel, body)?;
             extensions_written += 1;
         }
     }
@@ -358,6 +405,11 @@ pub fn sanitise_imported_config(mut imported: Config, local: &Config) -> Config 
     // toggle is hidden, or from before it existed) would silently turn it
     // back on and run them at once.
     imported.acp.agent.import_login_shell_env = local.acp.agent.import_login_shell_env;
+    // Where this machine keeps the user's steering doc. A backup naming a
+    // path (any path: a hand-made archive could point at a shell rc file)
+    // must not decide where import writes, or what Kage later reads and
+    // sends to the agent as steering.
+    imported.acp.agent.user_steering_path = local.acp.agent.user_steering_path.clone();
 
     // A backup from an older build can carry an extension's own
     // `enabled: false`, which this build would otherwise ignore. Same fold
@@ -382,14 +434,6 @@ fn resolve_user_steering_path(config: &Config) -> Option<PathBuf> {
         Some(p) if !p.trim().is_empty() => Some(PathBuf::from(p)),
         _ => crate::steering_io::default_user_steering_path().ok(),
     }
-}
-
-fn ensure_parent(p: &Path) -> Result<()> {
-    if let Some(parent) = p.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create parent of {:?}", p))?;
-    }
-    Ok(())
 }
 
 /// Walk a directory recursively, returning `(relative_path, full_path)`
@@ -417,33 +461,252 @@ fn walk_files(root: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
 }
 
 /// Validate that an archive entry's relative path is safe to write
-/// under our extension-data root. Rejects absolute paths, parent-dir
-/// traversals (`..`), and any invalid Windows drive prefix on
-/// non-Windows systems too (paranoid: the source machine's archive
-/// could carry such entries even if we aren't currently building
-/// them).
+/// under our extension-data root, the same on every platform: `/`-separated
+/// plain names only. Rejects absolute paths, `..`, backslashes, drive
+/// letters and other `:` (alternate data streams), NUL and control
+/// characters, names Windows would silently alias (trailing `.` or space)
+/// or treat as a device (`CON`, `NUL`, `COM1`, …), and paths that name
+/// nothing.
 pub fn sanitise_archive_path(rel: &str) -> Result<PathBuf> {
     if rel.is_empty() {
         anyhow::bail!("empty path");
     }
-    let path = Path::new(rel);
-    if path.is_absolute() {
-        anyhow::bail!("absolute path in archive: {}", rel);
+    if rel.starts_with('/') {
+        anyhow::bail!("absolute path in archive: {}", rel.escape_debug());
+    }
+    if rel.chars().any(|c| c == '\\' || c == ':' || c.is_control()) {
+        anyhow::bail!(
+            "disallowed character in archive path: {}",
+            rel.escape_debug()
+        );
     }
     let mut clean = PathBuf::new();
-    for component in path.components() {
-        use std::path::Component;
-        match component {
-            Component::Normal(n) => clean.push(n),
-            Component::CurDir => {
-                // `./foo/bar` — ignore the dot, keep walking.
-            }
-            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                anyhow::bail!("disallowed path component in archive: {}", rel);
-            }
+    for seg in rel.split('/') {
+        if seg.is_empty() || seg == "." {
+            continue;
         }
+        if seg == ".." || seg.ends_with('.') || seg.ends_with(' ') || is_windows_device_name(seg) {
+            anyhow::bail!(
+                "disallowed path component in archive: {}",
+                rel.escape_debug()
+            );
+        }
+        clean.push(seg);
+    }
+    if clean.as_os_str().is_empty() {
+        anyhow::bail!("archive path names nothing: {}", rel.escape_debug());
     }
     Ok(clean)
+}
+
+/// Names Windows opens as a device rather than a file, whatever follows the
+/// first `.` (`con.json` is `CON`) and ignoring spaces before it.
+fn is_windows_device_name(seg: &str) -> bool {
+    let stem = seg
+        .split('.')
+        .next()
+        .unwrap_or(seg)
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
+    if matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    let Some(n) = stem
+        .strip_prefix("COM")
+        .or_else(|| stem.strip_prefix("LPT"))
+    else {
+        return false;
+    };
+    let mut chars = n.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some('0'..='9' | '¹' | '²' | '³'), None)
+    )
+}
+
+/// A symlink, or on Windows any reparse point (junction, mount point, …):
+/// an entry whose contents live somewhere other than where it sits.
+fn is_link(md: &std::fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if md.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    md.file_type().is_symlink()
+}
+
+/// Refuse `path` (already `lstat`ed into `md`) if it is a link, or isn't a
+/// directory where one is needed (or is one where a file goes).
+fn refuse_link_or_kind(path: &Path, md: &std::fs::Metadata, want_dir: bool) -> Result<()> {
+    let reason = if is_link(md) {
+        "it is a symlink or other link"
+    } else if want_dir && !md.is_dir() {
+        "it is not a folder"
+    } else if !want_dir && md.is_dir() {
+        "it is a folder"
+    } else {
+        return Ok(());
+    };
+    Err(unsafe_path(path.display().to_string(), reason))
+}
+
+/// Refuse a destination under `root` that would follow a symlink (or
+/// reparse point) at the root or any component below it, or replace a
+/// directory. Components that don't exist yet are fine.
+fn check_destination_under(root: &Path, rel: &Path) -> Result<()> {
+    let parts: Vec<_> = rel.components().collect();
+    let mut cur = root.to_path_buf();
+    for i in 0..=parts.len() {
+        if i > 0 {
+            cur.push(parts[i - 1]);
+        }
+        let md = match std::fs::symlink_metadata(&cur) {
+            Ok(md) => md,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e).with_context(|| format!("Failed to inspect {:?}", cur)),
+        };
+        refuse_link_or_kind(&cur, &md, i < parts.len())?;
+    }
+    Ok(())
+}
+
+/// Refuse a backup whose entries need one name to be both a file and a
+/// folder (`ext/a` and `ext/a/b.json`), compared case-insensitively as on
+/// Windows and macOS. Caught here, the import fails before anything is
+/// written rather than midway.
+fn check_no_file_folder_clash<'a>(rels: impl Iterator<Item = &'a Path>) -> Result<()> {
+    let key = |p: &Path| {
+        p.components()
+            .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    let mut files = std::collections::HashSet::new();
+    let mut folders = std::collections::HashSet::new();
+    for rel in rels {
+        files.insert(key(rel));
+        let mut parent = rel.parent();
+        while let Some(p) = parent.filter(|p| !p.as_os_str().is_empty()) {
+            folders.insert(key(p));
+            parent = p.parent();
+        }
+    }
+    if let Some(clash) = files.intersection(&folders).next() {
+        anyhow::bail!(
+            "Backup is inconsistent: extension-data/{} is both a file and a folder",
+            clash
+        );
+    }
+    Ok(())
+}
+
+/// Make sure `dir` is a real directory (not a link), creating it if absent.
+fn ensure_real_dir(dir: &Path) -> Result<()> {
+    match std::fs::symlink_metadata(dir) {
+        Ok(md) => return refuse_link_or_kind(dir, &md, true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e).with_context(|| format!("Failed to inspect {:?}", dir)),
+    }
+    match std::fs::create_dir(dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(e).with_context(|| format!("Failed to create {:?}", dir)),
+    }
+    let md =
+        std::fs::symlink_metadata(dir).with_context(|| format!("Failed to inspect {:?}", dir))?;
+    refuse_link_or_kind(dir, &md, true)
+}
+
+/// Write `body` to `rel` under `root` without following a link at or
+/// below the root: each directory is created (or checked) one level at a
+/// time with `lstat`, and the file goes to a temp file that is renamed
+/// into place (a rename replaces a link instead of writing through it).
+fn write_under(root: &Path, rel: &Path, body: &[u8]) -> Result<()> {
+    let parts: Vec<_> = rel.components().collect();
+    let Some((last, dirs)) = parts.split_last() else {
+        anyhow::bail!("Empty destination under {:?}", root);
+    };
+    // Above the root is this machine's own config folder.
+    if let Some(parent) = root.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create {:?}", parent))?;
+    }
+    let mut cur = root.to_path_buf();
+    ensure_real_dir(&cur)?;
+    for part in dirs {
+        cur.push(part);
+        ensure_real_dir(&cur)?;
+    }
+    let target = cur.join(last);
+    if let Ok(md) = std::fs::symlink_metadata(&target) {
+        refuse_link_or_kind(&target, &md, false)?;
+    }
+    write_file_atomic(&target, body)
+}
+
+/// Where to write a steering doc this machine keeps at `path`. A symlink
+/// there is the user's own setup (a dotfiles link), so its target is used.
+fn steering_target(path: &Path) -> Result<PathBuf> {
+    match std::fs::symlink_metadata(path) {
+        Ok(md) if md.file_type().is_symlink() => {
+            std::fs::canonicalize(path).with_context(|| format!("Failed to resolve {:?}", path))
+        }
+        _ => Ok(path.to_path_buf()),
+    }
+}
+
+/// Write a steering doc at the [`steering_target`] this machine chose.
+fn write_steering(target: &Path, body: &[u8]) -> Result<()> {
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create parent of {:?}", target))?;
+    }
+    write_file_atomic(target, body)
+}
+
+/// Write `body` to `path` via a fresh temp file in the same directory
+/// (`create_new`, so an existing file or link there is never opened),
+/// flushed to disk, then renamed over `path`. A crash leaves the old file
+/// or the new one, never half of either.
+fn write_file_atomic(path: &Path, body: &[u8]) -> Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let dir = path
+        .parent()
+        .with_context(|| format!("No parent directory for {:?}", path))?;
+    let name = path
+        .file_name()
+        .with_context(|| format!("No file name in {:?}", path))?
+        .to_string_lossy();
+    let tmp = dir.join(format!(
+        ".{}.{}-{}.kage-import.tmp",
+        name,
+        std::process::id(),
+        SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
+    let result = (|| -> Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+            .with_context(|| format!("Failed to create {:?}", tmp))?;
+        file.write_all(body)
+            .with_context(|| format!("Failed to write {:?}", tmp))?;
+        file.sync_all()
+            .with_context(|| format!("Failed to flush {:?}", tmp))?;
+        drop(file);
+        std::fs::rename(&tmp, path).with_context(|| format!("Failed to write {:?}", path))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 // --- Encryption --------------------------------------------------------------
@@ -651,6 +914,433 @@ mod tests {
         assert!(sanitise_archive_path("").is_err());
         let good = sanitise_archive_path("ext1/keys.json").unwrap();
         assert_eq!(good, PathBuf::from("ext1").join("keys.json"));
+    }
+
+    #[test]
+    fn sanitise_imported_config_keeps_local_steering_path() {
+        let mut local = fake_config();
+        local.acp.agent.user_steering_path = Some("/home/me/steering.md".into());
+        let mut imported = fake_config();
+        imported.acp.agent.user_steering_path = Some("/home/me/.zshrc".into());
+        let merged = sanitise_imported_config(imported, &local);
+        assert_eq!(
+            merged.acp.agent.user_steering_path.as_deref(),
+            Some("/home/me/steering.md")
+        );
+
+        local.acp.agent.user_steering_path = None;
+        let mut imported = fake_config();
+        imported.acp.agent.user_steering_path = Some("/home/me/.zshrc".into());
+        assert_eq!(
+            sanitise_imported_config(imported, &local)
+                .acp
+                .agent
+                .user_steering_path,
+            None
+        );
+    }
+
+    #[test]
+    fn archive_paths_are_validated_the_same_on_every_platform() {
+        for bad in [
+            "../escape",
+            "/tmp/escape",
+            "C:/escape",
+            "c:escape",
+            "C:\\escape",
+            "..\\escape",
+            "ext\\file.json",
+            "\\\\server\\share\\x",
+            "a\0b",
+            "ext/a\nb.json",
+            ".",
+            "./",
+            "//",
+            "x/./../y",
+            "x/..",
+            "ext/file.json:stream",
+            "ext/trailing.",
+            "ext/trailing ",
+            "ext/CON",
+            "CON/a.json",
+            "ext/con.json",
+            "ext/nul.json",
+            "ext/NUL",
+            "ext/Prn.txt",
+            "ext/aux",
+            "ext/com1.txt",
+            "ext/COM9",
+            "ext/lpt1",
+            "ext/LPT0.json",
+            "ext/COM\u{b9}",
+            "ext/CON .txt",
+            "ext/CONIN$",
+            "ext/conout$.json",
+        ] {
+            assert!(sanitise_archive_path(bad).is_err(), "{:?}", bad);
+        }
+        assert_eq!(
+            sanitise_archive_path("./ext//a.json").unwrap(),
+            PathBuf::from("ext").join("a.json")
+        );
+        for good in [
+            "ext/console.json",
+            "ext/com10.json",
+            "ext/lpt.json",
+            "ext/nul-state.json",
+            "my-ext_2/nested/key.v2.json",
+        ] {
+            assert!(sanitise_archive_path(good).is_ok(), "{:?}", good);
+        }
+    }
+
+    // --- Import writes only where this machine chooses ---------------------
+    //
+    // These run against the isolated per-process config dir (`crate::paths`
+    // isolates unit tests). They share its `extension-data/` root, so each
+    // uses its own extension ids and takes `DISK`.
+
+    static DISK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn disk() -> std::sync::MutexGuard<'static, ()> {
+        DISK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn isolated_ext_root() -> PathBuf {
+        let root = extension_data_root().unwrap();
+        assert!(crate::paths::is_under_isolation_root(&root), "{:?}", root);
+        root
+    }
+
+    /// A hand-made v1 bundle: manifest + `config` + `entries`.
+    fn handmade_bundle(config: &Config, entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(Cursor::new(&mut buf));
+            let opts = zip::write::SimpleFileOptions::default();
+            zip.start_file("manifest.json", opts).unwrap();
+            zip.write_all(&serde_json::to_vec(&BundleManifest::now()).unwrap())
+                .unwrap();
+            zip.start_file("config.json", opts).unwrap();
+            zip.write_all(&serde_json::to_vec(config).unwrap()).unwrap();
+            for (name, body) in entries {
+                zip.start_file(*name, opts).unwrap();
+                zip.write_all(body).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        buf
+    }
+
+    fn expect_refused(bytes: &[u8], local: &Config) -> UnsafeImportPath {
+        let err = import(bytes, None, local).expect_err("import must be refused");
+        let refused = err
+            .downcast_ref::<UnsafeImportPath>()
+            .unwrap_or_else(|| panic!("not an UnsafeImportPath: {:#}", err));
+        UnsafeImportPath {
+            path: refused.path.clone(),
+            reason: refused.reason.clone(),
+        }
+    }
+
+    fn local_with_steering(path: &Path) -> Config {
+        let mut local = Config::default();
+        local.acp.agent.user_steering_path = Some(path.to_string_lossy().into_owned());
+        local
+    }
+
+    fn no_temp_files_in(dir: &Path) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let name = entry.unwrap().file_name();
+            assert!(
+                !name.to_string_lossy().ends_with(".kage-import.tmp"),
+                "left behind {:?}",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn import_writes_steering_only_where_this_machine_keeps_it() {
+        let _disk = disk();
+        let scratch = tempfile::tempdir().unwrap();
+        let chosen_by_archive = scratch.path().join("outside").join("chosen-by-archive.txt");
+        let local_path = scratch.path().join("mine").join("user-steering.md");
+        let local = local_with_steering(&local_path);
+        let mut imported = fake_config();
+        imported.acp.agent.user_steering_path =
+            Some(chosen_by_archive.to_string_lossy().into_owned());
+        let bundle = handmade_bundle(
+            &imported,
+            &[("steering/user.md", b"archive-controlled content")],
+        );
+
+        let (merged, summary) = import(&bundle, None, &local).unwrap();
+        assert!(!chosen_by_archive.exists());
+        assert!(!chosen_by_archive.parent().unwrap().exists());
+        assert_eq!(
+            std::fs::read_to_string(&local_path).unwrap(),
+            "archive-controlled content"
+        );
+        assert_eq!(
+            merged.acp.agent.user_steering_path,
+            local.acp.agent.user_steering_path
+        );
+        assert_eq!(summary.steering_bytes, 26);
+        no_temp_files_in(local_path.parent().unwrap());
+
+        // No local choice: the default path under Kage's config dir, still
+        // never the archive's.
+        let default_path = crate::steering_io::default_user_steering_path().unwrap();
+        assert!(crate::paths::is_under_isolation_root(&default_path));
+        let (merged, _) = import(&bundle, None, &Config::default()).unwrap();
+        assert!(!chosen_by_archive.exists());
+        assert_eq!(merged.acp.agent.user_steering_path, None);
+        assert_eq!(
+            std::fs::read_to_string(&default_path).unwrap(),
+            "archive-controlled content"
+        );
+        std::fs::remove_file(&default_path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn import_refuses_a_symlinked_extension_dir_and_writes_nothing() {
+        let _disk = disk();
+        let root = isolated_ext_root();
+        std::fs::create_dir_all(&root).unwrap();
+        let scratch = tempfile::tempdir().unwrap();
+        let outside = scratch.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let steering = scratch.path().join("user-steering.md");
+        let local = local_with_steering(&steering);
+        std::os::unix::fs::symlink(&outside, root.join("symlinked-ext")).unwrap();
+
+        let bundle = handmade_bundle(
+            &fake_config(),
+            &[
+                ("steering/user.md", b"steering"),
+                ("extension-data/symlinked-ok/a.json", b"[1]"),
+                ("extension-data/symlinked-ext/escaped.json", b"overwritten"),
+            ],
+        );
+        let refused = expect_refused(&bundle, &local);
+        assert!(refused.reason.contains("symlink"), "{}", refused);
+        assert!(refused.path.contains("symlinked-ext"), "{}", refused);
+
+        assert!(!outside.join("escaped.json").exists());
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+        assert!(!root.join("symlinked-ok").exists(), "nothing is written");
+        assert!(!steering.exists(), "nothing is written");
+        std::fs::remove_file(root.join("symlinked-ext")).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn import_refuses_a_symlinked_nested_dir_or_file_and_writes_nothing() {
+        let _disk = disk();
+        let root = isolated_ext_root();
+        let scratch = tempfile::tempdir().unwrap();
+        let outside = scratch.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let ext = root.join("nested-link-ext");
+        std::fs::create_dir_all(ext.join("real")).unwrap();
+        std::os::unix::fs::symlink(&outside, ext.join("real").join("sub")).unwrap();
+        std::os::unix::fs::symlink(outside.join("target.json"), ext.join("link.json")).unwrap();
+        // A dangling link names a file that doesn't exist yet.
+        std::os::unix::fs::symlink(outside.join("dangling.json"), ext.join("dangling.json"))
+            .unwrap();
+
+        for entry in [
+            "extension-data/nested-link-ext/real/sub/deep/x.json",
+            "extension-data/nested-link-ext/real/sub/x.json",
+            "extension-data/nested-link-ext/link.json",
+            "extension-data/nested-link-ext/dangling.json",
+        ] {
+            let bundle = handmade_bundle(
+                &fake_config(),
+                &[
+                    ("extension-data/nested-link-ok/a.json", b"[1]"),
+                    (entry, b"overwritten"),
+                ],
+            );
+            let refused = expect_refused(&bundle, &Config::default());
+            assert!(refused.reason.contains("symlink"), "{}: {}", entry, refused);
+            assert!(!root.join("nested-link-ok").exists(), "{}", entry);
+        }
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+        std::fs::remove_dir_all(&ext).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_extension_data_root_is_refused() {
+        // The shared isolated root can't be swapped for a link while other
+        // tests use it, so drive the checks against a private root.
+        let scratch = tempfile::tempdir().unwrap();
+        let outside = scratch.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let root = scratch.path().join("extension-data");
+        std::os::unix::fs::symlink(&outside, &root).unwrap();
+        let rel = Path::new("ext").join("a.json");
+        let err = check_destination_under(&root, &rel).unwrap_err();
+        assert!(
+            err.downcast_ref::<UnsafeImportPath>().is_some(),
+            "{:#}",
+            err
+        );
+        let err = write_under(&root, &rel, b"x").unwrap_err();
+        assert!(
+            err.downcast_ref::<UnsafeImportPath>().is_some(),
+            "{:#}",
+            err
+        );
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn write_under_creates_real_dirs_and_replaces_files() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = scratch.path().join("extension-data");
+        let rel = Path::new("ext").join("deep").join("a.json");
+        check_destination_under(&root, &rel).unwrap();
+        write_under(&root, &rel, b"one").unwrap();
+        write_under(&root, &rel, b"two").unwrap();
+        assert_eq!(std::fs::read(root.join(&rel)).unwrap(), b"two");
+        no_temp_files_in(&root.join("ext").join("deep"));
+        // A folder where the file goes is refused, not replaced.
+        let dir_rel = Path::new("ext").join("deep");
+        assert!(check_destination_under(&root, &dir_rel).is_err());
+        assert!(write_under(&root, &dir_rel, b"x").is_err());
+        assert!(root.join(&rel).is_file());
+    }
+
+    #[test]
+    fn import_refuses_a_name_that_is_both_file_and_folder_and_writes_nothing() {
+        let _disk = disk();
+        let root = isolated_ext_root();
+        for (file, nested) in [
+            (
+                "extension-data/clash-ext/a",
+                "extension-data/clash-ext/a/b.json",
+            ),
+            (
+                "extension-data/clash-ext/A",
+                "extension-data/clash-ext/a/b.json",
+            ),
+        ] {
+            for order in [[file, nested], [nested, file]] {
+                let bundle = handmade_bundle(
+                    &fake_config(),
+                    &[(order[0], b"1".as_slice()), (order[1], b"2".as_slice())],
+                );
+                let err = import(&bundle, None, &Config::default()).unwrap_err();
+                assert!(format!("{:#}", err).contains("both a file and a folder"));
+                assert!(!root.join("clash-ext").exists(), "{:?}", order);
+            }
+        }
+        let fine = handmade_bundle(
+            &fake_config(),
+            &[
+                ("extension-data/clash-ext/a.json", b"1"),
+                ("extension-data/clash-ext/a/b.json", b"2"),
+            ],
+        );
+        assert_eq!(
+            import(&fine, None, &Config::default())
+                .unwrap()
+                .1
+                .extensions,
+            2
+        );
+        std::fs::remove_dir_all(root.join("clash-ext")).unwrap();
+    }
+
+    #[test]
+    fn import_refuses_bad_entry_names_and_writes_nothing() {
+        let _disk = disk();
+        let root = isolated_ext_root();
+        let scratch = tempfile::tempdir().unwrap();
+        let steering = scratch.path().join("user-steering.md");
+        let local = local_with_steering(&steering);
+        for bad in [
+            "extension-data/bad-names/../../escape.json",
+            "extension-data/bad-names/CON",
+            "extension-data/bad-names/nul.json",
+            "extension-data/C:/escape.json",
+            "extension-data/bad-names\\escape.json",
+            "extension-data/bad-names/a.json:stream",
+            "extension-data//abs/escape.json",
+        ] {
+            let bundle = handmade_bundle(
+                &fake_config(),
+                &[
+                    ("steering/user.md", b"steering"),
+                    ("extension-data/bad-names-ok/a.json", b"[1]"),
+                    (bad, b"x"),
+                ],
+            );
+            let refused = expect_refused(&bundle, &local);
+            assert!(refused.path.starts_with("extension-data/"), "{}", refused);
+            assert!(!root.join("bad-names-ok").exists(), "{}", bad);
+            assert!(!root.join("bad-names").exists(), "{}", bad);
+            assert!(!steering.exists(), "{}", bad);
+        }
+    }
+
+    #[test]
+    fn a_v1_bundle_round_trips_plain_and_encrypted() {
+        let _disk = disk();
+        let root = isolated_ext_root();
+        let ext = root.join("round-trip-ext");
+        std::fs::create_dir_all(ext.join("nested")).unwrap();
+        std::fs::write(ext.join("notes.json"), b"[\"a\",\"b\"]").unwrap();
+        std::fs::write(ext.join("nested").join("deep.json"), b"{\"k\":1}").unwrap();
+        let scratch = tempfile::tempdir().unwrap();
+        let steering = scratch.path().join("user-steering.md");
+        std::fs::write(&steering, b"be brief").unwrap();
+        let mut config = local_with_steering(&steering);
+        config.ui.language = Some("fr".into());
+
+        let plain = export(&config, None).unwrap();
+        let encrypted = export(&config, Some("pw")).unwrap();
+        assert!(encrypted.starts_with(ENCRYPTED_MAGIC));
+
+        for (bytes, pw) in [(&plain, None), (&encrypted, Some("pw"))] {
+            std::fs::remove_dir_all(&ext).unwrap();
+            std::fs::remove_file(&steering).unwrap();
+            let (merged, summary) = import(bytes, pw, &config).unwrap();
+            assert_eq!(merged.ui.language.as_deref(), Some("fr"));
+            assert_eq!(
+                merged.acp.agent.user_steering_path,
+                config.acp.agent.user_steering_path
+            );
+            assert_eq!(std::fs::read(&steering).unwrap(), b"be brief");
+            assert_eq!(
+                std::fs::read(ext.join("notes.json")).unwrap(),
+                b"[\"a\",\"b\"]"
+            );
+            assert_eq!(
+                std::fs::read(ext.join("nested").join("deep.json")).unwrap(),
+                b"{\"k\":1}"
+            );
+            assert!(summary.extensions >= 2);
+            assert!(summary.steering_bytes >= 8);
+            assert_eq!(summary.kage_version, env!("CARGO_PKG_VERSION"));
+            no_temp_files_in(&ext);
+        }
+        // Importing over existing files replaces them in place.
+        std::fs::write(ext.join("notes.json"), b"stale").unwrap();
+        import(&plain, None, &config).unwrap();
+        assert_eq!(
+            std::fs::read(ext.join("notes.json")).unwrap(),
+            b"[\"a\",\"b\"]"
+        );
+        assert!(
+            import(&encrypted, None, &config).is_err(),
+            "needs passphrase"
+        );
+        std::fs::remove_dir_all(&ext).unwrap();
     }
 
     #[test]
