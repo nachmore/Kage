@@ -211,13 +211,20 @@ add switch parsing; extend the allowlist only with forms known to be
 interactive.
 
 A shared folder (Program Files, the profile, AppData, Downloads, temp, …)
-is never one product's folder, however it's spelled: `WinFs::is_shared`
-decides on the path as written and as `canonicalize` resolves it (8.3
-names, junctions, trailing dots and spaces — `Downloads.` is Downloads),
-before a folder can verify an uninstaller or become a protected product
-tree. `plan_uninstall` checks again on the resolved paths, and runs
-nothing that resolves to a network share. Compare Windows paths for these
-decisions through `WinFs`, never as raw strings.
+is never one product's folder, however it's spelled. `WinFs::sharing`
+reads a folder as written and as `canonicalize` resolves it (8.3 names,
+junctions, trailing dots and spaces — `Downloads.` is Downloads), and a
+resolution is one of three things: resolved, missing (`NotFound`), or
+unknown (any other error). Sharing fails closed: a folder is `NotShared`
+only if it resolves, no shared folder resolved unknown (missing ones are
+compared as configured), and neither form is shared. Only a `NotShared`
+folder (`WinFs::is_unshared`) can verify an uninstaller — `plan_uninstall`
+requires it of the install folder and of the folder the uninstaller
+resolves into, and runs nothing that resolves to a network share — or
+become a protected product tree (`product_install_dirs`). Anything else
+opens Settings and protects no tree. `WinFs::is_shared` (known shared) only
+discards matching evidence. Compare Windows paths for these decisions
+through `WinFs`, never as raw strings.
 
 ## Things that aren't in `os/` and shouldn't be
 
