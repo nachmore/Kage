@@ -9372,16 +9372,16 @@
     "_source_hash": "56759a9610c65640"
   },
   "shared.shell.sandbox.body": {
-    "message": "ایجنٹ کمانڈز اپنے سینڈ باکس کے اندر چلاتا ہے، اور اس سینڈ باکس نے اس کمانڈ کو روک دیا۔ Kage میں منظوری دینے سے یہ نہیں بدل سکتا — یہ کمانڈ خود ٹرمینل میں چلائیں۔",
-    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app.",
+    "message": "ایجنٹ اپنے سینڈ باکس کے اندر کمانڈز چلاتا ہے، اور اسی سینڈ باکس نے اس کمانڈ کو روک دیا ہے۔ Kage میں اسے منظور کرنے سے یہ نہیں بدل سکتا۔ پہلے پوری کمانڈ پڑھیں، اور اسے خود ٹرمینل میں صرف اسی صورت چلائیں جب آپ کو اس کے ہر حصے پر بھروسا ہو۔",
+    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app. The notice can't vouch for the command (a command can print a sandbox error itself), so the user is asked to read all of it first; the full command is shown right below this text.",
     "_machine_translated": true,
-    "_source_hash": "5533adcf5b846d08"
+    "_source_hash": "f52af77b9d81a196"
   },
   "shared.shell.sandbox.open_terminal": {
-    "message": "کاپی کریں اور Terminal کھولیں",
-    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS, Windows Terminal on Windows), without typing or running anything. 'Terminal' is the terminal app.",
+    "message": "کاپی کریں اور ٹرمینل کھولیں",
+    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS; Windows Terminal, or PowerShell where it isn't installed, on Windows; the desktop's terminal on Linux), without typing or running anything. 'Terminal' is the terminal app.",
     "_machine_translated": true,
-    "_source_hash": "ea62cd7887f4cfcd"
+    "_source_hash": "d9b0654f788fae30"
   },
   "shared.shell.sandbox.copied_paste": {
     "message": "کاپی ہو گئی۔ اسے چلانے کے لیے ٹرمینل میں پیسٹ کریں۔",
@@ -9400,5 +9400,17 @@
     "description": "Shown in the sandbox notice when the command was copied to the clipboard but opening the terminal app failed. {error} is the error message from the system.",
     "_machine_translated": true,
     "_source_hash": "b9fb9ef18bdf1274"
+  },
+  "shared.shell.sandbox.warn_hidden": {
+    "message": "اس میں پوشیدہ یا کنٹرول حروف ہیں (خانوں میں دکھائے گئے)، اس لیے ہو سکتا ہے یہ وہ نہ کرے جو بظاہر لگتا ہے۔ اسے تب تک نہ چلائیں جب تک آپ کو معلوم نہ ہو کہ یہ حروف وہاں کیوں ہیں۔",
+    "description": "Warning in the sandbox notice, right under the blocked shell command it shows: the command has invisible characters (bidi, zero-width, control characters), which the notice draws as boxed stand-ins. 'It' is the command. The Copy & open Terminal button is not offered for such a command.",
+    "_machine_translated": true,
+    "_source_hash": "ab359b5c1fcd7378"
+  },
+  "shared.shell.sandbox.warn_lines": {
+    "message": "یہ کئی سطروں پر مشتمل ہے۔ صرف پہلی سطر نہیں، ہر سطر پڑھیں۔",
+    "description": "Warning in the sandbox notice, right under the blocked shell command it shows, when the command is more than one line long. 'It' is the command.",
+    "_machine_translated": true,
+    "_source_hash": "36c2d11cd6238803"
   }
 }

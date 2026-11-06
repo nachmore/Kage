@@ -220,6 +220,18 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
     }
 }
 
+/// Alternatives to `system_command_impl`'s program, tried in order when it
+/// isn't installed. Windows Terminal (`wt.exe`) is missing from many
+/// Windows 10 installs, so the terminal falls back to a PowerShell console.
+/// `start` gives it a console window of its own: system commands are
+/// spawned with CREATE_NO_WINDOW (`spawn_detached_impl`).
+pub fn system_command_fallbacks_impl(cmd: &str) -> Vec<(&'static str, Vec<&'static str>)> {
+    match cmd {
+        "terminal" => vec![("cmd", vec!["/C", "start", "", "powershell.exe"])],
+        _ => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::system_command_impl;

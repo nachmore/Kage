@@ -75,6 +75,35 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
     }
 }
 
+/// Alternatives to `system_command_impl`'s program, tried in order when it
+/// isn't installed. `x-terminal-emulator` only exists on Debian-family
+/// distributions, so the terminal falls back to the freedesktop launcher
+/// (`xdg-terminal-exec`), then the common desktops' own terminals, then
+/// xterm. Each opens a new window when run with no arguments.
+pub fn system_command_fallbacks_impl(cmd: &str) -> Vec<(&'static str, Vec<&'static str>)> {
+    match cmd {
+        "terminal" => [
+            "xdg-terminal-exec",
+            "ptyxis",
+            "gnome-terminal",
+            "kgx",
+            "konsole",
+            "xfce4-terminal",
+            "mate-terminal",
+            "lxterminal",
+            "tilix",
+            "alacritty",
+            "kitty",
+            "foot",
+            "xterm",
+        ]
+        .into_iter()
+        .map(|program| (program, Vec::new()))
+        .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Spawn a process with elevated privileges using pkexec.
 pub fn spawn_elevated_impl(program: &str, args: &[&str]) -> std::io::Result<std::process::Child> {
     let mut cmd_args: Vec<&str> = vec![program];

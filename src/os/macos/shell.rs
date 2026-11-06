@@ -69,6 +69,12 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
     }
 }
 
+/// Alternatives to `system_command_impl`'s program for when it isn't
+/// installed. None on macOS: every program it names ships with the OS.
+pub fn system_command_fallbacks_impl(_cmd: &str) -> Vec<(&'static str, Vec<&'static str>)> {
+    Vec::new()
+}
+
 /// Spawn a process with elevated privileges using osascript's `with administrator privileges`.
 ///
 /// This triggers the native macOS admin authentication dialog (Touch ID / password).

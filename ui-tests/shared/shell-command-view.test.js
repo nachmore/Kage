@@ -733,6 +733,75 @@ describe('agent sandbox notice', () => {
         expect(status.classList.contains('is-error')).toBe(true);
     });
 
+    it('shows the whole command, exactly as it will run', () => {
+        const state = makeState();
+        const long = `brew install --cask betterdisplay && ${'x'.repeat(1500)}`;
+        const block = createShellCommandBlock(blocked(state, 'a', long));
+        const box = notice(block).querySelector('.shell-cmd-sandbox-command');
+        // All of it — the header shows one clipped line.
+        expect(box.querySelector('.shell-cmd-sandbox-command-text').textContent).toBe(long);
+        expect(box.hidden).toBe(false);
+        expect(box.dir).toBe('ltr');
+        expect(box.getAttribute('aria-label')).toBe('shared.shell.command_label');
+        expect(notice(block).querySelector('.shell-cmd-sandbox-warn').hidden).toBe(true);
+        expect(openTerminalBtn(block).hidden).toBe(false);
+    });
+
+    it('marks hidden characters and withholds Copy & open Terminal for them', async () => {
+        const invoke = vi.fn(() => Promise.resolve());
+        window.__TAURI__ = { core: { invoke } };
+        const state = makeState();
+        const cmd = 'brew install x\u202e # \u001b[201~';
+        const block = createShellCommandBlock(blocked(state, 'a', cmd));
+        const n = notice(block);
+        const marks = [...n.querySelectorAll('.shell-cmd-sandbox-command .shell-cmd-mark')];
+        expect(marks.map((m) => m.textContent)).toEqual(['<U+202E>', '␛']);
+        const warn = n.querySelector('.shell-cmd-sandbox-warn');
+        expect(warn.hidden).toBe(false);
+        expect(warn.textContent).toBe('shared.shell.sandbox.warn_hidden');
+        expect(openTerminalBtn(block).hidden).toBe(true);
+        // Even a click that gets through opens nothing.
+        openTerminalBtn(block).click();
+        await flush();
+        await flush();
+        expect(writeText).not.toHaveBeenCalled();
+        expect(invoke).not.toHaveBeenCalled();
+        // Copy command stays (as in the panel), under the warning.
+        const copy = n.querySelector('.shell-cmd-copy:not(.shell-cmd-open-terminal)');
+        expect(copy.hidden).toBe(false);
+        copy.click();
+        expect(writeText).toHaveBeenCalledWith(cmd);
+    });
+
+    it('warns about a command of several lines (not a trailing newline)', () => {
+        const state = makeState();
+        const multi = createShellCommandBlock(blocked(state, 'a', 'brew update\nbrew install x'));
+        const warn = notice(multi).querySelector('.shell-cmd-sandbox-warn');
+        expect(warn.hidden).toBe(false);
+        expect(warn.textContent).toBe('shared.shell.sandbox.warn_lines');
+        expect(openTerminalBtn(multi).hidden).toBe(false);
+        const trailing = createShellCommandBlock(blocked(state, 'b', 'brew install x\n'));
+        expect(notice(trailing).querySelector('.shell-cmd-sandbox-warn').hidden).toBe(true);
+    });
+
+    it('both warnings at once', () => {
+        const state = makeState();
+        const block = createShellCommandBlock(blocked(state, 'a', 'a\u200b\nb'));
+        expect(notice(block).querySelector('.shell-cmd-sandbox-warn').textContent).toBe(
+            'shared.shell.sandbox.warn_hidden shared.shell.sandbox.warn_lines'
+        );
+    });
+
+    it('flags a piped command that exited 0 with the nested-Seatbelt line', () => {
+        const state = makeState();
+        const rec = startShell(state, 'a', `${BREW} 2>&1 | tail -20`);
+        complete(state, 'a', `==> Downloading …\n${SANDBOXED}`, { exit: 0 });
+        const block = createShellCommandBlock(rec);
+        expect(block.dataset.state).toBe('success');
+        expect(isShellSandboxBlocked(block)).toBe(true);
+        expect(notice(block)).not.toBeNull();
+    });
+
     it('offers no actions when only the title is known', () => {
         const state = makeState();
         const rec = feed(state, {

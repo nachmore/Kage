@@ -4462,12 +4462,20 @@
     "description": "Heading of a notice under a failed shell command block. The AI agent (a separate program Kage talks to) runs every shell command inside its own security sandbox, and that sandbox refused this command. 'Sandbox' is the security term."
   },
   "shared.shell.sandbox.body": {
-    "message": "The agent runs commands inside its own sandbox, and that sandbox stopped this one. Approving it in Kage can't change that — run the command yourself in a terminal.",
-    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app."
+    "message": "The agent runs commands inside its own sandbox, and that sandbox stopped this one. Approving it in Kage can't change that. Read the whole command first, and run it yourself in a terminal only if you trust all of it.",
+    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app. The notice can't vouch for the command (a command can print a sandbox error itself), so the user is asked to read all of it first; the full command is shown right below this text."
+  },
+  "shared.shell.sandbox.warn_hidden": {
+    "message": "It contains hidden or control characters (shown boxed), so it may not do what it seems to. Don't run it unless you know why they're there.",
+    "description": "Warning in the sandbox notice, right under the blocked shell command it shows: the command has invisible characters (bidi, zero-width, control characters), which the notice draws as boxed stand-ins. 'It' is the command. The Copy & open Terminal button is not offered for such a command."
+  },
+  "shared.shell.sandbox.warn_lines": {
+    "message": "It spans several lines. Read every line, not just the first.",
+    "description": "Warning in the sandbox notice, right under the blocked shell command it shows, when the command is more than one line long. 'It' is the command."
   },
   "shared.shell.sandbox.open_terminal": {
     "message": "Copy & open Terminal",
-    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS, Windows Terminal on Windows), without typing or running anything. 'Terminal' is the terminal app."
+    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS; Windows Terminal, or PowerShell where it isn't installed, on Windows; the desktop's terminal on Linux), without typing or running anything. 'Terminal' is the terminal app."
   },
   "shared.shell.sandbox.copied_paste": {
     "message": "Copied. Paste it into the terminal to run it.",

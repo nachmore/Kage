@@ -9372,16 +9372,16 @@
     "_source_hash": "56759a9610c65640"
   },
   "shared.shell.sandbox.body": {
-    "message": "에이전트는 자체 샌드박스 안에서 명령을 실행하며, 해당 샌드박스가 이 명령을 중단했습니다. Kage에서 승인해도 이는 바뀌지 않습니다. 터미널에서 직접 명령을 실행하십시오.",
-    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app.",
+    "message": "에이전트는 자체 샌드박스 안에서 명령을 실행하며, 이 명령은 해당 샌드박스에 의해 차단되었습니다. Kage에서 승인해도 이를 바꿀 수 없습니다. 먼저 명령 전체를 읽어 보시고, 모든 내용을 신뢰할 수 있는 경우에만 터미널에서 직접 실행하십시오.",
+    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app. The notice can't vouch for the command (a command can print a sandbox error itself), so the user is asked to read all of it first; the full command is shown right below this text.",
     "_machine_translated": true,
-    "_source_hash": "5533adcf5b846d08"
+    "_source_hash": "f52af77b9d81a196"
   },
   "shared.shell.sandbox.open_terminal": {
-    "message": "복사 후 터미널 열기",
-    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS, Windows Terminal on Windows), without typing or running anything. 'Terminal' is the terminal app.",
+    "message": "복사하고 터미널 열기",
+    "description": "Button in the sandbox notice under a blocked shell command: copies the command to the clipboard and opens the user's terminal app (Terminal on macOS; Windows Terminal, or PowerShell where it isn't installed, on Windows; the desktop's terminal on Linux), without typing or running anything. 'Terminal' is the terminal app.",
     "_machine_translated": true,
-    "_source_hash": "ea62cd7887f4cfcd"
+    "_source_hash": "d9b0654f788fae30"
   },
   "shared.shell.sandbox.copied_paste": {
     "message": "복사되었습니다. 터미널에 붙여 넣어 실행하십시오.",
@@ -9400,5 +9400,17 @@
     "description": "Shown in the sandbox notice when the command was copied to the clipboard but opening the terminal app failed. {error} is the error message from the system.",
     "_machine_translated": true,
     "_source_hash": "b9fb9ef18bdf1274"
+  },
+  "shared.shell.sandbox.warn_hidden": {
+    "message": "이 명령에는 숨겨진 문자나 제어 문자(상자로 표시됨)가 포함되어 있어 보이는 것과 다르게 동작할 수 있습니다. 해당 문자가 포함된 이유를 알지 못한다면 실행하지 마십시오.",
+    "description": "Warning in the sandbox notice, right under the blocked shell command it shows: the command has invisible characters (bidi, zero-width, control characters), which the notice draws as boxed stand-ins. 'It' is the command. The Copy & open Terminal button is not offered for such a command.",
+    "_machine_translated": true,
+    "_source_hash": "ab359b5c1fcd7378"
+  },
+  "shared.shell.sandbox.warn_lines": {
+    "message": "이 명령은 여러 줄로 되어 있습니다. 첫 줄만이 아니라 모든 줄을 읽어 보십시오.",
+    "description": "Warning in the sandbox notice, right under the blocked shell command it shows, when the command is more than one line long. 'It' is the command.",
+    "_machine_translated": true,
+    "_source_hash": "36c2d11cd6238803"
   }
 }

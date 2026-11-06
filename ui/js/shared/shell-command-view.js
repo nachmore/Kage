@@ -25,13 +25,16 @@
  * collapsing dispatches a bubbling SHELL_LAYOUT_EVENT so a window that
  * sizes itself to its content (the floating window) can re-measure.
  *
- * A failed command whose output shows the agent's own sandbox refused it
+ * A command whose output shows the agent's own sandbox refused it
  * (`shellSandboxDenial`) gets a notice under its header, open or not: Kage's
  * approvals can't lift that sandbox, so the user is handed the command —
- * Copy command, or Copy & open Terminal, which copies it and opens the
- * terminal app without typing or running anything. Such a block stays in
- * the activity slot, and opens the command list it's handed off to, so the
- * notice stays in view.
+ * shown in full, with its hidden characters marked, and the user asked to
+ * read it first, since any command can print a sandbox error itself. Copy
+ * command, or Copy & open Terminal, which copies it and opens the terminal
+ * app without typing or running anything; that one-click path is withheld
+ * for a command with hidden characters, and a multi-line one gets a
+ * warning. Such a block stays in the activity slot, and opens the command
+ * list it's handed off to, so the notice stays in view.
  */
 
 import { errMessage } from './error-message.js';
@@ -48,6 +51,7 @@ import {
 } from './tool-call-dom.js';
 import {
     getShellCalls,
+    isPlainShellCommand,
     joinCapped,
     settleShellCalls,
     shellCallState,
@@ -270,13 +274,15 @@ function setNoticeStatus(root, text, isError = false) {
  * Copy the command, then open the user's terminal app — and nothing more:
  * the command only goes on the clipboard, for the user to paste and run.
  * `execute_system_command` "terminal" (src/commands/input.rs) launches the
- * OS terminal with no arguments, after hiding the floating window, which
- * suits both windows: the terminal is about to take focus, and the
- * always-on-top floating window would otherwise sit over it.
+ * OS terminal with no arguments (the first one installed, on Linux and
+ * Windows: os::shell::system_command_candidates), after hiding the
+ * floating window, which suits both windows: the terminal is about to take
+ * focus, and the always-on-top floating window would otherwise sit over it.
  */
 async function copyAndOpenTerminal(root, button) {
     const command = root._kageShell.record?.command || '';
-    if (!command || button.disabled) return;
+    // (The button is hidden for a command that doesn't show as written.)
+    if (!command || button.disabled || !isPlainShellCommand(command)) return;
     // One terminal per click, however fast the clicks come.
     button.disabled = true;
     setNoticeStatus(root, '');
@@ -319,6 +325,25 @@ function buildSandboxNotice(root) {
     const body = el('p', 'shell-cmd-sandbox-text');
     body.textContent = t('shared.shell.sandbox.body');
 
+    // The whole command, exactly as it will run (hidden characters marked):
+    // what the user is asked to read before running it. The header shows
+    // one clipped line; with the panel open its full command shows instead
+    // (CSS hides this one).
+    const command = el('pre', 'shell-cmd-sandbox-command');
+    command.dir = 'ltr';
+    command.tabIndex = 0;
+    command.setAttribute('role', 'group');
+    command.setAttribute('aria-label', t('shared.shell.command_label'));
+    const prompt = el('span', 'shell-cmd-prompt');
+    prompt.setAttribute('aria-hidden', 'true');
+    prompt.textContent = '$ ';
+    const commandText = el('span', 'shell-cmd-sandbox-command-text');
+    command.append(prompt, commandText);
+
+    // Hidden characters or several lines: say so before the buttons.
+    const warn = el('p', 'shell-cmd-sandbox-warn');
+    warn.hidden = true;
+
     const actions = el('div', 'shell-cmd-sandbox-actions');
     const copy = copyButton(
         () => t('shared.shell.copy_command'),
@@ -342,8 +367,38 @@ function buildSandboxNotice(root) {
     status.dir = 'auto';
     status.setAttribute('role', 'status');
 
-    notice.append(title, body, actions, status);
-    return { el: notice, titleId: title.id, actions, status };
+    notice.append(title, body, command, warn, actions, status);
+    return {
+        el: notice,
+        titleId: title.id,
+        command,
+        commandText,
+        commandKey: null,
+        warn,
+        actions,
+        open,
+        status,
+    };
+}
+
+/** Show the record's command in the notice, and what to watch out for in it. */
+function renderNoticeCommand(notice, command) {
+    if (notice.commandKey === command) return false;
+    notice.commandKey = command;
+    notice.commandText.textContent = '';
+    appendShellCommandText(notice.commandText, command);
+    notice.command.hidden = !command;
+    const plain = isPlainShellCommand(command);
+    const warnings = [];
+    if (!plain) warnings.push(t('shared.shell.sandbox.warn_hidden'));
+    if (command.trimEnd().includes('\n')) warnings.push(t('shared.shell.sandbox.warn_lines'));
+    notice.warn.textContent = warnings.join(' ');
+    notice.warn.hidden = !warnings.length;
+    // Characters that don't show as written (escape sequences, bidi
+    // overrides, carriage returns …) can make a paste do something other
+    // than what's on screen: no one-click path to a terminal for those.
+    notice.open.hidden = !plain;
+    return true;
 }
 
 /** Add, keep or drop the block's sandbox notice for `denial`. */
@@ -360,14 +415,17 @@ function syncSandboxNotice(root, denial) {
         return;
     }
     root.dataset.sandbox = denial.reason;
-    if (!st.notice) {
+    const created = !st.notice;
+    if (created) {
         st.notice = buildSandboxNotice(root);
         st.header.after(st.notice.el);
         st.header.setAttribute('aria-describedby', st.notice.titleId);
-        layoutChanged(root);
     }
+    const command = st.record.command || '';
+    const changed = renderNoticeCommand(st.notice, command);
     // Nothing to hand over without a command (only its title is known).
-    st.notice.actions.hidden = !st.record.command;
+    st.notice.actions.hidden = !command;
+    if (created || changed) layoutChanged(root);
 }
 
 /** Whether the agent's own sandbox blocked a block's command (it shows the notice). */

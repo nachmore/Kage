@@ -2849,8 +2849,9 @@ body.light-theme .conn-edit-actions {
 
 /* The agent's own sandbox refused the command (shell-commands.js
    shellSandboxDenial): a notice right under the header, open or not, with
-   Copy command / Copy & open Terminal. Its text is translated, so it takes
-   its own direction (dir="auto" on the notice, text-align: start). */
+   the full command, any warning about it, and Copy command / Copy & open
+   Terminal. Its text is translated, so it takes its own direction
+   (dir="auto" on the notice, text-align: start). */
 .shell-cmd[data-sandbox] .shell-cmd-header {
     border-radius: 7px 7px 0 0;
 }
@@ -2876,6 +2877,40 @@ body.light-theme .conn-edit-actions {
 }
 .shell-cmd-sandbox-text {
     margin: 0;
+}
+/* The whole command, to read before running it — LTR and monospace like
+   the panel's. With the panel open, the panel's copy is the one shown. */
+.shell-cmd-sandbox-command {
+    max-height: 120px;
+    margin: 0;
+    padding: 6px 8px;
+    overflow: auto;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg-strong);
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    font-size: 12px;
+    text-align: left;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+.shell-cmd-sandbox-command[hidden],
+.shell-cmd.expanded .shell-cmd-sandbox-command {
+    display: none;
+}
+.shell-cmd-sandbox-command:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: -2px;
+}
+.shell-cmd-sandbox-warn {
+    margin: 0;
+    color: var(--kage-term-mark);
+    font-weight: 600;
+}
+.shell-cmd-sandbox-warn[hidden] {
+    display: none;
 }
 .shell-cmd-sandbox-actions {
     display: flex;

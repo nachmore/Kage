@@ -2,7 +2,7 @@ use crate::error::AppError;
 use crate::os;
 use crate::state::FeatureServices;
 use crate::window_labels;
-use log::{error, info};
+use log::{debug, error, info};
 use tauri::{Manager, State};
 
 /// Check if input is a URL (must be the entire input, not embedded in a sentence)
@@ -455,6 +455,34 @@ pub async fn execute_shortcut<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Spawn the first of a system command's programs that is installed
+/// (`os::shell::system_command_candidates`: e.g. the terminal falls back
+/// from `x-terminal-emulator` on distributions without it). Any failure
+/// other than "not found" is final; when none is installed, the first
+/// program's error is returned.
+fn spawn_system_command(command_id: &str) -> std::io::Result<std::process::Child> {
+    let mut first_err: Option<std::io::Error> = None;
+    for (program, args) in crate::os::shell::system_command_candidates(command_id) {
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args);
+        match crate::os::process::spawn_detached(&mut cmd) {
+            Ok(child) => return Ok(child),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                debug!(
+                    "System command '{}': {} is not installed, trying the next program",
+                    command_id, program
+                );
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(first_err
+        .unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no program to run")))
+}
+
 #[tauri::command]
 pub async fn execute_system_command<R: tauri::Runtime>(
     command_id: String,
@@ -477,10 +505,7 @@ pub async fn execute_system_command<R: tauri::Runtime>(
         let (program, args) = crate::os::shell::system_command(command_id.as_str());
         crate::os::shell::spawn_elevated(program, &args)
     } else {
-        let (program, args) = crate::os::shell::system_command(command_id.as_str());
-        let mut cmd = std::process::Command::new(program);
-        cmd.args(args);
-        crate::os::process::spawn_detached(&mut cmd)
+        spawn_system_command(command_id.as_str())
     };
 
     match result {

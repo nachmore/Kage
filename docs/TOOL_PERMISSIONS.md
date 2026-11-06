@@ -83,11 +83,27 @@ user's terminal.
 
 Kage never works around that sandbox and never runs the command outside
 the agent. `detectSandboxDenial` (`ui/js/shared/shell-commands.js`)
-recognises unmistakable sandbox signatures in a failed command's output —
-never a bare "Operation not permitted" or "Permission denied", which SIP,
-privacy prompts and file modes produce in a terminal too — and the command
-block then explains it and offers **Copy command** and **Copy & open
-Terminal** (copies, then opens the terminal app with nothing typed or run).
+recognises sandbox signatures in a failed command's output — never a bare
+"Operation not permitted" or "Permission denied", which SIP, privacy
+prompts and file modes produce in a terminal too. A call that exited 0
+counts only when its command has an unquoted `|` (`brew install x 2>&1 |
+tail -20` exits with `tail`'s status) and only on the nested-Seatbelt
+line. bubblewrap errors aren't unique to a sandbox (a system that
+restricts unprivileged user namespaces, such as Ubuntu 23.10+, prints them
+in a terminal too), so they're skipped for a command that runs `bwrap`,
+`flatpak` or `steam` itself. The command block then explains what happened
+and offers **Copy command** and **Copy & open Terminal** (copies, then opens
+the terminal app with nothing typed or run; on Linux and Windows it falls
+back through other terminals when the default one isn't installed).
+
+The signatures are only text, and a command can print them itself (`…;
+echo 'sandbox-exec: sandbox_apply: Operation not permitted' >&2; exit 1`,
+say, from a prompt-injected agent). So the notice never vouches for the
+command: it shows the whole command, with hidden characters marked, and
+asks the user to read it before running it themselves. It warns when the
+command spans several lines, and for a command with hidden or control
+characters it warns and withholds **Copy & open Terminal**.
+
 The built-in steering (`src/builtin_steering.md`) tells the agent the same:
 stop, don't try to get around any sandbox, and give the user the command.
 

@@ -756,30 +756,50 @@ export function shellCallState(record) {
 // Agents run shell commands inside a sandbox of their own (kiro-cli behind
 // a managed wrapper, Codex with Seatbelt / Landlock, Claude Code's sandbox
 // runtime). A command it blocks can work fine in the user's own terminal,
-// and Kage's tool approvals can't change that — so a failure that is
-// unmistakably the agent's sandbox gets a notice (shell-command-view.js).
+// and Kage's tool approvals can't change that — so a failure that reads
+// as the agent's sandbox refusing the command gets a notice
+// (shell-command-view.js).
 //
 // Only text a failing command doesn't print in a terminal counts. A bare
 // "Operation not permitted" / "Permission denied" never does: SIP, privacy
 // (TCC) prompts, file modes and root-owned paths fail exactly the same way
 // outside any sandbox. Signatures are matched at the start of a line (after
-// at most a few `name: ` prefixes such as `Error: `), so the same text
-// quoted inside other output — a grep hit, a test diff, a log line with a
-// timestamp in front — doesn't count either.
+// at most a few `name: ` prefixes such as `Error: `), so most quoted copies
+// — a test diff, an assertion message, a log line with a timestamp in
+// front — don't count either.
+//
+// This is a hint, not proof: the output is just text, and a command can
+// print any of these lines itself (`echo 'sandbox-exec: …' >&2; exit 1`).
+// So the notice never vouches for the command — it asks the user to read
+// it before running it themselves — and Kage never runs it.
 
 // Up to four `name: ` prefixes (`Error: `, `brew: `, `sandbox error: `).
 // The class has no `:`, so each prefix ends at its own colon: no
 // backtracking blow-up on long lines.
 const LINE_PREFIX = String.raw`^[ \t]*(?:[A-Za-z][\w .-]{0,40}: ){0,4}`;
 
+// A command that runs bubblewrap itself (directly, or through Flatpak /
+// Steam): its own bwrap can fail the same way in a terminal.
+const RUNS_BWRAP = /(?:^|[\s;&|(`/])(?:bwrap|flatpak(?:-builder)?|steam)(?=$|[\s;&|)`])/;
+
+// `strict` signatures are specific enough to count even when the call
+// reported success (see shellSandboxDenial); `unless` skips a signature for
+// a command it can't be told apart from.
 const SANDBOX_SIGNATURES = Object.freeze([
     // macOS Seatbelt, nested: the command (Homebrew, `swift build`, …)
     // tried to apply its own sandbox-exec profile inside the agent's
     // sandbox, which macOS refuses: "sandbox-exec: sandbox_apply: Operation
-    // not permitted". In a terminal the same profile applies fine.
+    // not permitted". In a terminal the same profile applies fine. The text
+    // is specific enough that it also counts after any `…: ` — Homebrew
+    // wraps it as `Error: wget (1.24.5): …`, `Error: firefox@nightly: …` or
+    // `Error: Download failed on Cask 'x' with message: …`.
     {
         reason: 'seatbelt',
-        re: new RegExp(`${LINE_PREFIX}sandbox_apply\\w*: Operation not permitted`, 'm'),
+        strict: true,
+        re: new RegExp(
+            `(?:${LINE_PREFIX}|: sandbox-exec: )sandbox_apply\\w*: Operation not permitted`,
+            'm'
+        ),
     },
     // A Seatbelt violation report: "Sandbox: curl(4242) deny(1)
     // network-outbound …". The system log prints these with a timestamp
@@ -800,14 +820,22 @@ const SANDBOX_SIGNATURES = Object.freeze([
         reason: 'sandbox-runtime',
         re: /^[ \t]*(?:< )?X-Proxy-Error: blocked-by-sandbox-runtime\b/im,
     },
-    // bubblewrap (Linux sandboxes, Flatpak) failing to set up its
-    // namespaces — what a nested bwrap gets inside another sandbox.
+    // bubblewrap (the Linux sandbox several agents wrap commands in)
+    // failing to set up its namespaces or mounts. These aren't unique to a
+    // sandbox: on a system that restricts unprivileged user namespaces
+    // (Ubuntu 23.10+'s AppArmor default, a kernel with them switched off)
+    // bwrap fails like this in a terminal too. When the command doesn't run
+    // bwrap itself, the bwrap that failed is the agent's wrapper — and the
+    // command, run in a terminal, needs no bwrap at all. A command that
+    // does (`flatpak run …`) is skipped. (One that runs bwrap only
+    // indirectly, through a build tool, isn't caught by that.)
     {
         reason: 'bubblewrap',
+        unless: RUNS_BWRAP,
         re: new RegExp(
             '^[ \\t]*bwrap: (?:setting up [ug]id map|error writing to setgroups|' +
                 'Creating new namespace failed|No permissions to create (?:a )?new namespace|' +
-                'unshare (?:user|pid) ns|Setting userns2 failed|Failed to make / r?slave|' +
+                'unshare (?:user|pid) ns|Setting userns2 failed|Failed to make / \\w|' +
                 "Can't mount proc|mounting proc|pivot_root|loopback: Failed RTM_NEWADDR)",
             'm'
         ),
@@ -828,39 +856,87 @@ const SANDBOX_LINE_MAX = 200;
 /**
  * Whether command output shows the agent's own sandbox refusing the
  * command: `{ reason, line }` — `reason` one of `seatbelt`,
- * `sandbox-runtime`, `bubblewrap`, `codex`; `line` the (first) matching
- * line, trimmed and clipped — or `null`. Pure; high precision by design
- * (see above): plain permission errors never match. Callers decide that
- * the command failed (`shellSandboxDenial`).
+ * `sandbox-runtime`, `bubblewrap`, `codex`; `line` the (first) line with a
+ * match, trimmed and clipped — or `null`. Pure; high precision by design
+ * (see above): plain permission errors never match. `opts.strict` checks
+ * only the signatures that also count for a call that reported success;
+ * `opts.command` is the command that printed `output` (some signatures
+ * don't count for some commands). Callers decide whether the call failed
+ * (`shellSandboxDenial`).
  */
-export function detectSandboxDenial(output) {
+export function detectSandboxDenial(output, opts = {}) {
     if (typeof output !== 'string' || !output) return null;
+    const strict = !!opts?.strict;
+    const command = typeof opts?.command === 'string' ? opts.command : '';
     const text =
         output.includes(ESC) || output.includes('\r') ? sanitizeTerminalText(output) : output;
-    for (const { reason, re } of SANDBOX_SIGNATURES) {
-        const m = re.exec(text);
+    for (const sig of SANDBOX_SIGNATURES) {
+        if (strict && !sig.strict) continue;
+        if (sig.unless && command && sig.unless.test(command)) continue;
+        const m = sig.re.exec(text);
         if (!m) continue;
-        // Every signature is anchored at a line start: report that line.
+        // Report the whole line the match is on.
         const start = text.lastIndexOf('\n', m.index) + 1;
         const nl = text.indexOf('\n', m.index);
         const end = Math.min(nl === -1 ? text.length : nl, start + SANDBOX_LINE_MAX * 2);
         const line = text.slice(start, safeCut(text, end)).trim();
-        return { reason, line: line.slice(0, safeCut(line, SANDBOX_LINE_MAX)) };
+        return { reason: sig.reason, line: line.slice(0, safeCut(line, SANDBOX_LINE_MAX)) };
     }
     return null;
 }
 
 /**
- * `detectSandboxDenial` for a record: only a failed call counts, and its
- * stored output (stderr first, head and tail of each) is what's checked.
+ * Whether `command` has a `|` outside quotes — a pipeline (`a | b`,
+ * `a |& b`) or an or-list (`a || b`). Either can end with status 0 when
+ * the command that mattered failed: a pipeline exits with its last
+ * command's status unless `pipefail` is set. A rough POSIX-shell reading:
+ * quotes and backslashes are honoured; `#` comments end the scan.
+ */
+export function hasUnquotedPipe(command) {
+    if (typeof command !== 'string') return false;
+    let quote = '';
+    for (let i = 0; i < command.length; i++) {
+        const c = command[i];
+        if (quote === "'") {
+            if (c === "'") quote = '';
+        } else if (c === '\\') {
+            i += 1;
+        } else if (quote === '"') {
+            if (c === '"') quote = '';
+        } else if (c === "'" || c === '"') {
+            quote = c;
+        } else if (c === '#' && (i === 0 || /\s/.test(command[i - 1]))) {
+            const nl = command.indexOf('\n', i);
+            if (nl === -1) return false;
+            i = nl;
+        } else if (c === '|') {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * `detectSandboxDenial` for a record: its stored output (stderr first,
+ * head and tail of each) is what's checked. A failed call is checked
+ * against every signature. A call that reported success only counts when
+ * its command has an unquoted `|` — `brew install x 2>&1 | tail -20` exits
+ * 0 when brew was refused — and then only on the strict signatures.
  */
 export function shellSandboxDenial(record) {
-    if (shellCallState(record) !== 'failed') return null;
+    const state = shellCallState(record);
+    const command = typeof record?.command === 'string' ? record.command : '';
+    let strict = false;
+    if (state !== 'failed') {
+        if (state !== 'success' || !hasUnquotedPipe(command)) return null;
+        strict = true;
+    }
     const out = shellOutputOf(record);
     if (!out) return null;
+    const opts = { strict, command };
     for (const seg of [out.stderr, out.stdout]) {
         if (!seg) continue;
-        const hit = detectSandboxDenial(seg.head) || detectSandboxDenial(seg.tail);
+        const hit = detectSandboxDenial(seg.head, opts) || detectSandboxDenial(seg.tail, opts);
         if (hit) return hit;
     }
     return null;
