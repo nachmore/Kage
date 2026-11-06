@@ -2,6 +2,7 @@ import { isExtensionEnabled, resolveExtensionConfig } from '../extension-config.
 import { normalizePermissions } from '../extension-permissions.js';
 import { resolveExtensionCatalog } from './i18n.js';
 import { applyMixin } from '../mixin.js';
+import { collectExtensionModules } from '../extension-modules.js';
 
 const SANDBOX_VENDOR_ALLOWLIST = {
     math: 'vendor/lib/math.js',
@@ -388,6 +389,18 @@ export function installExtensionSourceMethods(ExtensionManager) {
         async _fetchProviderSources(id, manifest) {
             const out = {};
             const c = manifest.contributes || {};
+            out.sourcePaths = {
+                searchProvider: c.searchProvider,
+                toolProvider: c.toolProvider,
+                triggerProvider: c.triggerProvider,
+                toolbarProvider: c.toolbarButtons,
+                messageFormatter: c.messageFormatters,
+                widgets: Object.fromEntries(
+                    (Array.isArray(c.widgets) ? c.widgets : [])
+                        .filter((w) => w?.id && w?.module)
+                        .map((w) => [w.id, w.module])
+                ),
+            };
             if (c.searchProvider) out.searchProvider = await this._fetchText(id, c.searchProvider);
             if (c.toolProvider) out.toolProvider = await this._fetchText(id, c.toolProvider);
             if (c.triggerProvider)
@@ -402,62 +415,23 @@ export function installExtensionSourceMethods(ExtensionManager) {
                     out.widgets[w.id] = await this._fetchText(id, w.module);
                 }
             }
-            out.sharedSources = await this._fetchSharedSources(out, id);
+            out.sharedSources = await this._fetchSharedSources(out, id, out.sourcePaths);
             return out;
         },
 
         /**
-         * Walk every fetched provider source looking for `import ... from './...'`
-         * statements. Recursively fetch those files too so the sandbox can
-         * wire them up as shared blob URLs (see runtime.js :
-         * registerSharedModules).
-         *
-         * Note: this is a deliberately dumb regex-based discovery. It does
-         * NOT handle dynamic `import()` expressions or conditional imports.
-         * Extensions that need those should keep all their JS in a single
-         * file or declare them explicitly later.
+         * Discover bundle-local imports and re-exports with the same lexer
+         * the runtime uses. Computed dynamic imports are intentionally excluded.
          *
          * @param {object} sources - the sources bag accumulated so far
          * @param {string} extensionId - extension id used for the read_extension_file IPC
          * @returns {Promise<object>} flat map of { "./rel/path.js": sourceText }
-         */ async _fetchSharedSources(sources, extensionId) {
-            const collected = new Map();
-            const queue = [];
-
-            const scan = (src) => {
-                if (typeof src !== 'string') return;
-                // Matches both `import X from './x.js'` and `import './x.js'`.
-                const re = /\bimport\s+(?:[^'"]+?\s+from\s+)?['"](\.{1,2}\/[^'"]+?)['"]/g;
-                let m;
-                while ((m = re.exec(src)) !== null) {
-                    const rel = m[1];
-                    if (!collected.has(rel) && !queue.includes(rel)) queue.push(rel);
-                }
-            };
-
-            // Seed queue from the entry-point provider sources.
-            for (const [kind, val] of Object.entries(sources)) {
-                if (kind === 'widgets' && val && typeof val === 'object') {
-                    for (const s of Object.values(val)) scan(s);
-                } else {
-                    scan(val);
-                }
-            }
-
-            // Breadth-first resolve — shared modules can import each other.
-            while (queue.length) {
-                const rel = queue.shift();
-                if (collected.has(rel)) continue;
-                const text = await this._fetchText(extensionId, rel);
-                if (text == null) continue;
-                collected.set(rel, text);
-                scan(text);
-            }
-
-            if (collected.size === 0) return undefined;
-            const out = {};
-            for (const [k, v] of collected) out[k] = v;
-            return out;
+         */ async _fetchSharedSources(sources, extensionId, sourcePaths = {}) {
+            return collectExtensionModules(
+                sources,
+                (path) => this._fetchText(extensionId, path),
+                sourcePaths
+            );
         },
 
         /**

@@ -553,6 +553,7 @@ describe('ExtensionManager widget render', () => {
             sandbox,
         });
         const host = document.createElement('div');
+        document.body.appendChild(host);
         if (!mgr._widgetInstances) mgr._widgetInstances = new Map();
         mgr._widgetInstances.set('ext:w', {
             extensionId: 'ext',

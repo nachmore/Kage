@@ -5,6 +5,7 @@
 import { formatIcu } from '../shared/icu-message.js';
 import { createSandboxedRunner } from './runtime/sandboxed-worker.js';
 import { HOST_FEATURES, invokeError } from './runtime/host-api.js';
+import { extensionModuleOrder, rewriteExtensionModules } from '../shared/extension-modules.js';
 
 /**
  * Kage extension sandbox runtime.
@@ -239,38 +240,24 @@ const runSandboxed = createSandboxedRunner({
 const sharedModuleBlobs = new Map();
 
 /**
- * Rewrite a source string so that `import ... from './xxx.js'` (and the
- * side-effect `import './xxx.js'`) refer to the blob URL assigned to
- * that relative path. Unknown relative imports are left alone — they'll
+ * Rewrite imports and re-exports to the final blob URL for the bundle path,
+ * relative to the importing file. Unknown relative imports are left alone — they'll
  * simply fail to resolve (and the failure surfaces through the provider
  * load error path).
  *
  * Exported as a pure function (taking the map explicitly) for unit
  * testing; the runtime path uses the module-level `sharedModuleBlobs`
- * instance via `rewriteRelativeImports`.
+ * instance.
  */
-export function rewriteRelativeImportsWith(source, blobMap) {
+export function rewriteRelativeImportsWith(source, blobMap, importer = './') {
     if (!blobMap || blobMap.size === 0) return source;
-    // Match both forms:
-    //   import X from './x.js'     (named or default)
-    //   import './x.js'            (side effect only)
-    // The specifier is quoted with either ' or ".
-    const pattern = /(\bimport\s+(?:[^'"]+?\s+from\s+)?)(['"])(\.{1,2}\/[^'"]+?)\2/g;
-    return source.replace(pattern, (whole, leading, quote, specifier) => {
-        const blob = blobMap.get(specifier);
-        if (!blob) return whole;
-        return `${leading}${quote}${blob}${quote}`;
-    });
+    return rewriteExtensionModules(source, blobMap, importer);
 }
 
-function rewriteRelativeImports(source) {
-    return rewriteRelativeImportsWith(source, sharedModuleBlobs);
-}
-
-async function importFromSource(sourceText, kind) {
+async function importFromSource(sourceText, kind, importer) {
     // Rewrite relative imports first so the blob URL we build below
     // references sibling blobs via their registered URLs.
-    const rewritten = rewriteRelativeImports(sourceText);
+    const rewritten = rewriteRelativeImportsWith(sourceText, sharedModuleBlobs, importer);
     // Build a blob URL we own so module specifier resolution stays local.
     const blob = new Blob([rewritten], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
@@ -290,42 +277,20 @@ async function importFromSource(sourceText, kind) {
 }
 
 /**
- * Build blob URLs for every shared module BEFORE loading any provider.
- * Shared modules can import each other, so we can't just process them
- * in source order — `a.js` might import `./b.js` before we've seen
- * `b.js`. We do two passes:
- *   1. Build an initial blob URL for each path, populating the blob
- *      map so all specifiers are resolvable.
- *   2. For modules that use relative imports, rewrite them (now that
- *      every sibling has a known blob URL) and replace the pass-1 URL.
- * Modules without relative imports keep their pass-1 URL and are
- * never rebuilt.
+ * Build each blob once, in dependency order. Validate cycles before allocating
+ * any URLs. Keep final URLs alive for the sandbox lifetime, including late
+ * quoted dynamic imports; the iframe's teardown releases them.
  */
-function registerSharedModules(sharedSources) {
-    if (!sharedSources || typeof sharedSources !== 'object') return;
-    const rawEntries = Object.entries(sharedSources);
-    if (rawEntries.length === 0) return;
-
-    // Pass 1: initial blob URLs with unmodified source.
-    for (const [relPath, src] of rawEntries) {
-        const blob = new Blob([src], { type: 'application/javascript' });
-        sharedModuleBlobs.set(relPath, URL.createObjectURL(blob));
+export function registerSharedModules(sharedSources, blobMap = sharedModuleBlobs) {
+    const order = extensionModuleOrder(sharedSources);
+    for (const path of order) {
+        const rewritten = rewriteRelativeImportsWith(sharedSources[path], blobMap, path);
+        blobMap.set(
+            path,
+            URL.createObjectURL(new Blob([rewritten], { type: 'application/javascript' }))
+        );
     }
-
-    // Pass 2: for each module that imports siblings relatively, rebuild
-    // the blob with rewritten specifiers. Revoke the pass-1 URL first
-    // so we don't leak its backing Blob.
-    for (const [relPath, src] of rawEntries) {
-        if (!/import\s.*['"]\.{1,2}\//.test(src)) continue;
-        const rewritten = rewriteRelativeImports(src);
-        if (rewritten === src) continue;
-        const oldUrl = sharedModuleBlobs.get(relPath);
-        try {
-            URL.revokeObjectURL(oldUrl);
-        } catch {}
-        const newBlob = new Blob([rewritten], { type: 'application/javascript' });
-        sharedModuleBlobs.set(relPath, URL.createObjectURL(newBlob));
-    }
+    return blobMap;
 }
 
 async function initExtension(init) {
@@ -347,6 +312,7 @@ async function initExtension(init) {
 
     const context = buildContext();
     const sources = init.sources || {};
+    const sourcePaths = sources.sourcePaths || {};
 
     // Shared modules (e.g. an extension's cache.js sibling) come in a
     // separate bag keyed by their relative path. We build blob URLs
@@ -356,7 +322,11 @@ async function initExtension(init) {
 
     if (sources.searchProvider) {
         try {
-            const Cls = await importFromSource(sources.searchProvider, 'searchProvider');
+            const Cls = await importFromSource(
+                sources.searchProvider,
+                'searchProvider',
+                sourcePaths.searchProvider
+            );
             providers.searchProvider = new Cls();
             providers.searchProvider.initialize?.(context);
         } catch (e) {
@@ -366,7 +336,11 @@ async function initExtension(init) {
 
     if (sources.toolProvider) {
         try {
-            const Cls = await importFromSource(sources.toolProvider, 'toolProvider');
+            const Cls = await importFromSource(
+                sources.toolProvider,
+                'toolProvider',
+                sourcePaths.toolProvider
+            );
             providers.toolProvider = new Cls();
             providers.toolProvider.initialize?.(context);
         } catch (e) {
@@ -376,7 +350,11 @@ async function initExtension(init) {
 
     if (sources.triggerProvider) {
         try {
-            const Cls = await importFromSource(sources.triggerProvider, 'triggerProvider');
+            const Cls = await importFromSource(
+                sources.triggerProvider,
+                'triggerProvider',
+                sourcePaths.triggerProvider
+            );
             providers.triggerProvider = new Cls();
             providers.triggerProvider.initialize?.(context);
         } catch (e) {
@@ -386,7 +364,11 @@ async function initExtension(init) {
 
     if (sources.settingsProvider) {
         try {
-            const Cls = await importFromSource(sources.settingsProvider, 'settingsProvider');
+            const Cls = await importFromSource(
+                sources.settingsProvider,
+                'settingsProvider',
+                sourcePaths.settingsProvider
+            );
             providers.settingsProvider = new Cls();
             providers.settingsProvider.initialize?.(context);
         } catch (e) {
@@ -396,7 +378,11 @@ async function initExtension(init) {
 
     if (sources.toolbarProvider) {
         try {
-            const Cls = await importFromSource(sources.toolbarProvider, 'toolbarProvider');
+            const Cls = await importFromSource(
+                sources.toolbarProvider,
+                'toolbarProvider',
+                sourcePaths.toolbarProvider
+            );
             providers.toolbarProvider = new Cls();
             providers.toolbarProvider.initialize?.(context);
         } catch (e) {
@@ -406,7 +392,11 @@ async function initExtension(init) {
 
     if (sources.messageFormatter) {
         try {
-            const Cls = await importFromSource(sources.messageFormatter, 'messageFormatter');
+            const Cls = await importFromSource(
+                sources.messageFormatter,
+                'messageFormatter',
+                sourcePaths.messageFormatter
+            );
             providers.messageFormatter = new Cls();
             providers.messageFormatter.initialize?.(context);
         } catch (e) {
@@ -427,7 +417,11 @@ async function initExtension(init) {
     if (sources.widgets && typeof sources.widgets === 'object') {
         for (const [widgetId, src] of Object.entries(sources.widgets)) {
             try {
-                const Cls = await importFromSource(src, `widget '${widgetId}'`);
+                const Cls = await importFromSource(
+                    src,
+                    `widget '${widgetId}'`,
+                    sourcePaths.widgets?.[widgetId]
+                );
                 const instance = new Cls();
                 instance.initialize?.(context);
                 providers.widgets[widgetId] = instance;

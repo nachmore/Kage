@@ -1,4 +1,5 @@
 import { activeLanguage as hostLanguage, isRtl as hostIsRtl } from '../i18n.js';
+import { collectExtensionModules } from '../extension-modules.js';
 
 function _stripCatalogMeta(catalog) {
     if (!catalog || typeof catalog !== 'object') return {};
@@ -139,47 +140,28 @@ export async function localizeManifestForPrompt(invoke, manifest, opts) {
  * module specifier" because the sandbox runtime has no blob URL
  * registered for the sibling.
  */
-export async function fetchSharedSourcesViaInvoke(invoke, extensionId, entrySources) {
-    const collected = new Map();
-    const queue = [];
-
-    const scan = (src) => {
-        if (typeof src !== 'string') return;
-        // Matches both `import X from './x.js'` and `import './x.js'`.
-        const re = /\bimport\s+(?:[^'"]+?\s+from\s+)?['"](\.{1,2}\/[^'"]+?)['"]/g;
-        let m;
-        while ((m = re.exec(src)) !== null) {
-            const rel = m[1];
-            if (!collected.has(rel) && !queue.includes(rel)) queue.push(rel);
-        }
-    };
-
-    for (const [, val] of Object.entries(entrySources || {})) {
-        scan(val);
-    }
-
-    while (queue.length) {
-        const rel = queue.shift();
-        if (collected.has(rel)) continue;
-        let text = null;
-        try {
-            text = await invoke('read_extension_file', {
-                extensionId,
-                kind: 'extension',
-                filePath: rel.replace('./', ''),
-            });
-        } catch (e) {
-            console.warn(`Failed to read extension file '${extensionId}/${rel}':`, e);
-        }
-        if (text == null) continue;
-        collected.set(rel, text);
-        scan(text);
-    }
-
-    if (collected.size === 0) return undefined;
-    const out = {};
-    for (const [k, v] of collected) out[k] = v;
-    return out;
+export async function fetchSharedSourcesViaInvoke(
+    invoke,
+    extensionId,
+    entrySources,
+    sourcePaths = {}
+) {
+    return collectExtensionModules(
+        entrySources,
+        async (path) => {
+            try {
+                return await invoke('read_extension_file', {
+                    extensionId,
+                    kind: 'extension',
+                    filePath: path.slice(2),
+                });
+            } catch (e) {
+                console.warn(`Failed to read extension file '${extensionId}/${path}':`, e);
+                return null;
+            }
+        },
+        sourcePaths
+    );
 }
 
 export async function resolveExtensionCatalog(fetchByCode) {

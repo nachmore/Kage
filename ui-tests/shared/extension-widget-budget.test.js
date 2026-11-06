@@ -13,11 +13,12 @@
  * resets the counter.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ExtensionManager } from '../../ui/js/shared/extension-manager.js';
 
 function makeController(overrides = {}) {
     const host = document.createElement('div');
+    document.body.appendChild(host);
     return {
         extensionId: 'test-ext',
         widgetId: 'w1',
@@ -55,7 +56,9 @@ function makeManagerWithSandbox({ renderImpl }) {
 describe('Widget budget cap', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
+        document.body.innerHTML = '';
     });
+    afterEach(() => { document.body.innerHTML = ''; });
 
     it('successful render resets the failure counter', async () => {
         let n = 0;

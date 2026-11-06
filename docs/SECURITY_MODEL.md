@@ -374,6 +374,10 @@ hard bounds and a circuit breaker:
 
 - The declared interval is clamped to `[1s, 24h]` so a typo'd `1`
   can't spin the host on a 1ms loop.
+- Widgets without a registered, connected host slot never start refreshing.
+  Timers stop while the hosting window is hidden and resume on show, with an
+  immediate refresh when content is missing or stale. Configuration updates
+  re-read the declared interval and re-arm the timer.
 - Re-entrant ticks are dropped — `setInterval` keeps firing even if
   the previous render is still in flight; we skip overlapping
   invocations rather than letting them stack.

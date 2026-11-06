@@ -152,6 +152,8 @@ let _runtimeSourceCache = null;
  * host windows — one ICU parser for both sides of the sandbox boundary.
  */
 export const RUNTIME_SOURCE_PATHS = [
+    'vendor/lib/extension-module-lexer.js',
+    'js/shared/extension-modules.js',
     'js/shared/icu-message.js',
     'js/extension-sandbox/runtime/sandboxed-worker.js',
     'js/extension-sandbox/runtime/host-api.js',

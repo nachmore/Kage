@@ -134,7 +134,8 @@ export async function buildSandboxedSettingsModule({
     // Collect sources: only the settings provider is needed for the
     // settings window. Search/tool/trigger providers are already loaded
     // in the floating/chat windows' own sandbox pools.
-    const sources = { settingsProvider: settingsProviderSource };
+    const sourcePaths = { settingsProvider: manifest.contributes?.settingsProvider };
+    const sources = { settingsProvider: settingsProviderSource, sourcePaths };
 
     // Walk relative imports in the settings provider so siblings like
     // `./auth.js` (Spotify uses this for OAuth helpers) can resolve
@@ -144,7 +145,7 @@ export async function buildSandboxedSettingsModule({
     // Skipping the call when there's no `invoke` keeps the function
     // callable from the legacy bootstrap path that doesn't have one.
     const sharedSources = invoke
-        ? await fetchSharedSourcesViaInvoke(invoke, manifest.id, sources)
+        ? await fetchSharedSourcesViaInvoke(invoke, manifest.id, sources, sourcePaths)
         : undefined;
 
     // The provider's context.config: the same effective config the runtime

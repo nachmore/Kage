@@ -244,7 +244,11 @@ export class ExtensionManager {
             for (const w of ext.manifest.contributes.widgets) {
                 if (!w?.id || !w?.slot) continue;
                 const key = `${id}:${w.id}`;
-                if (this._widgetInstances?.has(key)) continue; // already mounted
+                const controller = this._widgetInstances?.get(key);
+                if (controller) {
+                    await this._refreshWidgetSchedule(controller, true);
+                    continue;
+                }
                 try {
                     await this._mountWidget(id, ext, w);
                 } catch (e) {
@@ -577,6 +581,10 @@ export class ExtensionManager {
      * the widget instances and sandbox pool are already empty.
      */
     destroy() {
+        if (this._widgetVisibilityListener) {
+            document.removeEventListener('visibilitychange', this._widgetVisibilityListener);
+            this._widgetVisibilityListener = null;
+        }
         // Clear every widget's timer + flip the destroyed flag so any
         // in-flight render returns without writing back to the DOM.
         if (this._widgetInstances) {

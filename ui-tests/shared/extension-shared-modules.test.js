@@ -2,9 +2,7 @@
  * Tests for the host-side shared-module discovery that lets extensions
  * use `import from './sibling.js'` inside sandboxed provider files.
  *
- * The sandbox runtime's rewrite step runs inside the iframe and needs
- * the real DOM for Blob/URL — that's covered by manual QA. Here we
- * cover the host-side scanning that populates the sharedSources bag.
+ * Graph rewriting is covered separately in extension-module-graph.test.js.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -123,6 +121,40 @@ describe('_fetchSharedSources', () => {
         const out = await mgr._fetchSharedSources(sources, 'test-ext');
         expect(out).toBeUndefined();
     });
+
+    it('discovers compact, commented, re-export, and quoted dynamic forms', async () => {
+        const mgr = makeManager({
+            'a.js': "export * from './b.js';",
+            'b.js': "export const B = 1;",
+            'c.js': "export const C = 1;",
+        });
+        const out = await mgr._fetchSharedSources({
+            searchProvider: 'import{B}/* gap */from"./a.js"; const c = import("./c.js");',
+        }, 'test');
+        expect(Object.keys(out).sort()).toEqual(['./a.js', './b.js', './c.js']);
+    });
+
+    it('resolves nested provider entry paths and rejects root escapes before IPC', async () => {
+        const mgr = makeManager({ 'shared.js': 'export const X = 1;' });
+        expect(await mgr._fetchSharedSources({
+            searchProvider: "import '../shared.js';",
+        }, 'test', { searchProvider: './providers/search.js' })).toEqual({
+            './shared.js': 'export const X = 1;',
+        });
+        const fetch = vi.spyOn(mgr, '_fetchText');
+        await expect(mgr._fetchSharedSources({
+            searchProvider: "import '../../other-extension/file.js';",
+        }, 'test', { searchProvider: './providers/search.js' })).rejects.toThrow('escapes bundle root');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('rejects encoded paths, URL fragments, schemes, and Windows separators', async () => {
+        const mgr = makeManager({});
+        for (const path of ['./%2e%2e/other.js', './x.js#fragment', './x.js?query', './file:other.js', './dir\\\\\\\\other.js']) {
+            await expect(mgr._fetchSharedSources({ searchProvider: `import '${path}';` }, 'test'))
+                .rejects.toThrow('Invalid extension module path');
+        }
+    });
 });
 
 /**
@@ -169,6 +201,17 @@ describe('fetchSharedSourcesViaInvoke (settings-side scanner)', () => {
         // Defence in depth — the scanner should never invoke for a
         // module that doesn't ask for sibling resolution.
         expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it('uses the same scanner and importer-relative resolution for Settings', async () => {
+        const invoke = makeInvoke({
+            'settings/helpers.js': "export * from '../defaults.js';",
+            'defaults.js': 'export const X = 1;',
+        });
+        const out = await fetchSharedSourcesViaInvoke(invoke, 'ext', {
+            settingsProvider: "import{X}from'./helpers.js';",
+        }, { settingsProvider: './settings/main.js' });
+        expect(Object.keys(out).sort()).toEqual(['./defaults.js', './settings/helpers.js']);
     });
 
     it('skips siblings whose IPC fetch fails — the runtime warns at load', async () => {

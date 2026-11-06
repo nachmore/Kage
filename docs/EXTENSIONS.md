@@ -438,6 +438,27 @@ the remaining gaps.
   host would arrive after the click's user activation has expired).
   On a settings page, use a [copy action](#copy-to-clipboard) instead.
 
+### Shared JavaScript modules
+
+Providers can import other files inside their own extension bundle. Relative
+paths resolve from the importing file's directory; `../` is allowed only when
+it stays inside the bundle root. Discovery never fetches external URLs or bare
+package names. Relative bundle paths containing schemes, encoded paths, query
+strings, fragments, or Windows separators are rejected. Host file reads still
+enforce canonical containment, including symlinks.
+
+The host discovers static default, named, namespace, and side-effect imports,
+`export { … } from`, `export * from`, `export * as … from`, and dynamic
+`import()` calls with a quoted string argument. Comments and multiline or
+compact syntax are supported. Computed dynamic specifiers (including template
+literals) are not discovered or rewritten; use a quoted literal for each
+bundle dependency.
+
+Shared modules get blob URLs in dependency order, so every import points at
+the dependency's final blob. Cycles are rejected with the module paths in the
+diagnostic. Blob URLs remain valid for the sandbox's lifetime, including
+dynamic imports made after provider initialization.
+
 ### Feature detection
 
 `context.hostFeatures` is a frozen array of strings naming optional
@@ -1123,6 +1144,13 @@ there are no live callback functions crossing the sandbox boundary.
 ```
 
 **Provider contract:**
+
+Widgets mount and refresh only in windows with a registered slot. Refresh
+timers pause while that window is hidden and resume when it is shown; missing
+or stale content is refreshed immediately. The host re-reads
+`getRefreshInterval()` after configuration updates and on resume, so changing
+the interval takes effect without remounting. Returning `0` disables periodic
+refreshes; mount and configuration changes still refresh the widget.
 
 ```js
 export default class MyWidget {

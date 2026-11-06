@@ -83,17 +83,16 @@ export function installExtensionUiMethods(ExtensionManager) {
         setWidgetSlot(slotName, element) {
             if (!this._widgetSlots) this._widgetSlots = new Map();
             this._widgetSlots.set(slotName, element);
-            // If widgets were already mounted to a pending queue, flush them
-            // now that the slot exists.
-            if (this._pendingWidgetMounts?.has(slotName)) {
-                const pending = this._pendingWidgetMounts.get(slotName);
-                this._pendingWidgetMounts.delete(slotName);
-                pending.forEach((fn) => {
-                    try {
-                        fn();
-                    } catch {}
-                });
+            if (!this._widgetVisibilityListener) {
+                this._widgetVisibilityListener = () => {
+                    if (this._widgetWindowVisible()) this.renderAllWidgets();
+                    else this._pauseWidgetTimers();
+                };
+                document.addEventListener('visibilitychange', this._widgetVisibilityListener);
             }
+            // Slots can arrive after extensions load. Windows with no slot
+            // never create widget controllers or start refresh timers.
+            this._mountAllWidgets().catch((e) => console.warn('Widget mount failed:', e));
         },
 
         async _mountAllWidgets() {
@@ -109,6 +108,9 @@ export function installExtensionUiMethods(ExtensionManager) {
         },
 
         async _mountWidget(extId, ext, widgetManifest) {
+            const slotEl = this._widgetSlots?.get(widgetManifest.slot);
+            if (!slotEl?.isConnected) return;
+            if (!this._widgetInstances) this._widgetInstances = new Map();
             const key = `${extId}:${widgetManifest.id}`;
             if (this._widgetInstances.has(key)) return;
             if (!ext.sandbox?.widgetIds?.includes(widgetManifest.id)) {
@@ -158,27 +160,48 @@ export function installExtensionUiMethods(ExtensionManager) {
                  *  render fails and the painted content is well past its
                  *  refresh cadence we wipe it. 0 = never painted. */
                 lastSuccessRenderAt: 0,
+                hasRendered: false,
+                needsRefresh: true,
             };
             this._widgetInstances.set(key, controller);
+            slotEl.appendChild(host);
+            await this._refreshWidgetSchedule(controller);
+        },
 
-            // Attach to slot (or queue if slot not yet registered).
-            const slotEl = this._widgetSlots?.get(widgetManifest.slot);
-            if (slotEl) {
-                slotEl.appendChild(host);
-            } else {
-                if (!this._pendingWidgetMounts) this._pendingWidgetMounts = new Map();
-                const queue = this._pendingWidgetMounts.get(widgetManifest.slot) || [];
-                queue.push(() => {
-                    const newSlot = this._widgetSlots.get(widgetManifest.slot);
-                    if (newSlot) newSlot.appendChild(host);
-                });
-                this._pendingWidgetMounts.set(widgetManifest.slot, queue);
+        _widgetWindowVisible() {
+            return (
+                !this._widgetWindowHidden && !document.hidden && window._kageFloatingHidden !== true
+            );
+        },
+
+        _pauseWidgetTimers() {
+            for (const ctrl of this._widgetInstances?.values() || []) {
+                if (ctrl.timer) clearInterval(ctrl.timer);
+                ctrl.timer = null;
             }
+        },
 
-            // Fetch the extension's refresh interval and do an initial render.
+        /** Tauri hide/show isn't consistently reflected in document.hidden. */
+        setWidgetVisibility(visible) {
+            this._widgetWindowHidden = !visible;
+            if (this._widgetWindowVisible()) return this.renderAllWidgets();
+            this._pauseWidgetTimers();
+        },
+
+        async _refreshWidgetSchedule(controller, force = false) {
+            if (force) controller.needsRefresh = true;
+            if (controller.destroyed || controller.tripped || !controller.host.isConnected) return;
+            // A config update or hide/show can arrive while the interval RPC
+            // or render is pending. Track hidden config changes too.
+            const version = (controller.scheduleVersion || 0) + 1;
+            controller.scheduleVersion = version;
+            if (!this._widgetWindowVisible()) return;
+            const ext = this.extensions.get(controller.extensionId);
+            if (!ext?.sandbox) return;
+            let interval = 0;
             try {
                 const ms = await ext.sandbox.call('getWidgetRefreshInterval', {
-                    widgetId: widgetManifest.id,
+                    widgetId: controller.widgetId,
                 });
                 const n = Number(ms);
                 if (Number.isFinite(n) && n > 0) {
@@ -186,46 +209,49 @@ export function installExtensionUiMethods(ExtensionManager) {
                     // re-rendering itself into a CPU spike (declared `1`
                     // interpreted as 1ms), the ceiling keeps the schedule
                     // bounded so the timer doesn't sit idle for years.
-                    controller.refreshIntervalMs = Math.max(
+                    interval = Math.max(
                         WIDGET_MIN_INTERVAL_MS,
                         Math.min(n, WIDGET_MAX_INTERVAL_MS)
                     );
-                } else {
-                    controller.refreshIntervalMs = 0;
                 }
-            } catch {
-                controller.refreshIntervalMs = 0;
+            } catch {}
+            if (
+                controller.destroyed ||
+                controller.tripped ||
+                controller.scheduleVersion !== version
+            )
+                return;
+            controller.refreshIntervalMs = interval;
+            if (controller.timer) clearInterval(controller.timer);
+            controller.timer = null;
+            if (!this._widgetWindowVisible() || !controller.host.isConnected) return;
+            const stale =
+                interval > 0 && performance.now() - controller.lastSuccessRenderAt >= interval;
+            if (
+                (controller.needsRefresh || !controller.hasRendered || stale) &&
+                !controller.renderInFlight
+            ) {
+                await this._renderWidget(controller);
             }
-
-            // Between the awaits above and the setInterval below, the
-            // extension may have been unloaded (_unmountWidgetsFor flipped
-            // `destroyed` and tried to clearInterval on a still-null timer).
-            // Bail out here so we don't schedule an orphan interval.
-            if (controller.destroyed) return;
-
-            await this._renderWidget(controller);
-
-            if (controller.destroyed) return;
-
-            if (controller.refreshIntervalMs > 0) {
-                controller.timer = setInterval(
-                    () => this._renderWidget(controller),
-                    controller.refreshIntervalMs
-                );
+            if (
+                controller.destroyed ||
+                controller.tripped ||
+                controller.scheduleVersion !== version
+            )
+                return;
+            if (interval > 0 && this._widgetWindowVisible() && controller.host.isConnected) {
+                controller.timer = setInterval(() => this._renderWidget(controller), interval);
             }
         },
 
         async _renderWidget(controller) {
             if (controller.destroyed || controller.tripped) return;
-            // Skip ticks while the floating window is hidden. The host
-            // signals this via window._kageFloatingHidden in app.js; the
-            // widget is repainting into an off-screen webview otherwise,
-            // which is wasted work for both us and the extension.
-            // This check is intentionally lighter than the breaker path:
-            // a skipped-while-hidden tick is not a failure (no counter
-            // increment, no breaker trip). The next tick after the window
-            // is shown will catch up.
-            if (typeof window !== 'undefined' && window._kageFloatingHidden === true) return;
+            // Hidden/detached hosts consume no refresh RPCs or failure budget.
+            if (!this._widgetWindowVisible() || !controller.host.isConnected) {
+                if (controller.timer) clearInterval(controller.timer);
+                controller.timer = null;
+                return;
+            }
             const ext = this.extensions.get(controller.extensionId);
             if (!ext?.sandbox) return;
 
@@ -240,6 +266,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                 return;
             }
             controller.renderInFlight = true;
+            const scheduleVersion = controller.scheduleVersion;
 
             const start = performance.now();
             let failureReason = null;
@@ -274,6 +301,8 @@ export function installExtensionUiMethods(ExtensionManager) {
                 // the empty/hidden state). Either way the host now reflects a
                 // fresh render, so reset the staleness clock.
                 controller.lastSuccessRenderAt = performance.now();
+                controller.hasRendered = true;
+                if (controller.scheduleVersion === scheduleVersion) controller.needsRefresh = false;
 
                 if (!out || typeof out.html !== 'string') {
                     // Nothing to render → hide the host so it takes up no layout.
@@ -335,6 +364,11 @@ export function installExtensionUiMethods(ExtensionManager) {
                 this._noteWidgetFailure(controller, 'throw');
             } finally {
                 controller.renderInFlight = false;
+                // A config update during a render must still get its own
+                // refresh, including widgets whose new interval is zero.
+                if (controller.needsRefresh && controller.scheduleVersion !== scheduleVersion) {
+                    this._refreshWidgetSchedule(controller);
+                }
             }
         },
 
@@ -448,21 +482,13 @@ export function installExtensionUiMethods(ExtensionManager) {
         /** Reset and resume a tripped widget. Single retry: if it trips
          *  again, we leave it paused — repeated retries would let a broken
          *  widget burn CPU indefinitely. The user can disable the
-         *  extension if it never recovers. */ _retryWidget(controller) {
+         *  extension if it never recovers. */ async _retryWidget(controller) {
             if (controller.destroyed) return;
             controller.consecutiveFailures = 0;
             controller.tripped = false;
             controller.renderInFlight = false;
             controller.host.innerHTML = '';
-            this._renderWidget(controller).then(() => {
-                if (controller.destroyed || controller.tripped) return;
-                if (controller.refreshIntervalMs > 0 && !controller.timer) {
-                    controller.timer = setInterval(
-                        () => this._renderWidget(controller),
-                        controller.refreshIntervalMs
-                    );
-                }
-            });
+            await this._refreshWidgetSchedule(controller, true);
         },
 
         async _runWidgetAction(controller, actionId) {
@@ -486,18 +512,13 @@ export function installExtensionUiMethods(ExtensionManager) {
             }
         },
 
-        /** Re-render every mounted widget now. Called when the floating
-         *  window becomes visible: `_renderWidget` skips ticks while the
-         *  window is hidden (window._kageFloatingHidden), so a widget mounted
-         *  while hidden — or whose periodic ticks were all skipped — would
-         *  otherwise show nothing until its next interval fires after the
-         *  window is already open. This catches them up on show so the first
-         *  visible paint has current content. Tripped/destroyed widgets are
-         *  skipped by _renderWidget itself. Fire-and-forget per widget. */ renderAllWidgets() {
-            if (!this._widgetInstances) return;
-            for (const ctrl of this._widgetInstances.values()) {
-                this._renderWidget(ctrl);
-            }
+        /** Resume timers on show; refresh immediately only when content is
+         *  missing or older than the current interval. */ async renderAllWidgets() {
+            await Promise.all(
+                Array.from(this._widgetInstances?.values() || [], (ctrl) =>
+                    this._refreshWidgetSchedule(ctrl)
+                )
+            );
         },
 
         _unmountWidgetsFor(extensionId) {

@@ -38,6 +38,7 @@ def ensure_vendor(repo_root: Path) -> None:
         lib / "marked.min.js",
         lib / "mermaid.min.js",
         lib / "katex" / "katex.min.js",
+        lib / "extension-module-lexer.js",
     ]
     if all(p.is_file() for p in sentinels):
         return  # Already populated

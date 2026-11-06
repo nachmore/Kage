@@ -27,6 +27,7 @@ const PRISM_LANGUAGES = [
  * File copy manifest: [source (relative to node_modules), dest (relative to lib/)]
  */
 const COPIES = [
+    ['es-module-lexer/LICENSE', 'es-module-lexer.LICENSE'],
     // marked — markdown parser
     ['marked/marked.min.js', 'marked.min.js'],
 
@@ -158,6 +159,27 @@ function generateEmojiNames() {
     return true;
 }
 
+// The synchronous JS build needs neither WASM nor an async initializer.
+// Isolate its short internal names so the sandbox host can inline it as a
+// classic script alongside the runtime without collisions.
+function generateModuleLexer() {
+    const src = path.join(NM, 'es-module-lexer/dist/lexer.asm.js');
+    if (!fs.existsSync(src)) {
+        console.error('  ✗ Missing: es-module-lexer/dist/lexer.asm.js');
+        return false;
+    }
+    const code = fs.readFileSync(src, 'utf8')
+        .replace('export function parse', 'function parse')
+        // Use ordinary JS even when globals are wrapped by a webview/test
+        // realm; asm.js validation otherwise emits a spurious linking warning.
+        .replace('"use asm";', '');
+    fs.writeFileSync(
+        path.join(LIB, 'extension-module-lexer.js'),
+        `// es-module-lexer 1.7.0 (MIT); see es-module-lexer.LICENSE.\nexport const parseExtensionModule = (() => {\n${code}\nreturn parse;\n})();\n`
+    );
+    return true;
+}
+
 // --- Main ---
 
 console.log('vendor/setup: copying browser bundles to lib/...');
@@ -192,6 +214,12 @@ for (const [srcDir, destDir] of DIR_COPIES) {
 
 // Special: emoji-names (generated from JSON)
 if (generateEmojiNames()) {
+    ok++;
+} else {
+    fail++;
+}
+
+if (generateModuleLexer()) {
     ok++;
 } else {
     fail++;

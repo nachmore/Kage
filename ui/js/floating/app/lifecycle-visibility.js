@@ -34,6 +34,8 @@ export const LifecycleVisibilityMethods = {
 
     setupVisibilityTracking() {
         this._windowFocused = true; // assume focused at startup
+        window._kageFloatingHidden = true;
+        this.extensionManager?.setWidgetVisibility(false);
 
         // --- Pause CSS animations when hidden to stop GPU compositing ---
         // WebView2 keeps processing infinite CSS animations even on hidden windows,
@@ -96,7 +98,8 @@ export const LifecycleVisibilityMethods = {
             // intervals were ticking against an invisible window — a
             // small but constant CPU drag on every hidden minute.
             // Mirrors the existing permission-modal pause/resume.
-            window._kageFloatingHidden = false;
+            const visible = await this._isWindowVisible();
+            window._kageFloatingHidden = !visible;
             if (window._kageMascot) {
                 try {
                     window._kageMascot.resume();
@@ -111,16 +114,14 @@ export const LifecycleVisibilityMethods = {
                 signalMascot('reopen');
                 signalMascot('summon');
             }
-            // Catch up widget renders that were skipped while hidden.
-            // _renderWidget no-ops when _kageFloatingHidden is true, so a
-            // widget mounted while the window was hidden (e.g. after an
-            // extension hot-update) — or whose periodic ticks were all
-            // skipped — would show nothing until its next interval fires.
-            // Force a render now so the first visible paint is current.
+            // Resume widget timers and catch up missing or stale content.
+            // Startup can send focus while the window is still hidden.
             try {
-                this.extensionManager?.renderAllWidgets();
+                this.extensionManager?.setWidgetVisibility(visible)?.catch((e) => {
+                    console.warn('Widget resume on show failed:', e);
+                });
             } catch (e) {
-                console.warn('renderAllWidgets on show failed:', e);
+                console.warn('Widget resume on show failed:', e);
             }
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
@@ -285,6 +286,7 @@ export const LifecycleVisibilityMethods = {
             // every show would directly inflate time-to-paint, which
             // is the headline metric for this window.
             window._kageFloatingHidden = true;
+            this.extensionManager?.setWidgetVisibility(false);
             // A calendar popup left open would greet the next show.
             this.calendarPicker?.close({ restoreFocus: false, immediate: true });
             if (window._kageMascot) {
