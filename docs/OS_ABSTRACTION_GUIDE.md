@@ -210,6 +210,15 @@ install folder with no argument or one of `/uninstall`, `--uninstall`,
 add switch parsing; extend the allowlist only with forms known to be
 interactive.
 
+A shared folder (Program Files, the profile, AppData, Downloads, temp, …)
+is never one product's folder, however it's spelled: `WinFs::is_shared`
+decides on the path as written and as `canonicalize` resolves it (8.3
+names, junctions, trailing dots and spaces — `Downloads.` is Downloads),
+before a folder can verify an uninstaller or become a protected product
+tree. `plan_uninstall` checks again on the resolved paths, and runs
+nothing that resolves to a network share. Compare Windows paths for these
+decisions through `WinFs`, never as raw strings.
+
 ## Things that aren't in `os/` and shouldn't be
 
 - **Tauri-typed code** (windows, app handles, IPC commands) lives in

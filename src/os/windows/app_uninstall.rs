@@ -4,7 +4,7 @@
 
 use crate::os::app_uninstall::{
     expand_env_vars, match_uninstall_entry, normalize_win_path, own_install, plan_uninstall,
-    product_install_dirs, UninstallEntry, UninstallError, UninstallOutcome, UninstallPlan,
+    product_install_dirs, UninstallEntry, UninstallError, UninstallOutcome, UninstallPlan, WinFs,
 };
 use crate::os::file_ops::Preflight;
 use crate::os::platform::file_ops::{shell_execute, with_com_sta};
@@ -27,7 +27,7 @@ pub fn bundle_identifier_impl(_bundle: &Path) -> Option<String> {
 
 /// Every product's own install folder from the Uninstall keys.
 pub fn installed_product_dirs_impl() -> Vec<PathBuf> {
-    product_install_dirs(&read_uninstall_entries(), &shared_dirs())
+    product_install_dirs(&read_uninstall_entries(), &win_fs())
         .into_iter()
         .map(PathBuf::from)
         .collect()
@@ -54,52 +54,44 @@ pub fn uninstall_impl(
         Some("exe") => (Some(path.to_path_buf()), false),
         _ => return Err(UninstallError::Unsupported),
     };
+    let fs = win_fs();
     let own = own_install();
-    let own_paths: Vec<String> = own
-        .paths()
-        .iter()
-        .map(|p| normalize_win_path(&p.to_string_lossy()))
-        .collect();
-    let is_own = |p: &str| {
-        let p = normalize_win_path(p);
-        own_paths
+    let normalized = |paths: Vec<PathBuf>| -> Vec<String> {
+        paths
             .iter()
-            .any(|o| p == *o || p.starts_with(&format!("{o}\\")))
+            .map(|p| normalize_win_path(&p.to_string_lossy()))
+            .collect()
     };
+    let own_paths = normalized(own.paths());
     let target_str = target.as_ref().map(|t| t.to_string_lossy().into_owned());
-    if target_str.as_deref().is_some_and(is_own) {
+    if target_str
+        .as_deref()
+        .is_some_and(|t| fs.is_within_any(t, &own_paths))
+    {
         return Err(UninstallError::IsKage);
     }
 
     let entries = read_uninstall_entries();
-    let Some(matched) = match_uninstall_entry(
-        name,
-        target_str.as_deref(),
-        shortcut_args,
-        &entries,
-        &shared_dirs(),
-    ) else {
+    let Some(matched) =
+        match_uninstall_entry(name, target_str.as_deref(), shortcut_args, &entries, &fs)
+    else {
         log::info!("[uninstall] no confident Uninstall entry for {name:?}; opening Settings");
         return open_installed_apps();
     };
     let entry = matched.entry;
     let display = entry.display_name.as_deref().unwrap_or_default();
-    let own_root = own.root().map(|r| normalize_win_path(&r.to_string_lossy()));
-    let in_own_root = |p: &str| {
-        let p = normalize_win_path(p);
-        own_root
-            .as_deref()
-            .is_some_and(|r| p == r || p.starts_with(&format!("{r}\\")))
-    };
+    let own_root = normalized(own.root().map(Path::to_path_buf).into_iter().collect());
+    let in_own_root = |p: &str| fs.is_within_any(p, &own_root);
     if display
         .trim()
         .eq_ignore_ascii_case(crate::launcher_actions::KAGE_PRODUCT_NAME)
         || entry.install_location.as_deref().is_some_and(in_own_root)
+        || matched.install_dir.as_deref().is_some_and(in_own_root)
     {
         return Err(UninstallError::IsKage);
     }
 
-    match plan_uninstall(&matched, |p| Path::new(p).is_file()) {
+    match plan_uninstall(&matched, &fs, |p| Path::new(p).is_file()) {
         UninstallPlan::Msi { product_code } => {
             let Some(msiexec) = msiexec_path() else {
                 log::warn!("[uninstall] msiexec.exe not found; opening Settings");
@@ -109,31 +101,13 @@ pub fn uninstall_impl(
             launch_uninstaller(&msiexec, &["/x", product_code.as_str()])?;
         }
         UninstallPlan::Run { program, arg } => {
-            // The allowlist compared paths as written; compare where they
-            // really lead too, so a junction in the product folder can't
-            // point the uninstaller somewhere else.
-            let real = |p: &Path| {
-                std::fs::canonicalize(p)
-                    .ok()
-                    .map(|c| normalize_win_path(&c.to_string_lossy()))
-            };
-            let dir = matched.install_dir.as_deref().map(Path::new).and_then(real);
-            let prog = real(Path::new(&program));
-            let inside =
-                matches!((&dir, &prog), (Some(d), Some(p)) if p.starts_with(&format!("{d}\\")));
-            if !inside {
-                log::warn!(
-                    "[uninstall] {display:?}'s uninstaller resolves outside its folder; opening Settings"
-                );
-                return open_installed_apps();
-            }
             log::info!("[uninstall] launching {display:?}'s uninstaller: {program}");
             let args: Vec<&str> = arg.as_deref().into_iter().collect();
             launch_uninstaller(&program, &args)?;
         }
         UninstallPlan::Settings => {
             log::info!(
-                "[uninstall] {display:?}'s UninstallString isn't on the allowlist; opening Settings"
+                "[uninstall] {display:?}'s UninstallString isn't on the allowlist, or doesn't resolve inside its own folder; opening Settings"
             );
             return open_installed_apps();
         }
@@ -278,8 +252,18 @@ fn read_uninstall_entries() -> Vec<UninstallEntry> {
     out
 }
 
+/// This machine's shared folders, resolved through `canonicalize` (links,
+/// junctions, 8.3 names, trailing dots and spaces).
+fn win_fs() -> WinFs {
+    WinFs::new(shared_dirs(), |p| {
+        std::fs::canonicalize(p)
+            .ok()
+            .map(|c| c.to_string_lossy().into_owned())
+    })
+}
+
 /// This machine's shared folders (normalised) — never one product's own
-/// folder (see `is_shared_dir`; drive and share roots are always shared).
+/// folder (see `WinFs::is_shared`; drive and share roots always are).
 fn shared_dirs() -> Vec<String> {
     let env = |v: &str| std::env::var(v).ok().filter(|s| !s.trim().is_empty());
     let mut dirs: Vec<String> = [
