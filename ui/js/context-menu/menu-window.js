@@ -7,6 +7,7 @@
 import { EVT } from '../shared/events.js';
 import { DISMISSED, defaultTextMenuItems, normalizeMenuItems } from '../shared/popup-menu.js';
 import { PopupMenuView } from '../shared/popup-menu-view.js';
+import { isMac } from '../shared/shortcuts.js';
 
 /** Body padding around the menu (room for its shadow), per side, CSS px. */
 export const MENU_PADDING = 8;
@@ -23,6 +24,7 @@ export const BLUR_DISMISS_MS = 150;
  * @param {Function} deps.t         i18n lookup
  * @param {() => boolean} [deps.devMode]
  * @param {() => boolean} [deps.isRtl]
+ * @param {boolean} [deps.mac]      macOS (Ctrl+click is a right click)
  */
 export function startMenuWindow({
     invoke,
@@ -33,6 +35,7 @@ export function startMenuWindow({
     t,
     devMode = () => false,
     isRtl = () => false,
+    mac = isMac(),
 }) {
     let current = null; // render payload on screen (or about to be)
     let lastToken = 0;
@@ -48,7 +51,8 @@ export function startMenuWindow({
         if (!current || answered) return;
         answered = true;
         cancelBlur();
-        const { token, owner, context } = current;
+        const answering = current;
+        const { token, owner, context } = answering;
         try {
             await emitTo(owner, EVT.CONTEXT_MENU_ACTION, {
                 token,
@@ -58,6 +62,9 @@ export function startMenuWindow({
         } catch (e) {
             console.warn('[context-menu] failed to send the choice:', e);
         }
+        // A newer menu may have arrived while the answer was in flight
+        // (the caller opened another one); hiding now would hide that.
+        if (current !== answering || current.token !== token) return;
         try {
             await appWindow.hide();
         } catch {}
@@ -67,6 +74,7 @@ export function startMenuWindow({
         t,
         onChoose: (id) => answer(id),
         onDismiss: () => answer(DISMISSED),
+        mac,
     });
 
     async function render(payload) {

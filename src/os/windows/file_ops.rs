@@ -148,6 +148,58 @@ pub fn run_as_admin_impl(path: &Path) -> anyhow::Result<bool> {
     with_com_sta(move || shell_execute(Some("runas"), &file, None, SEE_MASK_NOASYNC))?
 }
 
+pub fn file_id_impl(path: &Path) -> Option<crate::os::file_ops::FileId> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    };
+    // No access rights (attributes only), every share mode, the reparse
+    // point itself rather than its target, and BACKUP_SEMANTICS so folders
+    // open too.
+    let file = std::fs::OpenOptions::new()
+        .access_mode(0)
+        .share_mode((FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE).0)
+        .custom_flags((FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).0)
+        .open(path)
+        .ok()?;
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut info) }.ok()?;
+    Some(crate::os::file_ops::FileId {
+        volume: u64::from(info.dwVolumeSerialNumber),
+        index: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+    })
+}
+
+pub fn is_link_impl(meta: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    use windows::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+    meta.file_type().is_symlink() || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+}
+
+pub fn on_disk_name_impl(path: &Path) -> Option<std::ffi::OsString> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows::Win32::Storage::FileSystem::{FindClose, FindFirstFileW, WIN32_FIND_DATAW};
+    // FindFirstFile treats `*` and `?` as wildcards; neither is legal in a
+    // Windows file name, so such a path can't name one item.
+    if path.to_string_lossy().contains(['*', '?']) {
+        return None;
+    }
+    let w = wide(path.as_os_str());
+    let mut data = WIN32_FIND_DATAW::default();
+    // Lists the directory entry itself, so a link isn't followed.
+    let handle = unsafe { FindFirstFileW(PCWSTR(w.as_ptr()), &mut data) }.ok()?;
+    let _ = unsafe { FindClose(handle) };
+    let len = data
+        .cFileName
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(data.cFileName.len());
+    (len > 0).then(|| std::ffi::OsString::from_wide(&data.cFileName[..len]))
+}
+
 pub fn show_properties_impl(path: &Path) -> anyhow::Result<()> {
     // INVOKEIDLIST routes the verb through the item's context menu, which
     // is where "properties" lives. No NOASYNC: the property sheet runs

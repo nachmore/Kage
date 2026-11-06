@@ -62,3 +62,20 @@ pub fn run_as_admin_impl(_path: &Path) -> anyhow::Result<bool> {
 pub fn show_properties_impl(_path: &Path) -> anyhow::Result<()> {
     anyhow::bail!("the Properties dialog is Windows-only")
 }
+
+pub fn file_id_impl(path: &Path) -> Option<crate::os::file_ops::FileId> {
+    use std::os::unix::fs::MetadataExt;
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    Some(crate::os::file_ops::FileId {
+        volume: meta.dev(),
+        index: meta.ino(),
+    })
+}
+
+pub fn is_link_impl(meta: &std::fs::Metadata) -> bool {
+    meta.file_type().is_symlink()
+}
+
+pub fn on_disk_name_impl(_path: &Path) -> Option<std::ffi::OsString> {
+    None
+}

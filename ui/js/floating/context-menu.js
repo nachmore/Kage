@@ -48,7 +48,12 @@ function initContextMenu(invoke, appWindow, listen) {
     };
     let swallowUntil = 0;
 
-    /** A point in this window's CSS px → logical screen coordinates. */
+    /**
+     * A point in this window's CSS px → screen coordinates in this window's
+     * logical units (position ÷ scale + offset). The backend multiplies a
+     * keyboard anchor by this window's scale again on Windows/Linux, so a
+     * mixed-DPI setup still lands on the right monitor.
+     */
     async function screenPoint(clientX, clientY) {
         const pos = await appWindow.outerPosition();
         const scale = await appWindow.scaleFactor();

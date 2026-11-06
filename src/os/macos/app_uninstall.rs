@@ -93,3 +93,8 @@ pub fn uninstall_impl(path: &Path, _name: &str) -> Result<UninstallOutcome, Unin
         Err(e) => Err(UninstallError::Failed(e.to_string())),
     }
 }
+
+/// Nothing records install folders here (macOS apps are their bundles).
+pub fn installed_product_dirs_impl() -> Vec<std::path::PathBuf> {
+    Vec::new()
+}

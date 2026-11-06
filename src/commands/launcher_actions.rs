@@ -10,6 +10,16 @@ use crate::launcher_actions::{
 use crate::state::FeatureServices;
 use tauri::State;
 
+/// Kage's bundle id and resource folder — what "Kage itself" means when
+/// deciding what may be moved or uninstalled.
+fn own_locations<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> actions::OwnLocations {
+    use tauri::Manager;
+    actions::OwnLocations {
+        bundle_id: app.config().identifier.clone(),
+        resource_dir: app.path().resource_dir().ok(),
+    }
+}
+
 /// Resolve the result the webview named. `kind` is `"app"` (target = the
 /// app's display name, looked up in the registry — never a path) or
 /// `"path"` (target = a filesystem path, validated). Anything else, or an
@@ -28,13 +38,13 @@ async fn resolve<R: tauri::Runtime>(
         ));
     }
     let target = target.to_string();
+    let own = own_locations(app);
     let job: Box<dyn FnOnce() -> Result<Resolved, AppError> + Send> = match kind {
         "app" => {
             let registry = features.app_launcher.lock().await.get_by_name(&target);
-            let own_id = app.config().identifier.clone();
-            Box::new(move || actions::resolve_app(&target, registry, &own_id))
+            Box::new(move || actions::resolve_app(&target, registry, &own))
         }
-        "path" => Box::new(move || actions::resolve_path(&target)),
+        "path" => Box::new(move || actions::resolve_path(&target, &own)),
         _ => {
             return Err(AppError::keyed(
                 ErrorKind::Internal,

@@ -237,6 +237,10 @@
     "message": "Couldn't put that on the clipboard — another app may be using it. Try again.",
     "description": "Launcher result menu: writing a path or file to the clipboard failed"
   },
+  "errors.launcher.target_changed": {
+    "message": "“{name}” changed since the menu opened, so Kage left it alone. Try again.",
+    "description": "Launcher result menu: right before moving an item to the Trash, it no longer was the item that was checked (replaced, or a folder on its path swapped)"
+  },
   "errors.launcher.action_failed": {
     "message": "Couldn't do that: {reason}",
     "description": "Launcher result menu: an OS operation failed; reason is the OS error text"

@@ -3,7 +3,7 @@
 
 use crate::os::app_uninstall::{
     expand_env_vars, has_silent_flag, match_uninstall_entry, normalize_win_path, own_install_root,
-    split_command_line, UninstallEntry, UninstallError, UninstallOutcome,
+    product_install_dirs, split_command_line, UninstallEntry, UninstallError, UninstallOutcome,
 };
 use crate::os::platform::file_ops::{shell_execute, with_com_sta};
 use std::ffi::OsStr;
@@ -21,6 +21,14 @@ pub fn is_protected_app_impl(_bundle: &Path) -> bool {
 
 pub fn bundle_identifier_impl(_bundle: &Path) -> Option<String> {
     None
+}
+
+/// Every product's own install folder from the Uninstall keys.
+pub fn installed_product_dirs_impl() -> Vec<PathBuf> {
+    product_install_dirs(&read_uninstall_entries(), &generic_dirs())
+        .into_iter()
+        .map(PathBuf::from)
+        .collect()
 }
 
 pub fn uninstall_impl(path: &Path, name: &str) -> Result<UninstallOutcome, UninstallError> {
@@ -62,9 +70,8 @@ pub fn uninstall_impl(path: &Path, name: &str) -> Result<UninstallOutcome, Unins
     {
         return Err(UninstallError::IsKage);
     }
-    let command = expand_env_vars(entry.uninstall_string.as_deref().unwrap_or_default(), |v| {
-        std::env::var(v).ok()
-    });
+    // Already `%VAR%`-expanded by `read_uninstall_entries`.
+    let command = entry.uninstall_string.clone().unwrap_or_default();
     let exists = |p: &str| Path::new(p).is_file() || Path::new(&format!("{p}.exe")).is_file();
     let Some((program, params)) = split_command_line(&command, exists) else {
         return open_installed_apps();
@@ -175,11 +182,15 @@ fn read_uninstall_entries() -> Vec<UninstallEntry> {
                     .filter(|s| !s.is_empty())
             };
             let flag = |v: &str| sub.get_value::<u32, _>(v).ok() == Some(1);
+            // REG_EXPAND_SZ values carry `%VAR%`s: expand them once, here,
+            // so locations compare with real paths and the command runs.
+            let expanded =
+                |v: &str| text(v).map(|s| expand_env_vars(&s, |name| std::env::var(name).ok()));
             out.push(UninstallEntry {
                 display_name: text("DisplayName"),
-                uninstall_string: text("UninstallString"),
-                install_location: text("InstallLocation"),
-                display_icon: text("DisplayIcon"),
+                uninstall_string: expanded("UninstallString"),
+                install_location: expanded("InstallLocation"),
+                display_icon: expanded("DisplayIcon"),
                 system_component: flag("SystemComponent"),
                 no_remove: flag("NoRemove"),
                 parent_key_name: text("ParentKeyName"),
