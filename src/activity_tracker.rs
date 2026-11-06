@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 use crate::lock_ext::LockExt;
 
 mod report;
+mod switches;
 
 pub use report::get_report;
 use report::prettify_process_name;
@@ -43,9 +44,12 @@ pub struct ActivityReport {
     pub total_seconds: u64,
     /// Per-app breakdown, sorted by duration descending
     pub apps: Vec<AppUsage>,
-    /// Number of context switches (app changes)
+    /// Moves from one app to a different app in the period. The first app
+    /// isn't one, and neither is the first app after a break (sleep, lock).
+    /// Kage's own windows are seen through. Equals the sum of every app's
+    /// `switches_to`. Rules in `switches.rs`.
     pub context_switches: u64,
-    /// Longest uninterrupted focus streak in seconds
+    /// Longest unbroken run of one app, in credited seconds
     pub longest_streak_seconds: u64,
     /// App with the longest streak
     pub longest_streak_app: String,
@@ -82,6 +86,7 @@ pub struct AppUsage {
     pub display_name: String,
     pub seconds: u64,
     pub percentage: f64,
+    /// Switches into this app from a different one (see `context_switches`)
     pub switches_to: u64,
     /// For browsers: breakdown by website/page title
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -200,7 +205,16 @@ const RETENTION_DAYS: i64 = 90;
 /// of a few rows per app per day — thousands of rows, not millions.
 const ROLLUP_RETENTION_DAYS: i64 = 730;
 
-fn init_db(conn: &Connection) -> Result<()> {
+/// Columns added to `activity_daily` after it first shipped.
+/// `CREATE TABLE IF NOT EXISTS` leaves an existing table as it is, so
+/// [`add_missing_daily_columns`] adds them. Rows rolled up before these
+/// existed keep the default 0, because the ordering they'd need is gone.
+const DAILY_ADDED_COLUMNS: [(&str, &str); 2] = [
+    ("switches", "INTEGER NOT NULL DEFAULT 0"),
+    ("longest_streak_secs", "INTEGER NOT NULL DEFAULT 0"),
+];
+
+fn init_db(conn: &Connection, poll_interval: u64) -> Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS activity_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,62 +229,66 @@ fn init_db(conn: &Connection) -> Result<()> {
             day TEXT NOT NULL,
             process_name TEXT NOT NULL,
             duration_secs INTEGER NOT NULL DEFAULT 0,
+            switches INTEGER NOT NULL DEFAULT 0,
+            longest_streak_secs INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (day, process_name)
         );
         ",
     )?;
-    prune_old_rows(conn);
+    add_missing_daily_columns(conn)?;
+    prune_old_rows(conn, poll_interval);
+    Ok(())
+}
+
+fn add_missing_daily_columns(conn: &Connection) -> Result<()> {
+    for (column, decl) in DAILY_ADDED_COLUMNS {
+        let present = conn
+            .prepare("SELECT 1 FROM pragma_table_info('activity_daily') WHERE name = ?1")?
+            .exists([column])?;
+        if !present {
+            conn.execute_batch(&format!(
+                "ALTER TABLE activity_daily ADD COLUMN {column} {decl}"
+            ))
+            .with_context(|| format!("Failed to add activity_daily.{column}"))?;
+        }
+    }
     Ok(())
 }
 
 /// Retention pass, run once at DB open. Fine-grained rows older than
-/// [`RETENTION_DAYS`] are ROLLED UP into `activity_daily` (per-day,
-/// per-app totals) before being deleted, so long-range reports (year /
-/// all-time) keep their totals and per-month aggregation while the big
-/// table stays bounded. What the rollup deliberately drops: window
-/// titles (site breakdowns), row ordering (context switches / streaks)
-/// — reports only compute those from the fine window anyway. Rollup
-/// rows older than [`ROLLUP_RETENTION_DAYS`] age out too. Best effort —
-/// a failure here just means tables are larger than intended, so we log
-/// and carry on rather than failing DB init.
-fn prune_old_rows(conn: &Connection) {
+/// [`RETENTION_DAYS`] are ROLLED UP into `activity_daily` before being
+/// deleted, so long-range reports (year / all-time) keep the same
+/// figures as the fine window: per-day, per-app time, switches into the
+/// app, and its longest streak (see `switches.rs`). Without the last two,
+/// a year report would count switches over the last 90 days only while
+/// its time covered the whole year. What the rollup drops: window titles
+/// (site breakdowns) and row ordering. A streak running across a prune
+/// boundary is split in two, and the switch between the last rolled-up
+/// row and the first fine row isn't counted (at most one per Kage
+/// launch, on data 90+ days old). Rollup rows older than
+/// [`ROLLUP_RETENTION_DAYS`] age out too.
+///
+/// The rollup and the delete commit together, so a crash between them
+/// can't count a day twice. Best effort: a failure here just means
+/// tables are larger than intended, so we log and carry on rather than
+/// failing DB init.
+fn prune_old_rows(conn: &Connection, poll_interval: u64) {
     let cutoff_dt = Local::now() - ChronoDuration::days(RETENTION_DAYS);
     let cutoff = cutoff_dt.to_rfc3339();
 
-    // 1. Fold soon-to-be-deleted rows into the daily rollup. substr(ts,1,10)
-    //    is the "YYYY-MM-DD" prefix of the RFC3339 timestamp. UPSERT so a
-    //    re-run (or rows landing on a day that already has rollup) adds.
-    let rolled = conn.execute(
-        "INSERT INTO activity_daily (day, process_name, duration_secs)
-         SELECT substr(timestamp, 1, 10), process_name, SUM(duration_secs)
-         FROM activity_log WHERE timestamp < ?1
-         GROUP BY substr(timestamp, 1, 10), process_name
-         ON CONFLICT(day, process_name)
-         DO UPDATE SET duration_secs = duration_secs + excluded.duration_secs",
-        rusqlite::params![cutoff],
-    );
-    if let Err(e) = &rolled {
-        warn!(
-            "[ActivityTracker] rollup failed: {} — skipping prune so no data is lost",
-            e
-        );
-        return;
-    }
-
-    // 2. Delete the fine rows we just rolled up.
-    match conn.execute(
-        "DELETE FROM activity_log WHERE timestamp < ?1",
-        rusqlite::params![cutoff],
-    ) {
+    match roll_up_and_delete(conn, &cutoff, poll_interval) {
         Ok(n) if n > 0 => info!(
             "[ActivityTracker] rolled up + pruned {} row(s) older than {} days",
             n, RETENTION_DAYS
         ),
         Ok(_) => {}
-        Err(e) => warn!("[ActivityTracker] retention prune failed: {}", e),
+        Err(e) => warn!(
+            "[ActivityTracker] rollup failed: {} — skipping prune so no data is lost",
+            e
+        ),
     }
 
-    // 3. Age out ancient rollup rows.
+    // Age out ancient rollup rows.
     let rollup_cutoff = (Local::now() - ChronoDuration::days(ROLLUP_RETENTION_DAYS))
         .format("%Y-%m-%d")
         .to_string();
@@ -280,6 +298,59 @@ fn prune_old_rows(conn: &Connection) {
     ) {
         warn!("[ActivityTracker] rollup retention prune failed: {}", e);
     }
+}
+
+/// Fold every `activity_log` row older than `cutoff` into `activity_daily`,
+/// then delete them, in one transaction. Returns the number of fine rows
+/// deleted.
+fn roll_up_and_delete(conn: &Connection, cutoff: &str, poll_interval: u64) -> Result<usize> {
+    let tx = conn.unchecked_transaction()?;
+
+    // Switches and streaks need the rows in order, so they're computed here
+    // rather than in SQL. Each streak is filed under the day it started,
+    // and its switch (if any) happened on that day too.
+    let mut per_day: std::collections::HashMap<(String, String), (u64, u64)> =
+        std::collections::HashMap::new();
+    switches::for_each_streak(&tx, "timestamp < ?1", cutoff, poll_interval, |streak| {
+        let (switches, longest) = per_day.entry((streak.day, streak.app)).or_default();
+        if streak.switched_in {
+            *switches += 1;
+        }
+        *longest = (*longest).max(streak.secs);
+    })?;
+
+    // Time per day and app. substr(ts,1,10) is the "YYYY-MM-DD" prefix of
+    // the RFC3339 timestamp. UPSERT so a re-run (or rows landing on a day
+    // that already has rollup) adds.
+    tx.execute(
+        "INSERT INTO activity_daily (day, process_name, duration_secs)
+         SELECT substr(timestamp, 1, 10), process_name, SUM(duration_secs)
+         FROM activity_log WHERE timestamp < ?1
+         GROUP BY substr(timestamp, 1, 10), process_name
+         ON CONFLICT(day, process_name)
+         DO UPDATE SET duration_secs = duration_secs + excluded.duration_secs",
+        rusqlite::params![cutoff],
+    )?;
+
+    {
+        let mut upsert = tx.prepare(
+            "INSERT INTO activity_daily (day, process_name, switches, longest_streak_secs)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(day, process_name) DO UPDATE SET
+                 switches = switches + excluded.switches,
+                 longest_streak_secs = MAX(longest_streak_secs, excluded.longest_streak_secs)",
+        )?;
+        for ((day, process_name), (switches, longest)) in &per_day {
+            upsert.execute(rusqlite::params![day, process_name, switches, longest])?;
+        }
+    }
+
+    let deleted = tx.execute(
+        "DELETE FROM activity_log WHERE timestamp < ?1",
+        rusqlite::params![cutoff],
+    )?;
+    tx.commit()?;
+    Ok(deleted)
 }
 
 // ---------------------------------------------------------------------------
@@ -298,11 +369,12 @@ pub async fn start_tracker(
     if let Some(interval) = poll_interval {
         *state.poll_interval_secs.lock_or_recover() = interval.max(2);
     }
+    let interval = *state.poll_interval_secs.lock_or_recover();
 
     // Open + init DB on the blocking pool (file I/O + schema create).
-    let opened = match tokio::task::spawn_blocking(|| -> Result<Connection> {
+    let opened = match tokio::task::spawn_blocking(move || -> Result<Connection> {
         let conn = Connection::open(db_path()).context("Failed to open activity database")?;
-        init_db(&conn)?;
+        init_db(&conn, interval)?;
         Ok(conn)
     })
     .await
@@ -369,7 +441,11 @@ async fn poll_loop(state: Arc<ActivityTrackerState>, generation: u64) {
         };
 
         // Skip transient system UI processes (noise, not real app usage)
-        if is_system_noise(&process) {
+        // and Kage itself. The platform layer already drops our own windows
+        // on Windows (by PID) and on a bundled macOS build (by name).
+        // `is_own_process_name` also catches an unbundled macOS dev binary,
+        // which reports itself as lowercase `kage`.
+        if is_system_noise(&process) || switches::is_own_process_name(&process) {
             continue;
         }
 
@@ -564,7 +640,7 @@ mod retention_tests {
     #[test]
     fn prune_removes_only_rows_older_than_retention() {
         let conn = Connection::open_in_memory().unwrap();
-        init_db(&conn).unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
 
         let recent = Local::now().to_rfc3339();
         let old = (Local::now() - ChronoDuration::days(RETENTION_DAYS + 5)).to_rfc3339();
@@ -577,7 +653,7 @@ mod retention_tests {
             .unwrap();
         }
 
-        prune_old_rows(&conn);
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
 
         let remaining: i64 = conn
             .query_row("SELECT COUNT(*) FROM activity_log", [], |r| r.get(0))
@@ -589,7 +665,7 @@ mod retention_tests {
     #[test]
     fn prune_rolls_old_rows_into_daily_before_deleting() {
         let conn = Connection::open_in_memory().unwrap();
-        init_db(&conn).unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
 
         let old_dt = Local::now() - ChronoDuration::days(RETENTION_DAYS + 5);
         let old_day = old_dt.format("%Y-%m-%d").to_string();
@@ -603,7 +679,7 @@ mod retention_tests {
             .unwrap();
         }
 
-        prune_old_rows(&conn);
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
 
         let (day, total): (String, u64) = conn
             .query_row(
@@ -624,7 +700,7 @@ mod retention_tests {
     #[test]
     fn prune_reruns_accumulate_into_existing_rollup_rows() {
         let conn = Connection::open_in_memory().unwrap();
-        init_db(&conn).unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
 
         let old_dt = Local::now() - ChronoDuration::days(RETENTION_DAYS + 5);
         let insert = |secs: u64| {
@@ -636,9 +712,9 @@ mod retention_tests {
         };
 
         insert(5);
-        prune_old_rows(&conn);
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
         insert(7); // arrives late for the same old day (e.g. clock skew)
-        prune_old_rows(&conn);
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
 
         let total: u64 = conn
             .query_row(
@@ -649,6 +725,94 @@ mod retention_tests {
             .unwrap();
         // UPSERT accumulates instead of replacing or duplicating.
         assert_eq!(total, 12);
+    }
+
+    /// Rows 5 s apart from noon `days` ago, each credited 5 s.
+    fn seed_old_run(conn: &Connection, days: i64, apps: &[&str]) {
+        let noon = (Local::now() - ChronoDuration::days(days))
+            .date_naive()
+            .and_hms_opt(12, 0, 0)
+            .unwrap()
+            .and_local_timezone(Local)
+            .earliest()
+            .unwrap();
+        for (i, app) in apps.iter().enumerate() {
+            let ts = noon + ChronoDuration::seconds(i as i64 * 5);
+            conn.execute(
+                "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, ?2, 't', 5)",
+                rusqlite::params![ts.to_rfc3339(), app],
+            )
+            .unwrap();
+        }
+    }
+
+    fn daily_stats(conn: &Connection, process: &str) -> (u64, u64, u64) {
+        conn.query_row(
+            "SELECT duration_secs, switches, longest_streak_secs FROM activity_daily WHERE process_name = ?1",
+            [process],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn prune_keeps_switches_and_longest_streak_per_day() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
+        seed_old_run(
+            &conn,
+            RETENTION_DAYS + 5,
+            &["code", "code", "code", "slack", "code", "code"],
+        );
+
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
+
+        // code: first app (no switch), then one switch back from slack.
+        assert_eq!(daily_stats(&conn, "code"), (25, 1, 15));
+        assert_eq!(daily_stats(&conn, "slack"), (5, 1, 5));
+    }
+
+    #[test]
+    fn prune_reruns_accumulate_switches_and_keep_the_longest_streak() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
+        seed_old_run(
+            &conn,
+            RETENTION_DAYS + 5,
+            &["code", "slack", "code", "code"],
+        );
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
+        // A second launch rolls up a later stretch of the same day.
+        seed_old_run(&conn, RETENTION_DAYS + 5, &["slack", "code"]);
+        prune_old_rows(&conn, DEFAULT_POLL_INTERVAL_SECS);
+
+        let (_, code_switches, code_longest) = daily_stats(&conn, "code");
+        assert_eq!(code_switches, 2);
+        assert_eq!(code_longest, 10);
+        let (_, slack_switches, _) = daily_stats(&conn, "slack");
+        assert_eq!(slack_switches, 1);
+    }
+
+    #[test]
+    fn init_db_adds_switch_columns_to_an_existing_rollup_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        // activity_daily as the first rollup build created it.
+        conn.execute_batch(
+            "CREATE TABLE activity_daily (
+                day TEXT NOT NULL,
+                process_name TEXT NOT NULL,
+                duration_secs INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (day, process_name)
+            );
+            INSERT INTO activity_daily VALUES ('2026-01-10', 'code', 3600);",
+        )
+        .unwrap();
+
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
+        // Opening again is a no-op, not a duplicate-column error.
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
+
+        assert_eq!(daily_stats(&conn, "code"), (3600, 0, 0));
     }
 }
 
@@ -679,7 +843,7 @@ mod month_bucket_tests {
     #[test]
     fn buckets_merge_fine_and_rollup_tables_per_month() {
         let conn = Connection::open_in_memory().unwrap();
-        init_db(&conn).unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
 
         // Feb entirely from the rollup, Mar split across both tables.
         seed(&conn, "rollup", "2026-02-10", "code", 100);
@@ -704,7 +868,7 @@ mod month_bucket_tests {
     #[test]
     fn buckets_cap_top_apps_at_three() {
         let conn = Connection::open_in_memory().unwrap();
-        init_db(&conn).unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
         for (i, p) in ["a", "b", "c", "d", "e"].iter().enumerate() {
             seed(&conn, "rollup", "2026-01-05", p, 100 - i as u64);
         }
@@ -721,7 +885,7 @@ mod month_bucket_tests {
     #[test]
     fn single_month_range_gets_no_buckets() {
         let conn = Connection::open_in_memory().unwrap();
-        init_db(&conn).unwrap();
+        init_db(&conn, DEFAULT_POLL_INTERVAL_SECS).unwrap();
         seed(&conn, "fine", "2026-03-02", "code", 60);
         let months = build_month_buckets(&conn, "2026-01-01").unwrap();
         assert!(months.is_empty());
