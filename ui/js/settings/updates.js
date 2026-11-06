@@ -25,6 +25,28 @@ export function formatErr(e) {
  * Updates Settings Module
  * Auto-update configuration and changelog display
  */
+/**
+ * Tidy GitHub's auto-generated release notes before rendering: the
+ * "**Full Changelog**: https://github.com/…/compare/a...b" line and the
+ * "… in https://github.com/…/pull/123" PR references are long unbroken
+ * URLs that pushed the changelog box into horizontal scrolling. Turn
+ * them into short links ("Full Changelog", "#123"), the way GitHub's own
+ * release page shows them. Pure; anything that doesn't match is left as
+ * written.
+ */
+export function tidyReleaseNotes(markdown) {
+    if (typeof markdown !== 'string') return '';
+    return markdown
+        .replace(
+            /^(\s*)\*\*Full Changelog\*\*:\s*(https?:\/\/\S+)\s*$/gim,
+            (_m, indent, url) => `${indent}[**Full Changelog**](${url})`
+        )
+        .replace(
+            /(^|\s)(https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|issues)\/(\d+))(?=[\s).,;:]|$)/gm,
+            (_m, lead, url, num) => `${lead}[#${num}](${url})`
+        );
+}
+
 export class UpdatesSettingsModule extends SettingsModule {
     constructor() {
         super('updates', t('settings.updates.title'), '🔄');
@@ -296,7 +318,7 @@ export class UpdatesSettingsModule extends SettingsModule {
         if (!container) return;
         try {
             let markdown = await window.__TAURI__.core.invoke('fetch_changelog');
-            markdown = markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            markdown = tidyReleaseNotes(markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
             if (window.marked) {
                 marked.setOptions({ breaks: true, gfm: true });
                 container.innerHTML = marked.parse(markdown);

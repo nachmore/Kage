@@ -678,6 +678,9 @@ body.light-theme .keycap-sep {
     padding: 16px;
     font-size: 13px;
     line-height: 1.6;
+    /* Release notes can still carry long bare URLs; break them instead of
+       scrolling the box sideways. */
+    overflow-wrap: anywhere;
 }
 .changelog-box h1,
 .changelog-box h2,
