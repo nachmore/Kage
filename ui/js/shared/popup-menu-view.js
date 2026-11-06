@@ -4,8 +4,9 @@
  *
  * Native-menu conventions: ↑/↓ move the highlight (wrapping, skipping
  * separators and disabled items), Home/End jump, Enter/Space choose, Esc
- * dismisses, hovering highlights. A keyboard-opened menu starts with the
- * first item highlighted; a mouse-opened one with none.
+ * dismisses, hovering highlights, and only a primary-button press chooses.
+ * A keyboard-opened menu starts with the first item highlighted; a
+ * mouse-opened one with none.
  */
 
 import { firstActionable, isActionable, lastActionable, stepHighlight } from './popup-menu.js';
@@ -51,6 +52,14 @@ export function renderMenuItems(root, items, t) {
     });
 }
 
+/**
+ * A primary-button press: not the right or middle button, and on macOS
+ * not Ctrl+click (a right click there).
+ */
+export function isPrimaryClick(e, { mac = false } = {}) {
+    return !!e && e.button === 0 && !(mac && e.ctrlKey);
+}
+
 export class PopupMenuView {
     /**
      * @param {HTMLElement} root   the `.menu` container
@@ -58,10 +67,12 @@ export class PopupMenuView {
      * @param {(key: string, vars?: object) => string} opts.t
      * @param {(id: string) => void} opts.onChoose
      * @param {() => void} opts.onDismiss
+     * @param {boolean} [opts.mac] Ctrl+click is a right click
      */
-    constructor(root, { t, onChoose, onDismiss }) {
+    constructor(root, { t, onChoose, onDismiss, mac = false }) {
         this.root = root;
         this.t = t;
+        this.mac = !!mac;
         this.onChoose = onChoose;
         this.onDismiss = onDismiss;
         this.items = [];
@@ -76,11 +87,14 @@ export class PopupMenuView {
         });
         root.addEventListener('mouseleave', () => this.highlight(-1));
         // mousedown, not click: the window may lose focus (and dismiss)
-        // before a click completes.
+        // before a click completes. Only the primary button chooses — a
+        // right or middle click on an item must not run it (and macOS
+        // Ctrl+click is a right click).
         root.addEventListener('mousedown', (e) => {
             const el = e.target.closest?.('.menu-item');
             if (!el) return;
             e.preventDefault();
+            if (!isPrimaryClick(e, { mac: this.mac })) return;
             this.choose(Number(el.dataset.index));
         });
     }

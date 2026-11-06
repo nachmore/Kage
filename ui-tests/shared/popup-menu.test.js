@@ -15,7 +15,11 @@ import {
     normalizeMenuItems,
     stepHighlight,
 } from '../../ui/js/shared/popup-menu.js';
-import { PopupMenuView, renderMenuItems } from '../../ui/js/shared/popup-menu-view.js';
+import {
+    PopupMenuView,
+    isPrimaryClick,
+    renderMenuItems,
+} from '../../ui/js/shared/popup-menu-view.js';
 import { startMenuWindow, MENU_PADDING } from '../../ui/js/context-menu/menu-window.js';
 import { EVT } from '../../ui/js/shared/events.js';
 
@@ -274,6 +278,48 @@ describe('PopupMenuView', () => {
         expect(onDismiss).toHaveBeenCalled();
     });
 
+    it('chooses only on a primary-button press', () => {
+        const { root, onChoose } = setup(items, {});
+        const open = root.querySelector('[data-action="open"]');
+        const press = (init) =>
+            open.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, ...init }));
+        press({ button: 2 }); // right click
+        press({ button: 1 }); // middle click
+        expect(onChoose).not.toHaveBeenCalled();
+        // The right/middle press still doesn't steal focus or start a drag.
+        const right = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 });
+        open.dispatchEvent(right);
+        expect(right.defaultPrevented).toBe(true);
+        press({ button: 0, ctrlKey: true }); // Ctrl+click off macOS is a click
+        expect(onChoose).toHaveBeenCalledTimes(1);
+        press({ button: 0 });
+        expect(onChoose).toHaveBeenCalledTimes(2);
+        expect(onChoose).toHaveBeenLastCalledWith('open');
+    });
+
+    it('treats Ctrl+click as a right click on macOS', () => {
+        const root = document.createElement('div');
+        const onChoose = vi.fn();
+        const view = new PopupMenuView(root, { t, onChoose, onDismiss: vi.fn(), mac: true });
+        view.show(items, {});
+        const open = root.querySelector('[data-action="open"]');
+        open.dispatchEvent(
+            new MouseEvent('mousedown', { bubbles: true, button: 0, ctrlKey: true })
+        );
+        expect(onChoose).not.toHaveBeenCalled();
+        open.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+        expect(onChoose).toHaveBeenCalledWith('open');
+    });
+
+    it('isPrimaryClick', () => {
+        expect(isPrimaryClick({ button: 0 })).toBe(true);
+        expect(isPrimaryClick({ button: 2 })).toBe(false);
+        expect(isPrimaryClick({ button: 1 })).toBe(false);
+        expect(isPrimaryClick({ button: 0, ctrlKey: true })).toBe(true);
+        expect(isPrimaryClick({ button: 0, ctrlKey: true }, { mac: true })).toBe(false);
+        expect(isPrimaryClick(null)).toBe(false);
+    });
+
     it('ignores clicks on disabled items', () => {
         const { root, onChoose } = setup(items, {});
         const disabled = root.querySelector('[data-action="gone"]');
@@ -287,7 +333,7 @@ describe('PopupMenuView', () => {
 });
 
 describe('startMenuWindow', () => {
-    function setup({ pending = null, readyFails = false } = {}) {
+    function setup({ pending = null, readyFails = false, emitTo: customEmitTo = null } = {}) {
         const listeners = {};
         const winListeners = {};
         const listen = (e, cb) => (listeners[e] = cb);
@@ -299,7 +345,7 @@ describe('startMenuWindow', () => {
             }
             return null;
         });
-        const emitTo = vi.fn(async () => {});
+        const emitTo = customEmitTo || vi.fn(async () => {});
         const appWindow = {
             hide: vi.fn(async () => {}),
             listen: (e, cb) => (winListeners[e] = cb),
@@ -316,6 +362,7 @@ describe('startMenuWindow', () => {
             t,
             devMode: () => false,
             isRtl: () => true,
+            mac: false,
         });
         return { win, listeners, winListeners, invoke, emitTo, appWindow, root };
     }
@@ -372,6 +419,45 @@ describe('startMenuWindow', () => {
             context: { kind: 'app', target: 'Slack' },
         });
         expect(appWindow.hide).toHaveBeenCalled();
+    });
+
+    it("an answer still in flight doesn't hide the menu that replaced it", async () => {
+        // present token 1 → choose → (emit pending) present token 2 → emit
+        // settles: token 2 must stay on screen.
+        let releaseEmit;
+        const emitTo = vi.fn(
+            () =>
+                new Promise((resolve) => {
+                    releaseEmit = resolve;
+                })
+        );
+        const { listeners, win, appWindow, root } = setup({ emitTo });
+        await listeners[EVT.CONTEXT_MENU_RENDER]({ payload: payload(1) });
+        const answering = win.answer('open');
+        await listeners[EVT.CONTEXT_MENU_RENDER]({
+            payload: payload(2, { items: [{ id: 'reveal', label: 'Reveal' }] }),
+        });
+        releaseEmit();
+        await answering;
+        expect(emitTo).toHaveBeenCalledWith(
+            'floating',
+            EVT.CONTEXT_MENU_ACTION,
+            expect.objectContaining({ token: 1, action: 'open' })
+        );
+        expect(appWindow.hide).not.toHaveBeenCalled();
+        expect([...root.querySelectorAll('.menu-item')].map((e) => e.dataset.action)).toEqual([
+            'reveal',
+        ]);
+        // The new menu still answers — and hides — normally.
+        const second = win.answer('reveal');
+        releaseEmit();
+        await second;
+        expect(emitTo).toHaveBeenLastCalledWith(
+            'floating',
+            EVT.CONTEXT_MENU_ACTION,
+            expect.objectContaining({ token: 2, action: 'reveal' })
+        );
+        expect(appWindow.hide).toHaveBeenCalledTimes(1);
     });
 
     it('dismisses on blur unless the focus comes back', async () => {

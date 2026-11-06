@@ -9640,5 +9640,11 @@
     "description": "Shown on macOS when uninstalling an app failed for permissions and the app was revealed in Finder instead",
     "_machine_translated": true,
     "_source_hash": "391086e54f82bb69"
+  },
+  "errors.launcher.target_changed": {
+    "message": "메뉴를 연 뒤 “{name}” 항목이 변경되어 Kage가 이 항목을 그대로 두었습니다. 다시 시도하십시오.",
+    "description": "Launcher result menu: right before moving an item to the Trash, it no longer was the item that was checked (replaced, or a folder on its path swapped)",
+    "_machine_translated": true,
+    "_source_hash": "416114f7e2cd73cd"
   }
 }

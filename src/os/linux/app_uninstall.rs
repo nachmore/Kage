@@ -16,3 +16,8 @@ pub fn is_protected_app_impl(_bundle: &Path) -> bool {
 pub fn bundle_identifier_impl(_bundle: &Path) -> Option<String> {
     None
 }
+
+/// Nothing records install folders here (macOS apps are their bundles).
+pub fn installed_product_dirs_impl() -> Vec<std::path::PathBuf> {
+    Vec::new()
+}

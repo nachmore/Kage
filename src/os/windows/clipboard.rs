@@ -125,41 +125,137 @@ pub(crate) fn register_clipboard_format(name: &str) -> u32 {
     unsafe { RegisterClipboardFormatW(wide.as_ptr()) }
 }
 
+/// A moveable global memory block holding `bytes` — what `SetClipboardData`
+/// takes. `None` if allocation or locking failed (nothing is leaked).
+unsafe fn global_copy(bytes: &[u8]) -> Option<*mut std::ffi::c_void> {
+    let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes.len().max(1));
+    if hmem.is_null() {
+        return None;
+    }
+    let dest = GlobalLock(hmem) as *mut u8;
+    if dest.is_null() {
+        GlobalFree(hmem);
+        return None;
+    }
+    ptr::copy_nonoverlapping(bytes.as_ptr(), dest, bytes.len());
+    GlobalUnlock(hmem);
+    Some(hmem)
+}
+
+/// A hidden message-only window to own the clipboard while we write it.
+/// `SetClipboardData` fails once `EmptyClipboard` has run under an
+/// `OpenClipboard(NULL)`, because the clipboard then has no owner. The
+/// window is destroyed after `CloseClipboard`; the data stays (it isn't
+/// delay-rendered), the clipboard just has no owner left to notify.
+struct ClipboardOwner(windows::Win32::Foundation::HWND);
+
+impl ClipboardOwner {
+    fn new() -> Option<Self> {
+        use windows::core::w;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, HWND_MESSAGE, WINDOW_EX_STYLE, WINDOW_STYLE,
+        };
+        // The system "STATIC" class needs no registration.
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                w!("STATIC"),
+                w!(""),
+                WINDOW_STYLE(0),
+                0,
+                0,
+                0,
+                0,
+                Some(HWND_MESSAGE),
+                None,
+                None,
+                None,
+            )
+        };
+        match hwnd {
+            Ok(hwnd) if !hwnd.is_invalid() => Some(Self(hwnd)),
+            Ok(_) => None,
+            Err(e) => {
+                log::warn!("clipboard owner window: CreateWindowExW failed: {e}");
+                None
+            }
+        }
+    }
+}
+
+impl Drop for ClipboardOwner {
+    fn drop(&mut self) {
+        // Same thread that created it, as DestroyWindow requires.
+        let _ = unsafe { windows::Win32::UI::WindowsAndMessaging::DestroyWindow(self.0) };
+    }
+}
+
 /// Replace the clipboard's contents with `formats` — (format id, bytes)
 /// pairs written together under one open, so readers never see half of
-/// them. Returns `false` if the clipboard couldn't be opened or any
-/// format failed to land.
+/// them. Every block is prepared before the clipboard is touched, so a
+/// failed allocation leaves the user's clipboard as it was; the clipboard
+/// is owned by a real window (see `ClipboardOwner`). If a format fails to
+/// land after the clipboard was emptied, it is emptied again rather than
+/// left half-written. Returns `false` on any failure.
 pub(crate) fn set_clipboard_formats(formats: &[(u32, &[u8])]) -> bool {
     unsafe {
-        if !open_clipboard_with_retry() {
+        let mut blocks: Vec<(u32, *mut std::ffi::c_void)> = Vec::with_capacity(formats.len());
+        for (format, bytes) in formats {
+            match global_copy(bytes) {
+                Some(hmem) => blocks.push((*format, hmem)),
+                None => {
+                    log::warn!("set_clipboard_formats: GlobalAlloc failed");
+                    free_blocks(&blocks);
+                    return false;
+                }
+            }
+        }
+        let Some(owner) = ClipboardOwner::new() else {
+            free_blocks(&blocks);
+            return false;
+        };
+        if !open_clipboard_with_retry_as(owner.0 .0) {
             log::warn!("set_clipboard_formats: OpenClipboard failed after retries");
+            free_blocks(&blocks);
             return false;
         }
-        EmptyClipboard();
+        if EmptyClipboard() == 0 {
+            log::warn!("set_clipboard_formats: EmptyClipboard failed");
+            CloseClipboard();
+            free_blocks(&blocks);
+            return false;
+        }
         let mut ok = true;
-        for (format, bytes) in formats {
-            let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes.len().max(1));
-            if hmem.is_null() {
-                ok = false;
-                break;
-            }
-            let dest = GlobalLock(hmem) as *mut u8;
-            if dest.is_null() {
-                GlobalFree(hmem);
-                ok = false;
-                break;
-            }
-            ptr::copy_nonoverlapping(bytes.as_ptr(), dest, bytes.len());
-            GlobalUnlock(hmem);
-            // On success the system owns hmem; on failure we free it.
-            if SetClipboardData(*format, hmem).is_null() {
+        let mut pending = blocks.into_iter();
+        for (format, hmem) in pending.by_ref() {
+            // On success the system owns hmem; on failure it's still ours.
+            if SetClipboardData(format, hmem).is_null() {
+                log::warn!("set_clipboard_formats: SetClipboardData({format}) failed");
                 GlobalFree(hmem);
                 ok = false;
                 break;
             }
         }
-        CloseClipboard();
+        // Blocks never handed over are still ours.
+        for (_, hmem) in pending {
+            GlobalFree(hmem);
+        }
+        if !ok {
+            // Don't leave a partial set (a file list without its
+            // DropEffect would paste as a copy after a "Cut").
+            EmptyClipboard();
+        }
+        if CloseClipboard() == 0 {
+            log::warn!("set_clipboard_formats: CloseClipboard failed");
+        }
+        drop(owner);
         ok
+    }
+}
+
+unsafe fn free_blocks(blocks: &[(u32, *mut std::ffi::c_void)]) {
+    for (_, hmem) in blocks {
+        GlobalFree(*hmem);
     }
 }
 
@@ -167,9 +263,14 @@ pub(crate) fn set_clipboard_formats(formats: &[(u32, &[u8])]) -> bool {
 /// call while another process owns the clipboard; the contention is almost
 /// always transient (tens of ms).
 unsafe fn open_clipboard_with_retry() -> bool {
+    open_clipboard_with_retry_as(ptr::null_mut())
+}
+
+/// `open_clipboard_with_retry` with `owner` as the clipboard's owner.
+unsafe fn open_clipboard_with_retry_as(owner: *mut std::ffi::c_void) -> bool {
     const ATTEMPTS: u32 = 10;
     for i in 0..ATTEMPTS {
-        if OpenClipboard(ptr::null_mut()) != 0 {
+        if OpenClipboard(owner) != 0 {
             return true;
         }
         if i + 1 < ATTEMPTS {

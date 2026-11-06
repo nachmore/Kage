@@ -305,7 +305,7 @@ pub async fn show_context_menu<R: tauri::Runtime>(
         keyboard: request.keyboard,
     };
     *PENDING.lock_or_recover() = Some(PendingMenu {
-        anchor: context_menu_anchor(&window, x, y, !request.keyboard),
+        anchor: context_menu_anchor(&caller, x, y, !request.keyboard),
         render: render.clone(),
         presented: false,
     });
@@ -377,43 +377,61 @@ pub async fn context_menu_ready<R: tauri::Runtime>(
     Ok(true)
 }
 
-/// Where a menu opened at logical screen point `(x, y)` starts.
+/// Where a menu opened at screen point `(x, y)` starts. The caller
+/// computes that point as its window's position divided by its own scale
+/// plus the offset inside the window (`ui/js/floating/context-menu.js`):
+/// logical units *of the caller's monitor*.
 ///
-/// macOS: global window coordinates *are* points, so stay logical — exact
-/// on every monitor whatever its scale. Windows/Linux: physical pixels are
-/// native. A mouse-opened menu uses the OS cursor position (physical and
-/// exact); a keyboard-opened one, or a failed cursor query, converts the
-/// given point with its monitor's scale.
+/// macOS: global window coordinates *are* points, the same on every
+/// monitor whatever its scale — stay logical. Windows/Linux: physical
+/// pixels are native, and "logical" differs per monitor, so a point can't
+/// be placed by testing it against each monitor's own logical rectangle
+/// (on a 100% + 200% pair those overlap). A mouse-opened menu uses the OS
+/// cursor position (physical and exact); a keyboard-opened one, or a
+/// failed cursor query, undoes the caller's own division: × the caller
+/// window's scale.
 fn context_menu_anchor<R: tauri::Runtime>(
-    window: &tauri::WebviewWindow<R>,
+    caller: &tauri::WebviewWindow<R>,
     x: i32,
     y: i32,
     at_cursor: bool,
 ) -> Anchor {
     #[cfg(target_os = "macos")]
     {
-        let _ = (window, at_cursor);
+        let _ = (caller, at_cursor);
         Anchor::Logical(x as f64, y as f64)
     }
     #[cfg(not(target_os = "macos"))]
     {
         if at_cursor {
-            match window.cursor_position() {
+            match caller.cursor_position() {
                 Ok(p) => return Anchor::Physical(p.x.round(), p.y.round()),
                 Err(e) => {
                     log::debug!("[context-menu] cursor_position failed ({e}); using the click")
                 }
             }
         }
-        let monitors = window.available_monitors().unwrap_or_default();
-        let s = monitors
-            .iter()
-            .find(|m| logical_rect(m).contains(x as f64, y as f64))
-            .map(|m| m.scale_factor())
-            .or_else(|| window.scale_factor().ok())
-            .unwrap_or(1.0);
-        Anchor::Physical((x as f64 * s).round(), (y as f64 * s).round())
+        let scale = caller.scale_factor().unwrap_or(1.0);
+        let (px, py) = caller_point_to_physical(x as f64, y as f64, scale);
+        Anchor::Physical(px, py)
     }
+}
+
+/// A point in the caller's logical units (`position / scale + offset`)
+/// as physical pixels: `position + offset × scale`.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn caller_point_to_physical(x: f64, y: f64, caller_scale: f64) -> (f64, f64) {
+    let s = if caller_scale.is_finite() && caller_scale > 0.0 {
+        caller_scale
+    } else {
+        1.0
+    };
+    ((x * s).round(), (y * s).round())
+}
+
+/// The first of `rects` containing `(x, y)`.
+fn monitor_at(rects: &[Rect], x: f64, y: f64) -> Option<usize> {
+    rects.iter().position(|r| r.contains(x, y))
 }
 
 /// Where the top-left of a `w`-wide menu goes for anchor x `x`: at the
@@ -441,8 +459,9 @@ fn context_menu_frame<R: tauri::Runtime>(
             // Find the monitor by the anchor itself, then clamp the box.
             let x = start_x(ax, w, rtl);
             let mut pos = (x, y);
-            if let Some(m) = monitors.iter().find(|m| logical_rect(m).contains(ax, y)) {
-                pos = clamp_rect(logical_rect(m), x, y, w, h);
+            let rects: Vec<Rect> = monitors.iter().map(logical_rect).collect();
+            if let Some(i) = monitor_at(&rects, ax, y) {
+                pos = clamp_rect(rects[i], x, y, w, h);
             }
             (
                 tauri::Size::Logical(tauri::LogicalSize::new(w, h)),
@@ -450,15 +469,18 @@ fn context_menu_frame<R: tauri::Runtime>(
             )
         }
         Anchor::Physical(ax, y) => {
-            let monitor = monitors.iter().find(|m| physical_rect(m).contains(ax, y));
+            // Physical rectangles never overlap, whatever each monitor's
+            // scale; the menu is sized for the monitor it lands on.
+            let rects: Vec<Rect> = monitors.iter().map(physical_rect).collect();
+            let monitor = monitor_at(&rects, ax, y);
             let s = monitor
-                .map(|m| m.scale_factor())
+                .map(|i| monitors[i].scale_factor())
                 .or_else(|| window.scale_factor().ok())
                 .unwrap_or(1.0);
             let (pw, ph) = (w * s, h * s);
             let x = start_x(ax, pw, rtl);
             let pos = match monitor {
-                Some(m) => clamp_rect(physical_rect(m), x, y, pw, ph),
+                Some(i) => clamp_rect(rects[i], x, y, pw, ph),
                 None => (x, y),
             };
             (
@@ -489,7 +511,8 @@ impl Rect {
     }
 }
 
-/// A monitor's rect in its own logical units (physical ÷ its scale).
+/// A monitor's rect in its own logical units (physical ÷ its scale) —
+/// global points on macOS. Meaningless across monitors elsewhere.
 fn logical_rect(m: &tauri::Monitor) -> Rect {
     let s = m.scale_factor();
     Rect {
@@ -588,6 +611,75 @@ mod tests {
             clamp_rect(left, -10.0, 500.0, 160.0, 220.0),
             (-160.0, 500.0)
         );
+    }
+
+    /// A 100% monitor with a 200% one to its right, in physical pixels.
+    const MIXED: [Rect; 2] = [
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 1920.0,
+            h: 1080.0,
+        },
+        Rect {
+            x: 1920.0,
+            y: 0.0,
+            w: 3840.0,
+            h: 2160.0,
+        },
+    ];
+    const MIXED_SCALES: [f64; 2] = [1.0, 2.0];
+
+    /// What the floating window sends: its position ÷ its scale + the
+    /// row's offset in CSS px.
+    fn caller_point(window_physical: (f64, f64), scale: f64, css: (f64, f64)) -> (f64, f64) {
+        (
+            window_physical.0 / scale + css.0,
+            window_physical.1 / scale + css.1,
+        )
+    }
+
+    #[test]
+    fn keyboard_anchor_lands_on_the_callers_monitor_at_mixed_dpi() {
+        // The launcher on the 200% monitor, a row 100×50 CSS px in.
+        let (lx, ly) = caller_point((2000.0, 100.0), 2.0, (100.0, 50.0));
+        assert_eq!((lx, ly), (1100.0, 100.0));
+        // Per-monitor "logical" rectangles overlap: (1100, 100) is inside
+        // the 100% monitor's too, which is how the old lookup misplaced it.
+        let logical: Vec<Rect> = MIXED
+            .iter()
+            .zip(MIXED_SCALES)
+            .map(|(r, s)| Rect {
+                x: r.x / s,
+                y: r.y / s,
+                w: r.w / s,
+                h: r.h / s,
+            })
+            .collect();
+        assert!(logical[0].contains(lx, ly) && logical[1].contains(lx, ly));
+        assert_eq!(monitor_at(&logical, lx, ly), Some(0));
+        // × the caller's own scale: exactly position + offset × scale.
+        let (px, py) = caller_point_to_physical(lx, ly, 2.0);
+        assert_eq!((px, py), (2200.0, 200.0));
+        assert_eq!(monitor_at(&MIXED, px, py), Some(1));
+    }
+
+    #[test]
+    fn keyboard_anchor_on_the_100_percent_monitor() {
+        let (lx, ly) = caller_point((500.0, 300.0), 1.0, (100.0, 50.0));
+        let (px, py) = caller_point_to_physical(lx, ly, 1.0);
+        assert_eq!((px, py), (600.0, 350.0));
+        assert_eq!(monitor_at(&MIXED, px, py), Some(0));
+        // Just right of the boundary is the other monitor.
+        assert_eq!(monitor_at(&MIXED, 1920.0, 10.0), Some(1));
+        assert_eq!(monitor_at(&MIXED, -1.0, 10.0), None);
+    }
+
+    #[test]
+    fn a_bad_caller_scale_is_treated_as_100_percent() {
+        assert_eq!(caller_point_to_physical(10.4, 20.6, 0.0), (10.0, 21.0));
+        assert_eq!(caller_point_to_physical(10.0, 20.0, f64::NAN), (10.0, 20.0));
+        assert_eq!(caller_point_to_physical(10.0, 20.0, 1.5), (15.0, 30.0));
     }
 
     fn item(id: &str, key: &str) -> MenuItem {

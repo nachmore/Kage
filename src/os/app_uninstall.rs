@@ -63,6 +63,13 @@ pub fn is_protected_app(bundle: &Path) -> bool {
     crate::os::platform::app_uninstall::is_protected_app_impl(bundle)
 }
 
+/// The folders the OS records installed products in — Windows: each
+/// Uninstall entry's `InstallLocation`, shared folders and drive roots
+/// left out. Empty elsewhere. Blocking: reads the registry.
+pub fn installed_product_dirs() -> Vec<PathBuf> {
+    crate::os::platform::app_uninstall::installed_product_dirs_impl()
+}
+
 /// The app's bundle identifier (macOS `CFBundleIdentifier`), if any.
 pub fn bundle_identifier(bundle: &Path) -> Option<String> {
     crate::os::platform::app_uninstall::bundle_identifier_impl(bundle)
@@ -145,6 +152,26 @@ pub fn is_generic_install_dir(dir: &str, generic: &[String]) -> bool {
     depth <= 2 || generic.iter().any(|g| g == dir)
 }
 
+/// Each entry's `InstallLocation` that names one product's own folder
+/// (normalised, deduplicated) — every entry, removable or not: they're
+/// all installed software. Shared folders (`generic`, drive roots and
+/// one-level folders) are left out, so a sloppy `InstallLocation` of
+/// `C:\` can't claim the whole drive.
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+pub fn product_install_dirs(entries: &[UninstallEntry], generic: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for loc in entries
+        .iter()
+        .filter_map(|e| e.install_location.as_deref())
+        .map(normalize_win_path)
+    {
+        if !loc.is_empty() && !is_generic_install_dir(&loc, generic) && !out.contains(&loc) {
+            out.push(loc);
+        }
+    }
+    out
+}
+
 fn eligible(e: &UninstallEntry) -> bool {
     let is_update = e.release_type.as_deref().is_some_and(|t| {
         let t = t.to_lowercase();
@@ -167,20 +194,76 @@ fn name_tokens(name: &str) -> Vec<String> {
         .collect()
 }
 
+/// The program an `UninstallString` runs, for locating the product (not
+/// for launching it — `split_command_line` does that): a quoted program,
+/// else everything up to the first `.exe`, else the first word.
+fn uninstaller_program(cmd: &str) -> Option<String> {
+    let cmd = cmd.trim();
+    if let Some(quoted) = cmd.strip_prefix('"') {
+        return quoted.split_once('"').map(|(p, _)| p.to_string());
+    }
+    if let Some(idx) = cmd.to_lowercase().find(".exe") {
+        return Some(cmd[..idx + 4].to_string());
+    }
+    cmd.split_whitespace().next().map(str::to_string)
+}
+
+/// The folder part of a normalised Windows path.
+fn win_parent(path: &str) -> Option<&str> {
+    path.rsplit_once('\\').map(|(dir, _)| dir)
+}
+
+/// Where an entry says its product lives: `InstallLocation`, the folder
+/// of `DisplayIcon` and the folder of the uninstaller — normalised, with
+/// shared folders (Program Files, System32, …) dropped, since a product
+/// "inside" one of those says nothing about which product it is.
+fn entry_locations(e: &UninstallEntry, generic: &[String]) -> Vec<String> {
+    let icon = e.display_icon.as_deref().map(normalize_win_path);
+    let uninstaller = e
+        .uninstall_string
+        .as_deref()
+        .and_then(uninstaller_program)
+        .map(|p| normalize_win_path(&p));
+    let mut out: Vec<String> = Vec::new();
+    let candidates = [
+        e.install_location.as_deref().map(normalize_win_path),
+        icon.as_deref().and_then(win_parent).map(str::to_string),
+        uninstaller
+            .as_deref()
+            .and_then(win_parent)
+            .map(str::to_string),
+    ];
+    for loc in candidates.into_iter().flatten() {
+        if loc.contains('\\') && !is_generic_install_dir(&loc, generic) && !out.contains(&loc) {
+            out.push(loc);
+        }
+    }
+    out
+}
+
 /// Pick the Uninstall entry for the app called `app_name` whose executable
 /// is `target` (a shortcut's target, or the exe itself). Returns `None`
 /// unless exactly one eligible entry matches with evidence — the caller
-/// then sends the user to Settings rather than guess:
+/// then sends the user to Settings rather than guess.
 ///
-/// 1. *Strong:* `DisplayIcon` is the target exe, `InstallLocation` is the
-///    exe's own folder, or `DisplayName` equals the app name.
-/// 2. *Weaker, used only without a strong match:* the exe sits deeper
-///    inside a non-generic `InstallLocation` **and** the two names share a
+/// With the executable known, only the executable's location counts:
+///
+/// 1. *Strong:* `DisplayIcon` is the target exe, or `InstallLocation` is
+///    the exe's own folder.
+/// 2. *Weaker, used only without a strong match:* the exe sits inside one
+///    of the entry's locations (`entry_locations`: install location, icon
+///    folder, uninstaller folder) **and** the names are equal or share a
 ///    distinctive word.
 ///
-/// Shared folders (`generic`, drive roots) never count as an install
-/// location, and duplicates (the same product listed in the 32- and
-/// 64-bit views) collapse to one.
+/// A name alone never decides (a portable copy can share an installed
+/// product's name), and an entry whose `InstallLocation` leaves the exe
+/// out is contradicted and never matches. Without a known executable (a
+/// shortcut that couldn't be resolved), only an exact `DisplayName` match
+/// counts.
+///
+/// Shared folders (`generic`, drive roots) never count as a location, and
+/// duplicates (the same product listed in the 32- and 64-bit views)
+/// collapse to one.
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
 pub fn match_uninstall_entry<'e>(
     app_name: &str,
@@ -200,52 +283,67 @@ pub fn match_uninstall_entry<'e>(
         }
     }
 
-    let target = target.map(normalize_win_path).filter(|t| !t.is_empty());
-    let target_dir = target
-        .as_deref()
-        .and_then(|t| t.rsplit_once('\\').map(|(dir, _)| dir.to_string()));
     let app_name = app_name.trim();
-    let app_tokens = name_tokens(app_name);
+    let same_name = |e: &UninstallEntry| {
+        !app_name.is_empty()
+            && e.display_name
+                .as_deref()
+                .is_some_and(|n| n.trim().eq_ignore_ascii_case(app_name))
+    };
+    let unique = |found: Vec<&'e UninstallEntry>| (found.len() == 1).then(|| found[0]);
 
-    let location = |e: &UninstallEntry| {
+    let target = target.map(normalize_win_path).filter(|t| !t.is_empty());
+    let Some(target) = target else {
+        return unique(candidates.into_iter().filter(|e| same_name(e)).collect());
+    };
+    let target_dir = win_parent(&target).map(str::to_string);
+    let app_tokens = name_tokens(app_name);
+    let inside = |l: &str| target.starts_with(&format!("{l}\\"));
+
+    // An install location that leaves the exe out places the product
+    // elsewhere: that entry is ruled out, whatever else agrees. (Icons and
+    // uninstallers often sit in shared caches — `Windows\Installer`,
+    // `Package Cache` — so they only ever count *for* a match.)
+    let install_dir = |e: &UninstallEntry| {
         e.install_location
             .as_deref()
             .map(normalize_win_path)
             .filter(|l| !l.is_empty() && !is_generic_install_dir(l, generic))
     };
+    let contradicted = |e: &UninstallEntry| install_dir(e).is_some_and(|l| !inside(&l));
+    let located: Vec<(&UninstallEntry, Vec<String>)> = candidates
+        .into_iter()
+        .filter(|e| !contradicted(e))
+        .map(|e| (e, entry_locations(e, generic)))
+        .collect();
 
-    let strong: Vec<&UninstallEntry> = candidates
+    let strong: Vec<&UninstallEntry> = located
         .iter()
-        .copied()
-        .filter(|e| {
-            let icon = e.display_icon.as_deref().map(normalize_win_path);
-            let by_icon = target.is_some() && icon.as_deref() == target.as_deref();
-            let by_dir = target_dir.is_some() && location(e).as_deref() == target_dir.as_deref();
-            let by_name = !app_name.is_empty()
-                && e.display_name
-                    .as_deref()
-                    .is_some_and(|n| n.trim().eq_ignore_ascii_case(app_name));
-            by_icon || by_dir || by_name
+        .filter(|(e, _)| {
+            let by_icon = e.display_icon.as_deref().map(normalize_win_path).as_deref()
+                == Some(target.as_str());
+            let by_dir = target_dir.is_some() && install_dir(e) == target_dir;
+            by_icon || by_dir
         })
+        .map(|(e, _)| *e)
         .collect();
     if !strong.is_empty() {
-        return (strong.len() == 1).then(|| strong[0]);
+        return unique(strong);
     }
 
-    let target = target?;
-    let weak: Vec<&UninstallEntry> = candidates
-        .iter()
-        .copied()
-        .filter(|e| {
-            let inside = location(e).is_some_and(|l| target.starts_with(&format!("{l}\\")));
-            let shares_word = e.display_name.as_deref().is_some_and(|n| {
-                let tokens = name_tokens(n);
-                app_tokens.iter().any(|t| tokens.contains(t))
-            });
-            inside && shares_word
-        })
-        .collect();
-    (weak.len() == 1).then(|| weak[0])
+    unique(
+        located
+            .iter()
+            .filter(|(e, locs)| {
+                let shares_word = e.display_name.as_deref().is_some_and(|n| {
+                    let tokens = name_tokens(n);
+                    app_tokens.iter().any(|t| tokens.contains(t))
+                });
+                locs.iter().any(|l| inside(l)) && (same_name(e) || shares_word)
+            })
+            .map(|(e, _)| *e)
+            .collect(),
+    )
 }
 
 /// Expand `%VAR%` references (REG_EXPAND_SZ values) with `lookup`.
@@ -311,29 +409,116 @@ pub fn split_command_line(cmd: &str, exists: impl Fn(&str) -> bool) -> Option<(S
     }
 }
 
-/// Whether uninstall parameters ask for an unattended run (`/S`, `/quiet`,
-/// msiexec's `/q…`, `--silent`, …). Such an entry is never launched from
-/// the launcher: the user must see the app's own uninstaller UI.
+/// Switch names (after `/`, `-` or `--`, lower-cased, before any `=` or
+/// `:` value) that make an uninstaller run without asking: NSIS `/S`,
+/// Inno `/SILENT` `/VERYSILENT` `/SUPPRESSMSGBOXES`, InstallShield `-s`,
+/// WiX Burn and MSI `/quiet` `/passive`, Mozilla `-ms`, Chromium
+/// `--force-uninstall`, and the generic `--silent` / `--unattended` /
+/// `--no-prompt` family.
+const SILENT_SWITCHES: &[&str] = &[
+    "s",
+    "silent",
+    "verysilent",
+    "quiet",
+    "passive",
+    "unattended",
+    "ms",
+    "suppressmsgboxes",
+    "force-uninstall",
+    "forceuninstall",
+    "no-prompt",
+    "noprompt",
+    "noninteractive",
+    "non-interactive",
+    "yes",
+    "y",
+];
+
+/// Values that make a mode switch unattended (`--mode unattended`,
+/// `/mode=silent`, `--ui=none`).
+const SILENT_VALUES: &[&str] = &[
+    "silent",
+    "verysilent",
+    "quiet",
+    "passive",
+    "unattended",
+    "none",
+];
+
+/// Whether `flag` (a switch name, lower-cased, prefix stripped) is an MSI
+/// UI level that runs without the user: `q` (= `qn`), `qn`, `qb`, `qr`, any
+/// of them with `+` (a closing dialog), `-` (no modal dialogs) or `!` (no
+/// Cancel) — in any combination, e.g. `qb!-` or `qn+`. Only `qf`, the full
+/// interactive UI, is accepted, and only without modifiers. `query`,
+/// `qualify` and other words starting with `q` aren't UI levels.
+fn is_unattended_msi_level(flag: &str) -> bool {
+    let Some(rest) = flag.strip_prefix('q') else {
+        return false;
+    };
+    let (level, modifiers) = match rest.chars().next() {
+        Some(c) if c.is_ascii_alphabetic() => (Some(c), &rest[1..]),
+        _ => (None, rest),
+    };
+    if !modifiers.chars().all(|c| matches!(c, '+' | '-' | '!')) {
+        return false;
+    }
+    match level {
+        None | Some('n') | Some('b') | Some('r') => true,
+        Some('f') => !modifiers.is_empty(),
+        Some(_) => false,
+    }
+}
+
+/// Whether uninstall parameters ask for an unattended run. Such an entry
+/// is never launched from the launcher: the user must see the app's own
+/// uninstaller UI. Errs towards `true` — a false alarm only means the
+/// user is sent to Settings → Installed apps instead.
+///
+/// Switches may start with `/`, `-` or `--` and be glued together
+/// (`/x{GUID}/qn`) or nested in a quoted argument (InstallShield's
+/// `/v"/qn"`), so every `/`-separated piece is read as a switch.
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
 pub fn has_silent_flag(params: &str) -> bool {
-    params.split_whitespace().any(|token| {
-        let t = token.trim_matches('"').to_lowercase();
-        let Some(flag) = t
-            .strip_prefix("--")
-            .or_else(|| t.strip_prefix('/'))
-            .or_else(|| t.strip_prefix('-'))
-        else {
-            return false;
+    let tokens: Vec<String> = params
+        .split_whitespace()
+        .map(|t| t.trim_matches('"').to_lowercase())
+        .collect();
+    let silent_name = |name: &str| SILENT_SWITCHES.contains(&name) || is_unattended_msi_level(name);
+    let silent_switch = |switch: &str| {
+        let switch = switch.trim_matches('"');
+        let (name, value) = match switch.find(['=', ':']) {
+            Some(i) => (&switch[..i], Some(switch[i + 1..].trim_matches('"'))),
+            None => (switch, None),
         };
-        let flag = flag.split(['=', ':']).next().unwrap_or("");
-        matches!(
-            flag,
-            "s" | "silent" | "verysilent" | "passive" | "unattended" | "ms" | "suppressmsgboxes"
-        ) || (flag.starts_with('q')
-            && flag[1..]
-                .chars()
-                .all(|c| c.is_ascii_alphabetic() || matches!(c, '+' | '!' | '-'))
-            && (flag.len() <= 3 || flag == "quiet"))
+        silent_name(name) || value.is_some_and(|v| SILENT_VALUES.contains(&v))
+    };
+    tokens.iter().any(|t| {
+        // A bare value after a mode switch: `--mode unattended`.
+        if SILENT_VALUES.contains(&t.as_str()) {
+            return true;
+        }
+        let (head, glued) = match t.strip_prefix("--") {
+            Some(rest) => (Some(rest), ""),
+            None => match t.strip_prefix('-') {
+                Some(rest) => (Some(rest), ""),
+                None => match t.strip_prefix('/') {
+                    Some(rest) => (None, rest),
+                    None => (None, t.as_str()),
+                },
+            },
+        };
+        if let Some(name) = head {
+            if silent_switch(name) {
+                return true;
+            }
+        }
+        // `/a/b`-style pieces; for a token that didn't start with `/`, only
+        // what follows a `/` inside it.
+        let mut pieces = glued.split('/');
+        if !t.starts_with('/') {
+            pieces.next();
+        }
+        pieces.any(|p| !p.is_empty() && silent_switch(p))
     })
 }
 
@@ -566,6 +751,143 @@ mod tests {
     }
 
     #[test]
+    fn a_shared_name_never_overrides_where_the_exe_is() {
+        // An installed Contoso Tool, and a portable copy of the same name.
+        let installed = UninstallEntry {
+            install_location: Some(r"C:\Program Files\Contoso".into()),
+            display_icon: Some(r"C:\Program Files\Contoso\tool.exe,0".into()),
+            ..entry("Tool", r#""C:\Program Files\Contoso\unins000.exe""#)
+        };
+        let entries = vec![installed];
+        let g = generic();
+        assert_eq!(
+            match_uninstall_entry("Tool", Some(r"D:\Portable\Tool\tool.exe"), &entries, &g),
+            None
+        );
+        // The installed copy itself still matches.
+        assert_eq!(
+            match_uninstall_entry(
+                "Tool",
+                Some(r"C:\Program Files\Contoso\tool.exe"),
+                &entries,
+                &g
+            ),
+            Some(&entries[0])
+        );
+    }
+
+    #[test]
+    fn with_a_known_exe_a_name_alone_is_not_enough() {
+        let entries = vec![entry("Contoso Tool", "MsiExec.exe /X{1}")];
+        let g = generic();
+        assert_eq!(
+            match_uninstall_entry(
+                "Contoso Tool",
+                Some(r"C:\Program Files\Contoso\tool.exe"),
+                &entries,
+                &g
+            ),
+            None
+        );
+        // Without one (a shortcut that couldn't be read), it is.
+        assert_eq!(
+            match_uninstall_entry("Contoso Tool", None, &entries, &g),
+            Some(&entries[0])
+        );
+    }
+
+    #[test]
+    fn an_install_location_elsewhere_contradicts_a_matching_icon() {
+        let entries = vec![UninstallEntry {
+            install_location: Some(r"C:\Program Files\Contoso".into()),
+            display_icon: Some(r"D:\Portable\Tool\tool.exe".into()),
+            ..entry("Tool", r#""C:\Program Files\Contoso\unins000.exe""#)
+        }];
+        assert_eq!(
+            match_uninstall_entry(
+                "Tool",
+                Some(r"D:\Portable\Tool\tool.exe"),
+                &entries,
+                &generic()
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn the_uninstallers_folder_is_evidence_with_a_matching_name() {
+        // Inno Setup: no InstallLocation, unins000.exe next to the app.
+        let entries = vec![entry(
+            "Contoso Tool 2.1",
+            r#""C:\Program Files\Contoso Tool\unins000.exe""#,
+        )];
+        let g = generic();
+        let exe = r"C:\Program Files\Contoso Tool\tool.exe";
+        assert_eq!(
+            match_uninstall_entry("Contoso Tool", Some(exe), &entries, &g),
+            Some(&entries[0])
+        );
+        assert_eq!(
+            match_uninstall_entry("Paint", Some(exe), &entries, &g),
+            None
+        );
+        // A cache folder (WiX Burn's Package Cache) proves nothing.
+        let cached = vec![entry(
+            "Contoso Tool",
+            r#""C:\ProgramData\Package Cache\{AB-12}\setup.exe" /uninstall"#,
+        )];
+        assert_eq!(
+            match_uninstall_entry("Contoso Tool", Some(exe), &cached, &g),
+            None
+        );
+    }
+
+    #[test]
+    fn finds_the_uninstaller_program() {
+        assert_eq!(
+            uninstaller_program(r#""C:\Program Files\App\u.exe" /x"#).as_deref(),
+            Some(r"C:\Program Files\App\u.exe")
+        );
+        assert_eq!(
+            uninstaller_program(r"C:\Program Files\App\uninstall.exe /S").as_deref(),
+            Some(r"C:\Program Files\App\uninstall.exe")
+        );
+        assert_eq!(
+            uninstaller_program("MsiExec.exe /X{1}").as_deref(),
+            Some("MsiExec.exe")
+        );
+    }
+
+    #[test]
+    fn product_install_dirs_skip_shared_folders_and_roots() {
+        let at = |loc: &str| UninstallEntry {
+            install_location: Some(loc.into()),
+            ..entry("X", "u.exe")
+        };
+        let entries = vec![
+            at(r"C:\Users\me\AppData\Local\Discord\"),
+            at(r"c:\users\me\appdata\local\discord"),
+            at(r"C:\Program Files\Contoso"),
+            at(r"C:\Program Files"),
+            at(r"C:\"),
+            at(r"D:\Games"),
+            at(""),
+            UninstallEntry {
+                system_component: true,
+                ..at(r"C:\Program Files\Runtime\1.0")
+            },
+        ];
+        assert_eq!(
+            product_install_dirs(&entries, &generic()),
+            vec![
+                r"c:\users\me\appdata\local\discord".to_string(),
+                r"c:\program files\contoso".to_string(),
+                r"c:\program files\runtime\1.0".to_string(),
+            ]
+        );
+    }
+
+    #[test]
     fn splits_quoted_unquoted_and_bare_command_lines() {
         let exists = |p: &str| p == r"C:\Program Files\App\uninstall.exe";
         assert_eq!(
@@ -594,18 +916,57 @@ mod tests {
     #[test]
     fn detects_silent_switches_but_not_interactive_ones() {
         for silent in [
+            // NSIS, Inno, InstallShield, Mozilla, Chromium, Squirrel.
             "/S",
-            "/quiet",
-            "/qn",
-            "/QB!",
-            "/q",
-            "-q",
-            "--silent",
+            "/SILENT",
             "/VERYSILENT",
-            "/passive",
-            "-ms",
             "/SUPPRESSMSGBOXES",
+            "-s",
+            "-ms",
+            "--force-uninstall",
+            "--uninstall -s",
+            // Generic.
+            "--silent",
+            "-silent",
+            "--quiet",
+            "--unattended",
+            "--mode unattended",
+            "--mode=unattended",
+            "/mode:silent",
+            "--ui=none",
+            "--no-prompt",
+            "-q",
+            // MSI / WiX Burn UI levels, every modifier combination, both
+            // switch characters.
+            "/q",
+            "/qn",
+            "/QN",
+            "/qn+",
+            "/qn-",
+            "/qb",
+            "/qb!",
+            "/QB!",
+            "/qb-",
+            "/qb+",
+            "/qb!-",
+            "/qb-!",
+            "/qb+!",
+            "/qb!+",
+            "/qr",
+            "/qr+",
+            "/q+",
+            "-qn",
+            "-qb!-",
+            "/quiet",
+            "-quiet",
+            "/passive",
+            "-passive",
+            "/qf+",
+            // Placement: after other switches, glued on, quoted, nested.
             "/x {1} /qn+",
+            "/X{AB-12}/qn",
+            "/I{AB-12} \"/qb!-\"",
+            "/s /v\"/qn\"",
         ] {
             assert!(has_silent_flag(silent), "{silent}");
         }
@@ -613,15 +974,36 @@ mod tests {
             "",
             "/X{AB-12}",
             "/I{AB-12}",
+            "/x {AB-12} /qf",
+            "/X{AB-12} /norestart",
             "--uninstall",
+            "--uninstall --channel=stable --system-level --verbose-logging",
             "/uninstall",
             "-removeonly",
+            "-runfromtemp -l0x0409 -removeonly",
             "--mode=remove",
             "/query",
             "/qualify",
+            "/qx",
             "scenario=install",
+            "scenario=install productstoremove=OneNote",
+            "/D=C:\\Program Files\\App",
+            "/allusers",
+            "/SP-",
         ] {
             assert!(!has_silent_flag(interactive), "{interactive}");
+        }
+    }
+
+    #[test]
+    fn msi_ui_levels_follow_the_grammar() {
+        for unattended in [
+            "q", "qn", "qb", "qr", "qn+", "qb!-", "qb+!", "qr-", "q!", "qf!",
+        ] {
+            assert!(is_unattended_msi_level(unattended), "{unattended}");
+        }
+        for not_level in ["qf", "query", "qualify", "qx", "quiet", "x", "", "qb?"] {
+            assert!(!is_unattended_msi_level(not_level), "{not_level}");
         }
     }
 

@@ -73,6 +73,35 @@ pub fn show_properties(path: &Path) -> anyhow::Result<()> {
     crate::os::platform::file_ops::show_properties_impl(path)
 }
 
+/// Which file a path names, independent of how it was spelled: (device,
+/// inode) on Unix, (volume serial, file index) on Windows. Taken of the
+/// item itself, never of a link's target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileId {
+    pub volume: u64,
+    pub index: u64,
+}
+
+/// The identity of the item at `path` (a link is identified as the link),
+/// or `None` if it can't be read.
+pub fn file_id(path: &Path) -> Option<FileId> {
+    crate::os::platform::file_ops::file_id_impl(path)
+}
+
+/// Whether `meta` (from `symlink_metadata`) is a link the OS would follow:
+/// a symlink, or on Windows any reparse point (junctions included).
+pub fn is_link(meta: &std::fs::Metadata) -> bool {
+    crate::os::platform::file_ops::is_link_impl(meta)
+}
+
+/// The final component of `path` as the directory stores it — Windows
+/// resolves 8.3 aliases (`DOCUME~1`) and drops trailing dots and spaces
+/// (`Documents.`) when opening a path, so the name typed may not be the
+/// item's name. Doesn't follow a link. `None` elsewhere, or on failure.
+pub fn on_disk_name(path: &Path) -> Option<std::ffi::OsString> {
+    crate::os::platform::file_ops::on_disk_name_impl(path)
+}
+
 /// `DROPEFFECT_COPY` / `DROPEFFECT_MOVE` for the clipboard's
 /// "Preferred DropEffect" format, which tells Explorer whether a paste
 /// copies or moves.
@@ -113,8 +142,10 @@ mod tests {
 
     fn utf16_list(bytes: &[u8]) -> Vec<String> {
         let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| u16::from_le_bytes(*c))
             .collect();
         let mut out = Vec::new();
         let mut cur = Vec::new();
