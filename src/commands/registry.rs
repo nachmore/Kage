@@ -160,6 +160,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::cancel_generation,
         crate::commands::save_frecency,
         crate::commands::load_frecency,
+        crate::commands::get_frecency_key,
         crate::commands::list_extensions,
         crate::commands::list_themes,
         crate::commands::list_command_packs,

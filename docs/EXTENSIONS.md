@@ -289,7 +289,7 @@ capabilities. These include: `get_config` and `save_config`,
 (file moves/renames/trash), `send_extension_tool_steering` (the host
 builds the tool-steering block from validated manifests, and the
 backend replays it into every session), `notify_response_ready`,
-`save_frecency` / `load_frecency`, install/uninstall commands,
+`save_frecency` / `load_frecency` / `get_frecency_key`, install/uninstall commands,
 tool-permission policy commands, `read_extension_file`,
 `open_devtools`, MCP config commands, updater commands, inline
 assist, the shortcut executor, and more. See

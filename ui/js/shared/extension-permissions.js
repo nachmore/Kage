@@ -41,6 +41,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // patterns and overwrite the global launcher ranking.
     save_frecency: null,
     load_frecency: null,
+    get_frecency_key: null,
 
     // --- clipboard ---------------------------------------------------------
     read_clipboard: 'clipboard',

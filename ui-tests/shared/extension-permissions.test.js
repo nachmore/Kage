@@ -35,6 +35,8 @@ describe('COMMAND_CAPABILITIES table', () => {
             // clobber the launcher ranking for everyone.
             'save_frecency',
             'load_frecency',
+            // The frecency HMAC key: with it, hashed ids could be dictionary-checked.
+            'get_frecency_key',
         ];
         for (const cmd of mustBeBlocked) {
             expect(COMMAND_CAPABILITIES[cmd]).toBeNull();

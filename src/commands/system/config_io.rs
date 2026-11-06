@@ -282,6 +282,77 @@ pub async fn load_frecency() -> Result<String, AppError> {
     }
 }
 
+/// Length of the per-install frecency key, in bytes.
+const FRECENCY_KEY_LEN: usize = 32;
+
+/// The per-install secret the launcher keys its frecency hashes with
+/// (base64). `search-frecency.json` stores HMACs of result ids and query
+/// prefixes rather than the values themselves: extension result ids can
+/// carry private text (bookmark names, meeting subjects, locations), and a
+/// keyed hash keeps ranking working without writing that text to disk.
+/// The key lives in its own file so the frecency file alone can't be
+/// dictionary-checked. Created on first use; a malformed key is replaced,
+/// which only resets ranking.
+#[tauri::command]
+pub async fn get_frecency_key() -> Result<String, AppError> {
+    let path = crate::paths::config_dir()
+        .ok_or("No config dir")?
+        .join("kage")
+        .join("search-frecency.key");
+    Ok(
+        tauri::async_runtime::spawn_blocking(move || load_or_create_frecency_key(&path))
+            .await
+            .map_err(|e| format!("Frecency key task failed: {}", e))??,
+    )
+}
+
+fn load_or_create_frecency_key(path: &std::path::Path) -> Result<String, String> {
+    use base64::Engine;
+    let engine = base64::engine::general_purpose::STANDARD;
+    if let Ok(existing) = fs::read_to_string(path) {
+        let trimmed = existing.trim();
+        if engine
+            .decode(trimmed)
+            .is_ok_and(|bytes| bytes.len() == FRECENCY_KEY_LEN)
+        {
+            return Ok(trimmed.to_string());
+        }
+        log::warn!("Frecency key file is malformed; replacing it");
+    }
+    use rand::TryRngCore;
+    let mut key = [0u8; FRECENCY_KEY_LEN];
+    rand::rngs::OsRng
+        .try_fill_bytes(&mut key)
+        .map_err(|e| format!("OS RNG (frecency key): {}", e))?;
+    let encoded = engine.encode(key);
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("Failed to create config dir: {}", e))?;
+    }
+    write_private_file(path, encoded.as_bytes())
+        .map_err(|e| format!("Failed to save frecency key: {}", e))?;
+    Ok(encoded)
+}
+
+/// Write `bytes` to `path`, readable only by the current user on Unix.
+fn write_private_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)?;
+        file.write_all(bytes)
+    }
+    #[cfg(not(unix))]
+    {
+        fs::write(path, bytes)
+    }
+}
+
 const MAX_SHORTCUT_HISTORY: usize = 20;
 
 fn shortcut_history_path() -> Result<std::path::PathBuf, String> {
@@ -741,6 +812,43 @@ pub async fn write_text_file(path: String, contents: String) -> Result<u64, AppE
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn scratch_key_path(name: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("kage-frecency-key-{}-{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        dir.join("kage").join("search-frecency.key")
+    }
+
+    #[test]
+    fn frecency_key_is_created_once_and_reused() {
+        use base64::Engine;
+        let path = scratch_key_path("reuse");
+        let first = load_or_create_frecency_key(&path).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&first)
+            .unwrap();
+        assert_eq!(bytes.len(), FRECENCY_KEY_LEN);
+        assert_eq!(load_or_create_frecency_key(&path).unwrap(), first);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600, "key file must be owner-only");
+        }
+        let _ = fs::remove_dir_all(path.parent().unwrap().parent().unwrap());
+    }
+
+    #[test]
+    fn malformed_frecency_key_is_replaced() {
+        let path = scratch_key_path("malformed");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "not base64 / too short").unwrap();
+        let key = load_or_create_frecency_key(&path).unwrap();
+        assert_ne!(key, "not base64 / too short");
+        assert_eq!(load_or_create_frecency_key(&path).unwrap(), key);
+        let _ = fs::remove_dir_all(path.parent().unwrap().parent().unwrap());
+    }
 
     fn grant(caps: &[&str]) -> crate::config::ExtensionGrant {
         crate::config::ExtensionGrant {

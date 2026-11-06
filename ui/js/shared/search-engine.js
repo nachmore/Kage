@@ -4,6 +4,7 @@
  */
 
 import { matchCommands, matchSlashCommands, matchCommandsByName } from './commands.js';
+import { createFrecencyHasher } from './frecency-hash.js';
 
 // --- Helpers ---
 
@@ -90,16 +91,26 @@ function _formatSize(bytes) {
 }
 
 // --- Frecency store ---
+//
+// Keyed by HMACs of the result id and of each query prefix, never the raw
+// values (see frecency-hash.js): result ids can carry private text. Until
+// the install key has loaded, selections aren't recorded and nothing is
+// boosted, rather than falling back to raw keys. Entries written before
+// hashing (raw keys) are left alone; they no longer match anything and age
+// out under the 90-day cutoff below.
 
 let _frecencyData = {};
 let _frecencyLoaded = false;
+let _frecencyHasher = null;
 
 export function recordSelection(query, resultId, invoke) {
-    const prefix = query.toLowerCase().substring(0, 6);
-    if (!_frecencyData[resultId]) {
-        _frecencyData[resultId] = { count: 0, lastUsed: 0, prefixes: {} };
+    if (!_frecencyHasher || resultId == null || resultId === '') return;
+    const key = _frecencyHasher.id(resultId);
+    const prefix = _frecencyHasher.prefix(query.toLowerCase().substring(0, 6));
+    if (!_frecencyData[key]) {
+        _frecencyData[key] = { count: 0, lastUsed: 0, prefixes: {} };
     }
-    const entry = _frecencyData[resultId];
+    const entry = _frecencyData[key];
     entry.count++;
     entry.lastUsed = Date.now();
     entry.prefixes[prefix] = (entry.prefixes[prefix] || 0) + 1;
@@ -107,9 +118,10 @@ export function recordSelection(query, resultId, invoke) {
 }
 
 function getFrecencyBoost(query, resultId) {
-    const entry = _frecencyData[resultId];
+    if (!_frecencyHasher || resultId == null || resultId === '') return 0;
+    const entry = _frecencyData[_frecencyHasher.id(resultId)];
     if (!entry) return 0;
-    const prefix = query.toLowerCase().substring(0, 6);
+    const prefix = _frecencyHasher.prefix(query.toLowerCase().substring(0, 6));
     const prefixCount = entry.prefixes[prefix] || 0;
     const totalCount = entry.count;
     const ageMs = Date.now() - entry.lastUsed;
@@ -140,11 +152,27 @@ function _debounceSave(invoke) {
 
 export async function loadFrecency(invoke) {
     if (_frecencyLoaded) return;
+    const [json, key] = await Promise.all([
+        invoke('load_frecency').catch(() => null),
+        invoke('get_frecency_key').catch((e) => {
+            console.warn('[search] frecency key unavailable; ranking by usage is off:', e);
+            return null;
+        }),
+    ]);
     try {
-        const json = await invoke('load_frecency');
         if (json) _frecencyData = JSON.parse(json);
     } catch {}
+    _frecencyHasher = key ? createFrecencyHasher(key) : null;
     _frecencyLoaded = true;
+}
+
+/** Test hook: forget loaded frecency state. */
+export function _resetFrecencyForTests() {
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = null;
+    _frecencyData = {};
+    _frecencyLoaded = false;
+    _frecencyHasher = null;
 }
 
 // --- Extension manager reference ---

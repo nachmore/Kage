@@ -284,3 +284,88 @@ describe('unifiedSearch — keyword completion hints', () => {
     expect(ids).toContain('ext-keyword:calendar:calendar');
   });
 });
+
+describe('frecency store privacy', () => {
+  const KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(42)));
+
+  function frecencyInvoke(store) {
+    return vi.fn(async (cmd, args) => {
+      if (cmd === 'load_frecency') return store.data ?? '{}';
+      if (cmd === 'get_frecency_key') return KEY;
+      if (cmd === 'save_frecency') {
+        store.data = args.data;
+        return null;
+      }
+      return JSON.stringify([]);
+    });
+  }
+
+  it('saves only hashed ids and prefixes, never the raw values', async () => {
+    vi.useFakeTimers();
+    try {
+      const mod = await import('../../ui/js/shared/search-engine.js');
+      mod._resetFrecencyForTests();
+      const store = {};
+      const invoke = frecencyInvoke(store);
+      await mod.loadFrecency(invoke);
+      mod.recordSelection('pw secret', 'pw:Tr0ub4dor&3', invoke);
+      mod.recordSelection('meeting', 'cal:Quarterly review with Dana', invoke);
+      await vi.advanceTimersByTimeAsync(2100);
+      expect(store.data).toBeTruthy();
+      expect(store.data).not.toContain('Tr0ub4dor');
+      expect(store.data).not.toContain('Quarterly');
+      expect(store.data).not.toContain('pw secr');
+      expect(store.data).not.toContain('meetin');
+      const saved = JSON.parse(store.data);
+      const keys = Object.keys(saved);
+      expect(keys).toHaveLength(2);
+      for (const k of keys) {
+        expect(k).toMatch(/^h1:[0-9a-f]{32}$/);
+        for (const p of Object.keys(saved[k].prefixes)) expect(p).toMatch(/^h1:[0-9a-f]{32}$/);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records nothing when the key is unavailable', async () => {
+    vi.useFakeTimers();
+    try {
+      const mod = await import('../../ui/js/shared/search-engine.js');
+      mod._resetFrecencyForTests();
+      const saves = [];
+      const invoke = vi.fn(async (cmd, args) => {
+        if (cmd === 'get_frecency_key') throw new Error('no key');
+        if (cmd === 'load_frecency') return '{}';
+        if (cmd === 'save_frecency') saves.push(args.data);
+        return JSON.stringify([]);
+      });
+      await mod.loadFrecency(invoke);
+      mod.recordSelection('calc', 'app:Calculator', invoke);
+      await vi.advanceTimersByTimeAsync(2100);
+      expect(saves).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still boosts a result the user picked before, and leaves legacy raw entries alone', async () => {
+    vi.useFakeTimers();
+    try {
+      const mod = await import('../../ui/js/shared/search-engine.js');
+      mod._resetFrecencyForTests();
+      const legacy = { 'app:Old': { count: 5, lastUsed: Date.now(), prefixes: { old: 5 } } };
+      const store = { data: JSON.stringify(legacy) };
+      const invoke = frecencyInvoke(store);
+      await mod.loadFrecency(invoke);
+      mod.recordSelection('saf', 'app:Safari', invoke);
+      await vi.advanceTimersByTimeAsync(2100);
+      const saved = JSON.parse(store.data);
+      // The legacy entry is kept as it was (not migrated or removed).
+      expect(saved['app:Old']).toEqual(legacy['app:Old']);
+      expect(Object.keys(saved).filter((k) => k.startsWith('h1:'))).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
