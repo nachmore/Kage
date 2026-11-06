@@ -9412,5 +9412,233 @@
     "description": "Warning in the sandbox notice, right under the blocked shell command it shows, when the command is more than one line long. 'It' is the command.",
     "_machine_translated": true,
     "_source_hash": "36c2d11cd6238803"
+  },
+  "errors.window.menu_invalid": {
+    "message": "No se ha podido mostrar ese menú.",
+    "description": "show_context_menu / context_menu_ready rejected a malformed menu (no usable items, oversized context, bad size)",
+    "_machine_translated": true,
+    "_source_hash": "f233e9d8f3bacf29"
+  },
+  "errors.launcher.invalid_target": {
+    "message": "Kage no puede realizar ninguna acción con ese elemento.",
+    "description": "Launcher result menu: empty, relative or unknown target",
+    "_machine_translated": true,
+    "_source_hash": "1da908b11e0bb0eb"
+  },
+  "errors.launcher.unknown_app": {
+    "message": "Kage ya no encuentra la app «{name}»; es posible que se haya desinstalado.",
+    "description": "Launcher result menu: the app isn't in Kage's app list",
+    "_machine_translated": true,
+    "_source_hash": "e04a0e03c5b6a2fd"
+  },
+  "errors.launcher.not_found": {
+    "message": "«{name}» ya no existe.",
+    "description": "Launcher result menu: the file, folder or app is gone from disk",
+    "_machine_translated": true,
+    "_source_hash": "efb87f031d2329e9"
+  },
+  "errors.launcher.action_unavailable": {
+    "message": "Esa acción no está disponible para este elemento.",
+    "description": "Launcher result menu: the requested action doesn't apply to this result on this OS",
+    "_machine_translated": true,
+    "_source_hash": "17934a5b29fc26a6"
+  },
+  "errors.launcher.confirmation_required": {
+    "message": "La desinstalación requiere tu confirmación previa.",
+    "description": "Launcher result menu: uninstall was requested without the user confirming",
+    "_machine_translated": true,
+    "_source_hash": "16cc2a9f33b4e7c7"
+  },
+  "errors.launcher.protected": {
+    "message": "Kage no eliminará «{name}», ya que forma parte del sistema operativo.",
+    "description": "Launcher result menu: refused to uninstall a system / SIP-protected app",
+    "_machine_translated": true,
+    "_source_hash": "4018da4c8b13a6d8"
+  },
+  "errors.launcher.uninstall_self": {
+    "message": "Kage no puede desinstalarse a sí mismo desde aquí. Usa la configuración de apps del sistema.",
+    "description": "Launcher result menu: refused to uninstall Kage",
+    "_machine_translated": true,
+    "_source_hash": "28c947909d8aaf2e"
+  },
+  "errors.launcher.app_running": {
+    "message": "Cierra «{name}» y vuelve a intentarlo.",
+    "description": "Launcher result menu: macOS app can't be moved to the Trash while it's running",
+    "_machine_translated": true,
+    "_source_hash": "dcf2723140e62ad5"
+  },
+  "errors.launcher.trash_denied": {
+    "message": "No tienes permiso para trasladar «{name}» a la papelera.",
+    "description": "Launcher result menu: the OS refused to trash a file or folder",
+    "_machine_translated": true,
+    "_source_hash": "d0304c78d86729d2"
+  },
+  "errors.launcher.trash_unavailable": {
+    "message": "No se ha encontrado ninguna herramienta de papelera. Instala gio (GLib) o trash-cli y vuelve a intentarlo.",
+    "description": "Launcher result menu (Linux): no freedesktop Trash implementation on PATH",
+    "_machine_translated": true,
+    "_source_hash": "e6f5722f045e177e"
+  },
+  "errors.launcher.clipboard_failed": {
+    "message": "No se ha podido copiar al portapapeles; puede que otra app lo esté usando. Vuelve a intentarlo.",
+    "description": "Launcher result menu: writing a path or file to the clipboard failed",
+    "_machine_translated": true,
+    "_source_hash": "07a4054d1e08965a"
+  },
+  "errors.launcher.action_failed": {
+    "message": "No se ha podido realizar la acción: {reason}",
+    "description": "Launcher result menu: an OS operation failed; reason is the OS error text",
+    "_machine_translated": true,
+    "_source_hash": "8903fa0862d87693"
+  },
+  "context_menu.aria_label": {
+    "message": "Menú",
+    "description": "Accessible name of the right-click menu",
+    "_machine_translated": true,
+    "_source_hash": "1e3afd5da5473c3e"
+  },
+  "result_menu.open": {
+    "message": "Abrir",
+    "description": "Result right-click menu — open the app, file or folder",
+    "_machine_translated": true,
+    "_source_hash": "530a614b5e486c9c"
+  },
+  "result_menu.run_as_admin": {
+    "message": "Ejecutar como administrador",
+    "description": "Result right-click menu (Windows) — launch elevated through the UAC prompt",
+    "_machine_translated": true,
+    "_source_hash": "76c97083537d37cb"
+  },
+  "result_menu.reveal_finder": {
+    "message": "Mostrar en Finder",
+    "description": "Result right-click menu (macOS) — reveal the item in Finder",
+    "_machine_translated": true,
+    "_source_hash": "c3f0bd3c284f60c3"
+  },
+  "result_menu.reveal_explorer": {
+    "message": "Abrir la ubicación del archivo",
+    "description": "Result right-click menu (Windows) — reveal the item (for apps, its Start menu shortcut) in File Explorer; same wording as the Start menu",
+    "_machine_translated": true,
+    "_source_hash": "7a269b4d2a3bd532"
+  },
+  "result_menu.reveal_folder": {
+    "message": "Abrir la carpeta contenedora",
+    "description": "Result right-click menu (Linux) — open the folder the item is in",
+    "_machine_translated": true,
+    "_source_hash": "b412323f3cf701f8"
+  },
+  "result_menu.copy_path": {
+    "message": "Copiar ruta",
+    "description": "Result right-click menu — copy the item's full path as text",
+    "_machine_translated": true,
+    "_source_hash": "cf0162b7c225dc28"
+  },
+  "result_menu.copy_as_path": {
+    "message": "Copiar como ruta de acceso",
+    "description": "Result right-click menu (Windows) — copy the item's full path as text; same wording as File Explorer",
+    "_machine_translated": true,
+    "_source_hash": "8c662d4b50a8e187"
+  },
+  "result_menu.copy": {
+    "message": "Copiar",
+    "description": "Result right-click menu — copy the file itself so it can be pasted in Finder / File Explorer",
+    "_machine_translated": true,
+    "_source_hash": "e8a5838f0c3d608b"
+  },
+  "result_menu.cut": {
+    "message": "Cortar",
+    "description": "Result right-click menu (Windows) — cut the file so pasting in File Explorer moves it",
+    "_machine_translated": true,
+    "_source_hash": "4f7a0c0236876adf"
+  },
+  "result_menu.move_to_trash": {
+    "message": "Trasladar a la papelera",
+    "description": "Result right-click menu (macOS/Linux) — move the file or folder to the Trash",
+    "_machine_translated": true,
+    "_source_hash": "5d557b087d6cc550"
+  },
+  "result_menu.move_to_recycle_bin": {
+    "message": "Mover a la papelera de reciclaje",
+    "description": "Result right-click menu (Windows) — move the file or folder to the Recycle Bin",
+    "_machine_translated": true,
+    "_source_hash": "5e0571150cefdef7"
+  },
+  "result_menu.uninstall": {
+    "message": "Desinstalar…",
+    "description": "Result right-click menu — uninstall the app (asks for confirmation first)",
+    "_machine_translated": true,
+    "_source_hash": "baf23e4bd3ded2a5"
+  },
+  "result_menu.properties": {
+    "message": "Propiedades",
+    "description": "Result right-click menu (Windows) — open the shell Properties dialog",
+    "_machine_translated": true,
+    "_source_hash": "2a164beb2def0a2b"
+  },
+  "result_menu.confirm.title": {
+    "message": "¿Desinstalar «{name}»?",
+    "description": "Uninstall confirmation title; name is the app",
+    "_machine_translated": true,
+    "_source_hash": "1b4d061f498f6298"
+  },
+  "result_menu.confirm.body_macos": {
+    "message": "Kage moverá {name} a la Papelera. Si cambias de opinión, puedes recuperarlo desde la Papelera.",
+    "description": "Uninstall confirmation body on macOS",
+    "_machine_translated": true,
+    "_source_hash": "4b75f9431bf50029"
+  },
+  "result_menu.confirm.body_windows": {
+    "message": "Kage abrirá el desinstalador de {name} o, si no encuentra ninguno, Configuración → Aplicaciones instaladas. No se eliminará nada hasta que lo confirmes allí.",
+    "description": "Uninstall confirmation body on Windows",
+    "_machine_translated": true,
+    "_source_hash": "37f1e04782643036"
+  },
+  "result_menu.confirm.cancel": {
+    "message": "Cancelar",
+    "description": "Uninstall confirmation — keep the app",
+    "_machine_translated": true,
+    "_source_hash": "96359ede0e254064"
+  },
+  "result_menu.confirm.uninstall": {
+    "message": "Desinstalar",
+    "description": "Uninstall confirmation — go ahead",
+    "_machine_translated": true,
+    "_source_hash": "41ca6f0bc219e3e1"
+  },
+  "result_menu.feedback.copied": {
+    "message": "Se copió «{name}»: pégalo en una carpeta para copiar el archivo.",
+    "description": "Shown after copying a file to the clipboard",
+    "_machine_translated": true,
+    "_source_hash": "56f9ce0bfdbfd6f3"
+  },
+  "result_menu.feedback.cut": {
+    "message": "Se cortó «{name}»: pégalo en una carpeta para moverlo allí.",
+    "description": "Shown after cutting a file (Windows)",
+    "_machine_translated": true,
+    "_source_hash": "92659107edf5fe41"
+  },
+  "result_menu.feedback.copied_path": {
+    "message": "Ruta copiada.",
+    "description": "Shown after copying an item's path",
+    "_machine_translated": true,
+    "_source_hash": "58aea4b3b6c526a4"
+  },
+  "result_menu.feedback.trashed": {
+    "message": "Se movió «{name}» a la Papelera.",
+    "description": "Shown after moving a file, folder or app to the Trash (macOS/Linux)",
+    "_machine_translated": true,
+    "_source_hash": "56e263569e61dabd"
+  },
+  "result_menu.feedback.recycled": {
+    "message": "Se movió «{name}» a la Papelera de reciclaje.",
+    "description": "Shown after moving a file or folder to the Recycle Bin (Windows)",
+    "_machine_translated": true,
+    "_source_hash": "0bf310535fee4ec0"
+  },
+  "result_menu.feedback.manual_removal": {
+    "message": "macOS no permitió que Kage moviera «{name}» a la Papelera: pertenece al sistema o a un administrador, o procede de la App Store. Está seleccionado en el Finder: arrástralo allí a la Papelera (el Finder te pedirá la contraseña si es necesario).",
+    "description": "Shown on macOS when uninstalling an app failed for permissions and the app was revealed in Finder instead",
+    "_machine_translated": true,
+    "_source_hash": "391086e54f82bb69"
   }
 }

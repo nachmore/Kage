@@ -28,6 +28,22 @@ Press <kbd>Alt</kbd>+<kbd>Space</kbd> (<kbd>Option</kbd>+<kbd>Space</kbd> on a M
 - **Clipboard history (Windows).** `>cb` searches Windows' clipboard history and pastes the item you pick into the app you were using. Images are listed, but only text items can be pasted. Turn on clipboard history in Windows Settings → System → Clipboard first.
 - **Sending to the AI.** <kbd>Enter</kbd> on text that isn't a match sends it to your agent. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> always skips the suggestions and sends straight to the agent.
 
+### Right-click on a result
+
+Right-click an app, file or folder result for a menu of what you can do with it. On Windows and Linux, <kbd>Shift</kbd>+<kbd>F10</kbd> or the <kbd>Menu</kbd> key opens it for the highlighted result. The menu only lists what works for that item on your system:
+
+| | macOS | Windows | Linux |
+|---|---|---|---|
+| **Apps** | Open · Show in Finder · Copy path · Uninstall… | Open · Run as administrator · Open file location · Copy as path · Uninstall… · Properties | Open · Open containing folder · Copy path |
+| **Files and folders** | Open · Show in Finder · Copy · Copy path · Move to Trash | Open · Open file location · Cut · Copy · Copy as path · Move to Recycle Bin · Properties | Open · Open containing folder · Copy path · Move to Trash |
+
+- **Copy** puts the file itself on the clipboard, so you can paste it in Finder or File Explorer. **Cut** (Windows only — macOS has no cut for files) moves it when you paste.
+- **Open file location** on Windows shows the app's Start menu shortcut, the way Start does. Store apps and Settings pages have no file to show.
+- **Move to Trash / Recycle Bin** can be undone from the Trash or Recycle Bin. Kage won't trash your home folder, standard folders such as Documents, or system folders. On Linux it uses `gio` (or trash-cli or KDE's `kioclient`).
+- **Uninstall…** always asks first, naming the app. On macOS the app goes to the Trash; apps that are part of macOS can't be removed, and an app that's running has to be quit first. If macOS won't let Kage move it (apps from the App Store or installed for all users), Kage selects it in Finder so you can drag it to the Trash there. On Windows, Kage opens the app's own uninstaller — never a silent one, and Windows asks for permission if it needs it — or Settings → Installed apps for Store apps and anything it can't match with confidence. Uninstall isn't offered on Linux (use your package manager) or for Kage itself. Uninstalled apps drop out of the results on their own.
+
+Right-clicking anywhere else shows the usual Cut, Copy, Paste, Settings and Close menu.
+
 ### Keyboard shortcuts
 
 | Keys | What they do |
@@ -40,6 +56,7 @@ Press <kbd>Alt</kbd>+<kbd>Space</kbd> (<kbd>Option</kbd>+<kbd>Space</kbd> on a M
 | <kbd>Esc</kbd> | Stop the reply, or hide the window |
 | <kbd>↑</kbd> | Bring back an earlier prompt |
 | <kbd>Alt</kbd>+<kbd>↓</kbd> | Open the calendar |
+| <kbd>Shift</kbd>+<kbd>F10</kbd> or <kbd>Menu</kbd> | [Actions](#right-click-on-a-result) for the highlighted app or file (Windows and Linux) |
 | <kbd>Ctrl</kbd>+<kbd>E</kbd> | Expand the conversation into the full chat window |
 | <kbd>Ctrl</kbd>+<kbd>L</kbd> | Clear and reset the launcher |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> | Copy the last reply |

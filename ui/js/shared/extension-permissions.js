@@ -319,6 +319,13 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     get_recent_crash: null,
     dismiss_recent_crash: null,
     show_context_menu: null,
+    // Context-menu window protocol (host chrome only).
+    get_pending_context_menu: null,
+    context_menu_ready: null,
+    // Launcher result menu: open/reveal/copy/trash/uninstall on apps and
+    // files. Destructive and filesystem-wide — never for extensions.
+    launcher_result_actions: null,
+    launcher_result_action: null,
     test_floating_window: null,
     handle_floating_input: null,
     set_window_session: null,

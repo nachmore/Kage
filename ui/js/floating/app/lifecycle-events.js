@@ -140,6 +140,12 @@ export const LifecycleEventsMethods = {
         document.addEventListener('keydown', (e) => {
             // Escape — stop speech/TTS first, then stop generating, then hide
             if (e.key === 'Escape') {
+                // An uninstall confirmation: Esc means "no", not "hide".
+                if (this._resultConfirm) {
+                    e.preventDefault();
+                    this._cancelResultConfirm();
+                    return;
+                }
                 // Stop speech recognition or TTS first
                 if (this.speech?.isActive || this.speech?.isListening) {
                     e.preventDefault();

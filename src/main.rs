@@ -34,6 +34,7 @@ mod extensions;
 mod hotkey_norm;
 mod i18n;
 mod internal_sites;
+mod launcher_actions;
 mod link_metadata_cache;
 mod logger;
 mod mcp_registration;

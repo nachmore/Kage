@@ -33,11 +33,13 @@ pub use kage_core::os::launcher;
 
 // Common types and traits
 pub mod app_install_watch;
+pub mod app_uninstall;
 pub mod calendar;
 pub mod clipboard;
 pub mod clipboard_history;
 pub mod cursor;
 pub mod diagnostics;
+pub mod file_ops;
 pub mod file_search;
 pub mod hotkey;
 pub mod icon;

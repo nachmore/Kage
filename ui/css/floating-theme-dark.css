@@ -45,3 +45,33 @@ body.dark-theme .app-suggestions {
 body.dark-theme .app-suggestion-item {
     border-bottom-color: #352f3d;
 }
+
+body.dark-theme .result-confirm-title {
+    color: #e5e7eb;
+}
+
+body.dark-theme .result-confirm-body,
+body.dark-theme .result-action-notice {
+    color: #a39fab;
+    border-top-color: #352f3d;
+}
+
+body.dark-theme .result-action-notice.error {
+    color: #ff8a80;
+}
+
+body.dark-theme .result-confirm-btn {
+    background: #352f3d;
+    border-color: #4a464f;
+    color: #e5e7eb;
+}
+
+body.dark-theme .result-confirm-btn:hover {
+    background: #2a2530;
+}
+
+body.dark-theme .result-confirm-btn.danger {
+    background: #c0392b;
+    border-color: #c0392b;
+    color: #fff;
+}

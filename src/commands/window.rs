@@ -11,7 +11,8 @@ use tauri::WebviewWindow;
 pub use implementation::{
     center_floating_on_active_monitor, center_window_on_active_monitor, mark_focused_chat,
     preload_context_menu, schedule_chat_shutdown_check_public, show_floating_at_mouse,
-    show_inline_assist_with_context, toggle_floating_window, ChatWindowInfo,
+    show_inline_assist_with_context, toggle_floating_window, ChatWindowInfo, MenuRender,
+    MenuRequest,
 };
 
 #[tauri::command]
@@ -86,13 +87,36 @@ pub async fn open_settings_window<R: tauri::Runtime>(
     implementation::open_settings_window(app, section, sub_section).await
 }
 
+/// Show the custom right-click menu at logical screen point `(x, y)`.
+/// `menu` describes the items (omit it for the default text menu); see
+/// `context_menu.rs` for the protocol.
 #[tauri::command]
 pub async fn show_context_menu<R: tauri::Runtime>(
     x: i32,
     y: i32,
+    menu: Option<MenuRequest>,
+    window: WebviewWindow<R>,
     app: tauri::AppHandle<R>,
-) -> Result<(), AppError> {
-    implementation::show_context_menu(x, y, app).await
+) -> Result<u64, AppError> {
+    implementation::show_context_menu(x, y, menu, window, app).await
+}
+
+/// The context-menu window's pull for a request it missed while loading.
+#[tauri::command]
+pub async fn get_pending_context_menu() -> Result<Option<MenuRender>, AppError> {
+    Ok(implementation::get_pending_context_menu())
+}
+
+/// The context-menu window measured menu `token`; size, place and show it.
+#[tauri::command]
+pub async fn context_menu_ready<R: tauri::Runtime>(
+    token: u64,
+    width: f64,
+    height: f64,
+    rtl: Option<bool>,
+    app: tauri::AppHandle<R>,
+) -> Result<bool, AppError> {
+    implementation::context_menu_ready(token, width, height, rtl.unwrap_or(false), app).await
 }
 
 #[tauri::command]

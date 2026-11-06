@@ -83,6 +83,13 @@ pub const INLINE_ASSIST_ERROR: &str = "inline_assist_error";
 /// list to the front. Renamed from `show-sessions`.
 pub const SHOW_SESSIONS: &str = "show_sessions";
 
+// --- Context menu ---------------------------------------------------
+
+/// A menu for the context-menu window to render (`MenuRender` payload:
+/// token, owner window, items, context). Sent only to that window. Its
+/// answer, `context_menu_action`, is emitted window-to-window from JS.
+pub const CONTEXT_MENU_RENDER: &str = "context_menu_render";
+
 // --- Hotkey-loop event names ----------------------------------------
 
 /// Floating window: enter clipboard-history mode. Fired after the
@@ -137,6 +144,7 @@ mod tests {
             INLINE_ASSIST_SHOW,
             INLINE_ASSIST_ERROR,
             SHOW_SESSIONS,
+            CONTEXT_MENU_RENDER,
             CLIPBOARD_HISTORY_MODE,
             VOICE_MODE,
             HOTKEY_REGISTRATION_FAILED,

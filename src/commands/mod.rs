@@ -4,6 +4,7 @@ pub mod folder_tools;
 pub mod i18n;
 pub mod input;
 pub mod kiro_desktop;
+pub mod launcher_actions;
 pub mod messaging;
 pub mod oauth;
 pub mod pocket_tts;

@@ -112,6 +112,8 @@ export const SearchMethods = {
     },
 
     async handleInputChange(_event) {
+        // Typing a new query abandons a pending uninstall confirmation.
+        this._cancelResultConfirm?.();
         const rawQuery = this.elements.input.value;
         const query = rawQuery.trim();
 

@@ -246,6 +246,8 @@ export async function renderUnifiedResults(results, container, resizeWindow, onI
         }
 
         item.classList.toggle('selected', i === 0);
+        // The row's result, for the right-click menu (floating/context-menu.js).
+        item._kageResult = r;
         // Wire click-to-execute. Use direct .onclick assignment (not
         // addEventListener) so reused DOM nodes don't stack duplicate
         // handlers across re-renders. Capture the result by value; the
