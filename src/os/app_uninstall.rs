@@ -422,6 +422,25 @@ pub struct WinFs {
 }
 
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+/// One warning per distinct set of unresolvable shared folders, not one
+/// per folder per `WinFs` (it's rebuilt for every menu and uninstall).
+fn warn_unresolved_shared_once(unknown: &[String]) {
+    use std::sync::Mutex;
+    static LAST: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    if unknown.is_empty() {
+        return;
+    }
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if last.as_slice() != unknown {
+        log::warn!(
+            "[uninstall] can't resolve shared folder(s) {}; uninstalls open Settings until they resolve",
+            unknown.join(", ")
+        );
+        *last = unknown.to_vec();
+    }
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
 impl WinFs {
     /// `shared`: this machine's shared folders (Program Files, Windows,
     /// ProgramData, the user profile roots, AppData, Desktop / Documents /
@@ -443,20 +462,18 @@ impl WinFs {
             resolve: Box::new(resolve),
         };
         let mut keys = Vec::new();
+        let mut unknown = Vec::new();
         for dir in shared {
             let dir = normalize_win_path(&dir);
             match fs.resolve(&dir) {
                 Resolution::Resolved(real) => keys.push(alias_key(&real)),
                 Resolution::Missing => {}
-                Resolution::Unknown => {
-                    log::warn!(
-                        "[uninstall] can't resolve shared folder {dir}; no folder counts as a product's own"
-                    );
-                    fs.shared_unknown = true;
-                }
+                Resolution::Unknown => unknown.push(dir.clone()),
             }
             keys.push(alias_key(&dir));
         }
+        fs.shared_unknown = !unknown.is_empty();
+        warn_unresolved_shared_once(&unknown);
         keys.sort();
         keys.dedup();
         fs.shared = keys;
