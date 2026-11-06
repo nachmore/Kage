@@ -80,41 +80,21 @@ pub fn read_clipboard_impl() -> Option<String> {
     }
 }
 
+/// Replace the clipboard with `text`, through the same owned, all-prepared
+/// writer as file lists (`set_clipboard_formats`).
 pub fn write_clipboard_impl(text: &str) -> bool {
-    let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-    let bytes = wide.len() * 2;
-    unsafe {
-        // OpenClipboard fails if another process currently holds the clipboard
-        // (common — clipboard managers, the source app finishing its own copy).
-        // Retry briefly rather than giving up on the first miss; callers that
-        // paste afterwards rely on the write actually landing.
-        if !open_clipboard_with_retry() {
-            log::warn!("write_clipboard: OpenClipboard failed after retries");
-            return false;
-        }
-        EmptyClipboard();
-        let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes);
-        if hmem.is_null() {
-            CloseClipboard();
-            return false;
-        }
-        let dest = GlobalLock(hmem) as *mut u16;
-        if dest.is_null() {
-            GlobalFree(hmem);
-            CloseClipboard();
-            return false;
-        }
-        ptr::copy_nonoverlapping(wide.as_ptr(), dest, wide.len());
-        GlobalUnlock(hmem);
-        // On success, the system owns hmem. On failure we must free it ourselves.
-        let ok = if SetClipboardData(CF_UNICODETEXT, hmem).is_null() {
-            GlobalFree(hmem);
+    let bytes: Vec<u8> = text
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    let text: &[u8] = &bytes;
+    match set_clipboard_formats(&[(CF_UNICODETEXT, text)], None) {
+        Ok(()) => true,
+        Err(e) => {
+            log::warn!("write_clipboard: {e}");
             false
-        } else {
-            true
-        };
-        CloseClipboard();
-        ok
+        }
     }
 }
 
@@ -194,45 +174,65 @@ impl Drop for ClipboardOwner {
 /// pairs written together under one open, so readers never see half of
 /// them. Every block is prepared before the clipboard is touched, so a
 /// failed allocation leaves the user's clipboard as it was; the clipboard
-/// is owned by a real window (see `ClipboardOwner`). If a format fails to
-/// land after the clipboard was emptied, it is emptied again rather than
-/// left half-written. Returns `false` on any failure.
-pub(crate) fn set_clipboard_formats(formats: &[(u32, &[u8])]) -> bool {
+/// is owned by a real window (see `ClipboardOwner`). `preflight`, if any,
+/// runs with the clipboard open, immediately before it's emptied — on
+/// this thread, nothing in between but `EmptyClipboard` — and an `Err`
+/// leaves the clipboard untouched. If a format fails to land after the
+/// clipboard was emptied, it's emptied again rather than left
+/// half-written. Every call is checked, `CloseClipboard` included.
+pub(crate) fn set_clipboard_formats(
+    formats: &[(u32, &[u8])],
+    preflight: Option<crate::os::file_ops::Preflight>,
+) -> Result<(), crate::os::file_ops::ClipboardFilesError> {
+    use crate::os::file_ops::ClipboardFilesError;
+    let failed = |what: &str| -> ClipboardFilesError {
+        log::warn!("set_clipboard_formats: {what}");
+        anyhow::anyhow!("couldn't write the clipboard: {what}").into()
+    };
     unsafe {
         let mut blocks: Vec<(u32, *mut std::ffi::c_void)> = Vec::with_capacity(formats.len());
         for (format, bytes) in formats {
             match global_copy(bytes) {
                 Some(hmem) => blocks.push((*format, hmem)),
                 None => {
-                    log::warn!("set_clipboard_formats: GlobalAlloc failed");
                     free_blocks(&blocks);
-                    return false;
+                    return Err(failed("GlobalAlloc failed"));
                 }
             }
         }
         let Some(owner) = ClipboardOwner::new() else {
             free_blocks(&blocks);
-            return false;
+            return Err(failed("no owner window"));
         };
         if !open_clipboard_with_retry_as(owner.0 .0) {
-            log::warn!("set_clipboard_formats: OpenClipboard failed after retries");
             free_blocks(&blocks);
-            return false;
+            return Err(failed("OpenClipboard failed after retries"));
+        }
+        if let Some(check) = preflight {
+            if let Err(e) = check() {
+                free_blocks(&blocks);
+                if CloseClipboard() == 0 {
+                    log::warn!("set_clipboard_formats: CloseClipboard failed");
+                }
+                return Err(ClipboardFilesError::Refused(e));
+            }
         }
         if EmptyClipboard() == 0 {
-            log::warn!("set_clipboard_formats: EmptyClipboard failed");
-            CloseClipboard();
             free_blocks(&blocks);
-            return false;
+            let closed = CloseClipboard() != 0;
+            return Err(failed(if closed {
+                "EmptyClipboard failed"
+            } else {
+                "EmptyClipboard and CloseClipboard failed"
+            }));
         }
-        let mut ok = true;
+        let mut error: Option<&str> = None;
         let mut pending = blocks.into_iter();
         for (format, hmem) in pending.by_ref() {
             // On success the system owns hmem; on failure it's still ours.
             if SetClipboardData(format, hmem).is_null() {
-                log::warn!("set_clipboard_formats: SetClipboardData({format}) failed");
                 GlobalFree(hmem);
-                ok = false;
+                error = Some("SetClipboardData failed");
                 break;
             }
         }
@@ -240,16 +240,28 @@ pub(crate) fn set_clipboard_formats(formats: &[(u32, &[u8])]) -> bool {
         for (_, hmem) in pending {
             GlobalFree(hmem);
         }
-        if !ok {
+        if error.is_some() {
             // Don't leave a partial set (a file list without its
             // DropEffect would paste as a copy after a "Cut").
-            EmptyClipboard();
+            if EmptyClipboard() == 0 {
+                log::warn!(
+                    "set_clipboard_formats: EmptyClipboard after a failed write failed; \
+                     the clipboard may hold part of the data"
+                );
+                error = Some("SetClipboardData failed, and clearing the partial write failed");
+            }
         }
         if CloseClipboard() == 0 {
-            log::warn!("set_clipboard_formats: CloseClipboard failed");
+            error = Some(match error {
+                Some(_) => "SetClipboardData and CloseClipboard failed",
+                None => "CloseClipboard failed",
+            });
         }
         drop(owner);
-        ok
+        match error {
+            None => Ok(()),
+            Some(what) => Err(failed(what)),
+        }
     }
 }
 

@@ -233,6 +233,10 @@
     "message": "No Trash tool was found. Install gio (GLib) or trash-cli and try again.",
     "description": "Launcher result menu (Linux): no freedesktop Trash implementation on PATH"
   },
+  "errors.launcher.trash_path_too_long": {
+    "message": "“{name}” has a path too long for the Recycle Bin. Shorten it — rename or move a folder above it — and try again.",
+    "description": "Launcher result menu (Windows): the path is 260 characters or longer, more than the Recycle Bin API accepts (MAX_PATH, terminating NUL included)"
+  },
   "errors.launcher.clipboard_failed": {
     "message": "Couldn't put that on the clipboard — another app may be using it. Try again.",
     "description": "Launcher result menu: writing a path or file to the clipboard failed"
@@ -240,6 +244,10 @@
   "errors.launcher.target_changed": {
     "message": "“{name}” changed since the menu opened, so Kage left it alone. Try again.",
     "description": "Launcher result menu: right before moving an item to the Trash, it no longer was the item that was checked (replaced, or a folder on its path swapped)"
+  },
+  "errors.launcher.identity_unavailable": {
+    "message": "Kage couldn't confirm that “{name}” is still the item you picked, so it left it alone.",
+    "description": "Launcher result menu: right before moving or cutting an item, its file identity couldn't be read (then or now), so Kage refused rather than guess"
   },
   "errors.launcher.action_failed": {
     "message": "Couldn't do that: {reason}",
@@ -3373,6 +3381,10 @@
     "message": "Properties",
     "description": "Result right-click menu (Windows) — open the shell Properties dialog"
   },
+  "result_menu.unavailable.trash_path_too_long": {
+    "message": "Move to Recycle Bin (path too long)",
+    "description": "Result right-click menu (Windows) — the Recycle Bin item, shown disabled because the path is 260 characters or longer, more than the Recycle Bin accepts"
+  },
   "result_menu.confirm.title": {
     "message": "Uninstall “{name}”?",
     "description": "Uninstall confirmation title; name is the app"
@@ -3382,7 +3394,7 @@
     "description": "Uninstall confirmation body on macOS"
   },
   "result_menu.confirm.body_windows": {
-    "message": "Kage will open {name}'s own uninstaller — or Settings → Installed apps if it can't find one. Nothing is removed until you confirm there.",
+    "message": "Kage will start {name}'s own uninstaller — or open Settings → Installed apps if it can't use it. Some uninstallers remove the app straight away, without asking again.",
     "description": "Uninstall confirmation body on Windows"
   },
   "result_menu.confirm.cancel": {

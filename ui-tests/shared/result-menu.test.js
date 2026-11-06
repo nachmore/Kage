@@ -8,6 +8,7 @@ import {
     buildResultMenuItems,
     resultActionLabelKey,
     resultMenuTarget,
+    unavailableLabelKey,
 } from '../../ui/js/shared/result-menu.js';
 import { normalizeMenuItems } from '../../ui/js/shared/popup-menu.js';
 
@@ -120,6 +121,51 @@ describe('buildResultMenuItems', () => {
             '-',
             'properties',
         ]);
+    });
+
+    it('lists an unavailable action disabled, with why, in its usual place', () => {
+        const items = buildResultMenuItems({
+            platform: 'windows',
+            name: 'deep.txt',
+            actions: ['open', 'reveal', 'cut_file', 'copy_file', 'copy_path', 'properties'],
+            unavailable: [{ action: 'trash', reason: 'path_too_long' }],
+        });
+        expect(shape(items)).toEqual([
+            'open',
+            '-',
+            'reveal',
+            '-',
+            'cut_file',
+            'copy_file',
+            'copy_path',
+            '-',
+            'trash',
+            '-',
+            'properties',
+        ]);
+        const trash = items.find((i) => i.id === 'trash');
+        expect(trash).toMatchObject({
+            enabled: false,
+            danger: false,
+            labelKey: 'result_menu.unavailable.trash_path_too_long',
+        });
+        expect(unavailableLabelKey('trash', 'path_too_long')).toBe(trash.labelKey);
+        expect(normalizeMenuItems(items)).toEqual(items);
+    });
+
+    it('ignores unknown reasons and an action that is also available', () => {
+        const items = buildResultMenuItems({
+            platform: 'windows',
+            name: 'a.txt',
+            actions: ['open', 'trash'],
+            unavailable: [
+                { action: 'trash', reason: 'path_too_long' },
+                { action: 'copy_path', reason: 'because' },
+                null,
+            ],
+        });
+        expect(shape(items)).toEqual(['open', '-', 'trash']);
+        expect(items.at(-1).enabled).toBe(true);
     });
 
     it('ignores unknown actions and survives empty input', () => {

@@ -2,7 +2,7 @@
 // `os::app_uninstall` for the contract).
 
 use crate::os::app_uninstall::{mac_bundle_is_protected, UninstallError, UninstallOutcome};
-use crate::os::file_ops::TrashError;
+use crate::os::file_ops::{Preflight, TrashError};
 use objc2::msg_send;
 use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::{AnyClass, AnyObject};
@@ -61,7 +61,12 @@ fn is_running(bundle: &Path) -> bool {
     })
 }
 
-pub fn uninstall_impl(path: &Path, _name: &str) -> Result<UninstallOutcome, UninstallError> {
+/// `preflight` runs right before the bundle is moved, on this thread.
+pub fn uninstall_impl(
+    path: &Path,
+    _name: &str,
+    preflight: Preflight,
+) -> Result<UninstallOutcome, UninstallError> {
     if !path
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("app"))
@@ -74,7 +79,7 @@ pub fn uninstall_impl(path: &Path, _name: &str) -> Result<UninstallOutcome, Unin
     if is_running(path) {
         return Err(UninstallError::AppRunning);
     }
-    match crate::os::file_ops::move_to_trash(path) {
+    match crate::os::file_ops::move_to_trash(path, preflight) {
         Ok(()) => {
             log::info!("[uninstall] moved {} to the Trash", path.display());
             Ok(UninstallOutcome::MovedToTrash)
@@ -90,6 +95,7 @@ pub fn uninstall_impl(path: &Path, _name: &str) -> Result<UninstallOutcome, Unin
                 .map_err(|e| UninstallError::Failed(e.to_string()))?;
             Ok(UninstallOutcome::RevealedForManualRemoval)
         }
+        Err(TrashError::Refused(e)) => Err(UninstallError::Refused(e)),
         Err(e) => Err(UninstallError::Failed(e.to_string())),
     }
 }

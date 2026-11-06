@@ -333,17 +333,45 @@ describe('PopupMenuView', () => {
 });
 
 describe('startMenuWindow', () => {
-    function setup({ pending = null, readyFails = false, emitTo: customEmitTo = null } = {}) {
-        const listeners = {};
-        const winListeners = {};
-        const listen = (e, cb) => (listeners[e] = cb);
-        const invoke = vi.fn(async (cmd) => {
-            if (cmd === 'get_pending_context_menu') return pending;
+    /**
+     * A stand-in for the backend's show/hide bookkeeping: `context_menu_ready`
+     * presents its token, `hide_context_menu` hides unless a newer token has
+     * been presented (as `context_menu.rs` does). `hideDelay` holds each hide
+     * until released, like a slow IPC round trip.
+     */
+    function fakeBackend({ readyFails = false, hideDelay = false } = {}) {
+        const state = { presented: 0, visible: false, hides: [] };
+        state.handle = async (cmd, args) => {
             if (cmd === 'context_menu_ready') {
                 if (readyFails) throw new Error('boom');
+                state.presented = Math.max(state.presented, args.token);
+                state.visible = true;
+                return true;
+            }
+            if (cmd === 'hide_context_menu') {
+                if (hideDelay) await new Promise((resolve) => state.hides.push(resolve));
+                if (args.token < state.presented) return false;
+                state.visible = false;
                 return true;
             }
             return null;
+        };
+        return state;
+    }
+
+    function setup({
+        pending = null,
+        readyFails = false,
+        hideDelay = false,
+        emitTo: customEmitTo = null,
+    } = {}) {
+        const listeners = {};
+        const winListeners = {};
+        const listen = (e, cb) => (listeners[e] = cb);
+        const backend = fakeBackend({ readyFails, hideDelay });
+        const invoke = vi.fn(async (cmd, args) => {
+            if (cmd === 'get_pending_context_menu') return pending;
+            return backend.handle(cmd, args);
         });
         const emitTo = customEmitTo || vi.fn(async () => {});
         const appWindow = {
@@ -364,7 +392,7 @@ describe('startMenuWindow', () => {
             isRtl: () => true,
             mac: false,
         });
-        return { win, listeners, winListeners, invoke, emitTo, appWindow, root };
+        return { win, listeners, winListeners, invoke, emitTo, appWindow, root, backend };
     }
     const payload = (token, extra = {}) => ({
         token,
@@ -408,8 +436,9 @@ describe('startMenuWindow', () => {
     });
 
     it('answers the owner with the choice and context, then hides', async () => {
-        const { listeners, win, emitTo, appWindow } = setup();
+        const { listeners, win, emitTo, invoke, backend } = setup();
         await listeners[EVT.CONTEXT_MENU_RENDER]({ payload: payload(5) });
+        expect(backend.visible).toBe(true);
         await win.answer('open');
         await win.answer('open'); // answered once only
         expect(emitTo).toHaveBeenCalledTimes(1);
@@ -418,7 +447,48 @@ describe('startMenuWindow', () => {
             action: 'open',
             context: { kind: 'app', target: 'Slack' },
         });
-        expect(appWindow.hide).toHaveBeenCalled();
+        expect(invoke).toHaveBeenCalledWith('hide_context_menu', { token: 5 });
+        expect(backend.visible).toBe(false);
+    });
+
+    it("a hide that lands after the next menu showed doesn't hide it", async () => {
+        // Token 1 answers and dispatches its hide; the IPC is slow. Token 2
+        // renders and is presented. Then token 1's hide lands: the backend
+        // drops it, and menu 2 stays on screen.
+        const { listeners, win, backend, appWindow, root } = setup({ hideDelay: true });
+        await listeners[EVT.CONTEXT_MENU_RENDER]({ payload: payload(1) });
+        const answering = win.answer('open');
+        await flush();
+        expect(backend.hides).toHaveLength(1); // token 1's hide is in flight
+        await listeners[EVT.CONTEXT_MENU_RENDER]({
+            payload: payload(2, { items: [{ id: 'reveal', label: 'Reveal' }] }),
+        });
+        expect(backend.presented).toBe(2);
+        backend.hides.shift()();
+        await answering;
+        expect(backend.visible).toBe(true);
+        expect(appWindow.hide).not.toHaveBeenCalled();
+        expect([...root.querySelectorAll('.menu-item')].map((e) => e.dataset.action)).toEqual([
+            'reveal',
+        ]);
+        // Menu 2's own hide still works.
+        const second = win.answer('reveal');
+        await flush();
+        backend.hides.shift()();
+        await second;
+        expect(backend.visible).toBe(false);
+    });
+
+    it('falls back to hiding the window itself if the backend hide fails', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { listeners, win, invoke, appWindow } = setup();
+        await listeners[EVT.CONTEXT_MENU_RENDER]({ payload: payload(5) });
+        invoke.mockImplementation(async (cmd) => {
+            if (cmd === 'hide_context_menu') throw new Error('gone');
+            return null;
+        });
+        await win.answer('open');
+        expect(appWindow.hide).toHaveBeenCalledTimes(1);
     });
 
     it("an answer still in flight doesn't hide the menu that replaced it", async () => {
@@ -431,7 +501,7 @@ describe('startMenuWindow', () => {
                     releaseEmit = resolve;
                 })
         );
-        const { listeners, win, appWindow, root } = setup({ emitTo });
+        const { listeners, win, invoke, root } = setup({ emitTo });
         await listeners[EVT.CONTEXT_MENU_RENDER]({ payload: payload(1) });
         const answering = win.answer('open');
         await listeners[EVT.CONTEXT_MENU_RENDER]({
@@ -444,7 +514,8 @@ describe('startMenuWindow', () => {
             EVT.CONTEXT_MENU_ACTION,
             expect.objectContaining({ token: 1, action: 'open' })
         );
-        expect(appWindow.hide).not.toHaveBeenCalled();
+        const hides = () => invoke.mock.calls.filter(([c]) => c === 'hide_context_menu');
+        expect(hides()).toHaveLength(0);
         expect([...root.querySelectorAll('.menu-item')].map((e) => e.dataset.action)).toEqual([
             'reveal',
         ]);
@@ -457,7 +528,7 @@ describe('startMenuWindow', () => {
             EVT.CONTEXT_MENU_ACTION,
             expect.objectContaining({ token: 2, action: 'reveal' })
         );
-        expect(appWindow.hide).toHaveBeenCalledTimes(1);
+        expect(hides()).toEqual([['hide_context_menu', { token: 2 }]]);
     });
 
     it('dismisses on blur unless the focus comes back', async () => {

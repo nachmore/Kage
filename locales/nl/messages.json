@@ -9588,10 +9588,10 @@
     "_source_hash": "4b75f9431bf50029"
   },
   "result_menu.confirm.body_windows": {
-    "message": "Kage opent het eigen verwijderprogramma van {name}, of Instellingen → Geïnstalleerde apps als er geen wordt gevonden. Er wordt pas iets verwijderd als je het daar bevestigt.",
+    "message": "Kage start het eigen verwijderprogramma van {name}, of opent Instellingen → Geïnstalleerde apps als dat niet lukt. Sommige verwijderprogramma's verwijderen de app meteen, zonder het nogmaals te vragen.",
     "description": "Uninstall confirmation body on Windows",
     "_machine_translated": true,
-    "_source_hash": "37f1e04782643036"
+    "_source_hash": "ac9a520d2ecb4209"
   },
   "result_menu.confirm.cancel": {
     "message": "Annuleren",
@@ -9646,5 +9646,23 @@
     "description": "Launcher result menu: right before moving an item to the Trash, it no longer was the item that was checked (replaced, or a folder on its path swapped)",
     "_machine_translated": true,
     "_source_hash": "416114f7e2cd73cd"
+  },
+  "errors.launcher.trash_path_too_long": {
+    "message": "Het pad van ‘{name}’ is te lang voor de Prullenbak. Maak het korter door een bovenliggende map te hernoemen of te verplaatsen en probeer het opnieuw.",
+    "description": "Launcher result menu (Windows): the path is 260 characters or longer, more than the Recycle Bin API accepts (MAX_PATH, terminating NUL included)",
+    "_machine_translated": true,
+    "_source_hash": "cb85fe6a0610f346"
+  },
+  "errors.launcher.identity_unavailable": {
+    "message": "Kage kon niet bevestigen dat ‘{name}’ nog steeds het item is dat u hebt gekozen en heeft het daarom ongemoeid gelaten.",
+    "description": "Launcher result menu: right before moving or cutting an item, its file identity couldn't be read (then or now), so Kage refused rather than guess",
+    "_machine_translated": true,
+    "_source_hash": "5a50e999f32f021c"
+  },
+  "result_menu.unavailable.trash_path_too_long": {
+    "message": "Naar Prullenbak verplaatsen (pad te lang)",
+    "description": "Result right-click menu (Windows) — the Recycle Bin item, shown disabled because the path is 260 characters or longer, more than the Recycle Bin accepts",
+    "_machine_translated": true,
+    "_source_hash": "9ff84b7c31b30663"
   }
 }

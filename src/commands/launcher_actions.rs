@@ -10,13 +10,27 @@ use crate::launcher_actions::{
 use crate::state::FeatureServices;
 use tauri::State;
 
-/// Kage's bundle id and resource folder — what "Kage itself" means when
-/// deciding what may be moved or uninstalled.
+/// Kage's bundle id, resource folder and bundled resources — what "Kage
+/// itself" means when deciding what may be moved or uninstalled.
 fn own_locations<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> actions::OwnLocations {
+    use tauri::utils::config::BundleResources;
     use tauri::Manager;
+    // Tauri derives it from a canonicalised exe path: verbatim (`\\?\C:\…`)
+    // on Windows. Compared with the plain forms everything else uses.
+    let resource_dir = app.path().resource_dir().ok().map(actions::strip_verbatim);
+    let entries: Vec<String> = match &app.config().bundle.resources {
+        Some(BundleResources::List(list)) => list.clone(),
+        // Source → target: where it lands is the target.
+        Some(BundleResources::Map(map)) => map.values().cloned().collect(),
+        None => Vec::new(),
+    };
     actions::OwnLocations {
         bundle_id: app.config().identifier.clone(),
-        resource_dir: app.path().resource_dir().ok(),
+        resources: resource_dir
+            .as_deref()
+            .map(|dir| actions::bundled_resource_paths(dir, &entries))
+            .unwrap_or_default(),
+        resource_dir,
     }
 }
 

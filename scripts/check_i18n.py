@@ -99,6 +99,8 @@ KNOWN_DYNAMIC_KEYS: set[str] = {
     "result_menu.*",
     "result_menu.feedback.*",
     "result_menu.confirm.*",
+    # Disabled items: `result_menu.unavailable.${action}_${reason}`.
+    "result_menu.unavailable.*",
     # Internal Sites settings render option labels, editor labels and test
     # rows via template literals (`settings.internal_sites.<group>.${v}`).
     "settings.internal_sites.editor.**",

@@ -322,6 +322,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // Context-menu window protocol (host chrome only).
     get_pending_context_menu: null,
     context_menu_ready: null,
+    hide_context_menu: null,
     // Launcher result menu: open/reveal/copy/trash/uninstall on apps and
     // files. Destructive and filesystem-wide — never for extensions.
     launcher_result_actions: null,

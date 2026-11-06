@@ -8,14 +8,17 @@
 //! target offers on this OS; `launcher_result_action` re-resolves and
 //! re-checks that list on every call, so a crafted request can't run an
 //! action the menu wouldn't have shown — and right before anything is
-//! moved to the Trash, the item's identity is checked once more.
+//! moved to the Trash or cut, on the thread that does it, the item's
+//! canonical path and identity are checked once more
+//! (`Resolved::verify_unchanged`; the remaining limits are in
+//! `os::file_ops`). An item whose identity can't be read is refused.
 //!
 //! An app bundle reached by path is still an app: it offers Uninstall, with
 //! every uninstall safeguard and the confirmation, never a bare Trash.
 
 use crate::error::{AppError, ErrorKind};
 use crate::os::app_uninstall::{UninstallError, UninstallOutcome};
-use crate::os::file_ops::{FileId, TrashError};
+use crate::os::file_ops::{ClipboardFilesError, FileId, TrashError};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -147,7 +150,25 @@ pub enum Facts {
         removable: bool,
         /// This machine has a Trash.
         trash: bool,
+        /// Longer than the Trash can take here (Windows: `MAX_PATH`).
+        path_too_long: bool,
     },
+}
+
+/// Why an action is shown but can't be chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnavailableReason {
+    /// Windows: the Recycle Bin API can't take paths over `MAX_PATH`.
+    PathTooLong,
+}
+
+/// An action listed disabled, with the reason the menu shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnavailableAction {
+    pub action: ResultAction,
+    pub reason: UnavailableReason,
 }
 
 /// Which app forms each OS can uninstall from the launcher.
@@ -188,7 +209,10 @@ pub fn actions_for(facts: &Facts, platform: Platform) -> Vec<ResultAction> {
             }
         }
         Facts::Path {
-            removable, trash, ..
+            removable,
+            trash,
+            path_too_long,
+            ..
         } => {
             out.push(Reveal);
             // A cut file is moved when it's pasted: only what may be moved.
@@ -199,7 +223,7 @@ pub fn actions_for(facts: &Facts, platform: Platform) -> Vec<ResultAction> {
                 out.push(CopyFile);
             }
             out.push(CopyPath);
-            if removable && trash {
+            if removable && trash && !path_too_long {
                 out.push(Trash);
             }
             if windows {
@@ -208,6 +232,24 @@ pub fn actions_for(facts: &Facts, platform: Platform) -> Vec<ResultAction> {
         }
     }
     out
+}
+
+/// Actions the menu lists disabled, with why: Trash for a removable item
+/// whose path is too long for this OS's Trash. Never in `actions_for`, so
+/// they're refused if requested anyway.
+pub fn unavailable_for(facts: &Facts) -> Vec<UnavailableAction> {
+    match *facts {
+        Facts::Path {
+            removable: true,
+            trash: true,
+            path_too_long: true,
+            ..
+        } => vec![UnavailableAction {
+            action: ResultAction::Trash,
+            reason: UnavailableReason::PathTooLong,
+        }],
+        _ => Vec::new(),
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -340,8 +382,62 @@ fn has_app_extension(path: &Path) -> bool {
 pub struct OwnLocations {
     /// The bundle identifier (`com.kage.launcher`).
     pub bundle_id: String,
-    /// Tauri's resource directory — part of the installation.
+    /// Tauri's resource directory.
     pub resource_dir: Option<PathBuf>,
+    /// The resources Kage ships (`bundle.resources`), resolved under
+    /// `resource_dir` — see `bundled_resource_paths`.
+    pub resources: Vec<PathBuf>,
+}
+
+/// Where each `bundle.resources` entry lands under `resource_dir`: the
+/// first component of its (target) path — `pocket_tts/*` →
+/// `<resource_dir>/pocket_tts`. Globs, absolute paths and `..` are
+/// skipped (Tauri renames `..` to `_up_`; nothing Kage ships uses it).
+pub fn bundled_resource_paths(resource_dir: &Path, entries: &[String]) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for entry in entries {
+        let unified = entry.replace('\\', "/");
+        if unified.starts_with('/') || unified.get(1..2) == Some(":") {
+            continue;
+        }
+        let Some(first) = unified.split('/').find(|c| !c.is_empty() && *c != ".") else {
+            continue;
+        };
+        if first == ".." || first.contains(['*', '?', '[', '{']) {
+            continue;
+        }
+        let path = resource_dir.join(first);
+        if !out.contains(&path) {
+            out.push(path);
+        }
+    }
+    out
+}
+
+/// What of Kage's installation is protected as whole trees: the verified
+/// install folder or bundle (or, for a loose executable, just its own
+/// files), the resources it ships, and Tauri's resource folder unless
+/// that's merely the folder a loose executable sits in.
+pub fn own_install_subtrees(
+    install: &crate::os::app_uninstall::OwnInstall,
+    exe_dir: Option<&Path>,
+    own: &OwnLocations,
+) -> Vec<PathBuf> {
+    let mut out = install.paths();
+    if let Some(res) = &own.resource_dir {
+        // Verbatim or not (Tauri's is `\\?\C:\…` on Windows).
+        let res = strip_verbatim(res.clone());
+        let ci = Platform::CURRENT.case_insensitive_paths();
+        let loose_dir = install.root().is_none()
+            && exe_dir.is_some_and(|d| {
+                path_key(&strip_verbatim(d.to_path_buf()), ci) == path_key(&res, ci)
+            });
+        if !loose_dir {
+            out.push(res);
+        }
+    }
+    out.extend(own.resources.iter().cloned());
+    out
 }
 
 /// A bundle id safe to use as a folder name.
@@ -443,15 +539,16 @@ impl Protection {
             .then_some(home.as_deref())
             .flatten();
         let mut subtrees = own_storage_dirs(&bases, &own.bundle_id, mac_home);
-        subtrees.extend(
-            [
-                crate::os::app_uninstall::own_install_root(),
-                std::env::current_exe().ok(),
-                own.resource_dir.clone(),
-            ]
-            .into_iter()
-            .flatten(),
-        );
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|e| std::fs::canonicalize(e).ok())
+            .map(strip_verbatim)
+            .and_then(|e| e.parent().map(Path::to_path_buf));
+        subtrees.extend(own_install_subtrees(
+            &crate::os::app_uninstall::own_install(),
+            exe_dir.as_deref(),
+            own,
+        ));
 
         let mut app_trees: Vec<PathBuf> = Vec::new();
         match Platform::CURRENT {
@@ -554,6 +651,8 @@ pub struct ResultActionsInfo {
     pub name: String,
     pub path: String,
     pub actions: Vec<ResultAction>,
+    /// Listed, but disabled with a reason.
+    pub unavailable: Vec<UnavailableAction>,
 }
 
 impl Resolved {
@@ -568,13 +667,18 @@ impl Resolved {
             name: self.name.clone(),
             path: self.path.to_string_lossy().into_owned(),
             actions: self.actions(),
+            unavailable: unavailable_for(&self.facts),
         }
     }
 
-    /// Right before something is moved: `path` must still name the item
-    /// that was checked — the same canonical path and the same file. This
-    /// narrows the window for swapping in a link, or another folder, in
-    /// between.
+    /// Right before something is moved — called by the OS layer on the
+    /// thread that moves it, immediately before (`os::file_ops::Preflight`):
+    /// `path` must still name the item that was checked — the same
+    /// canonical path and the same file. This narrows the window for
+    /// swapping in a link, or another folder, in between; it can't close it
+    /// (the OS calls take paths), and on FAT/exFAT the file identity is
+    /// weak (see `os::file_ops`). Fails closed: an identity that couldn't
+    /// be read, then or now, refuses.
     pub fn verify_unchanged(&self) -> Result<(), AppError> {
         let changed = |why: &str| {
             log::warn!(
@@ -587,8 +691,22 @@ impl Resolved {
                 &[("name", &self.name)],
             )
         };
+        let unconfirmed = |why: &str| {
+            log::warn!(
+                "[launcher-action] can't confirm which file {} is ({why}); refusing",
+                self.path.display()
+            );
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.launcher.identity_unavailable",
+                &[("name", &self.name)],
+            )
+        };
         let Some(expected) = &self.canonical else {
             return Err(changed("no canonical path"));
+        };
+        let Some(identity) = self.identity else {
+            return Err(unconfirmed("no identity when it was checked"));
         };
         let now = match canonical_target(&self.path) {
             Ok(now) => now,
@@ -605,10 +723,16 @@ impl Resolved {
         if path_key(&now, ci) != path_key(expected, ci) {
             return Err(changed("resolves elsewhere"));
         }
-        if crate::os::file_ops::file_id(&now) != self.identity {
-            return Err(changed("different file"));
+        match crate::os::file_ops::file_id(&now) {
+            None => Err(unconfirmed("identity unreadable now")),
+            Some(id) if id != identity => Err(changed("different file")),
+            Some(_) => Ok(()),
         }
-        Ok(())
+    }
+
+    /// `verify_unchanged` as an OS-layer preflight.
+    fn preflight(&self) -> impl Fn() -> Result<(), AppError> + Sync + '_ {
+        move || self.verify_unchanged()
     }
 }
 
@@ -679,14 +803,15 @@ fn bundle_uninstallable(name: &str, path: &Path, canonical: &Path, own: &OwnLoca
 }
 
 fn is_own_install(path: &Path) -> bool {
-    let Some(root) = crate::os::app_uninstall::own_install_root() else {
-        return false;
-    };
     let ci = Platform::CURRENT.case_insensitive_paths();
     let target = std::fs::canonicalize(path)
         .map(strip_verbatim)
         .unwrap_or_else(|_| path.to_path_buf());
-    is_within(&path_key(&target, ci), &path_key(&root, ci))
+    let target = path_key(&target, ci);
+    crate::os::app_uninstall::own_install()
+        .paths()
+        .iter()
+        .any(|own| is_within(&target, &path_key(own, ci)))
 }
 
 fn is_os_or_own_bundle(bundle: &Path, own_bundle_id: &str) -> bool {
@@ -770,6 +895,10 @@ pub fn resolve_path(raw: &str, own: &OwnLocations) -> Result<Resolved, AppError>
             is_dir,
             removable,
             trash: crate::os::file_ops::trash_available(),
+            path_too_long: crate::os::file_ops::exceeds_path_limit(
+                &path,
+                crate::os::file_ops::trash_path_limit(),
+            ),
         },
         canonical: Some(path),
         identity,
@@ -846,19 +975,31 @@ pub fn perform(target: &Resolved, action: ResultAction) -> Result<ActionOutcome,
             }
         }
         ResultAction::CopyFile | ResultAction::CutFile => {
-            crate::os::file_ops::copy_files_to_clipboard(
+            // A Cut is a move once pasted: checked right before it's
+            // published (the paste itself is the file manager's, by path).
+            let cut = action == ResultAction::CutFile;
+            let check = target.preflight();
+            let preflight: Option<crate::os::file_ops::Preflight> =
+                if cut { Some(&check) } else { None };
+            match crate::os::file_ops::copy_files_to_clipboard(
                 std::slice::from_ref(&target.path),
-                action == ResultAction::CutFile,
-            )
-            .map_err(|e| {
-                log::warn!("[launcher-action] file clipboard write failed: {e}");
-                AppError::keyed(ErrorKind::Internal, "errors.launcher.clipboard_failed", &[])
-            })?;
-            Ok(ActionOutcome::Copied)
+                cut,
+                preflight,
+            ) {
+                Ok(()) => Ok(ActionOutcome::Copied),
+                Err(ClipboardFilesError::Refused(e)) => Err(e),
+                Err(ClipboardFilesError::Failed(e)) => {
+                    log::warn!("[launcher-action] file clipboard write failed: {e}");
+                    Err(AppError::keyed(
+                        ErrorKind::Internal,
+                        "errors.launcher.clipboard_failed",
+                        &[],
+                    ))
+                }
+            }
         }
         ResultAction::Trash => {
-            target.verify_unchanged()?;
-            match crate::os::file_ops::move_to_trash(&target.path) {
+            match crate::os::file_ops::move_to_trash(&target.path, &target.preflight()) {
                 Ok(()) => {
                     log::info!(
                         "[launcher-action] moved {} to the Trash",
@@ -876,21 +1017,29 @@ pub fn perform(target: &Resolved, action: ResultAction) -> Result<ActionOutcome,
                     "errors.launcher.trash_unavailable",
                     &[],
                 )),
+                Err(TrashError::PathTooLong) => Err(AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.launcher.trash_path_too_long",
+                    &[("name", &target.name)],
+                )),
+                Err(TrashError::Refused(e)) => Err(e),
                 Err(TrashError::Other(reason)) => Err(failed(reason)),
             }
         }
         ResultAction::Uninstall => {
-            // A bundle is moved to the Trash: same last-moment check.
-            if matches!(
+            // A bundle is moved to the Trash: the same last-moment check,
+            // run where it's moved. Other forms remove no file themselves.
+            let bundle = matches!(
                 target.facts,
                 Facts::App {
                     form: AppForm::Bundle,
                     ..
                 }
-            ) {
-                target.verify_unchanged()?;
-            }
-            match crate::os::app_uninstall::uninstall(&target.path, &target.name) {
+            );
+            let check = target.preflight();
+            let no_check = || -> Result<(), AppError> { Ok(()) };
+            let preflight: crate::os::file_ops::Preflight = if bundle { &check } else { &no_check };
+            match crate::os::app_uninstall::uninstall(&target.path, &target.name, preflight) {
                 Ok(UninstallOutcome::MovedToTrash) => Ok(ActionOutcome::MovedToTrash),
                 Ok(UninstallOutcome::UninstallerLaunched) => Ok(ActionOutcome::UninstallerLaunched),
                 Ok(UninstallOutcome::SettingsOpened) => Ok(ActionOutcome::SettingsOpened),
@@ -917,6 +1066,7 @@ pub fn perform(target: &Resolved, action: ResultAction) -> Result<ActionOutcome,
                     "errors.launcher.action_unavailable",
                     &[],
                 )),
+                Err(UninstallError::Refused(e)) => Err(e),
                 Err(UninstallError::Failed(reason)) => Err(failed(reason)),
             }
         }
@@ -944,6 +1094,16 @@ mod tests {
         OwnLocations {
             bundle_id: "com.kage.launcher".into(),
             resource_dir: None,
+            resources: Vec::new(),
+        }
+    }
+
+    fn file_facts(removable: bool, trash: bool) -> Facts {
+        Facts::Path {
+            is_dir: false,
+            removable,
+            trash,
+            path_too_long: false,
         }
     }
 
@@ -1032,11 +1192,7 @@ mod tests {
 
     #[test]
     fn file_menus_per_os() {
-        let file = Facts::Path {
-            is_dir: false,
-            removable: true,
-            trash: true,
-        };
+        let file = file_facts(true, true);
         assert_eq!(
             actions_for(&file, Platform::MacOs),
             vec![Open, Reveal, CopyFile, CopyPath, Trash]
@@ -1050,12 +1206,43 @@ mod tests {
             vec![Open, Reveal, CopyPath, Trash]
         );
         // Linux without a Trash tool: nothing to move it with.
-        let no_trash = Facts::Path {
+        let no_trash = file_facts(true, false);
+        assert!(!actions_for(&no_trash, Platform::Linux).contains(&Trash));
+        assert!(unavailable_for(&no_trash).is_empty());
+        assert!(unavailable_for(&file).is_empty());
+    }
+
+    #[test]
+    fn a_path_too_long_for_the_trash_lists_it_disabled_with_why() {
+        let long = Facts::Path {
             is_dir: false,
             removable: true,
-            trash: false,
+            trash: true,
+            path_too_long: true,
         };
-        assert!(!actions_for(&no_trash, Platform::Linux).contains(&Trash));
+        let actions = actions_for(&long, Platform::Windows);
+        assert!(!actions.contains(&Trash));
+        // Cut, Copy and the rest still work.
+        assert!(actions.contains(&CutFile) && actions.contains(&CopyFile));
+        assert_eq!(
+            unavailable_for(&long),
+            vec![UnavailableAction {
+                action: Trash,
+                reason: UnavailableReason::PathTooLong,
+            }]
+        );
+        assert_eq!(
+            serde_json::to_value(unavailable_for(&long)).unwrap(),
+            serde_json::json!([{ "action": "trash", "reason": "path_too_long" }])
+        );
+        // A protected item isn't listed at all, too long or not.
+        let protected = Facts::Path {
+            is_dir: false,
+            removable: false,
+            trash: true,
+            path_too_long: true,
+        };
+        assert!(unavailable_for(&protected).is_empty());
     }
 
     #[test]
@@ -1064,6 +1251,7 @@ mod tests {
             is_dir: true,
             removable: false,
             trash: true,
+            path_too_long: false,
         };
         for p in [Platform::MacOs, Platform::Windows, Platform::Linux] {
             let actions = actions_for(&protected, p);
@@ -1075,12 +1263,25 @@ mod tests {
         assert!(actions_for(&protected, Platform::Windows).contains(&CopyFile));
     }
 
+    // `resolve_user_path` ends with `Path::is_absolute`, which follows the
+    // host's rules (`/Users/me` isn't absolute on Windows, `C:\Users` isn't
+    // on Unix), so each host checks its own kind of path.
+
     #[test]
-    fn user_paths_must_be_absolute() {
+    fn empty_and_nul_paths_are_refused_everywhere() {
+        for platform in [Platform::MacOs, Platform::Windows, Platform::Linux] {
+            assert_eq!(resolve_user_path("", None, platform), None);
+            assert_eq!(resolve_user_path("   ", None, platform), None);
+            assert_eq!(resolve_user_path("a\0b", None, platform), None);
+            assert_eq!(resolve_user_path("~/x", None, platform), None);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_user_paths_must_be_absolute() {
         let home = Path::new("/Users/me");
         let mac = Platform::MacOs;
-        assert_eq!(resolve_user_path("", Some(home), mac), None);
-        assert_eq!(resolve_user_path("   ", Some(home), mac), None);
         assert_eq!(resolve_user_path("relative/x", Some(home), mac), None);
         assert_eq!(resolve_user_path("/tmp/a\0b", Some(home), mac), None);
         assert_eq!(
@@ -1091,11 +1292,40 @@ mod tests {
             resolve_user_path("~", Some(home), mac),
             Some(home.to_path_buf())
         );
-        assert_eq!(resolve_user_path("~/x", None, mac), None);
         assert_eq!(
-            resolve_user_path(" /etc/hosts ", None, mac),
+            resolve_user_path(" /etc/hosts ", None, Platform::Linux),
             Some(PathBuf::from("/etc/hosts"))
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_user_paths_must_be_absolute() {
+        let home = Path::new(r"C:\Users\me");
+        let win = Platform::Windows;
+        assert_eq!(
+            resolve_user_path(r"C:\Users\me", None, win),
+            Some(PathBuf::from(r"C:\Users\me"))
+        );
+        assert_eq!(
+            resolve_user_path(r"~\Documents\a.txt", Some(home), win),
+            Some(PathBuf::from(r"C:\Users\me\Documents\a.txt"))
+        );
+        assert_eq!(
+            resolve_user_path("~/Documents/a.txt", Some(home), win),
+            Some(home.join("Documents/a.txt"))
+        );
+        assert_eq!(
+            resolve_user_path(r"\\server\share\a.txt", None, win),
+            Some(PathBuf::from(r"\\server\share\a.txt"))
+        );
+        for relative in [r"Documents\a.txt", r"..\a.txt", r"C:a.txt", r"\Users\me"] {
+            assert_eq!(
+                resolve_user_path(relative, Some(home), win),
+                None,
+                "{relative}"
+            );
+        }
     }
 
     #[test]
@@ -1453,6 +1683,156 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn bundled_resources_resolve_to_their_top_folders() {
+        let res = Path::new("res");
+        let entries: Vec<String> = [
+            "pocket_tts/*",
+            "pocket_tts/model.bin",
+            r"icons\tray.png",
+            "./licenses/",
+            "*.dll",
+            "../outside/x",
+            "/abs/x",
+            "C:/abs/x",
+            "",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        assert_eq!(
+            bundled_resource_paths(res, &entries),
+            vec![
+                res.join("pocket_tts"),
+                res.join("icons"),
+                res.join("licenses"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_loose_exe_never_protects_the_folder_it_sits_in() {
+        use crate::os::app_uninstall::OwnInstall;
+        let downloads = std::env::temp_dir().join("Downloads");
+        let exe = downloads.join("kage.exe");
+        let loose = OwnInstall {
+            root: None,
+            files: vec![exe.clone()],
+        };
+        // Tauri's resource dir on Windows is the exe's own folder.
+        let locs = OwnLocations {
+            resource_dir: Some(downloads.clone()),
+            resources: vec![downloads.join("pocket_tts")],
+            ..own()
+        };
+        let trees = own_install_subtrees(&loose, Some(&downloads), &locs);
+        assert_eq!(trees, vec![exe.clone(), downloads.join("pocket_tts")]);
+        let protection = Protection {
+            subtrees: trees,
+            ..Default::default()
+        };
+        assert!(protection.blocks_removal(&exe, true));
+        assert!(protection.blocks_removal(&downloads.join("pocket_tts").join("m.bin"), true));
+        assert!(!protection.blocks_removal(&downloads.join("report.pdf"), true));
+        assert!(!protection.blocks_removal(&downloads.join("Apps"), true));
+
+        // An installation: the whole folder.
+        let dir = std::env::temp_dir().join("Kage");
+        let installed = OwnInstall {
+            root: Some(dir.clone()),
+            files: Vec::new(),
+        };
+        let locs = OwnLocations {
+            resource_dir: Some(dir.clone()),
+            ..own()
+        };
+        assert_eq!(
+            own_install_subtrees(&installed, Some(&dir), &locs),
+            vec![dir.clone(), dir]
+        );
+        // Tauri's verbatim spelling of that same folder (Windows) is
+        // still the loose exe's folder. Plain strings: any host.
+        let verbatim_loose = OwnInstall {
+            root: None,
+            files: vec![PathBuf::from(r"C:\Users\me\Downloads\kage.exe")],
+        };
+        let locs = OwnLocations {
+            resource_dir: Some(PathBuf::from(r"\\?\C:\Users\me\Downloads")),
+            ..own()
+        };
+        assert_eq!(
+            own_install_subtrees(
+                &verbatim_loose,
+                Some(Path::new(r"C:\Users\me\Downloads")),
+                &locs
+            ),
+            vec![PathBuf::from(r"C:\Users\me\Downloads\kage.exe")]
+        );
+        // A resource folder of its own (Linux `/usr/lib/kage`) is Kage's.
+        let res = std::env::temp_dir().join("lib-kage");
+        let locs = OwnLocations {
+            resource_dir: Some(res.clone()),
+            ..own()
+        };
+        assert_eq!(
+            own_install_subtrees(&loose, Some(&downloads), &locs),
+            vec![exe, res]
+        );
+    }
+
+    #[test]
+    fn verify_unchanged_fails_closed_without_an_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.txt");
+        std::fs::write(&file, "x").unwrap();
+        let mut r = resolve_path(&file.to_string_lossy(), &own()).unwrap();
+        r.verify_unchanged().unwrap();
+        // None then is never "unchanged", even if it's None now too.
+        r.identity = None;
+        assert_eq!(
+            r.verify_unchanged().unwrap_err().key,
+            "errors.launcher.identity_unavailable"
+        );
+        // And nothing is moved: the refusal comes before the Trash.
+        if r.actions().contains(&Trash) || cfg!(not(target_os = "linux")) {
+            let e = perform(&r, Trash).unwrap_err();
+            assert!(
+                e.key == "errors.launcher.identity_unavailable"
+                    || e.key == "errors.launcher.trash_unavailable",
+                "{}",
+                e.key
+            );
+        }
+        assert!(file.exists());
+    }
+
+    #[test]
+    fn a_refusing_preflight_leaves_the_item_where_it_is() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("keep.txt");
+        std::fs::write(&file, "x").unwrap();
+        let calls = AtomicUsize::new(0);
+        let refuse = || -> Result<(), AppError> {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.launcher.target_changed",
+                &[],
+            ))
+        };
+        match crate::os::file_ops::move_to_trash(&file, &refuse) {
+            Err(TrashError::Refused(e)) => {
+                assert_eq!(e.key, "errors.launcher.target_changed");
+                assert_eq!(calls.load(Ordering::SeqCst), 1);
+            }
+            // Linux CI without gio / trash-cli: nothing to run.
+            Err(TrashError::Unavailable) if cfg!(target_os = "linux") => {}
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+        assert!(file.exists());
     }
 
     #[test]

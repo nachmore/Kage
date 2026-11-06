@@ -171,6 +171,45 @@ macOS and Linux share one POSIX implementation (`src/os/login_env/`:
 when to re-probe and who may wait); Windows is a no-op — Explorer-launched
 processes already get the full user + system environment.
 
+## Destructive file operations (`file_ops`, `app_uninstall`)
+
+The launcher's result menu can move items to the Trash / Recycle Bin, cut
+them (Windows), and move an app bundle to the Trash (macOS Uninstall). Each
+of those entry points takes a `Preflight` — the caller's re-check that the
+path still names the item it vetted (same canonical path, same file
+identity; `launcher_actions::Resolved::verify_unchanged`). Platform code
+must run it **on the thread that makes the destructive call, immediately
+before it**, and abort with nothing done on `Err`: on Windows that's inside
+the `with_com_sta` shell thread right before `SHFileOperationW`, and with
+the clipboard already open right before `EmptyClipboard` for a Cut. Never
+check on one thread and hand the call to another. An item whose identity
+can't be read (then or now) is refused — `None == None` is not "unchanged".
+
+What the check can't do, because the OS APIs take paths, not handles:
+
+- It narrows the window between check and call to microseconds; it can't
+  close it.
+- A Cut is pasted later by Explorer from the `CF_HDROP` path list —
+  path-based by design. Kage checks the item when it publishes the list;
+  what the path names at paste time is the file manager's to resolve.
+- Linux trashes through `gio` / `trash-cli` / `kioclient`, separate
+  processes handed the path.
+- File identity is (volume, file index). FAT and exFAT have no stable file
+  index — Windows derives it from where the directory entry sits — so a
+  replacement that reuses the entry can carry the same identity there, and
+  on ReFS (Dev Drives) the 64-bit index isn't guaranteed unique; the
+  canonical-path half of the check still applies.
+- `SHFileOperationW` is limited to `MAX_PATH`; longer paths are refused up
+  front and the menu lists Recycle Bin disabled, saying why.
+
+Windows Uninstall runs an uninstaller only from an allowlist
+(`app_uninstall::plan_uninstall`): `msiexec.exe /x {ProductCode}` for a
+Windows Installer product, or the product's own `.exe` from its verified
+install folder with no argument or one of `/uninstall`, `--uninstall`,
+`-uninstall`, `/u`. Anything else opens Settings → Installed apps. Don't
+add switch parsing; extend the allowlist only with forms known to be
+interactive.
+
 ## Things that aren't in `os/` and shouldn't be
 
 - **Tauri-typed code** (windows, app handles, IPC commands) lives in

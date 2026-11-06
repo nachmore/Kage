@@ -2,7 +2,10 @@
 // and cut), Recycle Bin via SHFileOperation, and the shell's "runas" /
 // "properties" verbs.
 
-use crate::os::file_ops::{build_hdrop_payload, preferred_drop_effect, TrashError};
+use crate::os::file_ops::{
+    build_hdrop_payload, exceeds_path_limit, preferred_drop_effect, trash_path_limit,
+    ClipboardFilesError, Preflight, TrashError,
+};
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use windows::core::{HRESULT, PCWSTR};
@@ -24,26 +27,30 @@ pub(crate) fn wide(s: &std::ffi::OsStr) -> Vec<u16> {
 /// Run `f` on a fresh thread with a single-threaded COM apartment, as the
 /// shell APIs require (verbs may be implemented by COM shell extensions).
 /// A dedicated thread keeps the apartment off the async runtime's pooled
-/// threads, which other code initialises differently.
-pub(crate) fn with_com_sta<T: Send + 'static>(
-    f: impl FnOnce() -> T + Send + 'static,
-) -> anyhow::Result<T> {
-    std::thread::Builder::new()
-        .name("shell-op".into())
-        .spawn(move || {
-            use windows::Win32::System::Com::{
-                CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
-            };
-            let hr =
-                unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) };
-            let out = f();
-            if hr.is_ok() {
-                unsafe { CoUninitialize() };
-            }
-            out
-        })?
-        .join()
-        .map_err(|_| anyhow::anyhow!("shell operation thread panicked"))
+/// threads, which other code initialises differently. Scoped, so `f` may
+/// borrow — a preflight check runs inside `f`, on the same thread as the
+/// call it guards.
+pub(crate) fn with_com_sta<T: Send>(f: impl FnOnce() -> T + Send) -> anyhow::Result<T> {
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("shell-op".into())
+            .spawn_scoped(scope, move || {
+                use windows::Win32::System::Com::{
+                    CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED,
+                    COINIT_DISABLE_OLE1DDE,
+                };
+                let hr = unsafe {
+                    CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE)
+                };
+                let out = f();
+                if hr.is_ok() {
+                    unsafe { CoUninitialize() };
+                }
+                out
+            })?
+            .join()
+            .map_err(|_| anyhow::anyhow!("shell operation thread panicked"))
+    })
 }
 
 /// `ShellExecuteExW(verb, file, params)`. `Ok(false)` means the user
@@ -77,7 +84,14 @@ pub(crate) fn shell_execute(
     }
 }
 
-pub fn copy_files_to_clipboard_impl(paths: &[PathBuf], cut: bool) -> anyhow::Result<()> {
+/// `preflight` runs with the clipboard open, right before it's replaced
+/// (`set_clipboard_formats`). Pasting a Cut later moves whatever the paths
+/// name then — `CF_HDROP` is path-based by design (see `os::file_ops`).
+pub fn copy_files_to_clipboard_impl(
+    paths: &[PathBuf],
+    cut: bool,
+    preflight: Option<Preflight>,
+) -> Result<(), ClipboardFilesError> {
     let strings: Vec<String> = paths
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
@@ -91,18 +105,22 @@ pub fn copy_files_to_clipboard_impl(paths: &[PathBuf], cut: bool) -> anyhow::Res
         formats.push((effect_format, &effect));
     } else if cut {
         // Without the DropEffect a paste copies — not what "Cut" promised.
-        anyhow::bail!("couldn't register the Preferred DropEffect clipboard format");
+        return Err(
+            anyhow::anyhow!("couldn't register the Preferred DropEffect clipboard format").into(),
+        );
     }
-    if super::clipboard::set_clipboard_formats(&formats) {
-        Ok(())
-    } else {
-        anyhow::bail!("couldn't write the file list to the clipboard")
-    }
+    super::clipboard::set_clipboard_formats(&formats, preflight)
 }
 
-pub fn move_to_trash_impl(path: &Path) -> Result<(), TrashError> {
-    let path = path.to_path_buf();
+/// `preflight` runs on the shell thread, right before `SHFileOperationW`.
+/// That API is limited to `MAX_PATH`; a longer path is refused up front
+/// (`TrashError::PathTooLong`) rather than handed to it.
+pub fn move_to_trash_impl(path: &Path, preflight: Preflight) -> Result<(), TrashError> {
+    if exceeds_path_limit(path, trash_path_limit()) {
+        return Err(TrashError::PathTooLong);
+    }
     with_com_sta(move || {
+        preflight().map_err(TrashError::Refused)?;
         // pFrom is a list: each path NUL-terminated, the list ends with
         // one more NUL.
         let mut from: Vec<u16> = path.as_os_str().encode_wide().collect();

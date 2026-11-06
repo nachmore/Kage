@@ -65,9 +65,20 @@ export function startMenuWindow({
         // A newer menu may have arrived while the answer was in flight
         // (the caller opened another one); hiding now would hide that.
         if (current !== answering || current.token !== token) return;
+        // The hide carries its token: the backend serialises it with
+        // presenting and ignores it once a newer menu is up, so a hide
+        // still in flight when the next menu shows can't take that down.
         try {
-            await appWindow.hide();
-        } catch {}
+            await invoke('hide_context_menu', { token });
+        } catch (e) {
+            console.warn('[context-menu] hide_context_menu failed:', e);
+            // Never leave a finished menu on screen.
+            if (current === answering) {
+                try {
+                    await appWindow.hide();
+                } catch {}
+            }
+        }
     }
 
     const view = new PopupMenuView(root, {

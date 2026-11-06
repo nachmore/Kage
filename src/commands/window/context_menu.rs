@@ -22,7 +22,11 @@
 //!    ignored.
 //! 4. The menu window emits `context_menu_action { token, action,
 //!    context }` to the requesting window — `action` is the item id, or
-//!    `"dismissed"` — and hides.
+//!    `"dismissed"` — then asks to be hidden with `hide_context_menu
+//!    { token }`. The backend ignores that hide if a newer menu has been
+//!    shown since: presenting and hiding are serialised (`PRESENTED`), so a
+//!    hide that was still in flight can never hide the menu that replaced
+//!    the one it was for.
 
 use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
@@ -116,6 +120,26 @@ struct PendingMenu {
 
 static PENDING: Mutex<Option<PendingMenu>> = Mutex::new(None);
 static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+/// The newest menu token shown. Held across a show's or a hide's window
+/// calls, so the two are applied in the order they were decided.
+static PRESENTED: tokio::sync::Mutex<Presented> = tokio::sync::Mutex::const_new(Presented(0));
+
+/// The newest token presented so far.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Presented(u64);
+
+impl Presented {
+    /// Whether a hide requested by menu `token` may hide the window: not if
+    /// a newer menu has been presented since.
+    fn may_hide(self, token: u64) -> bool {
+        token >= self.0
+    }
+
+    fn record(&mut self, token: u64) {
+        self.0 = self.0.max(token);
+    }
+}
 
 fn valid_id(s: &str) -> bool {
     !s.is_empty()
@@ -346,6 +370,9 @@ pub async fn context_menu_ready<R: tauri::Runtime>(
             &[],
         ));
     };
+    // Ordered against `hide_context_menu`: whichever takes this first
+    // applies first.
+    let mut presented = PRESENTED.lock().await;
     let anchor = {
         let mut pending = PENDING.lock_or_recover();
         match pending.as_mut() {
@@ -372,8 +399,31 @@ pub async fn context_menu_ready<R: tauri::Runtime>(
     window
         .set_size(size)
         .map_err(|e| format!("Failed to size context menu: {}", e))?;
+    presented.record(token);
     crate::overlay_windows::present(&window)
         .map_err(|e| format!("Failed to show context menu: {}", e))?;
+    Ok(true)
+}
+
+/// The menu window is done with menu `token` (answered or dismissed):
+/// hide it — unless a newer menu has been presented meanwhile, which a
+/// late hide must not take down. `Ok(false)` when ignored.
+pub async fn hide_context_menu<R: tauri::Runtime>(
+    token: u64,
+    app: tauri::AppHandle<R>,
+) -> Result<bool, AppError> {
+    let presented = PRESENTED.lock().await;
+    if !presented.may_hide(token) {
+        log::debug!("[context-menu] ignoring the hide for menu {token}: a newer one is up");
+        return Ok(false);
+    }
+    let Some(window) = app.get_webview_window(window_labels::CONTEXT_MENU) else {
+        return Ok(false);
+    };
+    window
+        .hide()
+        .map_err(|e| AppError::internal(format!("Failed to hide context menu: {e}")))?;
+    drop(presented);
     Ok(true)
 }
 
@@ -779,6 +829,24 @@ mod tests {
         // A bare request is the default text menu.
         let bare: MenuRequest = serde_json::from_value(serde_json::json!({})).unwrap();
         assert!(bare.items.is_none() && !bare.keyboard);
+    }
+
+    #[test]
+    fn a_late_hide_never_hides_a_newer_menu() {
+        // Menu 1 is up; its answer's hide is dispatched, menu 2 is
+        // presented, then the hide for 1 lands: ignored.
+        let mut p = Presented(0);
+        p.record(1);
+        assert!(p.may_hide(1));
+        p.record(2);
+        assert!(!p.may_hide(1));
+        assert!(p.may_hide(2));
+        // A newer menu requested but not yet presented doesn't block the
+        // current one's hide: it'll present after it.
+        assert!(p.may_hide(3));
+        // Tokens only move forward.
+        p.record(1);
+        assert_eq!(p, Presented(2));
     }
 
     #[test]

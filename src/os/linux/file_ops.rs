@@ -3,7 +3,7 @@
 // trash-cli, then KDE's kioclient), so the file manager can restore it.
 // File copy/cut aren't offered on Linux — see `os::file_ops`.
 
-use crate::os::file_ops::TrashError;
+use crate::os::file_ops::{ClipboardFilesError, Preflight, TrashError};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -22,14 +22,22 @@ fn on_path(program: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn copy_files_to_clipboard_impl(_paths: &[PathBuf], _cut: bool) -> anyhow::Result<()> {
-    anyhow::bail!("copying files to the clipboard isn't supported on Linux")
+pub fn copy_files_to_clipboard_impl(
+    _paths: &[PathBuf],
+    _cut: bool,
+    _preflight: Option<Preflight>,
+) -> Result<(), ClipboardFilesError> {
+    Err(anyhow::anyhow!("copying files to the clipboard isn't supported on Linux").into())
 }
 
-pub fn move_to_trash_impl(path: &Path) -> Result<(), TrashError> {
+/// `preflight` runs right before the trash tool is started. The tool is a
+/// separate process handed the path, so the move itself is path-based
+/// (see `os::file_ops`).
+pub fn move_to_trash_impl(path: &Path, preflight: Preflight) -> Result<(), TrashError> {
     let Some((program, args)) = TRASH_TOOLS.iter().find(|(p, _)| on_path(p)) else {
         return Err(TrashError::Unavailable);
     };
+    preflight().map_err(TrashError::Refused)?;
     let mut cmd = Command::new(program);
     cmd.args(*args).arg(path);
     if program.starts_with("kioclient") {
