@@ -36,12 +36,13 @@
 //!   namespace of Kage's own (see [`temp_target`]). While a temp exists its
 //!   writer holds an exclusive advisory lock on it. A crash can leave one
 //!   behind; writes of the same target sweep those up
-//!   ([`remove_stale_temps`]), but only temps that are Kage's (that name
-//!   shape, a regular file, owned by this user), at least
-//!   [`STALE_TEMP_AGE`] old, and not locked by a live writer (where the
-//!   filesystem has advisory locks; elsewhere the age decides). On the
-//!   failure path a writer removes its own temp (retrying while it is in
-//!   use); one that still can't be removed is swept later.
+//!   ([`remove_stale_temps`]), but only temps that are provably Kage's and
+//!   abandoned: that name shape, a regular file owned by this user, at
+//!   least [`STALE_TEMP_AGE`] old, and not locked by a live writer. A temp
+//!   whose lock can't be checked is kept, unless the filesystem reports it
+//!   has no advisory locks at all, where the age decides. Windows doesn't
+//!   sweep (no ownership check there). On the failure path a writer
+//!   removes its own temp (retrying while it is in use).
 
 use std::collections::HashMap;
 use std::fs;
@@ -69,28 +70,39 @@ const TMP_SUFFIX_LEN: usize = 16;
 
 /// How old a temp must be before a sweep may remove it. A write takes
 /// milliseconds, so anything this old was left by a crash; the age check
-/// also covers the moments a live writer's temp is unlocked (between
-/// creating and locking it, and on Windows between closing and renaming
-/// it), and is all there is on filesystems without advisory locks.
+/// also covers the moment a live writer's temp is unlocked (between
+/// creating and locking it), and is all there is on filesystems without
+/// advisory locks.
 pub const STALE_TEMP_AGE: Duration = Duration::from_secs(10 * 60);
 
 /// Atomically replace `path` with `contents`. The parent directory must
 /// exist. See the module docs for the guarantees.
 pub fn write(path: &Path, contents: impl AsRef<[u8]>, perms: Perms) -> io::Result<()> {
-    let target = resolve_symlink(path)?;
-    let (dir, name) = split(&target)?;
+    write_at(&resolve_symlink(path)?, contents.as_ref(), perms)
+}
+
+/// [`write`], except that a symlink at `path` isn't followed: the rename
+/// replaces it with the new file. For callers that refuse links themselves
+/// (backup import checks every component first) and must not write through
+/// one that appeared since.
+pub fn write_no_follow(path: &Path, contents: impl AsRef<[u8]>, perms: Perms) -> io::Result<()> {
+    write_at(path, contents.as_ref(), perms)
+}
+
+fn write_at(target: &Path, contents: &[u8], perms: Perms) -> io::Result<()> {
+    let (dir, name) = split(target)?;
     // Before anything is written: a directory we can't sync can't make the
     // rename durable, so fail while the target is still untouched.
     let dir_sync = DirSync::open(&dir)?;
     sweep_if_due(&dir, &name);
 
     let tmp = dir.join(temp_name(&name));
-    let result = write_temp(&tmp, &target, contents.as_ref(), perms).and_then(|file| {
+    let result = write_temp(&tmp, target, contents, perms).and_then(|file| {
         // Windows won't rename a file with an open handle. Elsewhere the
         // handle, and with it the lock, is held until the temp is gone.
         #[cfg(windows)]
         drop(file);
-        let renamed = rename_replacing(&tmp, &target);
+        let renamed = rename_replacing(&tmp, target);
         #[cfg(not(windows))]
         drop(file);
         renamed
@@ -106,10 +118,17 @@ pub fn write(path: &Path, contents: impl AsRef<[u8]>, perms: Perms) -> io::Resul
 /// Remove temps an interrupted [`write`] of `<dir>/<file_name>` left
 /// behind: Kage's own (see [`temp_target`]), at least [`STALE_TEMP_AGE`]
 /// old, and not locked by a writer that's still running.
+///
+/// Not on Windows: there is no check there that a temp is this user's, and
+/// one in a folder shared with another account could be its live writer's.
 pub fn remove_stale_temps(dir: &Path, file_name: &str) {
+    #[cfg(unix)]
     remove_stale_temps_older_than(dir, file_name, STALE_TEMP_AGE);
+    #[cfg(not(unix))]
+    let _ = (dir, file_name);
 }
 
+#[cfg(unix)]
 fn remove_stale_temps_older_than(dir: &Path, file_name: &str, min_age: Duration) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -130,7 +149,9 @@ fn remove_stale_temps_older_than(dir: &Path, file_name: &str, min_age: Duration)
 }
 
 /// Remove the temp at `path` if no live writer can still own it. Returns
-/// whether it was removed.
+/// whether it was removed. Anything that can't be checked is kept: a temp
+/// left behind costs nothing, a live writer's removed loses its write.
+#[cfg(unix)]
 fn remove_if_stale(path: &Path, min_age: Duration) -> io::Result<bool> {
     // Not followed: a link planted at a temp's name is never ours.
     let meta = fs::symlink_metadata(path)?;
@@ -146,21 +167,34 @@ fn remove_if_stale(path: &Path, min_age: Duration) -> io::Result<bool> {
     // need a writable descriptor for an exclusive lock.
     let file = match open_no_follow(path, true).or_else(|_| open_no_follow(path, false)) {
         Ok(f) => f,
-        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-            // Can't open it at all (an Inherit temp of a target with no
-            // owner access): its lock can't be checked, the age has to do.
-            fs::remove_file(path)?;
-            return Ok(true);
+        Err(e) => {
+            // No access (a temp of a target with no owner access, or one
+            // whose mode was changed): its lock can't be checked.
+            log::debug!("Can't open temp {:?} ({}); keeping it", path, e);
+            return Ok(false);
         }
-        Err(e) => return Err(e),
     };
+    // The file opened must be the one checked above, still ours.
+    let opened = file.metadata()?;
+    if !same_file(&meta, &opened) || !owned_by_current_user(&opened) {
+        return Ok(false);
+    }
     match file.try_lock() {
         Ok(()) => {}
         // A writer is still in the middle of it.
         Err(fs::TryLockError::WouldBlock) => return Ok(false),
-        // No advisory locks here: the age alone has to rule a writer out.
+        // The filesystem has no advisory locks: the age alone has to rule a
+        // writer out.
+        Err(fs::TryLockError::Error(e)) if locks_unsupported(&e) => {
+            log::debug!("No locks for temp {:?} ({}); going by its age", path, e);
+        }
         Err(fs::TryLockError::Error(e)) => {
-            log::debug!("Can't lock temp {:?} ({}); going by its age", path, e);
+            log::debug!(
+                "Can't check the lock on temp {:?} ({}); keeping it",
+                path,
+                e
+            );
+            return Ok(false);
         }
     }
     // Removed while still locked, so no writer can take it over meanwhile.
@@ -175,21 +209,31 @@ fn owned_by_current_user(meta: &fs::Metadata) -> bool {
     meta.uid() == unsafe { libc::geteuid() }
 }
 
-#[cfg(not(unix))]
-fn owned_by_current_user(_meta: &fs::Metadata) -> bool {
-    // The directories Kage writes are per user; ACLs keep others out.
-    true
+#[cfg(unix)]
+fn same_file(a: &fs::Metadata, b: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    a.dev() == b.dev() && a.ino() == b.ino()
 }
 
+/// A `try_lock` error that says the filesystem has no advisory locks (some
+/// NFS and FUSE mounts), as opposed to one that says nothing about whether
+/// a writer holds the lock.
+#[cfg(unix)]
+fn locks_unsupported(e: &io::Error) -> bool {
+    e.kind() == io::ErrorKind::Unsupported
+        || e.raw_os_error().is_some_and(|c| {
+            [libc::ENOLCK, libc::ENOTSUP, libc::EOPNOTSUPP, libc::ENOSYS].contains(&c)
+        })
+}
+
+#[cfg(unix)]
 fn open_no_follow(path: &Path, write: bool) -> io::Result<fs::File> {
-    let mut opts = fs::OpenOptions::new();
-    opts.read(true).write(write);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.custom_flags(libc::O_NOFOLLOW);
-    }
-    opts.open(path)
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .read(true)
+        .write(write)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
 }
 
 /// Whether `file_name` is a temp file [`write`] creates (for any target).
@@ -412,11 +456,7 @@ fn remove_temp(tmp: &Path) {
     match retry_in_use(|| fs::remove_file(tmp)) {
         Ok(()) => {}
         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-        Err(e) => log::warn!(
-            "Failed to remove temp file {:?} ({}); a later write removes it",
-            tmp,
-            e
-        ),
+        Err(e) => log::warn!("Failed to remove temp file {:?}: {}", tmp, e),
     }
 }
 
@@ -529,6 +569,7 @@ mod tests {
         assert_eq!(names(dir.path()), vec!["blocked"], "temp left behind");
     }
 
+    #[cfg(unix)]
     #[test]
     fn stale_unlocked_temps_are_removed_and_nothing_else() {
         let dir = tempdir();
@@ -607,6 +648,7 @@ mod tests {
         assert_eq!(names(dir.path()), vec!["live.json"]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn writes_sweep_their_targets_stale_temps() {
         let dir = tempdir();
@@ -616,6 +658,80 @@ mod tests {
         write(&path, b"{}", Perms::Inherit).unwrap();
         assert!(!stale.exists());
         assert_eq!(fs::read_to_string(&path).unwrap(), "{}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_temp_whose_lock_cannot_be_checked_is_kept() {
+        // The regression: an hour-old temp, held under its writer's lock
+        // with mode 000, was deleted because the sweep couldn't open it.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir();
+        let locked = dir.path().join(format!(".k.json{TMP_MARKER}{SUFFIX}"));
+        old_file(&locked, b"live");
+        let writer = fs::File::options().write(true).open(&locked).unwrap();
+        writer.try_lock().unwrap();
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+        // Unlocked and unopenable: nothing says it's abandoned either.
+        let unopenable = dir
+            .path()
+            .join(format!(".k.json{TMP_MARKER}fedcba9876543210"));
+        old_file(&unopenable, b"?");
+        fs::set_permissions(&unopenable, fs::Permissions::from_mode(0o000)).unwrap();
+        // SAFETY: geteuid has no preconditions and can't fail.
+        let root = unsafe { libc::geteuid() } == 0; // root opens anything
+
+        remove_stale_temps(dir.path(), "k.json");
+        assert!(locked.exists(), "a live writer's temp was removed");
+        if !root {
+            assert!(unopenable.exists(), "an unopenable temp was removed");
+        }
+        drop(writer);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn only_no_locks_at_all_lets_the_age_decide() {
+        for code in [libc::ENOLCK, libc::ENOTSUP, libc::EOPNOTSUPP, libc::ENOSYS] {
+            assert!(locks_unsupported(&io::Error::from_raw_os_error(code)));
+        }
+        assert!(locks_unsupported(&io::Error::from(
+            io::ErrorKind::Unsupported
+        )));
+        for code in [
+            libc::EBADF,
+            libc::EACCES,
+            libc::EIO,
+            libc::EINVAL,
+            libc::EINTR,
+        ] {
+            assert!(!locks_unsupported(&io::Error::from_raw_os_error(code)));
+        }
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn windows_never_sweeps() {
+        let dir = tempdir();
+        let stale = dir.path().join(format!(".k.json{TMP_MARKER}{SUFFIX}"));
+        old_file(&stale, b"");
+        remove_stale_temps(dir.path(), "k.json");
+        write(&dir.path().join("k.json"), b"{}", Perms::Inherit).unwrap();
+        assert!(stale.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_no_follow_replaces_a_link_instead_of_writing_through_it() {
+        let dir = tempdir();
+        let outside = dir.path().join("outside.json");
+        fs::write(&outside, b"keep").unwrap();
+        let path = dir.path().join("data.json");
+        std::os::unix::fs::symlink(&outside, &path).unwrap();
+        write_no_follow(&path, b"new", Perms::Private).unwrap();
+        assert!(fs::symlink_metadata(&path).unwrap().file_type().is_file());
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+        assert_eq!(fs::read(&outside).unwrap(), b"keep");
     }
 
     #[test]

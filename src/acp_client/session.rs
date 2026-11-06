@@ -251,7 +251,7 @@ impl AcpClient {
         content: &str,
         attachments: Option<&[serde_json::Value]>,
     ) -> Result<()> {
-        self.send_chat_prompt(session_id, content, attachments, None)
+        self.send_chat_prompt(session_id, content, attachments, None, None)
     }
 
     /// `send_chat_streaming` for hidden prompts (steering, inline-assist,
@@ -265,75 +265,27 @@ impl AcpClient {
         content: &str,
         keep_reply: bool,
     ) -> Result<()> {
-        self.send_chat_prompt(session_id, content, None, Some(keep_reply))
-    }
-
-    /// A hidden steering prompt (its reply muted and discarded) that can't
-    /// hold the session for long: see `send_prompt_muted_bounded` for
-    /// `cancel_baseline`, `yield_queue` and `before_send`. Unlike the
-    /// senders above it doesn't wait for a compaction in progress: call
-    /// `wait_for_compaction` first. Blocking.
-    pub fn send_hidden_prompt_bounded(
-        &self,
-        session_id: &str,
-        content: &str,
-        cancel_baseline: Option<u64>,
-        yield_queue: &dyn Fn() -> bool,
-        before_send: &mut dyn FnMut() -> Option<super::PromptLimits>,
-    ) -> super::HiddenPromptOutcome {
-        // Built lazily, once the prompt is surely going out, so a prompt
-        // that steps aside doesn't use up the periodic time stamp.
-        self.send_prompt_muted_bounded(
-            session_id,
-            cancel_baseline,
-            yield_queue,
-            before_send,
-            &|| {
-                serde_json::json!({
-                    "sessionId": session_id,
-                    "prompt": self.prompt_blocks(session_id, content, None),
-                })
-            },
-        )
+        self.send_chat_prompt(session_id, content, None, Some(keep_reply), None)
     }
 
     /// Shared body of the two senders above. `muted` is `None` for a
-    /// visible prompt, `Some(keep_reply)` for a background one.
+    /// visible prompt, `Some(keep_reply)` for a background one. What
+    /// `hidden` gives goes ahead of `content` as a text block of its own
+    /// (visible prompts only).
     fn send_chat_prompt(
         &self,
         session_id: &str,
         content: &str,
         attachments: Option<&[serde_json::Value]>,
         muted: Option<bool>,
+        hidden: Option<&dyn super::HiddenPrefix>,
     ) -> Result<()> {
         // Wait for any in-progress compaction to finish before sending
         self.wait_for_compaction();
+        let hidden = hidden
+            .filter(|_| muted.is_none())
+            .and_then(|h| Some((h, h.text_for(session_id)?)));
 
-        let params = serde_json::json!({
-            "sessionId": session_id,
-            "prompt": self.prompt_blocks(session_id, content, attachments)
-        });
-        let response = match muted {
-            None => self.send_prompt(session_id, params)?,
-            Some(keep_reply) => self.send_prompt_muted(session_id, params, keep_reply)?,
-        };
-
-        if let Some(error) = response.error {
-            return Err(bail_acp_error("ACP error", &error));
-        }
-
-        info!("Prompt completed");
-        Ok(())
-    }
-
-    /// The `prompt` content blocks for `content` (plus attachments), with
-    /// the periodic current-time stamp in front when one is due.
-    fn prompt_blocks(
-        &self,
-        session_id: &str,
-        content: &str,
-        attachments: Option<&[serde_json::Value]>,
-    ) -> Vec<serde_json::Value> {
         let debug = *self.transport.debug_mode.lock_or_recover();
 
         if debug {
@@ -356,6 +308,12 @@ impl AcpClient {
         // (auto-steering, sub-agents) are untouched, and a caller waiting
         // on the lock can't wipe the in-flight prompt's partial stream.
         let mut prompt: Vec<serde_json::Value> = Vec::new();
+
+        // Its own block, so history readers can skip it whole (see
+        // `crate::state::TOOL_STEERING_TAG`).
+        if let Some((_, text)) = &hidden {
+            prompt.push(serde_json::json!({ "type": "text", "text": text }));
+        }
 
         // Periodically inject current timestamp so the agent's sense of time stays fresh
         {
@@ -391,7 +349,36 @@ impl AcpClient {
         if prompt.is_empty() {
             prompt.push(serde_json::json!({ "type": "text", "text": "" }));
         }
-        prompt
+
+        let params = serde_json::json!({
+            "sessionId": session_id,
+            "prompt": prompt
+        });
+        let response = match (muted, &hidden) {
+            (None, Some((h, _))) => {
+                self.send_prompt_observed(session_id, params, &|| h.written(session_id))?
+            }
+            (None, None) => self.send_prompt(session_id, params)?,
+            (Some(keep_reply), _) => self.send_prompt_muted(session_id, params, keep_reply)?,
+        };
+
+        if let Some(error) = response.error {
+            return Err(bail_acp_error("ACP error", &error));
+        }
+        if let Some((h, _)) = hidden {
+            // A turn cut short by a Stop may not be in the agent's history.
+            let stop_reason = response
+                .result
+                .as_ref()
+                .and_then(|r| r.get("stopReason"))
+                .and_then(|s| s.as_str());
+            if stop_reason != Some("cancelled") {
+                h.completed(session_id);
+            }
+        }
+
+        info!("Prompt completed");
+        Ok(())
     }
 
     // --- Recovery ---
@@ -422,16 +409,21 @@ impl AcpClient {
     /// input on success or transient-failure recovery, but on
     /// "session corrupted" / "fresh session" recovery the returned id is the
     /// new session id that the caller should adopt.
+    ///
+    /// `hidden` is asked again for every attempt, so whichever session the
+    /// prompt lands on gets what that session needs.
     pub fn send_chat_streaming_with_recovery(
         &self,
         session_id: String,
         content: String,
         attachments: Option<Vec<serde_json::Value>>,
+        hidden: Option<&dyn super::HiddenPrefix>,
     ) -> Result<String> {
         let att_ref = attachments.as_deref();
+        let send = |id: &str| self.send_chat_prompt(id, &content, att_ref, None, hidden);
 
         // --- Attempt 1: normal send ---
-        match self.send_chat_streaming(&session_id, &content, att_ref) {
+        match send(&session_id) {
             Ok(()) => return Ok(session_id),
             Err(e) => {
                 let err_str = format!("{}", e);
@@ -445,7 +437,7 @@ impl AcpClient {
                         // live windows to adopt new_id before the resend streams.
                         self.reset_session_accumulator(&new_id);
                         self.notify_session_migrated(&session_id, &new_id);
-                        self.send_chat_streaming(&new_id, &content, att_ref)?;
+                        send(&new_id)?;
                         return Ok(new_id);
                     }
                 } else {
@@ -477,7 +469,7 @@ impl AcpClient {
             }
         };
 
-        match self.send_chat_streaming(&session_id, &content, att_ref) {
+        match send(&session_id) {
             Ok(()) => return Ok(session_id),
             Err(e) => {
                 let err_str = format!("{}", e);
@@ -496,7 +488,7 @@ impl AcpClient {
         let new_id = self.restart_with_fresh_session()?;
         self.reset_session_accumulator(&new_id);
         self.notify_session_migrated(&session_id, &new_id);
-        self.send_chat_streaming(&new_id, &content, att_ref)?;
+        send(&new_id)?;
         Ok(new_id)
     }
 

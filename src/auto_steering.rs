@@ -310,6 +310,12 @@ impl ConversationCollector {
             if item_kind == "text" {
                 if let Some(text) = item.get("data").and_then(|d| d.as_str()) {
                     let text = text.trim();
+                    // The extension tool steering a user prompt can carry
+                    // ahead of its text is metadata, like the time stamp:
+                    // the prompt is still a real one (maybe image-only).
+                    if text.starts_with(crate::state::TOOL_STEERING_TAG) {
+                        continue;
+                    }
                     // Skip steering messages and extraction prompts
                     if text.starts_with(STEERING_MSG_PREFIX) {
                         had_hidden = true;
@@ -961,6 +967,43 @@ mod tests {
                 "User: how do I sort a vec?".to_string(),
                 "Assistant: use sort()".to_string(),
                 "Assistant: or sort_by()".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn collector_skips_the_tool_steering_a_user_prompt_carries() {
+        let mut c = ConversationCollector::new(50);
+        let prompt = serde_json::json!({
+            "kind": "Prompt",
+            "data": { "content": [
+                { "kind": "text", "data": format!(
+                    "{}\n<extension_tools>\nlots of tools\n</extension_tools>\n</_kage_tool_steering>",
+                    crate::state::TOOL_STEERING_TAG
+                ) },
+                { "kind": "text", "data": "what's AAPL at?" },
+            ] }
+        })
+        .to_string();
+        c.push_line(&prompt);
+        c.push_line(&jsonl("AssistantMessage", "about 200"));
+        // An image-only prompt carrying it is still a real turn.
+        let image_only = serde_json::json!({
+            "kind": "Prompt",
+            "data": { "content": [
+                { "kind": "text", "data": format!("{}\nTools\n</_kage_tool_steering>", crate::state::TOOL_STEERING_TAG) },
+                { "kind": "image", "data": {} },
+            ] }
+        })
+        .to_string();
+        c.push_line(&image_only);
+        c.push_line(&jsonl("AssistantMessage", "a chart"));
+        assert_eq!(
+            c.finish(),
+            vec![
+                "User: what's AAPL at?".to_string(),
+                "Assistant: about 200".to_string(),
+                "Assistant: a chart".to_string(),
             ]
         );
     }

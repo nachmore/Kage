@@ -288,7 +288,7 @@ capabilities. These include: `get_config` and `save_config`,
 `paste_clipboard_item` (keystroke injection), `execute_folder_plan`
 (file moves/renames/trash), `send_extension_tool_steering` (the host
 builds the tool-steering block from validated manifests, and the
-backend replays it into every session), `notify_response_ready`,
+backend attaches it to the window's user prompts), `notify_response_ready`,
 `save_frecency` / `load_frecency` / `get_frecency_key`, install/uninstall commands,
 tool-permission policy commands, `read_extension_file`,
 `open_devtools`, MCP config commands, updater commands, inline
@@ -1471,7 +1471,9 @@ export default class MyToolProvider {
 ### How It Works
 
 1. Extension loads → `getTools()` definitions are collected
-2. Tool definitions are sent to the agent as a steering message
+2. Tool definitions ride, hidden, on the window's next user prompt on each
+   session (again whenever they change; a "no tools left" notice once
+   they're gone)
 3. Agent emits a `` ```extension_tool_call``` `` fenced block when it wants to call a tool
 4. Frontend detects the fence, executes the tool via `execute()`, sends result back to agent
 5. Agent continues its response with the tool result data

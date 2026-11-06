@@ -8,9 +8,10 @@
  * and has no hidden coupling to either window.
  *
  * Lifecycle the host drives:
- *   - `controller.startSteering()` once extensions are loaded and the window
- *     has a session — sends the tool steering and re-sends it whenever the
- *     extension tools change (`stopSteering()` on teardown)
+ *   - `controller.startSteering()` once extensions are loaded — publishes the
+ *     tool steering to the backend and re-publishes it whenever the extension
+ *     tools change (`stopSteering()` on teardown). The backend attaches it to
+ *     the window's next user prompt on a session that doesn't have it yet.
  *   - `controller.reset()` when starting a new prompt
  *   - `controller.maybeHandleChunk(text)` from each chunk handler — returns
  *     `{ handled: true }` if the controller has taken over rendering/execution
@@ -36,9 +37,9 @@ import { detectExtensionToolCall, detectExtensionToolCallIncremental } from './s
 
 /**
  * Quiet period after a tool-definitions change before the steering is
- * re-sent. One config save can surface as two changes (config update, then
- * extension reload), and a setting flicked on and off again settles back to
- * what the agent already has — neither should cost an agent turn.
+ * re-published. One config save can surface as two changes (config update,
+ * then extension reload), and a setting flicked on and off again settles back
+ * to what was published — neither should publish twice.
  */
 export const STEERING_REFRESH_DEBOUNCE_MS = 500;
 
@@ -48,18 +49,20 @@ export class ExtensionToolController {
         this.handled = false;
         this.executing = false;
         /**
-         * Block this window last published: `null` before its first one, ''
-         * for "no tools". The first publication goes out even when empty, so
-         * the backend steers this window's sessions with "no tools" rather
-         * than with another window's list.
+         * The current steering lifetime, from startSteering() to
+         * stopSteering(); `null` outside one. Work started in a lifetime
+         * checks it's still current after every await, so nothing is
+         * published after stopSteering().
+         * @type {null | {
+         *   sent: string | null,
+         *   run: Promise<void> | null,
+         *   pending: boolean,
+         *   pendingFetch: boolean,
+         *   timer: ReturnType<typeof setTimeout> | null,
+         *   unwatch: (() => void) | null,
+         * }}
          */
-        this._steeringSent = null;
-        this._steeringRun = null;
-        this._steeringPending = false;
-        /** A queued rerun must fetch fresh definitions (not just re-render). */
-        this._steeringPendingFetch = false;
-        this._steeringTimer = null;
-        this._unwatchTools = null;
+        this._steering = null;
     }
 
     reset() {
@@ -110,82 +113,98 @@ export class ExtensionToolController {
     }
 
     /**
-     * Send the extension tool steering for the host's session, then keep the
-     * agent in sync: whenever the extension manager reports different tool
-     * definitions, re-send (debounced). Safe to call more than once.
+     * Publish this window's extension tool steering, then keep it current:
+     * whenever the extension manager reports different tool definitions,
+     * publish again (debounced). Safe to call more than once; after
+     * stopSteering() it starts a new lifetime, which publishes afresh.
      */
     startSteering() {
-        if (!this._unwatchTools) {
+        if (!this._steering) {
+            const life = {
+                sent: null,
+                run: null,
+                pending: false,
+                pendingFetch: false,
+                timer: null,
+                unwatch: null,
+            };
+            this._steering = life;
             const em = this.host.extensionManager;
             if (typeof em?.onToolDefinitionsChanged === 'function') {
-                this._unwatchTools = em.onToolDefinitionsChanged(() =>
-                    this.scheduleSteeringRefresh()
-                );
+                life.unwatch = em.onToolDefinitionsChanged(() => this.scheduleSteeringRefresh());
             }
         }
         return this.sendSteering();
     }
 
-    /** Stop following tool-definition changes (window teardown). */
+    /**
+     * Stop following tool-definition changes (window teardown). Work still in
+     * flight stops at its next await; nothing is published after this.
+     */
     stopSteering() {
-        clearTimeout(this._steeringTimer);
-        this._steeringTimer = null;
-        this._unwatchTools?.();
-        this._unwatchTools = null;
+        const life = this._steering;
+        if (!life) return;
+        this._steering = null;
+        clearTimeout(life.timer);
+        life.unwatch?.();
     }
 
     /**
-     * Re-send the steering once the tool definitions settle. Renders the
-     * definitions the manager just reported (its cache) instead of fetching
-     * again: a fetch notifies listeners itself, so an extension whose
-     * getTools() answers differently on every call would otherwise keep
-     * this loop, and an agent turn per lap, going forever.
+     * Publish again once the tool definitions settle. Renders the definitions
+     * the manager just reported (its cache) instead of fetching again: a
+     * fetch notifies listeners itself, so an extension whose getTools()
+     * answers differently on every call would otherwise keep this loop going
+     * forever.
      */
     scheduleSteeringRefresh() {
-        clearTimeout(this._steeringTimer);
-        this._steeringTimer = setTimeout(() => {
-            this._steeringTimer = null;
-            this.sendSteering({ fetch: false });
+        const life = this._steering;
+        if (!life) return;
+        clearTimeout(life.timer);
+        life.timer = setTimeout(() => {
+            life.timer = null;
+            if (life === this._steering) this.sendSteering({ fetch: false });
         }, STEERING_REFRESH_DEBOUNCE_MS);
     }
 
     /**
-     * Build the steering block from the extension manager and ship it to the
-     * agent if it differs from what this window last sent. An empty block is
-     * sent too (the first one and any after tools): the backend records that
-     * this window has no tools, and turns it into a "tools withdrawn" notice
-     * for sessions that were sent tools.
+     * Build the steering block from the extension manager and publish it to
+     * the backend if it differs from what this window last published. An
+     * empty block is published too (the first one, and any after tools): the
+     * backend records that this window has no tools, and turns it into a
+     * "tools withdrawn" notice for sessions that were sent tools. Does nothing
+     * outside a startSteering() lifetime.
      *
-     * Single-flight with one trailing rerun, so this window's claims reach
-     * the backend in order (the backend then delivers per session in claim
-     * order and drops superseded blocks).
+     * Single-flight with one trailing rerun, so this window's publications
+     * reach the backend in order and the last one wins.
      *
      * @param {{ fetch?: boolean }} [opts] - `fetch: false` renders the
      *   manager's cached definitions rather than asking every extension.
      */
     sendSteering({ fetch = true } = {}) {
-        if (this._steeringRun) {
-            this._steeringPending = true;
-            this._steeringPendingFetch ||= fetch;
-            return this._steeringRun;
+        const life = this._steering;
+        if (!life) return Promise.resolve();
+        if (life.run) {
+            life.pending = true;
+            life.pendingFetch ||= fetch;
+            return life.run;
         }
-        this._steeringRun = (async () => {
+        life.run = (async () => {
             try {
                 let fetchNow = fetch;
                 do {
-                    this._steeringPending = false;
-                    await this._sendSteeringOnce(fetchNow);
-                    fetchNow = this._steeringPendingFetch;
-                    this._steeringPendingFetch = false;
-                } while (this._steeringPending);
+                    life.pending = false;
+                    await this._sendSteeringOnce(life, fetchNow);
+                    fetchNow = life.pendingFetch;
+                    life.pendingFetch = false;
+                } while (life.pending && life === this._steering);
             } finally {
-                this._steeringRun = null;
+                life.run = null;
             }
         })();
-        return this._steeringRun;
+        return life.run;
     }
 
-    async _sendSteeringOnce(fetch) {
+    async _sendSteeringOnce(life, fetch) {
         const em = this.host.extensionManager;
         let block;
         try {
@@ -198,22 +217,17 @@ export class ExtensionToolController {
             console.warn('Failed to build extension tool steering:', e);
             return;
         }
-        // Unchanged since this window's last send. The backend replays the
-        // latest block to the window's other sessions before their next
-        // prompt, so there's nothing to do on a session switch either.
-        if (block === this._steeringSent) return;
-        // No session right now (none adopted yet, the active chat deleted):
-        // still publish, so the backend replays this window's current block
-        // to whichever session it prompts next.
-        const sessionId = this.host.getSessionId?.() || null;
+        if (life !== this._steering) return; // stopped meanwhile
+        // Unchanged since this window's last publication. The backend sends
+        // it with the next prompt on any session that doesn't have it, so
+        // there's nothing to do on a session switch either.
+        if (block === life.sent) return;
         try {
-            await this.host.invoke('send_extension_tool_steering', {
-                sessionId,
-                toolSteering: block,
-            });
-            this._steeringSent = block;
+            await this.host.invoke('send_extension_tool_steering', { toolSteering: block });
+            if (life !== this._steering) return;
+            life.sent = block;
         } catch (e) {
-            console.warn('Failed to send extension tool steering:', e);
+            console.warn('Failed to publish extension tool steering:', e);
         }
     }
 

@@ -11,7 +11,9 @@
 //   `steering_ack` rather than a normal reply. This stops the
 //   "ack" / "got it" responses from bloating the timeline.
 // - Timestamp injections (`[Current time: ...]`) are metadata, not user
-//   text — they're stripped from the displayed prompt.
+//   text — they're stripped from the displayed prompt. So is the extension
+//   tool steering block (`<_kage_tool_steering>`) a user prompt can carry
+//   ahead of its text.
 // - Images are extracted and listed alongside text parts so the renderer
 //   can show them as snapshots.
 // - Tool calls: each turn's logged tool uses and results are rebuilt into
@@ -27,6 +29,12 @@ import { HistoryToolCollector } from './tool-call-history.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI. */
 export const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
+
+/**
+ * Start of the hidden content block carrying extension tool steering on a
+ * user prompt (`crate::state::TOOL_STEERING_TAG`).
+ */
+export const TOOL_STEERING_TAG = '<_kage_tool_steering>';
 
 /**
  * Build metadata for a single message based on the session's per-id
@@ -107,7 +115,11 @@ export function buildRenderQueue(
                         textParts.push(item.data.substring(STEERING_MSG_PREFIX.length).trim());
                         continue;
                     }
-                    if (item.data.trim().startsWith('[Current time:')) {
+                    const trimmed = item.data.trim();
+                    if (
+                        trimmed.startsWith('[Current time:') ||
+                        trimmed.startsWith(TOOL_STEERING_TAG)
+                    ) {
                         continue;
                     }
                     textParts.push(item.data);

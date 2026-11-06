@@ -273,8 +273,17 @@ mod tests {
         block_on(load_extension_data(ext.into(), key.into())).unwrap()
     }
 
+    /// The extension-data root is shared with config_export's tests, whose
+    /// backup round trip reads and rewrites all of it.
+    fn data_root_lock() -> std::sync::MutexGuard<'static, ()> {
+        crate::config_export::EXTENSION_DATA_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn interrupted_write_never_reaches_the_reader() {
+        let _root = data_root_lock();
         // crate::paths isolates unit tests to a scratch dir on first lookup.
         let _ = crate::paths::config_dir();
         assert!(crate::paths::is_isolated());
@@ -307,9 +316,13 @@ mod tests {
             load(ext, "settings").as_deref(),
             Some(r#"{"apiKey":"sk-456"}"#)
         );
-        assert!(!stale.exists(), "the first save cleans up the stale temp");
+        // The first save sweeps the stale temp up. Not on Windows, which
+        // doesn't sweep (see atomic_write::remove_stale_temps).
+        assert_eq!(stale.exists(), cfg!(not(unix)), "stale temp after a save");
         assert_eq!(std::fs::read_to_string(&lookalike).unwrap(), "mine");
         std::fs::remove_file(&lookalike).unwrap();
+        #[cfg(not(unix))]
+        std::fs::remove_file(&stale).unwrap();
         let leftovers: Vec<_> = std::fs::read_dir(path.parent().unwrap())
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -319,6 +332,7 @@ mod tests {
 
     #[test]
     fn concurrent_saves_always_leave_a_complete_file() {
+        let _root = data_root_lock();
         let ext = "atomic-test-concurrent";
         let big_a = format!(r#"{{"v":"{}"}}"#, "a".repeat(64 * 1024));
         let big_b = format!(r#"{{"v":"{}"}}"#, "b".repeat(64 * 1024));
@@ -350,6 +364,7 @@ mod tests {
     #[test]
     fn extension_data_is_owner_only() {
         use std::os::unix::fs::PermissionsExt;
+        let _root = data_root_lock();
         let ext = "atomic-test-perms";
         save(ext, "secret", "{}");
         let path = resolve_data_path(ext, "secret").unwrap();

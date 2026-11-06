@@ -23,7 +23,7 @@ export const LifecycleEventsMethods = {
             .then(() => {
                 _ts?.('Extensions initialized (background)');
                 setExtensionManager(this.extensionManager);
-                // Also re-sends whenever the extension tools change.
+                // Also re-publishes whenever the extension tools change.
                 this.extensionToolController.startSteering();
                 if (this._onExtensionsReady) this._onExtensionsReady();
                 _ts?.('Extension steering sent (background)');

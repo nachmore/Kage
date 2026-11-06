@@ -269,6 +269,11 @@ pub(super) fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
                                 if trimmed.starts_with("[Current time:") {
                                     continue;
                                 }
+                                // Nor the extension tool steering a user
+                                // prompt can carry ahead of its text.
+                                if trimmed.starts_with(crate::state::TOOL_STEERING_TAG) {
+                                    continue;
+                                }
                                 // Strip injected Kage tags before clipping.
                                 // If the message was *only* tags (e.g.
                                 // inline-assist instruction wrappers),
@@ -572,4 +577,26 @@ pub fn maybe_generate_ai_title<R: tauri::Runtime>(
             title_to_write
         );
     });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn title_skips_the_tool_steering_a_user_prompt_carries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.jsonl");
+        let prompt = serde_json::json!({
+            "kind": "Prompt",
+            "data": { "content": [
+                { "kind": "text", "data": format!(
+                    "{}\n<extension_tools>\nTools\n</extension_tools>\n</_kage_tool_steering>",
+                    crate::state::TOOL_STEERING_TAG
+                ) },
+                { "kind": "text", "data": "[Current time: 12:00]" },
+                { "kind": "text", "data": "Plan my week" },
+            ] }
+        });
+        std::fs::write(&path, format!("{prompt}\n")).unwrap();
+        assert_eq!(super::extract_title_from_jsonl(&path), "Plan my week");
+    }
 }

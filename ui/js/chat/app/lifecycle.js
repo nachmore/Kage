@@ -105,11 +105,10 @@ export function createLifecycleMixin(dependencies) {
                     stripKageTags(exists?.title) || t('chat.session.current_title');
             }
 
-            // Send extension tool definitions to the agent as steering, and
-            // re-send them whenever they change. After the auto-select above:
-            // main only sets activeSessionId there; with no session id the
-            // block (or "no tools") is only published. Sessions adopted later
-            // get it replayed by the backend before their first prompt.
+            // Publish the extension tool definitions (or "no tools") to the
+            // backend, and again whenever they change. The backend attaches
+            // them to this window's next prompt on each session that doesn't
+            // have them yet.
             this.extensionToolController.startSteering();
 
             this.elements.chatInput.focus();

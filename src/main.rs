@@ -436,6 +436,17 @@ async fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 setup::handle_window_close(window, api);
             }
+            if let tauri::WindowEvent::Destroyed = event {
+                // The window's extension tool steering goes with it. Tauri
+                // has unregistered the window by now, so a publication still
+                // in flight from it is refused (send_extension_tool_steering).
+                use lock_ext::LockExt;
+                if let Some(acp) = window.try_state::<state::AcpHandles>() {
+                    acp.tool_steering
+                        .lock_or_recover()
+                        .forget_window(window.label());
+                }
+            }
         })
         .on_page_load(|webview, _payload| {
             // Subscribe to WebView2's ProcessFailed event the moment a

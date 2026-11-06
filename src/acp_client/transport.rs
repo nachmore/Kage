@@ -22,29 +22,6 @@ use crate::process_manager::ProcessManager;
 /// using std mpsc avoids dragging tokio into the sync transport layer.
 type ResponseInbox = mpsc::SyncSender<AcpResponse>;
 
-/// Time limits for [`AcpTransport::send_prompt_request_bounded`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PromptLimits {
-    /// How long the turn may run once written, absolute.
-    pub budget: Duration,
-    /// After the cancel, how long the agent gets to end the turn.
-    pub cancel_grace: Duration,
-}
-
-/// What became of an [`AcpTransport::send_prompt_request_bounded`] request.
-#[derive(Debug)]
-pub enum BoundedPromptReply {
-    /// Never written: the agent got nothing.
-    NotSent(anyhow::Error),
-    /// The agent ended the turn by itself.
-    Replied(AcpResponse),
-    /// Cut short (budget spent, or stopped by the user). Carries the agent's
-    /// reply if it ended the turn within the grace period.
-    CutShort(Option<AcpResponse>),
-    /// The connection dropped while the turn ran.
-    Lost(anyhow::Error),
-}
-
 enum ReaderSource {
     Pipe(BufReader<ChildStdout>),
     Tcp(BufReader<TcpStream>),
@@ -602,7 +579,7 @@ impl AcpTransport {
     /// shared channel. A response that arrives after this method has timed
     /// out is dropped (logged) instead of corrupting the next caller.
     pub fn send_request(&self, method: &str, params: serde_json::Value) -> Result<AcpResponse> {
-        self.send_request_inner(method, params, false)
+        self.send_request_inner(method, params, false, &|| {})
     }
 
     /// Send a `session/prompt` request and wait for the turn to end.
@@ -617,85 +594,19 @@ impl AcpTransport {
         method: &str,
         params: serde_json::Value,
     ) -> Result<AcpResponse> {
-        self.send_request_inner(method, params, true)
+        self.send_prompt_request_observed(method, params, &|| {})
     }
 
-    /// Send a `session/prompt` that must be over within `limits.budget` of
-    /// being written, whatever any other session is doing. For hidden
-    /// prompts (extension tool steering) that a user prompt may be queued
-    /// behind: the idle watchdog of [`send_prompt_request`] is reset by
-    /// inbound activity on *any* session, so with another chat streaming it
-    /// would never fire.
-    ///
-    /// When the budget runs out, `cancel` is called (it should send the
-    /// session's `session/cancel`). When `stopped` turns true (the user
-    /// pressed Stop, which sent its own cancel) the turn is cut short the
-    /// same way, minus the extra cancel. Either way the agent then gets
-    /// `limits.cancel_grace` to end the turn, so its prompt slot frees too,
-    /// and after that the request is abandoned (a late reply is dropped as
-    /// orphaned). Blocking.
-    pub fn send_prompt_request_bounded(
+    /// [`send_prompt_request`], calling `on_written` as soon as the request
+    /// has been written to the agent, before waiting for the turn. Not
+    /// called when it never got there (no connection, the write failed).
+    pub fn send_prompt_request_observed(
         &self,
         method: &str,
         params: serde_json::Value,
-        limits: PromptLimits,
-        stopped: &dyn Fn() -> bool,
-        cancel: &dyn Fn(),
-    ) -> BoundedPromptReply {
-        // Short slices: `stopped` is a user's Stop, noticed promptly.
-        const POLL_SLICE: Duration = Duration::from_millis(25);
-        let (id, rx, debug) = match self.start_request(method, params) {
-            Ok(started) => started,
-            Err(e) => return BoundedPromptReply::NotSent(e),
-        };
-        let deadline = std::time::Instant::now() + limits.budget;
-        let lost = |this: &Self| {
-            this.pending.lock_or_recover().remove(&id);
-            *this.connected.lock_or_recover() = false;
-            BoundedPromptReply::Lost(anyhow::anyhow!(
-                "Connection lost while waiting for response"
-            ))
-        };
-        let user_stopped = loop {
-            let now = std::time::Instant::now();
-            if stopped() {
-                break true;
-            }
-            if now >= deadline {
-                break false;
-            }
-            match rx.recv_timeout(POLL_SLICE.min(deadline - now)) {
-                Ok(response) => {
-                    if debug {
-                        info!("[RECV] Response id={}", id);
-                    }
-                    return BoundedPromptReply::Replied(response);
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
-                Err(mpsc::RecvTimeoutError::Disconnected) => return lost(self),
-            }
-        };
-        if user_stopped {
-            info!("{} id={} stopped by the user", method, id);
-        } else {
-            warn!(
-                "{} id={} still running after {:?}; cancelling it",
-                method, id, limits.budget
-            );
-            cancel();
-        }
-        match rx.recv_timeout(limits.cancel_grace) {
-            Ok(response) => BoundedPromptReply::CutShort(Some(response)),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                warn!(
-                    "{} id={} didn't end within {:?} of the cancel; abandoning it",
-                    method, id, limits.cancel_grace
-                );
-                self.pending.lock_or_recover().remove(&id);
-                BoundedPromptReply::CutShort(None)
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => lost(self),
-        }
+        on_written: &dyn Fn(),
+    ) -> Result<AcpResponse> {
+        self.send_request_inner(method, params, true, on_written)
     }
 
     fn send_request_inner(
@@ -703,42 +614,8 @@ impl AcpTransport {
         method: &str,
         params: serde_json::Value,
         idle_watchdog: bool,
+        on_written: &dyn Fn(),
     ) -> Result<AcpResponse> {
-        let (id, rx, debug) = self.start_request(method, params)?;
-        if idle_watchdog {
-            self.recv_with_idle_watchdog(id, method, &rx, debug)
-        } else {
-            // Per-request timeout, not a global idle timer: an unrelated chatty
-            // session/update stream on another id no longer extends this
-            // caller's deadline.
-            match rx.recv_timeout(Self::RPC_TIMEOUT) {
-                Ok(response) => {
-                    if debug {
-                        info!("[RECV] Response id={}", id);
-                    }
-                    Ok(response)
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    self.pending.lock_or_recover().remove(&id);
-                    anyhow::bail!("Timeout waiting for response to {}", method)
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    self.pending.lock_or_recover().remove(&id);
-                    *self.connected.lock_or_recover() = false;
-                    anyhow::bail!("Connection lost while waiting for response")
-                }
-            }
-        }
-    }
-
-    /// Allocate an id, register its inbox and write the request. Returns
-    /// the id, the inbox and whether protocol debugging is on. On error
-    /// nothing was written.
-    fn start_request(
-        &self,
-        method: &str,
-        params: serde_json::Value,
-    ) -> Result<(u64, mpsc::Receiver<AcpResponse>, bool)> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 
         let request = AcpRequest {
@@ -768,7 +645,32 @@ impl AcpTransport {
             self.pending.lock_or_recover().remove(&id);
             return Err(e);
         }
-        Ok((id, rx, debug))
+        on_written();
+
+        if idle_watchdog {
+            self.recv_with_idle_watchdog(id, method, &rx, debug)
+        } else {
+            // Per-request timeout, not a global idle timer: an unrelated chatty
+            // session/update stream on another id no longer extends this
+            // caller's deadline.
+            match rx.recv_timeout(Self::RPC_TIMEOUT) {
+                Ok(response) => {
+                    if debug {
+                        info!("[RECV] Response id={}", id);
+                    }
+                    Ok(response)
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    self.pending.lock_or_recover().remove(&id);
+                    anyhow::bail!("Timeout waiting for response to {}", method)
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    self.pending.lock_or_recover().remove(&id);
+                    *self.connected.lock_or_recover() = false;
+                    anyhow::bail!("Connection lost while waiting for response")
+                }
+            }
+        }
     }
 
     /// Wait for a prompt response, extending the deadline for as long as the

@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     STEERING_MSG_PREFIX,
+    TOOL_STEERING_TAG,
     buildMsgMeta,
     buildRenderQueue,
     formatDuration,
@@ -138,6 +139,28 @@ describe('buildRenderQueue', () => {
         const queue = buildRenderQueue(messages, {}, {}, stubImageToDataUrl);
         expect(queue).toHaveLength(1);
         expect(queue[0].text).toBe('What time is it?');
+    });
+
+    it('hides the extension tool steering a user prompt carries', () => {
+        const messages = [
+            {
+                kind: 'Prompt',
+                message_id: 'u1',
+                content: [
+                    {
+                        kind: 'text',
+                        data: `${TOOL_STEERING_TAG}\n<extension_tools>\nTools\n</extension_tools>\n</_kage_tool_steering>`,
+                    },
+                    { kind: 'text', data: 'Quote AAPL' },
+                ],
+            },
+            { kind: 'AssistantMessage', message_id: 'a1', content: [{ kind: 'text', data: 'About 200.' }] },
+        ];
+        const queue = buildRenderQueue(messages, {}, {}, stubImageToDataUrl);
+        expect(queue.map((q) => [q.type, q.text])).toEqual([
+            ['user', 'Quote AAPL'],
+            ['assistant', 'About 200.'],
+        ]);
     });
 
     it('extracts image content into snapshots, leaving text intact', () => {

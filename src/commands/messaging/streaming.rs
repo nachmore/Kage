@@ -55,10 +55,6 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
     // epilogues that clear the originator entry.
     acp.client.set_in_flight_prompt(&session_id, &message);
 
-    // Snapshot before the turn shows as started: a Stop pressed from here
-    // on belongs to this turn (see the tool-steering replay below).
-    let cancel_epoch = acp.client.cancel_epoch(&session_id);
-
     // Tell chat hosts a user turn just started on this session so they
     // can badge it in the sidebar even when they're viewing another
     // session. Fired only for real user prompts — steering/titling
@@ -97,56 +93,17 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
             }
         }
 
-        // Extension tool steering is sent per session by the window that
-        // loaded the extensions, at init and whenever its tools change.
-        // Sessions created or adopted since (new chat, peer window,
-        // recovery), or that the change was published from another window
-        // for, may not have the latest block, and a window may be
-        // delivering a changed block on this session right now. Either way
-        // the agent gets it, muted, before this prompt, which may need the
-        // new tools; bounded (see steer_before_user_prompt).
-        let steering_held_session = super::permissions::steer_before_user_prompt(
+        // The notification handler (set up at app init) handles all streaming
+        // chunks, permissions, and tool calls via Tauri events.
+        let had_attachments = attachments.as_ref().is_some_and(|a| !a.is_empty());
+        let send_result = send_user_prompt(
             &client,
             &tool_steering,
             &window_label,
             &session_id,
-            cancel_epoch,
-            super::permissions::STEERING_LIMITS,
-            super::permissions::USER_PROMPT_STEERING_LIMIT,
+            message,
+            attachments,
         );
-        if steering_held_session {
-            // Stop pressed while a steering prompt held the session: the
-            // agent's session/cancel ended that prompt, and the user's has
-            // not been sent yet. Honour the Stop by not sending it.
-            if client.cancel_epoch(&session_id) != cancel_epoch {
-                info!(
-                    "Send on {} cancelled during tool steering; prompt not sent",
-                    session_id
-                );
-                super::notifications::flush_session_chunks(&app_for_send, &client, &session_id);
-                // The originator already finalised on Stop; peers only hear
-                // broadcasts, so clear their activity badge.
-                crate::event_targets::emit_streaming_audience(
-                    &app_for_send,
-                    events::SESSION_ACTIVITY,
-                    &serde_json::json!({
-                        "sessionId": &session_id,
-                        "kind": "failed",
-                    }),
-                );
-                if let Ok(mut m) = originators.lock() {
-                    m.remove(&session_id);
-                }
-                client.clear_in_flight_prompt(&session_id);
-                return;
-            }
-        }
-
-        // The notification handler (set up at app init) handles all streaming
-        // chunks, permissions, and tool calls via Tauri events.
-        let had_attachments = attachments.as_ref().is_some_and(|a| !a.is_empty());
-        let send_result =
-            client.send_chat_streaming_with_recovery(session_id.clone(), message, attachments);
 
         // Recovery may have moved us to a fresh session; pick that up
         // for the post-send epilogue (auto_steering, originator clear).
@@ -344,10 +301,6 @@ pub async fn cancel_generation(
         .automation_plan_cancelled
         .store(true, std::sync::atomic::Ordering::Relaxed);
 
-    // Before the session/cancel: a send still running its hidden tool
-    // steering prompt must see this and not send the user's prompt.
-    acp.client.note_cancel(&session_id);
-
     acp.client.cancel_session(&session_id).map_err(|e| {
         AppError::keyed(
             ErrorKind::ConnectionLost,
@@ -404,6 +357,7 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
         let window_sessions = ui.window_sessions.clone();
         let config = features.config.clone();
         let session_cache = features.session_cache.clone();
+        let tool_steering = acp.tool_steering.clone();
 
         async_runtime::spawn_blocking(move || {
             if !client.is_connected() {
@@ -457,8 +411,14 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
             }
             // Same mid-stream switch-in support as send_message_streaming.
             client.set_in_flight_prompt(&session_id, &message);
-            let result =
-                client.send_chat_streaming_with_recovery(session_id.clone(), message, None);
+            let result = send_user_prompt(
+                &client,
+                &tool_steering,
+                window_labels::MAIN,
+                &session_id,
+                message,
+                None,
+            );
             let active_session_id = match &result {
                 Ok(id) => id.clone(),
                 Err(_) => session_id.clone(),
@@ -506,4 +466,208 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
         });
     }
     Ok(())
+}
+
+/// Send a user prompt from `window` on `session_id`, with recovery (see
+/// `AcpClient::send_chat_streaming_with_recovery`). Returns the session the
+/// prompt went out on. Blocking.
+///
+/// The window's extension tool steering rides on it, as a hidden block ahead
+/// of the user's text, when the session it goes to doesn't have that block
+/// yet: the window's current tool list, or a "tools withdrawn" notice for a
+/// session that was sent tools ([`ToolSteeringPrefix`]).
+fn send_user_prompt(
+    client: &crate::acp_client::AcpClient,
+    tool_steering: &std::sync::Mutex<crate::state::ToolSteeringState>,
+    window: &str,
+    session_id: &str,
+    message: String,
+    attachments: Option<Vec<serde_json::Value>>,
+) -> anyhow::Result<String> {
+    let steering = ToolSteeringPrefix {
+        state: tool_steering,
+        window,
+        attempt: std::cell::RefCell::new(None),
+    };
+    client.send_chat_streaming_with_recovery(
+        session_id.to_string(),
+        message,
+        attachments,
+        Some(&steering),
+    )
+}
+
+/// A user prompt's extension tool steering, decided per send attempt (the
+/// recovery ladder may resend on a reloaded or fresh session). The block is
+/// noted when the prompt carrying it is written and counts as delivered once
+/// the agent finishes that turn; a send that fails or is stopped leaves it
+/// pending, so the next prompt carries it again.
+struct ToolSteeringPrefix<'a> {
+    state: &'a std::sync::Mutex<crate::state::ToolSteeringState>,
+    window: &'a str,
+    /// This attempt's session, the steering it carries, and its write once
+    /// it's on the wire.
+    attempt: std::cell::RefCell<Option<(String, crate::state::PromptSteering, Option<u64>)>>,
+}
+
+impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
+    fn text_for(&self, session_id: &str) -> Option<String> {
+        let steering = self
+            .state
+            .lock_or_recover()
+            .for_prompt(self.window, session_id);
+        let text = steering.as_ref().map(|s| s.text.clone());
+        if let Some(text) = &text {
+            info!(
+                "Extension tool steering rides on this prompt on {} ({} chars)",
+                session_id,
+                text.len()
+            );
+        }
+        *self.attempt.borrow_mut() = steering.map(|s| (session_id.to_string(), s, None));
+        text
+    }
+
+    fn written(&self, session_id: &str) {
+        if let Some((sid, steering, write)) = self.attempt.borrow_mut().as_mut() {
+            if sid == session_id {
+                *write = Some(
+                    self.state
+                        .lock_or_recover()
+                        .note_written(session_id, steering),
+                );
+            }
+        }
+    }
+
+    fn completed(&self, session_id: &str) {
+        if let Some((sid, steering, Some(write))) = self.attempt.borrow().as_ref() {
+            if sid == session_id {
+                self.state
+                    .lock_or_recover()
+                    .note_delivered(session_id, steering, *write);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::send_user_prompt;
+    use crate::acp_client::{AcpClient, AcpConnectionMode};
+    use crate::state::{ToolSteeringState, TOOL_STEERING_TAG};
+    use std::io::{BufRead, BufReader, Write};
+    use std::sync::{Arc, Mutex};
+
+    /// A fake agent on loopback (ephemeral port, test-only): ends every
+    /// prompt at once (as cancelled if its text is "stop me") and records
+    /// each one's text blocks, timestamps left out.
+    fn fake_agent() -> (u16, Arc<Mutex<Vec<Vec<String>>>>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let prompts = Arc::new(Mutex::new(Vec::new()));
+        let log = prompts.clone();
+        std::thread::spawn(move || {
+            let Ok((stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut writer = stream.try_clone().unwrap();
+            for line in BufReader::new(stream).lines() {
+                let Ok(line) = line else { return };
+                let msg: serde_json::Value = serde_json::from_str(&line).unwrap();
+                if msg["method"] != "session/prompt" {
+                    continue;
+                }
+                let texts: Vec<String> = msg["params"]["prompt"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .filter(|t| !t.starts_with("[Current time:"))
+                    .map(String::from)
+                    .collect();
+                let stop_reason = if texts.last().is_some_and(|t| t == "stop me") {
+                    "cancelled"
+                } else {
+                    "end_turn"
+                };
+                log.lock().unwrap().push(texts);
+                let reply = serde_json::json!({
+                    "jsonrpc": "2.0", "id": msg["id"],
+                    "result": { "stopReason": stop_reason }
+                });
+                if writeln!(writer, "{reply}").is_err() {
+                    return;
+                }
+            }
+        });
+        (port, prompts)
+    }
+
+    #[test]
+    fn tool_steering_rides_on_the_next_user_prompt_once() {
+        let (port, prompts) = fake_agent();
+        let client = AcpClient::new(AcpConnectionMode::Remote {
+            host: "127.0.0.1".to_string(),
+            port,
+        });
+        client.connect().unwrap();
+        let steering = Mutex::new(ToolSteeringState::default());
+        let send = |text: &str| {
+            send_user_prompt(&client, &steering, "main", "S", text.to_string(), None).unwrap()
+        };
+
+        steering
+            .lock()
+            .unwrap()
+            .publish("main", "<extension_tools>\nquotes\n</extension_tools>");
+        assert_eq!(send("first"), "S");
+        send("second");
+        steering.lock().unwrap().publish("main", "");
+        send("third");
+        send("fourth");
+
+        let prompts = prompts.lock().unwrap().clone();
+        assert_eq!(prompts.len(), 4);
+        assert_eq!(prompts[0].len(), 2, "{:?}", prompts[0]);
+        assert!(prompts[0][0].starts_with(TOOL_STEERING_TAG));
+        assert!(prompts[0][0].contains("quotes"));
+        assert_eq!(prompts[0][1], "first");
+        assert_eq!(prompts[1], vec!["second"], "delivered once");
+        assert!(prompts[2][0].contains("No local extension tools"));
+        assert_eq!(prompts[2][1], "third");
+        assert_eq!(prompts[3], vec!["fourth"]);
+    }
+
+    #[test]
+    fn tool_steering_on_a_stopped_turn_is_sent_again() {
+        // A turn cut short by Stop may not make it into the agent's history.
+        let (port, prompts) = fake_agent();
+        let client = AcpClient::new(AcpConnectionMode::Remote {
+            host: "127.0.0.1".to_string(),
+            port,
+        });
+        client.connect().unwrap();
+        let steering = Mutex::new(ToolSteeringState::default());
+        let send = |text: &str| {
+            send_user_prompt(&client, &steering, "main", "S", text.to_string(), None).unwrap()
+        };
+        steering
+            .lock()
+            .unwrap()
+            .publish("main", "<extension_tools>\nquotes\n</extension_tools>");
+        send("stop me");
+        send("again");
+        send("later");
+
+        let prompts = prompts.lock().unwrap().clone();
+        assert!(prompts[0][0].starts_with(TOOL_STEERING_TAG));
+        assert!(
+            prompts[1][0].starts_with(TOOL_STEERING_TAG),
+            "{:?}",
+            prompts[1]
+        );
+        assert_eq!(prompts[1][1], "again");
+        assert_eq!(prompts[2], vec!["later"]);
+    }
 }

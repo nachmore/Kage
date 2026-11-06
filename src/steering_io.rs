@@ -185,6 +185,11 @@ pub fn import_lines_from_path(path: &str) -> Result<Vec<String>> {
     Ok(split_lines(body))
 }
 
+/// Serialises the unit tests that write the (test-isolated) auto steering
+/// doc: it is one file for the whole test process.
+#[cfg(test)]
+pub(crate) static AUTO_DOC_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,6 +298,9 @@ mod tests {
                 |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
             // The auto doc lives in the (test-isolated) config dir. Editing
             // it must not leave it readable to others, whatever it was.
+            let _auto_doc = super::AUTO_DOC_TEST_LOCK
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let config = Config::default();
             let auto = resolve_path(SteeringKind::Auto, &config).unwrap();
             assert!(crate::paths::is_under_isolation_root(&auto));

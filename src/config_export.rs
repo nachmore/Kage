@@ -63,6 +63,7 @@
 //! is written to a temp file and renamed into place. A refusal is an
 //! [`UnsafeImportPath`] error.
 
+use crate::atomic_write::Perms;
 use crate::config::Config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -328,21 +329,32 @@ fn unpack_archive(bytes: &[u8], local: &Config) -> Result<(Config, ImportSummary
             check_destination_under(root, rel)?;
         }
     }
-    let mut steering_writes: Vec<(PathBuf, Vec<u8>)> = Vec::new();
-    for (body, path) in [
-        (steering_auto, Config::get_auto_steering_path().ok()),
-        (steering_user, resolve_user_steering_path(local)),
+    // The auto doc is Kage's and holds what it learned about the user:
+    // owner-only, as everywhere else it is written. The user's own doc keeps
+    // the permissions they gave it.
+    let mut steering_writes: Vec<(PathBuf, Vec<u8>, Perms)> = Vec::new();
+    for (body, path, perms) in [
+        (
+            steering_auto,
+            Config::get_auto_steering_path().ok(),
+            Perms::Private,
+        ),
+        (
+            steering_user,
+            resolve_user_steering_path(local),
+            Perms::Inherit,
+        ),
     ] {
         if let (Some(body), Some(path)) = (body, path) {
-            steering_writes.push((steering_target(&path)?, body));
+            steering_writes.push((steering_target(&path)?, body, perms));
         }
     }
 
     // Side-files: written AFTER the config round-trip validated. If the
     // parse failed above we'd have bailed without touching disk.
     let mut steering_bytes = 0usize;
-    for (target, body) in &steering_writes {
-        write_steering(target, body)?;
+    for (target, body, perms) in &steering_writes {
+        write_steering(target, body, *perms)?;
         steering_bytes += body.len();
     }
 
@@ -421,6 +433,12 @@ pub fn sanitise_imported_config(mut imported: Config, local: &Config) -> Config 
 
 // --- Helpers ----------------------------------------------------------------
 
+/// Serialises the unit tests that write the (test-isolated) extension-data
+/// root: one tree for the whole test process, which a backup export reads
+/// in full and its import writes back.
+#[cfg(test)]
+pub(crate) static EXTENSION_DATA_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn extension_data_root() -> Option<PathBuf> {
     Some(
         crate::paths::config_dir()?
@@ -450,12 +468,11 @@ fn walk_files(root: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
             if ft.is_dir() {
                 stack.push(path);
             } else if ft.is_file() {
-                // Leftover of an interrupted atomic write: not user data.
-                if entry
-                    .file_name()
-                    .to_str()
-                    .is_some_and(crate::atomic_write::is_temp_file_name)
-                {
+                // Leftover of an interrupted atomic write (or of an import
+                // by an older build): not user data.
+                if entry.file_name().to_str().is_some_and(|n| {
+                    crate::atomic_write::is_temp_file_name(n) || is_legacy_import_temp(n)
+                }) {
                     continue;
                 }
                 let rel = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
@@ -466,6 +483,25 @@ fn walk_files(root: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
         }
     }
     Ok(out)
+}
+
+/// A temp an older build's backup import wrote next to its target,
+/// `.<name>.<pid>-<seq>.kage-import.tmp`, which a crash could leave behind.
+fn is_legacy_import_temp(file_name: &str) -> bool {
+    let Some(rest) = file_name
+        .strip_prefix('.')
+        .and_then(|r| r.strip_suffix(".kage-import.tmp"))
+    else {
+        return false;
+    };
+    let Some((name, ids)) = rest.rsplit_once('.') else {
+        return false;
+    };
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    !name.is_empty()
+        && ids
+            .split_once('-')
+            .is_some_and(|(pid, seq)| digits(pid) && digits(seq))
 }
 
 /// Validate that an archive entry's relative path is safe to write
@@ -633,8 +669,10 @@ fn ensure_real_dir(dir: &Path) -> Result<()> {
 
 /// Write `body` to `rel` under `root` without following a link at or
 /// below the root: each directory is created (or checked) one level at a
-/// time with `lstat`, and the file goes to a temp file that is renamed
-/// into place (a rename replaces a link instead of writing through it).
+/// time with `lstat`, and the file goes through
+/// [`crate::atomic_write::write_no_follow`] (its rename replaces a link
+/// instead of writing through it). Owner-only, like every other write of
+/// extension data: it can hold an extension's API keys.
 fn write_under(root: &Path, rel: &Path, body: &[u8]) -> Result<()> {
     let parts: Vec<_> = rel.components().collect();
     let Some((last, dirs)) = parts.split_last() else {
@@ -655,7 +693,8 @@ fn write_under(root: &Path, rel: &Path, body: &[u8]) -> Result<()> {
     if let Ok(md) = std::fs::symlink_metadata(&target) {
         refuse_link_or_kind(&target, &md, false)?;
     }
-    write_file_atomic(&target, body)
+    crate::atomic_write::write_no_follow(&target, body, Perms::Private)
+        .with_context(|| format!("Failed to write {:?}", target))
 }
 
 /// Where to write a steering doc this machine keeps at `path`. A symlink
@@ -670,51 +709,13 @@ fn steering_target(path: &Path) -> Result<PathBuf> {
 }
 
 /// Write a steering doc at the [`steering_target`] this machine chose.
-fn write_steering(target: &Path, body: &[u8]) -> Result<()> {
+fn write_steering(target: &Path, body: &[u8], perms: Perms) -> Result<()> {
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create parent of {:?}", target))?;
     }
-    write_file_atomic(target, body)
-}
-
-/// Write `body` to `path` via a fresh temp file in the same directory
-/// (`create_new`, so an existing file or link there is never opened),
-/// flushed to disk, then renamed over `path`. A crash leaves the old file
-/// or the new one, never half of either.
-fn write_file_atomic(path: &Path, body: &[u8]) -> Result<()> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-    let dir = path
-        .parent()
-        .with_context(|| format!("No parent directory for {:?}", path))?;
-    let name = path
-        .file_name()
-        .with_context(|| format!("No file name in {:?}", path))?
-        .to_string_lossy();
-    let tmp = dir.join(format!(
-        ".{}.{}-{}.kage-import.tmp",
-        name,
-        std::process::id(),
-        SEQ.fetch_add(1, Ordering::Relaxed)
-    ));
-    let result = (|| -> Result<()> {
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)
-            .with_context(|| format!("Failed to create {:?}", tmp))?;
-        file.write_all(body)
-            .with_context(|| format!("Failed to write {:?}", tmp))?;
-        file.sync_all()
-            .with_context(|| format!("Failed to flush {:?}", tmp))?;
-        drop(file);
-        std::fs::rename(&tmp, path).with_context(|| format!("Failed to write {:?}", path))
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
-    }
-    result
+    crate::atomic_write::write_no_follow(target, body, perms)
+        .with_context(|| format!("Failed to write {:?}", target))
 }
 
 // --- Encryption --------------------------------------------------------------
@@ -1006,12 +1007,12 @@ mod tests {
     //
     // These run against the isolated per-process config dir (`crate::paths`
     // isolates unit tests). They share its `extension-data/` root, so each
-    // uses its own extension ids and takes `DISK`.
-
-    static DISK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // uses its own extension ids and takes `EXTENSION_DATA_TEST_LOCK`.
 
     fn disk() -> std::sync::MutexGuard<'static, ()> {
-        DISK.lock().unwrap_or_else(|e| e.into_inner())
+        super::EXTENSION_DATA_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     fn isolated_ext_root() -> PathBuf {
@@ -1059,13 +1060,101 @@ mod tests {
 
     fn no_temp_files_in(dir: &Path) {
         for entry in std::fs::read_dir(dir).unwrap() {
-            let name = entry.unwrap().file_name();
+            let name = entry.unwrap().file_name().to_string_lossy().into_owned();
             assert!(
-                !name.to_string_lossy().ends_with(".kage-import.tmp"),
+                !crate::atomic_write::is_temp_file_name(&name) && !name.ends_with(".tmp"),
                 "left behind {:?}",
                 name
             );
         }
+    }
+
+    #[cfg(unix)]
+    fn mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn import_writes_extension_data_and_auto_steering_owner_only() {
+        // The regression: import wrote them with the umask's default (0644
+        // under umask 022), replacing 0600 files.
+        use std::os::unix::fs::PermissionsExt;
+        let _disk = disk();
+        let _auto_doc = crate::steering_io::AUTO_DOC_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let root = isolated_ext_root();
+        let ext_file = root.join("perm-ext").join("secrets.json");
+        std::fs::create_dir_all(ext_file.parent().unwrap()).unwrap();
+        std::fs::write(&ext_file, b"{}").unwrap();
+        std::fs::set_permissions(&ext_file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let scratch = tempfile::tempdir().unwrap();
+        let user_doc = scratch.path().join("user-steering.md");
+        std::fs::write(&user_doc, b"old").unwrap();
+        std::fs::set_permissions(&user_doc, std::fs::Permissions::from_mode(0o640)).unwrap();
+        let auto_doc = Config::get_auto_steering_path().unwrap();
+        assert!(crate::paths::is_under_isolation_root(&auto_doc));
+
+        let bundle = handmade_bundle(
+            &fake_config(),
+            &[
+                ("extension-data/perm-ext/secrets.json", b"{\"key\":\"k\"}"),
+                ("extension-data/perm-ext/new.json", b"[]"),
+                ("steering/auto.md", b"- likes tea"),
+                ("steering/user.md", b"be brief"),
+            ],
+        );
+        import(&bundle, None, &local_with_steering(&user_doc)).unwrap();
+
+        assert_eq!(mode(&ext_file), 0o600);
+        assert_eq!(mode(&root.join("perm-ext").join("new.json")), 0o600);
+        assert_eq!(mode(&auto_doc), 0o600);
+        assert_eq!(std::fs::read(&auto_doc).unwrap(), b"- likes tea");
+        assert_eq!(mode(&user_doc), 0o640, "the user's own doc keeps its mode");
+        assert_eq!(std::fs::read(&user_doc).unwrap(), b"be brief");
+        no_temp_files_in(&root.join("perm-ext"));
+        no_temp_files_in(scratch.path());
+        std::fs::remove_dir_all(root.join("perm-ext")).unwrap();
+        std::fs::remove_file(&auto_doc).unwrap();
+    }
+
+    #[test]
+    fn export_skips_leftover_temps() {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = scratch.path();
+        std::fs::create_dir_all(root.join("ext")).unwrap();
+        std::fs::write(root.join("ext").join("data.json"), b"{}").unwrap();
+        for leftover in [
+            ".data.json.kage-tmp-0123456789abcdef",
+            ".data.json.4242-7.kage-import.tmp",
+        ] {
+            std::fs::write(root.join("ext").join(leftover), b"{").unwrap();
+        }
+        // Look-alikes a user (or an extension) could have named.
+        for kept in [
+            "notes.kage-import.tmp",
+            ".data.json.x-7.kage-import.tmp",
+            ".data.json.kage-import.tmp",
+        ] {
+            std::fs::write(root.join("ext").join(kept), b"mine").unwrap();
+        }
+        let mut names: Vec<String> = walk_files(root)
+            .unwrap()
+            .into_iter()
+            .map(|(rel, _)| rel.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            vec![
+                ".data.json.kage-import.tmp",
+                ".data.json.x-7.kage-import.tmp",
+                "data.json",
+                "notes.kage-import.tmp",
+            ]
+        );
     }
 
     #[test]
@@ -1299,6 +1388,10 @@ mod tests {
     #[test]
     fn a_v1_bundle_round_trips_plain_and_encrypted() {
         let _disk = disk();
+        // Export picks up the auto doc if there is one; import writes it back.
+        let _auto_doc = crate::steering_io::AUTO_DOC_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let root = isolated_ext_root();
         let ext = root.join("round-trip-ext");
         std::fs::create_dir_all(ext.join("nested")).unwrap();

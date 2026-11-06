@@ -369,7 +369,11 @@ export const LifecycleVisibilityMethods = {
                     window._kageMascot = null;
                 }
                 this._stopOllamaStatusPoll();
-                this.extensionToolController?.stopSteering?.();
+                // Not stopSteering(): the window is only hidden (close is
+                // prevented), and the next reload re-populates the manager,
+                // whose tool changes must keep reaching the backend. A real
+                // teardown takes the JS with it, and the backend drops the
+                // window's publication on Destroyed.
                 this.extensionManager?.destroy?.();
             } catch (e) {
                 console.warn('floating close-requested cleanup failed:', e);

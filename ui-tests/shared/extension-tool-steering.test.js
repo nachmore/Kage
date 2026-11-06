@@ -2,8 +2,9 @@
  * Extension tool steering stays in sync with the extension tools after
  * startup: a setting that turns an extension's agent tools on (Stocks'
  * "Allow tools for agents"), an extension enabled, installed, disabled or
- * removed. The steering must be re-sent once per real change and never for a
- * refresh that found the same tools.
+ * removed. The window re-publishes once per real change, never for a
+ * refresh that found the same tools, and nothing after stopSteering(). (The
+ * backend attaches what was published to the window's next user prompt.)
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -160,15 +161,14 @@ describe('extension tool steering follows tool changes', () => {
         // sent to a session that had none), so the backend doesn't steer
         // its sessions with another window's tools.
         expect(h.steeringSends()).toHaveLength(1);
-        expect(h.steeringSends()[0][1]).toEqual({ sessionId: 'sess-1', toolSteering: '' });
+        expect(h.steeringSends()[0][1]).toEqual({ toolSteering: '' });
 
         h.appConfig.extensions.stocks.allowAgentTools = true;
         await h.configUpdated();
         await settle();
         expect(h.steeringSends()).toHaveLength(2);
         const [, args] = h.steeringSends()[1];
-        expect(args.sessionId).toBe('sess-1');
-        expect(args.toolSteering).toContain('get_quote');
+        expect(args).toEqual({ toolSteering: expect.stringContaining('get_quote') });
         expect(args.toolSteering).toContain('replaces any extension tool list');
 
         // Another config save that leaves the tools as they were (or the
@@ -238,6 +238,55 @@ describe('extension tool steering follows tool changes', () => {
         expect(h.steeringSends()).toHaveLength(1);
     });
 
+    it('stopSteering() while a publication is being built publishes nothing', async () => {
+        const h = makeHarness({ allowAgentTools: true });
+        let release;
+        const gate = new Promise((r) => {
+            release = r;
+        });
+        h.sandbox.call.mockImplementationOnce(async () => {
+            await gate;
+            return [QUOTE_TOOL];
+        });
+        const started = h.controller.startSteering();
+        h.controller.stopSteering();
+        release();
+        await started;
+        expect(h.steeringSends()).toHaveLength(0);
+    });
+
+    it('a change queued behind a stopped publication is dropped', async () => {
+        const h = makeHarness({ allowAgentTools: false });
+        await h.mgr.getToolDefinitions();
+        let release;
+        h.hostInvoke.mockImplementationOnce(
+            () =>
+                new Promise((r) => {
+                    release = r;
+                })
+        );
+        const started = h.controller.startSteering(); // its invoke hangs
+        for (let i = 0; i < 100 && !release; i++) await Promise.resolve();
+        expect(h.steeringSends()).toHaveLength(1);
+        // A real change, so only the lifetime check can hold it back.
+        h.sandbox.config = { allowAgentTools: true };
+        h.controller.sendSteering(); // queued rerun
+        h.controller.stopSteering();
+        release();
+        await started;
+        expect(h.steeringSends()).toHaveLength(1); // only the one already sent
+    });
+
+    it('startSteering() after stopSteering() publishes afresh', async () => {
+        const h = makeHarness({ allowAgentTools: false });
+        await h.mgr.getToolDefinitions();
+        await h.controller.startSteering();
+        h.controller.stopSteering();
+        await h.controller.startSteering();
+        expect(h.steeringSends()).toHaveLength(2);
+        expect(h.mgr._toolDefsListeners.size).toBe(1);
+    });
+
     it('startSteering() twice subscribes once', async () => {
         const h = makeHarness({ allowAgentTools: false });
         await h.mgr.getToolDefinitions();
@@ -259,12 +308,11 @@ describe('ExtensionToolController.sendSteering is single-flight', () => {
         });
         const c = new ExtensionToolController({
             invoke,
-            getSessionId: () => 's',
             extensionManager: {
                 buildToolSteeringBlock: vi.fn(async () => blocks.shift() ?? 'v2'),
             },
         });
-        const p1 = c.sendSteering();
+        const p1 = c.startSteering();
         const p2 = c.sendSteering();
         const p3 = c.sendSteering();
         releaseFirst();

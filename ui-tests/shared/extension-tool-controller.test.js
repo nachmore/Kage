@@ -210,13 +210,12 @@ describe('ExtensionToolController._handleToolCall', () => {
     });
 });
 
-describe('ExtensionToolController.sendSteering', () => {
-    it('ships the block to the agent with the host session id', async () => {
+describe('ExtensionToolController.startSteering', () => {
+    it('publishes the block to the backend (no session: the backend attaches it per prompt)', async () => {
         const host = makeHost();
         const c = new ExtensionToolController(host);
-        await c.sendSteering();
+        await c.startSteering();
         expect(host.invoke).toHaveBeenCalledWith('send_extension_tool_steering', {
-            sessionId: 'sess-1',
             toolSteering: 'STEER',
         });
     });
@@ -228,25 +227,20 @@ describe('ExtensionToolController.sendSteering', () => {
         const host = makeHost();
         host.extensionManager.buildToolSteeringBlock = vi.fn().mockResolvedValue(null);
         const c = new ExtensionToolController(host);
-        await c.sendSteering();
+        await c.startSteering();
         expect(host.invoke).toHaveBeenCalledTimes(1);
         expect(host.invoke).toHaveBeenCalledWith('send_extension_tool_steering', {
-            sessionId: 'sess-1',
             toolSteering: '',
         });
         await c.sendSteering();
         expect(host.invoke).toHaveBeenCalledTimes(1);
     });
 
-    it('publishes without a session when the host has none', async () => {
-        // The backend records it and replays it to the next session.
-        const host = makeHost({ getSessionId: vi.fn().mockReturnValue(null) });
+    it('sendSteering() outside a startSteering() lifetime publishes nothing', async () => {
+        const host = makeHost();
         const c = new ExtensionToolController(host);
         await c.sendSteering();
-        expect(host.invoke).toHaveBeenCalledWith('send_extension_tool_steering', {
-            sessionId: null,
-            toolSteering: 'STEER',
-        });
+        expect(host.invoke).not.toHaveBeenCalled();
     });
 });
 

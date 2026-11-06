@@ -18,11 +18,11 @@ Kage exposes agent-callable tools through two distinct mechanisms:
    computer-control uses.
 2. **Local extensions** — JS in the WebView declares tools in its
    manifest. The host's `ui/js/shared/extension-tool-controller.js`
-   builds a steering block from those validated declarations and pushes
-   it to the agent as a hidden steering message via
-   `send_extension_tool_steering` — a host-only command (mapped to
-   `null` in `extension-permissions.js`), because the backend replays
-   the latest block into every new and recovered session, so extension
+   builds a steering block from those validated declarations and
+   publishes it to the backend via `send_extension_tool_steering` — a
+   host-only command (mapped to `null` in `extension-permissions.js`),
+   because the backend attaches the block, hidden, to the window's next
+   user prompt on every session that doesn't have it yet, so extension
    code must never supply it directly. The agent emits a
    specially-formatted call in its response stream; the frontend detects
    it (`detectExtensionToolCall` in `ui/js/shared/streaming-utils.js`),

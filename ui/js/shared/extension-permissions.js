@@ -147,8 +147,10 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     send_message_streaming: 'agent',
     cancel_generation: 'agent',
     send_steering_message: 'agent',
-    // Host-only: the backend replays the latest block into every new and
-    // recovered session, so an extension-supplied block would persist into
+    // Host-only: the backend keeps the block as the calling window's
+    // publication and attaches it, hidden, to that window's next user prompt
+    // on every session that doesn't have it yet (and lends it to windows
+    // that haven't published), so an extension-supplied block would steer
     // sessions it never touched. Only extension-tool-controller.js (host
     // code) sends it, built from the validated tool definitions.
     send_extension_tool_steering: null,
