@@ -291,7 +291,36 @@ pub fn is_absolute_win_path(p: &str) -> bool {
     } else {
         return false;
     };
-    !rest.contains(':') && !rest.split('\\').any(|c| c == "." || c == "..")
+    // `.`, `..`, and any other component of only dots and spaces (which
+    // Windows would trim to nothing).
+    !rest.contains(':')
+        && !rest
+            .split('\\')
+            .any(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '.' | ' ')))
+}
+
+/// `p` (normalised) with each component's trailing dots and spaces
+/// dropped: the one form every spelling Windows opens as the same folder
+/// shares. Win32 trims them when it opens a path — all of them from the
+/// last component, a `.` from any other — so `Downloads.`, `Downloads `
+/// and `Downloads. .` all open Downloads. This trims every component, a
+/// little more than Windows does, so it's only for deciding a folder is
+/// shared, where reading two folders as one errs safe. Components of only
+/// dots and spaces are left alone (`is_absolute_win_path` refuses them).
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+pub fn alias_key(p: &str) -> String {
+    let (lead, body) = match p.strip_prefix(r"\\") {
+        Some(body) => (r"\\", body),
+        None => ("", p),
+    };
+    let parts: Vec<&str> = body
+        .split('\\')
+        .map(|c| match c.trim_end_matches(['.', ' ']) {
+            "" => c,
+            trimmed => trimmed,
+        })
+        .collect();
+    format!("{lead}{}", parts.join("\\"))
 }
 
 /// A drive root (`c:`) or a share root (`\\srv\share`), normalised.
@@ -328,15 +357,82 @@ fn is_icon_index(s: &str) -> bool {
     !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
 }
 
-/// Whether `dir` (normalised) is a shared folder — never one product's
-/// own folder, so a product "inside" it says nothing about which product
-/// that is, and it's never protected as one product's tree. A drive or
-/// share root always is; `shared` lists this machine's others, normalised
-/// (Program Files, Windows, ProgramData, the user profile roots, AppData,
-/// Desktop/Documents/Downloads, temp, …: `shared_dirs` on Windows).
+/// Where a Windows path really leads (see `WinFs::new`).
+type Resolver = Box<dyn Fn(&str) -> Option<String>>;
+
+/// What the Windows path decisions need from the machine: its shared
+/// folders, and where a path really leads.
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
-pub fn is_shared_dir(dir: &str, shared: &[String]) -> bool {
-    is_volume_root(dir) || shared.iter().any(|s| s == dir)
+pub struct WinFs {
+    /// `alias_key` of each shared folder, as configured and as resolved.
+    shared: Vec<String>,
+    resolve: Resolver,
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+impl WinFs {
+    /// `shared`: this machine's shared folders (Program Files, Windows,
+    /// ProgramData, the user profile roots, AppData, Desktop / Documents /
+    /// Downloads, temp, …: `shared_dirs` on Windows). `resolve`: where a
+    /// path really leads, every link, junction, 8.3 name and trailing dot
+    /// or space resolved — Windows' `canonicalize` — or `None` if nothing
+    /// is there.
+    pub fn new(
+        shared: impl IntoIterator<Item = String>,
+        resolve: impl Fn(&str) -> Option<String> + 'static,
+    ) -> Self {
+        let mut fs = Self {
+            shared: Vec::new(),
+            resolve: Box::new(resolve),
+        };
+        let mut keys = Vec::new();
+        for dir in shared {
+            let dir = normalize_win_path(&dir);
+            keys.extend(fs.resolve(&dir).map(|r| alias_key(&r)));
+            keys.push(alias_key(&dir));
+        }
+        keys.sort();
+        keys.dedup();
+        fs.shared = keys;
+        fs
+    }
+
+    /// Where `p` really leads, normalised; `None` if nothing is there or
+    /// it leads somewhere Kage can't reason about (`is_absolute_win_path`).
+    pub fn resolve(&self, p: &str) -> Option<String> {
+        (self.resolve)(p)
+            .map(|r| normalize_win_path(&r))
+            .filter(|r| is_absolute_win_path(r))
+    }
+
+    /// `p` as written (normalised) and, if it resolves, where it leads.
+    fn forms(&self, p: &str) -> Vec<String> {
+        let p = normalize_win_path(p);
+        let resolved = self.resolve(&p).filter(|r| *r != p);
+        std::iter::once(p).chain(resolved).collect()
+    }
+
+    /// Whether `dir` is a shared folder — never one product's own folder,
+    /// so a product "inside" it says nothing about which product that is,
+    /// and it's never protected as one product's tree: a drive or share
+    /// root, one of the shared folders, or a folder holding one. Decided
+    /// for `dir` as written and where it resolves, each read through
+    /// `alias_key`, so no spelling of a shared folder — `Downloads.`,
+    /// `DOWNLO~1`, a junction to it — counts as a product's own.
+    pub fn is_shared(&self, dir: &str) -> bool {
+        self.forms(dir).iter().any(|d| {
+            let k = alias_key(d);
+            is_volume_root(&k) || self.shared.iter().any(|s| within(s, &k))
+        })
+    }
+
+    /// Whether `p`, as written or where it resolves, is one of `roots`
+    /// (normalised) or inside one.
+    pub fn is_within_any(&self, p: &str, roots: &[String]) -> bool {
+        self.forms(p)
+            .iter()
+            .any(|p| roots.iter().any(|r| within(p, r)))
+    }
 }
 
 /// A normalised absolute path from a registry value, or `None` if it isn't
@@ -354,13 +450,14 @@ fn install_location(e: &UninstallEntry) -> Option<String> {
 
 /// Each entry's `InstallLocation` that names one product's own folder
 /// (normalised, deduplicated) — every entry, removable or not: they're
-/// all installed software. Shared folders and roots are left out, so a
-/// sloppy `InstallLocation` of `C:\` can't claim the whole drive.
+/// all installed software. Shared folders and roots are left out, however
+/// they're spelled (`WinFs::is_shared`), so a sloppy `InstallLocation` of
+/// `C:\` or `Downloads.` can't claim the whole drive or Downloads.
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
-pub fn product_install_dirs(entries: &[UninstallEntry], shared: &[String]) -> Vec<String> {
+pub fn product_install_dirs(entries: &[UninstallEntry], fs: &WinFs) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for loc in entries.iter().filter_map(install_location) {
-        if !is_shared_dir(&loc, shared) && !out.contains(&loc) {
+        if !out.contains(&loc) && !fs.is_shared(&loc) {
             out.push(loc);
         }
     }
@@ -417,7 +514,7 @@ fn within(path: &str, dir: &str) -> bool {
 /// Where an entry says its product lives — `InstallLocation`, the folder
 /// of `DisplayIcon`, the folder of the uninstaller — normalised, with
 /// shared folders dropped.
-fn entry_locations(e: &UninstallEntry, shared: &[String]) -> Vec<String> {
+fn entry_locations(e: &UninstallEntry, fs: &WinFs) -> Vec<String> {
     let icon = e
         .display_icon
         .as_deref()
@@ -438,7 +535,7 @@ fn entry_locations(e: &UninstallEntry, shared: &[String]) -> Vec<String> {
             .map(str::to_string),
     ];
     for loc in candidates.into_iter().flatten() {
-        if !is_shared_dir(&loc, shared) && !out.contains(&loc) {
+        if !out.contains(&loc) && !fs.is_shared(&loc) {
             out.push(loc);
         }
     }
@@ -486,15 +583,16 @@ pub struct UninstallMatch<'e> {
 /// exact `DisplayName` match count, and then no install folder is
 /// verified.
 ///
-/// Shared folders never count as a location, and duplicates (the same
-/// product listed in the 32- and 64-bit views) collapse to one.
+/// Shared folders, however they're spelled (`WinFs::is_shared`), never
+/// count as a location, and duplicates (the same product listed in the
+/// 32- and 64-bit views) collapse to one.
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
 pub fn match_uninstall_entry<'e>(
     app_name: &str,
     target: Option<&str>,
     shortcut_args: bool,
     entries: &'e [UninstallEntry],
-    shared: &[String],
+    fs: &WinFs,
 ) -> Option<UninstallMatch<'e>> {
     let mut candidates: Vec<&UninstallEntry> = Vec::new();
     for e in entries.iter().filter(|e| eligible(e)) {
@@ -546,11 +644,10 @@ pub fn match_uninstall_entry<'e>(
     let located: Vec<(&UninstallEntry, Vec<String>)> = candidates
         .into_iter()
         .filter(|e| !contradicted(e) && names_agree(e))
-        .map(|e| (e, entry_locations(e, shared)))
+        .map(|e| (e, entry_locations(e, fs)))
         .collect();
 
-    let product_dir =
-        |e: &UninstallEntry| install_location(e).filter(|l| !is_shared_dir(l, shared));
+    let product_dir = |e: &UninstallEntry| install_location(e).filter(|l| !fs.is_shared(l));
     let strong: Vec<&UninstallEntry> = located
         .iter()
         .filter(|(e, _)| {
@@ -579,7 +676,7 @@ pub fn match_uninstall_entry<'e>(
     }?;
 
     let install_dir = product_dir(entry).or_else(|| {
-        entry_locations(entry, shared)
+        entry_locations(entry, fs)
             .into_iter()
             .filter(|l| within(&target, l) && &target != l)
             .min_by_key(String::len)
@@ -691,14 +788,26 @@ pub fn split_uninstall_string(cmd: &str) -> Option<(String, String)> {
 ///    whatever the stored `UninstallString` says.
 /// 2. A plain executable (quoted or not) with no argument, or exactly one
 ///    of `INTERACTIVE_UNINSTALL_ARGS`, that `exists` and sits inside the
-///    product's verified install folder (`UninstallMatch::install_dir`).
+///    product's verified install folder (`UninstallMatch::install_dir`) —
+///    as written and where both really lead (`WinFs::resolve`), so a
+///    junction, 8.3 name or trailing dot can't move either one: the
+///    resolved uninstaller must be inside the resolved folder, and neither
+///    that folder nor the one the uninstaller resolves into may be shared.
+///    Both must resolve to a local drive: a network path can lead back to
+///    this machine (`\\localhost\c$\Users\me\Downloads` is Downloads)
+///    where nothing shows it.
 ///
 /// Every other argument, a value that only looks like a switch, a script,
 /// `rundll32`, a path with `.` / `..`, an uninstaller in a shared cache
-/// (`Package Cache`, `InstallShield Installation Information`) and
-/// anything unparseable: Settings.
+/// (`Package Cache`, `InstallShield Installation Information`), one that
+/// doesn't resolve, one on a network share, and anything unparseable:
+/// Settings.
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
-pub fn plan_uninstall(m: &UninstallMatch, exists: impl Fn(&str) -> bool) -> UninstallPlan {
+pub fn plan_uninstall(
+    m: &UninstallMatch,
+    fs: &WinFs,
+    exists: impl Fn(&str) -> bool,
+) -> UninstallPlan {
     let e = m.entry;
     if e.windows_installer {
         if let Some(product_code) = product_code(&e.key_name) {
@@ -723,18 +832,35 @@ pub fn plan_uninstall(m: &UninstallMatch, exists: impl Fn(&str) -> bool) -> Unin
         return UninstallPlan::Settings;
     };
     let normalized = normalize_win_path(&program);
-    let inside_product = m
-        .install_dir
-        .as_deref()
-        .is_some_and(|dir| normalized != dir && within(&normalized, dir));
+    let Some(dir) = m.install_dir.as_deref() else {
+        return UninstallPlan::Settings;
+    };
     if !is_absolute_win_path(&normalized)
         || !normalized.ends_with(".exe")
-        || !inside_product
+        || !inside_product(&normalized, dir, fs)
         || !exists(&program)
     {
         return UninstallPlan::Settings;
     }
-    UninstallPlan::Run { program, arg }
+    // Where they really lead, compared exactly: the canonical forms carry
+    // no aliases left to read through.
+    match (fs.resolve(dir), fs.resolve(&program)) {
+        (Some(real_dir), Some(real_program))
+            if !real_dir.starts_with(r"\\") && inside_product(&real_program, &real_dir, fs) =>
+        {
+            UninstallPlan::Run { program, arg }
+        }
+        _ => UninstallPlan::Settings,
+    }
+}
+
+/// Whether `program` (normalised) is strictly inside the product folder
+/// `dir`, and neither `dir` nor the folder `program` sits in is shared.
+fn inside_product(program: &str, dir: &str, fs: &WinFs) -> bool {
+    program != dir
+        && within(program, dir)
+        && !fs.is_shared(dir)
+        && win_parent(program).is_some_and(|folder| !fs.is_shared(folder))
 }
 
 #[cfg(test)]
@@ -758,27 +884,49 @@ mod tests {
     }
 
     /// This machine's shared folders, as `shared_dirs` lists them on
-    /// Windows (normalised).
-    fn shared() -> Vec<String> {
-        [
-            r"C:\Program Files",
-            r"C:\Program Files (x86)",
-            r"C:\Program Files\Common Files",
-            r"C:\ProgramData",
-            r"C:\ProgramData\Package Cache",
-            r"C:\Windows",
-            r"C:\Windows\System32",
-            r"C:\Windows\Installer",
-            r"C:\Users",
-            r"C:\Users\me",
-            r"C:\Users\me\Downloads",
-            r"C:\Users\me\AppData\Local",
-            r"C:\Users\me\AppData\Local\Programs",
-            r"C:\Users\me\AppData\Roaming",
-        ]
-        .iter()
-        .map(|s| normalize_win_path(s))
-        .collect()
+    /// Windows.
+    const SHARED: &[&str] = &[
+        r"C:\Program Files",
+        r"C:\Program Files (x86)",
+        r"C:\Program Files\Common Files",
+        r"C:\ProgramData",
+        r"C:\ProgramData\Package Cache",
+        r"C:\Windows",
+        r"C:\Windows\System32",
+        r"C:\Windows\Installer",
+        r"C:\Users",
+        r"C:\Users\me",
+        r"C:\Users\me\Downloads",
+        r"C:\Users\me\OneDrive\Documents",
+        r"C:\Users\me\AppData\Local",
+        r"C:\Users\me\AppData\Local\Programs",
+        r"C:\Users\me\AppData\Roaming",
+    ];
+
+    /// The machine with `SHARED`, a stand-in for Windows' `canonicalize`
+    /// as the resolver: trailing dots and spaces dropped (as Win32 does
+    /// when it opens a path), then each `links` prefix — an 8.3 name, a
+    /// junction — replaced by where it leads. A path resolves only if
+    /// something on `disk` is there: that file, or a folder holding one.
+    fn fake_fs(links: &[(&str, &str)], disk: &[&str]) -> WinFs {
+        let key = |p: &str| alias_key(&normalize_win_path(p));
+        let links: Vec<(String, String)> = links.iter().map(|(l, to)| (key(l), key(to))).collect();
+        let disk: Vec<String> = disk.iter().map(|d| key(d)).collect();
+        WinFs::new(SHARED.iter().map(|s| s.to_string()), move |p| {
+            let mut real = key(p);
+            for (link, to) in &links {
+                if within(&real, link) {
+                    real = format!("{to}{}", &real[link.len()..]);
+                }
+            }
+            disk.iter().any(|d| within(d, &real)).then_some(real)
+        })
+    }
+
+    /// `SHARED`, with no links and nothing on disk: paths are read only as
+    /// written.
+    fn shared() -> WinFs {
+        fake_fs(&[], &[])
     }
 
     fn matched<'e>(
@@ -949,7 +1097,7 @@ mod tests {
             r"c:\users\me\appdata\local",
             r"c:\users\me\downloads",
         ] {
-            assert!(is_shared_dir(shared_dir, &g), "{shared_dir}");
+            assert!(g.is_shared(shared_dir), "{shared_dir}");
         }
         for own in [
             r"d:\tool",
@@ -957,7 +1105,7 @@ mod tests {
             r"\\server\share\tool",
             r"c:\program files\contoso",
         ] {
-            assert!(!is_shared_dir(own, &g), "{own}");
+            assert!(!g.is_shared(own), "{own}");
         }
     }
 
@@ -1182,8 +1330,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(m.entry, &entries[0]);
+        let fs = fake_fs(&[], &[r"C:\Users\me\AppData\Local\Discord\Update.exe"]);
         assert_eq!(
-            plan_uninstall(&m, |_| true),
+            plan_uninstall(&m, &fs, |_| true),
             run(
                 r"C:\Users\me\AppData\Local\Discord\Update.exe",
                 Some("--uninstall")
@@ -1397,12 +1546,24 @@ mod tests {
     /// The decision for one stored entry, the exe found at `exe`; every
     /// path in `on_disk` exists.
     fn plan_for(e: UninstallEntry, exe: Option<&str>, on_disk: &[&str]) -> UninstallPlan {
+        plan_on(&fake_fs(&[], on_disk), e, exe, on_disk)
+    }
+
+    /// `plan_for` on the machine `fs`.
+    fn plan_on(
+        fs: &WinFs,
+        e: UninstallEntry,
+        exe: Option<&str>,
+        on_disk: &[&str],
+    ) -> UninstallPlan {
         let name = e.display_name.clone().unwrap_or_default();
         let entries = [e];
-        let Some(m) = match_uninstall_entry(&name, exe, false, &entries, &shared()) else {
+        let Some(m) = match_uninstall_entry(&name, exe, false, &entries, fs) else {
             return UninstallPlan::Settings;
         };
-        plan_uninstall(&m, |p| on_disk.iter().any(|d| d.eq_ignore_ascii_case(p)))
+        plan_uninstall(&m, fs, |p| {
+            on_disk.iter().any(|d| d.eq_ignore_ascii_case(p))
+        })
     }
 
     fn run(program: &str, arg: Option<&str>) -> UninstallPlan {
@@ -1662,5 +1823,258 @@ mod tests {
         );
         assert_eq!(expand_env_vars(r"%NOPE%\x 100%", lookup), r"%NOPE%\x 100%");
         assert_eq!(expand_env_vars("%%", lookup), "%%");
+    }
+
+    // -- Aliases: trailing dots and spaces, 8.3 names, junctions ---------
+
+    #[test]
+    fn alias_key_drops_the_trailing_dots_and_spaces_windows_ignores() {
+        for (p, key) in [
+            (r"c:\users\me\downloads.", r"c:\users\me\downloads"),
+            (r"c:\users\me\downloads ", r"c:\users\me\downloads"),
+            (r"c:\users\me\downloads. .", r"c:\users\me\downloads"),
+            (r"c:\users\me.\downloads..", r"c:\users\me\downloads"),
+            (
+                r"c:\users\me\downloads.\tool.exe",
+                r"c:\users\me\downloads\tool.exe",
+            ),
+            (
+                r"c:\users\me\downloads \tool.exe",
+                r"c:\users\me\downloads\tool.exe",
+            ),
+            (r"\\server\share.\tool", r"\\server\share\tool"),
+            (r"c:\program files\app", r"c:\program files\app"),
+            ("c:", "c:"),
+            // Only the file system knows an 8.3 name.
+            (r"c:\users\me\downlo~1", r"c:\users\me\downlo~1"),
+            // Nothing left to trim to: kept, and refused as a location.
+            (r"c:\x\...", r"c:\x\..."),
+        ] {
+            assert_eq!(alias_key(p), key, "{p}");
+        }
+        for bad in [
+            r"c:\x\...",
+            r"c:\x\...\y",
+            r"c:\ \x",
+            r"c:\x\. .",
+            r"\\server\share\ ",
+        ] {
+            assert!(!is_absolute_win_path(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn every_spelling_of_a_shared_folder_is_shared() {
+        let fs = fake_fs(
+            &[
+                (r"C:\Users\me\DOWNLO~1", r"C:\Users\me\Downloads"),
+                (r"D:\Tool", r"C:\Users\me\Downloads"),
+                (r"D:\Root", r"E:\"),
+                (r"D:\Docs", r"C:\Users\me\OneDrive"),
+            ],
+            &[
+                r"C:\Users\me\Downloads\a.txt",
+                r"C:\Users\me\OneDrive\Documents\b.txt",
+                r"E:\c.txt",
+            ],
+        );
+        for dir in [
+            r"C:\Users\me\Downloads",
+            r"C:\Users\me\Downloads.",
+            r"C:\Users\me\Downloads \",
+            r"C:\Users\me\Downloads. .",
+            r"C:\USERS\ME.\DOWNLOADS",
+            r"C:\Users\me\DOWNLO~1",
+            // Junctions to Downloads, to a drive root.
+            r"D:\Tool",
+            r"D:\Root",
+            // Holding a shared folder (Documents redirected into OneDrive),
+            // directly or through a junction.
+            r"C:\Users\me\OneDrive",
+            r"D:\Docs",
+        ] {
+            assert!(fs.is_shared(dir), "{dir}");
+        }
+        for own in [
+            r"C:\Users\me\Downloads\Tool",
+            r"C:\Users\me\DOWNLO~1\Tool",
+            r"D:\Tool\Sub",
+            r"D:\Tools",
+            r"C:\Users\me\OneDrive\Tool",
+        ] {
+            assert!(!fs.is_shared(own), "{own}");
+        }
+    }
+
+    #[test]
+    fn a_shared_folders_real_location_is_shared_too() {
+        // Downloads moved to another drive, a junction left behind.
+        let fs = fake_fs(&[(r"C:\Users\me\Downloads", r"D:\DL")], &[r"D:\DL\a.txt"]);
+        assert!(fs.is_shared(r"D:\DL"));
+        assert!(fs.is_shared(r"D:\DL."));
+        assert!(!fs.is_shared(r"D:\DL\Tool"));
+    }
+
+    #[test]
+    fn an_aliased_shared_folder_never_authorizes_an_uninstaller() {
+        // Downloads spelled so the strings miss it, an app there, and
+        // another app's uninstaller beside it.
+        let fs = fake_fs(
+            &[
+                (r"C:\Users\me\DOWNLO~1", r"C:\Users\me\Downloads"),
+                (r"D:\Tool", r"C:\Users\me\Downloads"),
+            ],
+            &[
+                r"C:\Users\me\Downloads\Tool.exe",
+                r"C:\Users\me\Downloads\OtherApp\uninstall.exe",
+            ],
+        );
+        for (location, dir) in [
+            (r"C:\Users\me\Downloads.", r"C:\Users\me\Downloads."),
+            (r"C:\Users\me\Downloads \", r"C:\Users\me\Downloads "),
+            (r"C:\Users\me\Downloads. .", r"C:\Users\me\Downloads. ."),
+            (r"C:\Users\me\DOWNLO~1", r"C:\Users\me\DOWNLO~1"),
+            (r"D:\Tool", r"D:\Tool"),
+        ] {
+            let uninstaller = format!(r"{dir}\OtherApp\uninstall.exe");
+            let e = at(location, entry("Tool", &format!(r#""{uninstaller}""#)));
+            let entries = [e.clone()];
+            // Not a protected product tree either.
+            assert_eq!(
+                product_install_dirs(&entries, &fs),
+                Vec::<String>::new(),
+                "{location}"
+            );
+            let exe = format!(r"{dir}\Tool.exe");
+            assert_eq!(
+                plan_on(&fs, e, Some(&exe), &[&uninstaller]),
+                UninstallPlan::Settings,
+                "{location}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_resolved_folder_and_uninstaller_are_checked_again() {
+        // A match as the strings saw it; what's on disk decides.
+        let e = at(r"D:\Tool", entry("Tool", r#""D:\Tool\bin\uninst.exe""#));
+        let m = UninstallMatch {
+            entry: &e,
+            install_dir: Some(r"d:\tool".into()),
+        };
+        let plan = |links: &[(&str, &str)], disk: &[&str]| {
+            plan_uninstall(&m, &fake_fs(links, disk), |_| true)
+        };
+        let ok = run(r"D:\Tool\bin\uninst.exe", None);
+        assert_eq!(plan(&[], &[r"D:\Tool\bin\uninst.exe"]), ok);
+        // A junction to an ordinary folder is fine.
+        assert_eq!(
+            plan(
+                &[(r"D:\Tool", r"E:\Real Tool")],
+                &[r"E:\Real Tool\bin\uninst.exe"]
+            ),
+            ok
+        );
+        for (links, disk) in [
+            // The install folder is a junction to Downloads, to a root.
+            (
+                vec![(r"D:\Tool", r"C:\Users\me\Downloads")],
+                vec![r"C:\Users\me\Downloads\bin\uninst.exe"],
+            ),
+            (vec![(r"D:\Tool", r"E:\")], vec![r"E:\bin\uninst.exe"]),
+            // The uninstaller's folder resolves into a shared folder.
+            (
+                vec![(r"D:\Tool\bin", r"C:\Windows\System32")],
+                vec![r"D:\Tool\tool.exe", r"C:\Windows\System32\uninst.exe"],
+            ),
+            // The uninstaller itself leads out of the folder.
+            (
+                vec![(r"D:\Tool\bin\uninst.exe", r"E:\Other\uninst.exe")],
+                vec![r"D:\Tool\tool.exe", r"E:\Other\uninst.exe"],
+            ),
+            // Nothing resolves.
+            (vec![], vec![]),
+        ] {
+            assert_eq!(plan(&links, &disk), UninstallPlan::Settings, "{links:?}");
+        }
+    }
+
+    #[test]
+    fn uninstallers_on_a_network_share_go_to_settings() {
+        // `\\localhost\c$` is this machine's C: — nothing resolves that.
+        for dir in [r"\\localhost\c$\Users\me\Downloads", r"\\server\share\Tool"] {
+            let uninstaller = format!(r"{dir}\uninst.exe");
+            let exe = format!(r"{dir}\tool.exe");
+            let e = at(dir, entry("Tool", &format!(r#""{uninstaller}""#)));
+            let fs = fake_fs(&[], &[&uninstaller, &exe]);
+            assert_eq!(
+                plan_on(&fs, e, Some(&exe), &[&uninstaller]),
+                UninstallPlan::Settings,
+                "{dir}"
+            );
+        }
+        // A mapped drive resolves to the share too.
+        let fs = fake_fs(
+            &[(r"Z:\", r"\\server\share")],
+            &[r"\\server\share\Tool\uninst.exe"],
+        );
+        let e = at(r"Z:\Tool", entry("Tool", r#""Z:\Tool\uninst.exe""#));
+        assert_eq!(
+            plan_on(&fs, e, Some(r"Z:\Tool\tool.exe"), &[r"Z:\Tool\uninst.exe"]),
+            UninstallPlan::Settings
+        );
+    }
+
+    #[test]
+    fn an_ordinary_product_folder_spelled_with_8dot3_names_still_uninstalls() {
+        let fs = fake_fs(
+            &[(r"C:\PROGRA~1", r"C:\Program Files")],
+            &[
+                r"C:\Program Files\Contoso\contoso.exe",
+                r"C:\Program Files\Contoso\uninst.exe",
+            ],
+        );
+        let e = at(
+            r"C:\PROGRA~1\Contoso",
+            entry("Contoso", r"C:\PROGRA~1\Contoso\uninst.exe"),
+        );
+        assert_eq!(
+            plan_on(
+                &fs,
+                e,
+                Some(r"C:\PROGRA~1\Contoso\contoso.exe"),
+                &[r"C:\PROGRA~1\Contoso\uninst.exe"]
+            ),
+            run(r"C:\PROGRA~1\Contoso\uninst.exe", None)
+        );
+        // `C:\PROGRA~1` itself is Program Files.
+        assert!(fs.is_shared(r"C:\PROGRA~1"));
+    }
+
+    #[test]
+    fn kages_own_folder_is_recognised_however_its_spelled() {
+        let own = vec![normalize_win_path(r"C:\Users\me\AppData\Local\Kage")];
+        let fs = fake_fs(
+            &[
+                (
+                    r"C:\Users\me\AppData\Local\KAGE~1",
+                    r"C:\Users\me\AppData\Local\Kage",
+                ),
+                (r"D:\K", r"C:\Users\me\AppData\Local\Kage"),
+            ],
+            &[r"C:\Users\me\AppData\Local\Kage\kage.exe"],
+        );
+        for p in [
+            r"C:\Users\me\AppData\Local\Kage",
+            r"C:\Users\me\AppData\Local\Kage\kage.exe",
+            r"C:\Users\me\AppData\Local\Kage.\kage.exe",
+            r"C:\Users\me\AppData\Local\KAGE~1\kage.exe",
+            r"D:\K\kage.exe",
+        ] {
+            assert!(fs.is_within_any(p, &own), "{p}");
+        }
+        for p in [r"C:\Users\me\AppData\Local\Kagex\kage.exe", r"D:\Kage.exe"] {
+            assert!(!fs.is_within_any(p, &own), "{p}");
+        }
     }
 }
