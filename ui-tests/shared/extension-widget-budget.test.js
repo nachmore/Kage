@@ -148,6 +148,28 @@ describe('Widget budget cap', () => {
         // Resolve the originally-stuck render so the test can exit cleanly.
         resolveFirst({ html: '<div>late</div>' });
         await p1;
+        expect(ctrl.host.querySelector('.ext-widget-paused')).toBeTruthy();
+        expect(ctrl.host.textContent).not.toContain('late');
+        expect(ctrl.consecutiveFailures).toBe(3);
+    });
+
+    it('quietly skips ticks overlapping a host render without spending the failure budget', async () => {
+        let release;
+        const render = vi.fn(() => new Promise((resolve) => { release = resolve; }));
+        const mgr = makeManagerWithSandbox({ renderImpl: render });
+        const ctrl = makeController({ consecutiveFailures: 2 });
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const pending = mgr._renderWidget(ctrl, true);
+        await mgr._renderWidget(ctrl);
+        await mgr._renderWidget(ctrl);
+        expect(render).toHaveBeenCalledTimes(1);
+        expect(warn).not.toHaveBeenCalled();
+        expect(ctrl.consecutiveFailures).toBe(2);
+        expect(ctrl.tripped).toBe(false);
+        release({ html: 'fresh' });
+        await pending;
+        expect(ctrl.consecutiveFailures).toBe(0);
+        expect(ctrl.host.textContent).toBe('fresh');
     });
 
     it('flags a slow_relative render when it eats >= 70% of the interval', async () => {

@@ -34,6 +34,7 @@ export const LifecycleVisibilityMethods = {
 
     setupVisibilityTracking() {
         this._windowFocused = true; // assume focused at startup
+        this._visibilitySequence = 0;
         // Pause extension widgets independently. The global hidden flag also
         // gates Ollama's initial status probe, which must run during startup.
         this.extensionManager?.setWidgetVisibility(false);
@@ -57,13 +58,34 @@ export const LifecycleVisibilityMethods = {
         });
 
         this.appWindow.listen('tauri://focus', async () => {
+            const sequence = ++this._visibilitySequence;
             this._windowFocused = true;
+            const visible = await this._isWindowVisible();
+            if (sequence !== this._visibilitySequence) return;
             // Was this a hide→show cycle, or just regaining focus on an
             // already-visible window? The flag is only ever set to false by
             // this handler, so `undefined` is the genuinely-hidden startup
             // state and counts as a reopen too.
             const wasHidden = window._kageFloatingHidden !== false;
+            window._kageFloatingHidden = !visible;
+            if (!visible) {
+                this.extensionManager?.setWidgetVisibility(false);
+                return;
+            }
             document.documentElement.classList.remove('animations-paused');
+            // Resume before signaling: reopen resets the previous party hat,
+            // summon pops in, and the banner check may then celebrate the update.
+            if (window._kageMascot) {
+                try {
+                    window._kageMascot.resume();
+                } catch (e) {
+                    console.warn('mascot.resume failed:', e);
+                }
+            }
+            if (wasHidden) {
+                signalMascot('reopen');
+                signalMascot('summon');
+            }
             // First focus this process — show the post-update banner
             // if last_updated_version is still set. Running it here
             // (instead of from init()) means the banner waits until
@@ -77,7 +99,7 @@ export const LifecycleVisibilityMethods = {
             // Spending the one-shot check there plays the celebration into
             // an invisible window, and the real show's `reopen` then clears
             // the party hat — so only count a focus the user can see.
-            if (!this._updateBannerChecked && (await this._isWindowVisible())) {
+            if (!this._updateBannerChecked) {
                 this._updateBannerChecked = true;
                 // The post-install auto-show races against other windows'
                 // webviews painting for the first time (notably the
@@ -90,33 +112,22 @@ export const LifecycleVisibilityMethods = {
                     this._suppressBlurHideUntil = Date.now() + 2000;
                     // First launch after an update: balloons, then a party hat
                     // that stays on until the user types or reopens. Fires
-                    // after the reopen/summon pair below (this promise resolves
-                    // a tick later), so the hat isn't immediately cleared.
+                    // after the reopen/summon pair above, so the hat isn't
+                    // immediately cleared.
                     signalMascotUpdated();
                 });
             }
-            // Resume work that was paused on hide. Mascot animation
-            // intervals were ticking against an invisible window — a
-            // small but constant CPU drag on every hidden minute.
-            // Mirrors the existing permission-modal pause/resume.
-            const visible = await this._isWindowVisible();
-            window._kageFloatingHidden = !visible;
             // Startup may focus the still-hidden webview before post-init
             // checks. Catch up its skipped Ollama probe on the actual show.
-            if (wasHidden && visible) this._pollOllamaStatusOnce().catch(() => {});
-            if (window._kageMascot) {
-                try {
-                    window._kageMascot.resume();
-                } catch (e) {
-                    console.warn('mascot.resume failed:', e);
-                }
-            }
-            // After the resume, or the engine would be frozen when these land.
-            // `reopen` is the fresh-start reset (clears the party hat, stale
-            // hover and typing gaze); `summon` is the pop-in that follows it.
-            if (wasHidden) {
-                signalMascot('reopen');
-                signalMascot('summon');
+            const status = this._ollamaStatus;
+            if (
+                wasHidden &&
+                status &&
+                (status.probeSkipped ||
+                    status.lastProbeAt == null ||
+                    Date.now() - status.lastProbeAt >= 30_000)
+            ) {
+                this._pollOllamaStatusOnce().catch(() => {});
             }
             // Resume widget timers and catch up missing or stale content.
             // Startup can send focus while the window is still hidden.
@@ -200,6 +211,7 @@ export const LifecycleVisibilityMethods = {
         });
 
         this.appWindow.listen('tauri://blur', async () => {
+            ++this._visibilitySequence;
             this._windowFocused = false;
             // Suppress blur-hide briefly after a post-update show. We
             // honour two signals:

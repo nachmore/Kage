@@ -250,9 +250,15 @@ const sharedModuleFailures = new Map();
  * testing; the runtime path uses the module-level `sharedModuleBlobs`
  * instance.
  */
-export function rewriteRelativeImportsWith(source, blobMap, importer = './', failures) {
+export function rewriteRelativeImportsWith(
+    source,
+    blobMap,
+    importer = './',
+    failures,
+    deferredDynamic
+) {
     if (!failures && (!blobMap || blobMap.size === 0)) return source;
-    return rewriteExtensionModules(source, blobMap, importer, failures);
+    return rewriteExtensionModules(source, blobMap, importer, failures, deferredDynamic);
 }
 
 export async function importFromSource(
@@ -292,19 +298,33 @@ export async function importFromSource(
  * their dependents. Keep final URLs alive for the sandbox lifetime, including late
  * quoted dynamic imports; the iframe's teardown releases them.
  */
+let dynamicRegistrySequence = 0;
+
 export function registerSharedModules(
     sharedSources,
     blobMap = sharedModuleBlobs,
     failures = blobMap === sharedModuleBlobs ? sharedModuleFailures : new Map()
 ) {
     const order = extensionModuleOrder(sharedSources, failures);
+    let registryKey;
+    const deferredDynamic = (path) => {
+        if (!Object.hasOwn(sharedSources || {}, path)) return null;
+        if (!registryKey) {
+            // A dynamic back edge can refer to a blob built later. Resolve it
+            // when import() executes, after all final URLs are registered.
+            registryKey = `__kageDynamicModules${++dynamicRegistrySequence}`;
+            globalThis[registryKey] = blobMap;
+        }
+        return `globalThis[${JSON.stringify(registryKey)}].get(${JSON.stringify(path)})`;
+    };
     for (const path of order) {
         try {
             const rewritten = rewriteRelativeImportsWith(
                 sharedSources[path],
                 blobMap,
                 path,
-                failures
+                failures,
+                deferredDynamic
             );
             blobMap.set(
                 path,
@@ -313,6 +333,22 @@ export function registerSharedModules(
         } catch (e) {
             failures.set(path, new Error(`Extension module '${path}': ${e?.message || e}`));
         }
+    }
+    // Deferred references to a target that subsequently failed must also
+    // reject with its recorded error, rather than import(undefined).
+    if (registryKey) {
+        const urls = new Map(blobMap);
+        for (const [path, error] of failures) {
+            urls.set(
+                path,
+                URL.createObjectURL(
+                    new Blob([`throw new Error(${JSON.stringify(error.message)});`], {
+                        type: 'application/javascript',
+                    })
+                )
+            );
+        }
+        globalThis[registryKey] = urls;
     }
     return blobMap;
 }

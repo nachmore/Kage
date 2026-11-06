@@ -238,7 +238,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                 (controller.needsRefresh || !controller.hasRendered || stale) &&
                 !controller.renderInFlight
             ) {
-                await this._renderWidget(controller);
+                await this._renderWidget(controller, true);
             }
             if (
                 controller.destroyed ||
@@ -256,7 +256,7 @@ export function installExtensionUiMethods(ExtensionManager) {
             }
         },
 
-        async _renderWidget(controller) {
+        async _renderWidget(controller, hostInitiated = false) {
             if (controller.destroyed || controller.tripped) return;
             // Hidden/detached hosts consume no refresh RPCs or failure budget.
             if (!this._widgetWindowVisible() || !controller.host.isConnected) {
@@ -274,10 +274,13 @@ export function installExtensionUiMethods(ExtensionManager) {
             // to queueing — by the time the in-flight render returns, its
             // output is already what the next tick would draw.
             if (controller.renderInFlight) {
-                this._noteWidgetFailure(controller, 'overlap');
+                if (!controller.renderHostInitiated) {
+                    this._noteWidgetFailure(controller, 'overlap');
+                }
                 return;
             }
             controller.renderInFlight = true;
+            controller.renderHostInitiated = hostInitiated;
             const scheduleVersion = controller.scheduleVersion;
 
             const start = performance.now();
@@ -289,7 +292,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                 // Bail if we were unmounted while the RPC was in flight —
                 // writing to a detached host is harmless but the listeners
                 // we'd wire up would never fire anyway.
-                if (controller.destroyed) return;
+                if (controller.destroyed || controller.tripped) return;
 
                 const elapsed = performance.now() - start;
                 // Slow-render checks. Both bounds are hard caps:
@@ -368,6 +371,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                     controller.consecutiveFailures = 0;
                 }
             } catch (e) {
+                if (controller.destroyed || controller.tripped) return;
                 console.warn(
                     `widget render for '${controller.extensionId}:${controller.widgetId}' failed:`,
                     e
@@ -376,6 +380,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                 this._noteWidgetFailure(controller, 'throw');
             } finally {
                 controller.renderInFlight = false;
+                controller.renderHostInitiated = false;
                 // A config update during a render must still get its own
                 // refresh, including widgets whose new interval is zero.
                 if (controller.needsRefresh && controller.scheduleVersion !== scheduleVersion) {

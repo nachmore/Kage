@@ -134,7 +134,6 @@ export class ExtensionManager {
             manifest,
             capabilities,
             sandbox: null,
-            configSignature: extensionConfigSignature(this._getExtensionConfig(id, manifest)),
         };
 
         const sources = await this._fetchProviderSources(id, manifest);
@@ -152,12 +151,16 @@ export class ExtensionManager {
         // labels — see getKeywordDefinitions) can reuse it without another
         // locale read.
         ext.i18n = i18n;
+        // Source/locale reads can span config saves. The signature must describe
+        // exactly the snapshot used to boot this sandbox.
+        const config = this._getExtensionConfig(id, manifest);
+        ext.configSignature = extensionConfigSignature(config);
         if (this._hasSandboxedProvider(sources)) {
             try {
                 ext.sandbox = await this._pool.load({
                     extensionId: id,
                     capabilities,
-                    config: this._getExtensionConfig(id, manifest),
+                    config,
                     sources,
                     sharedSources,
                     vendorSources,
@@ -182,6 +185,14 @@ export class ExtensionManager {
         await this._loadExtensionCss(id, manifest);
 
         this.extensions.set(id, ext);
+        // Saves during sandbox boot or CSS loading couldn't reach this entry.
+        // Once registered, reconcile it before returning to the caller.
+        const currentConfig = this._getExtensionConfig(id, manifest);
+        const currentSignature = extensionConfigSignature(currentConfig);
+        if (currentSignature !== ext.configSignature) {
+            ext.configSignature = currentSignature;
+            await ext.sandbox?.updateConfig(currentConfig);
+        }
     }
 
     // --- Sources -----------------------------------------------------------

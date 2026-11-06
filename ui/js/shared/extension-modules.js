@@ -15,6 +15,7 @@ export function extensionModuleImports(source) {
         .filter((entry) => typeof entry.n === 'string' && entry.d !== -2)
         .map((entry) => ({
             specifier: entry.n,
+            dynamic: entry.d >= 0,
             start: entry.d === -1 ? entry.s - 1 : entry.s,
             end: entry.d === -1 ? entry.e + 1 : entry.e,
         }));
@@ -55,9 +56,14 @@ export async function collectExtensionModules(entrySources, fetchText, sourcePat
     const scan = (source, importer) => {
         try {
             // Validate the entire file before queueing any of its imports.
-            const paths = extensionModuleImports(source).map(({ specifier }) =>
-                resolveExtensionModule(specifier, importer)
-            );
+            const paths = extensionModuleImports(source).map(({ specifier, dynamic }) => {
+                try {
+                    return resolveExtensionModule(specifier, importer);
+                } catch (e) {
+                    if (!dynamic) throw e;
+                    return null; // A dynamic path error rejects only when called.
+                }
+            });
             for (const path of paths) {
                 if (path && !visited.has(path)) queue.add(path);
             }
@@ -92,16 +98,53 @@ export async function collectExtensionModules(entrySources, fetchText, sourcePat
 }
 
 /** Replace only module specifier ranges, never import-like prose. */
-export function rewriteExtensionModules(source, blobMap, importer = './', failures) {
-    let out = source;
-    for (const { specifier, start, end } of extensionModuleImports(source).reverse()) {
-        const path = resolveExtensionModule(specifier, importer);
-        if (path && failures?.has(path)) throw failures.get(path);
-        const blob = path && blobMap.get(path);
-        if (path && failures && !blob) {
-            throw new Error(`Missing extension module '${path}' imported by '${importer}'`);
+export function rewriteExtensionModules(
+    source,
+    blobMap,
+    importer = './',
+    failures,
+    deferredDynamic
+) {
+    // Resolve and validate in source order; rewriting backwards must not choose
+    // a later missing import over an earlier containment or dependency error.
+    const resolved = extensionModuleImports(source).map((entry) => {
+        try {
+            return { ...entry, path: resolveExtensionModule(entry.specifier, importer) };
+        } catch (error) {
+            if (!entry.dynamic) throw error;
+            return { ...entry, error };
         }
-        if (blob) out = out.slice(0, start) + source[start] + blob + source[start] + out.slice(end);
+    });
+    const imports = resolved.map((entry) => {
+        const { path, dynamic, error } = entry;
+        try {
+            if (error) throw error;
+            if (path && failures?.has(path)) throw failures.get(path);
+            const blob = path && blobMap.get(path);
+            const deferred = dynamic && path && !blob && deferredDynamic?.(path);
+            if (deferred) return { ...entry, replacement: deferred };
+            if (path && failures && !blob) {
+                throw new Error(`Missing extension module '${path}' imported by '${importer}'`);
+            }
+            return {
+                ...entry,
+                replacement: blob && source[entry.start] + blob + source[entry.start],
+            };
+        } catch (e) {
+            if (!dynamic) throw e;
+            // Evaluating this stub fails the import() promise, preserving the
+            // provider's try/catch and recording the original diagnostic.
+            const stub = URL.createObjectURL(
+                new Blob([`throw new Error(${JSON.stringify(e?.message || String(e))});`], {
+                    type: 'application/javascript',
+                })
+            );
+            return { ...entry, replacement: JSON.stringify(stub) };
+        }
+    });
+    let out = source;
+    for (const { start, end, replacement } of imports.reverse()) {
+        if (replacement) out = out.slice(0, start) + replacement + out.slice(end);
     }
     return out;
 }
@@ -124,7 +167,8 @@ export function extensionModuleOrder(sharedSources, failures = new Map()) {
         active.add(path);
         visiting.push(path);
         try {
-            for (const { specifier } of extensionModuleImports(sources.get(path))) {
+            for (const { specifier, dynamic } of extensionModuleImports(sources.get(path))) {
+                if (dynamic) continue;
                 const dependency = resolveExtensionModule(specifier, path);
                 if (dependency && sources.has(dependency)) visit(dependency);
                 if (failures.has(dependency)) throw failures.get(dependency);
@@ -140,5 +184,25 @@ export function extensionModuleOrder(sharedSources, failures = new Map()) {
         if (!failures.has(path)) ordered.push(path);
     };
     for (const path of sources.keys()) visit(path);
-    return ordered;
+    // Prefer building dynamic targets first too, without treating dynamic
+    // edges as static cycles or propagating their failures. When no such
+    // ordering exists, keep the static dependency order and defer the lookup.
+    const remaining = new Set(ordered);
+    const result = [];
+    while (remaining.size) {
+        const next =
+            [...remaining].find((path) =>
+                extensionModuleImports(sources.get(path)).every(({ specifier, dynamic }) => {
+                    try {
+                        return !remaining.has(resolveExtensionModule(specifier, path));
+                    } catch (e) {
+                        if (!dynamic) throw e;
+                        return true;
+                    }
+                })
+            ) || remaining.values().next().value;
+        remaining.delete(next);
+        result.push(next);
+    }
+    return result;
 }

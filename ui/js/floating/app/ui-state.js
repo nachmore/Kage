@@ -274,6 +274,7 @@ export const UiStateMethods = {
 
         if (!enabled) {
             this._stopOllamaStatusPoll();
+            this._ollamaStatus = null;
             hideExtensionBar('ollama-status');
             return;
         }
@@ -325,16 +326,23 @@ export const UiStateMethods = {
         // Don't hit the network (possibly LAN) while the launcher is
         // hidden — same gate the mascot animation uses. The interval
         // keeps ticking; the first poll after re-show refreshes.
-        if (window._kageFloatingHidden) return;
+        if (window._kageFloatingHidden) {
+            s.probeSkipped = true;
+            return;
+        }
+        s.probeSkipped = false;
+        s.lastProbeAt = Date.now();
         let probe = null;
         try {
             probe = await this.invoke('ollama_probe', { baseUrl: s.baseUrl });
         } catch (e) {
+            if (this._ollamaStatus !== s) return;
             updateExtensionBar('ollama-status', {
                 text: `${s.model || 'Ollama'} · offline`,
             });
             return;
         }
+        if (this._ollamaStatus !== s) return;
         if (probe?.status !== 'Reachable') {
             updateExtensionBar('ollama-status', {
                 text: `${s.model || 'Ollama'} · offline`,
@@ -352,6 +360,7 @@ export const UiStateMethods = {
             const match = (Array.isArray(models) ? models : []).find((m) => m?.name === s.model);
             if (match?.size) sizeStr = ` · ${formatBytes(match.size)}`;
         } catch {}
+        if (this._ollamaStatus !== s) return;
         const versionStr = probe.version ? ` (Ollama ${probe.version})` : '';
         updateExtensionBar('ollama-status', {
             text: `${s.model || 'Ollama'}${sizeStr} · ready${versionStr}`,

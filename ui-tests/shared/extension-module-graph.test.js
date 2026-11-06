@@ -58,6 +58,51 @@ async function buildGraph(files, entry) {
 }
 
 describe('shared module graph', () => {
+    it.each([
+        [undefined, "Missing extension module './optional.js'"],
+        ['export const broken = "unterminated;', 'Parse error'],
+        ["import './optional.js';", 'Extension module import cycle'],
+    ])('defers a dynamic target failure to a throwing stub', (optional, error) => {
+        const capture = captureBlobs();
+        const failures = new Map();
+        const files = {
+            './client.js': "export async function load() { try { await import('./optional.js'); } catch (e) { return e.message; } }",
+        };
+        if (optional !== undefined) files['./optional.js'] = optional;
+        const blobs = registerSharedModules(files, new Map(), failures);
+        expect(blobs.has('./client.js')).toBe(true);
+        expect(failures.has('./client.js')).toBe(false);
+        const rewritten = capture.textByUrl.get(blobs.get('./client.js'));
+        const [entry] = extensionModuleImports(rewritten);
+        const stub = capture.textByUrl.get(entry.specifier);
+        expect(stub).toContain('throw new Error(');
+        expect(stub).toContain(error);
+    });
+
+    it('allows dynamic back edges while preserving static dependency ordering', () => {
+        const capture = captureBlobs();
+        const failures = new Map();
+        const blobs = registerSharedModules({
+            './a.js': "export const load = () => import('./b.js'); export const value = 42;",
+            './b.js': "import { value } from './a.js'; export const result = value;",
+        }, new Map(), failures);
+        expect([...blobs.keys()]).toEqual(['./a.js', './b.js']);
+        expect(failures.size).toBe(0);
+        const a = capture.textByUrl.get(blobs.get('./a.js'));
+        const [dynamic] = extensionModuleImports(a);
+        expect(dynamic).toBeUndefined(); // deferred specifier is computed
+        expect(a).toContain('globalThis["__kageDynamicModules');
+        expect(capture.textByUrl.get(blobs.get('./b.js'))).toContain(blobs.get('./a.js'));
+    });
+
+    it('reports the first source-order error before attempting a reverse rewrite', () => {
+        captureBlobs();
+        expect(() => rewriteRelativeImportsWith(
+            "import '../escape.js'; import './only.js';",
+            new Map([['./only.js', 'blob:null/only']]), './search.js', new Map()
+        )).toThrow('Extension module path escapes bundle root: ../escape.js');
+    });
+
     it('rewrites a three-level graph leaf-first, independent of discovery order', async () => {
         const { map } = await buildGraph({
             './client.js': "import { symbols } from './symbols.js'; export const client = symbols;",

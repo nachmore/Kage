@@ -454,10 +454,19 @@ compact syntax are supported. Computed dynamic specifiers (including template
 literals) are not discovered or rewritten; use a quoted literal for each
 bundle dependency.
 
-Shared modules get blob URLs in dependency order, so every import points at
-the dependency's final blob. Cycles are rejected with the module paths in the
-diagnostic. Blob URLs remain valid for the sandbox's lifetime, including
-dynamic imports made after provider initialization.
+Shared modules get final blob URLs in dependency order. Syntax errors, invalid
+paths, missing files, and static import cycles are isolated per file: only that
+file and providers that statically depend on it fail to load. Independent
+providers, widgets, CSS, and settings continue loading. Diagnostics identify
+the importing file and dependency; static cycle errors include the cycle paths.
+
+Quoted dynamic imports resolve when called. A missing or rejected target points
+to a stub module that throws the recorded error, so `try { await
+import('./optional.js'); } catch { … }` can recover without preventing the
+provider from loading. Dynamic edges do not propagate load failures or count
+as static cycles; back edges look up the target's final URL at call time.
+Blob URLs remain valid for the sandbox's lifetime, including dynamic imports
+made after provider initialization.
 
 ### Feature detection
 
