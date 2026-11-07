@@ -420,4 +420,21 @@ describe('stripToolSteering', () => {
     it('treats a cut-off block as all steering', () => {
         expect(stripToolSteering(`${TOOL_STEERING_TAG}\ncut off`)).toBe('');
     });
+
+    it("keeps the user's own indentation", () => {
+        expect(stripToolSteering(`${block}\n    print(1)\n    print(2)`)).toBe('    print(1)\n    print(2)');
+    });
+
+    it('a merged block, time stamp and text keeps the text in the history', () => {
+        const messages = [
+            {
+                kind: 'Prompt',
+                message_id: 'u1',
+                content: [{ kind: 'text', data: `${block}\n[Current time: 2026-11-06 14:00]\nhello` }],
+            },
+            { kind: 'Prompt', message_id: 'u2', content: [{ kind: 'text', data: '[Current time: 2026-11-06 14:15]' }] },
+        ];
+        const queue = buildRenderQueue(messages, {}, {}, stubImageToDataUrl);
+        expect(queue.filter((q) => q.type === 'user').map((q) => q.text)).toEqual(['hello']);
+    });
 });

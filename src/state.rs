@@ -109,7 +109,13 @@ pub fn strip_tool_steering(text: &str) -> &str {
     let mut stripped = false;
     loop {
         let Some(body) = rest.trim_start().strip_prefix(TOOL_STEERING_TAG) else {
-            return if stripped { rest.trim_start() } else { text };
+            // Only the separator the prompt put after the block: the user's
+            // own leading spaces (indented code) stay.
+            return if stripped {
+                rest.trim_start_matches(['\r', '\n'])
+            } else {
+                text
+            };
         };
         // The block can't contain its own end tag (`for_prompt` escapes it),
         // so the first one closes it. None: cut off, all of it is the block.
@@ -702,5 +708,10 @@ mod tests {
             "only a leading block is Kage's"
         );
         assert_eq!(strip_tool_steering("<_kage_tool_steering>\ncut off"), "");
+        assert_eq!(
+            strip_tool_steering(&format!("{block}\n    print(1)\n    print(2)")),
+            "    print(1)\n    print(2)",
+            "the user's indentation stays"
+        );
     }
 }

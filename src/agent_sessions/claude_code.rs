@@ -265,8 +265,11 @@ fn parse_session_metadata(path: &Path, mtime: std::time::SystemTime) -> Option<A
             "user" => {
                 let content = o.get("message").and_then(|m| m.get("content"));
                 if let Some(s) = content.and_then(|c| c.as_str()) {
-                    user_count += 1;
                     let s = user_text(s);
+                    // Kage's tool steering on its own isn't a turn.
+                    if !s.trim().is_empty() {
+                        user_count += 1;
+                    }
                     if title.is_none() && !s.trim().is_empty() {
                         title = Some(clip_title(s.trim(), 80));
                     }
@@ -594,6 +597,8 @@ mod tests {
             json!({ "type": "user", "message": {
                 "content": format!("{}\nplan my week", kage_tool_steering())
             } }),
+            // String form, steering only: not a turn either.
+            json!({ "type": "user", "message": { "content": kage_tool_steering() } }),
         ];
         let body: String = lines.iter().map(|l| format!("{l}\n")).collect();
         std::fs::write(&path, body).unwrap();

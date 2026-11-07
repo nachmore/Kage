@@ -47,6 +47,19 @@ const TOOL_STEERING_TAG_END = '</_kage_tool_steering>';
  * @param {string} text
  * @returns {string}
  */
+/**
+ * `text` without a leading `[Current time: …]` stamp (Kage adds one ahead of
+ * the user's text every so often). Only that line goes; the rest stays.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripTimeStamp(text) {
+    if (typeof text !== 'string') return text;
+    const m = /^\s*\[Current time:[^\]\n]*\][ \t]*(?:\r?\n)*/.exec(text);
+    return m ? text.slice(m[0].length) : text;
+}
+
 export function stripToolSteering(text) {
     if (typeof text !== 'string') return text;
     let rest = text;
@@ -54,7 +67,9 @@ export function stripToolSteering(text) {
     for (;;) {
         const trimmed = rest.trimStart();
         if (!trimmed.startsWith(TOOL_STEERING_TAG)) {
-            return stripped ? trimmed : text;
+            // Only the separator after the block: the user's own leading
+            // spaces (indented code) stay.
+            return stripped ? rest.replace(/^[\r\n]+/, '') : text;
         }
         // The block can't contain its own end tag (the backend escapes it).
         const end = trimmed.indexOf(TOOL_STEERING_TAG_END, TOOL_STEERING_TAG.length);
@@ -143,10 +158,11 @@ export function buildRenderQueue(
                         textParts.push(item.data.substring(STEERING_MSG_PREFIX.length).trim());
                         continue;
                     }
-                    const data = stripToolSteering(item.data);
-                    // Only the tool steering, or a time stamp: metadata.
-                    if (data !== item.data && !data.trim()) continue;
-                    if (data.trim().startsWith('[Current time:')) continue;
+                    // Kage's tool steering and time stamp are metadata; an
+                    // agent that merges a prompt's blocks into one string
+                    // keeps the user's text after them.
+                    const data = stripTimeStamp(stripToolSteering(item.data));
+                    if (!data.trim()) continue;
                     textParts.push(data);
                 } else if (item.kind === 'image') {
                     const dataUrl = imageToDataUrl(item);
