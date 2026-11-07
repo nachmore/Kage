@@ -108,6 +108,11 @@ pub struct AcpClient {
     /// or several windows reacting to the same dead agent — from stacking
     /// into a respawn storm. See `restart_connection`.
     restart_guard: Arc<Mutex<Option<std::time::Instant>>>,
+    /// Session ids this run created (`session/new`). Anything else the
+    /// agent is prompted on (a session resumed or loaded from an earlier
+    /// run) may hold context this run never saw; see
+    /// [`HiddenPrefix::text_for`]. Never pruned, like `prompt_locks`.
+    created_sessions: Arc<Mutex<std::collections::HashSet<String>>>,
 }
 
 #[cfg(test)]
@@ -138,13 +143,22 @@ pub fn vendor_method_suffix(method: &str) -> Option<&str> {
 /// text block ahead of the user's own, which the chat UI doesn't show. Asked
 /// afresh for every attempt of [`AcpClient::send_chat_streaming_with_recovery`],
 /// since recovery may resend the prompt on another session.
+///
+/// All three run under the session's prompt lock, in this order, for one
+/// prompt at a time: the block is chosen once the prompts queued ahead on
+/// the session are done, and its outcome is in before the next one chooses.
+/// `written` and `completed` only follow a `text_for` that gave a block.
 pub trait HiddenPrefix {
     /// The block a prompt to `session_id` should carry, if any.
-    fn text_for(&self, session_id: &str) -> Option<String>;
-    /// The prompt carrying `text_for(session_id)` was written to the agent.
-    /// Never called for one that didn't get there.
+    /// `created_this_run`: this run created the session (`session/new`),
+    /// so its history holds only what this run sent; otherwise it was
+    /// resumed or loaded and may hold anything an earlier run sent.
+    fn text_for(&self, session_id: &str, created_this_run: bool) -> Option<String>;
+    /// The prompt carrying that block was written to the agent. Never
+    /// called for one that didn't get there.
     fn written(&self, session_id: &str);
-    /// The agent then finished that turn, other than by a cancel.
+    /// The agent then finished that turn without an error, other than by a
+    /// cancel.
     fn completed(&self, session_id: &str);
 }
 
@@ -162,7 +176,21 @@ impl AcpClient {
             vendor_prefix: Arc::new(Mutex::new(None)),
             prompt_locks: Arc::new(Mutex::new(HashMap::new())),
             restart_guard: Arc::new(Mutex::new(None)),
+            created_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
         }
+    }
+
+    /// Note that this run created `session_id` (`session/new`).
+    fn note_session_created(&self, session_id: &str) {
+        self.created_sessions
+            .lock_or_recover()
+            .insert(session_id.to_string());
+    }
+
+    /// Whether this run created `session_id`, rather than resuming or
+    /// loading one from an earlier run.
+    pub fn created_this_run(&self, session_id: &str) -> bool {
+        self.created_sessions.lock_or_recover().contains(session_id)
     }
 
     /// Whether a `session/load` replay is currently in flight for
@@ -437,23 +465,52 @@ impl AcpClient {
     /// prompt's partial stream, because it can't reset until it owns the
     /// slot.
     pub fn send_prompt(&self, session_id: &str, params: serde_json::Value) -> Result<AcpResponse> {
-        self.send_prompt_observed(session_id, params, &|| {})
-    }
-
-    /// `send_prompt`, calling `on_written` once the prompt is written to
-    /// the agent (under the prompt lock, so in the order prompts reach the
-    /// agent), never if it didn't get there.
-    fn send_prompt_observed(
-        &self,
-        session_id: &str,
-        params: serde_json::Value,
-        on_written: &dyn Fn(),
-    ) -> Result<AcpResponse> {
         let lock = self.prompt_lock_for(session_id);
         let _guard = lock.lock_or_recover();
         self.reset_session_accumulator(session_id);
-        self.transport
-            .send_prompt_request_observed("session/prompt", params, on_written)
+        self.transport.send_prompt_request("session/prompt", params)
+    }
+
+    /// `send_prompt` for a user prompt that may carry `prefix`'s hidden
+    /// block: `build` turns the block (if any) into the request params.
+    ///
+    /// Everything about the block happens under the session's prompt lock:
+    /// it is chosen only once the prompts queued ahead on the session have
+    /// finished, noted as written as it goes out, and noted as completed
+    /// before the lock is released. So a prompt queued behind this one (from
+    /// another window, or an identical one from the same window) chooses
+    /// knowing what this one delivered, and never picks a block, or no
+    /// block, against a state an earlier prompt is about to change.
+    fn send_prompt_with_prefix(
+        &self,
+        session_id: &str,
+        prefix: &dyn HiddenPrefix,
+        build: &dyn Fn(Option<&str>) -> serde_json::Value,
+    ) -> Result<AcpResponse> {
+        let lock = self.prompt_lock_for(session_id);
+        let _guard = lock.lock_or_recover();
+        let text = prefix.text_for(session_id, self.created_this_run(session_id));
+        let params = build(text.as_deref());
+        self.reset_session_accumulator(session_id);
+        let carried = text.is_some();
+        let response =
+            self.transport
+                .send_prompt_request_observed("session/prompt", params, &|| {
+                    if carried {
+                        prefix.written(session_id);
+                    }
+                })?;
+        // An error reply, or a turn cut short by a Stop, may not be in the
+        // agent's history: the block stays pending.
+        let stop_reason = response
+            .result
+            .as_ref()
+            .and_then(|r| r.get("stopReason"))
+            .and_then(|s| s.as_str());
+        if carried && response.error.is_none() && stop_reason != Some("cancelled") {
+            prefix.completed(session_id);
+        }
+        Ok(response)
     }
 
     /// Like `send_prompt`, but the reply is muted: still accumulated, but
@@ -626,18 +683,144 @@ mod tests {
         assert_eq!(client.peek_session_accumulator("session-a"), "");
     }
 
+    /// Records what a prompt's hidden prefix was asked and told, and
+    /// whether the session's prompt lock was held each time.
+    struct RecordingPrefix<'a> {
+        client: &'a AcpClient,
+        block: Option<&'static str>,
+        events: std::sync::Mutex<Vec<(&'static str, bool)>>,
+    }
+
+    impl RecordingPrefix<'_> {
+        fn record(&self, event: &'static str, session_id: &str) {
+            let lock = self.client.prompt_lock_for(session_id);
+            let held = lock.try_lock().is_err();
+            self.events.lock_or_recover().push((event, held));
+        }
+    }
+
+    impl HiddenPrefix for RecordingPrefix<'_> {
+        fn text_for(&self, session_id: &str, _created_this_run: bool) -> Option<String> {
+            self.record("text_for", session_id);
+            self.block.map(str::to_string)
+        }
+        fn written(&self, session_id: &str) {
+            self.record("written", session_id);
+        }
+        fn completed(&self, session_id: &str) {
+            self.record("completed", session_id);
+        }
+    }
+
+    /// A fake agent on loopback (ephemeral port, test-only) that answers
+    /// every request with an empty result and every prompt with
+    /// `end_turn`, once `release` lets it.
+    fn gated_agent(release: std::sync::mpsc::Receiver<()>) -> u16 {
+        use std::io::{BufRead, BufReader, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let Ok((stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut writer = stream.try_clone().unwrap();
+            for line in BufReader::new(stream).lines() {
+                let Ok(line) = line else { return };
+                let msg: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let result = if msg["method"] == "session/prompt" {
+                    if release.recv().is_err() {
+                        return;
+                    }
+                    serde_json::json!({ "stopReason": "end_turn" })
+                } else if msg["method"] == "session/new" {
+                    serde_json::json!({ "sessionId": "created" })
+                } else {
+                    serde_json::json!({})
+                };
+                let reply =
+                    serde_json::json!({ "jsonrpc": "2.0", "id": msg["id"], "result": result });
+                if writeln!(writer, "{reply}").is_err() {
+                    return;
+                }
+            }
+        });
+        port
+    }
+
+    #[test]
+    fn hidden_prefix_is_chosen_and_settled_under_the_prompt_lock() {
+        let (release, gate) = std::sync::mpsc::channel();
+        let port = gated_agent(gate);
+        let client = AcpClient::new(AcpConnectionMode::Remote {
+            host: "127.0.0.1".to_string(),
+            port,
+        });
+        client.connect().unwrap();
+        let prefix = RecordingPrefix {
+            client: &client,
+            block: Some("<_kage_tool_steering>\nx\n</_kage_tool_steering>"),
+            events: std::sync::Mutex::new(Vec::new()),
+        };
+        let build = |text: Option<&str>| serde_json::json!({ "prompt": [text] });
+
+        // Another prompt holds the session: the block isn't chosen until
+        // it's done, so it can't be chosen against a state that prompt is
+        // about to change.
+        let lock = client.prompt_lock_for("S");
+        let held = lock.lock_or_recover();
+        let chosen_early = std::thread::scope(|scope| {
+            let sender = scope.spawn(|| client.send_prompt_with_prefix("S", &prefix, &build));
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let chosen_early = !prefix.events.lock_or_recover().is_empty();
+            drop(held);
+            release.send(()).unwrap();
+            sender.join().unwrap().unwrap();
+            chosen_early
+        });
+        assert!(
+            !chosen_early,
+            "chosen while another prompt held the session"
+        );
+        assert_eq!(
+            *prefix.events.lock_or_recover(),
+            vec![("text_for", true), ("written", true), ("completed", true)],
+            "chosen, written and completed, all before the next prompt can choose"
+        );
+    }
+
+    #[test]
+    fn hidden_prefix_is_told_whether_this_run_created_the_session() {
+        let (release, gate) = std::sync::mpsc::channel::<()>();
+        let port = gated_agent(gate);
+        let client = AcpClient::new(AcpConnectionMode::Remote {
+            host: "127.0.0.1".to_string(),
+            port,
+        });
+        client.connect().unwrap();
+        assert!(!client.created_this_run("created"));
+        let (id, _) = client.create_session(None).unwrap();
+        assert_eq!(id, "created");
+        assert!(client.created_this_run("created"));
+        assert!(!client.created_this_run("from-an-earlier-run"));
+        drop(release);
+    }
+
     #[test]
     fn tool_steering_write_hook_skips_a_prompt_that_never_went_out() {
         // No transport → the write fails: the steering it carried must stay
-        // pending, so the hook that marks it sent must not run.
+        // pending, so the hooks that mark it sent must not run.
         let client = AcpClient::new(AcpConnectionMode::Local {
             spawn_command: "true".to_string(),
         });
-        let written = std::cell::Cell::new(false);
+        let prefix = RecordingPrefix {
+            client: &client,
+            block: Some("block"),
+            events: std::sync::Mutex::new(Vec::new()),
+        };
         let result =
-            client.send_prompt_observed("session-a", serde_json::json!({}), &|| written.set(true));
+            client.send_prompt_with_prefix("session-a", &prefix, &|_| serde_json::json!({}));
         assert!(result.is_err());
-        assert!(!written.get());
+        assert_eq!(*prefix.events.lock_or_recover(), vec![("text_for", true)]);
     }
 
     #[test]

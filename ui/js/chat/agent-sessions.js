@@ -2,6 +2,7 @@ import { errMessage } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { renderMarkdown } from '../shared/markdown.js';
 import { mascotHTML } from '../shared/mascot.js';
+import { stripToolSteering } from '../shared/session-render.js';
 
 /**
  * Agent session viewer — read-only display of sessions from registered
@@ -371,8 +372,13 @@ export class AgentSessionViewer {
         container.scrollTop = 0;
     }
 
+    /**
+     * A user message's own text. The backend readers already drop the
+     * extension tool steering Kage adds to the prompts it sends; this keeps
+     * the viewer from showing it whatever a provider returns.
+     */
     extractUserText(msg) {
-        return msg.content;
+        return stripToolSteering(msg.content || '');
     }
 
     restoreInputArea() {

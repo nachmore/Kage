@@ -210,8 +210,9 @@ pub(super) fn load_session(
 
 fn push_user(messages: &mut Vec<AgentMessage>, message: &serde_json::Value) {
     let text = content::extract_text_content(message.get("content"));
-    if !text.is_empty() && !content::is_system_message(&text) {
-        messages.push(agent_message("user", text));
+    let text = crate::agent_sessions::user_text(&text);
+    if !text.is_empty() && !content::is_system_message(text) {
+        messages.push(agent_message("user", text.to_string()));
     }
 }
 

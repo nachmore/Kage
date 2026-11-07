@@ -20,6 +20,7 @@ import {
     formatRelativeDate,
     formatError,
     orderSessionsForSidebar,
+    stripToolSteering,
 } from '../../ui/js/shared/session-render.js';
 
 // Stub image converter — production code uses btoa+Uint8Array, the tests
@@ -161,6 +162,19 @@ describe('buildRenderQueue', () => {
             ['user', 'Quote AAPL'],
             ['assistant', 'About 200.'],
         ]);
+    });
+
+    it('keeps the user text an agent merged after the tool steering', () => {
+        const block = `${TOOL_STEERING_TAG}\nTools\n</_kage_tool_steering>`;
+        const messages = [
+            {
+                kind: 'Prompt',
+                message_id: 'u1',
+                content: [{ kind: 'text', data: `${block}\nQuote AAPL` }],
+            },
+        ];
+        const queue = buildRenderQueue(messages, {}, {}, stubImageToDataUrl);
+        expect(queue.map((q) => [q.type, q.text])).toEqual([['user', 'Quote AAPL']]);
     });
 
     it('extracts image content into snapshots, leaving text intact', () => {
@@ -382,5 +396,28 @@ describe('orderSessionsForSidebar', () => {
         const copy = [...sessions];
         orderSessionsForSidebar(sessions, {});
         expect(sessions).toEqual(copy);
+    });
+});
+
+describe('stripToolSteering', () => {
+    const block = `${TOOL_STEERING_TAG}\n<extension_tools>\nquotes\n</extension_tools>\n</_kage_tool_steering>`;
+
+    it('drops a block of its own', () => {
+        expect(stripToolSteering(block)).toBe('');
+        expect(stripToolSteering(`  ${block}${block}\n`)).toBe('');
+    });
+
+    it('keeps the user text after it', () => {
+        expect(stripToolSteering(`${block}\n\nhello`)).toBe('hello');
+    });
+
+    it('leaves anything else alone', () => {
+        expect(stripToolSteering(' plain ')).toBe(' plain ');
+        expect(stripToolSteering(`hello ${block}`)).toBe(`hello ${block}`);
+        expect(stripToolSteering(undefined)).toBe(undefined);
+    });
+
+    it('treats a cut-off block as all steering', () => {
+        expect(stripToolSteering(`${TOOL_STEERING_TAG}\ncut off`)).toBe('');
     });
 });

@@ -255,6 +255,7 @@ fn query_session_rows(
 /// Title from the first transcript entry (already projected by SQLite).
 fn title_from_first_entry(first: Option<&str>) -> String {
     let clean = first.unwrap_or("").trim().trim_start_matches('>').trim();
+    let clean = super::user_text(clean).trim();
     if clean.is_empty() {
         "Untitled".to_string()
     } else {
@@ -294,6 +295,7 @@ fn push_user_messages(user: &serde_json::Value, out: &mut Vec<AgentMessage>) {
         .and_then(|p| p.get("prompt"))
         .and_then(|p| p.as_str())
     {
+        let prompt = super::user_text(prompt);
         if !prompt.is_empty() {
             out.push(AgentMessage {
                 role: "user".to_string(),
@@ -458,6 +460,25 @@ mod tests {
         assert_eq!(got[4].transcript_len, Some(0));
 
         assert_eq!(query_session_rows(&db, 2).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn kage_tool_steering_is_not_shown_or_used_as_the_title() {
+        // kiro-cli keeps a prompt's text blocks as one string.
+        let prompt = format!(
+            "{}\n<extension_tools>\nquotes\n</extension_tools>\n</_kage_tool_steering>\nhello",
+            crate::state::TOOL_STEERING_TAG
+        );
+        let v = serde_json::json!({
+            "history": [{ "user": { "content": { "Prompt": { "prompt": prompt } } } }]
+        });
+        let msgs = render_history(&v);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].content, "hello");
+        assert_eq!(
+            title_from_first_entry(Some(&format!("> {prompt}"))),
+            "hello"
+        );
     }
 
     #[test]

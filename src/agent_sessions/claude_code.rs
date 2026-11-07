@@ -26,8 +26,8 @@
 //! fingerprint, evicted on next-scan retain.
 
 use super::{
-    clip_title, file_mtime_ms, fingerprint, rfc3339_from_system_time, AgentMessage, AgentSession,
-    AgentSessionProvider, CachedSession, FileFingerprint, SessionLocator,
+    clip_title, file_mtime_ms, fingerprint, rfc3339_from_system_time, user_text, AgentMessage,
+    AgentSession, AgentSessionProvider, CachedSession, FileFingerprint, SessionLocator,
 };
 use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
@@ -266,14 +266,19 @@ fn parse_session_metadata(path: &Path, mtime: std::time::SystemTime) -> Option<A
                 let content = o.get("message").and_then(|m| m.get("content"));
                 if let Some(s) = content.and_then(|c| c.as_str()) {
                     user_count += 1;
+                    let s = user_text(s);
                     if title.is_none() && !s.trim().is_empty() {
                         title = Some(clip_title(s.trim(), 80));
                     }
                 } else if let Some(arr) = content.and_then(|c| c.as_array()) {
-                    // tool_result-only user lines don't count as turns.
-                    let has_text = arr
-                        .iter()
-                        .any(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"));
+                    // tool_result-only user lines don't count as turns, nor
+                    // does Kage's tool steering on its own.
+                    let has_text = arr.iter().any(|b| {
+                        b.get("type").and_then(|t| t.as_str()) == Some("text")
+                            && b.get("text")
+                                .and_then(|t| t.as_str())
+                                .is_none_or(|t| !user_text(t).is_empty())
+                    });
                     if has_text {
                         user_count += 1;
                     }
@@ -373,6 +378,7 @@ fn render_user(o: &serde_json::Value, out: &mut Vec<AgentMessage>) {
     };
 
     if let Some(s) = content.as_str() {
+        let s = user_text(s);
         if !s.trim().is_empty() {
             out.push(AgentMessage {
                 role: "user".to_string(),
@@ -394,6 +400,7 @@ fn render_user(o: &serde_json::Value, out: &mut Vec<AgentMessage>) {
         match t {
             "text" => {
                 if let Some(s) = block.get("text").and_then(|v| v.as_str()) {
+                    let s = user_text(s);
                     if !s.trim().is_empty() {
                         out.push(AgentMessage {
                             role: "user".to_string(),
@@ -539,6 +546,60 @@ mod tests {
         assert_eq!(out.len(), 2);
         assert_eq!(out[0].content, "first");
         assert_eq!(out[1].content, "second");
+    }
+
+    fn kage_tool_steering() -> String {
+        format!(
+            "{}\n<extension_tools>\nquotes\n</extension_tools>\n</_kage_tool_steering>",
+            crate::state::TOOL_STEERING_TAG
+        )
+    }
+
+    #[test]
+    fn render_user_hides_kage_tool_steering() {
+        // Kage driving Claude Code puts it ahead of the user's text, as a
+        // block of its own; an adapter that merged blocks keeps it at the
+        // front of one string.
+        let v = json!({
+            "type": "user",
+            "message": {
+                "content": [
+                    { "type": "text", "text": kage_tool_steering() },
+                    { "type": "text", "text": "what's AAPL at?" }
+                ]
+            }
+        });
+        let mut out = Vec::new();
+        render_user(&v, &mut out);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].content, "what's AAPL at?");
+
+        let merged = json!({
+            "type": "user",
+            "message": { "content": format!("{}\nplan my week", kage_tool_steering()) }
+        });
+        let mut out = Vec::new();
+        render_user(&merged, &mut out);
+        assert_eq!(out[0].content, "plan my week");
+    }
+
+    #[test]
+    fn listing_title_and_count_skip_kage_tool_steering() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.jsonl");
+        let lines = [
+            json!({ "type": "user", "message": { "content": [
+                { "type": "text", "text": kage_tool_steering() },
+            ] } }),
+            json!({ "type": "user", "message": {
+                "content": format!("{}\nplan my week", kage_tool_steering())
+            } }),
+        ];
+        let body: String = lines.iter().map(|l| format!("{l}\n")).collect();
+        std::fs::write(&path, body).unwrap();
+        let session = parse_session_metadata(&path, std::time::SystemTime::now()).unwrap();
+        assert_eq!(session.title, "plan my week");
+        assert_eq!(session.message_count, 1, "steering alone isn't a turn");
     }
 
     #[test]

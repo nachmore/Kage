@@ -21,7 +21,7 @@ pub(super) fn is_system_message(text: &str) -> bool {
 
 /// Strip steering/context wrappers from a `.chat` user message.
 pub(super) fn extract_user_text_from_chat(text: &str) -> String {
-    let text = text.trim();
+    let text = crate::agent_sessions::user_text(text.trim()).trim();
     if text.starts_with("<identity>") {
         return String::new();
     }

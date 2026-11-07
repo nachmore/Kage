@@ -475,7 +475,10 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
 /// The window's extension tool steering rides on it, as a hidden block ahead
 /// of the user's text, when the session it goes to doesn't have that block
 /// yet: the window's current tool list, or a "tools withdrawn" notice for a
-/// session that was sent tools ([`ToolSteeringPrefix`]).
+/// session that may hold tools ([`ToolSteeringPrefix`]). Not on a slash
+/// command (`/usage`), which the agent needs as typed: the block stays
+/// pending for the next prompt. Nor do `commands/execute` slash commands
+/// (`execute_slash_command`) touch it, as they aren't prompts.
 fn send_user_prompt(
     client: &crate::acp_client::AcpClient,
     tool_steering: &std::sync::Mutex<crate::state::ToolSteeringState>,
@@ -498,10 +501,11 @@ fn send_user_prompt(
 }
 
 /// A user prompt's extension tool steering, decided per send attempt (the
-/// recovery ladder may resend on a reloaded or fresh session). The block is
-/// noted when the prompt carrying it is written and counts as delivered once
-/// the agent finishes that turn; a send that fails or is stopped leaves it
-/// pending, so the next prompt carries it again.
+/// recovery ladder may resend on a reloaded or fresh session), under the
+/// session's prompt lock. The block is noted when the prompt carrying it is
+/// written and counts as delivered once the agent finishes that turn; a send
+/// that fails or is stopped leaves it pending, so the next prompt carries it
+/// again.
 struct ToolSteeringPrefix<'a> {
     state: &'a std::sync::Mutex<crate::state::ToolSteeringState>,
     window: &'a str,
@@ -511,11 +515,11 @@ struct ToolSteeringPrefix<'a> {
 }
 
 impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
-    fn text_for(&self, session_id: &str) -> Option<String> {
-        let steering = self
-            .state
-            .lock_or_recover()
-            .for_prompt(self.window, session_id);
+    fn text_for(&self, session_id: &str, created_this_run: bool) -> Option<String> {
+        let steering =
+            self.state
+                .lock_or_recover()
+                .for_prompt(self.window, session_id, created_this_run);
         let text = steering.as_ref().map(|s| s.text.clone());
         if let Some(text) = &text {
             info!(
@@ -529,13 +533,9 @@ impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
     }
 
     fn written(&self, session_id: &str) {
-        if let Some((sid, steering, write)) = self.attempt.borrow_mut().as_mut() {
+        if let Some((sid, _, write)) = self.attempt.borrow_mut().as_mut() {
             if sid == session_id {
-                *write = Some(
-                    self.state
-                        .lock_or_recover()
-                        .note_written(session_id, steering),
-                );
+                *write = Some(self.state.lock_or_recover().note_written(session_id));
             }
         }
     }
@@ -555,14 +555,19 @@ impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
 mod tests {
     use super::send_user_prompt;
     use crate::acp_client::{AcpClient, AcpConnectionMode};
-    use crate::state::{ToolSteeringState, TOOL_STEERING_TAG};
+    use crate::state::{ToolSteeringState, TOOLS_WITHDRAWN_BLOCK, TOOL_STEERING_TAG};
     use std::io::{BufRead, BufReader, Write};
     use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
-    /// A fake agent on loopback (ephemeral port, test-only): ends every
-    /// prompt at once (as cancelled if its text is "stop me") and records
-    /// each one's text blocks, timestamps left out.
-    fn fake_agent() -> (u16, Arc<Mutex<Vec<Vec<String>>>>) {
+    type Prompts = Arc<Mutex<Vec<Vec<String>>>>;
+
+    /// A fake agent on loopback (ephemeral port, test-only). It ends every
+    /// prompt at once (as cancelled if its text is "stop me", after 300 ms
+    /// if it's "slow") and records each one's text blocks, timestamps left
+    /// out, in the order they arrive. `session/new` creates "NEW"; any
+    /// other request gets an empty result.
+    fn fake_agent() -> (u16, Prompts) {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let prompts = Arc::new(Mutex::new(Vec::new()));
@@ -575,27 +580,33 @@ mod tests {
             for line in BufReader::new(stream).lines() {
                 let Ok(line) = line else { return };
                 let msg: serde_json::Value = serde_json::from_str(&line).unwrap();
-                if msg["method"] != "session/prompt" {
-                    continue;
-                }
-                let texts: Vec<String> = msg["params"]["prompt"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .filter_map(|b| b["text"].as_str())
-                    .filter(|t| !t.starts_with("[Current time:"))
-                    .map(String::from)
-                    .collect();
-                let stop_reason = if texts.last().is_some_and(|t| t == "stop me") {
-                    "cancelled"
-                } else {
-                    "end_turn"
+                let result = match msg["method"].as_str() {
+                    Some("session/prompt") => {
+                        let texts: Vec<String> = msg["params"]["prompt"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .filter_map(|b| b["text"].as_str())
+                            .filter(|t| !t.starts_with("[Current time:"))
+                            .map(String::from)
+                            .collect();
+                        let last = texts.last().cloned().unwrap_or_default();
+                        log.lock().unwrap().push(texts);
+                        if last == "slow" {
+                            std::thread::sleep(Duration::from_millis(300));
+                        }
+                        let stop_reason = if last == "stop me" {
+                            "cancelled"
+                        } else {
+                            "end_turn"
+                        };
+                        serde_json::json!({ "stopReason": stop_reason })
+                    }
+                    Some("session/new") => serde_json::json!({ "sessionId": "NEW" }),
+                    _ => serde_json::json!({}),
                 };
-                log.lock().unwrap().push(texts);
-                let reply = serde_json::json!({
-                    "jsonrpc": "2.0", "id": msg["id"],
-                    "result": { "stopReason": stop_reason }
-                });
+                let reply =
+                    serde_json::json!({ "jsonrpc": "2.0", "id": msg["id"], "result": result });
                 if writeln!(writer, "{reply}").is_err() {
                     return;
                 }
@@ -604,24 +615,57 @@ mod tests {
         (port, prompts)
     }
 
-    #[test]
-    fn tool_steering_rides_on_the_next_user_prompt_once() {
-        let (port, prompts) = fake_agent();
+    fn connected_client(port: u16) -> AcpClient {
         let client = AcpClient::new(AcpConnectionMode::Remote {
             host: "127.0.0.1".to_string(),
             port,
         });
         client.connect().unwrap();
+        client
+    }
+
+    /// Wait until the fake agent has received `n` prompts.
+    fn wait_for_prompts(prompts: &Prompts, n: usize) {
+        for _ in 0..500 {
+            if prompts.lock().unwrap().len() >= n {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("the agent never got {n} prompts");
+    }
+
+    fn tools(name: &str) -> String {
+        format!("<extension_tools>\n{name}\n</extension_tools>")
+    }
+
+    /// The tool steering in effect for the agent after each prompt it
+    /// received: that prompt's block, or the one before.
+    fn effective_steering(prompts: &[Vec<String>]) -> Vec<Option<String>> {
+        let mut current = None;
+        prompts
+            .iter()
+            .map(|p| {
+                if let Some(block) = p.first().filter(|t| t.starts_with(TOOL_STEERING_TAG)) {
+                    current = Some(block.clone());
+                }
+                current.clone()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn tool_steering_rides_on_the_next_user_prompt_once() {
+        let (port, prompts) = fake_agent();
+        let client = connected_client(port);
         let steering = Mutex::new(ToolSteeringState::default());
+        let (id, _) = client.create_session(None).unwrap();
         let send = |text: &str| {
-            send_user_prompt(&client, &steering, "main", "S", text.to_string(), None).unwrap()
+            send_user_prompt(&client, &steering, "main", &id, text.to_string(), None).unwrap()
         };
 
-        steering
-            .lock()
-            .unwrap()
-            .publish("main", "<extension_tools>\nquotes\n</extension_tools>");
-        assert_eq!(send("first"), "S");
+        steering.lock().unwrap().publish("main", &tools("quotes"));
+        assert_eq!(send("first"), id);
         send("second");
         steering.lock().unwrap().publish("main", "");
         send("third");
@@ -643,19 +687,12 @@ mod tests {
     fn tool_steering_on_a_stopped_turn_is_sent_again() {
         // A turn cut short by Stop may not make it into the agent's history.
         let (port, prompts) = fake_agent();
-        let client = AcpClient::new(AcpConnectionMode::Remote {
-            host: "127.0.0.1".to_string(),
-            port,
-        });
-        client.connect().unwrap();
+        let client = connected_client(port);
         let steering = Mutex::new(ToolSteeringState::default());
         let send = |text: &str| {
             send_user_prompt(&client, &steering, "main", "S", text.to_string(), None).unwrap()
         };
-        steering
-            .lock()
-            .unwrap()
-            .publish("main", "<extension_tools>\nquotes\n</extension_tools>");
+        steering.lock().unwrap().publish("main", &tools("quotes"));
         send("stop me");
         send("again");
         send("later");
@@ -669,5 +706,214 @@ mod tests {
         );
         assert_eq!(prompts[1][1], "again");
         assert_eq!(prompts[2], vec!["later"]);
+    }
+
+    #[test]
+    fn tool_steering_identical_prompts_racing_attach_it_once() {
+        let (port, prompts) = fake_agent();
+        let client = connected_client(port);
+        let steering = Mutex::new(ToolSteeringState::default());
+        steering.lock().unwrap().publish("main", &tools("quotes"));
+        let send = |text: &str| {
+            send_user_prompt(&client, &steering, "main", "S", text.to_string(), None).unwrap()
+        };
+        std::thread::scope(|scope| {
+            let first = scope.spawn(|| send("slow"));
+            // The second starts while the first, carrying the block, is
+            // still in flight.
+            wait_for_prompts(&prompts, 1);
+            let second = scope.spawn(|| send("second"));
+            first.join().unwrap();
+            second.join().unwrap();
+        });
+        let prompts = prompts.lock().unwrap().clone();
+        assert!(prompts[0][0].starts_with(TOOL_STEERING_TAG));
+        assert_eq!(prompts[1], vec!["second"], "attached once");
+    }
+
+    #[test]
+    fn tool_steering_queued_prompt_carries_its_own_windows_tools() {
+        // The session holds A's tools. While another prompt holds the
+        // session, window B (changed tools) and window A both send. Whichever
+        // goes first, each prompt must reach the agent with its own window's
+        // tools in effect: A's prompt queued behind B's can't go out bare.
+        let (port, prompts) = fake_agent();
+        let client = connected_client(port);
+        let steering = Mutex::new(ToolSteeringState::default());
+        steering.lock().unwrap().publish("a", &tools("A tools"));
+        steering.lock().unwrap().publish("b", &tools("B tools"));
+        let send = |window: &str, text: &str| {
+            send_user_prompt(&client, &steering, window, "S", text.to_string(), None).unwrap()
+        };
+        send("a", "prime");
+        std::thread::scope(|scope| {
+            let holder = scope.spawn(|| client.send_chat_streaming("S", "slow", None).unwrap());
+            wait_for_prompts(&prompts, 2);
+            let from_b = scope.spawn(|| send("b", "from b"));
+            let from_a = scope.spawn(|| send("a", "from a"));
+            holder.join().unwrap();
+            from_b.join().unwrap();
+            from_a.join().unwrap();
+        });
+        let prompts = prompts.lock().unwrap().clone();
+        assert_eq!(prompts.len(), 4, "{prompts:?}");
+        let effective = effective_steering(&prompts);
+        for (prompt, steering) in prompts.iter().zip(&effective) {
+            let text = prompt.last().unwrap();
+            let want = match text.as_str() {
+                "from a" | "prime" | "slow" => "A tools",
+                "from b" => "B tools",
+                other => panic!("unexpected prompt {other}"),
+            };
+            assert!(
+                steering.as_deref().is_some_and(|s| s.contains(want)),
+                "{text:?} went out with {steering:?}: {prompts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn tool_steering_skips_slash_commands_and_stays_pending() {
+        let (port, prompts) = fake_agent();
+        let client = connected_client(port);
+        let steering = Mutex::new(ToolSteeringState::default());
+        steering.lock().unwrap().publish("main", &tools("quotes"));
+        let send = |text: &str| {
+            send_user_prompt(&client, &steering, "main", "S", text.to_string(), None).unwrap()
+        };
+        // A command dispatched through `commands/execute` isn't a prompt
+        // and leaves it pending too.
+        client
+            .send_request(
+                &client.vendor_method("commands/execute"),
+                serde_json::json!({ "sessionId": "S", "command": { "command": "context" } }),
+            )
+            .unwrap();
+        send("/usage");
+        send("/mcp:server:prompt arg");
+        send("hello");
+        send("again");
+
+        let prompts = prompts.lock().unwrap().clone();
+        assert_eq!(prompts[0], vec!["/usage"], "the command as typed, alone");
+        assert_eq!(prompts[1], vec!["/mcp:server:prompt arg"]);
+        assert!(
+            prompts[2][0].starts_with(TOOL_STEERING_TAG),
+            "{:?}",
+            prompts[2]
+        );
+        assert_eq!(prompts[2][1], "hello");
+        assert_eq!(prompts[3], vec!["again"]);
+    }
+
+    #[test]
+    fn slash_command_prompt_is_a_single_text_block() {
+        // Not even a due time stamp goes with it (`/usage` needs one block).
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let seen = Arc::new(Mutex::new(None));
+        let log = seen.clone();
+        std::thread::spawn(move || {
+            let Ok((stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut writer = stream.try_clone().unwrap();
+            for line in BufReader::new(stream).lines() {
+                let Ok(line) = line else { return };
+                let msg: serde_json::Value = serde_json::from_str(&line).unwrap();
+                *log.lock().unwrap() = Some(msg["params"]["prompt"].clone());
+                let reply = serde_json::json!({
+                    "jsonrpc": "2.0", "id": msg["id"], "result": { "stopReason": "end_turn" }
+                });
+                if writeln!(writer, "{reply}").is_err() {
+                    return;
+                }
+            }
+        });
+        let client = connected_client(port);
+        let steering = Mutex::new(ToolSteeringState::default());
+        steering.lock().unwrap().publish("main", &tools("quotes"));
+        send_user_prompt(&client, &steering, "main", "S", "/usage".into(), None).unwrap();
+        assert_eq!(
+            seen.lock().unwrap().clone().unwrap(),
+            serde_json::json!([{ "type": "text", "text": "/usage" }])
+        );
+    }
+
+    #[test]
+    fn tool_steering_restored_session_gets_a_withdrawal_once() {
+        // "OLD" wasn't created by this run: an earlier run may have sent it
+        // tools, so with none left its first prompt says so, once. A
+        // session this run created never had any.
+        let (port, prompts) = fake_agent();
+        let client = connected_client(port);
+        let steering = Mutex::new(ToolSteeringState::default());
+        steering.lock().unwrap().publish("main", "");
+        let (new_id, _) = client.create_session(None).unwrap();
+        let send = |id: &str, text: &str| {
+            send_user_prompt(&client, &steering, "main", id, text.to_string(), None).unwrap()
+        };
+        client.load_existing_session("OLD", None).unwrap();
+        send("OLD", "resumed");
+        send("OLD", "again");
+        send(&new_id, "fresh");
+
+        let prompts = prompts.lock().unwrap().clone();
+        assert!(
+            prompts[0][0].contains(TOOLS_WITHDRAWN_BLOCK),
+            "{:?}",
+            prompts[0]
+        );
+        assert_eq!(prompts[0][1], "resumed");
+        assert_eq!(prompts[1], vec!["again"], "once");
+        assert_eq!(prompts[2], vec!["fresh"]);
+    }
+
+    #[test]
+    fn tool_steering_restored_session_gets_the_current_list_once() {
+        let (port, prompts) = fake_agent();
+        let client = connected_client(port);
+        let steering = Mutex::new(ToolSteeringState::default());
+        steering.lock().unwrap().publish("main", &tools("quotes"));
+        let send = |text: &str| {
+            send_user_prompt(&client, &steering, "main", "OLD", text.to_string(), None).unwrap()
+        };
+        send("resumed");
+        send("again");
+        let prompts = prompts.lock().unwrap().clone();
+        assert!(prompts[0][0].contains("quotes"));
+        assert_eq!(prompts[1], vec!["again"]);
+    }
+
+    #[test]
+    fn tool_steering_window_that_has_not_published_sends_nothing() {
+        // chat-1's extensions are still loading. It doesn't borrow main's
+        // tools (it may not have them) and leaves the session alone.
+        let (port, prompts) = fake_agent();
+        let client = connected_client(port);
+        let steering = Mutex::new(ToolSteeringState::default());
+        steering
+            .lock()
+            .unwrap()
+            .publish("main", &tools("main tools"));
+        let send = |window: &str, text: &str| {
+            send_user_prompt(&client, &steering, window, "S", text.to_string(), None).unwrap()
+        };
+        send("chat-1", "loading");
+        send("main", "from main");
+        send("chat-1", "still loading");
+        send("main", "main again");
+        steering
+            .lock()
+            .unwrap()
+            .publish("chat-1", &tools("chat tools"));
+        send("chat-1", "loaded");
+
+        let prompts = prompts.lock().unwrap().clone();
+        assert_eq!(prompts[0], vec!["loading"]);
+        assert!(prompts[1][0].contains("main tools"));
+        assert_eq!(prompts[2], vec!["still loading"]);
+        assert_eq!(prompts[3], vec!["main again"], "main's delivery stands");
+        assert!(prompts[4][0].contains("chat tools"));
     }
 }

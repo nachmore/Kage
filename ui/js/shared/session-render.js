@@ -35,6 +35,34 @@ export const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
  * user prompt (`crate::state::TOOL_STEERING_TAG`).
  */
 export const TOOL_STEERING_TAG = '<_kage_tool_steering>';
+const TOOL_STEERING_TAG_END = '</_kage_tool_steering>';
+
+/**
+ * `text` without the extension tool steering block(s) Kage puts ahead of a
+ * user's own text (`crate::state::strip_tool_steering`). A block of its own
+ * becomes `''`; for an agent that merged a prompt's text into one string,
+ * the user's text after the block is kept. Text that doesn't start with
+ * the block comes back unchanged.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripToolSteering(text) {
+    if (typeof text !== 'string') return text;
+    let rest = text;
+    let stripped = false;
+    for (;;) {
+        const trimmed = rest.trimStart();
+        if (!trimmed.startsWith(TOOL_STEERING_TAG)) {
+            return stripped ? trimmed : text;
+        }
+        // The block can't contain its own end tag (the backend escapes it).
+        const end = trimmed.indexOf(TOOL_STEERING_TAG_END, TOOL_STEERING_TAG.length);
+        if (end < 0) return '';
+        rest = trimmed.slice(end + TOOL_STEERING_TAG_END.length);
+        stripped = true;
+    }
+}
 
 /**
  * Build metadata for a single message based on the session's per-id
@@ -115,14 +143,11 @@ export function buildRenderQueue(
                         textParts.push(item.data.substring(STEERING_MSG_PREFIX.length).trim());
                         continue;
                     }
-                    const trimmed = item.data.trim();
-                    if (
-                        trimmed.startsWith('[Current time:') ||
-                        trimmed.startsWith(TOOL_STEERING_TAG)
-                    ) {
-                        continue;
-                    }
-                    textParts.push(item.data);
+                    const data = stripToolSteering(item.data);
+                    // Only the tool steering, or a time stamp: metadata.
+                    if (data !== item.data && !data.trim()) continue;
+                    if (data.trim().startsWith('[Current time:')) continue;
+                    textParts.push(data);
                 } else if (item.kind === 'image') {
                     const dataUrl = imageToDataUrl(item);
                     if (dataUrl) imageDataUrls.push(dataUrl);

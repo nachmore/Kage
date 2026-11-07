@@ -64,6 +64,15 @@ fn resolve_cwd(cwd: Option<String>) -> String {
 /// error carries a string `data` field. Used by the prompt/sub-agent paths
 /// where we want the raw detail string rather than `format_acp_error`'s
 /// `(code: N)` rendering.
+/// Whether a prompt's text is a slash command for the agent (`/usage`,
+/// `/mcp:server:prompt`, ...). Agents recognise one by the prompt's first
+/// text block, and some need it to be the only one, so it goes out exactly
+/// as typed: no hidden prefix, no time stamp. Both stay due for the next
+/// prompt.
+fn is_slash_command(content: &str) -> bool {
+    content.trim_start().starts_with('/')
+}
+
 fn bail_acp_error(context: &str, error: &super::types::AcpError) -> anyhow::Error {
     let detail = error.data.as_ref().and_then(|d| d.as_str()).unwrap_or("");
     if detail.is_empty() {
@@ -146,6 +155,7 @@ impl AcpClient {
         }
 
         info!("Session created: {}", session_id);
+        self.note_session_created(&session_id);
         Ok((session_id, models_list))
     }
 
@@ -271,7 +281,8 @@ impl AcpClient {
     /// Shared body of the two senders above. `muted` is `None` for a
     /// visible prompt, `Some(keep_reply)` for a background one. What
     /// `hidden` gives goes ahead of `content` as a text block of its own
-    /// (visible prompts only).
+    /// (visible prompts other than slash commands only), chosen and settled
+    /// under the session's prompt lock (`send_prompt_with_prefix`).
     fn send_chat_prompt(
         &self,
         session_id: &str,
@@ -282,9 +293,8 @@ impl AcpClient {
     ) -> Result<()> {
         // Wait for any in-progress compaction to finish before sending
         self.wait_for_compaction();
-        let hidden = hidden
-            .filter(|_| muted.is_none())
-            .and_then(|h| Some((h, h.text_for(session_id)?)));
+        let slash_command = is_slash_command(content);
+        let hidden = hidden.filter(|_| muted.is_none() && !slash_command);
 
         let debug = *self.transport.debug_mode.lock_or_recover();
 
@@ -307,74 +317,65 @@ impl AcpClient {
         // the prompt lock — other sessions' in-flight accumulators
         // (auto-steering, sub-agents) are untouched, and a caller waiting
         // on the lock can't wipe the in-flight prompt's partial stream.
-        let mut prompt: Vec<serde_json::Value> = Vec::new();
+        let build = |prefix: Option<&str>| {
+            let mut prompt: Vec<serde_json::Value> = Vec::new();
 
-        // Its own block, so history readers can skip it whole (see
-        // `crate::state::TOOL_STEERING_TAG`).
-        if let Some((_, text)) = &hidden {
-            prompt.push(serde_json::json!({ "type": "text", "text": text }));
-        }
-
-        // Periodically inject current timestamp so the agent's sense of time stays fresh
-        {
-            let mut last = LAST_TIMESTAMP_INJECTION.lock_or_recover();
-            let elapsed = last.map(|t| t.elapsed().as_secs()).unwrap_or(u64::MAX);
-            if elapsed >= TIMESTAMP_REFRESH_SECS {
-                let now = chrono::Local::now();
-                let today = now.format("%Y-%m-%d").to_string();
-                let time = now.format("%H:%M").to_string();
-
-                let mut last_date = LAST_TIMESTAMP_DATE.lock_or_recover();
-                let ts = if *last_date == today {
-                    // Same day — just the time
-                    format!("[Current time: {}]", time)
-                } else {
-                    // Date changed — include full date
-                    *last_date = today.clone();
-                    format!("[Current time: {} {}]", today, time)
-                };
-                prompt.push(serde_json::json!({ "type": "text", "text": ts }));
-                *last = Some(Instant::now());
+            // Its own block, so history readers can skip it whole (see
+            // `crate::state::TOOL_STEERING_TAG`).
+            if let Some(text) = prefix {
+                prompt.push(serde_json::json!({ "type": "text", "text": text }));
             }
-        }
 
-        if !content.is_empty() {
-            prompt.push(serde_json::json!({ "type": "text", "text": content }));
-        }
-        if let Some(att) = attachments {
-            for block in att {
-                prompt.push(block.clone());
-            }
-        }
-        if prompt.is_empty() {
-            prompt.push(serde_json::json!({ "type": "text", "text": "" }));
-        }
+            // Periodically inject current timestamp so the agent's sense of
+            // time stays fresh. Not into a slash command, which must stay
+            // a single block; the next prompt carries it.
+            if !slash_command {
+                let mut last = LAST_TIMESTAMP_INJECTION.lock_or_recover();
+                let elapsed = last.map(|t| t.elapsed().as_secs()).unwrap_or(u64::MAX);
+                if elapsed >= TIMESTAMP_REFRESH_SECS {
+                    let now = chrono::Local::now();
+                    let today = now.format("%Y-%m-%d").to_string();
+                    let time = now.format("%H:%M").to_string();
 
-        let params = serde_json::json!({
-            "sessionId": session_id,
-            "prompt": prompt
-        });
-        let response = match (muted, &hidden) {
-            (None, Some((h, _))) => {
-                self.send_prompt_observed(session_id, params, &|| h.written(session_id))?
+                    let mut last_date = LAST_TIMESTAMP_DATE.lock_or_recover();
+                    let ts = if *last_date == today {
+                        // Same day — just the time
+                        format!("[Current time: {}]", time)
+                    } else {
+                        // Date changed — include full date
+                        *last_date = today.clone();
+                        format!("[Current time: {} {}]", today, time)
+                    };
+                    prompt.push(serde_json::json!({ "type": "text", "text": ts }));
+                    *last = Some(Instant::now());
+                }
             }
-            (None, None) => self.send_prompt(session_id, params)?,
-            (Some(keep_reply), _) => self.send_prompt_muted(session_id, params, keep_reply)?,
+
+            if !content.is_empty() {
+                prompt.push(serde_json::json!({ "type": "text", "text": content }));
+            }
+            if let Some(att) = attachments {
+                for block in att {
+                    prompt.push(block.clone());
+                }
+            }
+            if prompt.is_empty() {
+                prompt.push(serde_json::json!({ "type": "text", "text": "" }));
+            }
+
+            serde_json::json!({
+                "sessionId": session_id,
+                "prompt": prompt
+            })
+        };
+        let response = match (muted, hidden) {
+            (None, Some(h)) => self.send_prompt_with_prefix(session_id, h, &build)?,
+            (None, None) => self.send_prompt(session_id, build(None))?,
+            (Some(keep_reply), _) => self.send_prompt_muted(session_id, build(None), keep_reply)?,
         };
 
         if let Some(error) = response.error {
             return Err(bail_acp_error("ACP error", &error));
-        }
-        if let Some((h, _)) = hidden {
-            // A turn cut short by a Stop may not be in the agent's history.
-            let stop_reason = response
-                .result
-                .as_ref()
-                .and_then(|r| r.get("stopReason"))
-                .and_then(|s| s.as_str());
-            if stop_reason != Some("cancelled") {
-                h.completed(session_id);
-            }
         }
 
         info!("Prompt completed");
@@ -569,7 +570,7 @@ impl AcpClient {
 
 #[cfg(test)]
 mod tests {
-    use super::{AcpClient, LoadReplayGuard};
+    use super::{is_slash_command, AcpClient, LoadReplayGuard};
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
@@ -648,6 +649,14 @@ mod tests {
     fn unrelated_errors_are_not_recoverable() {
         let err = "ACP error: model declined to respond";
         assert!(!AcpClient::is_recoverable_error(err));
+    }
+
+    #[test]
+    fn slash_commands_are_recognised_by_their_leading_slash() {
+        assert!(is_slash_command("/usage"));
+        assert!(is_slash_command("  /mcp:server:prompt args"));
+        assert!(!is_slash_command("what does /usage do?"));
+        assert!(!is_slash_command(""));
     }
 
     #[test]

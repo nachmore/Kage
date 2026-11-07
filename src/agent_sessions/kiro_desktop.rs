@@ -215,6 +215,15 @@ mod tests {
     }
 
     #[test]
+    fn extract_user_text_hides_kage_tool_steering() {
+        let s = format!(
+            "{}\nTools\n</_kage_tool_steering>\nreal text",
+            crate::state::TOOL_STEERING_TAG
+        );
+        assert_eq!(extract_user_text_from_chat(&s), "real text");
+    }
+
+    #[test]
     fn extract_user_text_strips_environment_context_suffix() {
         let s = "real text<EnvironmentContext>os=linux</EnvironmentContext>";
         assert_eq!(extract_user_text_from_chat(s), "real text");

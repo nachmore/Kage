@@ -46,37 +46,35 @@ pub struct AcpHandles {
 /// doesn't have it yet, as a hidden text block ahead of the user's own
 /// ([`for_prompt`](Self::for_prompt)), wrapped in [`TOOL_STEERING_TAG`]. A
 /// window with no tools left sends [`TOOLS_WITHDRAWN_BLOCK`] instead, and
-/// only to sessions that were sent a tool list.
+/// only to sessions that may hold a tool list.
 ///
 /// Blocks are kept per publishing window: the window that prompts a session
 /// is the one that runs the tool calls the reply asks for, so a session is
 /// steered with that window's tools, and one window losing its tools can't
-/// withdraw them from another window's sessions. Only a window that hasn't
-/// published at all (still loading its extensions) borrows: the most recent
-/// publication of any window, if that one has tools. A closed window's
-/// publication is dropped ([`forget_window`](Self::forget_window)).
+/// withdraw them from another window's sessions. A window that hasn't
+/// published yet (its extensions are still loading) steers nothing: its
+/// prompts go out bare and leave the session as it was. It never borrows
+/// another window's tools, which it may not be able to run. A closed
+/// window's publication is dropped ([`forget_window`](Self::forget_window)).
 ///
 /// Per session it tracks what the agent got, from the prompts themselves: a
 /// prompt carrying a block is noted when it is written to the agent
 /// ([`note_written`](Self::note_written)) and again once the agent finished
 /// it ([`note_delivered`](Self::note_delivered)). Until then the block stays
-/// pending and the next prompt carries it again.
+/// pending and the next prompt carries it again. The caller chooses the
+/// block and records both under the session's prompt lock, so prompts
+/// queued on one session see each other's outcome. A session this run of
+/// Kage didn't create (resumed or loaded from an earlier run) has unknown
+/// steering: it may hold any tool list, so its first prompt carries the
+/// window's block, or the withdrawal notice if the window has no tools.
 #[derive(Debug, Default)]
 pub struct ToolSteeringState {
-    /// Window label → what that window last published.
-    published: HashMap<String, Published>,
-    /// Bumped on every publication; orders them across windows.
-    publish_seq: u64,
+    /// Window label → what that window last published: `(hash, block)`, or
+    /// `None` for no extension tools.
+    published: HashMap<String, Option<(u64, String)>>,
     /// Bumped on every steering-carrying prompt written to the agent.
     write_seq: u64,
     sessions: HashMap<String, SessionSteering>,
-}
-
-#[derive(Debug)]
-struct Published {
-    seq: u64,
-    /// `(hash, block)`; `None`: the window has no extension tools.
-    tools: Option<(u64, String)>,
 }
 
 #[derive(Debug, Default)]
@@ -85,9 +83,9 @@ struct SessionSteering {
     /// when another one goes out, until that prompt completes: a prompt cut
     /// short may or may not have reached the agent's history.
     delivered: Option<u64>,
-    /// A prompt carrying a tool list was written here and no withdrawal has
-    /// been delivered since: the agent may hold extension tools, so "no
-    /// tools" needs saying.
+    /// The agent may hold extension tools, so "no tools" needs saying: a
+    /// prompt carrying a block was written here and no withdrawal has been
+    /// delivered since.
     may_have_tools: bool,
     /// `write_seq` of the last steering-carrying prompt written here.
     last_write: u64,
@@ -96,9 +94,32 @@ struct SessionSteering {
 /// Opening tag of the hidden block a user prompt carries its extension tool
 /// steering in. A `<_kage_*>` tag like `<_kage_app_steering>`: the chat UI
 /// strips it, and the history readers (chat transcript, titles,
-/// auto-steering) skip a text block that starts with it.
+/// auto-steering, the other agents' session viewers) skip it
+/// ([`strip_tool_steering`]).
 pub const TOOL_STEERING_TAG: &str = "<_kage_tool_steering>";
 const TOOL_STEERING_TAG_END: &str = "</_kage_tool_steering>";
+
+/// `text` without the extension tool steering a Kage prompt carries ahead
+/// of the user's own text. Kage sends it as a text block of its own, which
+/// this turns into `""`; an agent that merges a prompt's text blocks into
+/// one string keeps it at the front, and the user's text after it is kept.
+/// Text that doesn't start with the block comes back unchanged.
+pub fn strip_tool_steering(text: &str) -> &str {
+    let mut rest = text;
+    let mut stripped = false;
+    loop {
+        let Some(body) = rest.trim_start().strip_prefix(TOOL_STEERING_TAG) else {
+            return if stripped { rest.trim_start() } else { text };
+        };
+        // The block can't contain its own end tag (`for_prompt` escapes it),
+        // so the first one closes it. None: cut off, all of it is the block.
+        let Some(end) = body.find(TOOL_STEERING_TAG_END) else {
+            return "";
+        };
+        rest = &body[end + TOOL_STEERING_TAG_END.len()..];
+        stripped = true;
+    }
+}
 
 /// Agent-facing replacement for a tool list once no extension tools are
 /// left. English on purpose: steering is for the agent, not the user.
@@ -129,16 +150,9 @@ impl ToolSteeringState {
     /// the window has no tools, and from then on its sessions are steered
     /// with "no tools", never with another window's list.
     pub fn publish(&mut self, window: &str, block: &str) {
-        self.publish_seq += 1;
         let tools =
             (!block.trim().is_empty()).then(|| (Self::hash_block(block), block.to_string()));
-        self.published.insert(
-            window.to_string(),
-            Published {
-                seq: self.publish_seq,
-                tools,
-            },
-        );
+        self.published.insert(window.to_string(), tools);
     }
 
     /// Drop a closed window's publication.
@@ -147,42 +161,38 @@ impl ToolSteeringState {
     }
 
     /// The block `window`'s sessions should have, as `(hash, block,
-    /// withdrawal)`: its own latest publication, "no tools" included, or for
-    /// a window that hasn't published yet the most recent publication of
-    /// any window, when that one has tools.
+    /// withdrawal)`: its own latest publication, "no tools" included.
+    /// `None` until it has published.
     fn target_for(&self, window: &str) -> Option<(u64, &str, bool)> {
-        let tools = match self.published.get(window) {
-            Some(own) => own.tools.as_ref(),
-            // Not "no tools" on another window's behalf, nor a list some
-            // window had before it published "no tools" (or closed).
-            None => self
-                .published
-                .values()
-                .max_by_key(|p| p.seq)?
-                .tools
-                .as_ref(),
-        };
-        Some(match tools {
+        Some(match self.published.get(window)? {
             Some((hash, block)) => (*hash, block.as_str(), false),
-            None if self.published.contains_key(window) => (
+            None => (
                 Self::hash_block(TOOLS_WITHDRAWN_BLOCK),
                 TOOLS_WITHDRAWN_BLOCK,
                 true,
             ),
-            None => return None,
         })
     }
 
     /// The steering a user prompt from `window` on `session_id` should
     /// carry: `window`'s block, if the session doesn't have it. `None` also
-    /// for "no tools" where no tool list ever went out.
-    pub fn for_prompt(&self, window: &str, session_id: &str) -> Option<PromptSteering> {
+    /// for "no tools" on a session that can't hold a tool list, and for a
+    /// window that hasn't published. `created_this_run`: this run of Kage
+    /// created the session, so everything it holds was noted here; any
+    /// other session has unknown steering until a prompt delivers some.
+    pub fn for_prompt(
+        &self,
+        window: &str,
+        session_id: &str,
+        created_this_run: bool,
+    ) -> Option<PromptSteering> {
         let (hash, block, withdrawal) = self.target_for(window)?;
         let session = self.sessions.get(session_id);
         if session.and_then(|s| s.delivered) == Some(hash) {
             return None;
         }
-        if withdrawal && !session.is_some_and(|s| s.may_have_tools) {
+        let may_have_tools = session.map_or(!created_this_run, |s| s.may_have_tools);
+        if withdrawal && !may_have_tools {
             return None;
         }
         // An extension's text can't close the wrapper early.
@@ -194,17 +204,17 @@ impl ToolSteeringState {
         })
     }
 
-    /// A prompt carrying `steering` was written to the agent on
-    /// `session_id`. Returns the write's number for
-    /// [`note_delivered`](Self::note_delivered).
-    pub fn note_written(&mut self, session_id: &str, steering: &PromptSteering) -> u64 {
+    /// A prompt carrying steering was written to the agent on `session_id`.
+    /// Returns the write's number for [`note_delivered`](Self::note_delivered).
+    pub fn note_written(&mut self, session_id: &str) -> u64 {
         self.write_seq += 1;
         let s = self.sessions.entry(session_id.to_string()).or_default();
         s.last_write = self.write_seq;
         s.delivered = None;
-        if !steering.withdrawal {
-            s.may_have_tools = true;
-        }
+        // A tool list may now be in the agent's history. A withdrawal only
+        // goes to a session that may hold one, and until it completes the
+        // session still may.
+        s.may_have_tools = true;
         self.write_seq
     }
 
@@ -437,15 +447,33 @@ pub struct AcpModel {
 
 #[cfg(test)]
 mod tests {
-    use super::{PromptSteering, ToolSteeringState, TOOLS_WITHDRAWN_BLOCK, TOOL_STEERING_TAG};
+    use super::{
+        strip_tool_steering, PromptSteering, ToolSteeringState, TOOLS_WITHDRAWN_BLOCK,
+        TOOL_STEERING_TAG,
+    };
+
+    /// `for_prompt` for a session this run created.
+    fn select(st: &ToolSteeringState, window: &str, session: &str) -> Option<PromptSteering> {
+        st.for_prompt(window, session, true)
+    }
 
     /// The steering a prompt from `window` on `session` carries, sent and
-    /// finished.
-    fn prompt(st: &mut ToolSteeringState, window: &str, session: &str) -> Option<String> {
-        let steering = st.for_prompt(window, session)?;
-        let write = st.note_written(session, &steering);
+    /// finished. `created_this_run` as in `for_prompt`.
+    fn prompt_on(
+        st: &mut ToolSteeringState,
+        window: &str,
+        session: &str,
+        created_this_run: bool,
+    ) -> Option<String> {
+        let steering = st.for_prompt(window, session, created_this_run)?;
+        let write = st.note_written(session);
         st.note_delivered(session, &steering, write);
         Some(steering.text)
+    }
+
+    /// `prompt_on` for a session this run created.
+    fn prompt(st: &mut ToolSteeringState, window: &str, session: &str) -> Option<String> {
+        prompt_on(st, window, session, true)
     }
 
     fn is_withdrawal(s: &PromptSteering) -> bool {
@@ -479,12 +507,12 @@ mod tests {
         let mut st = ToolSteeringState::default();
         st.publish("main", "tools");
         // Failed before it was sent.
-        assert!(st.for_prompt("main", "s").is_some());
-        assert!(st.for_prompt("main", "s").is_some());
+        assert!(select(&st, "main", "s").is_some());
+        assert!(select(&st, "main", "s").is_some());
         // Sent, but the turn didn't complete.
-        let steering = st.for_prompt("main", "s").unwrap();
-        st.note_written("s", &steering);
-        assert!(st.for_prompt("main", "s").is_some());
+        select(&st, "main", "s").unwrap();
+        st.note_written("s");
+        assert!(select(&st, "main", "s").is_some());
     }
 
     #[test]
@@ -494,8 +522,8 @@ mod tests {
         st.publish("main", "v1");
         prompt(&mut st, "main", "s").unwrap();
         st.publish("main", "v2");
-        let v2 = st.for_prompt("main", "s").unwrap();
-        st.note_written("s", &v2);
+        select(&st, "main", "s").unwrap();
+        st.note_written("s");
         st.publish("main", "v1");
         assert!(prompt(&mut st, "main", "s").unwrap().contains("v1"));
     }
@@ -504,19 +532,19 @@ mod tests {
     fn tool_steering_failure_before_sending_needs_no_withdrawal() {
         let mut st = ToolSteeringState::default();
         st.publish("main", "tools");
-        assert!(st.for_prompt("main", "s").is_some()); // never written
+        assert!(select(&st, "main", "s").is_some()); // never written
         st.publish("main", "");
-        assert!(st.for_prompt("main", "s").is_none());
+        assert!(select(&st, "main", "s").is_none());
     }
 
     #[test]
     fn tool_steering_list_written_but_unfinished_is_withdrawn() {
         let mut st = ToolSteeringState::default();
         st.publish("main", "tools");
-        let steering = st.for_prompt("main", "s").unwrap();
-        st.note_written("s", &steering);
+        select(&st, "main", "s").unwrap();
+        st.note_written("s");
         st.publish("main", "");
-        assert!(is_withdrawal(&st.for_prompt("main", "s").unwrap()));
+        assert!(is_withdrawal(&select(&st, "main", "s").unwrap()));
     }
 
     #[test]
@@ -530,18 +558,50 @@ mod tests {
         st.publish("main", "tools");
         prompt(&mut st, "main", "s1").unwrap();
         st.publish("main", "");
-        assert!(is_withdrawal(&st.for_prompt("main", "s1").unwrap()));
-        assert!(st.for_prompt("main", "s2").is_none(), "s2 never had tools");
+        assert!(is_withdrawal(&select(&st, "main", "s1").unwrap()));
+        assert!(select(&st, "main", "s2").is_none(), "s2 never had tools");
         prompt(&mut st, "main", "s1").unwrap();
-        assert!(st.for_prompt("main", "s1").is_none(), "withdrawn once");
+        assert!(select(&st, "main", "s1").is_none(), "withdrawn once");
 
         // A withdrawal that didn't complete is sent again.
         st.publish("main", "tools");
         prompt(&mut st, "main", "s1").unwrap();
         st.publish("main", "");
-        let w = st.for_prompt("main", "s1").unwrap();
-        st.note_written("s1", &w);
-        assert!(is_withdrawal(&st.for_prompt("main", "s1").unwrap()));
+        select(&st, "main", "s1").unwrap();
+        st.note_written("s1");
+        assert!(is_withdrawal(&select(&st, "main", "s1").unwrap()));
+    }
+
+    #[test]
+    fn tool_steering_restored_session_gets_a_withdrawal_once() {
+        // A session from an earlier run may hold that run's tool list.
+        let mut st = ToolSteeringState::default();
+        st.publish("main", "");
+        let w = st.for_prompt("main", "old", false).unwrap();
+        assert!(is_withdrawal(&w));
+        // Cut short: still owed, also once the session is no longer new to
+        // this run's bookkeeping.
+        st.note_written("old");
+        assert!(is_withdrawal(&st.for_prompt("main", "old", false).unwrap()));
+        let text = prompt_on(&mut st, "main", "old", false).unwrap();
+        assert!(text.contains(TOOLS_WITHDRAWN_BLOCK));
+        assert!(st.for_prompt("main", "old", false).is_none(), "once");
+        assert!(
+            st.for_prompt("main", "new", true).is_none(),
+            "a session this run created never had tools"
+        );
+    }
+
+    #[test]
+    fn tool_steering_restored_session_gets_the_current_list_once() {
+        let mut st = ToolSteeringState::default();
+        st.publish("main", "tools");
+        let text = prompt_on(&mut st, "main", "old", false).unwrap();
+        assert!(text.contains("tools"));
+        assert!(st.for_prompt("main", "old", false).is_none(), "once");
+        // It now holds this run's list, so losing it is withdrawn.
+        st.publish("main", "");
+        assert!(is_withdrawal(&st.for_prompt("main", "old", false).unwrap()));
     }
 
     #[test]
@@ -551,24 +611,34 @@ mod tests {
         st.publish("main", "main tools");
         prompt(&mut st, "floating", "shared").unwrap();
         st.publish("floating", "");
-        let from_main = st.for_prompt("main", "shared").unwrap();
+        let from_main = select(&st, "main", "shared").unwrap();
         assert!(!is_withdrawal(&from_main));
         assert!(from_main.text.contains("main tools"));
     }
 
     #[test]
-    fn tool_steering_window_that_has_not_published_borrows_the_newest_list() {
+    fn tool_steering_window_that_has_not_published_steers_nothing() {
+        // Its extensions are still loading: another window's list may name
+        // tools it can't run, and "no tools" may not be true either.
         let mut st = ToolSteeringState::default();
-        assert!(st.for_prompt("chat-1", "s").is_none(), "nothing published");
+        assert!(select(&st, "chat-1", "s").is_none(), "nothing published");
         st.publish("main", "main tools");
-        assert!(st
-            .for_prompt("chat-1", "s")
+        assert!(
+            select(&st, "chat-1", "s").is_none(),
+            "main's isn't borrowed"
+        );
+        assert!(st.for_prompt("chat-1", "old", false).is_none());
+        // The session is left as it was: main's prompt still carries main's
+        // list, and once main's is delivered a later main prompt is bare.
+        prompt(&mut st, "main", "s").unwrap();
+        assert!(select(&st, "chat-1", "s").is_none());
+        assert!(select(&st, "main", "s").is_none());
+        // Once it publishes it steers its own sessions.
+        st.publish("chat-1", "chat tools");
+        assert!(select(&st, "chat-1", "s")
             .unwrap()
             .text
-            .contains("main tools"));
-        // The newest publication says "no tools": nothing to borrow.
-        st.publish("floating", "");
-        assert!(st.for_prompt("chat-1", "s").is_none());
+            .contains("chat tools"));
     }
 
     #[test]
@@ -576,7 +646,7 @@ mod tests {
         let mut st = ToolSteeringState::default();
         st.publish("main", "main tools");
         st.publish("floating", "");
-        assert!(st.for_prompt("floating", "s").is_none());
+        assert!(select(&st, "floating", "s").is_none());
     }
 
     #[test]
@@ -584,11 +654,8 @@ mod tests {
         let mut st = ToolSteeringState::default();
         st.publish("chat-1", "tools");
         st.forget_window("chat-1");
-        assert!(st.for_prompt("chat-1", "s").is_none());
-        assert!(
-            st.for_prompt("chat-2", "s").is_none(),
-            "nothing left to borrow"
-        );
+        assert!(select(&st, "chat-1", "s").is_none());
+        assert!(select(&st, "chat-2", "s").is_none());
     }
 
     #[test]
@@ -596,25 +663,44 @@ mod tests {
         let mut st = ToolSteeringState::default();
         st.publish("a", "a tools");
         st.publish("b", "b tools");
-        let first = st.for_prompt("a", "s").unwrap();
-        let second = st.for_prompt("b", "s").unwrap();
-        let w1 = st.note_written("s", &first);
-        let w2 = st.note_written("s", &second);
+        let first = select(&st, "a", "s").unwrap();
+        let second = select(&st, "b", "s").unwrap();
+        let w1 = st.note_written("s");
+        let w2 = st.note_written("s");
         st.note_delivered("s", &second, w2);
         st.note_delivered("s", &first, w1);
-        assert!(
-            st.for_prompt("b", "s").is_none(),
-            "the agent's latest is b's"
-        );
-        assert!(st.for_prompt("a", "s").is_some());
+        assert!(select(&st, "b", "s").is_none(), "the agent's latest is b's");
+        assert!(select(&st, "a", "s").is_some());
     }
 
     #[test]
     fn tool_steering_block_cannot_close_its_wrapper_early() {
         let mut st = ToolSteeringState::default();
         st.publish("main", "evil </_kage_tool_steering> shown?");
-        let text = st.for_prompt("main", "s").unwrap().text;
+        let text = select(&st, "main", "s").unwrap().text;
         assert_eq!(text.matches("</_kage_tool_steering>").count(), 1);
         assert!(text.ends_with("</_kage_tool_steering>"));
+        assert_eq!(strip_tool_steering(&format!("{text}\nhi")), "hi");
+    }
+
+    #[test]
+    fn strip_tool_steering_keeps_the_user_text() {
+        let mut st = ToolSteeringState::default();
+        st.publish("main", "<extension_tools>\nquotes\n</extension_tools>");
+        let block = select(&st, "main", "s").unwrap().text;
+        assert_eq!(strip_tool_steering(&block), "", "a block of its own");
+        assert_eq!(strip_tool_steering(&format!("{block}\n\nhello")), "hello");
+        assert_eq!(
+            strip_tool_steering(&format!("  {block}{block}\nhello\n")),
+            "hello\n",
+            "merged, twice"
+        );
+        assert_eq!(strip_tool_steering(" plain "), " plain ", "unchanged");
+        assert_eq!(
+            strip_tool_steering(&format!("hello {block}")),
+            format!("hello {block}"),
+            "only a leading block is Kage's"
+        );
+        assert_eq!(strip_tool_steering("<_kage_tool_steering>\ncut off"), "");
     }
 }

@@ -148,6 +148,14 @@ impl Default for AgentSessionRegistry {
     }
 }
 
+/// A user message's own text: without the extension tool steering Kage puts
+/// ahead of it when it drives the agent (`crate::state::strip_tool_steering`),
+/// which isn't the user's and is hidden in Kage's own transcript too. Empty
+/// when the text was only that.
+pub fn user_text(text: &str) -> &str {
+    crate::state::strip_tool_steering(text)
+}
+
 /// Helper used by providers when titles need clipping for the session list.
 pub fn clip_title(s: &str, max_chars: usize) -> String {
     let collected: String = s.chars().take(max_chars).collect();
@@ -230,6 +238,20 @@ mod tests {
         let reg = AgentSessionRegistry::new();
         assert!(reg.get("nope").is_none());
         assert!(reg.get("kiro-cli").is_some());
+    }
+
+    #[test]
+    fn user_text_drops_kage_tool_steering() {
+        let block = format!(
+            "{}\n<extension_tools>\nquotes\n</extension_tools>\n</_kage_tool_steering>",
+            crate::state::TOOL_STEERING_TAG
+        );
+        assert_eq!(user_text(&block), "");
+        assert_eq!(
+            user_text(&format!("{block}\nwhat's AAPL at?")),
+            "what's AAPL at?"
+        );
+        assert_eq!(user_text("plain"), "plain");
     }
 
     #[test]
