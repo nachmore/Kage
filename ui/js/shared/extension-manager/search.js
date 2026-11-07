@@ -1,4 +1,6 @@
 import { sanitizeExtensionHtml } from '../extension-html-sanitizer.js';
+import { decideInvoke } from '../extension-permissions.js';
+import { validateExtensionInvokeArgs } from '../extension-url-policy.js';
 import { resolveExtensionMessage } from './i18n.js';
 import { applyMixin } from '../mixin.js';
 
@@ -172,6 +174,27 @@ export function installExtensionSearchMethods(ExtensionManager) {
                 console.warn(`execute() in '${id}' failed:`, e);
                 return null;
             }
+        },
+
+        /**
+         * Why the host must refuse to run `command` with `args` for extension
+         * `id`, or null when it may. For commands the host runs on an
+         * extension's behalf, such as the `open_url` result action. These are
+         * the checks the sandbox bridge applies to the extension's own
+         * invoke() (capability, then argument policy), so an action can never
+         * do more than the extension could do itself.
+         * @param {string} id
+         * @param {string} command
+         * @param {object} args
+         * @returns {string|null}
+         */
+        extensionInvokeDenial(id, command, args) {
+            const ext = this.extensions.get(id);
+            if (!ext) return `extension '${id}' is not loaded`;
+            if (!this._isEnabled(id)) return `extension '${id}' is disabled`;
+            const decision = decideInvoke(command, new Set(ext.capabilities || []));
+            if (!decision.allow) return decision.reason;
+            return validateExtensionInvokeArgs(command, args);
         },
 
         /**

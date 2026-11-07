@@ -2,14 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { HOST_FEATURES, invokeError } from '../../ui/js/extension-sandbox/runtime/host-api.js';
 
 describe('sandbox runtime host API', () => {
-    it('advertises the settings copy action, structured invoke errors, manifest-default config, and minimized windows', () => {
+    it('advertises the settings copy action, structured invoke errors, manifest-default config, minimized windows, and atomic data writes', () => {
         expect(HOST_FEATURES).toContain('settings.copy_action');
         expect(HOST_FEATURES).toContain('invoke.error_kind');
         expect(HOST_FEATURES).toContain('config.manifest_defaults');
         expect(HOST_FEATURES).toContain('windows.minimized');
         expect(HOST_FEATURES).toContain('export.sensitive_data');
         expect(HOST_FEATURES).toContain('export.plain_settings');
+        expect(HOST_FEATURES).toContain('storage.atomic_write');
         expect(Object.isFrozen(HOST_FEATURES)).toBe(true);
+    });
+
+    it('lists each feature once', () => {
+        expect(new Set(HOST_FEATURES).size).toBe(HOST_FEATURES.length);
     });
 
     it('builds an Error carrying the AppError kind and key', () => {

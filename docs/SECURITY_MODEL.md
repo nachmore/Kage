@@ -305,7 +305,11 @@ clicks in the host document, the sanitizers limit link targets to
 `http(s)`/`mailto` (narrower than `urls`, nothing that reaches
 `launch`), and the user chose to follow a link they could see.
 Programmatic opens (`context.invoke('open_url', …)`) still require
-`urls`.
+`urls`. So does an `open_url` a search result returns from `execute()`
+(and `open_path` needs `launch`): the host runs the command for the
+extension only after the same capability and argument checks as its own
+`invoke()` (`ExtensionManager.extensionInvokeDenial`), and opens only
+`http(s)` / `mailto` links that way.
 
 ## Defense in depth
 

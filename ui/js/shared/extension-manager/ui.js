@@ -1,5 +1,5 @@
 import { sanitizeExtensionHtml, findExtActions } from '../extension-html-sanitizer.js';
-import { t, tHtml } from '../i18n.js';
+import { activeLanguage, t, tHtml } from '../i18n.js';
 import { applyMixin } from '../mixin.js';
 import { extensionDisplay } from './i18n.js';
 import { neutralizeLinks } from '../link-handler.js';
@@ -163,6 +163,10 @@ export function installExtensionUiMethods(ExtensionManager) {
                 lastSuccessRenderAt: 0,
                 hasRendered: false,
                 needsRefresh: true,
+                /** `_widgetPaintSignature` of what the host shows, null when
+                 *  it shows anything else (nothing, the paused notice). A
+                 *  render with the same signature leaves the DOM alone. */
+                paintedSignature: null,
             };
             this._widgetInstances.set(key, controller);
             slotEl.appendChild(host);
@@ -319,11 +323,27 @@ export function installExtensionUiMethods(ExtensionManager) {
                 controller.hasRendered = true;
                 if (controller.scheduleVersion === scheduleVersion) controller.needsRefresh = false;
 
+                const signature =
+                    out && typeof out.html === 'string'
+                        ? this._widgetPaintSignature(controller, out)
+                        : null;
                 if (!out || typeof out.html !== 'string') {
                     // Nothing to render → hide the host so it takes up no layout.
                     controller.host.innerHTML = '';
                     controller.host.style.display = 'none';
+                    controller.paintedSignature = null;
+                } else if (
+                    signature !== null &&
+                    signature === controller.paintedSignature &&
+                    controller.host.style.display !== 'none'
+                ) {
+                    // Same view as the one on screen: keep its DOM, so keyboard
+                    // focus, a text selection and anything typed into it
+                    // survive a refresh tick.
                 } else {
+                    // Set again once the paint completes; a paint that throws
+                    // part-way must not look current to the next render.
+                    controller.paintedSignature = null;
                     const frag = sanitizeExtensionHtml(out.html, 'rich');
                     controller.host.innerHTML = '';
                     if (out.className) {
@@ -360,6 +380,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                             }
                         }
                     }
+                    controller.paintedSignature = signature;
                 }
 
                 if (failureReason) {
@@ -391,6 +412,33 @@ export function installExtensionUiMethods(ExtensionManager) {
             }
         },
 
+        /**
+         * Everything a widget paint depends on: the extension's html,
+         * className and actions, plus the host state the paint reads (whether
+         * date labels become picker buttons, and the language of their
+         * labels). Equal signatures paint the same DOM. null (never equal)
+         * when the render output can't be serialised.
+         */
+        _widgetPaintSignature(controller, out) {
+            try {
+                const actions = Array.isArray(out.actions)
+                    ? out.actions.filter((a) => a?.id).map((a) => [a.id, a.rpc || a.id])
+                    : null;
+                const datePicker =
+                    !!this._dateAffordanceHandler &&
+                    !!this._isDateProvider?.(controller.extensionId);
+                return JSON.stringify([
+                    out.html,
+                    out.className ?? null,
+                    actions,
+                    datePicker,
+                    activeLanguage() ?? null,
+                ]);
+            } catch {
+                return null;
+            }
+        },
+
         /** Clear painted widget content once it has gone stale after a failed
          *  render. A single transient blip shouldn't flicker the bar away —
          *  but a time-sensitive widget (calendar's "Now" bar, todos' due
@@ -413,6 +461,7 @@ export function installExtensionUiMethods(ExtensionManager) {
 
             controller.host.innerHTML = '';
             controller.host.style.display = 'none';
+            controller.paintedSignature = null;
             // Reset the clock so we don't re-evaluate against the same stamp;
             // the next successful render re-arms it.
             controller.lastSuccessRenderAt = 0;
@@ -453,6 +502,7 @@ export function installExtensionUiMethods(ExtensionManager) {
             // of leaving the mascot posed for a dead widget until the TTL
             // expires.
             this.extensions.get(controller.extensionId)?.sandbox?.clearMascotActivity?.();
+            controller.paintedSignature = null;
             try {
                 controller.host.style.display = '';
                 controller.host.innerHTML = '';
@@ -507,6 +557,7 @@ export function installExtensionUiMethods(ExtensionManager) {
             controller.tripped = false;
             controller.renderInFlight = false;
             controller.host.innerHTML = '';
+            controller.paintedSignature = null;
             await this._refreshWidgetSchedule(controller, true);
         },
 

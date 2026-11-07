@@ -611,6 +611,7 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 | `windows.minimized`    | `list_open_windows` entries carry `minimized: boolean`. Whether minimized windows are listed and flagged depends on the platform and permissions (see [Other apps' windows](#other-apps-windows)). |
 | `export.sensitive_data` | Restoring a backup never replaces what the manifest's `sensitiveData` and `config.<field>.sensitive` declare with an empty or missing copy, and none of it is in an unencrypted backup (see [Sensitive data and backups](#sensitive-data-and-backups)). |
 | `export.plain_settings` | A settings-only (unencrypted) backup copies the settings the manifest's `config` declares as booleans, numbers, `enum` choices or `backup: "plain"` strings (see [Marking settings safe to copy](#marking-settings-safe-to-copy)). |
+| `storage.atomic_write` | `save_extension_data` replaces a key atomically, so a crash or force quit mid-write never leaves a truncated value (see [Your extension runs as MULTIPLE instances](#your-extension-runs-as-multiple-instances--design-for-it)). On older hosts, keep a backup copy of anything you can't afford to lose. |
 
 ### Errors from `invoke()`
 
@@ -658,6 +659,14 @@ modules**. Consequences:
   unavailable in the sandbox, and module state doesn't cross
   windows — if two instances must agree on something, it goes
   through extension-data.
+- **Each `save_extension_data` replaces the key atomically**
+  (the host writes a temp file and renames it over the old one),
+  so a reader, or the next launch after a crash, sees the old
+  value or the new one, never a truncated mix. Hosts that do this
+  list `storage.atomic_write` in
+  [`context.hostFeatures`](#feature-detection). Atomic isn't
+  serialized: two instances writing the same key still race, and
+  the last write wins.
 
 Rules for anything with side effects (auth flows, credential
 refresh, write-behind caches, migrations):
@@ -867,12 +876,21 @@ Returned by `execute()`:
 | Type | Description | Fields |
 |------|-------------|--------|
 | `copy` | Copy value to clipboard | `value: string` |
-| `open_url` | Open URL in browser | `value: string` |
-| `open_path` | Open file/folder | `value: string` |
-| `send_prompt` | Send to AI agent | `value: string` |
+| `open_url` | Open a link in the default browser or mail app. Needs the `urls` capability, and only absolute `http:`, `https:` and `mailto:` URLs are opened | `value: string` |
+| `open_path` | Open a file or folder with its default app. Needs the `launch` capability | `value: string` |
+| `prompt` | Send the text to the AI agent as the user's message (`send_prompt` is accepted as an older name) | `value: string` |
+| `display` | Show the text (Markdown) in the window as a reply, without asking the agent | `value: string` |
 | `replace_input` | Replace the floating window input text and trigger a new search | `value: string` |
+| `refresh_widgets` | Repaint this window's mounted widgets now, instead of at their next refresh (e.g. after a change the widget shows) | — |
 | `open_extension_settings` | Open Settings deep-linked to this extension's own settings page (the target is derived from the extension's id by the host — an extension cannot navigate to any other section) | — |
-| `custom` | Extension handles it | `data: any` |
+| `custom` | Nothing for the host to do: `execute()` already did the work | `data: any` |
+
+The host runs `open_url` and `open_path` for you, with the same checks as
+your own `invoke('open_url', …)` / `invoke('open_path', …)`: without the
+capability, or for any other URL scheme, nothing opens and the refusal is
+logged. On success the floating window hides. Hosts from before these
+actions were handled ignore them, so call `invoke` yourself from `execute()`
+(and return `custom`) if you must support those.
 
 ### Score Guidelines
 
@@ -1335,6 +1353,12 @@ export default class MyWidget {
 Return `{ rerender: true }` from `onAction` to force an immediate
 re-render (outside the normal refresh interval).
 
+A render that returns exactly what is on screen (the same `html`,
+`className` and `actions`) leaves the widget's DOM alone, so keyboard
+focus, a text selection and anything typed into the widget survive the
+refresh. Any change repaints the whole widget, so keep transient UI
+state in your own state and render it.
+
 ## Toolbar Button Provider API
 
 Toolbar buttons appear in the chat window toolbar. The extension
@@ -1581,13 +1605,26 @@ export default class MyToolProvider {
 
     /**
      * Execute a tool call. Must return { result } or { error }.
-     * Has a 5-second timeout — keep operations fast.
+     * The host waits 5 seconds unless getToolTimeout() says otherwise —
+     * keep operations fast.
      * @param {string} toolName
      * @param {object} params
      * @returns {Promise<{result?: any, error?: string}>}
      */
     async execute(toolName, params) {
         return { result: { items: [] } };
+    }
+
+    /**
+     * Optional: how long (ms) the host waits for execute(toolName, …)
+     * before the call fails with "Extension tool timed out". Asked before
+     * every call. A missing method, or anything but a positive number,
+     * means 5000; the host caps the value at 60000 (60 s).
+     * @param {string} toolName
+     * @returns {number}
+     */
+    getToolTimeout(toolName) {
+        return toolName === 'list_items' ? 15_000 : 5_000;
     }
 
     destroy() {}
@@ -1624,13 +1661,34 @@ Add `toolProvider` to `contributes`:
     description: string,    // What the tool does (shown to the LLM)
     parameters: {           // Parameter definitions
         paramName: {
-            type: string,       // 'string', 'number', 'boolean'
+            type: string,        // 'string', 'number', 'boolean', 'array', 'object'
             description: string, // Shown to the LLM
-            default: any        // Optional default value
+            default: any,        // Optional default value
+            enum: Array,         // Optional allowed values (strings or numbers)
+            items: {             // Optional, for type 'array': its elements
+                type: string,    //   e.g. 'string'
+                enum: Array      //   optional allowed element values
+            },
+            required: boolean    // Optional; true marks the parameter required
         }
     }
 }
 ```
+
+The agent sees each parameter as a line built from these fields, for
+example:
+
+```
+range (string, one of: 1d|5d|1mo, default: 1d) — Chart range
+kinds (array of string, one of: note|link|doc, required) — Only these kinds
+```
+
+At most 12 allowed values are listed (the rest are counted), and values
+containing spaces or separators are quoted. Fields of the wrong shape are
+left out. Hosts from before `enum`, `items` and `required` were shown print
+only `type`, `default` and `description`, so if the allowed values matter,
+name them in the description too. The host doesn't validate parameters
+against these fields: check and coerce them in `execute()`.
 
 ## Trigger Provider API
 

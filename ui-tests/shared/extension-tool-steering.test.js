@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     ExtensionManager,
+    formatToolParam,
     formatToolSteeringBlock,
 } from '../../ui/js/shared/extension-manager.js';
 import {
@@ -394,6 +395,143 @@ describe('formatToolSteeringBlock', () => {
         ]);
         expect(block).toContain('  - t: does t');
         expect(block).toContain('a (undefined)');
+    });
+});
+
+describe('formatToolParam', () => {
+    it('renders plain declarations exactly as before', () => {
+        expect(
+            formatToolParam('limit', { type: 'number', description: 'Max items', default: 10 })
+        ).toBe('limit (number, default: 10) — Max items');
+        expect(formatToolParam('symbol', { type: 'string', description: 'Ticker' })).toBe(
+            'symbol (string) — Ticker'
+        );
+        expect(formatToolParam('flag', { type: 'boolean', default: false })).toBe(
+            'flag (boolean, default: false)'
+        );
+        expect(formatToolParam('a', null)).toBe('a (undefined)');
+        expect(formatToolParam('b', 'string')).toBe('b (undefined)');
+    });
+
+    it('lists enum values', () => {
+        expect(
+            formatToolParam('range', {
+                type: 'string',
+                enum: ['1d', '5d', '1mo', '1y'],
+                default: '1d',
+                description: 'Chart range',
+            })
+        ).toBe('range (string, one of: 1d|5d|1mo|1y, default: 1d) — Chart range');
+        expect(formatToolParam('n', { type: 'number', enum: [1, 2.5, -3] })).toBe(
+            'n (number, one of: 1|2.5|-3)'
+        );
+    });
+
+    it('shows the item type and item values of an array', () => {
+        expect(
+            formatToolParam('kinds', {
+                type: 'array',
+                items: { type: 'string', enum: ['note', 'link', 'doc', 'action', 'meeting'] },
+                description: 'Only these kinds',
+            })
+        ).toBe('kinds (array of string, one of: note|link|doc|action|meeting) — Only these kinds');
+        expect(formatToolParam('terms', { type: 'array', items: { type: 'string' } })).toBe(
+            'terms (array of string)'
+        );
+        // Values put on the array instead of its items still reach the agent.
+        expect(formatToolParam('tags', { type: 'array', enum: ['a', 'b'] })).toBe(
+            'tags (array, one of: a|b)'
+        );
+        // items on a non-array type is ignored.
+        expect(formatToolParam('q', { type: 'string', items: { type: 'number' } })).toBe(
+            'q (string)'
+        );
+    });
+
+    it('marks required parameters, only for a literal true', () => {
+        expect(
+            formatToolParam('query', {
+                type: 'string',
+                required: true,
+                description: 'The question, verbatim',
+            })
+        ).toBe('query (string, required) — The question, verbatim');
+        expect(formatToolParam('k', { type: 'string', required: 'yes' })).toBe('k (string)');
+        expect(
+            formatToolParam('kinds', {
+                type: 'array',
+                items: { type: 'string', enum: ['note', 'doc'] },
+                required: true,
+                default: 'note',
+            })
+        ).toBe('kinds (array of string, one of: note|doc, required, default: note)');
+    });
+
+    it('falls back to the plain form for malformed declarations, never throwing', () => {
+        const cases = [
+            [{ type: 'string', enum: 'a|b' }, 'x (string)'],
+            [{ type: 'string', enum: [] }, 'x (string)'],
+            [{ type: 'string', enum: ['a', { b: 1 }] }, 'x (string)'],
+            [{ type: 'number', enum: [1, Number.NaN] }, 'x (number)'],
+            [{ type: 'string', enum: ['a', null] }, 'x (string)'],
+            [{ type: 'string', enum: [, 'a'] }, 'x (string)'], // sparse
+            [{ type: 'array', items: null }, 'x (array)'],
+            [{ type: 'array', items: 'string' }, 'x (array)'],
+            [{ type: 'array', items: { type: { toString: 1 } } }, 'x (array)'],
+            [{ type: 'array', items: { type: 'string', enum: 7 } }, 'x (array of string)'],
+            [{ type: 7 }, 'x (7)'],
+        ];
+        for (const [spec, want] of cases) {
+            expect(formatToolParam('x', spec)).toBe(want);
+        }
+        const hostile = structuredClone({ type: 'array', items: { type: 'string', enum: ['a'] } });
+        Object.defineProperty(hostile, 'default', { value: { toString: 1, valueOf: 1 } });
+        expect(() => formatToolParam('x', hostile)).not.toThrow();
+    });
+
+    it('caps long enums and counts the rest', () => {
+        const values = Array.from({ length: 20 }, (_, i) => `v${i}`);
+        expect(formatToolParam('x', { type: 'string', enum: values })).toBe(
+            `x (string, one of: ${values.slice(0, 12).join('|')}|… (+8 more))`
+        );
+        const twelve = values.slice(0, 12);
+        expect(formatToolParam('x', { type: 'string', enum: twelve })).toBe(
+            `x (string, one of: ${twelve.join('|')})`
+        );
+    });
+
+    it('quotes values that would blur the list', () => {
+        expect(
+            formatToolParam('x', { type: 'string', enum: ['a b', '', 'x|y', 'p(q)', 'ok', 'last week'] })
+        ).toBe('x (string, one of: "a b"|""|"x|y"|"p(q)"|ok|"last week")');
+    });
+
+    it('is what the steering block prints for each parameter', () => {
+        const block = formatToolSteeringBlock([
+            {
+                extensionId: 'mindmap',
+                extensionName: 'Mind Map',
+                extensionIcon: '🧠',
+                tools: [
+                    {
+                        name: 'search',
+                        description: 'Search saved notes',
+                        parameters: {
+                            query: { type: 'string', required: true, description: 'Verbatim' },
+                            kinds: {
+                                type: 'array',
+                                items: { type: 'string', enum: ['note', 'doc'] },
+                            },
+                            limit: { type: 'number', default: 8 },
+                        },
+                    },
+                ],
+            },
+        ]);
+        expect(block).toContain(
+            '    Parameters: query (string, required) — Verbatim; ' +
+                'kinds (array of string, one of: note|doc); limit (number, default: 8)\n'
+        );
     });
 });
 

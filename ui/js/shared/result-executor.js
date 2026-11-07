@@ -12,6 +12,64 @@ import { kageLog } from './kage-log.js';
 import { executeCommand } from './commands.js';
 import { recordSelection } from './search-engine.js';
 
+// Links an extension result row may open on Enter (`open_url`): web and
+// mail only. A row is no place to dial, message or open OS settings.
+const RESULT_URL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+
+/**
+ * The host command for an extension's `open_url` / `open_path` result
+ * action, or a string saying why the action is malformed. The URL is sent
+ * in its parsed, normalised form.
+ * @returns {{command: string, args: object} | string}
+ */
+function openRequestFor(action) {
+    const value = typeof action.value === 'string' ? action.value.trim() : '';
+    if (!value) return `'${action.type}' needs a non-empty string value`;
+    if (action.type === 'open_path') return { command: 'open_path', args: { path: value } };
+    let url;
+    try {
+        url = new URL(value);
+    } catch {
+        return "'open_url' needs an absolute URL";
+    }
+    if (!RESULT_URL_PROTOCOLS.has(url.protocol)) {
+        return `'open_url' opens only http, https and mailto links, not '${url.protocol}'`;
+    }
+    if (url.protocol !== 'mailto:' && !url.hostname) return "'open_url' needs a host";
+    return { command: 'open_url', args: { url: url.href } };
+}
+
+/**
+ * Run an extension's `open_url` / `open_path` result action. The host runs
+ * the command for the extension, so it applies the checks the sandbox
+ * bridge would apply to the extension's own invoke(): it must hold the
+ * command's capability (`urls` / `launch`) and pass the argument policy.
+ * Refusals and failures are logged, never thrown.
+ * @returns {Promise<boolean>} true when the target was opened
+ */
+async function openForExtension(result, action, ctx) {
+    const id = result._extensionId;
+    const request = openRequestFor(action);
+    let denial;
+    if (typeof request === 'string') denial = request;
+    else if (typeof ctx.extensionManager.extensionInvokeDenial !== 'function') {
+        denial = 'this window cannot check extension capabilities';
+    } else {
+        denial = ctx.extensionManager.extensionInvokeDenial(id, request.command, request.args);
+    }
+    if (denial) {
+        console.warn(`[ext ${id}] result action '${action.type}' refused: ${denial}`);
+        return false;
+    }
+    try {
+        await ctx.invoke(request.command, request.args);
+        return true;
+    } catch (e) {
+        console.warn(`[ext ${id}] result action '${action.type}' failed:`, e);
+        return false;
+    }
+}
+
 /**
  * Execute a unified search result.
  * @param {Object} result - The search result to execute
@@ -58,8 +116,16 @@ export async function executeResult(result, query, ctx) {
                         await navigator.clipboard.writeText(action.value);
                     } catch {}
                 }
-            } else if (action.type === 'prompt' && ctx.onPrompt) {
+            } else if (
+                (action.type === 'prompt' || action.type === 'send_prompt') &&
+                ctx.onPrompt
+            ) {
+                // `send_prompt` is the name docs/EXTENSIONS.md used to give.
                 await ctx.onPrompt(action.value);
+            } else if (action.type === 'open_url' || action.type === 'open_path') {
+                if (await openForExtension(result, action, ctx)) {
+                    return { handled: true, action: 'hide' };
+                }
             } else if (action.type === 'display' && ctx.onDisplay) {
                 ctx.onDisplay(action.value);
             } else if (action.type === 'replace_input' && ctx.onReplaceInput) {

@@ -34,6 +34,9 @@ export const HOST_FEATURES = Object.freeze([
     // declares as booleans, numbers, `enum` choices or `backup: "plain"`
     // strings (docs/EXTENSIONS.md § Marking settings safe to copy).
     'export.plain_settings',
+    // `save_extension_data` replaces the file atomically (write temp +
+    // rename), so a crash never leaves a truncated value.
+    'storage.atomic_write',
 ]);
 
 /**

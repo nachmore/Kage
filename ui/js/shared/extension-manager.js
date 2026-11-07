@@ -94,7 +94,7 @@ export function formatToolSteeringBlock(defs) {
                     ? Object.entries(tool.parameters)
                     : [];
             if (params.length > 0) {
-                const paramDescs = params.map(([k, v]) => describeParam(k, v)).join('; ');
+                const paramDescs = params.map(([k, v]) => formatToolParam(k, v)).join('; ');
                 block += `    Parameters: ${paramDescs}\n`;
             }
         }
@@ -127,12 +127,56 @@ function isToolEntry(tool) {
     return tool !== null && typeof tool === 'object';
 }
 
-/** Steering text for one parameter declaration (a sandbox may send junk). */
-function describeParam(name, spec) {
+/** Most allowed values listed for one parameter; the rest are counted. */
+const MAX_STEERING_ENUM_VALUES = 12;
+
+/**
+ * Steering text for one parameter declaration (a sandbox may send junk):
+ * `name (type[, one of: a|b][, required][, default: x]) — description`.
+ * An array parameter reads `array of <items.type>` and lists `items.enum`.
+ * Fields that aren't the expected shape are left out, so a malformed
+ * declaration still renders the way a plain `{ type, default, description }`
+ * one does.
+ * @param {string} name
+ * @param {unknown} spec - the extension's declaration for this parameter
+ * @returns {string}
+ */
+export function formatToolParam(name, spec) {
     const v = spec !== null && typeof spec === 'object' ? spec : {};
+    const items =
+        v.type === 'array' && v.items !== null && typeof v.items === 'object' ? v.items : null;
+    let type = safeText(v.type);
+    if (items && typeof items.type === 'string' && items.type) type += ` of ${items.type}`;
+    // For an array the allowed values are its elements'. Some authors put
+    // them on the array itself; show those rather than nothing.
+    const allowed = enumText(items && Array.isArray(items.enum) ? items.enum : v.enum);
+    const oneOf = allowed ? `, one of: ${allowed}` : '';
+    const required = v.required === true ? ', required' : '';
     const def = v.default !== undefined ? `, default: ${safeText(v.default)}` : '';
     const desc = v.description ? ` — ${safeText(v.description)}` : '';
-    return `${name} (${safeText(v.type)}${def})${desc}`;
+    return `${safeText(name)} (${type}${oneOf}${required}${def})${desc}`;
+}
+
+/**
+ * `a|b|c` for an enum of strings and finite numbers, '' for anything else.
+ * A value that would blur the list (a separator, a bracket, whitespace, or
+ * an empty string) is JSON-quoted. Long lists end in `… (+N more)`.
+ */
+function enumText(values) {
+    if (!Array.isArray(values) || values.length === 0) return '';
+    // Array.from turns holes into undefined, which fails the check below.
+    const list = Array.from(values);
+    const ok = list.every(
+        (x) => typeof x === 'string' || (typeof x === 'number' && Number.isFinite(x))
+    );
+    if (!ok) return '';
+    const shown = list
+        .slice(0, MAX_STEERING_ENUM_VALUES)
+        .map((x) =>
+            typeof x === 'string' && !/^[^\s|,;()]+$/.test(x) ? JSON.stringify(x) : String(x)
+        );
+    const rest = list.length - shown.length;
+    return shown.join('|') + (rest > 0 ? `|… (+${rest} more)` : '');
 }
 
 /**
