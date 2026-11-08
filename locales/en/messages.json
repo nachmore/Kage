@@ -461,6 +461,10 @@
     "message": "Extension Store",
     "description": "Sidebar item — extension store"
   },
+  "settings.sidebar.updated_badge": {
+    "message": "Updated",
+    "description": "Small badge next to an extension in the Settings sidebar after Update all updated it; cleared when Settings closes"
+  },
   "settings.sidebar.privacy": {
     "message": "Privacy",
     "description": "Sidebar item — privacy / telemetry settings"

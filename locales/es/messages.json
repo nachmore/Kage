@@ -10180,5 +10180,11 @@
     "description": "Import summary: installed extensions switched off because what they were allowed to do comes only from approval on this machine, never from a backup; names is a localised list",
     "_machine_translated": true,
     "_source_hash": "f58bf3d94c5be6d5"
+  },
+  "settings.sidebar.updated_badge": {
+    "message": "Actualizada",
+    "description": "Small badge next to an extension in the Settings sidebar after Update all updated it; cleared when Settings closes",
+    "_machine_translated": true,
+    "_source_hash": "d747ffeba0ebb293"
   }
 }

@@ -729,7 +729,10 @@ export function addExtensionSidebarItem(id, icon, label) {
     const section = document.getElementById('extensionsSidebarSection');
     if (!section) return;
     // Don't add duplicates
-    if (section.querySelector(`.sidebar-item[data-section="${id}"]`)) return;
+    if (section.querySelector(`.sidebar-item[data-section="${id}"]`)) {
+        applyUpdatedMarks();
+        return;
+    }
 
     const item = document.createElement('div');
     item.className = 'sidebar-item';
@@ -741,6 +744,7 @@ export function addExtensionSidebarItem(id, icon, label) {
     iconSpan.className = 'sidebar-item-icon';
     iconSpan.textContent = icon;
     const labelSpan = document.createElement('span');
+    labelSpan.className = 'sidebar-item-label';
     labelSpan.textContent = label;
     item.appendChild(iconSpan);
     item.appendChild(labelSpan);
@@ -749,7 +753,7 @@ export function addExtensionSidebarItem(id, icon, label) {
     const extItems = [...section.querySelectorAll('.sidebar-item[data-ext-sidebar="true"]')];
     const lowerLabel = label.toLowerCase();
     const insertBefore = extItems.find((el) => {
-        const elLabel = el.querySelector('span:last-child')?.textContent?.toLowerCase() || '';
+        const elLabel = el.querySelector('.sidebar-item-label')?.textContent?.toLowerCase() || '';
         return elLabel > lowerLabel;
     });
 
@@ -758,6 +762,56 @@ export function addExtensionSidebarItem(id, icon, label) {
     } else {
         section.appendChild(item);
     }
+    applyUpdatedMarks();
+}
+
+// Extensions that "Update all" updated while Settings was open, marked in
+// the sidebar so you can see which. Closing Settings only hides the window,
+// so the backend clears the marks when it shows Settings again
+// (open_settings_window → window.__kageClearUpdatedExtensions).
+const _updatedExtensionIds = new Set();
+
+/** Mark these extension ids as just updated (sidebar badge). */
+export function markUpdatedExtensions(ids) {
+    for (const id of Array.isArray(ids) ? ids : []) {
+        if (typeof id === 'string' && id) _updatedExtensionIds.add(id);
+    }
+    applyUpdatedMarks();
+}
+
+/** Drop every "updated" mark. */
+export function clearUpdatedExtensions() {
+    _updatedExtensionIds.clear();
+    applyUpdatedMarks();
+}
+
+/** The ids currently marked (tests). */
+export function updatedExtensionIds() {
+    return [..._updatedExtensionIds];
+}
+
+function applyUpdatedMarks() {
+    if (typeof document === 'undefined') return;
+    const label = t('settings.sidebar.updated_badge');
+    document.querySelectorAll('.sidebar-item[data-ext-sidebar="true"]').forEach((item) => {
+        const extId = (item.dataset.section || '').replace(/^ext-/, '');
+        const marked = _updatedExtensionIds.has(extId);
+        let badge = item.querySelector('.sidebar-item-badge');
+        if (marked && !badge) {
+            badge = document.createElement('span');
+            badge.className = 'sidebar-item-badge';
+            item.appendChild(badge);
+        } else if (!marked && badge) {
+            badge.remove();
+            badge = null;
+        }
+        if (badge) badge.textContent = label;
+        item.classList.toggle('is-updated', marked);
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.__kageClearUpdatedExtensions = clearUpdatedExtensions;
 }
 
 // --- Sandbox pool helpers ---------------------------------------------------

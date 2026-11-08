@@ -113,6 +113,18 @@ body {
 .sidebar-item-icon {
     font-size: 14px;
 }
+/* "Updated" mark after Update all (cleared when Settings closes). */
+.sidebar-item-badge {
+    margin-inline-start: auto;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+    color: var(--kage-accent-hover);
+    background: color-mix(in srgb, var(--kage-accent) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--kage-accent) 45%, transparent);
+}
 
 /* Main Content */
 .settings-content {

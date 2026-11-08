@@ -344,7 +344,7 @@
             <div class="store-tab" data-tab="commands" onclick="window.__kageStore.switchTab('commands')" data-i18n="store.tab.commands">Quick Commands</div>
         </div>
         <div class="store-toolbar">
-            <input type="text" id="storeSearch" placeholder="Search..." data-i18n-placeholder="store.search.placeholder" oninput="window.__kageStore.onSearch()">
+            <input type="text" id="storeSearch" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search..." data-i18n-placeholder="store.search.placeholder" oninput="window.__kageStore.onSearch()">
             <select class="store-source-select" id="sourceFilter" onchange="window.__kageStore.renderTab()" style="display:none">
                 <option value="" data-i18n="store.source.all">All Sources</option>
             </select>

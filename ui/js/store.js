@@ -692,6 +692,23 @@ function onSearch() {
     searchTimeout = setTimeout(() => renderTab(), 300);
 }
 
+/**
+ * Back to a fresh view. Closing the store only hides its window, so without
+ * this a reopened store kept the last search, filters and tab. The backend
+ * calls it when it shows a store that was closed (open_store_window).
+ */
+function resetView() {
+    clearTimeout(searchTimeout);
+    const search = document.getElementById('storeSearch');
+    if (search) search.value = '';
+    showInstalledOnly = false;
+    document.getElementById('installedFilter')?.classList.remove('active');
+    const source = document.getElementById('sourceFilter');
+    if (source) source.value = '';
+    document.getElementById('storeContent')?.scrollTo?.(0, 0);
+    switchTab('extensions');
+}
+
 // Attribute-safe escaper: escapes `& < > " '` so untrusted catalog fields
 // can't break out of quoted attributes. The old textContent/innerHTML trick
 // left quotes intact, which was an XSS when interpolated into attributes.
@@ -758,6 +775,7 @@ window.__kageStore = {
     renderTab,
     refresh,
     handleDeepLinkInstall,
+    resetView,
 };
 // Top-level alias for the eval_script path: the Rust deep-link
 // handler injects `handleDeepLinkInstall('<id>')` into an

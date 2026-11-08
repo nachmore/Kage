@@ -2,6 +2,7 @@ import { SettingsModule } from './base.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 import { t } from '../shared/i18n.js';
 import { errMessage } from '../shared/error-message.js';
+import { markUpdatedExtensions } from './manager.js';
 /**
  * Store Settings Module — auto-update, primary store URL, and additional store sources.
  */
@@ -110,6 +111,8 @@ export class StoreSettingsModule extends SettingsModule {
                 const invoke = window.__TAURI__?.core?.invoke;
                 if (!invoke) return;
                 const result = await invoke('check_extension_updates');
+                // Mark which ones in the sidebar until Settings is closed.
+                markUpdatedExtensions(result.updated_ids);
                 if (result.updated > 0) {
                     showResult(
                         t('settings.store.update_check.updated', { count: result.updated }),

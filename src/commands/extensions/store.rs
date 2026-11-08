@@ -78,6 +78,13 @@ pub async fn open_store_window_with_intent<R: tauri::Runtime>(
     });
 
     if let Some(w) = app.get_webview_window(window_labels::STORE) {
+        // Closing the store only hides it. Reopened after a close, it starts
+        // fresh instead of keeping the last search, filters and tab.
+        if !w.is_visible().unwrap_or(true) {
+            let _ = w.eval(
+                "if(window.__kageStore&&typeof window.__kageStore.resetView==='function')window.__kageStore.resetView()",
+            );
+        }
         let _ = w.show();
         let _ = w.set_focus();
         // Navigate to requested tab — use eval_script for reliability since
@@ -608,6 +615,8 @@ pub async fn check_extension_updates<R: tauri::Runtime>(
         .unwrap_or_default();
 
     let mut updated = 0u32;
+    // Which ones, so Settings can mark them in its sidebar.
+    let mut updated_ids: Vec<String> = Vec::new();
     let checked = installed.len() as u32;
 
     for (id, local_version, _kind) in &installed {
@@ -657,6 +666,7 @@ pub async fn check_extension_updates<R: tauri::Runtime>(
                     {
                         Ok(_) => {
                             updated += 1;
+                            updated_ids.push(id.clone());
                             info!("Updated extension '{}' to {}", id, remote_version);
                         }
                         Err(e) => {
@@ -683,7 +693,11 @@ pub async fn check_extension_updates<R: tauri::Runtime>(
         }
     }
 
-    Ok(serde_json::json!({ "updated": updated, "checked": checked }))
+    Ok(serde_json::json!({
+        "updated": updated,
+        "checked": checked,
+        "updated_ids": updated_ids,
+    }))
 }
 
 /// Inner install logic reused by both store_install and check_extension_updates.

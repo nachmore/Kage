@@ -50,6 +50,13 @@ pub async fn open_settings_window<R: tauri::Runtime>(
     // each preset's `where`/`--version` probe).
     let already_open = app.get_webview_window(window_labels::SETTINGS).is_some();
     let window = if let Some(w) = app.get_webview_window(window_labels::SETTINGS) {
+        // Closing Settings only hides it. Shown again after a close, it drops
+        // the "updated" marks Update all left in the sidebar.
+        if !w.is_visible().unwrap_or(true) {
+            let _ = w.eval(
+                "if(typeof window.__kageClearUpdatedExtensions==='function')window.__kageClearUpdatedExtensions()",
+            );
+        }
         w
     } else {
         // Encode section/subsection in the URL so the fresh window's
