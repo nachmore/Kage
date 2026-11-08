@@ -3186,22 +3186,16 @@
     "_source_hash": "8522d8e532e1e1fb"
   },
   "settings.about.backup.description": {
-    "message": "Flytt Kage-oppsettet ditt mellom maskiner. Sikkerhetskopien inneholder konfigurasjon, lagrede ledetekster og snarveier, egendefinert og innlært styring, samt utvidelsesdata. Kryptering med en passfrase er valgfritt, men anbefales hvis filen skal forlate maskinen din.",
+    "message": "Flytt Kage-oppsettet ditt mellom maskiner. En kryptert sikkerhetskopi inneholder alt, også pålogginger. En sikkerhetskopi med bare innstillinger er ikke kryptert, så den inneholder bare preferanser som ikke kan låse opp noe.",
     "description": "Body text in the backup section",
     "_machine_translated": true,
-    "_source_hash": "e4dbe7e1d6ab2e28"
+    "_source_hash": "3a5506d5907f75ff"
   },
   "settings.about.backup.export.label": {
     "message": "Eksporter",
     "description": "Subsection label for export controls",
     "_machine_translated": true,
     "_source_hash": "df01bf7467258888"
-  },
-  "settings.about.backup.encrypt_toggle": {
-    "message": "Krypter med en passfrase (AES-256-GCM med Argon2id-nøkkelutledning).",
-    "description": "Helper next to the encryption toggle",
-    "_machine_translated": true,
-    "_source_hash": "5c348b02467e7b48"
   },
   "settings.about.backup.passphrase.placeholder": {
     "message": "Passfrase",
@@ -3234,10 +3228,10 @@
     "_source_hash": "ff9ad6961f6ebcf3"
   },
   "settings.about.backup.import.description": {
-    "message": "Velg en tidligere eksportert <code>.kage</code>- eller <code>.kage.enc</code>-fil. Import erstatter din nåværende konfigurasjon – maskinens vindusposisjoner, telemetri-installasjons-ID og oppstartsinnstilling for OS holdes lokalt.",
+    "message": "Velg en tidligere eksportert <code>.kage</code>- eller <code>.kage.enc</code>-fil. Alt sikkerhetskopien ikke har – en innstilling den utelater, en tom verdi, en pålogging – beholder verdien fra denne maskinen, og det samme gjelder vindusplasseringer, installasjons-ID-en for telemetri og oppstartsinnstillingen i operativsystemet.",
     "description": "Helper text for import (HTML allowed)",
     "_machine_translated": true,
-    "_source_hash": "736c5b1684c03868"
+    "_source_hash": "896cfe0a917c43fb"
   },
   "settings.about.backup.import_btn": {
     "message": "Importer …",
@@ -7086,10 +7080,10 @@
     "_source_hash": "f0a3eb503050f83a"
   },
   "settings.about.dialog.import.message": {
-    "message": "Import vil erstatte din nåværende Kage-konfigurasjon (vindusposisjoner, installasjons-ID og OS-oppstartsinnstilling beholdes lokalt).\n\nFortsette?",
+    "message": "Importen erstatter Kage-innstillingene dine med innstillingene fra sikkerhetskopien. Alt sikkerhetskopien ikke har, beholder verdien fra denne maskinen (og vindusplasseringer, installasjons-ID og oppstartsinnstillingen i operativsystemet forblir alltid lokale).\n\nVil du fortsette?",
     "description": "Body of the import confirmation dialog",
     "_machine_translated": true,
-    "_source_hash": "2f754269a541af14"
+    "_source_hash": "c8d5979947e53c70"
   },
   "settings.about.dialog.restart.message": {
     "message": "Noen endringer trer først i kraft etter omstart (agenttilkobling, hurtigtaster, tema). Start Kage på nytt nå?",
@@ -9413,6 +9407,258 @@
     "_machine_translated": true,
     "_source_hash": "36c2d11cd6238803"
   },
+  "errors.config.export_preview_failed": {
+    "message": "Kunne ikke vise hva en sikkerhetskopi med bare innstillinger utelater: {message}",
+    "description": "Returned when preview_config_export can't read this machine's settings or extension data",
+    "_machine_translated": true,
+    "_source_hash": "50c0a572aaccdd96"
+  },
+  "settings.about.import.summary.sign_in_again": {
+    "message": "Logg på {names} igjen.",
+    "description": "Import summary: extensions whose sign-ins the backup left out; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "4943d2f36acc1143"
+  },
+  "settings.about.import.summary.reenter": {
+    "message": "Skriv inn på nytt: {items}.",
+    "description": "Import summary: Kage settings whose keys the backup left out; items is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "0f9a049f7bc8b531"
+  },
+  "settings.about.import.summary.kept_local": {
+    "message": "{count, plural, one {Beholdt denne maskinens verdi for 1 pålogging eller nøkkel som sikkerhetskopien utelot.} other {Beholdt denne maskinens verdier for # pålogginger og nøkler som sikkerhetskopien utelot.}}",
+    "description": "Import summary when every left-out sign-in or key already had a value on this machine",
+    "_machine_translated": true,
+    "_source_hash": "c85f89b3813b246a"
+  },
+  "settings.about.backup.passphrase_mismatch": {
+    "message": "Passordfrasene samsvarer ikke.",
+    "description": "Error when the passphrase and its confirmation differ",
+    "_machine_translated": true,
+    "_source_hash": "888b94e90878c2d7"
+  },
+  "settings.about.backup.exporting": {
+    "message": "Eksporterer …",
+    "description": "Status while a backup is being written",
+    "_machine_translated": true,
+    "_source_hash": "df64879f25202f3b"
+  },
+  "settings.about.backup.saved": {
+    "message": "✓ Lagret {size} til {path}",
+    "description": "Status after a successful export; size is a formatted byte count, path is the file the user picked",
+    "_machine_translated": true,
+    "_source_hash": "74514b9c6fbd1166"
+  },
+  "settings.about.backup.export_failed": {
+    "message": "Eksporten mislyktes: {message}",
+    "description": "Status when writing a backup fails",
+    "_machine_translated": true,
+    "_source_hash": "95f6fb19877a143a"
+  },
+  "settings.about.backup.filter.encrypted": {
+    "message": "Kryptert Kage-sikkerhetskopi",
+    "description": "File-type name in the save/open dialog for .kage.enc files",
+    "_machine_translated": true,
+    "_source_hash": "3693529f10aaa9f1"
+  },
+  "settings.about.backup.filter.plain": {
+    "message": "Kage-sikkerhetskopi",
+    "description": "File-type name in the save/open dialog for .kage files",
+    "_machine_translated": true,
+    "_source_hash": "8c48c5235df5d9d3"
+  },
+  "settings.about.backup.filter.all": {
+    "message": "Alle filer",
+    "description": "File-type name in the open dialog that matches every file",
+    "_machine_translated": true,
+    "_source_hash": "bc1f64f6c70a40db"
+  },
+  "settings.about.backup.unlock.title": {
+    "message": "Skriv inn passordfrase",
+    "description": "Title of the prompt shown when importing an encrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "dab6ffcfc111b299"
+  },
+  "settings.about.backup.unlock.description": {
+    "message": "Denne filen er kryptert. Skriv inn passordfrasen du brukte da du eksporterte.",
+    "description": "Body of the prompt shown when importing an encrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "e9187f7d1edc7fd9"
+  },
+  "settings.about.backup.unlock.cancel": {
+    "message": "Avbryt",
+    "description": "Button that closes the passphrase prompt without importing",
+    "_machine_translated": true,
+    "_source_hash": "1c21538fd78b51cc"
+  },
+  "settings.about.backup.unlock.ok": {
+    "message": "Lås opp",
+    "description": "Button that decrypts and imports the backup with the entered passphrase",
+    "_machine_translated": true,
+    "_source_hash": "797ba16fb904c2ea"
+  },
+  "settings.about.backup.sensitive.group.other": {
+    "message": "Andre utvidelsesdata",
+    "description": "Group heading for extension data files that don't belong to a known extension",
+    "_machine_translated": true,
+    "_source_hash": "3c59372cd8884663"
+  },
+  "settings.about.backup.sensitive.unnamed": {
+    "message": "uten navn",
+    "description": "Stand-in for an item with an empty name, e.g. an unnamed shortcut",
+    "_machine_translated": true,
+    "_source_hash": "419773839f274821"
+  },
+  "settings.about.backup.sensitive.item.agent_command": {
+    "message": "Agenttilkobling «{name}»: kommandoargumenter",
+    "description": "An agent connection whose command line has arguments or environment settings, which a backup can leave out",
+    "_machine_translated": true,
+    "_source_hash": "12a1661f81f40a3c"
+  },
+  "settings.about.backup.sensitive.item.agent_ollama_url": {
+    "message": "Agenttilkobling «{name}»: Ollama-adresse",
+    "description": "An Ollama agent connection whose address contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "0b5d6ff0ed0d8780"
+  },
+  "settings.about.backup.sensitive.item.store_url": {
+    "message": "Adresse til egendefinert utvidelsesbutikk",
+    "description": "The custom extension store URL, which contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "09a7fa7cd69abc94"
+  },
+  "settings.about.backup.sensitive.item.store_source_url": {
+    "message": "Utvidelsesbutikk «{name}»: adresse",
+    "description": "An additional extension store whose URL contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "1d0e1b73552cb81e"
+  },
+  "settings.about.backup.sensitive.item.shortcut_url": {
+    "message": "Snarvei «{name}»: nettadresse",
+    "description": "A shortcut whose URL contains a credential or is a private webhook",
+    "_machine_translated": true,
+    "_source_hash": "739e39e227decaf3"
+  },
+  "settings.about.backup.sensitive.item.shortcut_arguments": {
+    "message": "Snarvei «{name}»: programargumenter",
+    "description": "A shortcut whose program arguments contain a credential",
+    "_machine_translated": true,
+    "_source_hash": "2df314724a6b230e"
+  },
+  "settings.about.backup.sensitive.item.shortcut_script": {
+    "message": "Snarvei «{name}»: skript",
+    "description": "A script shortcut that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "8094e82639f45bc1"
+  },
+  "settings.about.backup.sensitive.item.macro_step_script": {
+    "message": "Automatisering «{name}»: skript i trinn {step}",
+    "description": "An automation step script that contains a credential; step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "788ab588603e78fe"
+  },
+  "settings.about.backup.sensitive.item.internal_site_script": {
+    "message": "Internt nettsted «{name}»: proxyskript",
+    "description": "An internal-site profile's proxy script that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "16a72d77476280cf"
+  },
+  "settings.about.backup.sensitive.item.internal_site_sample_url": {
+    "message": "Internt nettsted «{name}»: eksempeladresse",
+    "description": "An internal-site profile's sample URL that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "ae6ba2ee9c6e10ad"
+  },
+  "settings.about.backup.sensitive.item.shortcut_prompt": {
+    "message": "Snarvei «{name}»: ledetekst",
+    "description": "A shortcut whose prompt contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "fe27acb79f018ab7"
+  },
+  "settings.about.backup.sensitive.item.macro_step_prompt": {
+    "message": "Automatisering «{name}»: ledetekst i trinn {step}",
+    "description": "An automation step prompt that contains a credential; step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "365aadee1a88c5f1"
+  },
+  "settings.about.backup.sensitive.item.tool_permission_rules": {
+    "message": "Kommandoer du har tillatt eller avvist (agenten vil spørre igjen)",
+    "description": "Tool-permission rules for agent commands the user allowed or denied; leaving them out means the agent asks again",
+    "_machine_translated": true,
+    "_source_hash": "847045996b5b3617"
+  },
+  "settings.about.backup.sensitive.item.context_rule_steering": {
+    "message": "Appmodus «{name}»: styring",
+    "description": "A per-app rule whose steering text contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "bdaa4b4f7861ffa6"
+  },
+  "settings.about.backup.sensitive.item.steering_auto": {
+    "message": "Lært styring: en nøkkel i teksten",
+    "description": "The learned (auto) steering document contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "23fd6ac38dd7ad7f"
+  },
+  "settings.about.backup.sensitive.item.steering_user": {
+    "message": "Styringsfilen din: en nøkkel i teksten",
+    "description": "The user's own steering document contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "d94411d38b0a7854"
+  },
+  "settings.about.backup.sensitive.item.unknown": {
+    "message": "Et element som en nyere versjon av Kage utelot",
+    "description": "A left-out item of a kind this version does not know, from an older backup made by a newer build",
+    "_machine_translated": true,
+    "_source_hash": "8de3260cf285f12d"
+  },
+  "settings.about.backup.sensitive.item.host_setting": {
+    "message": "Innstilling «{path}»",
+    "description": "One of Kage's own settings that holds a sign-in or key; path is its location in the settings file, e.g. ui › language",
+    "_machine_translated": true,
+    "_source_hash": "06018b231ec4b901"
+  },
+  "settings.about.backup.sensitive.item.agent_connection": {
+    "message": "Agenttilkobling «{name}»",
+    "description": "An agent connection with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "994c186b1d2a9afc"
+  },
+  "settings.about.backup.sensitive.item.shortcut": {
+    "message": "Snarvei «{name}»",
+    "description": "A shortcut with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "ffa6e6a91b1b3807"
+  },
+  "settings.about.backup.sensitive.item.macro": {
+    "message": "Automatisering «{name}»",
+    "description": "An automation with a credential in one of its settings, such as its summary",
+    "_machine_translated": true,
+    "_source_hash": "7fb669b16c7342a6"
+  },
+  "settings.about.backup.sensitive.item.macro_step": {
+    "message": "Automatisering «{name}»: trinn {step}",
+    "description": "An automation step with a credential in it (for example in a find-and-replace); step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "485f51798f7d2a79"
+  },
+  "settings.about.backup.sensitive.item.context_rule": {
+    "message": "Appmodus «{name}»",
+    "description": "A per-app mode with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "ba4e0a8f5ed49ce7"
+  },
+  "settings.about.backup.sensitive.item.internal_site": {
+    "message": "Internt nettsted «{name}»",
+    "description": "An internal-site profile with a credential in one of its rules",
+    "_machine_translated": true,
+    "_source_hash": "202e184b9fc4d2b3"
+  },
+  "settings.about.backup.sensitive.item.quick_action": {
+    "message": "Hurtighandling «{name}»",
+    "description": "A custom quick action whose prompt or label contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "447dd416f395e6c3"
+  },
   "errors.config.import_unsafe_path": {
     "message": "Denne sikkerhetskopien kan ikke importeres: den ville skrevet utenfor Kages mapper ({path}). Ingenting ble endret.",
     "description": "Returned when a backup archive entry has an unsafe name, or would be written through a symlink or other link on this machine. {path} is the archive entry name or the local path of the link. The import is refused before anything is written.",
@@ -9676,5 +9922,263 @@
     "description": ">extensions command description",
     "_machine_translated": true,
     "_source_hash": "31782aee63fb447e"
+  },
+  "errors.config.export_passphrase_blank": {
+    "message": "En passordfrase kan ikke være tom eller bare bestå av mellomrom.",
+    "description": "Returned when an encrypted export is asked for with a passphrase that is empty or only whitespace",
+    "_machine_translated": true,
+    "_source_hash": "65810c336b4aae0c"
+  },
+  "errors.config.export_too_large": {
+    "message": "Denne sikkerhetskopien ville blitt for stor til å gjenopprettes: en datafil for en utvidelse er over {max_mb} MB, eller alt til sammen er over {total_mb} MB. Ingenting ble lagret.",
+    "description": "Returned when extension data is over the backup size limits; max_mb and total_mb are numbers of megabytes",
+    "_machine_translated": true,
+    "_source_hash": "025cb447a83c3e00"
+  },
+  "errors.config.import_too_large": {
+    "message": "Denne sikkerhetskopien kan ikke importeres: den inneholder mer enn {max_files} filer, en fil over {max_mb} MB eller mer enn {total_mb} MB totalt. Ingenting ble endret.",
+    "description": "Returned when a backup archive is over the size or file-count limits; the import is refused before anything is written. max_files is a count, max_mb and total_mb are numbers of megabytes",
+    "_machine_translated": true,
+    "_source_hash": "830be0307a8c4e2e"
+  },
+  "errors.config.import_passphrase_required": {
+    "message": "Denne sikkerhetskopien er kryptert. Skriv inn passordfrasen.",
+    "description": "Returned when the chosen backup file is encrypted (recognised by its contents, whatever its name) and no passphrase was given; the UI then asks for one",
+    "_machine_translated": true,
+    "_source_hash": "fff7f066c3ca6ae8"
+  },
+  "errors.config.import_wrong_passphrase": {
+    "message": "Passordfrasen åpner ikke denne sikkerhetskopien, eller filen er skadet.",
+    "description": "Returned when an encrypted backup can't be decrypted with the passphrase given; the UI asks again",
+    "_machine_translated": true,
+    "_source_hash": "dde901b03ea582b0"
+  },
+  "settings.about.backup.passphrase_blank": {
+    "message": "En passordfrase kan ikke bare bestå av mellomrom.",
+    "description": "Error when the export passphrase is only whitespace",
+    "_machine_translated": true,
+    "_source_hash": "bdccfebdb6fdc09e"
+  },
+  "settings.about.backup.unlock.wrong": {
+    "message": "Passordfrasen åpnet ikke sikkerhetskopien. Prøv igjen.",
+    "description": "Body of the passphrase prompt when the previous passphrase didn't decrypt the backup",
+    "_machine_translated": true,
+    "_source_hash": "4871f907e2ac1bc5"
+  },
+  "errors.config.export_passphrase_required": {
+    "message": "Skriv inn en passordfrase for å kryptere sikkerhetskopien.",
+    "description": "Returned when an encrypted export is asked for without a passphrase",
+    "_machine_translated": true,
+    "_source_hash": "c9466429cee18235"
+  },
+  "errors.config.import_newer_config": {
+    "message": "Innstillingene i denne sikkerhetskopien kommer fra en nyere versjon av Kage. Oppdater Kage og prøv igjen. Ingenting ble endret.",
+    "description": "Import refused: the backup's config.json uses a config schema newer than this build reads",
+    "_machine_translated": true,
+    "_source_hash": "c1809510e7dce4fe"
+  },
+  "errors.config.import_old_config": {
+    "message": "Innstillingene i denne sikkerhetskopien kommer fra en versjon av Kage som er for gammel til å leses. Ingenting ble endret.",
+    "description": "Import refused: the backup's config.json uses a config schema older than this build can migrate",
+    "_machine_translated": true,
+    "_source_hash": "a7810b496c8621b6"
+  },
+  "errors.config.import_unfinished": {
+    "message": "En tidligere import ble ikke fullført og kunne ikke angres. Start Kage på nytt og prøv igjen. Ingenting ble endret.",
+    "description": "Import refused: an interrupted import is still unresolved, or another Kage process is importing",
+    "_machine_translated": true,
+    "_source_hash": "1ae264d4c97e3848"
+  },
+  "settings.about.backup.mode.title": {
+    "message": "Hva skal sikkerhetskopieres",
+    "description": "Legend of the export choice: encrypted full backup or unencrypted settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "5cc5344da62aa9e5"
+  },
+  "settings.about.backup.mode.encrypted.label": {
+    "message": "Alt, kryptert (anbefalt)",
+    "description": "Export option: an encrypted backup of everything",
+    "_machine_translated": true,
+    "_source_hash": "9c556e0814e2b4ed"
+  },
+  "settings.about.backup.mode.encrypted.description": {
+    "message": "Innstillinger, styringsdokumenter, snarveier, automatiseringer, agentoppsett og alle utvidelser med tilhørende data, også pålogginger. Filen kan bare åpnes med passordfrasen du velger.",
+    "description": "Describes the encrypted full backup",
+    "_machine_translated": true,
+    "_source_hash": "1b7bbdead622401b"
+  },
+  "settings.about.backup.mode.settings_only.label": {
+    "message": "Bare innstillinger, ikke kryptert",
+    "description": "Export option: an unencrypted backup of allowlisted settings only",
+    "_machine_translated": true,
+    "_source_hash": "26910eae1c850e15"
+  },
+  "settings.about.backup.mode.settings_only.description": {
+    "message": "Preferanser for tema, språk, hurtigtaster, vindu, oppdateringer og varsler, hvilke utvidelser som er på og hva de har lov til, og utvidelsesinnstillingene som utviklerne har merket som trygge å kopiere. Ingen passord, nøkler eller pålogginger.",
+    "description": "Describes what an unencrypted settings-only backup holds",
+    "_machine_translated": true,
+    "_source_hash": "73cd01dda69c7e48"
+  },
+  "settings.about.backup.settings_only.left_out_generic": {
+    "message": "Styringsdokumenter, snarveier, automatiseringer, agentoppsett, utvidelsesdata og pålogginger er ikke med i denne filen. Krypter for å ta dem med.",
+    "description": "Shown under the settings-only option: what it never carries",
+    "_machine_translated": true,
+    "_source_hash": "2664e71b17e9148c"
+  },
+  "settings.about.backup.settings_only.left_out_intro": {
+    "message": "Fra denne maskinen utelates dermed:",
+    "description": "Introduces the list of what a settings-only backup of this machine would leave out",
+    "_machine_translated": true,
+    "_source_hash": "7765246cd98e927a"
+  },
+  "settings.about.backup.settings_only.left_out.steering": {
+    "message": "Styringsdokumentene dine",
+    "description": "Left out of a settings-only backup: the custom and learned steering docs",
+    "_machine_translated": true,
+    "_source_hash": "4d8725f629364ea3"
+  },
+  "settings.about.backup.settings_only.left_out.shortcuts": {
+    "message": "{count, plural, one {1 snarvei} other {# snarveier}}",
+    "description": "Left out of a settings-only backup: shortcuts",
+    "_machine_translated": true,
+    "_source_hash": "9be57e3fe5561e72"
+  },
+  "settings.about.backup.settings_only.left_out.automations": {
+    "message": "{count, plural, one {1 automatisering} other {# automatiseringer}}",
+    "description": "Left out of a settings-only backup: automations (macros)",
+    "_machine_translated": true,
+    "_source_hash": "d8ef970dc5155bf3"
+  },
+  "settings.about.backup.settings_only.left_out.quick_actions": {
+    "message": "{count, plural, one {1 egendefinert hurtighandling} other {# egendefinerte hurtighandlinger}}",
+    "description": "Left out of a settings-only backup: custom quick actions (their prompts)",
+    "_machine_translated": true,
+    "_source_hash": "75a9add6e5174867"
+  },
+  "settings.about.backup.settings_only.left_out.app_modes": {
+    "message": "{count, plural, one {1 appmodus} other {# appmoduser}}",
+    "description": "Left out of a settings-only backup: app modes (per-app steering)",
+    "_machine_translated": true,
+    "_source_hash": "6e91491be51672de"
+  },
+  "settings.about.backup.settings_only.left_out.agents": {
+    "message": "{count, plural, one {1 agentoppsett} other {# agentoppsett}}",
+    "description": "Left out of a settings-only backup: agent connections (commands, hosts, models)",
+    "_machine_translated": true,
+    "_source_hash": "f09681e8796e87f9"
+  },
+  "settings.about.backup.settings_only.left_out.internal_sites": {
+    "message": "{count, plural, one {1 internt nettsted} other {# interne nettsteder}}",
+    "description": "Left out of a settings-only backup: internal-site profiles and their scripts",
+    "_machine_translated": true,
+    "_source_hash": "867ae106a9e594e9"
+  },
+  "settings.about.backup.settings_only.left_out.tool_permissions": {
+    "message": "Kommandoer du har tillatt eller avvist, og verktøyene du stoler på",
+    "description": "Left out of a settings-only backup: tool permissions",
+    "_machine_translated": true,
+    "_source_hash": "deacf2ef30e0b531"
+  },
+  "settings.about.backup.settings_only.left_out.stores": {
+    "message": "Adresser til utvidelsesbutikker",
+    "description": "Left out of a settings-only backup: custom extension store URLs",
+    "_machine_translated": true,
+    "_source_hash": "ad89f9de431da387"
+  },
+  "settings.about.backup.settings_only.left_out.extension_data": {
+    "message": "{count, plural, one {Utvidelsesdata (1 fil)} other {Utvidelsesdata (# filer)}}",
+    "description": "Left out of a settings-only backup: what extensions store",
+    "_machine_translated": true,
+    "_source_hash": "e4f60aca77bfa742"
+  },
+  "settings.about.backup.settings_only.left_out.extension_settings": {
+    "message": "{count, plural, one {1 utvidelsesinnstilling som ikke er merket som trygg å kopiere} other {# utvidelsesinnstillinger som ikke er merket som trygge å kopiere}}",
+    "description": "Left out of a settings-only backup: extension settings their manifests do not mark safe for an unencrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "344fff7fbd1a19bf"
+  },
+  "settings.about.backup.settings_only.left_out_outro": {
+    "message": "Krypter for å ta dem med.",
+    "description": "Ends the list of what a settings-only backup leaves out",
+    "_machine_translated": true,
+    "_source_hash": "4cea893922c443c5"
+  },
+  "settings.about.backup.settings_only.flagged_intro": {
+    "message": "{count, plural, one {Denne innstillingen er også utelatt, fordi verdien ikke ser ut som en innstilling:} other {Disse innstillingene er også utelatt, fordi verdiene ikke ser ut som innstillinger:}}",
+    "description": "Introduces allowlisted settings left out of a settings-only backup because their values look like they may hold a password or key",
+    "_machine_translated": true,
+    "_source_hash": "4145f683d7a62adb"
+  },
+  "settings.about.backup.settings_only.flagged_extension_setting": {
+    "message": "{extension}: innstillingen «{field}»",
+    "description": "One extension setting left out of a settings-only backup because its value looks like a secret",
+    "_machine_translated": true,
+    "_source_hash": "cec5134d93d5c385"
+  },
+  "settings.about.backup.settings_only.list_unavailable": {
+    "message": "Kunne ikke vise hva som finnes på denne maskinen: {message}",
+    "description": "Shown when the list of what a settings-only backup leaves out could not be loaded",
+    "_machine_translated": true,
+    "_source_hash": "cf2819af43db7da0"
+  },
+  "settings.about.backup.saved_settings_only": {
+    "message": "✓ Lagret {size} til {path}. Bare innstillinger: krypter en sikkerhetskopi for å ta med alt annet.",
+    "description": "Status after saving a settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "13c034d7e15fd345"
+  },
+  "settings.about.import.summary.settings_only": {
+    "message": "{count, plural, one {✓ Gjenopprettet 1 innstilling} other {✓ Gjenopprettet # innstillinger}}{exported_at}. Alt annet på denne maskinen ble latt være som det var.",
+    "description": "Summary after importing a settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "5834f55a08a58477"
+  },
+  "errors.config.import_local_newer": {
+    "message": "Kage-innstillingene på denne maskinen kommer fra en nyere versjon av Kage, så Kage kjører med standardinnstillinger og kan ikke lagre en import. Oppdater Kage og prøv igjen. Ingenting ble endret.",
+    "description": "Import refused: config.json on disk was written by a newer build and is being preserved, so saves are off this session",
+    "_machine_translated": true,
+    "_source_hash": "1324978b3fb8f283"
+  },
+  "errors.config.import_config_too_large": {
+    "message": "Innstillingene i denne sikkerhetskopien er for store til å brukes (over {max_kb} KB). Ingenting ble endret.",
+    "description": "Import refused: the merged settings would be larger than Kage reads back at startup",
+    "_machine_translated": true,
+    "_source_hash": "7b731c6af65accfd"
+  },
+  "store.card.approve": {
+    "message": "Godkjenn",
+    "description": "Store card button for an installed extension that is off until the user approves what it asks to do (shows the permission prompt)",
+    "_machine_translated": true,
+    "_source_hash": "94d7354658590a7d"
+  },
+  "store.card.approve.title": {
+    "message": "Se gjennom og godkjenn det denne utvidelsen ber om å gjøre",
+    "description": "Tooltip of the Approve button on a Store card",
+    "_machine_translated": true,
+    "_source_hash": "088194f275bba30e"
+  },
+  "store.card.approving": {
+    "message": "Godkjenner …",
+    "description": "Store card status while the Approve flow runs",
+    "_machine_translated": true,
+    "_source_hash": "30798f331850fc7a"
+  },
+  "store.approve.failed.title": {
+    "message": "Godkjenningen mislyktes",
+    "description": "Title of the alert shown when approving an installed extension fails",
+    "_machine_translated": true,
+    "_source_hash": "51fe2ab11850ea8f"
+  },
+  "settings.about.import.summary.kept_local_settings": {
+    "message": "{count, plural, one {Beholdt innstillingene og de lagrede dataene på denne maskinen for {names}: påloggingen her forblir som den er, og sikkerhetskopien inneholdt ingen egen.} other {Beholdt innstillingene og de lagrede dataene på denne maskinen for {names}: påloggingene her forblir som de er, og sikkerhetskopien inneholdt ingen egne.}}",
+    "description": "Import summary: extensions that kept this machine's settings and data whole, because their sign-in on this machine stays and the backup's settings could have sent it somewhere else; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "0fec5fa99b8bc6c2"
+  },
+  "settings.about.import.summary.needs_approval": {
+    "message": "{count, plural, one {# utvidelse må godkjennes på nytt: {names}. Den er slått av til du godkjenner den i Store.} other {# utvidelser må godkjennes på nytt: {names}. De er slått av til du godkjenner dem i Store.}}",
+    "description": "Import summary: installed extensions switched off because what they were allowed to do comes only from approval on this machine, never from a backup; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "f58bf3d94c5be6d5"
   }
 }

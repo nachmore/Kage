@@ -182,7 +182,13 @@ impl Default for Config {
 
 impl Config {
     /// Maximum config file size (1 MB). Anything larger is likely corrupted.
-    const MAX_CONFIG_SIZE: u64 = 1024 * 1024;
+    pub(crate) const MAX_CONFIG_SIZE: u64 = 1024 * 1024;
+
+    /// Whether `save` is a no-op this session: config.json on disk came
+    /// from a newer build and is being preserved.
+    pub fn saves_suspended() -> bool {
+        PRESERVE_NEWER_FILE.load(Ordering::SeqCst)
+    }
 
     pub fn load() -> Result<Self> {
         let config_path = Self::get_config_path()?;

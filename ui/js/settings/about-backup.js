@@ -1,46 +1,198 @@
-import { t } from '../shared/i18n.js';
+import { activeLanguage, t } from '../shared/i18n.js';
 import { formatBytes } from '../shared/tool-utils.js';
 import { getSettingsManager } from './module-registry.js';
+
+/** AppError key: the chosen backup is encrypted and no passphrase was given. */
+export const IMPORT_PASSPHRASE_REQUIRED_KEY = 'errors.config.import_passphrase_required';
+
+/** AppError key: the passphrase didn't decrypt the backup (or it's damaged). */
+export const IMPORT_WRONG_PASSPHRASE_KEY = 'errors.config.import_wrong_passphrase';
+
+/** The two kinds of backup (`ExportMode` in src/config_export.rs). */
+export const MODE_ENCRYPTED = 'encrypted';
+export const MODE_SETTINGS_ONLY = 'settings_only';
+
+/**
+ * Settings → About → Backup & restore markup. The section's behaviour lives
+ * in the methods {@link installAboutBackupMethods} adds to the About module.
+ *
+ * Export offers exactly two kinds of backup: everything, encrypted with a
+ * passphrase (the default), or an unencrypted file of settings only — an
+ * allowlist the backend enforces, so no secret can be in it. Before a
+ * settings-only file is saved, the section lists in plain words what it
+ * leaves out.
+ */
+export function renderBackupSection() {
+    return `
+                <div class="about-logging-section">
+                    <div class="about-logging-header" id="backupToggle" role="button" tabindex="0" aria-expanded="false" aria-controls="backupBody">
+                        <span class="about-logging-arrow" id="backupArrow" aria-hidden="true">▶</span>
+                        <span>${t('settings.about.backup.title')}</span>
+                    </div>
+                    <div class="about-logging-body" id="backupBody" style="display:none;">
+                        <div class="setting-description" style="margin-bottom:12px;">
+                            ${t('settings.about.backup.description')}
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-label">${t('settings.about.backup.export.label')}</div>
+                            <fieldset id="backupMode" class="backup-mode">
+                                <legend class="backup-mode-title">${t('settings.about.backup.mode.title')}</legend>
+                                <div class="backup-mode-option">
+                                    <input type="radio" name="backupMode" id="backupModeEncrypted" value="${MODE_ENCRYPTED}" checked aria-describedby="backupModeEncryptedDesc">
+                                    <div class="backup-mode-option-text">
+                                        <label for="backupModeEncrypted">${t('settings.about.backup.mode.encrypted.label')}</label>
+                                        <div class="setting-description" id="backupModeEncryptedDesc">${t('settings.about.backup.mode.encrypted.description')}</div>
+                                        <div id="backupPassphraseRow" class="backup-passphrase-row">
+                                            <input type="password" id="backupPassphrase" class="setting-input" placeholder="${t('settings.about.backup.passphrase.placeholder')}" aria-label="${t('settings.about.backup.passphrase.placeholder')}" aria-describedby="backupPassphraseNote" autocomplete="new-password" style="margin-bottom:6px;">
+                                            <input type="password" id="backupPassphraseConfirm" class="setting-input" placeholder="${t('settings.about.backup.passphrase.confirm_placeholder')}" aria-label="${t('settings.about.backup.passphrase.confirm_placeholder')}" autocomplete="new-password">
+                                            <div class="setting-description" id="backupPassphraseNote" style="margin-top:4px;font-size:11px;">${t('settings.about.backup.passphrase.note')}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="backup-mode-option">
+                                    <input type="radio" name="backupMode" id="backupModeSettings" value="${MODE_SETTINGS_ONLY}" aria-describedby="backupModeSettingsDesc backupLeftOutGeneric backupLeftOut">
+                                    <div class="backup-mode-option-text">
+                                        <label for="backupModeSettings">${t('settings.about.backup.mode.settings_only.label')}</label>
+                                        <div class="setting-description" id="backupModeSettingsDesc">${t('settings.about.backup.mode.settings_only.description')}</div>
+                                        <p class="setting-description backup-left-out-generic" id="backupLeftOutGeneric">${t('settings.about.backup.settings_only.left_out_generic')}</p>
+                                        <div class="backup-left-out" id="backupLeftOut" hidden>
+                                            <p class="setting-description" id="backupLeftOutIntro">${t('settings.about.backup.settings_only.left_out_intro')}</p>
+                                            <ul class="backup-left-out-list" id="backupLeftOutList"></ul>
+                                            <p class="setting-description" id="backupFlaggedIntro" hidden></p>
+                                            <ul class="backup-left-out-list" id="backupFlaggedList" hidden></ul>
+                                            <p class="setting-description" id="backupLeftOutOutro">${t('settings.about.backup.settings_only.left_out_outro')}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </fieldset>
+                            <div class="setting-control backup-export-actions" style="margin-top:8px;">
+                                <button class="setting-button" id="backupExportBtn" type="button">${t('settings.about.backup.export_btn')}</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-label">${t('settings.about.backup.import.label')}</div>
+                            <div class="setting-description">${t('settings.about.backup.import.description')}</div>
+                            <div class="setting-control" style="margin-top:8px;">
+                                <button class="setting-button" id="backupImportBtn" type="button">${t('settings.about.backup.import_btn')}</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-label">${t('settings.about.backup.config_folder.label')}</div>
+                            <div class="setting-description">${t('settings.about.backup.config_folder.description')}</div>
+                            <div class="setting-control" style="margin-top:8px;">
+                                <button class="setting-button" id="openConfigFolderBtn" type="button">${t('settings.about.action.open_config')}</button>
+                            </div>
+                        </div>
+
+                        <div id="backupStatus" class="setting-description" role="status" aria-live="polite" style="min-height:1em;margin-top:8px;"></div>
+                    </div>
+                </div>`;
+}
+
+/**
+ * Bidi-isolate a value placed inside a localised sentence (FSI … PDI), so a
+ * path or a Latin name in an RTL message keeps its punctuation in place.
+ */
+function isolate(value) {
+    return `\u2068${value}\u2069`;
+}
+
+/** Join names as a list in the UI language ("A, B and C"). */
+function formatList(items) {
+    items = items.map(isolate);
+    try {
+        return new Intl.ListFormat(activeLanguage() || undefined, {
+            style: 'long',
+            type: 'conjunction',
+        }).format(items);
+    } catch {
+        return items.join(', ');
+    }
+}
+
+const $ = (id) => document.getElementById(id);
+
+/**
+ * How each kind of thing a settings-only backup leaves out is worded (the
+ * backend sends `{ kind, count }`; ICU plurals are rendered here).
+ */
+const LEFT_OUT_LABELS = Object.freeze({
+    steering: (count) => t('settings.about.backup.settings_only.left_out.steering', { count }),
+    shortcuts: (count) => t('settings.about.backup.settings_only.left_out.shortcuts', { count }),
+    automations: (count) =>
+        t('settings.about.backup.settings_only.left_out.automations', { count }),
+    quick_actions: (count) =>
+        t('settings.about.backup.settings_only.left_out.quick_actions', { count }),
+    app_modes: (count) => t('settings.about.backup.settings_only.left_out.app_modes', { count }),
+    agents: (count) => t('settings.about.backup.settings_only.left_out.agents', { count }),
+    internal_sites: (count) =>
+        t('settings.about.backup.settings_only.left_out.internal_sites', { count }),
+    tool_permissions: (count) =>
+        t('settings.about.backup.settings_only.left_out.tool_permissions', { count }),
+    stores: (count) => t('settings.about.backup.settings_only.left_out.stores', { count }),
+    extension_data: (count) =>
+        t('settings.about.backup.settings_only.left_out.extension_data', { count }),
+    extension_settings: (count) =>
+        t('settings.about.backup.settings_only.left_out.extension_settings', { count }),
+});
+
+/** The words for one left-out item; an unknown kind (newer backend) by name. */
+export function leftOutLabel(item) {
+    if (!Object.hasOwn(LEFT_OUT_LABELS, item?.kind)) return String(item?.kind ?? '');
+    return LEFT_OUT_LABELS[item.kind](Number(item.count) || 0);
+}
+
+/** Fill a list with text items (labels come from the backend: never markup). */
+function fillList(list, labels) {
+    if (!list) return;
+    list.replaceChildren(
+        ...labels.map((label) => {
+            const li = document.createElement('li');
+            li.dir = 'auto';
+            li.textContent = label;
+            return li;
+        })
+    );
+}
 
 export function installAboutBackupMethods(AboutSettingsModule) {
     Object.assign(AboutSettingsModule.prototype, {
         _wireBackupSection() {
-            const toggle = document.getElementById('backupToggle');
+            const toggle = $('backupToggle');
             if (toggle) {
                 toggle.addEventListener('click', () => this._toggleBackup());
-            }
-            const encrypt = document.getElementById('backupEncryptToggle');
-            if (encrypt) {
-                encrypt.addEventListener('change', () => {
-                    const row = document.getElementById('backupPassphraseRow');
-                    if (row) row.style.display = encrypt.checked ? '' : 'none';
-                    if (!encrypt.checked) {
-                        // Wipe the field so a half-typed passphrase doesn't
-                        // linger in DOM if the user toggles off.
-                        const pw = document.getElementById('backupPassphrase');
-                        const pw2 = document.getElementById('backupPassphraseConfirm');
-                        if (pw) pw.value = '';
-                        if (pw2) pw2.value = '';
+                toggle.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        this._toggleBackup();
                     }
                 });
             }
-            const exportBtn = document.getElementById('backupExportBtn');
+            for (const id of ['backupModeEncrypted', 'backupModeSettings']) {
+                $(id)?.addEventListener('change', () => this._onBackupModeChange());
+            }
+            this._onBackupModeChange();
+            const exportBtn = $('backupExportBtn');
             if (exportBtn) exportBtn.addEventListener('click', () => this._runBackupExport());
-            const importBtn = document.getElementById('backupImportBtn');
+            const importBtn = $('backupImportBtn');
             if (importBtn) importBtn.addEventListener('click', () => this._runBackupImport());
         },
 
         _toggleBackup() {
-            const body = document.getElementById('backupBody');
-            const arrow = document.getElementById('backupArrow');
+            const body = $('backupBody');
+            const arrow = $('backupArrow');
             if (!body || !arrow) return;
             const visible = body.style.display !== 'none';
             body.style.display = visible ? 'none' : '';
             arrow.classList.toggle('expanded', !visible);
+            $('backupToggle')?.setAttribute('aria-expanded', String(!visible));
         },
 
         _setBackupStatus(text, kind) {
-            const el = document.getElementById('backupStatus');
+            const el = $('backupStatus');
             if (!el) return;
             el.textContent = text || '';
             el.style.color =
@@ -51,27 +203,136 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                       : '';
         },
 
+        _clearPassphrases() {
+            const pw = $('backupPassphrase');
+            const pw2 = $('backupPassphraseConfirm');
+            if (pw) pw.value = '';
+            if (pw2) pw2.value = '';
+        },
+
+        /** 'encrypted' | 'settings_only' — the export choice. */
+        _selectedBackupMode() {
+            return $('backupModeSettings')?.checked ? MODE_SETTINGS_ONLY : MODE_ENCRYPTED;
+        },
+
+        /**
+         * Show the passphrase fields only for an encrypted backup (wiping
+         * them when it's not chosen, so a half-typed passphrase doesn't
+         * linger in the DOM), and list what a settings-only one leaves out
+         * when that's chosen.
+         */
+        _onBackupModeChange() {
+            const settingsOnly = this._selectedBackupMode() === MODE_SETTINGS_ONLY;
+            const row = $('backupPassphraseRow');
+            if (row) row.hidden = settingsOnly;
+            if (settingsOnly) {
+                this._clearPassphrases();
+                this._leftOutShown = this._showLeftOut();
+            } else {
+                const box = $('backupLeftOut');
+                if (box) box.hidden = true;
+                this._leftOutShown = null;
+            }
+        },
+
+        /**
+         * Load and show what a settings-only backup of this machine leaves
+         * out. Resolves once it's on screen (or the failure is). Never
+         * carries a value: the backend returns labels and counts only.
+         */
+        async _showLeftOut() {
+            const box = $('backupLeftOut');
+            const list = $('backupLeftOutList');
+            const flaggedIntro = $('backupFlaggedIntro');
+            const flaggedList = $('backupFlaggedList');
+            let preview;
+            try {
+                preview = await window.__TAURI__.core.invoke('preview_config_export');
+            } catch (e) {
+                fillList(list, [
+                    t('settings.about.backup.settings_only.list_unavailable', {
+                        message: this._formatError(e),
+                    }),
+                ]);
+                if (flaggedIntro) flaggedIntro.hidden = true;
+                if (flaggedList) flaggedList.hidden = true;
+                if (box) box.hidden = false;
+                return;
+            }
+            // The answer may arrive after the user switched back.
+            if (this._selectedBackupMode() !== MODE_SETTINGS_ONLY) return;
+            const leftOut = Array.isArray(preview?.left_out) ? preview.left_out : [];
+            const flagged = Array.isArray(preview?.flagged) ? preview.flagged : [];
+            fillList(list, leftOut.map(leftOutLabel));
+            const intro = $('backupLeftOutIntro');
+            if (intro) intro.hidden = leftOut.length === 0;
+            if (list) list.hidden = leftOut.length === 0;
+            if (flaggedIntro) {
+                flaggedIntro.hidden = flagged.length === 0;
+                flaggedIntro.textContent = t('settings.about.backup.settings_only.flagged_intro', {
+                    count: flagged.length,
+                });
+            }
+            if (flaggedList) {
+                flaggedList.hidden = flagged.length === 0;
+                fillList(flaggedList, flagged);
+            }
+            if (box) box.hidden = leftOut.length === 0 && flagged.length === 0;
+        },
+
+        /**
+         * Export flow. An encrypted backup needs a passphrase, typed twice.
+         * A settings-only one is saved only once the list of what it leaves
+         * out is on screen. There is no unencrypted full backup.
+         */
         async _runBackupExport() {
-            const encryptEl = document.getElementById('backupEncryptToggle');
-            const encrypt = !!encryptEl?.checked;
+            // One export at a time: a double-click would otherwise open two
+            // save dialogs (and run Argon2id twice).
+            if (this._backupExportBusy) return;
+            this._backupExportBusy = true;
+            const exportBtn = $('backupExportBtn');
+            exportBtn?.setAttribute('aria-busy', 'true');
+            try {
+                await this._runBackupExportOnce();
+            } finally {
+                this._backupExportBusy = false;
+                exportBtn?.removeAttribute('aria-busy');
+            }
+        },
+
+        async _runBackupExportOnce() {
+            const mode = this._selectedBackupMode();
+            const encrypt = mode === MODE_ENCRYPTED;
             let passphrase = null;
             if (encrypt) {
-                const pw = document.getElementById('backupPassphrase')?.value || '';
-                const pw2 = document.getElementById('backupPassphraseConfirm')?.value || '';
+                const pw = $('backupPassphrase')?.value || '';
+                const pw2 = $('backupPassphraseConfirm')?.value || '';
                 if (!pw) {
                     this._setBackupStatus(t('settings.about.backup.passphrase_required'), 'error');
+                    $('backupPassphrase')?.focus();
+                    return;
+                }
+                // Refuse an all-whitespace passphrase, but send any other
+                // one exactly as typed: spaces around it are part of it.
+                if (!pw.trim()) {
+                    this._setBackupStatus(t('settings.about.backup.passphrase_blank'), 'error');
+                    $('backupPassphrase')?.focus();
                     return;
                 }
                 if (pw !== pw2) {
-                    this._setBackupStatus("Passphrases don't match.", 'error');
+                    this._setBackupStatus(t('settings.about.backup.passphrase_mismatch'), 'error');
+                    $('backupPassphraseConfirm')?.focus();
                     return;
                 }
                 passphrase = pw;
+            } else {
+                // What it leaves out is listed before anything is saved.
+                await (this._leftOutShown || (this._leftOutShown = this._showLeftOut()));
             }
 
             const invoke = window.__TAURI__.core.invoke;
             const dialog = window.__TAURI__.dialog;
-            let defaultName = 'kage-backup.kage';
+            let defaultName = encrypt ? 'kage-backup.kage.enc' : 'kage-settings.kage';
             try {
                 defaultName = await invoke('export_config_default_filename', {
                     encrypted: encrypt,
@@ -84,8 +345,12 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                     defaultPath: defaultName,
                     filters: [
                         {
-                            name: encrypt ? 'Kage encrypted backup' : 'Kage backup',
-                            extensions: encrypt ? ['enc', 'kage'] : ['kage'],
+                            name: encrypt
+                                ? t('settings.about.backup.filter.encrypted')
+                                : t('settings.about.backup.filter.plain'),
+                            // Encrypted backups end in .enc, so import
+                            // knows to ask for the passphrase up front.
+                            extensions: encrypt ? ['enc'] : ['kage'],
                         },
                     ],
                 });
@@ -100,26 +365,133 @@ export function installAboutBackupMethods(AboutSettingsModule) {
             }
             if (!target) return; // user cancelled
 
-            this._setBackupStatus('Exporting…');
+            this._setBackupStatus(t('settings.about.backup.exporting'));
             try {
                 const bytes = await invoke('export_config_bundle', {
                     path: target,
+                    mode,
                     passphrase,
                 });
-                this._setBackupStatus(`✓ Saved ${formatBytes(bytes)} to ${target}`, 'success');
+                const vars = { size: formatBytes(bytes), path: isolate(target) };
+                this._setBackupStatus(
+                    encrypt
+                        ? t('settings.about.backup.saved', vars)
+                        : t('settings.about.backup.saved_settings_only', vars),
+                    'success'
+                );
                 // Clear passphrase fields so the value doesn't persist
                 // visibly — Argon2id derived a key once and we don't need
                 // it again.
-                const pw = document.getElementById('backupPassphrase');
-                const pw2 = document.getElementById('backupPassphraseConfirm');
-                if (pw) pw.value = '';
-                if (pw2) pw2.value = '';
+                this._clearPassphrases();
             } catch (e) {
-                this._setBackupStatus('Export failed: ' + this._formatError(e), 'error');
+                this._setBackupStatus(
+                    t('settings.about.backup.export_failed', { message: this._formatError(e) }),
+                    'error'
+                );
             }
         },
 
+        /**
+         * The import summary line, including what needs signing in again,
+         * what kept this machine's settings, and which extensions are off
+         * until the user approves them.
+         */
+        _importSummaryText(summary) {
+            const exportedAt = summary.exported_at
+                ? t('settings.about.import.summary.exported_at', { date: summary.exported_at })
+                : '';
+            const list = (v) => (Array.isArray(v) ? v : []);
+            const approve = list(summary.needs_approval);
+            const withApprovals = (sentences) => {
+                if (approve.length) {
+                    sentences.push(
+                        t('settings.about.import.summary.needs_approval', {
+                            count: approve.length,
+                            names: formatList(approve),
+                        })
+                    );
+                }
+                return sentences.join(' ');
+            };
+            if (summary.kind === MODE_SETTINGS_ONLY) {
+                return withApprovals([
+                    t('settings.about.import.summary.settings_only', {
+                        count: summary.settings || 0,
+                        exported_at: exportedAt,
+                    }),
+                ]);
+            }
+            const parts = [];
+            parts.push(t('settings.about.import.summary.shortcuts', { count: summary.shortcuts }));
+            parts.push(
+                t('settings.about.import.summary.extensions', { count: summary.extensions })
+            );
+            if (summary.steering_bytes > 0) {
+                parts.push(
+                    t('settings.about.import.summary.steering', {
+                        size: formatBytes(summary.steering_bytes),
+                    })
+                );
+            }
+            const sentences = [
+                t('settings.about.import.success', {
+                    parts: parts.join(', '),
+                    exported_at: exportedAt,
+                }),
+            ];
+            const signIn = Array.isArray(summary.sign_in_again) ? summary.sign_in_again : [];
+            const reenter = Array.isArray(summary.reenter) ? summary.reenter : [];
+            if (signIn.length) {
+                sentences.push(
+                    t('settings.about.import.summary.sign_in_again', { names: formatList(signIn) })
+                );
+            }
+            if (reenter.length) {
+                sentences.push(
+                    t('settings.about.import.summary.reenter', { items: formatList(reenter) })
+                );
+            }
+            if (summary.left_out > 0 && !signIn.length && !reenter.length) {
+                sentences.push(
+                    t('settings.about.import.summary.kept_local', { count: summary.left_out })
+                );
+            }
+            const keptWhole = list(summary.kept_local);
+            if (keptWhole.length) {
+                sentences.push(
+                    t('settings.about.import.summary.kept_local_settings', {
+                        count: keptWhole.length,
+                        names: formatList(keptWhole),
+                    })
+                );
+            }
+            return withApprovals(sentences);
+        },
+
         async _runBackupImport() {
+            // One import at a time: a double-click would otherwise open two
+            // file dialogs and two overwrite prompts.
+            if (this._backupImportBusy) return;
+            this._backupImportBusy = true;
+            const importBtn = $('backupImportBtn');
+            importBtn?.setAttribute('aria-busy', 'true');
+            try {
+                await this._runBackupImportOnce();
+            } finally {
+                this._backupImportBusy = false;
+                importBtn?.removeAttribute('aria-busy');
+            }
+        },
+
+        /**
+         * Import flow: pick a file, confirm the overwrite, then import. A
+         * name ending in `.enc` asks for the passphrase first. Any other
+         * file is tried without one; the backend recognises an encrypted
+         * file by its contents and asks for the passphrase, so a backup
+         * renamed to `.kage` still opens. A wrong passphrase asks again
+         * until it works, another error occurs, or the user cancels.
+         */
+        async _runBackupImportOnce() {
             const invoke = window.__TAURI__.core.invoke;
             const dialog = window.__TAURI__.dialog;
 
@@ -129,8 +501,11 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                     multiple: false,
                     directory: false,
                     filters: [
-                        { name: 'Kage backup', extensions: ['kage', 'enc'] },
-                        { name: 'All files', extensions: ['*'] },
+                        {
+                            name: t('settings.about.backup.filter.plain'),
+                            extensions: ['kage', 'enc'],
+                        },
+                        { name: t('settings.about.backup.filter.all'), extensions: ['*'] },
                     ],
                 });
             } catch (e) {
@@ -144,22 +519,7 @@ export function installAboutBackupMethods(AboutSettingsModule) {
             }
             if (!chosen || typeof chosen !== 'string') return;
 
-            // Detect encryption by extension. `.kage.enc` and `.enc` both
-            // route through the encrypted unwrap; `.kage` is plain. The
-            // backend also has a runtime check on the magic prefix, so a
-            // user who renames their file is still safe.
-            const looksEncrypted = /\.enc$/i.test(chosen);
-            let passphrase = null;
-            if (looksEncrypted) {
-                passphrase = await this._promptForPassphrase();
-                if (passphrase === null) {
-                    // user cancelled the passphrase prompt
-                    return;
-                }
-            }
-
-            // Confirm before clobbering the local config — import
-            // *replaces* (after sanitising the device-local fields).
+            // Confirm before replacing the local settings.
             try {
                 const { ask } = window.__TAURI__.dialog || {};
                 if (typeof ask === 'function') {
@@ -171,43 +531,43 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                 }
             } catch {}
 
-            this._setBackupStatus(t('settings.about.import.importing'));
-            let summary;
-            try {
-                summary = await invoke('import_config_bundle', {
-                    path: chosen,
-                    passphrase,
-                });
-            } catch (e) {
-                this._setBackupStatus(
-                    t('settings.about.import.failed', { message: this._formatError(e) }),
-                    'error'
-                );
-                return;
+            // A `.enc` name is a strong hint: ask before the first try.
+            let passphrase = null;
+            if (/\.enc$/i.test(chosen)) {
+                passphrase = await this._promptForPassphrase();
+                if (passphrase === null) return; // cancelled
             }
 
-            const parts = [];
-            parts.push(t('settings.about.import.summary.shortcuts', { count: summary.shortcuts }));
-            parts.push(
-                t('settings.about.import.summary.extensions', { count: summary.extensions })
-            );
-            if (summary.steering_bytes > 0) {
-                parts.push(
-                    t('settings.about.import.summary.steering', {
-                        size: formatBytes(summary.steering_bytes),
-                    })
-                );
+            this._setBackupStatus(t('settings.about.import.importing'));
+            let summary;
+            for (;;) {
+                try {
+                    summary = await invoke('import_config_bundle', {
+                        path: chosen,
+                        passphrase,
+                    });
+                    break;
+                } catch (e) {
+                    const wrong = e?.key === IMPORT_WRONG_PASSPHRASE_KEY;
+                    if (!wrong && e?.key !== IMPORT_PASSPHRASE_REQUIRED_KEY) {
+                        this._setBackupStatus(
+                            t('settings.about.import.failed', {
+                                message: this._formatError(e),
+                            }),
+                            'error'
+                        );
+                        return;
+                    }
+                    passphrase = await this._promptForPassphrase({ retry: wrong });
+                    if (passphrase === null) {
+                        // Cancelled: nothing was imported, nothing to report.
+                        this._setBackupStatus('');
+                        return;
+                    }
+                }
             }
-            const exportedAt = summary.exported_at
-                ? t('settings.about.import.summary.exported_at', { date: summary.exported_at })
-                : '';
-            this._setBackupStatus(
-                t('settings.about.import.success', {
-                    parts: parts.join(', '),
-                    exported_at: exportedAt,
-                }),
-                'success'
-            );
+
+            this._setBackupStatus(this._importSummaryText(summary), 'success');
 
             // The bundle replaced config.json, but every module's form still
             // holds pre-import values; a later Save would write them back
@@ -234,51 +594,75 @@ export function installAboutBackupMethods(AboutSettingsModule) {
         },
 
         /**
-         * Prompt for a passphrase via a tiny inline overlay. Returns the
-         * string on Enter, or `null` on cancel/Escape. Lives inline (not as
-         * its own class) because every other passphrase prompt in the
-         * codebase is going through the same UX — keeping it focused here
-         * avoids the abstraction and stays auditable.
+         * Prompt for a passphrase in a small modal dialog. Resolves to the
+         * string on Unlock/Enter, or `null` on Cancel/Escape. Focus moves
+         * into the dialog, Tab stays inside it, and focus returns to where
+         * it was when it closes. With `retry`, the body says the last
+         * passphrase didn't work.
          */
-        _promptForPassphrase() {
+        _promptForPassphrase({ retry = false } = {}) {
             return new Promise((resolve) => {
+                const returnFocus = document.activeElement;
                 const overlay = document.createElement('div');
                 overlay.className = 'backup-passphrase-overlay';
                 overlay.innerHTML = `
-                <div class="backup-passphrase-box">
-                    <div class="backup-passphrase-title">Enter passphrase</div>
-                    <div class="backup-passphrase-desc">This file is encrypted. Enter the passphrase you used when exporting.</div>
-                    <input type="password" class="setting-input" autocomplete="off" spellcheck="false">
+                <div class="backup-passphrase-box" role="dialog" aria-modal="true" aria-labelledby="backupUnlockTitle" aria-describedby="backupUnlockDesc">
+                    <div class="backup-passphrase-title" id="backupUnlockTitle"></div>
+                    <div class="backup-passphrase-desc" id="backupUnlockDesc"></div>
+                    <input type="password" class="setting-input" autocomplete="off" spellcheck="false" aria-labelledby="backupUnlockTitle">
                     <div class="backup-passphrase-actions">
-                        <button class="setting-button backup-passphrase-cancel" type="button">Cancel</button>
-                        <button class="setting-button backup-passphrase-ok" type="button">Unlock</button>
+                        <button class="setting-button backup-passphrase-cancel" type="button"></button>
+                        <button class="setting-button backup-passphrase-ok" type="button"></button>
                     </div>
                 </div>
             `;
+                overlay.querySelector('#backupUnlockTitle').textContent = t(
+                    'settings.about.backup.unlock.title'
+                );
+                overlay.querySelector('#backupUnlockDesc').textContent = retry
+                    ? t('settings.about.backup.unlock.wrong')
+                    : t('settings.about.backup.unlock.description');
+                const cancelBtn = overlay.querySelector('.backup-passphrase-cancel');
+                const okBtn = overlay.querySelector('.backup-passphrase-ok');
+                cancelBtn.textContent = t('settings.about.backup.unlock.cancel');
+                okBtn.textContent = t('settings.about.backup.unlock.ok');
                 document.body.appendChild(overlay);
                 const input = overlay.querySelector('input');
-                const cancel = () => {
-                    overlay.remove();
-                    resolve(null);
-                };
-                const ok = () => {
-                    const v = input.value;
-                    overlay.remove();
-                    resolve(v);
-                };
-                overlay
-                    .querySelector('.backup-passphrase-cancel')
-                    .addEventListener('click', cancel);
-                overlay.querySelector('.backup-passphrase-ok').addEventListener('click', ok);
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
+                const order = [input, cancelBtn, okBtn];
+                // On the document, not the overlay: a click on the backdrop
+                // moves focus to <body>, and Escape / Tab must still work.
+                const onKeydown = (e) => {
+                    if (e.key === 'Escape') {
                         e.preventDefault();
-                        ok();
-                    } else if (e.key === 'Escape') {
+                        close(null);
+                    } else if (e.key === 'Enter' && e.target === input) {
                         e.preventDefault();
-                        cancel();
+                        close(input.value);
+                    } else if (e.key === 'Tab') {
+                        // Keep focus inside the dialog.
+                        const i = order.indexOf(document.activeElement);
+                        const next = e.shiftKey
+                            ? order[(i <= 0 ? order.length : i) - 1]
+                            : order[(i + 1) % order.length];
+                        e.preventDefault();
+                        next.focus();
+                    }
+                };
+                const close = (value) => {
+                    document.removeEventListener('keydown', onKeydown, true);
+                    overlay.remove();
+                    if (returnFocus && typeof returnFocus.focus === 'function') returnFocus.focus();
+                    resolve(value);
+                };
+                document.addEventListener('keydown', onKeydown, true);
+                overlay.addEventListener('mousedown', (e) => {
+                    if (e.target === overlay) {
+                        e.preventDefault();
+                        input.focus();
                     }
                 });
+                cancelBtn.addEventListener('click', () => close(null));
+                okBtn.addEventListener('click', () => close(input.value));
                 setTimeout(() => input.focus(), 0);
             });
         },

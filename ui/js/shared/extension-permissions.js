@@ -308,6 +308,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // every byte of user config; unconditionally off-limits to
     // extensions.
     export_config_default_filename: null,
+    preview_config_export: null,
     export_config_bundle: null,
     import_config_bundle: null,
     // Generic "write text to a user-picked path". Backs the chat
@@ -494,6 +495,22 @@ export function normalizePermissions(raw, extensionId) {
         out.push(cap);
     }
     return out;
+}
+
+/**
+ * Whether a recorded grant (`config.extension_grants[id]`, or nothing)
+ * covers every capability a manifest's `permissions` asks for — the same
+ * test the backend applies before a backup import may switch an extension
+ * on (`config_export::consent`). An extension it doesn't cover runs with
+ * only what was granted until the user approves the rest.
+ *
+ * @param {{granted?: string[]}|null|undefined} record
+ * @param {unknown} permissions
+ * @param {string} extensionId
+ */
+export function grantCovers(record, permissions, extensionId) {
+    const granted = new Set(normalizePermissions(record?.granted, extensionId));
+    return normalizePermissions(permissions, extensionId).every((cap) => granted.has(cap));
 }
 
 /**

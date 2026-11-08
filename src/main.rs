@@ -173,6 +173,11 @@ async fn run() {
     // setup closure needs the raw argv to resolve the resume marker.
     let main_args = args.clone();
 
+    // A backup import interrupted midway (Kage killed, power lost) is
+    // finished or undone before config.json is read, so the config and the
+    // files it imported always match.
+    config_export::recover_interrupted_import();
+
     // Register state on the builder before windows can issue Tauri invokes.
     // Setup retains only work requiring `&mut App` or `app.handle()`.
     let config = startup::load_config_with_overrides(debug_mode, Config::load);

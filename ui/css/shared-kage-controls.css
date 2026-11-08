@@ -482,6 +482,73 @@ input:checked + .toggle-slider:before {
     border: 1px solid var(--kage-border);
 }
 
+/* Backup export: "everything, encrypted" or "settings only, not encrypted",
+ * with what the settings-only file leaves out. Logical properties only, so
+ * it mirrors under [dir=rtl] without overrides. */
+.backup-mode {
+    margin-block: 6px 0;
+    margin-inline: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--kage-border);
+    border-radius: 6px;
+    min-inline-size: 0;
+}
+.backup-mode-title {
+    padding-inline: 4px;
+    font-weight: 600;
+    color: var(--kage-text-primary, var(--kage-text));
+}
+.backup-mode-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-block-start: 8px;
+}
+.backup-mode-option input[type="radio"] {
+    margin-block-start: 3px;
+    flex: none;
+}
+.backup-mode-option-text {
+    flex: 1;
+    min-inline-size: 0;
+}
+.backup-mode-option label {
+    cursor: pointer;
+    color: var(--kage-text-primary, var(--kage-text));
+}
+.backup-passphrase-row {
+    margin-block-start: 8px;
+}
+.backup-passphrase-row[hidden],
+.backup-left-out[hidden],
+.backup-left-out [hidden] {
+    display: none;
+}
+.backup-left-out-generic,
+.backup-left-out p {
+    margin-block: 6px 0;
+    font-size: 12px;
+}
+.backup-left-out-list {
+    margin-block: 4px 0;
+    padding-inline-start: 18px;
+    font-size: 12px;
+    color: var(--kage-text-secondary);
+    max-block-size: 180px;
+    overflow-y: auto;
+}
+.backup-export-actions {
+    display: flex;
+    gap: 8px;
+}
+.backup-export-actions [hidden] {
+    display: none;
+}
+#backupToggle:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 2px;
+}
+
 /* Agent type picker — modal that asks "what kind of agent are you
  * adding?" before routing to the matching sub-flow. Shared by the
  * welcome wizard and the connections list. See pickAgentType() in

@@ -60,6 +60,10 @@ fn read_manifest(source_dir: &Path) -> Result<ExtensionManifest> {
     // Reject hostile manifest ids before they reach any filesystem op.
     // See validate_extension_id for why this matters.
     validate_extension_id(&manifest.id).context("Invalid extension id in manifest")?;
+    // Surface malformed backup-sensitivity declarations in the log at
+    // install time, where an author will look; they're dropped, not fatal.
+    manifest.sensitive_data_patterns();
+    manifest.config_field_decls();
     Ok(manifest)
 }
 

@@ -2810,16 +2810,12 @@
     "description": "Collapsible section header"
   },
   "settings.about.backup.description": {
-    "message": "Move your Kage setup between machines. The backup includes config, saved prompts & shortcuts, custom and learned steering, and extension data. Encryption with a passphrase is optional but recommended if the file will leave your machine.",
+    "message": "Move your Kage setup between machines. An encrypted backup carries everything, sign-ins included. A settings-only backup isn't encrypted, so it carries only preferences that can't unlock anything.",
     "description": "Body text in the backup section"
   },
   "settings.about.backup.export.label": {
     "message": "Export",
     "description": "Subsection label for export controls"
-  },
-  "settings.about.backup.encrypt_toggle": {
-    "message": "Encrypt with a passphrase (AES-256-GCM with Argon2id key derivation).",
-    "description": "Helper next to the encryption toggle"
   },
   "settings.about.backup.passphrase.placeholder": {
     "message": "Passphrase",
@@ -2842,7 +2838,7 @@
     "description": "Subsection label for import controls"
   },
   "settings.about.backup.import.description": {
-    "message": "Pick a previously exported <code>.kage</code> or <code>.kage.enc</code> file. Imports replace your current config — your machine's window positions, telemetry install ID, and OS startup setting are kept local.",
+    "message": "Pick a previously exported <code>.kage</code> or <code>.kage.enc</code> file. Anything the backup doesn't have — a setting it leaves out, an empty value, a sign-in — keeps this machine's value, and so do window positions, the telemetry install ID and the OS startup setting.",
     "description": "Helper text for import (HTML allowed)"
   },
   "settings.about.backup.import_btn": {
@@ -4081,6 +4077,18 @@
     "message": "Failed to write backup to {path}: {message}",
     "description": "Returned when std::fs::write fails on the backup path"
   },
+  "errors.config.export_preview_failed": {
+    "message": "Couldn't list what a settings-only backup leaves out: {message}",
+    "description": "Returned when preview_config_export can't read this machine's settings or extension data"
+  },
+  "errors.config.export_passphrase_blank": {
+    "message": "A passphrase can't be empty or only spaces.",
+    "description": "Returned when an encrypted export is asked for with a passphrase that is empty or only whitespace"
+  },
+  "errors.config.export_too_large": {
+    "message": "This backup would be too large to restore: an extension's data file is over {max_mb} MB, or all of it is over {total_mb} MB. Nothing was saved.",
+    "description": "Returned when extension data is over the backup size limits; max_mb and total_mb are numbers of megabytes"
+  },
   "errors.config.import_read_failed": {
     "message": "Failed to read backup at {path}: {message}",
     "description": "Returned when std::fs::read fails on the backup path during import"
@@ -4096,6 +4104,18 @@
   "errors.config.import_unsafe_path": {
     "message": "This backup can't be imported: it would write outside Kage's folders ({path}). Nothing was changed.",
     "description": "Returned when a backup archive entry has an unsafe name, or would be written through a symlink or other link on this machine. {path} is the archive entry name or the local path of the link. The import is refused before anything is written."
+  },
+  "errors.config.import_too_large": {
+    "message": "This backup can't be imported: it holds more than {max_files} files, a file over {max_mb} MB, or more than {total_mb} MB in all. Nothing was changed.",
+    "description": "Returned when a backup archive is over the size or file-count limits; the import is refused before anything is written. max_files is a count, max_mb and total_mb are numbers of megabytes"
+  },
+  "errors.config.import_passphrase_required": {
+    "message": "This backup is encrypted. Enter its passphrase.",
+    "description": "Returned when the chosen backup file is encrypted (recognised by its contents, whatever its name) and no passphrase was given; the UI then asks for one"
+  },
+  "errors.config.import_wrong_passphrase": {
+    "message": "That passphrase doesn't open this backup, or the file is damaged.",
+    "description": "Returned when an encrypted backup can't be decrypted with the passphrase given; the UI asks again"
   },
   "errors.config.persist_failed": {
     "message": "Failed to persist imported config: {message}",
@@ -4392,6 +4412,22 @@
   "store.reinstall.failed.title": {
     "message": "Reinstall failed",
     "description": "Title of the alert shown when an extension reinstall fails"
+  },
+  "store.card.approve": {
+    "message": "Approve",
+    "description": "Store card button for an installed extension that is off until the user approves what it asks to do (shows the permission prompt)"
+  },
+  "store.card.approve.title": {
+    "message": "Review and approve what this extension asks to do",
+    "description": "Tooltip of the Approve button on a Store card"
+  },
+  "store.card.approving": {
+    "message": "Approving…",
+    "description": "Store card status while the Approve flow runs"
+  },
+  "store.approve.failed.title": {
+    "message": "Approval failed",
+    "description": "Title of the alert shown when approving an installed extension fails"
   },
   "store.uninstall.failed.title": {
     "message": "Uninstall failed",
@@ -5118,7 +5154,7 @@
     "description": "Title of the restart-after-import dialog"
   },
   "settings.about.dialog.import.message": {
-    "message": "Import will replace your current Kage config (window positions, install ID, and OS startup setting are kept local).\n\nContinue?",
+    "message": "Import will replace your Kage settings with the backup's. Anything the backup doesn't have keeps this machine's value (and window positions, install ID and OS startup setting always stay local).\n\nContinue?",
     "description": "Body of the import confirmation dialog"
   },
   "settings.about.dialog.restart.message": {
@@ -5149,6 +5185,26 @@
     "message": " (exported {date})",
     "description": "Suffix appended to the summary line when exported_at is known"
   },
+  "settings.about.import.summary.sign_in_again": {
+    "message": "Sign in again to {names}.",
+    "description": "Import summary: extensions whose sign-ins the backup left out; names is a localised list"
+  },
+  "settings.about.import.summary.reenter": {
+    "message": "Re-enter: {items}.",
+    "description": "Import summary: Kage settings whose keys the backup left out; items is a localised list"
+  },
+  "settings.about.import.summary.kept_local": {
+    "message": "{count, plural, one {Kept this machine's value for 1 sign-in or key the backup left out.} other {Kept this machine's values for # sign-ins and keys the backup left out.}}",
+    "description": "Import summary when every left-out sign-in or key already had a value on this machine"
+  },
+  "settings.about.import.summary.kept_local_settings": {
+    "message": "{count, plural, one {Kept this machine's settings and stored data for {names}: its sign-in here stays where it is, and the backup didn't bring one of its own.} other {Kept this machine's settings and stored data for {names}: their sign-ins here stay where they are, and the backup didn't bring their own.}}",
+    "description": "Import summary: extensions that kept this machine's settings and data whole, because their sign-in on this machine stays and the backup's settings could have sent it somewhere else; names is a localised list"
+  },
+  "settings.about.import.summary.needs_approval": {
+    "message": "{count, plural, one {# extension needs your approval again: {names}. It stays off until you approve it in the Store.} other {# extensions need your approval again: {names}. They stay off until you approve them in the Store.}}",
+    "description": "Import summary: installed extensions switched off because what they were allowed to do comes only from approval on this machine, never from a backup; names is a localised list"
+  },
   "settings.about.import.success": {
     "message": "✓ {parts}{exported_at}.",
     "description": "Final summary status line after a successful import"
@@ -5168,6 +5224,166 @@
   "settings.about.backup.open_dialog_cancelled": {
     "message": "Open dialog cancelled: {message}",
     "description": "Status when the OS open dialog throws"
+  },
+  "settings.about.backup.passphrase_mismatch": {
+    "message": "Passphrases don't match.",
+    "description": "Error when the passphrase and its confirmation differ"
+  },
+  "settings.about.backup.passphrase_blank": {
+    "message": "A passphrase can't be only spaces.",
+    "description": "Error when the export passphrase is only whitespace"
+  },
+  "settings.about.backup.exporting": {
+    "message": "Exporting…",
+    "description": "Status while a backup is being written"
+  },
+  "settings.about.backup.saved": {
+    "message": "✓ Saved {size} to {path}",
+    "description": "Status after a successful export; size is a formatted byte count, path is the file the user picked"
+  },
+  "settings.about.backup.export_failed": {
+    "message": "Export failed: {message}",
+    "description": "Status when writing a backup fails"
+  },
+  "settings.about.backup.filter.encrypted": {
+    "message": "Kage encrypted backup",
+    "description": "File-type name in the save/open dialog for .kage.enc files"
+  },
+  "settings.about.backup.filter.plain": {
+    "message": "Kage backup",
+    "description": "File-type name in the save/open dialog for .kage files"
+  },
+  "settings.about.backup.filter.all": {
+    "message": "All files",
+    "description": "File-type name in the open dialog that matches every file"
+  },
+  "settings.about.backup.unlock.title": {
+    "message": "Enter passphrase",
+    "description": "Title of the prompt shown when importing an encrypted backup"
+  },
+  "settings.about.backup.unlock.description": {
+    "message": "This file is encrypted. Enter the passphrase you used when exporting.",
+    "description": "Body of the prompt shown when importing an encrypted backup"
+  },
+  "settings.about.backup.unlock.wrong": {
+    "message": "That passphrase didn't open the backup. Try again.",
+    "description": "Body of the passphrase prompt when the previous passphrase didn't decrypt the backup"
+  },
+  "settings.about.backup.unlock.cancel": {
+    "message": "Cancel",
+    "description": "Button that closes the passphrase prompt without importing"
+  },
+  "settings.about.backup.unlock.ok": {
+    "message": "Unlock",
+    "description": "Button that decrypts and imports the backup with the entered passphrase"
+  },
+  "settings.about.backup.sensitive.group.other": {
+    "message": "Other extension data",
+    "description": "Group heading for extension data files that don't belong to a known extension"
+  },
+  "settings.about.backup.sensitive.unnamed": {
+    "message": "unnamed",
+    "description": "Stand-in for an item with an empty name, e.g. an unnamed shortcut"
+  },
+  "settings.about.backup.sensitive.item.agent_command": {
+    "message": "Agent connection “{name}”: command arguments",
+    "description": "An agent connection whose command line has arguments or environment settings, which a backup can leave out"
+  },
+  "settings.about.backup.sensitive.item.agent_ollama_url": {
+    "message": "Agent connection “{name}”: Ollama address",
+    "description": "An Ollama agent connection whose address contains a credential"
+  },
+  "settings.about.backup.sensitive.item.store_url": {
+    "message": "Custom extension store address",
+    "description": "The custom extension store URL, which contains a credential"
+  },
+  "settings.about.backup.sensitive.item.store_source_url": {
+    "message": "Extension store “{name}”: address",
+    "description": "An additional extension store whose URL contains a credential"
+  },
+  "settings.about.backup.sensitive.item.shortcut_url": {
+    "message": "Shortcut “{name}”: web address",
+    "description": "A shortcut whose URL contains a credential or is a private webhook"
+  },
+  "settings.about.backup.sensitive.item.shortcut_arguments": {
+    "message": "Shortcut “{name}”: program arguments",
+    "description": "A shortcut whose program arguments contain a credential"
+  },
+  "settings.about.backup.sensitive.item.shortcut_script": {
+    "message": "Shortcut “{name}”: script",
+    "description": "A script shortcut that contains a credential"
+  },
+  "settings.about.backup.sensitive.item.shortcut_prompt": {
+    "message": "Shortcut “{name}”: prompt",
+    "description": "A shortcut whose prompt contains a credential"
+  },
+  "settings.about.backup.sensitive.item.macro_step_script": {
+    "message": "Automation “{name}”: script in step {step}",
+    "description": "An automation step script that contains a credential; step is 1-based"
+  },
+  "settings.about.backup.sensitive.item.macro_step_prompt": {
+    "message": "Automation “{name}”: prompt in step {step}",
+    "description": "An automation step prompt that contains a credential; step is 1-based"
+  },
+  "settings.about.backup.sensitive.item.tool_permission_rules": {
+    "message": "Commands you allowed or denied (the agent will ask again)",
+    "description": "Tool-permission rules for agent commands the user allowed or denied; leaving them out means the agent asks again"
+  },
+  "settings.about.backup.sensitive.item.context_rule_steering": {
+    "message": "App mode “{name}”: steering",
+    "description": "A per-app rule whose steering text contains a credential"
+  },
+  "settings.about.backup.sensitive.item.steering_auto": {
+    "message": "Learned steering: a key in the text",
+    "description": "The learned (auto) steering document contains a credential"
+  },
+  "settings.about.backup.sensitive.item.steering_user": {
+    "message": "Your steering file: a key in the text",
+    "description": "The user's own steering document contains a credential"
+  },
+  "settings.about.backup.sensitive.item.internal_site_script": {
+    "message": "Internal site “{name}”: proxy script",
+    "description": "An internal-site profile's proxy script that contains a credential"
+  },
+  "settings.about.backup.sensitive.item.internal_site_sample_url": {
+    "message": "Internal site “{name}”: sample address",
+    "description": "An internal-site profile's sample URL that contains a credential"
+  },
+  "settings.about.backup.sensitive.item.unknown": {
+    "message": "An item a newer version of Kage left out",
+    "description": "A left-out item of a kind this version does not know, from an older backup made by a newer build"
+  },
+  "settings.about.backup.sensitive.item.host_setting": {
+    "message": "Setting “{path}”",
+    "description": "One of Kage's own settings that holds a sign-in or key; path is its location in the settings file, e.g. ui › language"
+  },
+  "settings.about.backup.sensitive.item.agent_connection": {
+    "message": "Agent connection “{name}”",
+    "description": "An agent connection with a credential in one of its settings"
+  },
+  "settings.about.backup.sensitive.item.shortcut": {
+    "message": "Shortcut “{name}”",
+    "description": "A shortcut with a credential in one of its settings"
+  },
+  "settings.about.backup.sensitive.item.macro": {
+    "message": "Automation “{name}”",
+    "description": "An automation with a credential in one of its settings, such as its summary"
+  },
+  "settings.about.backup.sensitive.item.macro_step": {
+    "message": "Automation “{name}”: step {step}",
+    "description": "An automation step with a credential in it (for example in a find-and-replace); step is 1-based"
+  },
+  "settings.about.backup.sensitive.item.context_rule": {
+    "message": "App mode “{name}”",
+    "description": "A per-app mode with a credential in one of its settings"
+  },
+  "settings.about.backup.sensitive.item.internal_site": {
+    "message": "Internal site “{name}”",
+    "description": "An internal-site profile with a credential in one of its rules"
+  },
+  "settings.about.backup.sensitive.item.quick_action": {
+    "message": "Quick action “{name}”",
+    "description": "A custom quick action whose prompt or label contains a credential"
   },
   "settings.assistant.quick_actions.section": {
     "message": "Quick Actions",
@@ -6452,5 +6668,125 @@
   "system_shortcuts.name.generic": {
     "message": "a built-in keyboard shortcut",
     "description": "Fallback name for a macOS system shortcut Kage doesn't have a specific name for"
+  },
+  "errors.config.export_passphrase_required": {
+    "message": "Enter a passphrase to encrypt the backup.",
+    "description": "Returned when an encrypted export is asked for without a passphrase"
+  },
+  "errors.config.import_newer_config": {
+    "message": "This backup's settings come from a newer version of Kage. Update Kage and try again. Nothing was changed.",
+    "description": "Import refused: the backup's config.json uses a config schema newer than this build reads"
+  },
+  "errors.config.import_old_config": {
+    "message": "This backup's settings come from a version of Kage too old to read. Nothing was changed.",
+    "description": "Import refused: the backup's config.json uses a config schema older than this build can migrate"
+  },
+  "errors.config.import_unfinished": {
+    "message": "An earlier import didn't finish and couldn't be undone. Restart Kage and try again. Nothing was changed.",
+    "description": "Import refused: an interrupted import is still unresolved, or another Kage process is importing"
+  },
+  "settings.about.backup.mode.title": {
+    "message": "What to back up",
+    "description": "Legend of the export choice: encrypted full backup or unencrypted settings-only backup"
+  },
+  "settings.about.backup.mode.encrypted.label": {
+    "message": "Everything, encrypted (recommended)",
+    "description": "Export option: an encrypted backup of everything"
+  },
+  "settings.about.backup.mode.encrypted.description": {
+    "message": "Your settings, steering docs, shortcuts, automations, agent setups, and every extension with its data, sign-ins included. The file opens only with the passphrase you choose.",
+    "description": "Describes the encrypted full backup"
+  },
+  "settings.about.backup.mode.settings_only.label": {
+    "message": "Settings only, not encrypted",
+    "description": "Export option: an unencrypted backup of allowlisted settings only"
+  },
+  "settings.about.backup.mode.settings_only.description": {
+    "message": "Theme, language, hotkeys, window, update and notification preferences, which extensions are on and what they may do, and the extension settings their makers mark safe to copy. No passwords, keys or sign-ins.",
+    "description": "Describes what an unencrypted settings-only backup holds"
+  },
+  "settings.about.backup.settings_only.left_out_generic": {
+    "message": "Your steering docs, shortcuts, automations, agent setups, extension data and sign-ins aren't in this file. Encrypt to include them.",
+    "description": "Shown under the settings-only option: what it never carries"
+  },
+  "settings.about.backup.settings_only.left_out_intro": {
+    "message": "From this machine, that leaves out:",
+    "description": "Introduces the list of what a settings-only backup of this machine would leave out"
+  },
+  "settings.about.backup.settings_only.left_out.steering": {
+    "message": "Your steering docs",
+    "description": "Left out of a settings-only backup: the custom and learned steering docs"
+  },
+  "settings.about.backup.settings_only.left_out.shortcuts": {
+    "message": "{count, plural, one {1 shortcut} other {# shortcuts}}",
+    "description": "Left out of a settings-only backup: shortcuts"
+  },
+  "settings.about.backup.settings_only.left_out.automations": {
+    "message": "{count, plural, one {1 automation} other {# automations}}",
+    "description": "Left out of a settings-only backup: automations (macros)"
+  },
+  "settings.about.backup.settings_only.left_out.quick_actions": {
+    "message": "{count, plural, one {1 custom quick action} other {# custom quick actions}}",
+    "description": "Left out of a settings-only backup: custom quick actions (their prompts)"
+  },
+  "settings.about.backup.settings_only.left_out.app_modes": {
+    "message": "{count, plural, one {1 app mode} other {# app modes}}",
+    "description": "Left out of a settings-only backup: app modes (per-app steering)"
+  },
+  "settings.about.backup.settings_only.left_out.agents": {
+    "message": "{count, plural, one {1 agent setup} other {# agent setups}}",
+    "description": "Left out of a settings-only backup: agent connections (commands, hosts, models)"
+  },
+  "settings.about.backup.settings_only.left_out.internal_sites": {
+    "message": "{count, plural, one {1 internal site} other {# internal sites}}",
+    "description": "Left out of a settings-only backup: internal-site profiles and their scripts"
+  },
+  "settings.about.backup.settings_only.left_out.tool_permissions": {
+    "message": "Commands you allowed or denied, and the tools you trust",
+    "description": "Left out of a settings-only backup: tool permissions"
+  },
+  "settings.about.backup.settings_only.left_out.stores": {
+    "message": "Extension store addresses",
+    "description": "Left out of a settings-only backup: custom extension store URLs"
+  },
+  "settings.about.backup.settings_only.left_out.extension_data": {
+    "message": "{count, plural, one {Extension data (1 file)} other {Extension data (# files)}}",
+    "description": "Left out of a settings-only backup: what extensions store"
+  },
+  "settings.about.backup.settings_only.left_out.extension_settings": {
+    "message": "{count, plural, one {1 extension setting not marked safe to copy} other {# extension settings not marked safe to copy}}",
+    "description": "Left out of a settings-only backup: extension settings their manifests do not mark safe for an unencrypted backup"
+  },
+  "settings.about.backup.settings_only.left_out_outro": {
+    "message": "Encrypt to include them.",
+    "description": "Ends the list of what a settings-only backup leaves out"
+  },
+  "settings.about.backup.settings_only.flagged_intro": {
+    "message": "{count, plural, one {This setting is left out too, because its value doesn't look like a setting:} other {These settings are left out too, because their values don't look like settings:}}",
+    "description": "Introduces allowlisted settings left out of a settings-only backup because their values look like they may hold a password or key"
+  },
+  "settings.about.backup.settings_only.flagged_extension_setting": {
+    "message": "{extension}: setting “{field}”",
+    "description": "One extension setting left out of a settings-only backup because its value looks like a secret"
+  },
+  "settings.about.backup.settings_only.list_unavailable": {
+    "message": "Couldn't list what this machine has: {message}",
+    "description": "Shown when the list of what a settings-only backup leaves out could not be loaded"
+  },
+  "settings.about.backup.saved_settings_only": {
+    "message": "✓ Saved {size} to {path}. Settings only: encrypt a backup to carry everything else.",
+    "description": "Status after saving a settings-only backup"
+  },
+  "settings.about.import.summary.settings_only": {
+    "message": "{count, plural, one {✓ Restored 1 setting} other {✓ Restored # settings}}{exported_at}. Everything else on this machine was left as it was.",
+    "description": "Summary after importing a settings-only backup"
+  },
+  "errors.config.import_local_newer": {
+    "message": "This machine's Kage settings come from a newer version of Kage, so Kage is running with defaults and can't save an import. Update Kage and try again. Nothing was changed.",
+    "description": "Import refused: config.json on disk was written by a newer build and is being preserved, so saves are off this session"
+  },
+  "errors.config.import_config_too_large": {
+    "message": "This backup's settings are too large to use (over {max_kb} KB). Nothing was changed.",
+    "description": "Import refused: the merged settings would be larger than Kage reads back at startup"
   }
 }

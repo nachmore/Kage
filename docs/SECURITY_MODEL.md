@@ -331,6 +331,178 @@ mitigations are in place:
 - Mutex poisoning is recovered gracefully (`lock_or_recover`)
   so one thread's panic doesn't cascade.
 
+## Backups and sensitive data
+
+A backup (Settings → About → Backup & restore) is a file the user moves
+between machines, so it is treated as something that can leak. There are
+exactly two kinds (`src/config_export.rs`), and no unencrypted full backup:
+
+- **Everything, encrypted** (the default): config, steering docs,
+  extension settings and extension data, AES-256-GCM-encrypted with a key
+  derived (Argon2id) from a passphrase. An empty or all-whitespace
+  passphrase is refused.
+- **Settings only, not encrypted**: an **allowlist**, not a scan. Every
+  field of `Config` has an explicit decision in
+  `src/config_export/allowlist.rs` (`FIELDS`): copied, with the shape its
+  value must have, or left out and why. The file is built by walking that
+  table, never the config, so a field nobody decided on is left out — and
+  the `every_config_field_has_a_decision` test fails until someone
+  decides. Copied values are booleans, numbers, closed sets (time and date
+  formats, update channel, power mode, window position, built-in voices),
+  a built-in theme or an installed theme's id, a language Kage ships,
+  hotkeys the runtime's parser registers (validated whole with the same
+  parser, modifier aliases written under the name the picker uses), and
+  the ids, capabilities, approved versions and timestamps of installed
+  items; nothing free-form. Every number must be finite, of its field's
+  type and within that setting's range (the Settings control's, or for
+  one without a control what the code can use: `allowlist::Range`); a
+  value outside is rejected, never clamped — left out of the file and
+  named, and on import this machine's value stays. As defence in depth, a copied string that
+  still looks like a password, token or key (`looks_like_secret` in
+  `src/config_export/sensitive.rs`) is left out too, and the UI names it.
+  Left out entirely: steering docs, app modes, prompts, shortcuts and
+  automations (scripts, arguments, URLs), agent connections, internal
+  sites, tool-permission rules and trust, store addresses, paths, the
+  install id, diagnostics switches, caches, and every extension's data.
+  Extension settings are copied only where **every** installed extension
+  folder for the id declares the field, no item claiming the id (a theme,
+  a second folder) marks it `sensitive` or refuses the value — those can
+  only make a setting stricter — and the value is a boolean, a number, one
+  of a declared `enum`, or a string the manifest marks
+  `config.<field>.backup: "plain"`; never a value of any type — boolean,
+  number and `enum` choice included — under a credential-like name (the
+  `SENSITIVE_NAME_PATTERN` safety net, one of the extension's
+  `sensitiveData` keys, or a field any manifest marks `sensitive`): that
+  check runs before any declared shape is looked at, and every string
+  that's copied, a declared choice included, also goes through
+  `looks_like_secret`. An extension that isn't installed has no
+  manifest to ask, so none of its settings are copied. Before the file
+  is saved, the UI lists what it leaves out from this machine
+  (`preview_config_export`: labels and counts, never values).
+
+`export_config_bundle` enforces both in the backend: `mode: "encrypted"`
+without a usable passphrase is refused, and `mode: "settings_only"` never
+takes one. Scratch (`__`) extension settings and the tool-permission
+history the agent records on its own ("ask" rules) are never in any
+backup. All four backup commands (`export_config_default_filename`,
+`preview_config_export`, `export_config_bundle`, `import_config_bundle`)
+are off-limits to extensions.
+
+Bundle formats: v1 is a full backup (what older builds read); v2 is what
+earlier builds wrote when a backup left items out or still carried their
+placeholder `__REMOVED_FROM_BACKUP__` (this build writes it for a full
+backup still holding such placeholders, so a build that would write them
+over real values refuses it); v3 is settings-only, which older builds
+refuse rather than import as a full backup.
+
+**Import** (`src/config_export/merge.rs`) keeps this machine's value
+wherever the backup's is missing, empty, or an earlier build's
+placeholder — bound to identity, so a local secret is never moved to a
+different item or place: Kage's singleton settings are the same setting
+(a string holding a placeholder is restored only if the rest of it
+matches, so `https://evil/…?t=<placeholder>` never receives this machine's
+`https://store/…?t=…`); agent connections and internal sites match by a
+unique `id` and the same connection type, and a site only when every
+other field (URL and content rules, sample address, enabled, language,
+timeout) matches; other lists only as exact twins. Extension settings
+merge by name, recursively, but only while the object still points where
+this machine's does (every URL and endpoint- or account-like field, at any
+depth, credential-named fields included — URLs by origin — judged once for
+the whole object, leaving aside only the values being kept); otherwise the
+bundle's copy is kept and the user is asked to sign in again. An
+extension whose credential stays on this machine — a sensitive setting,
+or a data file holding one (declared in `sensitiveData`, or named like a
+credential, or JSON with a credential-named value), that the bundle
+doesn't replace with its own, judged file by file — keeps this machine's
+settings and data files whole, and the summary names it: nothing in the
+bundle can point that credential somewhere else. Settings
+are an object: anything else in the bundle's place keeps this machine's
+whole. A hotkey's key and modifiers are merged together. A setting or data file an extension
+declares sensitive (or named like a credential) is never replaced by an
+empty or missing one, in any bundle version; an extension-data file whose
+copy holds nothing never replaces one that does. In an earlier build's
+"leave out" bundle, which never carried a sensitive value, a sensitive
+value or file there was put in by hand and never replaces this machine's;
+a bundle carrying a file its manifest says it left out is refused. A
+settings-only bundle merges only allowlisted fields (each re-checked
+against its shape and this machine's manifests; for an extension not
+installed here only booleans and numbers) and leaves everything else
+untouched. It never changes an endpoint-like setting of an extension
+that holds a credential here, in its settings or its data files; it takes
+at most 512 ids per map and 128 settings per extension, and leaves a
+quarter of config.json's size limit free; one carrying steering or
+extension data is refused. An
+import whose merged settings would be larger than `Config::load` reads
+(1 MB) is refused,
+and so is any import while this session can't save config.json (it came
+from a newer Kage and is being preserved).
+Tool-permission rules are merged (a backup adds and updates rules but
+never removes one of this machine's); category-wide tool trust stays this
+machine's. Extension capability grants are never taken from any backup,
+of any kind or version, encrypted or not (`src/config_export/consent.rs`):
+the merged `extension_grants` is this machine's, whole. A backup may
+switch an extension on only when this machine's grant already covers
+everything its installed manifest requests; an installed extension the
+backup has on, or claims a grant for, that this machine's grant doesn't
+cover is switched off and listed in the summary as needing approval. The
+Store's **Approve** button for such an extension runs the install-time
+permission prompt again (`commit_extension_install` records the grant).
+
+`config.json` from a backup goes through `config_migrations` the way
+`Config::load` does before anything is merged or written: a schema from a
+newer Kage is refused ("update Kage"), and the merged config is saved at
+this build's schema.
+
+Import only writes to this machine's steering docs (at this machine's
+paths: a bundle's `user_steering_path` is ignored and the local one
+kept) and under `extension-data/`. Archive paths are plain `/`-separated
+names on every platform (no `..`, `\`, `:`, `~`, `<>|?*"`, NUL, device
+names). An incoming name that differs from a local one only by case or
+Unicode normalisation is treated as that file when this file system
+resolves both to the same file (APFS, NTFS; not a case-sensitive disk);
+no symlink under the root is followed (each component is `lstat`ed). The
+file is capped before it is read (`MAX_FILE_BYTES`, by its size and a
+capped reader), the encrypted envelope before key derivation, and the
+archive before it's unpacked, and decryption happens in place. Entries are
+read only after their names are checked, and capped (10,000 entries,
+64 MB each, 256 MB in all, measured as they inflate; entries sharing data
+are refused).
+
+Import is all or nothing and survives a crash: every destination is
+checked, every file is staged to a temp file next to its target, then a
+durable journal (`import-journal.json`, owner-only,
+`src/config_export/journal.rs`) records every target, its staged file,
+the name its current copy is moved aside to, and a copy of `config.json`;
+only then do renames commit the files. The caller saves `config.json`
+under the same config lock as the merge (so a concurrent save can't be
+lost) and finishes the transaction, which records the commit marker
+before deleting the old copies. A failure puts everything back. An import
+interrupted by a crash is resolved before the config is read on the next
+start (or by the next import): committed → its leftovers are deleted;
+not committed → every file and `config.json` are put back, so files and
+config always match. Undoing never removes or replaces a file the
+import didn't write: the journal records what each write puts at its
+target (SHA-256, length and, on Unix, device and inode, which the rename
+keeps), and a target that has changed since (an extension wrote it
+again, or a new file is there) is kept, with this machine's earlier copy
+beside it. Each finished undo step (a file put back, `config.json`
+restored) is appended to the journal and flushed before the next one
+starts, so a retry skips what's done and never touches a file created
+since; `config.json` that didn't exist before the import is removed at
+most once, recorded before it goes. A rollback copy is deleted only once
+its transaction committed; one whose files can't all be reached or put
+back keeps the journal, and every copy, for the next try (after five failed tries the
+journal is set aside under another name, copies still kept, so imports
+aren't blocked for good). An import undone by the running Kage leaves no
+config snapshot for a later start to restore over newer saves, and a
+journal is never written over. Imports hold an OS file lock (`.kage-import.lock`), so a
+second Kage process never resolves one still running. Extension data
+and the auto steering doc are written owner-only, whatever they had
+before; the user's own steering doc keeps its permissions (owner-only
+when new). Replacing is a rename,
+so another hard link to a replaced file keeps the old content. An
+encrypted backup is recognised by its first bytes, whatever it is called.
+
 ## Summary of current guarantees
 
 | Threat                                                | Status | Notes |
@@ -349,6 +521,12 @@ mitigations are in place:
 | Link or redirect turns a Kage window into a remote page | ✅ Blocked | JS link handler in every window + Rust `on_navigation` guard. See "Links and navigation". |
 | Extension opens the browser without `urls` via an iframe redirect | ✅ Blocked | The guard never opens URLs it can't attribute to the main frame. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
+| Unencrypted backup file leaks a token, key, script, prompt or steering doc | ✅ Blocked | The only unencrypted backup is settings-only: an allowlist of shaped values, no free-form text, no extension data. Backend-enforced. See "Backups and sensitive data". |
+| Restoring a backup wipes a sign-in this machine has   | ✅ Blocked | Missing, empty and placeholder values keep the local one, bound to the same item and endpoint. |
+| An interrupted import leaves files and config out of step | ✅ Blocked | Durable journal with a commit marker; resolved before the next start reads config. |
+| Undoing an import deletes data written since          | ✅ Blocked | Each undo step is recorded before the next; a target is removed or replaced only while it's the file the import wrote (hash, length, inode). |
+| A backup grants an extension capabilities             | ✅ Blocked | Grants are never imported, in any kind of backup; an extension the backup would switch on stays off until this machine's grant covers its manifest. |
+| A backup points a credential kept here somewhere else | ✅ Blocked | An extension whose credential stays here keeps its settings and data whole; settings-only backups never move an endpoint of one. |
 
 ## Known gaps being worked on
 

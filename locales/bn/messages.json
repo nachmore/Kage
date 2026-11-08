@@ -3186,22 +3186,16 @@
     "_source_hash": "8522d8e532e1e1fb"
   },
   "settings.about.backup.description": {
-    "message": "আপনার Kage সেটআপ এক মেশিন থেকে অন্য মেশিনে সরান। ব্যাকআপে কনফিগ, সংরক্ষিত প্রম্পট ও শর্টকাট, কাস্টম এবং শেখা স্টিয়ারিং, এবং এক্সটেনশন ডেটা অন্তর্ভুক্ত থাকে। পাসফ্রেজ দিয়ে এনক্রিপশন ঐচ্ছিক, তবে ফাইলটি যদি আপনার মেশিন থেকে বের হয় তাহলে এটি প্রস্তাবিত।",
+    "message": "আপনার Kage সেটআপ এক মেশিন থেকে অন্য মেশিনে সরান। এনক্রিপ্ট করা ব্যাকআপে সাইন-ইন সহ সবকিছু থাকে। শুধু-সেটিংস ব্যাকআপ এনক্রিপ্ট করা হয় না, তাই এতে কেবল এমন পছন্দগুলো থাকে যা দিয়ে কিছু আনলক করা যায় না।",
     "description": "Body text in the backup section",
     "_machine_translated": true,
-    "_source_hash": "e4dbe7e1d6ab2e28"
+    "_source_hash": "3a5506d5907f75ff"
   },
   "settings.about.backup.export.label": {
     "message": "এক্সপোর্ট",
     "description": "Subsection label for export controls",
     "_machine_translated": true,
     "_source_hash": "df01bf7467258888"
-  },
-  "settings.about.backup.encrypt_toggle": {
-    "message": "পাসফ্রেজ দিয়ে এনক্রিপ্ট করুন (Argon2id কী ডেরিভেশন সহ AES-256-GCM)।",
-    "description": "Helper next to the encryption toggle",
-    "_machine_translated": true,
-    "_source_hash": "5c348b02467e7b48"
   },
   "settings.about.backup.passphrase.placeholder": {
     "message": "পাসফ্রেজ",
@@ -3234,10 +3228,10 @@
     "_source_hash": "ff9ad6961f6ebcf3"
   },
   "settings.about.backup.import.description": {
-    "message": "পূর্বে এক্সপোর্ট করা একটি <code>.kage</code> বা <code>.kage.enc</code> ফাইল বেছে নিন। ইম্পোর্ট আপনার বর্তমান কনফিগ প্রতিস্থাপন করে — আপনার মেশিনের উইন্ডোর অবস্থান, টেলিমেট্রি ইনস্টল ID, এবং OS স্টার্টআপ সেটিং স্থানীয়ভাবে রাখা হয়।",
+    "message": "আগে এক্সপোর্ট করা একটি <code>.kage</code> বা <code>.kage.enc</code> ফাইল বেছে নিন। ব্যাকআপে যা নেই — বাদ দেওয়া কোনো সেটিং, খালি কোনো মান, কোনো সাইন-ইন — সেগুলোতে এই মেশিনের মানই থাকবে; উইন্ডোর অবস্থান, টেলিমেট্রি ইনস্টল ID এবং OS স্টার্টআপ সেটিংও অপরিবর্তিত থাকবে।",
     "description": "Helper text for import (HTML allowed)",
     "_machine_translated": true,
-    "_source_hash": "736c5b1684c03868"
+    "_source_hash": "896cfe0a917c43fb"
   },
   "settings.about.backup.import_btn": {
     "message": "ইম্পোর্ট…",
@@ -7086,10 +7080,10 @@
     "_source_hash": "f0a3eb503050f83a"
   },
   "settings.about.dialog.import.message": {
-    "message": "ইম্পোর্ট আপনার বর্তমান Kage কনফিগ প্রতিস্থাপন করবে (উইন্ডো পজিশন, ইনস্টল ID, এবং OS স্টার্টআপ সেটিং স্থানীয়ভাবে রাখা হয়)।\n\nচালিয়ে যাবেন?",
+    "message": "ইমপোর্ট করলে আপনার Kage সেটিংস ব্যাকআপের সেটিংস দিয়ে প্রতিস্থাপিত হবে। ব্যাকআপে যা নেই, সেগুলোতে এই মেশিনের মানই থাকবে (এবং উইন্ডোর অবস্থান, ইনস্টল ID ও OS স্টার্টআপ সেটিং সবসময় স্থানীয় থাকে)।\n\nচালিয়ে যাবেন?",
     "description": "Body of the import confirmation dialog",
     "_machine_translated": true,
-    "_source_hash": "2f754269a541af14"
+    "_source_hash": "c8d5979947e53c70"
   },
   "settings.about.dialog.restart.message": {
     "message": "কিছু পরিবর্তন কেবল রিস্টার্টের পরে কার্যকর হয় (এজেন্ট কানেকশন, হটকি, থিম)। এখনই Kage রিস্টার্ট করবেন?",
@@ -9413,6 +9407,258 @@
     "_machine_translated": true,
     "_source_hash": "36c2d11cd6238803"
   },
+  "errors.config.export_preview_failed": {
+    "message": "শুধু-সেটিংস ব্যাকআপে কী বাদ পড়ে তার তালিকা করা যায়নি: {message}",
+    "description": "Returned when preview_config_export can't read this machine's settings or extension data",
+    "_machine_translated": true,
+    "_source_hash": "50c0a572aaccdd96"
+  },
+  "settings.about.import.summary.sign_in_again": {
+    "message": "{names}-এ আবার সাইন ইন করুন।",
+    "description": "Import summary: extensions whose sign-ins the backup left out; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "4943d2f36acc1143"
+  },
+  "settings.about.import.summary.reenter": {
+    "message": "আবার লিখুন: {items}।",
+    "description": "Import summary: Kage settings whose keys the backup left out; items is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "0f9a049f7bc8b531"
+  },
+  "settings.about.import.summary.kept_local": {
+    "message": "{count, plural, one {ব্যাকআপে বাদ দেওয়া ১টি সাইন-ইন বা কী-এর জন্য এই মেশিনের মান রাখা হয়েছে।} other {ব্যাকআপে বাদ দেওয়া #টি সাইন-ইন ও কী-এর জন্য এই মেশিনের মান রাখা হয়েছে।}}",
+    "description": "Import summary when every left-out sign-in or key already had a value on this machine",
+    "_machine_translated": true,
+    "_source_hash": "c85f89b3813b246a"
+  },
+  "settings.about.backup.passphrase_mismatch": {
+    "message": "পাসফ্রেজ মিলছে না।",
+    "description": "Error when the passphrase and its confirmation differ",
+    "_machine_translated": true,
+    "_source_hash": "888b94e90878c2d7"
+  },
+  "settings.about.backup.exporting": {
+    "message": "এক্সপোর্ট করা হচ্ছে…",
+    "description": "Status while a backup is being written",
+    "_machine_translated": true,
+    "_source_hash": "df64879f25202f3b"
+  },
+  "settings.about.backup.saved": {
+    "message": "✓ {path}-এ {size} সংরক্ষিত হয়েছে",
+    "description": "Status after a successful export; size is a formatted byte count, path is the file the user picked",
+    "_machine_translated": true,
+    "_source_hash": "74514b9c6fbd1166"
+  },
+  "settings.about.backup.export_failed": {
+    "message": "এক্সপোর্ট ব্যর্থ হয়েছে: {message}",
+    "description": "Status when writing a backup fails",
+    "_machine_translated": true,
+    "_source_hash": "95f6fb19877a143a"
+  },
+  "settings.about.backup.filter.encrypted": {
+    "message": "Kage এনক্রিপ্ট করা ব্যাকআপ",
+    "description": "File-type name in the save/open dialog for .kage.enc files",
+    "_machine_translated": true,
+    "_source_hash": "3693529f10aaa9f1"
+  },
+  "settings.about.backup.filter.plain": {
+    "message": "Kage ব্যাকআপ",
+    "description": "File-type name in the save/open dialog for .kage files",
+    "_machine_translated": true,
+    "_source_hash": "8c48c5235df5d9d3"
+  },
+  "settings.about.backup.filter.all": {
+    "message": "সব ফাইল",
+    "description": "File-type name in the open dialog that matches every file",
+    "_machine_translated": true,
+    "_source_hash": "bc1f64f6c70a40db"
+  },
+  "settings.about.backup.unlock.title": {
+    "message": "পাসফ্রেজ লিখুন",
+    "description": "Title of the prompt shown when importing an encrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "dab6ffcfc111b299"
+  },
+  "settings.about.backup.unlock.description": {
+    "message": "এই ফাইলটি এনক্রিপ্ট করা। এক্সপোর্ট করার সময় যে পাসফ্রেজ ব্যবহার করেছিলেন সেটি লিখুন।",
+    "description": "Body of the prompt shown when importing an encrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "e9187f7d1edc7fd9"
+  },
+  "settings.about.backup.unlock.cancel": {
+    "message": "বাতিল",
+    "description": "Button that closes the passphrase prompt without importing",
+    "_machine_translated": true,
+    "_source_hash": "1c21538fd78b51cc"
+  },
+  "settings.about.backup.unlock.ok": {
+    "message": "আনলক করুন",
+    "description": "Button that decrypts and imports the backup with the entered passphrase",
+    "_machine_translated": true,
+    "_source_hash": "797ba16fb904c2ea"
+  },
+  "settings.about.backup.sensitive.group.other": {
+    "message": "অন্যান্য এক্সটেনশন ডেটা",
+    "description": "Group heading for extension data files that don't belong to a known extension",
+    "_machine_translated": true,
+    "_source_hash": "3c59372cd8884663"
+  },
+  "settings.about.backup.sensitive.unnamed": {
+    "message": "নামহীন",
+    "description": "Stand-in for an item with an empty name, e.g. an unnamed shortcut",
+    "_machine_translated": true,
+    "_source_hash": "419773839f274821"
+  },
+  "settings.about.backup.sensitive.item.agent_command": {
+    "message": "এজেন্ট সংযোগ “{name}”: কমান্ড আর্গুমেন্ট",
+    "description": "An agent connection whose command line has arguments or environment settings, which a backup can leave out",
+    "_machine_translated": true,
+    "_source_hash": "12a1661f81f40a3c"
+  },
+  "settings.about.backup.sensitive.item.agent_ollama_url": {
+    "message": "এজেন্ট সংযোগ “{name}”: Ollama ঠিকানা",
+    "description": "An Ollama agent connection whose address contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "0b5d6ff0ed0d8780"
+  },
+  "settings.about.backup.sensitive.item.store_url": {
+    "message": "কাস্টম এক্সটেনশন স্টোরের ঠিকানা",
+    "description": "The custom extension store URL, which contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "09a7fa7cd69abc94"
+  },
+  "settings.about.backup.sensitive.item.store_source_url": {
+    "message": "এক্সটেনশন স্টোর “{name}”: ঠিকানা",
+    "description": "An additional extension store whose URL contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "1d0e1b73552cb81e"
+  },
+  "settings.about.backup.sensitive.item.shortcut_url": {
+    "message": "শর্টকাট “{name}”: ওয়েব ঠিকানা",
+    "description": "A shortcut whose URL contains a credential or is a private webhook",
+    "_machine_translated": true,
+    "_source_hash": "739e39e227decaf3"
+  },
+  "settings.about.backup.sensitive.item.shortcut_arguments": {
+    "message": "শর্টকাট “{name}”: প্রোগ্রাম আর্গুমেন্ট",
+    "description": "A shortcut whose program arguments contain a credential",
+    "_machine_translated": true,
+    "_source_hash": "2df314724a6b230e"
+  },
+  "settings.about.backup.sensitive.item.shortcut_script": {
+    "message": "শর্টকাট “{name}”: স্ক্রিপ্ট",
+    "description": "A script shortcut that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "8094e82639f45bc1"
+  },
+  "settings.about.backup.sensitive.item.macro_step_script": {
+    "message": "অটোমেশন “{name}”: ধাপ {step}-এর স্ক্রিপ্ট",
+    "description": "An automation step script that contains a credential; step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "788ab588603e78fe"
+  },
+  "settings.about.backup.sensitive.item.internal_site_script": {
+    "message": "অভ্যন্তরীণ সাইট “{name}”: প্রক্সি স্ক্রিপ্ট",
+    "description": "An internal-site profile's proxy script that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "16a72d77476280cf"
+  },
+  "settings.about.backup.sensitive.item.internal_site_sample_url": {
+    "message": "অভ্যন্তরীণ সাইট “{name}”: নমুনা ঠিকানা",
+    "description": "An internal-site profile's sample URL that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "ae6ba2ee9c6e10ad"
+  },
+  "settings.about.backup.sensitive.item.shortcut_prompt": {
+    "message": "শর্টকাট “{name}”: প্রম্পট",
+    "description": "A shortcut whose prompt contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "fe27acb79f018ab7"
+  },
+  "settings.about.backup.sensitive.item.macro_step_prompt": {
+    "message": "অটোমেশন “{name}”: ধাপ {step}-এর প্রম্পট",
+    "description": "An automation step prompt that contains a credential; step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "365aadee1a88c5f1"
+  },
+  "settings.about.backup.sensitive.item.tool_permission_rules": {
+    "message": "আপনার অনুমোদিত বা প্রত্যাখ্যাত কমান্ড (এজেন্ট আবার জিজ্ঞাসা করবে)",
+    "description": "Tool-permission rules for agent commands the user allowed or denied; leaving them out means the agent asks again",
+    "_machine_translated": true,
+    "_source_hash": "847045996b5b3617"
+  },
+  "settings.about.backup.sensitive.item.context_rule_steering": {
+    "message": "অ্যাপ মোড “{name}”: স্টিয়ারিং",
+    "description": "A per-app rule whose steering text contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "bdaa4b4f7861ffa6"
+  },
+  "settings.about.backup.sensitive.item.steering_auto": {
+    "message": "শেখা স্টিয়ারিং: টেক্সটে একটি কী রয়েছে",
+    "description": "The learned (auto) steering document contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "23fd6ac38dd7ad7f"
+  },
+  "settings.about.backup.sensitive.item.steering_user": {
+    "message": "আপনার স্টিয়ারিং ফাইল: টেক্সটে একটি কী রয়েছে",
+    "description": "The user's own steering document contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "d94411d38b0a7854"
+  },
+  "settings.about.backup.sensitive.item.unknown": {
+    "message": "Kage-এর একটি নতুন সংস্করণ যে আইটেমটি বাদ দিয়েছে",
+    "description": "A left-out item of a kind this version does not know, from an older backup made by a newer build",
+    "_machine_translated": true,
+    "_source_hash": "8de3260cf285f12d"
+  },
+  "settings.about.backup.sensitive.item.host_setting": {
+    "message": "সেটিং “{path}”",
+    "description": "One of Kage's own settings that holds a sign-in or key; path is its location in the settings file, e.g. ui › language",
+    "_machine_translated": true,
+    "_source_hash": "06018b231ec4b901"
+  },
+  "settings.about.backup.sensitive.item.agent_connection": {
+    "message": "এজেন্ট সংযোগ “{name}”",
+    "description": "An agent connection with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "994c186b1d2a9afc"
+  },
+  "settings.about.backup.sensitive.item.shortcut": {
+    "message": "শর্টকাট “{name}”",
+    "description": "A shortcut with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "ffa6e6a91b1b3807"
+  },
+  "settings.about.backup.sensitive.item.macro": {
+    "message": "অটোমেশন “{name}”",
+    "description": "An automation with a credential in one of its settings, such as its summary",
+    "_machine_translated": true,
+    "_source_hash": "7fb669b16c7342a6"
+  },
+  "settings.about.backup.sensitive.item.macro_step": {
+    "message": "অটোমেশন “{name}”: ধাপ {step}",
+    "description": "An automation step with a credential in it (for example in a find-and-replace); step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "485f51798f7d2a79"
+  },
+  "settings.about.backup.sensitive.item.context_rule": {
+    "message": "অ্যাপ মোড “{name}”",
+    "description": "A per-app mode with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "ba4e0a8f5ed49ce7"
+  },
+  "settings.about.backup.sensitive.item.internal_site": {
+    "message": "অভ্যন্তরীণ সাইট “{name}”",
+    "description": "An internal-site profile with a credential in one of its rules",
+    "_machine_translated": true,
+    "_source_hash": "202e184b9fc4d2b3"
+  },
+  "settings.about.backup.sensitive.item.quick_action": {
+    "message": "কুইক অ্যাকশন “{name}”",
+    "description": "A custom quick action whose prompt or label contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "447dd416f395e6c3"
+  },
   "errors.config.import_unsafe_path": {
     "message": "এই ব্যাকআপটি ইমপোর্ট করা যাবে না: এটি Kage-এর ফোল্ডারের বাইরে লিখবে ({path})। কিছুই পরিবর্তন করা হয়নি।",
     "description": "Returned when a backup archive entry has an unsafe name, or would be written through a symlink or other link on this machine. {path} is the archive entry name or the local path of the link. The import is refused before anything is written.",
@@ -9676,5 +9922,263 @@
     "description": ">extensions command description",
     "_machine_translated": true,
     "_source_hash": "31782aee63fb447e"
+  },
+  "errors.config.export_passphrase_blank": {
+    "message": "পাসফ্রেজ খালি বা শুধু স্পেস দিয়ে তৈরি হতে পারবে না।",
+    "description": "Returned when an encrypted export is asked for with a passphrase that is empty or only whitespace",
+    "_machine_translated": true,
+    "_source_hash": "65810c336b4aae0c"
+  },
+  "errors.config.export_too_large": {
+    "message": "এই ব্যাকআপটি রিস্টোর করার জন্য খুব বড় হবে: কোনো এক্সটেনশনের ডেটা ফাইল {max_mb} MB-এর বেশি, অথবা মোট ডেটা {total_mb} MB-এর বেশি। কিছুই সংরক্ষণ করা হয়নি।",
+    "description": "Returned when extension data is over the backup size limits; max_mb and total_mb are numbers of megabytes",
+    "_machine_translated": true,
+    "_source_hash": "025cb447a83c3e00"
+  },
+  "errors.config.import_too_large": {
+    "message": "এই ব্যাকআপটি ইমপোর্ট করা যাবে না: এতে {max_files}টির বেশি ফাইল, {max_mb} MB-এর বেশি আকারের কোনো ফাইল, অথবা মোট {total_mb} MB-এর বেশি ডেটা আছে। কিছুই পরিবর্তন করা হয়নি।",
+    "description": "Returned when a backup archive is over the size or file-count limits; the import is refused before anything is written. max_files is a count, max_mb and total_mb are numbers of megabytes",
+    "_machine_translated": true,
+    "_source_hash": "830be0307a8c4e2e"
+  },
+  "errors.config.import_passphrase_required": {
+    "message": "এই ব্যাকআপটি এনক্রিপ্ট করা। এর পাসফ্রেজ লিখুন।",
+    "description": "Returned when the chosen backup file is encrypted (recognised by its contents, whatever its name) and no passphrase was given; the UI then asks for one",
+    "_machine_translated": true,
+    "_source_hash": "fff7f066c3ca6ae8"
+  },
+  "errors.config.import_wrong_passphrase": {
+    "message": "এই পাসফ্রেজ দিয়ে ব্যাকআপটি খোলা যাচ্ছে না, অথবা ফাইলটি ক্ষতিগ্রস্ত।",
+    "description": "Returned when an encrypted backup can't be decrypted with the passphrase given; the UI asks again",
+    "_machine_translated": true,
+    "_source_hash": "dde901b03ea582b0"
+  },
+  "settings.about.backup.passphrase_blank": {
+    "message": "পাসফ্রেজ শুধু স্পেস দিয়ে তৈরি হতে পারবে না।",
+    "description": "Error when the export passphrase is only whitespace",
+    "_machine_translated": true,
+    "_source_hash": "bdccfebdb6fdc09e"
+  },
+  "settings.about.backup.unlock.wrong": {
+    "message": "এই পাসফ্রেজ দিয়ে ব্যাকআপটি খোলা যায়নি। আবার চেষ্টা করুন।",
+    "description": "Body of the passphrase prompt when the previous passphrase didn't decrypt the backup",
+    "_machine_translated": true,
+    "_source_hash": "4871f907e2ac1bc5"
+  },
+  "errors.config.export_passphrase_required": {
+    "message": "ব্যাকআপ এনক্রিপ্ট করতে একটি পাসফ্রেজ লিখুন।",
+    "description": "Returned when an encrypted export is asked for without a passphrase",
+    "_machine_translated": true,
+    "_source_hash": "c9466429cee18235"
+  },
+  "errors.config.import_newer_config": {
+    "message": "এই ব্যাকআপের সেটিংস Kage-এর একটি নতুন সংস্করণ থেকে এসেছে। Kage আপডেট করে আবার চেষ্টা করুন। কিছুই পরিবর্তন করা হয়নি।",
+    "description": "Import refused: the backup's config.json uses a config schema newer than this build reads",
+    "_machine_translated": true,
+    "_source_hash": "c1809510e7dce4fe"
+  },
+  "errors.config.import_old_config": {
+    "message": "এই ব্যাকআপের সেটিংস Kage-এর এমন একটি পুরোনো সংস্করণ থেকে এসেছে যা পড়া সম্ভব নয়। কিছুই পরিবর্তন করা হয়নি।",
+    "description": "Import refused: the backup's config.json uses a config schema older than this build can migrate",
+    "_machine_translated": true,
+    "_source_hash": "a7810b496c8621b6"
+  },
+  "errors.config.import_unfinished": {
+    "message": "আগের একটি ইমপোর্ট শেষ হয়নি এবং তা পূর্বাবস্থায় ফেরানো যায়নি। Kage রিস্টার্ট করে আবার চেষ্টা করুন। কিছুই পরিবর্তন করা হয়নি।",
+    "description": "Import refused: an interrupted import is still unresolved, or another Kage process is importing",
+    "_machine_translated": true,
+    "_source_hash": "1ae264d4c97e3848"
+  },
+  "settings.about.backup.mode.title": {
+    "message": "কী ব্যাকআপ করবেন",
+    "description": "Legend of the export choice: encrypted full backup or unencrypted settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "5cc5344da62aa9e5"
+  },
+  "settings.about.backup.mode.encrypted.label": {
+    "message": "সবকিছু, এনক্রিপ্ট করা (প্রস্তাবিত)",
+    "description": "Export option: an encrypted backup of everything",
+    "_machine_translated": true,
+    "_source_hash": "9c556e0814e2b4ed"
+  },
+  "settings.about.backup.mode.encrypted.description": {
+    "message": "আপনার সেটিংস, স্টিয়ারিং ডক, শর্টকাট, অটোমেশন, এজেন্ট সেটআপ এবং প্রতিটি এক্সটেনশন ও তার ডেটা, সাইন-ইন সহ। ফাইলটি কেবল আপনার বেছে নেওয়া পাসফ্রেজ দিয়েই খোলে।",
+    "description": "Describes the encrypted full backup",
+    "_machine_translated": true,
+    "_source_hash": "1b7bbdead622401b"
+  },
+  "settings.about.backup.mode.settings_only.label": {
+    "message": "শুধু সেটিংস, এনক্রিপ্ট করা নয়",
+    "description": "Export option: an unencrypted backup of allowlisted settings only",
+    "_machine_translated": true,
+    "_source_hash": "26910eae1c850e15"
+  },
+  "settings.about.backup.mode.settings_only.description": {
+    "message": "থিম, ভাষা, হটকি, উইন্ডো, আপডেট ও নোটিফিকেশনের পছন্দ, কোন এক্সটেনশন চালু আছে ও সেগুলো কী করতে পারে, এবং এক্সটেনশন নির্মাতারা যে সেটিংস কপি করার জন্য নিরাপদ হিসেবে চিহ্নিত করেছেন। কোনো পাসওয়ার্ড, কী বা সাইন-ইন নয়।",
+    "description": "Describes what an unencrypted settings-only backup holds",
+    "_machine_translated": true,
+    "_source_hash": "73cd01dda69c7e48"
+  },
+  "settings.about.backup.settings_only.left_out_generic": {
+    "message": "আপনার স্টিয়ারিং ডক, শর্টকাট, অটোমেশন, এজেন্ট সেটআপ, এক্সটেনশন ডেটা ও সাইন-ইন এই ফাইলে নেই। এগুলো অন্তর্ভুক্ত করতে এনক্রিপ্ট করুন।",
+    "description": "Shown under the settings-only option: what it never carries",
+    "_machine_translated": true,
+    "_source_hash": "2664e71b17e9148c"
+  },
+  "settings.about.backup.settings_only.left_out_intro": {
+    "message": "এই মেশিন থেকে যা বাদ পড়বে:",
+    "description": "Introduces the list of what a settings-only backup of this machine would leave out",
+    "_machine_translated": true,
+    "_source_hash": "7765246cd98e927a"
+  },
+  "settings.about.backup.settings_only.left_out.steering": {
+    "message": "আপনার স্টিয়ারিং ডক",
+    "description": "Left out of a settings-only backup: the custom and learned steering docs",
+    "_machine_translated": true,
+    "_source_hash": "4d8725f629364ea3"
+  },
+  "settings.about.backup.settings_only.left_out.shortcuts": {
+    "message": "{count, plural, one {#টি শর্টকাট} other {#টি শর্টকাট}}",
+    "description": "Left out of a settings-only backup: shortcuts",
+    "_machine_translated": true,
+    "_source_hash": "9be57e3fe5561e72"
+  },
+  "settings.about.backup.settings_only.left_out.automations": {
+    "message": "{count, plural, one {#টি অটোমেশন} other {#টি অটোমেশন}}",
+    "description": "Left out of a settings-only backup: automations (macros)",
+    "_machine_translated": true,
+    "_source_hash": "d8ef970dc5155bf3"
+  },
+  "settings.about.backup.settings_only.left_out.quick_actions": {
+    "message": "{count, plural, one {#টি কাস্টম কুইক অ্যাকশন} other {#টি কাস্টম কুইক অ্যাকশন}}",
+    "description": "Left out of a settings-only backup: custom quick actions (their prompts)",
+    "_machine_translated": true,
+    "_source_hash": "75a9add6e5174867"
+  },
+  "settings.about.backup.settings_only.left_out.app_modes": {
+    "message": "{count, plural, one {#টি অ্যাপ মোড} other {#টি অ্যাপ মোড}}",
+    "description": "Left out of a settings-only backup: app modes (per-app steering)",
+    "_machine_translated": true,
+    "_source_hash": "6e91491be51672de"
+  },
+  "settings.about.backup.settings_only.left_out.agents": {
+    "message": "{count, plural, one {#টি এজেন্ট সেটআপ} other {#টি এজেন্ট সেটআপ}}",
+    "description": "Left out of a settings-only backup: agent connections (commands, hosts, models)",
+    "_machine_translated": true,
+    "_source_hash": "f09681e8796e87f9"
+  },
+  "settings.about.backup.settings_only.left_out.internal_sites": {
+    "message": "{count, plural, one {#টি অভ্যন্তরীণ সাইট} other {#টি অভ্যন্তরীণ সাইট}}",
+    "description": "Left out of a settings-only backup: internal-site profiles and their scripts",
+    "_machine_translated": true,
+    "_source_hash": "867ae106a9e594e9"
+  },
+  "settings.about.backup.settings_only.left_out.tool_permissions": {
+    "message": "আপনার অনুমোদিত বা প্রত্যাখ্যাত কমান্ড এবং আপনার বিশ্বস্ত টুলগুলো",
+    "description": "Left out of a settings-only backup: tool permissions",
+    "_machine_translated": true,
+    "_source_hash": "deacf2ef30e0b531"
+  },
+  "settings.about.backup.settings_only.left_out.stores": {
+    "message": "এক্সটেনশন স্টোরের ঠিকানা",
+    "description": "Left out of a settings-only backup: custom extension store URLs",
+    "_machine_translated": true,
+    "_source_hash": "ad89f9de431da387"
+  },
+  "settings.about.backup.settings_only.left_out.extension_data": {
+    "message": "{count, plural, one {এক্সটেনশন ডেটা (১টি ফাইল)} other {এক্সটেনশন ডেটা (#টি ফাইল)}}",
+    "description": "Left out of a settings-only backup: what extensions store",
+    "_machine_translated": true,
+    "_source_hash": "e4f60aca77bfa742"
+  },
+  "settings.about.backup.settings_only.left_out.extension_settings": {
+    "message": "{count, plural, one {১টি এক্সটেনশন সেটিং কপি করার জন্য নিরাপদ হিসেবে চিহ্নিত নয়} other {#টি এক্সটেনশন সেটিং কপি করার জন্য নিরাপদ হিসেবে চিহ্নিত নয়}}",
+    "description": "Left out of a settings-only backup: extension settings their manifests do not mark safe for an unencrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "344fff7fbd1a19bf"
+  },
+  "settings.about.backup.settings_only.left_out_outro": {
+    "message": "এগুলো অন্তর্ভুক্ত করতে এনক্রিপ্ট করুন।",
+    "description": "Ends the list of what a settings-only backup leaves out",
+    "_machine_translated": true,
+    "_source_hash": "4cea893922c443c5"
+  },
+  "settings.about.backup.settings_only.flagged_intro": {
+    "message": "{count, plural, one {এই সেটিংটিও বাদ দেওয়া হয়েছে, কারণ এর মান সেটিংয়ের মতো দেখাচ্ছে না:} other {এই সেটিংগুলোও বাদ দেওয়া হয়েছে, কারণ এদের মান সেটিংয়ের মতো দেখাচ্ছে না:}}",
+    "description": "Introduces allowlisted settings left out of a settings-only backup because their values look like they may hold a password or key",
+    "_machine_translated": true,
+    "_source_hash": "4145f683d7a62adb"
+  },
+  "settings.about.backup.settings_only.flagged_extension_setting": {
+    "message": "{extension}: সেটিং “{field}”",
+    "description": "One extension setting left out of a settings-only backup because its value looks like a secret",
+    "_machine_translated": true,
+    "_source_hash": "cec5134d93d5c385"
+  },
+  "settings.about.backup.settings_only.list_unavailable": {
+    "message": "এই মেশিনে কী আছে তার তালিকা করা যায়নি: {message}",
+    "description": "Shown when the list of what a settings-only backup leaves out could not be loaded",
+    "_machine_translated": true,
+    "_source_hash": "cf2819af43db7da0"
+  },
+  "settings.about.backup.saved_settings_only": {
+    "message": "✓ {path}-এ {size} সংরক্ষিত হয়েছে। শুধু সেটিংস: বাকি সবকিছু সঙ্গে নিতে একটি ব্যাকআপ এনক্রিপ্ট করুন।",
+    "description": "Status after saving a settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "13c034d7e15fd345"
+  },
+  "settings.about.import.summary.settings_only": {
+    "message": "{count, plural, one {✓ ১টি সেটিং পুনরুদ্ধার করা হয়েছে} other {✓ #টি সেটিং পুনরুদ্ধার করা হয়েছে}}{exported_at}। এই মেশিনের বাকি সবকিছু আগের মতোই রাখা হয়েছে।",
+    "description": "Summary after importing a settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "5834f55a08a58477"
+  },
+  "errors.config.import_local_newer": {
+    "message": "এই কম্পিউটারের Kage সেটিংস Kage-এর একটি নতুন সংস্করণ থেকে এসেছে, তাই Kage ডিফল্ট সেটিংসে চলছে এবং ইমপোর্ট সংরক্ষণ করতে পারছে না। Kage আপডেট করে আবার চেষ্টা করুন। কিছুই পরিবর্তন করা হয়নি।",
+    "description": "Import refused: config.json on disk was written by a newer build and is being preserved, so saves are off this session",
+    "_machine_translated": true,
+    "_source_hash": "1324978b3fb8f283"
+  },
+  "errors.config.import_config_too_large": {
+    "message": "এই ব্যাকআপের সেটিংস ব্যবহারের জন্য খুব বড় ({max_kb} KB-এর বেশি)। কিছুই পরিবর্তন করা হয়নি।",
+    "description": "Import refused: the merged settings would be larger than Kage reads back at startup",
+    "_machine_translated": true,
+    "_source_hash": "7b731c6af65accfd"
+  },
+  "store.card.approve": {
+    "message": "অনুমোদন করুন",
+    "description": "Store card button for an installed extension that is off until the user approves what it asks to do (shows the permission prompt)",
+    "_machine_translated": true,
+    "_source_hash": "94d7354658590a7d"
+  },
+  "store.card.approve.title": {
+    "message": "এই এক্সটেনশনটি কী করতে চাইছে তা পর্যালোচনা করে অনুমোদন করুন",
+    "description": "Tooltip of the Approve button on a Store card",
+    "_machine_translated": true,
+    "_source_hash": "088194f275bba30e"
+  },
+  "store.card.approving": {
+    "message": "অনুমোদন করা হচ্ছে…",
+    "description": "Store card status while the Approve flow runs",
+    "_machine_translated": true,
+    "_source_hash": "30798f331850fc7a"
+  },
+  "store.approve.failed.title": {
+    "message": "অনুমোদন ব্যর্থ হয়েছে",
+    "description": "Title of the alert shown when approving an installed extension fails",
+    "_machine_translated": true,
+    "_source_hash": "51fe2ab11850ea8f"
+  },
+  "settings.about.import.summary.kept_local_settings": {
+    "message": "{count, plural, one {{names}-এর জন্য এই মেশিনের সেটিংস ও সংরক্ষিত ডেটা রাখা হয়েছে: এখানে এর সাইন-ইন যেমন আছে তেমনই থাকবে, আর ব্যাকআপে এর নিজস্ব কোনো সাইন-ইন ছিল না।} other {{names}-এর জন্য এই মেশিনের সেটিংস ও সংরক্ষিত ডেটা রাখা হয়েছে: এখানে এগুলোর সাইন-ইন যেমন আছে তেমনই থাকবে, আর ব্যাকআপে এগুলোর নিজস্ব সাইন-ইন ছিল না।}}",
+    "description": "Import summary: extensions that kept this machine's settings and data whole, because their sign-in on this machine stays and the backup's settings could have sent it somewhere else; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "0fec5fa99b8bc6c2"
+  },
+  "settings.about.import.summary.needs_approval": {
+    "message": "{count, plural, one {#টি এক্সটেনশনের আবার আপনার অনুমোদন প্রয়োজন: {names}। Store-এ অনুমোদন না করা পর্যন্ত এটি বন্ধ থাকবে।} other {#টি এক্সটেনশনের আবার আপনার অনুমোদন প্রয়োজন: {names}। Store-এ অনুমোদন না করা পর্যন্ত এগুলো বন্ধ থাকবে।}}",
+    "description": "Import summary: installed extensions switched off because what they were allowed to do comes only from approval on this machine, never from a backup; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "f58bf3d94c5be6d5"
   }
 }

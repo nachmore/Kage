@@ -97,6 +97,9 @@ base64 = "0.22"
 reqwest = { version = "0.13", features = ["blocking", "json"] }
 url = "2.5"
 zip = { version = "8.1", default-features = false, features = ["deflate"] }
+# NFC for comparing backup file names the way APFS/NTFS do (already in
+# the tree via `url` → `idna`).
+icu_normalizer = { version = "2.1", default-features = false, features = ["compiled_data"] }
 semver = "1.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-notification = "2.3.3"

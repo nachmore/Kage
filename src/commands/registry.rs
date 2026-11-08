@@ -142,6 +142,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::ollama_list_models,
         crate::commands::ollama_codex_spawn_command,
         crate::commands::export_config_default_filename,
+        crate::commands::preview_config_export,
         crate::commands::export_config_bundle,
         crate::commands::import_config_bundle,
         crate::commands::write_text_file,

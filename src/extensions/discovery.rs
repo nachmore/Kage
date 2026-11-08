@@ -69,6 +69,29 @@ pub fn discover_items(kind: &str, enabled_states: &HashMap<String, bool>) -> Vec
     items
 }
 
+/// Every installed item of a given kind, including folders that claim an
+/// id another folder already has (which [`discover_items`] drops). For
+/// callers that must see every manifest's declarations, such as backups
+/// (`config_export::sensitive`), where one folder must not hide what
+/// another declares sensitive. Each item's `manifest.kind` is set to
+/// `kind`: where it was found, not what its manifest claims.
+pub fn discover_all_items(
+    kind: &str,
+    enabled_states: &HashMap<String, bool>,
+) -> Vec<InstalledItem> {
+    let mut items = Vec::new();
+    if let Ok(subdir) = kind_to_subdir(kind) {
+        if let Ok(user_dir) = user_item_dir(subdir) {
+            for mut item in scan_directory(&user_dir, enabled_states) {
+                item.manifest.kind = kind.to_string();
+                items.push(item);
+            }
+        }
+    }
+    items.sort_by(|a, b| a.path.cmp(&b.path));
+    items
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +112,37 @@ mod tests {
         let items = scan_directory(&base, &HashMap::new());
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].manifest.name, "todo");
+    }
+
+    #[test]
+    fn discover_all_keeps_every_folder_claiming_an_id() {
+        let dir = user_item_dir(kind_to_subdir("extension").unwrap()).unwrap();
+        let ids = ["r3-dup-a", "r3-dup-b"];
+        for (folder, declares) in [(ids[0], true), (ids[1], false)] {
+            let path = dir.join(folder);
+            fs::create_dir_all(&path).unwrap();
+            let mut manifest = serde_json::json!({
+                "id": "r3-dup", "name": folder, "version": "1.0.0", "type": "theme",
+            });
+            if declares {
+                manifest["sensitiveData"] = serde_json::json!(["vault"]);
+            }
+            fs::write(path.join("manifest.json"), manifest.to_string()).unwrap();
+        }
+        let all: Vec<InstalledItem> = discover_all_items("extension", &HashMap::new())
+            .into_iter()
+            .filter(|i| i.manifest.id == "r3-dup")
+            .collect();
+        for folder in ids {
+            let _ = fs::remove_dir_all(dir.join(folder));
+        }
+        assert_eq!(all.len(), 2);
+        assert!(
+            all.iter().all(|i| i.manifest.kind == "extension"),
+            "kind is where it was found"
+        );
+        assert!(all
+            .iter()
+            .any(|i| !i.manifest.sensitive_data_patterns().is_empty()));
     }
 }

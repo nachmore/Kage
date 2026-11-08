@@ -4,6 +4,7 @@ import {
     CAPABILITIES,
     KNOWN_CAPABILITIES,
     normalizePermissions,
+    grantCovers,
     decideInvoke,
 } from '../../ui/js/shared/extension-permissions.js';
 
@@ -98,6 +99,26 @@ describe('normalizePermissions', () => {
     it('ignores non-string entries', () => {
         const result = normalizePermissions([null, 42, 'storage', {}], 'x');
         expect(result).toEqual(['storage']);
+    });
+});
+
+describe('grantCovers', () => {
+    it('is true only when the recorded grant holds every requested capability', () => {
+        expect(grantCovers({ granted: ['network', 'storage'] }, ['storage', 'network'], 'x')).toBe(
+            true
+        );
+        expect(grantCovers({ granted: ['storage'] }, ['storage', 'network'], 'x')).toBe(false);
+        expect(grantCovers(undefined, ['storage'], 'x')).toBe(false);
+        expect(grantCovers(null, ['storage'], 'x')).toBe(false);
+    });
+
+    it('asking for nothing needs no grant', () => {
+        expect(grantCovers(undefined, [], 'x')).toBe(true);
+        expect(grantCovers(undefined, undefined, 'x')).toBe(true);
+    });
+
+    it('compares the normalised sets', () => {
+        expect(grantCovers({ granted: [' Storage '] }, ['STORAGE'], 'x')).toBe(true);
     });
 });
 

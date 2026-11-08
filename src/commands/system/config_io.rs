@@ -217,50 +217,6 @@ pub(crate) fn keep_local_tool_trust(imported: &mut Config, local: &Config) {
         local.tool_permissions.trusted_mcp_servers.clone();
 }
 
-/// Replace an imported config's grants with the local map, then fill in
-/// backup grants only for extensions with no local grant.
-///
-/// A backup is often restored after config.json was reset, which wipes
-/// the local grants while the install dirs survive. Dropping every
-/// backup grant would leave those extensions enabled but running with
-/// no capabilities. A backup grant is accepted only when the extension
-/// is installed here, the approved version matches the installed
-/// manifest, and the granted set is a subset of what that manifest
-/// requests (install consent is all-or-nothing on that set, so this
-/// grants nothing local consent wouldn't have). Otherwise the extension
-/// is disabled so the user re-enables it rather than running it broken.
-pub(crate) fn merge_imported_grants(
-    imported: &mut Config,
-    local_grants: &std::collections::HashMap<String, crate::config::ExtensionGrant>,
-    installed: &[crate::extensions::ExtensionManifest],
-) {
-    let backup = std::mem::replace(&mut imported.extension_grants, local_grants.clone());
-    for (id, grant) in backup {
-        if local_grants.contains_key(&id) {
-            continue;
-        }
-        let Some(manifest) = installed.iter().find(|m| m.id == id) else {
-            continue;
-        };
-        let requested = crate::extensions::normalize_permissions(
-            manifest.permissions.as_deref().unwrap_or(&[]),
-            &manifest.id,
-        );
-        if grant.approved_version == manifest.version
-            && grant.granted.iter().all(|cap| requested.contains(cap))
-        {
-            imported.extension_grants.insert(id, grant);
-        } else {
-            log::warn!(
-                "import_config_bundle: backup grant for '{}' doesn't match the installed \
-                 manifest; disabling it until the user re-enables it",
-                id
-            );
-            imported.extension_states.insert(id, false);
-        }
-    }
-}
-
 #[tauri::command]
 pub async fn save_frecency(data: String) -> Result<(), AppError> {
     let path = crate::paths::config_dir()
@@ -562,37 +518,52 @@ pub async fn is_terminator_mode(features: State<'_, FeatureServices>) -> Result<
 
 // --- Cross-device backup commands -----------------------------------
 //
-// Export bundles the user's current config + steering docs +
-// extension data into a single zip (optionally AES-GCM-encrypted with
-// a passphrase). Import is the inverse — unwraps, sanitises away
-// device-local fields, and writes everything back. See
-// `src/config_export.rs` for the layout + sanitisation rules.
+// Export writes one of two kinds of backup: everything (config, steering
+// docs, extension data) encrypted with a passphrase, or an unencrypted
+// file of allowlisted settings only. Import is the inverse — unwraps,
+// merges with this machine's values, sanitises away device-local fields.
+// See `src/config_export.rs` for the layout and the merge rules.
 
 /// Suggested filename for the export dialog. Frontend uses this so
 /// the date stamp matches Local time on the user's machine without
 /// the JS having to format dates itself.
 #[tauri::command]
 pub async fn export_config_default_filename(encrypted: bool) -> String {
-    crate::config_export::default_filename(encrypted)
+    crate::config_export::default_filename(if encrypted {
+        crate::config_export::ExportMode::Encrypted
+    } else {
+        crate::config_export::ExportMode::SettingsOnly
+    })
 }
 
-/// Build the backup bytes and write them to the user-picked path.
-/// Returns the byte count so the UI can confirm a successful write.
-/// We do the disk write here rather than handing bytes back over IPC
-/// because a config + extension-data bundle can be tens of MB and
-/// the round-trip is wasteful.
+/// Installed extensions and themes, whose manifests say which of their
+/// data is sensitive, each tagged with the kind of folder it was found in.
+/// Blocking (reads every manifest).
+fn installed_items(
+    states: &std::collections::HashMap<String, bool>,
+) -> Vec<crate::extensions::InstalledItem> {
+    // Every folder, even two claiming one id: each one's declarations count.
+    ["extension", "theme"]
+        .iter()
+        .flat_map(|kind| crate::extensions::discover_all_items(kind, states))
+        .collect()
+}
+
+/// What an unencrypted settings-only backup would leave out (steering
+/// docs, shortcuts, agent setups, extension data, …), in plain words, and
+/// how many settings it would hold. Labels only, never values. The Backup
+/// UI lists it before the user saves one.
 #[tauri::command]
-pub async fn export_config_bundle(
-    path: String,
-    passphrase: Option<String>,
+pub async fn preview_config_export(
     features: State<'_, FeatureServices>,
-) -> Result<u64, AppError> {
+) -> Result<crate::config_export::ExportPreview, AppError> {
     let config = {
         let cfg = features.config.lock_or_recover();
         cfg.clone()
     };
-    let bytes = tauri::async_runtime::spawn_blocking(move || {
-        crate::config_export::export(&config, passphrase.as_deref())
+    tauri::async_runtime::spawn_blocking(move || {
+        let installed = installed_items(&config.extension_states);
+        crate::config_export::preview(&config, &installed)
     })
     .await
     .map_err(|e| {
@@ -605,10 +576,50 @@ pub async fn export_config_bundle(
     .map_err(|e| {
         AppError::keyed(
             ErrorKind::Internal,
-            "errors.config.export_build_failed",
+            "errors.config.export_preview_failed",
             &[("message", &e.to_string())],
         )
-    })?;
+    })
+}
+
+/// Build the backup bytes and write them to the user-picked path.
+/// Returns the byte count so the UI can confirm a successful write.
+/// We do the disk write here rather than handing bytes back over IPC
+/// because a config + extension-data bundle can be tens of MB and
+/// the round-trip is wasteful.
+///
+/// `mode` is `"encrypted"` (the default: everything, which needs a
+/// passphrase that isn't blank) or `"settings_only"` (allowlisted settings,
+/// unencrypted, no passphrase). There is no unencrypted full backup.
+#[tauri::command]
+pub async fn export_config_bundle(
+    path: String,
+    mode: Option<crate::config_export::ExportMode>,
+    passphrase: Option<String>,
+    features: State<'_, FeatureServices>,
+) -> Result<u64, AppError> {
+    let config = {
+        let cfg = features.config.lock_or_recover();
+        cfg.clone()
+    };
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        let installed = installed_items(&config.extension_states);
+        crate::config_export::export(
+            &config,
+            mode.unwrap_or_default(),
+            passphrase.as_deref(),
+            &installed,
+        )
+    })
+    .await
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.export_task_failed",
+            &[("message", &e.to_string())],
+        )
+    })?
+    .map_err(export_error)?;
 
     let len = bytes.len() as u64;
     std::fs::write(&path, &bytes).map_err(|e| {
@@ -621,24 +632,132 @@ pub async fn export_config_bundle(
     Ok(len)
 }
 
-/// The AppError for a failed `config_export::import`. A backup that would
-/// write outside Kage's folders gets its own message (nothing was written).
+/// The AppError for a failed `config_export::export`.
+fn export_error(e: anyhow::Error) -> AppError {
+    use crate::config_export::{BackupTooLarge, BlankPassphrase, PassphraseNeeded};
+    if e.downcast_ref::<PassphraseNeeded>().is_some() {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.export_passphrase_required",
+            &[],
+        )
+    } else if e.downcast_ref::<BlankPassphrase>().is_some() {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.export_passphrase_blank",
+            &[],
+        )
+    } else if e.downcast_ref::<BackupTooLarge>().is_some() {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.export_too_large",
+            &[
+                ("max_mb", &megabytes(crate::config_export::MAX_ENTRY_BYTES)),
+                (
+                    "total_mb",
+                    &megabytes(crate::config_export::MAX_TOTAL_BYTES),
+                ),
+            ],
+        )
+    } else {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.export_build_failed",
+            &[("message", &e.to_string())],
+        )
+    }
+}
+
+fn megabytes(bytes: u64) -> String {
+    (bytes / (1024 * 1024)).to_string()
+}
+
+/// The AppError for a failed `config_export::prepare_import` /
+/// `apply_import`. A backup that would write outside Kage's folders, or is
+/// too large, gets its own message (nothing was written), and so do the
+/// passphrase cases the UI answers by asking (again).
 fn import_error(e: anyhow::Error) -> AppError {
-    match e.downcast_ref::<crate::config_export::UnsafeImportPath>() {
-        Some(unsafe_path) => {
-            log::warn!("import_config_bundle: refused: {}", unsafe_path);
+    use crate::config_export::{
+        BackupTooLarge, ConfigTooLarge, ImportUnfinished, PassphraseRequired, UnsafeImportPath,
+        UnsupportedConfigSchema, WrongPassphrase,
+    };
+    if let Some(unsafe_path) = e.downcast_ref::<UnsafeImportPath>() {
+        log::warn!("import_config_bundle: refused: {}", unsafe_path);
+        return AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_unsafe_path",
+            &[("path", &unsafe_path.path)],
+        );
+    }
+    if let Some(too_large) = e.downcast_ref::<BackupTooLarge>() {
+        log::warn!("import_config_bundle: refused: {}", too_large);
+        return AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_too_large",
+            &[
+                ("max_files", &crate::config_export::MAX_ENTRIES.to_string()),
+                ("max_mb", &megabytes(crate::config_export::MAX_ENTRY_BYTES)),
+                (
+                    "total_mb",
+                    &megabytes(crate::config_export::MAX_TOTAL_BYTES),
+                ),
+            ],
+        );
+    }
+    if let Some(schema) = e.downcast_ref::<UnsupportedConfigSchema>() {
+        log::warn!("import_config_bundle: refused: {}", schema);
+        return if schema.newer {
             AppError::keyed(
                 ErrorKind::Internal,
-                "errors.config.import_unsafe_path",
-                &[("path", &unsafe_path.path)],
+                "errors.config.import_newer_config",
+                &[],
             )
-        }
-        None => AppError::keyed(
-            ErrorKind::Internal,
-            "errors.config.import_build_failed",
-            &[("message", &e.to_string())],
-        ),
+        } else {
+            AppError::keyed(ErrorKind::Internal, "errors.config.import_old_config", &[])
+        };
     }
+    if e.downcast_ref::<ConfigTooLarge>().is_some() {
+        return AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_config_too_large",
+            &[("max_kb", &(Config::MAX_CONFIG_SIZE / 1024).to_string())],
+        );
+    }
+    if e.downcast_ref::<ImportUnfinished>().is_some() {
+        return AppError::keyed(ErrorKind::Internal, "errors.config.import_unfinished", &[]);
+    }
+    if e.downcast_ref::<PassphraseRequired>().is_some() {
+        return AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_passphrase_required",
+            &[],
+        );
+    }
+    if e.downcast_ref::<WrongPassphrase>().is_some() {
+        return AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_wrong_passphrase",
+            &[],
+        );
+    }
+    AppError::keyed(
+        ErrorKind::Internal,
+        "errors.config.import_build_failed",
+        &[("message", &e.to_string())],
+    )
+}
+
+/// What an import changes that the command applies after saving.
+struct ImportOutcome {
+    summary: crate::config_export::ImportSummary,
+    prior_terminator: bool,
+    prior_acp_mode: crate::config::AcpMode,
+    new_log_buffer: usize,
+    new_terminator: bool,
+    new_language: Option<String>,
+    new_acp_mode: crate::config::AcpMode,
+    new_login_env: bool,
+    auto_start: bool,
 }
 
 /// Apply a backup bundle from disk. Returns the import summary (counts)
@@ -653,78 +772,117 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
     acp: State<'_, AcpHandles>,
     app: tauri::AppHandle<R>,
 ) -> Result<crate::config_export::ImportSummary, AppError> {
-    let bytes = std::fs::read(&path).map_err(|e| {
-        AppError::keyed(
+    // Capped before it's read: a huge file is refused without filling memory.
+    let bytes =
+        crate::config_export::read_backup_file(std::path::Path::new(&path)).map_err(|e| {
+            if e.downcast_ref::<crate::config_export::BackupTooLarge>()
+                .is_some()
+            {
+                import_error(e)
+            } else {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.config.import_read_failed",
+                    &[("path", &path), ("message", &e.to_string())],
+                )
+            }
+        })?;
+    // config.json on disk is from a newer Kage and is being preserved, so
+    // nothing this import changes could be saved with it.
+    if Config::saves_suspended() {
+        return Err(AppError::keyed(
             ErrorKind::Internal,
-            "errors.config.import_read_failed",
-            &[("path", &path), ("message", &e.to_string())],
-        )
-    })?;
-    let local = {
-        let cfg = features.config.lock_or_recover();
-        cfg.clone()
-    };
+            "errors.config.import_local_newer",
+            &[],
+        ));
+    }
+    let states = features.config.lock_or_recover().extension_states.clone();
+    let config = features.config.clone();
 
-    // Disk + decryption work happens off the runtime so the dialog
-    // stays responsive even with Argon2's intentionally-slow KDF. The
-    // installed manifests are read here too (off the config lock) so the
-    // backup's grants can be checked against what's actually on disk.
-    let (mut new_config, summary, installed) = tauri::async_runtime::spawn_blocking(move || {
-        crate::config_export::import(&bytes, passphrase.as_deref(), &local).map(
-            |(config, summary)| {
-                let installed: Vec<crate::extensions::ExtensionManifest> = ["extension", "theme"]
-                    .iter()
-                    .flat_map(|kind| {
-                        crate::extensions::discover_items(kind, &local.extension_states)
-                    })
-                    .map(|item| item.manifest)
-                    .collect();
-                (config, summary, installed)
-            },
-        )
-    })
-    .await
-    .map_err(|e| {
-        AppError::keyed(
-            ErrorKind::Internal,
-            "errors.config.import_task_failed",
-            &[("message", &e.to_string())],
-        )
-    })?
-    .map_err(import_error)?;
+    // Decryption (Argon2's intentionally slow KDF) and unpacking happen off
+    // the runtime and outside the config lock. The installed manifests are
+    // read here too, so what an import may switch on can be checked against
+    // this machine's grants and what's actually on disk, and the summary can
+    // name extensions to approve or sign in to again. Then, under the config
+    // lock held from reading this machine's config until the merged one is
+    // saved, the backup is merged and its files written: a save made
+    // meanwhile (a permission decision, a setting) can't be lost, and if
+    // saving fails the files are put back.
+    let outcome =
+        tauri::async_runtime::spawn_blocking(move || -> Result<ImportOutcome, AppError> {
+            let items = installed_items(&states);
+            let prepared = crate::config_export::prepare_import(bytes, passphrase.as_deref())
+                .map_err(import_error)?;
 
-    // Persist + swap the in-memory state under the same lock —
-    // mirrors save_config so concurrent permission saves don't race.
-    let new_log_buffer = new_config.system.log_buffer_size;
-    let new_terminator = new_config.tool_permissions.terminator_mode;
-    let new_language = new_config.ui.language.clone();
-    let new_acp_mode = new_config.acp.active_mode();
-    let new_login_env = new_config.acp.agent.import_login_shell_env;
-    let (prior_terminator, prior_acp_mode) = {
-        let mut state_config = features.config.lock_or_recover();
-        let prior = state_config.tool_permissions.terminator_mode;
-        let prior_acp = state_config.acp.active_mode();
-        // Grants are backend-owned and recorded by install consent on THIS
-        // machine. Keep the local map whole: a backup must neither strip
-        // grants from extensions installed here nor (being a plain,
-        // possibly hand-edited file) raise an installed extension's
-        // capabilities without the user consenting here. Backup grants
-        // only fill gaps the local install consent would have covered.
-        merge_imported_grants(&mut new_config, &state_config.extension_grants, &installed);
-        // Like grants: category-wide tool trust stays this machine's.
-        keep_local_tool_trust(&mut new_config, &state_config);
-        *state_config = new_config;
-        // Channel is a typed enum — unknown values from a hand-edited
-        // backup collapsed to Stable at deserialise time.
-        state_config.save().map_err(|e| {
+            let mut state_config = config.lock_or_recover();
+            let local = state_config.clone();
+            let (mut new_config, summary, files) =
+                crate::config_export::apply_import(prepared, &local, &items)
+                    .map_err(import_error)?
+                    .into_parts();
+            // Grants are this machine's whole, and no extension is switched on
+            // that its grant here doesn't cover: `apply_import` enforces that
+            // for every kind of backup (`config_export::consent`). Like grants,
+            // category-wide tool trust stays this machine's.
+            keep_local_tool_trust(&mut new_config, &local);
+            if let Err(e) = crate::config_export::check_config_size(&new_config) {
+                files.rollback();
+                return Err(import_error(e));
+            }
+            let outcome = ImportOutcome {
+                summary,
+                prior_terminator: local.tool_permissions.terminator_mode,
+                prior_acp_mode: local.acp.active_mode(),
+                new_log_buffer: new_config.system.log_buffer_size,
+                new_terminator: new_config.tool_permissions.terminator_mode,
+                new_language: new_config.ui.language.clone(),
+                new_acp_mode: new_config.acp.active_mode(),
+                new_login_env: new_config.acp.agent.import_login_shell_env,
+                auto_start: new_config.system.auto_start,
+            };
+            *state_config = new_config;
+            // Channel is a typed enum — unknown values from a hand-edited
+            // backup collapsed to Stable at deserialise time.
+            if let Err(e) = state_config.save() {
+                *state_config = local;
+                files.rollback();
+                return Err(AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.config.persist_failed",
+                    &[("message", &e.to_string())],
+                ));
+            }
+            if let Err(e) = files.finish() {
+                // The files were put back: put the config back too.
+                *state_config = local;
+                let _ = state_config.save();
+                return Err(AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.config.persist_failed",
+                    &[("message", &e.to_string())],
+                ));
+            }
+            Ok(outcome)
+        })
+        .await
+        .map_err(|e| {
             AppError::keyed(
                 ErrorKind::Internal,
-                "errors.config.persist_failed",
+                "errors.config.import_task_failed",
                 &[("message", &e.to_string())],
             )
-        })?;
-        (prior, prior_acp)
-    };
+        })??;
+    let ImportOutcome {
+        summary,
+        prior_terminator,
+        prior_acp_mode,
+        new_log_buffer,
+        new_terminator,
+        new_language,
+        new_acp_mode,
+        new_login_env,
+        auto_start,
+    } = outcome;
 
     apply_runtime_config(
         &app,
@@ -749,10 +907,6 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
     // local preference, so this is essentially a no-op write — we
     // run it anyway so the registry / launchd entry state can never
     // drift from the JSON).
-    let auto_start = {
-        let cfg = features.config.lock_or_recover();
-        cfg.system.auto_start
-    };
     crate::os::set_startup_enabled(auto_start);
 
     let _ = app.emit(
@@ -897,6 +1051,66 @@ mod tests {
             Some("extension-data/ext/CON")
         );
 
+        for (err, key) in [
+            (
+                anyhow::Error::new(crate::config_export::PassphraseRequired),
+                "errors.config.import_passphrase_required",
+            ),
+            (
+                anyhow::Error::new(crate::config_export::WrongPassphrase),
+                "errors.config.import_wrong_passphrase",
+            ),
+            (
+                anyhow::Error::new(crate::config_export::BackupTooLarge {
+                    what: "test".into(),
+                }),
+                "errors.config.import_too_large",
+            ),
+            (
+                anyhow::Error::new(crate::config_export::UnsupportedConfigSchema {
+                    stored: 9,
+                    newer: true,
+                }),
+                "errors.config.import_newer_config",
+            ),
+            (
+                anyhow::Error::new(crate::config_export::UnsupportedConfigSchema {
+                    stored: 0,
+                    newer: false,
+                }),
+                "errors.config.import_old_config",
+            ),
+            (
+                anyhow::Error::new(crate::config_export::ImportUnfinished),
+                "errors.config.import_unfinished",
+            ),
+            (
+                anyhow::Error::new(crate::config_export::ConfigTooLarge),
+                "errors.config.import_config_too_large",
+            ),
+        ] {
+            assert_eq!(import_error(err).key, key);
+        }
+        for (err, key) in [
+            (
+                anyhow::Error::new(crate::config_export::BlankPassphrase),
+                "errors.config.export_passphrase_blank",
+            ),
+            (
+                anyhow::Error::new(crate::config_export::PassphraseNeeded),
+                "errors.config.export_passphrase_required",
+            ),
+            (
+                anyhow::Error::new(crate::config_export::BackupTooLarge {
+                    what: "test".into(),
+                }),
+                "errors.config.export_too_large",
+            ),
+            (anyhow::anyhow!("x"), "errors.config.export_build_failed"),
+        ] {
+            assert_eq!(export_error(err).key, key);
+        }
+
         let other = import_error(anyhow::anyhow!("Backup is missing config.json"));
         assert_eq!(other.key, "errors.config.import_build_failed");
         assert_eq!(
@@ -1017,76 +1231,5 @@ mod tests {
             imported.tool_permissions.trusted_mcp_servers,
             vec!["builder-mcp".to_string()]
         );
-    }
-
-    fn manifest(id: &str, version: &str, perms: &[&str]) -> crate::extensions::ExtensionManifest {
-        serde_json::from_value(serde_json::json!({
-            "id": id,
-            "name": id,
-            "version": version,
-            "type": "extension",
-            "permissions": perms,
-        }))
-        .expect("test manifest must deserialize")
-    }
-
-    fn imported_with(id: &str, caps: &[&str]) -> Config {
-        let mut cfg = Config::default();
-        cfg.extension_states.insert(id.into(), true);
-        cfg.extension_grants.insert(id.into(), grant(caps));
-        cfg
-    }
-
-    #[test]
-    fn import_restores_backup_grant_matching_installed_manifest() {
-        // Restore-after-reset: no local grant, extension still on disk.
-        let mut imported = imported_with("spotify", &["storage", "oauth"]);
-        let installed = [manifest("spotify", "1.0.0", &["storage", "urls", "oauth"])];
-
-        merge_imported_grants(&mut imported, &Default::default(), &installed);
-
-        assert_eq!(
-            imported.extension_grants.get("spotify").unwrap().granted,
-            vec!["storage", "oauth"]
-        );
-        assert_eq!(imported.extension_states.get("spotify"), Some(&true));
-    }
-
-    #[test]
-    fn import_rejects_backup_grant_for_other_version() {
-        let mut imported = imported_with("spotify", &["storage"]);
-        let installed = [manifest("spotify", "2.0.0", &["storage"])];
-
-        merge_imported_grants(&mut imported, &Default::default(), &installed);
-
-        assert!(imported.extension_grants.is_empty());
-        assert_eq!(imported.extension_states.get("spotify"), Some(&false));
-    }
-
-    #[test]
-    fn import_rejects_backup_grant_wider_than_manifest() {
-        let mut imported = imported_with("todos", &["storage", "oauth"]);
-        let installed = [manifest("todos", "1.0.0", &["storage"])];
-
-        merge_imported_grants(&mut imported, &Default::default(), &installed);
-
-        assert!(imported.extension_grants.is_empty());
-        assert_eq!(imported.extension_states.get("todos"), Some(&false));
-    }
-
-    #[test]
-    fn import_keeps_local_grant_and_drops_uninstalled_ones() {
-        let mut imported = imported_with("todos", &["storage", "oauth"]);
-        imported
-            .extension_grants
-            .insert("gone".into(), grant(&["storage"]));
-        let mut local = std::collections::HashMap::new();
-        local.insert("todos".to_string(), grant(&["storage"]));
-        let installed = [manifest("todos", "1.0.0", &["storage", "oauth"])];
-
-        merge_imported_grants(&mut imported, &local, &installed);
-
-        assert_eq!(imported.extension_grants, local);
-        assert_eq!(imported.extension_states.get("todos"), Some(&true));
     }
 }

@@ -18,6 +18,11 @@
  */
 
 import { ExtensionSandboxPool, hostFeaturesFor } from './extension-sandbox-host.js';
+import {
+    normalizeSensitiveData,
+    plainBackupFields,
+    sensitiveConfigFields,
+} from './extension-sensitive-data.js';
 import { applyManifestI18n, extensionDisplay } from './extension-manager/i18n.js';
 import { installExtensionDateMethods } from './extension-manager/dates.js';
 import { installExtensionSourceMethods } from './extension-manager/sources.js';
@@ -239,6 +244,14 @@ export class ExtensionManager {
         const ext = {
             manifest,
             capabilities,
+            // What the manifest says grants access if leaked, and which
+            // free-form settings an unencrypted backup may copy (the backend
+            // applies the same rules).
+            // Normalised here so a malformed declaration warns at load, like
+            // an unknown capability.
+            sensitiveData: normalizeSensitiveData(manifest.sensitiveData, id),
+            sensitiveConfigFields: sensitiveConfigFields(manifest),
+            plainBackupFields: plainBackupFields(manifest),
             sandbox: null,
         };
 

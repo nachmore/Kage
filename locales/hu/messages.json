@@ -3186,22 +3186,16 @@
     "_source_hash": "8522d8e532e1e1fb"
   },
   "settings.about.backup.description": {
-    "message": "Vidd át a Kage beállításaidat gépek között. A biztonsági mentés tartalmazza a konfigurációt, a mentett promptokat és gyorsbillentyűket, az egyéni és tanult irányítást, valamint a bővítményadatokat. A jelszóval történő titkosítás opcionális, de ajánlott, ha a fájl elhagyja a gépedet.",
+    "message": "Vigye át a Kage beállításait egyik gépről a másikra. A titkosított biztonsági mentés mindent tartalmaz, a bejelentkezéseket is. A csak beállításokat tartalmazó mentés nincs titkosítva, ezért csak olyan beállításokat tartalmaz, amelyekkel semmi sem oldható fel.",
     "description": "Body text in the backup section",
     "_machine_translated": true,
-    "_source_hash": "e4dbe7e1d6ab2e28"
+    "_source_hash": "3a5506d5907f75ff"
   },
   "settings.about.backup.export.label": {
     "message": "Exportálás",
     "description": "Subsection label for export controls",
     "_machine_translated": true,
     "_source_hash": "df01bf7467258888"
-  },
-  "settings.about.backup.encrypt_toggle": {
-    "message": "Titkosítás jelszóval (AES-256-GCM Argon2id kulcsszármaztatással).",
-    "description": "Helper next to the encryption toggle",
-    "_machine_translated": true,
-    "_source_hash": "5c348b02467e7b48"
   },
   "settings.about.backup.passphrase.placeholder": {
     "message": "Jelszó",
@@ -3234,10 +3228,10 @@
     "_source_hash": "ff9ad6961f6ebcf3"
   },
   "settings.about.backup.import.description": {
-    "message": "Válassz egy korábban exportált <code>.kage</code> vagy <code>.kage.enc</code> fájlt. Az importálás felülírja a jelenlegi konfigurációdat — a géped ablakpozíciói, a telemetria telepítési azonosítója és az OS indítási beállítása helyben maradnak.",
+    "message": "Válasszon egy korábban exportált <code>.kage</code> vagy <code>.kage.enc</code> fájlt. Ami nincs a mentésben – egy kihagyott beállítás, egy üres érték, egy bejelentkezés –, annál megmarad ennek a gépnek az értéke, és ugyanez érvényes az ablakpozíciókra, a telemetriai telepítési ID-ra és az operációs rendszer indítási beállítására is.",
     "description": "Helper text for import (HTML allowed)",
     "_machine_translated": true,
-    "_source_hash": "736c5b1684c03868"
+    "_source_hash": "896cfe0a917c43fb"
   },
   "settings.about.backup.import_btn": {
     "message": "Importálás…",
@@ -7086,10 +7080,10 @@
     "_source_hash": "f0a3eb503050f83a"
   },
   "settings.about.dialog.import.message": {
-    "message": "Az importálás felülírja a jelenlegi Kage-konfigurációt (az ablakpozíciók, a telepítési azonosító és az operációs rendszer indítási beállítása helyben megmarad).\n\nFolytatod?",
+    "message": "Az importálás lecseréli a Kage beállításait a mentésben szereplőkre. Ami nincs a mentésben, annál megmarad ennek a gépnek az értéke (az ablakpozíciók, a telepítési ID és az operációs rendszer indítási beállítása pedig mindig helyiek maradnak).\n\nFolytatja?",
     "description": "Body of the import confirmation dialog",
     "_machine_translated": true,
-    "_source_hash": "2f754269a541af14"
+    "_source_hash": "c8d5979947e53c70"
   },
   "settings.about.dialog.restart.message": {
     "message": "Egyes módosítások csak újraindítás után lépnek életbe (ügynökkapcsolat, gyorsbillentyűk, téma). Újraindítod most a Kage-et?",
@@ -9413,6 +9407,258 @@
     "_machine_translated": true,
     "_source_hash": "36c2d11cd6238803"
   },
+  "errors.config.export_preview_failed": {
+    "message": "Nem sikerült listázni, mit hagy ki a csak beállításokat tartalmazó mentés: {message}",
+    "description": "Returned when preview_config_export can't read this machine's settings or extension data",
+    "_machine_translated": true,
+    "_source_hash": "50c0a572aaccdd96"
+  },
+  "settings.about.import.summary.sign_in_again": {
+    "message": "Jelentkezzen be újra ide: {names}.",
+    "description": "Import summary: extensions whose sign-ins the backup left out; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "4943d2f36acc1143"
+  },
+  "settings.about.import.summary.reenter": {
+    "message": "Adja meg újra: {items}.",
+    "description": "Import summary: Kage settings whose keys the backup left out; items is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "0f9a049f7bc8b531"
+  },
+  "settings.about.import.summary.kept_local": {
+    "message": "{count, plural, one {Megtartottuk ennek a gépnek az értékét 1 olyan bejelentkezéshez vagy kulcshoz, amelyet a biztonsági mentés kihagyott.} other {Megtartottuk ennek a gépnek az értékeit # olyan bejelentkezéshez és kulcshoz, amelyet a biztonsági mentés kihagyott.}}",
+    "description": "Import summary when every left-out sign-in or key already had a value on this machine",
+    "_machine_translated": true,
+    "_source_hash": "c85f89b3813b246a"
+  },
+  "settings.about.backup.passphrase_mismatch": {
+    "message": "A jelmondatok nem egyeznek.",
+    "description": "Error when the passphrase and its confirmation differ",
+    "_machine_translated": true,
+    "_source_hash": "888b94e90878c2d7"
+  },
+  "settings.about.backup.exporting": {
+    "message": "Exportálás…",
+    "description": "Status while a backup is being written",
+    "_machine_translated": true,
+    "_source_hash": "df64879f25202f3b"
+  },
+  "settings.about.backup.saved": {
+    "message": "✓ {size} mentve ide: {path}",
+    "description": "Status after a successful export; size is a formatted byte count, path is the file the user picked",
+    "_machine_translated": true,
+    "_source_hash": "74514b9c6fbd1166"
+  },
+  "settings.about.backup.export_failed": {
+    "message": "Sikertelen exportálás: {message}",
+    "description": "Status when writing a backup fails",
+    "_machine_translated": true,
+    "_source_hash": "95f6fb19877a143a"
+  },
+  "settings.about.backup.filter.encrypted": {
+    "message": "Titkosított Kage biztonsági mentés",
+    "description": "File-type name in the save/open dialog for .kage.enc files",
+    "_machine_translated": true,
+    "_source_hash": "3693529f10aaa9f1"
+  },
+  "settings.about.backup.filter.plain": {
+    "message": "Kage biztonsági mentés",
+    "description": "File-type name in the save/open dialog for .kage files",
+    "_machine_translated": true,
+    "_source_hash": "8c48c5235df5d9d3"
+  },
+  "settings.about.backup.filter.all": {
+    "message": "Minden fájl",
+    "description": "File-type name in the open dialog that matches every file",
+    "_machine_translated": true,
+    "_source_hash": "bc1f64f6c70a40db"
+  },
+  "settings.about.backup.unlock.title": {
+    "message": "Adja meg a jelmondatot",
+    "description": "Title of the prompt shown when importing an encrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "dab6ffcfc111b299"
+  },
+  "settings.about.backup.unlock.description": {
+    "message": "Ez a fájl titkosított. Adja meg az exportáláskor használt jelmondatot.",
+    "description": "Body of the prompt shown when importing an encrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "e9187f7d1edc7fd9"
+  },
+  "settings.about.backup.unlock.cancel": {
+    "message": "Mégse",
+    "description": "Button that closes the passphrase prompt without importing",
+    "_machine_translated": true,
+    "_source_hash": "1c21538fd78b51cc"
+  },
+  "settings.about.backup.unlock.ok": {
+    "message": "Feloldás",
+    "description": "Button that decrypts and imports the backup with the entered passphrase",
+    "_machine_translated": true,
+    "_source_hash": "797ba16fb904c2ea"
+  },
+  "settings.about.backup.sensitive.group.other": {
+    "message": "Egyéb bővítményadatok",
+    "description": "Group heading for extension data files that don't belong to a known extension",
+    "_machine_translated": true,
+    "_source_hash": "3c59372cd8884663"
+  },
+  "settings.about.backup.sensitive.unnamed": {
+    "message": "névtelen",
+    "description": "Stand-in for an item with an empty name, e.g. an unnamed shortcut",
+    "_machine_translated": true,
+    "_source_hash": "419773839f274821"
+  },
+  "settings.about.backup.sensitive.item.agent_command": {
+    "message": "„{name}” ügynökkapcsolat: parancsargumentumok",
+    "description": "An agent connection whose command line has arguments or environment settings, which a backup can leave out",
+    "_machine_translated": true,
+    "_source_hash": "12a1661f81f40a3c"
+  },
+  "settings.about.backup.sensitive.item.agent_ollama_url": {
+    "message": "„{name}” ügynökkapcsolat: Ollama-cím",
+    "description": "An Ollama agent connection whose address contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "0b5d6ff0ed0d8780"
+  },
+  "settings.about.backup.sensitive.item.store_url": {
+    "message": "Egyéni bővítménybolt címe",
+    "description": "The custom extension store URL, which contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "09a7fa7cd69abc94"
+  },
+  "settings.about.backup.sensitive.item.store_source_url": {
+    "message": "„{name}” bővítménybolt: cím",
+    "description": "An additional extension store whose URL contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "1d0e1b73552cb81e"
+  },
+  "settings.about.backup.sensitive.item.shortcut_url": {
+    "message": "„{name}” parancsikon: webcím",
+    "description": "A shortcut whose URL contains a credential or is a private webhook",
+    "_machine_translated": true,
+    "_source_hash": "739e39e227decaf3"
+  },
+  "settings.about.backup.sensitive.item.shortcut_arguments": {
+    "message": "„{name}” parancsikon: programargumentumok",
+    "description": "A shortcut whose program arguments contain a credential",
+    "_machine_translated": true,
+    "_source_hash": "2df314724a6b230e"
+  },
+  "settings.about.backup.sensitive.item.shortcut_script": {
+    "message": "„{name}” parancsikon: szkript",
+    "description": "A script shortcut that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "8094e82639f45bc1"
+  },
+  "settings.about.backup.sensitive.item.macro_step_script": {
+    "message": "„{name}” automatizálás: szkript a(z) {step}. lépésben",
+    "description": "An automation step script that contains a credential; step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "788ab588603e78fe"
+  },
+  "settings.about.backup.sensitive.item.internal_site_script": {
+    "message": "„{name}” belső webhely: proxyszkript",
+    "description": "An internal-site profile's proxy script that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "16a72d77476280cf"
+  },
+  "settings.about.backup.sensitive.item.internal_site_sample_url": {
+    "message": "„{name}” belső webhely: mintacím",
+    "description": "An internal-site profile's sample URL that contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "ae6ba2ee9c6e10ad"
+  },
+  "settings.about.backup.sensitive.item.shortcut_prompt": {
+    "message": "„{name}” parancsikon: prompt",
+    "description": "A shortcut whose prompt contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "fe27acb79f018ab7"
+  },
+  "settings.about.backup.sensitive.item.macro_step_prompt": {
+    "message": "„{name}” automatizálás: prompt a(z) {step}. lépésben",
+    "description": "An automation step prompt that contains a credential; step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "365aadee1a88c5f1"
+  },
+  "settings.about.backup.sensitive.item.tool_permission_rules": {
+    "message": "Engedélyezett vagy elutasított parancsok (az ügynök újra rákérdez)",
+    "description": "Tool-permission rules for agent commands the user allowed or denied; leaving them out means the agent asks again",
+    "_machine_translated": true,
+    "_source_hash": "847045996b5b3617"
+  },
+  "settings.about.backup.sensitive.item.context_rule_steering": {
+    "message": "„{name}” alkalmazásmód: irányítás",
+    "description": "A per-app rule whose steering text contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "bdaa4b4f7861ffa6"
+  },
+  "settings.about.backup.sensitive.item.steering_auto": {
+    "message": "Tanult irányítás: kulcs a szövegben",
+    "description": "The learned (auto) steering document contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "23fd6ac38dd7ad7f"
+  },
+  "settings.about.backup.sensitive.item.steering_user": {
+    "message": "Saját irányítási fájl: kulcs a szövegben",
+    "description": "The user's own steering document contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "d94411d38b0a7854"
+  },
+  "settings.about.backup.sensitive.item.unknown": {
+    "message": "A Kage egy újabb verziója által kihagyott elem",
+    "description": "A left-out item of a kind this version does not know, from an older backup made by a newer build",
+    "_machine_translated": true,
+    "_source_hash": "8de3260cf285f12d"
+  },
+  "settings.about.backup.sensitive.item.host_setting": {
+    "message": "„{path}” beállítás",
+    "description": "One of Kage's own settings that holds a sign-in or key; path is its location in the settings file, e.g. ui › language",
+    "_machine_translated": true,
+    "_source_hash": "06018b231ec4b901"
+  },
+  "settings.about.backup.sensitive.item.agent_connection": {
+    "message": "„{name}” ügynökkapcsolat",
+    "description": "An agent connection with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "994c186b1d2a9afc"
+  },
+  "settings.about.backup.sensitive.item.shortcut": {
+    "message": "„{name}” gyorsparancs",
+    "description": "A shortcut with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "ffa6e6a91b1b3807"
+  },
+  "settings.about.backup.sensitive.item.macro": {
+    "message": "„{name}” automatizálás",
+    "description": "An automation with a credential in one of its settings, such as its summary",
+    "_machine_translated": true,
+    "_source_hash": "7fb669b16c7342a6"
+  },
+  "settings.about.backup.sensitive.item.macro_step": {
+    "message": "„{name}” automatizálás: {step}. lépés",
+    "description": "An automation step with a credential in it (for example in a find-and-replace); step is 1-based",
+    "_machine_translated": true,
+    "_source_hash": "485f51798f7d2a79"
+  },
+  "settings.about.backup.sensitive.item.context_rule": {
+    "message": "„{name}” alkalmazásmód",
+    "description": "A per-app mode with a credential in one of its settings",
+    "_machine_translated": true,
+    "_source_hash": "ba4e0a8f5ed49ce7"
+  },
+  "settings.about.backup.sensitive.item.internal_site": {
+    "message": "„{name}” belső webhely",
+    "description": "An internal-site profile with a credential in one of its rules",
+    "_machine_translated": true,
+    "_source_hash": "202e184b9fc4d2b3"
+  },
+  "settings.about.backup.sensitive.item.quick_action": {
+    "message": "„{name}” gyorsművelet",
+    "description": "A custom quick action whose prompt or label contains a credential",
+    "_machine_translated": true,
+    "_source_hash": "447dd416f395e6c3"
+  },
   "errors.config.import_unsafe_path": {
     "message": "Ez a biztonsági mentés nem importálható: a Kage mappáin kívülre írna ({path}). Semmi sem módosult.",
     "description": "Returned when a backup archive entry has an unsafe name, or would be written through a symlink or other link on this machine. {path} is the archive entry name or the local path of the link. The import is refused before anything is written.",
@@ -9676,5 +9922,263 @@
     "description": ">extensions command description",
     "_machine_translated": true,
     "_source_hash": "31782aee63fb447e"
+  },
+  "errors.config.export_passphrase_blank": {
+    "message": "A jelmondat nem lehet üres, és nem állhat csak szóközökből.",
+    "description": "Returned when an encrypted export is asked for with a passphrase that is empty or only whitespace",
+    "_machine_translated": true,
+    "_source_hash": "65810c336b4aae0c"
+  },
+  "errors.config.export_too_large": {
+    "message": "Ez a biztonsági mentés túl nagy lenne a visszaállításhoz: egy bővítmény adatfájlja nagyobb {max_mb} MB-nál, vagy az összes adat meghaladja a {total_mb} MB-ot. Semmi sem lett mentve.",
+    "description": "Returned when extension data is over the backup size limits; max_mb and total_mb are numbers of megabytes",
+    "_machine_translated": true,
+    "_source_hash": "025cb447a83c3e00"
+  },
+  "errors.config.import_too_large": {
+    "message": "Ez a biztonsági mentés nem importálható: több mint {max_files} fájlt tartalmaz, van benne {max_mb} MB-nál nagyobb fájl, vagy összesen több mint {total_mb} MB. Semmi sem változott.",
+    "description": "Returned when a backup archive is over the size or file-count limits; the import is refused before anything is written. max_files is a count, max_mb and total_mb are numbers of megabytes",
+    "_machine_translated": true,
+    "_source_hash": "830be0307a8c4e2e"
+  },
+  "errors.config.import_passphrase_required": {
+    "message": "Ez a biztonsági mentés titkosítva van. Adja meg a jelmondatát.",
+    "description": "Returned when the chosen backup file is encrypted (recognised by its contents, whatever its name) and no passphrase was given; the UI then asks for one",
+    "_machine_translated": true,
+    "_source_hash": "fff7f066c3ca6ae8"
+  },
+  "errors.config.import_wrong_passphrase": {
+    "message": "Ez a jelmondat nem nyitja meg a biztonsági mentést, vagy a fájl sérült.",
+    "description": "Returned when an encrypted backup can't be decrypted with the passphrase given; the UI asks again",
+    "_machine_translated": true,
+    "_source_hash": "dde901b03ea582b0"
+  },
+  "settings.about.backup.passphrase_blank": {
+    "message": "A jelmondat nem állhat csak szóközökből.",
+    "description": "Error when the export passphrase is only whitespace",
+    "_machine_translated": true,
+    "_source_hash": "bdccfebdb6fdc09e"
+  },
+  "settings.about.backup.unlock.wrong": {
+    "message": "Ez a jelmondat nem nyitotta meg a biztonsági mentést. Próbálja újra.",
+    "description": "Body of the passphrase prompt when the previous passphrase didn't decrypt the backup",
+    "_machine_translated": true,
+    "_source_hash": "4871f907e2ac1bc5"
+  },
+  "errors.config.export_passphrase_required": {
+    "message": "Adjon meg egy jelmondatot a mentés titkosításához.",
+    "description": "Returned when an encrypted export is asked for without a passphrase",
+    "_machine_translated": true,
+    "_source_hash": "c9466429cee18235"
+  },
+  "errors.config.import_newer_config": {
+    "message": "A mentés beállításai a Kage egy újabb verziójából származnak. Frissítse a Kage-et, és próbálja újra. Semmi sem változott.",
+    "description": "Import refused: the backup's config.json uses a config schema newer than this build reads",
+    "_machine_translated": true,
+    "_source_hash": "c1809510e7dce4fe"
+  },
+  "errors.config.import_old_config": {
+    "message": "A mentés beállításai a Kage egy túl régi, már nem olvasható verziójából származnak. Semmi sem változott.",
+    "description": "Import refused: the backup's config.json uses a config schema older than this build can migrate",
+    "_machine_translated": true,
+    "_source_hash": "a7810b496c8621b6"
+  },
+  "errors.config.import_unfinished": {
+    "message": "Egy korábbi importálás nem fejeződött be, és nem lehetett visszavonni. Indítsa újra a Kage-et, és próbálja újra. Semmi sem változott.",
+    "description": "Import refused: an interrupted import is still unresolved, or another Kage process is importing",
+    "_machine_translated": true,
+    "_source_hash": "1ae264d4c97e3848"
+  },
+  "settings.about.backup.mode.title": {
+    "message": "Mit mentsen",
+    "description": "Legend of the export choice: encrypted full backup or unencrypted settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "5cc5344da62aa9e5"
+  },
+  "settings.about.backup.mode.encrypted.label": {
+    "message": "Mindent, titkosítva (ajánlott)",
+    "description": "Export option: an encrypted backup of everything",
+    "_machine_translated": true,
+    "_source_hash": "9c556e0814e2b4ed"
+  },
+  "settings.about.backup.mode.encrypted.description": {
+    "message": "A beállításai, irányító dokumentumai, gyorsparancsai, automatizálásai, ügynökbeállításai és minden bővítmény az adataival együtt, a bejelentkezéseket is beleértve. A fájl csak az Ön által választott jelmondattal nyitható meg.",
+    "description": "Describes the encrypted full backup",
+    "_machine_translated": true,
+    "_source_hash": "1b7bbdead622401b"
+  },
+  "settings.about.backup.mode.settings_only.label": {
+    "message": "Csak beállítások, titkosítás nélkül",
+    "description": "Export option: an unencrypted backup of allowlisted settings only",
+    "_machine_translated": true,
+    "_source_hash": "26910eae1c850e15"
+  },
+  "settings.about.backup.mode.settings_only.description": {
+    "message": "Téma, nyelv, gyorsbillentyűk, ablak-, frissítési és értesítési beállítások, mely bővítmények vannak bekapcsolva és mit tehetnek, valamint azok a bővítménybeállítások, amelyeket a készítőik biztonságosan másolhatónak jelölnek. Jelszavak, kulcsok és bejelentkezések nélkül.",
+    "description": "Describes what an unencrypted settings-only backup holds",
+    "_machine_translated": true,
+    "_source_hash": "73cd01dda69c7e48"
+  },
+  "settings.about.backup.settings_only.left_out_generic": {
+    "message": "Az irányító dokumentumai, gyorsparancsai, automatizálásai, ügynökbeállításai, bővítményadatai és bejelentkezései nincsenek ebben a fájlban. Titkosítsa a mentést, hogy ezek is benne legyenek.",
+    "description": "Shown under the settings-only option: what it never carries",
+    "_machine_translated": true,
+    "_source_hash": "2664e71b17e9148c"
+  },
+  "settings.about.backup.settings_only.left_out_intro": {
+    "message": "Erről a gépről ez kimarad:",
+    "description": "Introduces the list of what a settings-only backup of this machine would leave out",
+    "_machine_translated": true,
+    "_source_hash": "7765246cd98e927a"
+  },
+  "settings.about.backup.settings_only.left_out.steering": {
+    "message": "Az irányító dokumentumai",
+    "description": "Left out of a settings-only backup: the custom and learned steering docs",
+    "_machine_translated": true,
+    "_source_hash": "4d8725f629364ea3"
+  },
+  "settings.about.backup.settings_only.left_out.shortcuts": {
+    "message": "{count, plural, one {1 gyorsparancs} other {# gyorsparancs}}",
+    "description": "Left out of a settings-only backup: shortcuts",
+    "_machine_translated": true,
+    "_source_hash": "9be57e3fe5561e72"
+  },
+  "settings.about.backup.settings_only.left_out.automations": {
+    "message": "{count, plural, one {1 automatizálás} other {# automatizálás}}",
+    "description": "Left out of a settings-only backup: automations (macros)",
+    "_machine_translated": true,
+    "_source_hash": "d8ef970dc5155bf3"
+  },
+  "settings.about.backup.settings_only.left_out.quick_actions": {
+    "message": "{count, plural, one {1 egyéni gyorsművelet} other {# egyéni gyorsművelet}}",
+    "description": "Left out of a settings-only backup: custom quick actions (their prompts)",
+    "_machine_translated": true,
+    "_source_hash": "75a9add6e5174867"
+  },
+  "settings.about.backup.settings_only.left_out.app_modes": {
+    "message": "{count, plural, one {1 alkalmazásmód} other {# alkalmazásmód}}",
+    "description": "Left out of a settings-only backup: app modes (per-app steering)",
+    "_machine_translated": true,
+    "_source_hash": "6e91491be51672de"
+  },
+  "settings.about.backup.settings_only.left_out.agents": {
+    "message": "{count, plural, one {1 ügynökbeállítás} other {# ügynökbeállítás}}",
+    "description": "Left out of a settings-only backup: agent connections (commands, hosts, models)",
+    "_machine_translated": true,
+    "_source_hash": "f09681e8796e87f9"
+  },
+  "settings.about.backup.settings_only.left_out.internal_sites": {
+    "message": "{count, plural, one {1 belső webhely} other {# belső webhely}}",
+    "description": "Left out of a settings-only backup: internal-site profiles and their scripts",
+    "_machine_translated": true,
+    "_source_hash": "867ae106a9e594e9"
+  },
+  "settings.about.backup.settings_only.left_out.tool_permissions": {
+    "message": "Az engedélyezett vagy letiltott parancsok és a megbízhatónak jelölt eszközök",
+    "description": "Left out of a settings-only backup: tool permissions",
+    "_machine_translated": true,
+    "_source_hash": "deacf2ef30e0b531"
+  },
+  "settings.about.backup.settings_only.left_out.stores": {
+    "message": "Bővítménytár-címek",
+    "description": "Left out of a settings-only backup: custom extension store URLs",
+    "_machine_translated": true,
+    "_source_hash": "ad89f9de431da387"
+  },
+  "settings.about.backup.settings_only.left_out.extension_data": {
+    "message": "{count, plural, one {Bővítményadatok (1 fájl)} other {Bővítményadatok (# fájl)}}",
+    "description": "Left out of a settings-only backup: what extensions store",
+    "_machine_translated": true,
+    "_source_hash": "e4f60aca77bfa742"
+  },
+  "settings.about.backup.settings_only.left_out.extension_settings": {
+    "message": "{count, plural, one {1 bővítménybeállítás, amely nincs biztonságosan másolhatóként megjelölve} other {# bővítménybeállítás, amely nincs biztonságosan másolhatóként megjelölve}}",
+    "description": "Left out of a settings-only backup: extension settings their manifests do not mark safe for an unencrypted backup",
+    "_machine_translated": true,
+    "_source_hash": "344fff7fbd1a19bf"
+  },
+  "settings.about.backup.settings_only.left_out_outro": {
+    "message": "Titkosítsa a biztonsági mentést, hogy ezek is bekerüljenek.",
+    "description": "Ends the list of what a settings-only backup leaves out",
+    "_machine_translated": true,
+    "_source_hash": "4cea893922c443c5"
+  },
+  "settings.about.backup.settings_only.flagged_intro": {
+    "message": "{count, plural, one {Ez a beállítás sem kerül bele, mert az értéke nem tűnik beállításnak:} other {Ezek a beállítások sem kerülnek bele, mert az értékük nem tűnik beállításnak:}}",
+    "description": "Introduces allowlisted settings left out of a settings-only backup because their values look like they may hold a password or key",
+    "_machine_translated": true,
+    "_source_hash": "4145f683d7a62adb"
+  },
+  "settings.about.backup.settings_only.flagged_extension_setting": {
+    "message": "{extension}: „{field}” beállítás",
+    "description": "One extension setting left out of a settings-only backup because its value looks like a secret",
+    "_machine_translated": true,
+    "_source_hash": "cec5134d93d5c385"
+  },
+  "settings.about.backup.settings_only.list_unavailable": {
+    "message": "Nem sikerült listázni, mi található ezen a gépen: {message}",
+    "description": "Shown when the list of what a settings-only backup leaves out could not be loaded",
+    "_machine_translated": true,
+    "_source_hash": "cf2819af43db7da0"
+  },
+  "settings.about.backup.saved_settings_only": {
+    "message": "✓ {size} mentve ide: {path}. Csak beállítások: minden más átviteléhez titkosított biztonsági mentést készítsen.",
+    "description": "Status after saving a settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "13c034d7e15fd345"
+  },
+  "settings.about.import.summary.settings_only": {
+    "message": "{count, plural, one {✓ 1 beállítás visszaállítva} other {✓ # beállítás visszaállítva}}{exported_at}. A gépen minden más változatlan maradt.",
+    "description": "Summary after importing a settings-only backup",
+    "_machine_translated": true,
+    "_source_hash": "5834f55a08a58477"
+  },
+  "errors.config.import_local_newer": {
+    "message": "Ezen a gépen a Kage beállításai a Kage egy újabb verziójából származnak, ezért a Kage alapértelmezett beállításokkal fut, és nem tudja menteni az importálást. Frissítse a Kage-et, majd próbálja újra. Semmi sem változott.",
+    "description": "Import refused: config.json on disk was written by a newer build and is being preserved, so saves are off this session",
+    "_machine_translated": true,
+    "_source_hash": "1324978b3fb8f283"
+  },
+  "errors.config.import_config_too_large": {
+    "message": "A biztonsági mentés beállításai túl nagyok a használathoz (több mint {max_kb} KB). Semmi sem változott.",
+    "description": "Import refused: the merged settings would be larger than Kage reads back at startup",
+    "_machine_translated": true,
+    "_source_hash": "7b731c6af65accfd"
+  },
+  "store.card.approve": {
+    "message": "Jóváhagyás",
+    "description": "Store card button for an installed extension that is off until the user approves what it asks to do (shows the permission prompt)",
+    "_machine_translated": true,
+    "_source_hash": "94d7354658590a7d"
+  },
+  "store.card.approve.title": {
+    "message": "Tekintse át és hagyja jóvá, mit kér ez a bővítmény",
+    "description": "Tooltip of the Approve button on a Store card",
+    "_machine_translated": true,
+    "_source_hash": "088194f275bba30e"
+  },
+  "store.card.approving": {
+    "message": "Jóváhagyás…",
+    "description": "Store card status while the Approve flow runs",
+    "_machine_translated": true,
+    "_source_hash": "30798f331850fc7a"
+  },
+  "store.approve.failed.title": {
+    "message": "A jóváhagyás sikertelen",
+    "description": "Title of the alert shown when approving an installed extension fails",
+    "_machine_translated": true,
+    "_source_hash": "51fe2ab11850ea8f"
+  },
+  "settings.about.import.summary.kept_local_settings": {
+    "message": "{count, plural, one {Megtartottuk ennek a gépnek a beállításait és tárolt adatait a következőhöz: {names}. Az itteni bejelentkezése változatlan marad, és a biztonsági mentés nem tartalmazott sajátot.} other {Megtartottuk ennek a gépnek a beállításait és tárolt adatait a következőkhöz: {names}. Az itteni bejelentkezéseik változatlanok maradnak, és a biztonsági mentés nem tartalmazott sajátot.}}",
+    "description": "Import summary: extensions that kept this machine's settings and data whole, because their sign-in on this machine stays and the backup's settings could have sent it somewhere else; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "0fec5fa99b8bc6c2"
+  },
+  "settings.about.import.summary.needs_approval": {
+    "message": "{count, plural, one {# bővítményt újra jóvá kell hagynia: {names}. Kikapcsolva marad, amíg jóvá nem hagyja a Store-ban.} other {# bővítményt újra jóvá kell hagynia: {names}. Kikapcsolva maradnak, amíg jóvá nem hagyja őket a Store-ban.}}",
+    "description": "Import summary: installed extensions switched off because what they were allowed to do comes only from approval on this machine, never from a backup; names is a localised list",
+    "_machine_translated": true,
+    "_source_hash": "f58bf3d94c5be6d5"
   }
 }

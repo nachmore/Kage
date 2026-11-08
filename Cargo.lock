@@ -2819,6 +2819,7 @@ dependencies = [
  "dirs",
  "env_logger",
  "hex",
+ "icu_normalizer",
  "kage-core",
  "libc",
  "log",

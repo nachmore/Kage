@@ -7,6 +7,8 @@ describe('sandbox runtime host API', () => {
         expect(HOST_FEATURES).toContain('invoke.error_kind');
         expect(HOST_FEATURES).toContain('config.manifest_defaults');
         expect(HOST_FEATURES).toContain('windows.minimized');
+        expect(HOST_FEATURES).toContain('export.sensitive_data');
+        expect(HOST_FEATURES).toContain('export.plain_settings');
         expect(Object.isFrozen(HOST_FEATURES)).toBe(true);
     });
 

@@ -86,6 +86,7 @@ my-extension/
 | `permissions` | **Yes** | Capabilities the extension needs. See [Permissions](#permissions). Use `[]` if the extension needs nothing. Omitting this field means the extension gets zero capabilities and every `invoke()` will be rejected. |
 | `sandboxVendor` | No | Array of allow-listed vendor library names to load into the sandbox before provider code runs. See [Vendor libraries](#vendor-libraries). Only built-in extensions may use this today. |
 | `config` | No | Config schema: your settings and their defaults, the only place defaults are declared. Keys become the extension's config object. See [Config Schema](#config-schema). |
+| `sensitiveData` | No | Storage keys whose data grants access if leaked (tokens, credentials). Restoring a backup never replaces them with an empty copy. See [Sensitive data and backups](#sensitive-data-and-backups). |
 | `contributes` | No | What the extension provides (see below). |
 
 ### Config Schema
@@ -97,6 +98,12 @@ providers' `context.config`, the Settings page, and anything the host
 itself reads.
 
 Supported types: `"boolean"`, `"string"`, `"number"`.
+
+An entry may also carry `"sensitive": true` when its value grants access
+if leaked — an API key, a password, a private calendar URL — `"enum": [...]`
+listing the only values it takes, and `"backup": "plain"` when a free-form
+string is safe to copy into an unencrypted settings-only backup. See
+[Sensitive data and backups](#sensitive-data-and-backups).
 
 Hosts that work as described below list `config.manifest_defaults` in
 [`context.hostFeatures`](#feature-detection). Older hosts hand your code
@@ -351,6 +358,126 @@ function loopbackFailure(e) {
 }
 ```
 
+## Sensitive data and backups
+
+Settings → About → Backup & restore writes one of two kinds of file:
+
+- **Everything, encrypted** (the default): the user's config and every
+  extension's settings and stored data, encrypted with a passphrase
+  (AES-256-GCM, Argon2id-derived key).
+- **Settings only, not encrypted**: preferences that can't unlock
+  anything. For your extension that's only the settings your manifest
+  says are safe to copy (below). Your stored data is **never** in it.
+
+### Marking settings safe to copy
+
+A settings-only backup copies one of your settings (saved under
+`config.extensions["<id>"]`) only when your manifest's `config` block
+declares it and its value is:
+
+- a **boolean** (`"type": "boolean"`), or a **number** (`"type": "number"`);
+- one of the values its **`enum`** lists (strings, numbers or booleans; at
+  most 64); or
+- a **string** the entry marks **`"backup": "plain"`**: free-form text you
+  promise holds nothing secret (a city, a display name, a public feed
+  URL). Unmarked strings are left out.
+
+```json
+{
+  "sensitiveData": ["creds", "token_*"],
+  "config": {
+    "show_badge":   { "type": "boolean", "default": true },
+    "units":        { "type": "string",  "default": "metric", "enum": ["metric", "imperial"] },
+    "city":         { "type": "string",  "default": "", "backup": "plain" },
+    "api_key":      { "type": "string",  "default": "", "sensitive": true },
+    "calendar_url": { "type": "string",  "default": "", "sensitive": true }
+  }
+}
+```
+
+Never copied, whatever the manifest says: a setting marked `sensitive`;
+anything named like a credential (the safety net below, or one of your
+`sensitiveData` keys), whatever its type — a boolean, a number or an
+`enum` choice included, so neither an `api_key` enum nor a numeric `pin`
+travels; a string (a declared `enum` choice included) that looks like a
+password, token or key, or a `backup: "plain"` string longer than 512
+characters (it's left out and the user is told); settings no
+manifest declares; nested objects and arrays. If several installed
+extension folders share your id, every one must declare and allow the
+setting; a theme or other item sharing the id can only make it stricter.
+Without an installed manifest nothing of yours is copied.
+
+Restoring a settings-only backup sets only the settings it carries,
+re-checked against the manifest installed there (if you aren't installed
+there yet, only booleans and numbers), and leaves everything else of
+yours alone. It never changes an endpoint-like setting (`url`,
+`server`, `region`, …) while that machine holds a credential of yours,
+in your settings or your stored data: a shared settings file can't point
+your token somewhere else.
+
+### Declaring sensitive data
+
+Anything that grants access if leaked should still be declared, so an
+import never wipes it:
+
+- **`sensitiveData`** lists storage keys: the `key` you pass to
+  `save_extension_data`. Each entry is an exact key (`"creds"`) or a
+  prefix ending in `*` (`"token_*"` covers `token_spotify`,
+  `token_refresh`, …; a bare `"*"` covers every key). Entries follow the
+  storage-key rules (letters, digits, `-`, `_`, `.`; no `..`; up to 128
+  characters) and match case-insensitively. At most 32 entries. A
+  malformed entry, and anything past the 32nd, is ignored with a warning
+  in the log and console, like an unknown capability; a value that isn't
+  an array is ignored the same way.
+- **`config.<field>.sensitive: true`** marks a setting as sensitive. Only
+  the boolean `true` counts; anything else is ignored with a warning.
+  `sensitive` wins over `backup: "plain"`.
+
+### The safety net
+
+Whatever you declare, the host also treats a storage key or setting as
+sensitive when its name matches
+`/(token|secret|credential|creds|password|passwd|passphrase|passcode|api[-_\s]?key|license[-_]?key|account[-_]?key|private[-_]?key|access[-_]?key|auth|oauth|session|cookie|totp|otp[-_]?(secret|seed)|mnemonic|(^|[-_.])(pin|pass|pwd)$)/i`.
+Rename a key that matches but holds nothing secret.
+
+Scratch (`__`) settings are never in any backup.
+
+### What restoring does
+
+Every restore keeps this machine's value wherever the backup's is
+missing or empty, and never replaces a sensitive setting or data file
+(declared, or caught by the safety net) with an empty or missing one: a
+user who restores a backup made on a machine where they never signed in
+to your extension stays signed in. Settings merge by name, recursively,
+but a local token is only kept while the object still points where this
+machine's does: if a URL or endpoint-like field (`url`, `endpoint`,
+`server`, `host`, `authority`, …), anywhere in the object, changed
+origin, the backup's object is kept without the local token and the user
+is asked to sign in again. Keep an
+account's token next to the address it belongs to. A data file whose
+backup copy holds nothing (`{}`, `{"token": ""}`) never replaces one that
+holds something; a JSON object keeps this machine's credential-named keys
+(every key, for a declared file) its backup copy lacks. Whenever this
+machine keeps a credential of yours that the backup doesn't replace with
+its own — a sensitive setting, or a stored data file holding one, judged
+file by file — your settings and stored data on this machine are kept
+whole: none of the backup's settings or files for you are taken, so it
+can't point that token somewhere else, and the user is told. Treat a
+missing token the way you treat a first run.
+
+What your extension may do is never restored from a backup: the
+capability grant is the one approved on this machine. If a backup has
+you switched on (or says you were granted more) and this machine's grant
+doesn't cover everything your manifest asks for, you stay off and the
+user is asked to approve you again (Store → Approve shows the
+install-time prompt).
+
+Hosts that do this list `export.sensitive_data` in
+[`context.hostFeatures`](#feature-detection); hosts that honour
+`backup: "plain"` and `enum` for settings-only backups also list
+`export.plain_settings`. Older hosts ignore these fields; declaring them
+is safe there.
+
 ## Vendor libraries
 
 Some extensions need a UMD/IIFE library (e.g. mathjs) that exposes a
@@ -485,6 +612,8 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 | `invoke.error_kind`    | `invoke()` rejections carry `err.kind` / `err.key` (see [Errors from `invoke()`](#errors-from-invoke)). |
 | `config.manifest_defaults` | `context.config` is the manifest defaults overlaid with saved values, `config.enabled` is the host's on/off switch, saving stores only overrides, and settings controls take their defaults from the manifest (see [Config Schema](#config-schema)). |
 | `windows.minimized`    | `list_open_windows` entries carry `minimized: boolean`. Whether minimized windows are listed and flagged depends on the platform and permissions (see [Other apps' windows](#other-apps-windows)). |
+| `export.sensitive_data` | Restoring a backup never replaces what the manifest's `sensitiveData` and `config.<field>.sensitive` declare with an empty or missing copy, and none of it is in an unencrypted backup (see [Sensitive data and backups](#sensitive-data-and-backups)). |
+| `export.plain_settings` | A settings-only (unencrypted) backup copies the settings the manifest's `config` declares as booleans, numbers, `enum` choices or `backup: "plain"` strings (see [Marking settings safe to copy](#marking-settings-safe-to-copy)). |
 
 ### Errors from `invoke()`
 

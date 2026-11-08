@@ -1,7 +1,7 @@
 import { errMessage } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { SettingsModule } from './base.js';
-import { installAboutBackupMethods } from './about-backup.js';
+import { installAboutBackupMethods, renderBackupSection } from './about-backup.js';
 /**
  * About Settings Module
  * Shows version, author, copyright info, links to welcome screen, and logging section
@@ -40,53 +40,7 @@ export class AboutSettingsModule extends SettingsModule {
                 </div>
 
                 <!-- Backup & Restore Section -->
-                <div class="about-logging-section">
-                    <div class="about-logging-header" id="backupToggle">
-                        <span class="about-logging-arrow" id="backupArrow">▶</span>
-                        <span>${t('settings.about.backup.title')}</span>
-                    </div>
-                    <div class="about-logging-body" id="backupBody" style="display:none;">
-                        <div class="setting-description" style="margin-bottom:12px;">
-                            ${t('settings.about.backup.description')}
-                        </div>
-
-                        <div class="setting-row">
-                            <div class="setting-label">${t('settings.about.backup.export.label')}</div>
-                            <div class="setting-checkbox-row">
-                                <label class="kage-checkbox">
-                                    <input type="checkbox" id="backupEncryptToggle">
-                                </label>
-                                <div class="setting-description">${t('settings.about.backup.encrypt_toggle')}</div>
-                            </div>
-                            <div id="backupPassphraseRow" style="display:none;margin-top:8px;">
-                                <input type="password" id="backupPassphrase" class="setting-input" placeholder="${t('settings.about.backup.passphrase.placeholder')}" autocomplete="new-password" style="margin-bottom:6px;">
-                                <input type="password" id="backupPassphraseConfirm" class="setting-input" placeholder="${t('settings.about.backup.passphrase.confirm_placeholder')}" autocomplete="new-password">
-                                <div class="setting-description" style="margin-top:4px;font-size:11px;">${t('settings.about.backup.passphrase.note')}</div>
-                            </div>
-                            <div class="setting-control" style="margin-top:8px;">
-                                <button class="setting-button" id="backupExportBtn">${t('settings.about.backup.export_btn')}</button>
-                            </div>
-                        </div>
-
-                        <div class="setting-row">
-                            <div class="setting-label">${t('settings.about.backup.import.label')}</div>
-                            <div class="setting-description">${t('settings.about.backup.import.description')}</div>
-                            <div class="setting-control" style="margin-top:8px;">
-                                <button class="setting-button" id="backupImportBtn">${t('settings.about.backup.import_btn')}</button>
-                            </div>
-                        </div>
-
-                        <div class="setting-row">
-                            <div class="setting-label">${t('settings.about.backup.config_folder.label')}</div>
-                            <div class="setting-description">${t('settings.about.backup.config_folder.description')}</div>
-                            <div class="setting-control" style="margin-top:8px;">
-                                <button class="setting-button" id="openConfigFolderBtn">${t('settings.about.action.open_config')}</button>
-                            </div>
-                        </div>
-
-                        <div id="backupStatus" class="setting-description" style="min-height:1em;margin-top:8px;"></div>
-                    </div>
-                </div>
+                ${renderBackupSection()}
 
                 <!-- Logging Section -->
                 <div class="about-logging-section">

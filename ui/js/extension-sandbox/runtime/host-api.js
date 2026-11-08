@@ -25,6 +25,15 @@ export const HOST_FEATURES = Object.freeze([
     // minimized windows are listed and flagged varies by platform and
     // permission (docs/EXTENSIONS.md § Other apps' windows).
     'windows.minimized',
+    // Restoring a backup never replaces what the manifest's `sensitiveData`
+    // and `config.<field>.sensitive` declare with an empty or missing copy,
+    // and none of it is in an unencrypted backup (docs/EXTENSIONS.md §
+    // Sensitive data and backups).
+    'export.sensitive_data',
+    // Settings-only (unencrypted) backups copy the settings `config`
+    // declares as booleans, numbers, `enum` choices or `backup: "plain"`
+    // strings (docs/EXTENSIONS.md § Marking settings safe to copy).
+    'export.plain_settings',
 ]);
 
 /**

@@ -16,6 +16,7 @@ import { alertDialog, confirmDialog } from './shared/confirm-dialog.js';
 import { errMessage } from './shared/error-message.js';
 import { escapeAttr } from './shared/tool-utils.js';
 import { localizeManifestForPrompt } from './shared/extension-manager.js';
+import { grantCovers } from './shared/extension-permissions.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { initLinkHandler } from './shared/link-handler.js';
 import { runStagedExtensionInstall } from './shared/staged-extension-install.js';
@@ -218,6 +219,19 @@ async function refreshInstalled() {
         collect('list_themes', 'theme'),
         collect('list_command_packs', 'commands'),
     ]);
+    // An installed extension whose recorded grant doesn't cover what it
+    // asks for (a backup import switched it off, or an update asked for
+    // more) gets an Approve button: the install-time prompt, run again.
+    let grants = {};
+    try {
+        grants = (await invoke('get_config'))?.extension_grants || {};
+    } catch (e) {
+        console.warn('[store] get_config failed:', e);
+    }
+    for (const [id, info] of installedMap.entries()) {
+        info.needsApproval =
+            info.kind === 'extension' && !grantCovers(grants[id], info.permissions, id);
+    }
 }
 
 function hasUpdate(itemId, remoteVersion) {
@@ -415,6 +429,15 @@ function renderCard(item, kind) {
             );
         }
 
+        // Approve: the store's copy of the same version, through the
+        // install-time permission prompt (a newer one is the Update button;
+        // the offline cards have no store copy).
+        if (localInfo?.needsApproval && !item._local && item.version === localInfo.version) {
+            buttons.push(
+                `<button class="store-card-btn update" data-action="approve" title="${esc(t('store.card.approve.title'))}">${esc(t('store.card.approve'))}</button>`
+            );
+        }
+
         // Reinstall button (dev mode only)
         if (_isDevMode) {
             buttons.push(
@@ -560,6 +583,37 @@ async function updateItem(id, source) {
     }
 }
 
+/**
+ * Approve an installed extension whose grant doesn't cover what it asks
+ * for: the store's copy goes through the same staged install as an update,
+ * so the permission prompt records the grant and switches it on, or a
+ * decline leaves the installed copy, its data and its (smaller) grant as
+ * they were.
+ */
+async function approveItem(id, source) {
+    const invoke = window.__TAURI__.core.invoke;
+    setCardBusy(id, esc(t('store.card.approving')));
+    try {
+        await runStagedExtensionInstall(
+            invoke,
+            () => invoke('store_install', { id, source: source || null }),
+            {
+                onSuccess: async () => {
+                    await refreshInstalled();
+                },
+            }
+        );
+        renderTab();
+    } catch (e) {
+        await alertDialog({
+            icon: '⚠️',
+            title: t('store.approve.failed.title'),
+            message: errMessage(e),
+        });
+        renderTab();
+    }
+}
+
 async function reinstallItem(id, source) {
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Reinstalling…');
@@ -668,6 +722,9 @@ document.getElementById('storeContent')?.addEventListener('click', (e) => {
             break;
         case 'reinstall':
             reinstallItem(id, source);
+            break;
+        case 'approve':
+            approveItem(id, source);
             break;
         case 'uninstall':
             uninstallItem(id, btn.dataset.kind);
