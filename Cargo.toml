@@ -206,7 +206,7 @@ objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplicat
 # non-activating NSPanels so they can appear over other apps' full-screen
 # Spaces (a plain NSWindow can't — see src/overlay_windows.rs).
 tauri-nspanel = "2.1"
-objc2-foundation = { version = "0.3", features = ["NSString", "NSArray", "NSData", "NSDictionary", "NSGeometry"] }
+objc2-foundation = { version = "0.3", features = ["NSString", "NSArray", "NSData", "NSDictionary", "NSGeometry", "NSUserDefaults", "NSValue"] }
 # Core Foundation + Core Graphics for CGWindowListCopyWindowInfo (per-window
 # title lookup). Title extraction requires the Screen Recording TCC permission
 # at runtime — without it we fall back to empty title (process-level tracking

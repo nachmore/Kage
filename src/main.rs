@@ -184,6 +184,9 @@ async fn run() {
     os::login_env::init_setting(config.acp.agent.import_login_shell_env);
     info!("Configuration loaded");
 
+    // Must run before the first webview: WebKit caches the setting.
+    os::spell_check::enable_webview_spell_checking();
+
     // Initialize the localisation catalogs from the embedded JSON resources.
     // Resolution order: explicit override in config.ui.language → OS locale
     // (sys_locale::get_locale, which honours CFLocale / GetUserDefaultLocaleName

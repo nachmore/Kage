@@ -17,6 +17,7 @@ pub mod permissions;
 pub mod power;
 pub mod process;
 pub mod shell;
+pub mod spell_check;
 pub mod startup;
 pub mod system_shortcuts;
 pub mod user;
