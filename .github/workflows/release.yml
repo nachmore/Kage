@@ -397,6 +397,18 @@ jobs:
         with:
           tool: tauri-cli@2.11.2
 
+      # The Windows bundler downloads NSIS and its plugins from GitHub
+      # release assets into %LOCALAPPDATA%\tauri on every cold runner, and
+      # GitHub's 503/504s there have failed whole builds after a clean
+      # compile. Cache that directory; the key follows the tauri-cli pin
+      # because the CLI's bundler decides which NSIS it wants.
+      - name: Cache Tauri bundler tools (Windows)
+        if: startsWith(matrix.os, 'windows')
+        uses: actions/cache@v6
+        with:
+          path: ~/AppData/Local/tauri
+          key: tauri-bundler-tools-${{ runner.os }}-tauri-cli-2.11.2
+
       # ----- macOS code signing (optional) -----------------------------
       #
       # Why: macOS TCC (Accessibility, Input Monitoring, Screen Recording,
@@ -458,7 +470,10 @@ jobs:
           # opaque "exit code 1" reports. See the matching note in
           # ci.yml.
           RUST_LOG: tauri_bundler=debug
-        run: cargo tauri build --target ${{ matrix.target }}
+        # Retries only bundler download failures (5xx, timeouts); see the
+        # script header.
+        shell: bash
+        run: bash scripts/ci/tauri_build_retry.sh --target ${{ matrix.target }}
 
       # Post-mortem for the macOS dmg bundling step. Mirrors the same
       # block in ci.yml. Runs only on failure of the build step above.
