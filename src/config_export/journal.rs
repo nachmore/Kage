@@ -20,10 +20,14 @@
 //! the content, its length and, on Unix, the file's device and inode, which
 //! a rename keeps), and a target that no longer is that file (an extension
 //! wrote it again, or a new one is there) is left as it is, its earlier
-//! copy kept beside it. Each step of an undo (a file put back, config.json
-//! restored) is appended to the journal, flushed, before the next one
-//! starts, so a retry after a partial undo skips what's already done and
-//! never touches a file created since.
+//! copy kept beside it. `config.json` is journaled the same way: the
+//! caller saves it through [`Transaction::save_config`], which records what
+//! it writes before writing it (and its inode once it's there), and an undo
+//! puts the earlier copy back, or removes the file when there was none,
+//! only while config.json is still that file. Each step of an undo (a file
+//! put back, config.json restored) is appended to the journal, flushed,
+//! before the next one starts, so a retry after a partial undo skips what's
+//! already done and never touches a file created since.
 //!
 //! Imports hold `.kage-import.lock` (an OS file lock, released if the
 //! process dies) while they run, so a second Kage process never "recovers"
@@ -138,6 +142,22 @@ impl Written {
         })
     }
 
+    /// What a file holding `body` will be, before it's written (its inode
+    /// isn't known yet).
+    fn of_bytes(body: &[u8]) -> Self {
+        use sha2::Digest;
+        Self {
+            sha256: hex::encode(sha2::Sha256::digest(body)),
+            len: body.len() as u64,
+            inode: None,
+        }
+    }
+
+    /// Whether the files at `a` and `b` hold the same bytes.
+    fn same_content(a: &Path, b: &Path) -> bool {
+        matches!((Self::of(a), Self::of(b)), (Ok(x), Ok(y)) if x.sha256 == y.sha256 && x.len == y.len)
+    }
+
     /// Whether the file at `path` is still this one.
     fn is_at(&self, path: &Path) -> bool {
         let Ok(md) = std::fs::symlink_metadata(path) else {
@@ -196,6 +216,13 @@ struct Journal {
     /// config.json was put back by an earlier try at undoing.
     #[serde(default)]
     config_undone: bool,
+    /// The config.json this import saved ([`Transaction::save_config`]):
+    /// recorded before it's written. An undo puts `config_backup` back, or
+    /// removes config.json when there was none, only while config.json is
+    /// still this file. `None`: the import saved none (or an earlier build
+    /// wrote the journal), so config.json is left as it is.
+    #[serde(default)]
+    config_written: Option<Written>,
 }
 
 fn default_true() -> bool {
@@ -262,11 +289,39 @@ fn write_journal(path: &Path, journal: &Journal) -> Result<()> {
         .context("Failed to write the import journal")
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Test hook: how many more undo steps are recorded before one fails.
+    static RECORDS_BEFORE_FAILURE: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Test hook: record `steps` more undo steps on this thread, then fail the
+/// next one (once).
+#[cfg(test)]
+pub(super) fn fail_record_after(steps: usize) {
+    RECORDS_BEFORE_FAILURE.with(|c| c.set(Some(steps)));
+}
+
 /// Append a finished undo step to the journal at `path`, flushed to disk
 /// before returning. One record per line after the journal itself; a
 /// record cut short by a crash doesn't parse and is ignored, so its step
 /// is redone (and finds nothing of its own to undo).
 fn record_step(path: &Path, step: Step) -> Result<()> {
+    #[cfg(test)]
+    if RECORDS_BEFORE_FAILURE.with(|c| match c.get() {
+        Some(0) => {
+            c.set(None);
+            true
+        }
+        Some(n) => {
+            c.set(Some(n - 1));
+            false
+        }
+        None => false,
+    }) {
+        anyhow::bail!("Failed to record progress in the import journal (test)");
+    }
     let mut line = b"\n".to_vec();
     line.extend(serde_json::to_vec(&step)?);
     let mut opts = OpenOptions::new();
@@ -405,6 +460,7 @@ impl Transaction {
             restore_config: true,
             attempts: 0,
             config_undone: false,
+            config_written: None,
         };
         let path = dir.join(JOURNAL_NAME);
         if let Err(e) = write_journal(&path, &journal) {
@@ -458,6 +514,40 @@ impl Transaction {
         Ok(())
     }
 
+    /// Save `config` as config.json, the config that goes with these files.
+    /// What it writes is recorded in the journal first (a failure to record
+    /// it saves nothing), and on Unix its inode once it's there, so an undo
+    /// — now, or after a crash — only ever puts back or removes this file,
+    /// never one saved since.
+    pub fn save_config(&mut self, config: &crate::config::Config) -> Result<()> {
+        let path = self.path.clone();
+        let journal = &mut self.journal;
+        config.save_recorded(|body| {
+            let mut next = journal.clone();
+            next.config_written = Some(Written::of_bytes(body));
+            write_journal(&path, &next)?;
+            *journal = next;
+            Ok(())
+        })?;
+        let Some(intent) = self.journal.config_written.clone() else {
+            // Saves are suspended: nothing was written.
+            return Ok(());
+        };
+        match Written::of(&self.journal.config) {
+            Ok(now) if now.inode.is_some() && now.sha256 == intent.sha256 => {
+                self.journal.config_written = Some(now);
+                if let Err(e) = write_journal(&self.path, &self.journal) {
+                    log::warn!(
+                        "Import: couldn't record which config.json it saved: {:#}",
+                        e
+                    );
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Keep the new files (the caller saved the config that goes with
     /// them): record the commit, then delete what they replaced.
     pub fn finish(mut self) -> Result<()> {
@@ -500,10 +590,10 @@ impl Transaction {
         if let Err(e) = write_journal(&self.path, &self.journal) {
             log::error!("Import rollback: couldn't update the journal: {:#}", e);
         }
-        if let Some(b) = self.journal.config_backup.clone() {
-            if exists(&b) && std::fs::rename(&b, &self.journal.config).is_err() {
-                log::warn!("Import rollback: couldn't put config.json back; the running config will be saved over it");
-                let _ = std::fs::remove_file(&b);
+        if !undo_config(&self.journal) {
+            log::warn!("Import rollback: couldn't put config.json back; the running config will be saved over it");
+            if let Some(b) = &self.journal.config_backup {
+                let _ = std::fs::remove_file(b);
             }
         }
         if roll_back(&self.path, &mut self.journal, Unrecorded::KeepGoing) {
@@ -625,6 +715,50 @@ fn undo_file(f: &FileEntry, created_dirs: &[PathBuf]) -> bool {
     }
 }
 
+/// Undo this transaction's config.json: put the copy taken before it back,
+/// or remove it if there was none — only while config.json is still the
+/// file the import saved ([`Journal::config_written`]). One saved since, or
+/// never replaced, is left as it is, the earlier copy beside it (unless
+/// it's the same bytes). `true` when it's done; `false`: try again later.
+fn undo_config(j: &Journal) -> bool {
+    let backup = j.config_backup.as_ref().filter(|b| exists(b));
+    let ours = j
+        .config_written
+        .as_ref()
+        .is_some_and(|w| w.is_at(&j.config));
+    if !ours {
+        if let Some(b) = backup {
+            if Written::same_content(b, &j.config) {
+                // Never replaced: the copy is the file that's there.
+                let _ = std::fs::remove_file(b);
+            } else {
+                log::warn!(
+                    "Import rollback: config.json isn't the one the import saved; keeping it, the earlier copy stays at {:?}",
+                    b
+                );
+            }
+        }
+        return true;
+    }
+    match (backup, &j.config_backup) {
+        (Some(b), _) => match std::fs::rename(b, &j.config) {
+            Ok(()) => true,
+            Err(e) => {
+                log::error!("Import rollback: couldn't restore config.json: {}", e);
+                false
+            }
+        },
+        (None, Some(b)) => {
+            log::error!(
+                "Import rollback: the earlier config.json ({:?}) is gone; keeping the import's",
+                b
+            );
+            true
+        }
+        (None, None) => remove_new(&j.config),
+    }
+}
+
 /// What [`roll_back`] does when a finished step can't be recorded.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Unrecorded {
@@ -669,45 +803,13 @@ fn roll_back(path: &Path, j: &mut Journal, unrecorded: Unrecorded) -> bool {
         }
     }
     if j.restore_config && !j.config_undone {
-        match &j.config_backup {
-            Some(b) if exists(b) => match std::fs::rename(b, &j.config) {
-                Ok(()) => {
-                    j.config_undone = true;
-                    if !record(Step::Config, &mut ok) {
-                        return false;
-                    }
-                }
-                Err(e) => {
-                    log::error!("Import rollback: couldn't restore config.json: {}", e);
-                    ok = false;
-                }
-            },
-            // Put back on an earlier try (its record was lost).
-            Some(_) => {
-                j.config_undone = true;
-                if !record(Step::Config, &mut ok) {
-                    return false;
-                }
+        if !undo_config(j) {
+            ok = false;
+        } else {
+            j.config_undone = true;
+            if !record(Step::Config, &mut ok) {
+                return false;
             }
-            // There was none, so the one there now was saved by this import
-            // (nothing else writes config.json while it holds the lock).
-            // Recorded *before* it's removed: a later try must never remove
-            // one saved since, and a removal that fails here leaves only
-            // this import's config behind.
-            None => match record_step(path, Step::Config) {
-                Ok(()) => {
-                    j.config_undone = true;
-                    if !remove_new(&j.config) {
-                        log::error!(
-                            "Import rollback: config.json from the undone import is still there"
-                        );
-                    }
-                }
-                Err(e) => {
-                    log::error!("Import rollback: {:#}", e);
-                    return false;
-                }
-            },
         }
     }
     // Only once everything is back (a retry may need them), and only if
@@ -878,6 +980,7 @@ mod tests {
             restore_config: true,
             attempts: 0,
             config_undone: false,
+            config_written: None,
         };
         let path = dir.path().join(JOURNAL_NAME);
         write_journal(&path, &journal).unwrap();

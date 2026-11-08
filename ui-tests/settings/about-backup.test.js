@@ -529,13 +529,18 @@ describe('import summary', () => {
         expect(one).toContain('\u2068Fetcher\u2069');
     });
 
-    it('names the extensions that kept this machine’s settings whole', () => {
+    it('names the extensions that kept this machine’s settings whole, for either kind', () => {
         const module = new FakeAbout();
-        const text = module._importSummaryText({ ...base, kept_local: ['Todos'] });
-        expect(plain(text)).toContain(
-            "Kept this machine's settings and stored data for Todos: its sign-in here stays where it is"
-        );
-        expect(text).not.toContain('Sign in again');
+        for (const summary of [
+            { ...base, kept_local: ['Todos'] },
+            { ...base, kind: 'settings_only', settings: 3, kept_local: ['Todos'] },
+        ]) {
+            const text = module._importSummaryText(summary);
+            expect(plain(text)).toContain(
+                "Kept this machine's settings and stored data for Todos: its sign-in here stays where it is"
+            );
+            expect(text).not.toContain('Sign in again');
+        }
     });
 
     it('old summaries without the new fields still render', () => {

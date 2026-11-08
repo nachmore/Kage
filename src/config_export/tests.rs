@@ -657,6 +657,7 @@ fn a_settings_only_import_changes_only_allowlisted_settings() {
     let summary = b.import(&bytes, None);
     assert_eq!(summary.kind, BundleKind::SettingsOnly);
     assert!(summary.settings > 10, "{}", summary.settings);
+    assert_eq!(summary.kept_local, vec!["GitHub".to_string()]);
     assert_eq!(b.config.ui.theme, "dark");
     assert_eq!(b.config.ui.language.as_deref(), Some("fr"));
     assert_eq!(b.config.hotkey.key, "K");
@@ -671,14 +672,8 @@ fn a_settings_only_import_changes_only_allowlisted_settings() {
     assert_eq!(b.config.tool_permissions.tools.len(), 2);
     assert!(b.config.tool_permissions.terminator_mode);
     assert_eq!(b.config.telemetry.install_id, before.telemetry.install_id);
-    let gh = &b.config.extensions["github"];
-    assert_eq!(gh["personal_token"], "ghp_LEAKleakLEAKleakLEAKleak");
-    assert_eq!(gh["trigger"], "g");
-    assert_eq!(gh["limit"], 3);
-    assert_eq!(
-        gh["note"], "password: sunshinebeachwaves",
-        "not plain: kept"
-    );
+    // Signed in here: GitHub's settings here stay whole.
+    assert_eq!(b.config.extensions["github"], before.extensions["github"]);
     assert_eq!(b.config.extensions["notes"], before.extensions["notes"]);
     assert_eq!(b.file("github/token.json"), token_before);
     assert_eq!(std::fs::read(&b.steering).unwrap(), steering_before);
@@ -733,11 +728,8 @@ fn a_hand_made_settings_only_backup_cant_reach_anything_else() {
     assert!(!b.config.extension_states.contains_key("BAD ID"));
     assert_eq!(b.config.updates.channel, before.updates.channel);
     assert_eq!(b.config.hotkey.key, before.hotkey.key);
-    let gh = &b.config.extensions["github"];
-    assert_eq!(gh["personal_token"], "ghp_local");
-    assert_eq!(gh["trigger"], "x");
-    assert_eq!(gh["show_badge"], false);
-    assert!(gh.get("note").is_none(), "free-form, not plain");
+    // Signed in here: none of GitHub's settings change.
+    assert_eq!(b.config.extensions["github"], before.extensions["github"]);
     assert!(
         !b.config.extensions.contains_key("notes"),
         "an installed extension that declares nothing gets nothing"
@@ -1572,8 +1564,10 @@ fn an_interrupted_import_is_undone_and_its_rollback_copies_kept_until_then() {
         Some(b.root.path().to_path_buf()),
     )
     .unwrap();
-    let (_, _, files) = applied.into_parts();
-    std::fs::write(&config_path, br#"{"ui":{"language":"fr"}}"#).unwrap();
+    let (_, _, mut files) = applied.into_parts();
+    let mut saved = Config::default();
+    saved.ui.language = Some("fr".into());
+    files.save_config(&saved).unwrap();
     files.abandon();
     assert!(b.file("notes/state.json").unwrap().contains("BUNDLE"));
     assert!(journal::journal_path().exists());
@@ -1730,22 +1724,21 @@ fn a_settings_only_import_never_moves_where_a_local_credential_goes() {
         "vault".into(),
         json!({ "endpoint": "https://vault.corp", "api_key": "K" }),
     );
-    b.import(
+    let before = b.config.extensions.clone();
+    let summary = b.import(
         &settings_only_bundle(json!({ "version": 1, "extensions": {
             "github": { "server_url": "https://a.example", "limit": 2 },
             "vault": { "endpoint": "https://evil.example", "flag": true, "count": 3 }
         }})),
         None,
     );
-    let gh = &b.config.extensions["github"];
-    assert_eq!(gh["server_url"], "https://b.example", "the endpoint stays");
-    assert_eq!(gh["personal_token"], "B-key");
-    assert_eq!(gh["limit"], 2, "other plain settings still arrive");
-    // Not installed here: booleans and numbers only, never a string.
-    let vault = &b.config.extensions["vault"];
-    assert_eq!(vault["endpoint"], "https://vault.corp");
-    assert_eq!(vault["flag"], true);
-    assert_eq!(vault["count"], 3);
+    // Signed in here: neither takes any of the backup's settings, and both
+    // are named.
+    assert_eq!(b.config.extensions["github"], before["github"]);
+    assert_eq!(b.config.extensions["vault"], before["vault"]);
+    let mut kept = summary.kept_local.clone();
+    kept.sort();
+    assert_eq!(kept, vec!["GitHub".to_string(), "vault".to_string()]);
     // With no credential here, a plain endpoint does travel.
     let mut c = Machine::new();
     c.import(
@@ -1915,7 +1908,7 @@ fn a_rollback_that_cant_reach_a_file_keeps_the_journal() {
 // --- Fix-verification round ----------------------------------------------------------
 
 #[test]
-fn a_settings_only_import_keeps_endpoints_of_a_token_kept_in_extension_data() {
+fn a_settings_only_import_keeps_settings_whole_for_a_token_kept_in_extension_data() {
     let _disk = disk();
     no_auto_steering();
     let mut b = Machine::new();
@@ -1924,16 +1917,23 @@ fn a_settings_only_import_keeps_endpoints_of_a_token_kept_in_extension_data() {
         json!({ "server_url": "https://ghe.b.corp" }),
     );
     b.write("github/token.json", r#"{"token":"ghp_B"}"#);
-    b.import(
+    let summary = b.import(
         &settings_only_bundle(json!({ "version": 1, "extensions": {
             "github": { "server_url": "https://evil.example", "limit": 4 } } })),
         None,
     );
     assert_eq!(
-        b.config.extensions["github"]["server_url"],
-        "https://ghe.b.corp"
+        b.config.extensions["github"],
+        json!({ "server_url": "https://ghe.b.corp" })
     );
-    assert_eq!(b.config.extensions["github"]["limit"], 4);
+    assert_eq!(summary.kept_local, vec!["GitHub".to_string()]);
+    // Nothing the backup would change: nothing to say.
+    let summary = b.import(
+        &settings_only_bundle(json!({ "version": 1, "extensions": {
+            "github": { "server_url": "https://ghe.b.corp" } } })),
+        None,
+    );
+    assert!(summary.kept_local.is_empty(), "{:?}", summary.kept_local);
 }
 
 #[test]
@@ -2287,8 +2287,10 @@ fn a_rollback_retry_never_removes_a_config_saved_since() {
     .unwrap()
     .into_parts();
     // There was no config.json; the import saved one, then Kage died.
-    std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
-    std::fs::write(&config_path, br#"{"ui":{"language":"fr"}}"#).unwrap();
+    let mut saved = Config::default();
+    saved.ui.language = Some("fr".into());
+    let mut files = files;
+    files.save_config(&saved).unwrap();
     files.abandon();
     let dir = b.steering.parent().unwrap().to_path_buf();
     let parked = dir.with_extension("parked");
@@ -2560,4 +2562,303 @@ fn a_file_created_while_importing_is_never_replaced() {
     assert_eq!(b.file("notes/new.json").unwrap(), "EXTENSION");
     assert!(!journal::journal_path().exists());
     no_temp_files_in(&b.root.path().join("notes"));
+}
+
+// --- Review round: one rule for a credential kept here ------------------------------
+
+/// The test extensions plus one with a declared key, a numeric account and
+/// a webhook address it may copy.
+fn with_hooks() -> Vec<InstalledItem> {
+    let mut items = installed();
+    items.push(item(json!({
+        "id": "hooks", "name": "Hooks", "version": "1.0.0", "type": "extension",
+        "config": {
+            "api_key": { "type": "string", "default": "", "sensitive": true },
+            "account_id": { "type": "number", "default": 0 },
+            "webhook_url": { "type": "string", "default": "", "backup": "plain" }
+        }
+    })));
+    items
+}
+
+/// `extensions` as every kind of backup carries them: settings-only, a v1
+/// plain full backup, and an encrypted full one.
+fn every_kind_with_extensions(exts: Value) -> Vec<(Vec<u8>, Option<&'static str>)> {
+    let settings = settings_only_bundle(json!({ "version": 1, "extensions": exts.clone() }));
+    let full = Config {
+        extensions: serde_json::from_value(exts).unwrap(),
+        ..Default::default()
+    };
+    let plain = handmade(&full, &[]);
+    let encrypted = encrypt(&plain, "pw").unwrap();
+    vec![(settings, None), (plain, None), (encrypted, Some("pw"))]
+}
+
+#[test]
+fn an_extension_signed_in_here_takes_none_of_a_backups_settings() {
+    let _disk = disk();
+    no_auto_steering();
+    let items = with_hooks();
+    let b = Machine::new();
+    // The review's probe: the key stays, and the backup moves the account
+    // (a number) and the webhook (same origin, another path).
+    let signed_in = json!({ "api_key": "K", "account_id": 1,
+                            "webhook_url": "https://hooks.example/alice" });
+    let mut local = b.config.clone();
+    local.extensions.insert("hooks".into(), signed_in.clone());
+    // Not installed here: only its numbers would travel.
+    local
+        .extensions
+        .insert("vault".into(), json!({ "api_key": "V", "account_id": 1 }));
+    let incoming = json!({
+        "hooks": { "account_id": 2, "webhook_url": "https://hooks.example/bob" },
+        "vault": { "account_id": 2 }
+    });
+    for (bytes, pw) in every_kind_with_extensions(incoming.clone()) {
+        let (merged, summary) = import_into(&b, &local, &items, &bytes, pw);
+        assert_eq!(merged.extensions["hooks"], signed_in, "{:?}", summary.kind);
+        assert_eq!(merged.extensions["vault"], local.extensions["vault"]);
+        let mut kept = summary.kept_local.clone();
+        kept.sort();
+        assert_eq!(kept, vec!["Hooks".to_string(), "vault".to_string()]);
+    }
+    // Not signed in here: the same backups' settings arrive.
+    let mut plain = b.config.clone();
+    plain.extensions.insert(
+        "hooks".into(),
+        json!({ "account_id": 1, "webhook_url": "https://hooks.example/alice" }),
+    );
+    plain
+        .extensions
+        .insert("vault".into(), json!({ "account_id": 1 }));
+    for (bytes, pw) in every_kind_with_extensions(incoming) {
+        let (merged, summary) = import_into(&b, &plain, &items, &bytes, pw);
+        assert_eq!(
+            merged.extensions["hooks"],
+            json!({ "account_id": 2, "webhook_url": "https://hooks.example/bob" }),
+            "{:?}",
+            summary.kind
+        );
+        assert_eq!(merged.extensions["vault"], json!({ "account_id": 2 }));
+        assert!(summary.kept_local.is_empty(), "{:?}", summary.kept_local);
+    }
+    // A full backup carrying its own key brings its settings with it.
+    let own = json!({ "hooks": { "api_key": "BACKUP", "account_id": 2,
+                                 "webhook_url": "https://hooks.example/bob" } });
+    for (bytes, pw) in every_kind_with_extensions(own).into_iter().skip(1) {
+        let (merged, summary) = import_into(&b, &local, &items, &bytes, pw);
+        assert_eq!(merged.extensions["hooks"]["api_key"], "BACKUP");
+        assert_eq!(merged.extensions["hooks"]["account_id"], 2);
+        assert!(!summary.kept_local.contains(&"Hooks".to_string()));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_data_file_kage_cant_read_keeps_its_extensions_settings_whole() {
+    use std::os::unix::fs::PermissionsExt;
+    let _disk = disk();
+    no_auto_steering();
+    let mode = |p: &Path, m: u32| std::fs::set_permissions(p, std::fs::Permissions::from_mode(m));
+    let local_settings = json!({ "server_url": "https://ghe.b.corp", "limit": 1 });
+    let token = r#"{"token":"ghp_B"}"#;
+    let setup = || {
+        let mut b = Machine::new();
+        b.config
+            .extensions
+            .insert("github".into(), local_settings.clone());
+        b.write("github/token.json", token);
+        mode(&b.root.path().join("github/token.json"), 0o000).unwrap();
+        b
+    };
+    if std::fs::read(setup().root.path().join("github/token.json")).is_ok() {
+        // Running as root, which reads anything: nothing to test.
+        return;
+    }
+    let mut a = Machine::new();
+    a.config.extensions.insert(
+        "github".into(),
+        json!({ "server_url": "https://evil.example", "limit": 2 }),
+    );
+    let full = a.export(ExportMode::Encrypted, Some("pw")).unwrap();
+    let settings_only = a.export(ExportMode::SettingsOnly, None).unwrap();
+    // A backup carrying its own copy of the file doesn't help: Kage can't
+    // tell what this machine's holds.
+    a.write("github/token.json", r#"{"token":"ghp_A"}"#);
+    let full_with_file = a.export(ExportMode::Encrypted, Some("pw")).unwrap();
+    for (bytes, pw) in [
+        (&full, Some("pw")),
+        (&full_with_file, Some("pw")),
+        (&settings_only, None),
+    ] {
+        // The review's probe: a declared token file at mode 000.
+        let mut b = setup();
+        let summary = b.import(bytes, pw);
+        assert_eq!(
+            b.config.extensions["github"], local_settings,
+            "{:?}",
+            summary.kind
+        );
+        assert_eq!(summary.kept_local, vec!["GitHub".to_string()]);
+        let path = b.root.path().join("github/token.json");
+        mode(&path, 0o600).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), token);
+    }
+    // A link in its folder, which Kage never follows: the same.
+    let outside = tempfile::tempdir().unwrap();
+    std::fs::write(outside.path().join("t.json"), token).unwrap();
+    for (bytes, pw) in [(&full, Some("pw")), (&settings_only, None)] {
+        let mut b = Machine::new();
+        b.config
+            .extensions
+            .insert("github".into(), local_settings.clone());
+        std::fs::create_dir_all(b.root.path().join("github")).unwrap();
+        std::os::unix::fs::symlink(
+            outside.path().join("t.json"),
+            b.root.path().join("github/linked.json"),
+        )
+        .unwrap();
+        let summary = b.import(bytes, pw);
+        assert_eq!(b.config.extensions["github"], local_settings);
+        assert_eq!(summary.kept_local, vec!["GitHub".to_string()]);
+    }
+}
+
+/// The rollback copies of config.json in Kage's folder, with what they hold.
+fn config_rollback_copies() -> Vec<(PathBuf, String)> {
+    let kage = journal::journal_path().parent().unwrap().to_path_buf();
+    std::fs::read_dir(&kage)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.to_string_lossy().ends_with("~config.json.bak"))
+        .map(|p| {
+            let body = std::fs::read_to_string(&p).unwrap();
+            (p, body)
+        })
+        .collect()
+}
+
+#[test]
+fn a_recovery_retry_never_puts_back_or_removes_a_config_saved_since() {
+    let _disk = disk();
+    no_auto_steering();
+    let config_path = Config::get_config_path().unwrap();
+    std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+    let original = r#"{"ui":{"language":"en"}}"#;
+    let language = || {
+        let body = std::fs::read(&config_path).ok()?;
+        let v: Value = serde_json::from_slice(&body).ok()?;
+        v["ui"]["language"].as_str().map(String::from)
+    };
+    let with_language = |l: &str| {
+        let mut c = Config::default();
+        c.ui.language = Some(l.into());
+        c
+    };
+    // Whether config.json existed before the import, and which recorded
+    // step of the first recovery fails: either file's, or config.json's
+    // (after it was put back or removed).
+    for had_one in [true, false] {
+        for fail_after in 0..3 {
+            let case = format!("had_one={} fail_after={}", had_one, fail_after);
+            match had_one {
+                true => std::fs::write(&config_path, original).unwrap(),
+                false => {
+                    let _ = std::fs::remove_file(&config_path);
+                }
+            }
+            let b = Machine::new();
+            b.write("notes/state.json", r#"{"notes":"LOCAL"}"#);
+            let bundle = handmade(
+                &Config::default(),
+                &[
+                    ("extension-data/notes/fresh.json", br#"{"from":"bundle"}"#),
+                    ("extension-data/notes/state.json", br#"{"notes":"BUNDLE"}"#),
+                ],
+            );
+            let (_, _, mut files) = apply_import_at(
+                prepare_import(bundle, None).unwrap(),
+                &b.config,
+                &installed(),
+                Some(b.root.path().to_path_buf()),
+            )
+            .unwrap()
+            .into_parts();
+            files.save_config(&with_language("fr")).unwrap();
+            files.abandon();
+            // The review's sequence: the first recovery can't record a
+            // step, Kage runs on and saves newer settings, and recovery
+            // runs again.
+            journal::fail_record_after(fail_after);
+            assert!(journal::recover().is_err(), "{}", case);
+            with_language("ja").save().unwrap();
+            assert_eq!(
+                journal::recover().unwrap(),
+                journal::Recovery::RolledBack,
+                "{}",
+                case
+            );
+            assert_eq!(language(), Some("ja".into()), "{}", case);
+            assert_eq!(
+                b.file("notes/state.json").unwrap(),
+                r#"{"notes":"LOCAL"}"#,
+                "{}",
+                case
+            );
+            assert!(b.file("notes/fresh.json").is_none(), "{}", case);
+            assert!(!journal::journal_path().exists(), "{}", case);
+            // This machine's earlier config, if it wasn't back yet, stays
+            // beside the newer one.
+            let copies = config_rollback_copies();
+            let expected: Vec<String> = if had_one && fail_after < 2 {
+                vec![original.to_string()]
+            } else {
+                Vec::new()
+            };
+            assert_eq!(
+                copies.iter().map(|(_, b)| b.clone()).collect::<Vec<_>>(),
+                expected,
+                "{}",
+                case
+            );
+            for (p, _) in copies {
+                std::fs::remove_file(p).unwrap();
+            }
+        }
+    }
+
+    // Untouched since, the import's own config.json is still undone, and
+    // on Unix even a later save of the very same bytes is a new file.
+    std::fs::write(&config_path, original).unwrap();
+    let b = Machine::new();
+    b.write("notes/state.json", r#"{"notes":"LOCAL"}"#);
+    let bundle = handmade(
+        &Config::default(),
+        &[("extension-data/notes/state.json", br#"{"notes":"BUNDLE"}"#)],
+    );
+    let apply = || {
+        let (_, _, mut files) = apply_import_at(
+            prepare_import(bundle.clone(), None).unwrap(),
+            &b.config,
+            &installed(),
+            Some(b.root.path().to_path_buf()),
+        )
+        .unwrap()
+        .into_parts();
+        files.save_config(&with_language("fr")).unwrap();
+        files.abandon();
+    };
+    apply();
+    assert_eq!(journal::recover().unwrap(), journal::Recovery::RolledBack);
+    assert_eq!(std::fs::read_to_string(&config_path).unwrap(), original);
+    apply();
+    with_language("fr").save().unwrap();
+    assert_eq!(journal::recover().unwrap(), journal::Recovery::RolledBack);
+    let expected = if cfg!(unix) { Some("fr") } else { Some("en") };
+    assert_eq!(language(), expected.map(String::from));
+    for (p, _) in config_rollback_copies() {
+        std::fs::remove_file(p).unwrap();
+    }
+    std::fs::remove_file(&config_path).unwrap();
 }

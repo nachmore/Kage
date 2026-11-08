@@ -816,7 +816,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
 
             let mut state_config = config.lock_or_recover();
             let local = state_config.clone();
-            let (mut new_config, summary, files) =
+            let (mut new_config, summary, mut files) =
                 crate::config_export::apply_import(prepared, &local, &items)
                     .map_err(import_error)?
                     .into_parts();
@@ -843,7 +843,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
             *state_config = new_config;
             // Channel is a typed enum — unknown values from a hand-edited
             // backup collapsed to Stable at deserialise time.
-            if let Err(e) = state_config.save() {
+            if let Err(e) = files.save_config(&state_config) {
                 *state_config = local;
                 files.rollback();
                 return Err(AppError::keyed(

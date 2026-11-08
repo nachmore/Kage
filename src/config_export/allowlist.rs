@@ -803,48 +803,29 @@ pub fn keep_local_unregistrable_hotkeys(merged: &mut Config, local: &Config) {
     }
 }
 
-/// Whether this machine's settings for an extension hold a credential:
-/// a sensitive setting (declared, or named like one) with content, at the
-/// top level or nested.
-fn holds_secret(id: &str, obj: &Map<String, Value>, rules: &Rules) -> bool {
-    obj.iter().any(|(k, v)| {
-        (rules.is_sensitive_setting(id, k) && super::merge::has_content(v)) || nested_secret(v)
-    })
-}
-
-fn nested_secret(v: &Value) -> bool {
-    match v {
-        Value::Object(o) => o.iter().any(|(k, c)| {
-            (crate::extensions::is_sensitive_name(k) && super::merge::has_content(c))
-                || nested_secret(c)
-        }),
-        Value::Array(a) => a.iter().any(nested_secret),
-        _ => false,
-    }
-}
-
 /// Merge a settings-only backup's `config.json` (`incoming`, already
 /// migrated) into this machine's `local`: only allowlisted fields, each
 /// re-checked; an empty value keeps this machine's; a hotkey is taken
-/// whole, and only one the runtime registers; grants never. An extension setting is taken only as this
-/// machine's manifests allow it (booleans and numbers only for an extension
-/// that isn't installed here), and never when it would change where an
-/// extension holding a credential here sends it. Returns the merged config
-/// and how many settings it took from the backup. `secret_data` names the
-/// extensions whose data files here hold a credential: their endpoints
-/// don't move either.
+/// whole, and only one the runtime registers; grants never. An extension
+/// setting is taken only as this machine's manifests allow it (booleans
+/// and numbers only for an extension that isn't installed here), and none
+/// at all for an extension in `keep_whole` (folded ids: it keeps a
+/// credential here, so its settings here stay whole). Returns the merged
+/// config, how many settings it took from the backup, and the extensions
+/// (the backup's ids) kept whole that it would otherwise have changed.
 pub fn merge(
     local: &Config,
     incoming: &Value,
     rules: &Rules,
-    secret_data: &std::collections::HashSet<String>,
-) -> anyhow::Result<(Config, usize)> {
+    keep_whole: &std::collections::BTreeSet<String>,
+) -> anyhow::Result<(Config, usize, Vec<String>)> {
     let ctx = Ctx {
         rules,
         side: Side::Import,
     };
     let mut tree = serde_json::to_value(local)?;
     let mut settings = 0usize;
+    let mut kept: Vec<String> = Vec::new();
     for (pattern, rule) in FIELDS {
         let Include(shape) = rule else {
             continue;
@@ -884,14 +865,13 @@ pub fn merge(
                 continue;
             }
             let installed = rules.is_installed(id);
+            let whole = keep_whole.contains(&sensitive::fold(id));
             let local_obj = tree
                 .get("extensions")
                 .and_then(|e| e.get(id))
                 .and_then(Value::as_object)
                 .cloned()
                 .unwrap_or_default();
-            let guard_endpoints =
-                holds_secret(id, &local_obj, rules) || secret_data.contains(id.as_str());
             for (field, v) in obj.iter().take(MAX_IMPORTED_FIELDS) {
                 if is_host_managed(field) || is_empty(v) || field.len() > MAX_FIELD_NAME {
                     continue;
@@ -904,14 +884,13 @@ pub fn merge(
                 if !ok {
                     continue;
                 }
-                if guard_endpoints {
-                    // Where this machine's credential for the extension is
-                    // sent never changes in a settings-only restore.
-                    let mut after = local_obj.clone();
-                    after.insert(field.clone(), v.clone());
-                    if !super::merge::same_endpoints(&after, &local_obj) {
-                        continue;
+                if whole {
+                    // Its credential stays here: none of its settings here
+                    // change, whatever they're called or hold.
+                    if local_obj.get(field) != Some(v) && !kept.contains(id) {
+                        kept.push(id.clone());
                     }
+                    continue;
                 }
                 set(
                     &mut tree,
@@ -924,7 +903,7 @@ pub fn merge(
     }
     let merged = Config::deserialize(&tree)
         .map_err(|e| anyhow::anyhow!("Backup settings don't fit this machine's: {}", e))?;
-    Ok((merged, settings))
+    Ok((merged, settings, kept))
 }
 
 /// Extension display names, for labels.
@@ -1280,7 +1259,7 @@ mod tests {
             "pocket_tts": { "temp": 0.5, "eos_threshold": 3.0 },
             "automation_power": { "battery_multiplier": 0.0, "low_battery_multiplier": 1e9 }
         });
-        let (merged, settings) = merge(&local, &incoming, &rules, &Default::default()).unwrap();
+        let (merged, settings, _) = merge(&local, &incoming, &rules, &Default::default()).unwrap();
         assert_eq!(settings, 1, "only the in-range temp");
         assert_eq!(merged.pocket_tts.temp, 0.5);
         assert_eq!(
@@ -1377,7 +1356,7 @@ mod tests {
                 "too many",
             ),
         ] {
-            let (merged, _) = merge(
+            let (merged, ..) = merge(
                 &local,
                 &json!({ "version": 1, "hotkey": hotkey, "voice_hotkey": hotkey }),
                 &rules,
@@ -1390,7 +1369,7 @@ mod tests {
         }
         // Aliases the runtime reads the same way are written canonically,
         // and the result registers.
-        let (merged, settings) = merge(
+        let (merged, settings, _) = merge(
             &local,
             &json!({ "version": 1,
                      "hotkey": { "modifiers": ["command", "Option", "control"], "key": "k" },

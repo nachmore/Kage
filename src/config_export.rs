@@ -44,9 +44,12 @@
 //! missing, empty, or a placeholder an earlier build wrote, bound to the
 //! item's identity so a local secret never moves to another command, site
 //! or server ([`merge`]). A setting or file an extension declares sensitive
-//! is never replaced by an empty or missing one, whatever the bundle. A
-//! settings-only backup merges only allowlisted fields and leaves everything
-//! else here untouched.
+//! is never replaced by an empty or missing one, whatever the bundle. An
+//! extension that keeps a credential here — one the backup doesn't replace
+//! with its own, or a data file Kage can't read — keeps this machine's
+//! settings and data whole, in every kind of import, and the summary names
+//! it ([`keeping_a_credential`]). A settings-only backup merges only
+//! allowlisted fields and leaves everything else here untouched.
 //!
 //! Config schemas are checked first: `config.json` goes through
 //! [`crate::config_migrations`] like `Config::load`; one from a newer Kage is
@@ -70,8 +73,10 @@
 //! Import is all or nothing: every write is planned and checked, staged to
 //! temp files next to its target, recorded in a durable journal
 //! ([`journal`]), then committed by renames that move each old file aside.
-//! The caller saves `config.json` and calls [`CommittedFiles::finish`],
-//! which records the commit before deleting the old files. A failure puts
+//! The caller saves `config.json` through [`CommittedFiles::save_config`]
+//! (the journal records what it writes) and calls
+//! [`CommittedFiles::finish`], which records the commit before deleting the
+//! old files. A failure puts
 //! everything back; an import interrupted by a crash is finished or undone
 //! the next time Kage starts ([`recover_interrupted_import`]). Extension
 //! data and the auto steering doc are written owner-only (they can hold an
@@ -376,32 +381,73 @@ fn check_config_size_within(config: &Config, limit: u64) -> Result<()> {
     Ok(())
 }
 
-/// The extensions whose data files here hold a credential: a file their
-/// manifest declares sensitive (or named like one) with content, or a JSON
-/// file with a credential-named value.
-fn extensions_with_secret_data(
-    root: Option<&Path>,
-    rules: &sensitive::Rules,
-) -> Result<HashSet<String>> {
-    let mut ids = HashSet::new();
+/// This machine's extension data, as an import judges it.
+#[derive(Default)]
+struct LocalData {
+    /// Its files, as [`list_data_files`] lists them.
+    files: Vec<(String, PathBuf)>,
+    /// The extensions (folded ids) with an entry in their folder that is
+    /// neither a folder nor a regular file (a link, …): Kage never follows
+    /// or reads one, so it can't tell what it holds.
+    unreadable: BTreeSet<String>,
+}
+
+fn local_data(root: Option<&Path>) -> Result<LocalData> {
     let Some(root) = root.filter(|r| r.exists()) else {
-        return Ok(ids);
+        return Ok(LocalData::default());
     };
-    for (rel, full) in list_data_files(root)? {
-        let Some((id, _)) = rel.split_once('/') else {
-            continue;
-        };
-        if ids.contains(id) {
+    let walk = walk(root)?;
+    let unreadable = walk
+        .others
+        .iter()
+        .filter_map(|rel| rel.components().next())
+        .map(|c| sensitive::fold(&c.as_os_str().to_string_lossy()))
+        .collect();
+    Ok(LocalData {
+        files: data_rels(walk.files),
+        unreadable,
+    })
+}
+
+/// The extensions (folded ids) that keep a credential on this machine
+/// through an import, so keep this machine's settings (and data) whole and
+/// take none of the backup's: a data file of theirs here that holds one
+/// and that the backup doesn't replace (`replaced`: this machine's names of
+/// the files it does), or one Kage can't read, which may hold one whatever
+/// the backup carries; or a sensitive setting with content the backup
+/// doesn't carry its own of. `incoming` is the backup's extension
+/// settings: `None` for a settings-only backup, which never carries a
+/// credential.
+fn keeping_a_credential(
+    data: &LocalData,
+    replaced: &HashSet<String>,
+    local: &serde_json::Map<String, serde_json::Value>,
+    incoming: Option<&serde_json::Map<String, serde_json::Value>>,
+    rules: &sensitive::Rules,
+    leave_out: bool,
+) -> BTreeSet<String> {
+    let mut ids = data.unreadable.clone();
+    for (rel, full) in &data.files {
+        let id = extension_of(Path::new(rel));
+        if id.is_empty() || ids.contains(&id) {
             continue;
         }
-        let Some(body) = read_regular_file(&full) else {
-            continue;
+        let keeps = match read_regular_file(full) {
+            None => true,
+            Some(_) if replaced.contains(rel) => false,
+            Some(body) => merge::holds_credential(&body, declared_data(rules, rel)),
         };
-        if merge::holds_credential(&body, declared_data(rules, &rel)) {
-            ids.insert(id.to_string());
+        if keeps {
+            ids.insert(id);
         }
     }
-    Ok(ids)
+    for (id, lv) in local {
+        let mv = incoming.and_then(|m| m.get(id));
+        if merge::settings_credential_stays(id, mv, lv, rules, leave_out) {
+            ids.insert(sensitive::fold(id));
+        }
+    }
+    ids
 }
 
 /// Whether the data file at `rel` (`<id>/<file>`) is one its extension
@@ -676,11 +722,15 @@ struct DataFile {
 /// Every extension-data file under `root` (OS clutter and an import's own
 /// temp files left out), as (`/`-separated rel, full path).
 fn list_data_files(root: &Path) -> Result<Vec<(String, PathBuf)>> {
-    Ok(walk_files(root)?
+    Ok(data_rels(walk_files(root)?))
+}
+
+fn data_rels(files: Vec<(PathBuf, PathBuf)>) -> Vec<(String, PathBuf)> {
+    files
         .into_iter()
         .map(|(rel, full)| (rel.to_string_lossy().replace('\\', "/"), full))
         .filter(|(rel, _)| !sensitive::is_os_junk(rel))
-        .collect())
+        .collect()
 }
 
 fn build_full_archive(config: &Config, ext_root: Option<&Path>) -> Result<Vec<u8>> {
@@ -1098,9 +1148,16 @@ fn apply_import_at(
     // this machine's consent ([`consent`]).
     let claims = consent::grant_claims(&p.config);
 
+    let local_tree = serde_json::to_value(local)?;
+    let no_settings = serde_json::Map::new();
+    let local_exts = local_tree["extensions"].as_object().unwrap_or(&no_settings);
+
     if p.kind == BundleKind::SettingsOnly {
-        let secret_data = extensions_with_secret_data(ext_root.as_deref(), &rules)?;
-        let (merged, settings) = allowlist::merge(local, &p.config, &rules, &secret_data)?;
+        // It never carries a credential, so every one here stays.
+        let data = local_data(ext_root.as_deref())?;
+        let keep_whole =
+            keeping_a_credential(&data, &HashSet::new(), local_exts, None, &rules, false);
+        let (merged, settings, kept) = allowlist::merge(local, &p.config, &rules, &keep_whole)?;
         let mut merged = sanitise_imported_config(merged, local);
         let needs_approval = consent::keep_local(&mut merged, local, &claims, installed);
         merged.version = crate::config_migrations::CURRENT_VERSION;
@@ -1113,6 +1170,7 @@ fn apply_import_at(
             exported_at: manifest.exported_at.clone(),
             settings,
             needs_approval: labels(&needs_approval, installed, &manifest),
+            kept_local: labels(&kept, installed, &manifest),
             ..Default::default()
         };
         return Ok(AppliedImport {
@@ -1130,12 +1188,8 @@ fn apply_import_at(
     // This machine's extension-data files, by the name APFS / NTFS would
     // match: an incoming `Github/ſtate.json` is this machine's
     // `github/state.json`, and is judged (and written) as that.
-    let local_files = ext_root
-        .as_deref()
-        .filter(|r| r.exists())
-        .map(list_data_files)
-        .transpose()?
-        .unwrap_or_default();
+    let data = local_data(ext_root.as_deref())?;
+    let local_files = &data.files;
     let exact: HashSet<&str> = local_files.iter().map(|(rel, _)| rel.as_str()).collect();
     let folded: HashMap<String, String> = local_files
         .iter()
@@ -1167,8 +1221,8 @@ fn apply_import_at(
 
     // --- Extension data. Plan every write, and check every destination,
     // before writing anything: a refused path leaves the disk untouched.
-    // On the way, note which of this machine's data files holding a
-    // credential the backup replaces with a copy carrying its own.
+    // On the way, note which of this machine's data files the backup
+    // replaces with its own copy.
     let mut data_writes: Vec<(String, PathBuf, Vec<u8>, bool)> = Vec::new();
     let mut replaced: HashSet<String> = HashSet::new();
     if let Some(root) = &ext_root {
@@ -1216,30 +1270,12 @@ fn apply_import_at(
             }
         }
     }
-    // The extensions whose credential stays on this machine: a data file
-    // holding one that the backup doesn't replace (judged per file: an
-    // unrelated file in the backup replaces nothing)…
-    let mut keep_whole: BTreeSet<String> = BTreeSet::new();
-    for (rel, full) in &local_files {
-        if replaced.contains(rel) {
-            continue;
-        }
-        if read_regular_file(full)
-            .is_some_and(|body| merge::holds_credential(&body, declared_data(&rules, rel)))
-        {
-            keep_whole.insert(extension_of(Path::new(rel)));
-        }
-    }
-    keep_whole.remove("");
 
     // --- Kage's settings and extension settings.
     let mut incoming = p.config;
-    let local_tree = serde_json::to_value(local)?;
     merge::host(&mut incoming, &local_tree);
     // Numbers outside what their setting takes are this machine's.
     allowlist::keep_local_numbers_in_range(&mut incoming, &local_tree);
-    let mut lost: Vec<String> = Vec::new();
-    let mut kept_local: Vec<String> = Vec::new();
     if let Some(obj) = incoming.as_object_mut() {
         let exts = obj
             .entry("extensions")
@@ -1247,35 +1283,39 @@ fn apply_import_at(
         if !exts.is_object() {
             *exts = serde_json::Value::Object(Default::default());
         }
-        let empty = serde_json::Map::new();
-        let l = local_tree["extensions"].as_object().unwrap_or(&empty);
-        if let Some(m) = exts.as_object_mut() {
-            // Scratch values never come from a backup.
-            for v in m.values_mut() {
-                if let Some(o) = v.as_object_mut() {
-                    o.retain(|k, _| !k.starts_with("__"));
-                }
+        // Scratch values never come from a backup.
+        for v in exts
+            .as_object_mut()
+            .into_iter()
+            .flat_map(|m| m.values_mut())
+        {
+            if let Some(o) = v.as_object_mut() {
+                o.retain(|k, _| !k.starts_with("__"));
             }
-            // …or a sensitive setting the backup doesn't carry its own of.
-            for (id, lv) in l {
-                if keep_whole.contains(&sensitive::fold(id))
-                    || merge::settings_credential_stays(id, m.get(id), lv, &rules, leave_out)
-                {
-                    keep_whole.insert(sensitive::fold(id));
-                }
-            }
-            // Those keep this machine's settings (and data) whole.
-            let whole: BTreeSet<String> = l
-                .keys()
-                .filter(|id| keep_whole.contains(&sensitive::fold(id)))
-                .cloned()
-                .chain(keep_whole.iter().cloned())
-                .collect();
-            let outcome = merge::extensions(m, l, &rules, &whole);
-            lost = outcome.lost;
-            kept_local = outcome.kept;
         }
     }
+    // The extensions whose credential stays on this machine keep this
+    // machine's settings and data whole (see `keeping_a_credential`).
+    let keep_whole = keeping_a_credential(
+        &data,
+        &replaced,
+        local_exts,
+        Some(
+            incoming
+                .get("extensions")
+                .and_then(serde_json::Value::as_object)
+                .unwrap_or(&no_settings),
+        ),
+        &rules,
+        leave_out,
+    );
+    let mut kept_local = match incoming
+        .get_mut("extensions")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        Some(m) => merge::extensions(m, local_exts, &keep_whole),
+        None => Vec::new(),
+    };
     let mut merged: Config =
         Config::deserialize(&incoming).context("Backup config.json was unparseable")?;
     merged.version = crate::config_migrations::CURRENT_VERSION;
@@ -1402,9 +1442,6 @@ fn apply_import_at(
             sign_in_again.push(name);
         }
     };
-    for id in &lost {
-        add_sign_in(id);
-    }
     let merged_tree = serde_json::to_value(&merged)?;
     let mut reenter: Vec<String> = Vec::new();
     let mut add_reenter = |label: String| {
@@ -1705,13 +1742,30 @@ fn resolve_user_steering_path(config: &Config) -> Option<PathBuf> {
 /// pairs. We need the relative path for the zip entry name and the
 /// full path for the read.
 fn walk_files(root: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
-    let mut out = Vec::new();
+    Ok(walk(root)?.files)
+}
+
+/// What [`walk`] finds under a folder.
+struct Walk {
+    /// Regular files, as `(relative_path, full_path)`.
+    files: Vec<(PathBuf, PathBuf)>,
+    /// Relative paths of entries that are neither a folder nor a regular
+    /// file (a symlink, …), never followed.
+    others: Vec<PathBuf>,
+}
+
+fn walk(root: &Path) -> Result<Walk> {
+    let mut out = Walk {
+        files: Vec::new(),
+        others: Vec::new(),
+    };
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
             let path = entry.path();
             let ft = entry.file_type()?;
+            let rel = || path.strip_prefix(root).unwrap_or(&path).to_path_buf();
             if ft.is_dir() {
                 stack.push(path);
             } else if ft.is_file() {
@@ -1722,11 +1776,13 @@ fn walk_files(root: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
                 }) {
                     continue;
                 }
-                let rel = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
-                out.push((rel, path));
+                out.files.push((rel(), path.clone()));
+            } else {
+                // Symlinks intentionally skipped — exporting a backup
+                // shouldn't follow links out of the user's data dir. An
+                // import counts them as unreadable ([`local_data`]).
+                out.others.push(rel());
             }
-            // Symlinks intentionally skipped — exporting a backup
-            // shouldn't follow links out of the user's data dir.
         }
     }
     Ok(out)
@@ -2230,8 +2286,22 @@ impl CommittedFiles {
         Self { txn: None }
     }
 
-    /// Keep the new files, once the config that goes with them is saved:
-    /// the commit is recorded, then what they replaced is deleted. An error
+    /// Save `config`, the config that goes with these files, as
+    /// config.json. The import's journal records what's written first, so
+    /// undoing the import (now, or after a crash) only ever puts back or
+    /// removes this file, never one saved since. An error saved nothing the
+    /// journal doesn't know of: the caller puts everything back
+    /// ([`Self::rollback`]).
+    pub fn save_config(&mut self, config: &Config) -> Result<()> {
+        match self.txn.as_mut() {
+            Some(txn) => txn.save_config(config),
+            None => config.save(),
+        }
+    }
+
+    /// Keep the new files, once the config that goes with them is saved
+    /// ([`Self::save_config`]): the commit is recorded, then what they
+    /// replaced is deleted. An error
     /// means the commit couldn't be recorded and the files were put back:
     /// the caller restores the config it saved.
     pub fn finish(mut self) -> Result<()> {

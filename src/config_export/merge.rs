@@ -22,17 +22,20 @@
 //!     local item then replaces the copy whole.
 //!   - **An extension whose credential stays here**: when this machine
 //!     holds a credential for an extension — a sensitive setting (declared,
-//!     or named like one) or a data file holding one — that the backup
-//!     doesn't replace with its own (judged per setting and per file: an
-//!     unrelated file in the backup replaces nothing), the extension keeps
-//!     this machine's settings and data files whole
-//!     ([`settings_credential_stays`], [`file_credential_stays`]), and the
-//!     user is told. Nothing in the backup can then point that credential
-//!     somewhere else, whatever its fields are called.
-//!   - **Other extension settings**: merged by name, recursively. A missing
-//!     or empty value is this machine's — unless the object now points
-//!     somewhere else ([`same_endpoints`]), in which case the backup's
-//!     object is kept as it is.
+//!     or named like one) or a data file holding one, or a data file Kage
+//!     can't read (which may) — that the backup doesn't replace with its own
+//!     (judged per setting and per file: an unrelated file in the backup
+//!     replaces nothing; a file Kage can't read, never), the extension keeps
+//!     this machine's settings and data files whole and takes none of the
+//!     backup's ([`settings_credential_stays`], [`file_credential_stays`]),
+//!     and the user is told. Nothing in the backup can then point that
+//!     credential somewhere else, whatever its fields are called or hold.
+//!     The same rule holds for a settings-only backup, which never carries
+//!     a credential.
+//!   - **Other extension settings**: merged by name, recursively; a missing
+//!     or empty value is this machine's. None of them holds a credential of
+//!     this machine's (that extension would be kept whole), so nothing put
+//!     back can go somewhere the backup chose.
 //!   - **Other extension data**: the backup's copy, unless it holds nothing
 //!     and this machine's does.
 //!
@@ -42,8 +45,7 @@
 use super::allowlist::is_empty;
 use super::sensitive::{Rules, PLACEHOLDER};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::collections::{BTreeSet, HashMap};
 
 /// Whether `v` holds anything worth keeping, at any depth: a number, or a
 /// string that isn't blank or the placeholder. Booleans and nulls are
@@ -368,91 +370,6 @@ pub fn placeholder_paths(v: &Value, path: &mut Vec<String>, out: &mut Vec<Vec<St
 
 // --- Extension settings and data --------------------------------------------------
 
-/// Field names that say where something is sent, or to which account.
-static ENDPOINT_KEY: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(
-        r"(?i)(url|uri|endpoint|host|server|domain|origin|address|instance|tenant|base|site|workspace|account|org|region|project|cluster|realm|team|authority|issuer|audience|callback|redirect|webhook)",
-    )
-    .expect("ENDPOINT_KEY must compile")
-});
-
-/// `scheme://host:port` of an absolute URL with a host.
-fn url_origin(s: &str) -> Option<(String, String, Option<u16>)> {
-    let u = url::Url::parse(s.trim()).ok()?;
-    let host = u.host_str()?.to_ascii_lowercase();
-    if host.is_empty() {
-        return None;
-    }
-    Some((u.scheme().to_string(), host, u.port_or_known_default()))
-}
-
-/// Every endpoint-like string under `v` (named like one, or holding a
-/// URL), by its path, at any depth — credential-named keys included —
-/// except under the paths `skip` names.
-fn endpoints(
-    v: &Value,
-    path: &mut Vec<String>,
-    key: &str,
-    skip: &dyn Fn(&[String]) -> bool,
-    out: &mut Vec<(Vec<String>, String)>,
-) {
-    if skip(path) {
-        return;
-    }
-    match v {
-        Value::String(s) if ENDPOINT_KEY.is_match(key) || url_origin(s).is_some() => {
-            out.push((path.clone(), s.clone()));
-        }
-        Value::Array(a) => {
-            for (i, c) in a.iter().enumerate() {
-                path.push(i.to_string());
-                endpoints(c, path, key, skip, out);
-                path.pop();
-            }
-        }
-        Value::Object(o) => {
-            for (k, c) in o {
-                path.push(k.clone());
-                endpoints(c, path, k, skip, out);
-                path.pop();
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Whether `merged` still sends things where `local` does: every
-/// endpoint-like string, at any depth, outside the paths in `skip` (and
-/// what's under them), is the same in both — URLs compared by origin. One
-/// added or removed is a change.
-fn same_endpoints_except(
-    merged: &Map<String, Value>,
-    local: &Map<String, Value>,
-    skip: &[Vec<String>],
-) -> bool {
-    let skipped = |p: &[String]| skip.iter().any(|s| p.starts_with(s));
-    let collect = |o: &Map<String, Value>| {
-        let mut out = Vec::new();
-        for (k, c) in o {
-            endpoints(c, &mut vec![k.clone()], k, &skipped, &mut out);
-        }
-        // Keyed by the path itself: no key can stand in for a nested one.
-        out.into_iter().collect::<HashMap<Vec<String>, String>>()
-    };
-    let (m, l) = (collect(merged), collect(local));
-    m.len() == l.len()
-        && m.iter().all(|(path, a)| match l.get(path) {
-            Some(b) => a == b || (url_origin(a).is_some() && url_origin(a) == url_origin(b)),
-            None => false,
-        })
-}
-
-/// Whether `merged` still sends things where `local` does (see
-/// [`same_endpoints_except`]).
-pub fn same_endpoints(merged: &Map<String, Value>, local: &Map<String, Value>) -> bool {
-    same_endpoints_except(merged, local, &[])
-}
-
 /// Whether the backup's copy of a value counts as absent for keeping this
 /// machine's: empty, or holding the placeholder.
 fn absent(v: Option<&Value>) -> bool {
@@ -470,45 +387,27 @@ pub fn has_secret_below(v: &Value) -> bool {
     }
 }
 
-/// How [`keep_local`] judges one object.
-struct KeepRules<'a> {
-    /// Whether a top-level key is a secret.
-    secret: &'a dyn Fn(&str) -> bool,
-    /// Whether a nested key is.
-    nested_secret: &'a dyn Fn(&str) -> bool,
-}
-
-/// The values [`keep_local`] would put back: where, what, and whether it's
-/// a secret.
+/// The values [`keep_local`] puts back: where, and what.
 fn plan(
     mo: &Map<String, Value>,
     lo: &Map<String, Value>,
-    rules: &KeepRules,
     path: &mut Vec<String>,
-    out: &mut Vec<(Vec<String>, Value, bool)>,
+    out: &mut Vec<(Vec<String>, Value)>,
 ) {
     for (k, lv) in lo {
         if path.is_empty() && super::sensitive::is_host_managed(k) {
             continue;
         }
-        let secret = if path.is_empty() {
-            (rules.secret)(k)
-        } else {
-            (rules.nested_secret)(k)
-        };
         let mv = mo.get(k);
-        // A credential nested under something the backup lacks (`accounts`
-        // with a token inside) is kept like one at the top.
-        let holds = secret || has_secret_below(lv);
         if !is_empty(lv) && absent(mv) {
             path.push(k.clone());
-            out.push((path.clone(), lv.clone(), holds));
+            out.push((path.clone(), lv.clone()));
             path.pop();
             continue;
         }
         if let (Some(Value::Object(mc)), Value::Object(lc)) = (mv, lv) {
             path.push(k.clone());
-            plan(mc, lc, rules, path, out);
+            plan(mc, lc, path, out);
             path.pop();
         }
     }
@@ -529,35 +428,25 @@ fn insert_at(obj: &mut Map<String, Value>, path: &[String], value: Value) {
     }
 }
 
-/// Keep `local`'s values in `merged` (one object, at any depth) where
-/// `merged`'s are absent, but only if,
-/// leaving those values aside, the whole object still points where this
-/// machine's does: nothing is kept in an object that now sends things
-/// somewhere else. Returns `false` if a secret couldn't be kept.
-fn keep_local(mo: &mut Map<String, Value>, lo: &Map<String, Value>, rules: &KeepRules) -> bool {
+/// Put `local`'s values back in `merged` (one extension's settings from
+/// the backup, at any depth) wherever `merged`'s are absent. Only for an
+/// extension that keeps no credential here ([`extensions`] keeps the others
+/// whole), so nothing put back is a credential of this machine's.
+fn keep_local(mo: &mut Map<String, Value>, lo: &Map<String, Value>) {
     let mut restores = Vec::new();
-    plan(mo, lo, rules, &mut Vec::new(), &mut restores);
-    if restores.is_empty() {
-        return true;
-    }
-    let paths: Vec<Vec<String>> = restores.iter().map(|(p, ..)| p.clone()).collect();
-    if !same_endpoints_except(mo, lo, &paths) {
-        // The settings point somewhere else now: this machine's values
-        // belong to the old place.
-        return !restores.iter().any(|(_, _, secret)| *secret);
-    }
-    for (path, value, _) in restores {
+    plan(mo, lo, &mut Vec::new(), &mut restores);
+    for (path, value) in restores {
         insert_at(mo, &path, value);
     }
-    true
 }
 
 /// Whether this machine's credential in an extension's settings (`lo`)
-/// stays here after a full import because the backup's settings (`mo`)
-/// don't carry their own in its place: a sensitive setting (declared, or
-/// named like one) with content, at any depth, that the backup lacks (in
-/// an earlier build's "leave out" backup, which never carried one, any
-/// this machine has).
+/// stays here through an import because the backup's settings (`mo`;
+/// `None` for a settings-only backup, which never carries one) don't carry
+/// their own in its place: a sensitive setting (declared, or named like
+/// one) with content, at any depth, that the backup lacks (in an earlier
+/// build's "leave out" backup, which never carried one, any this machine
+/// has).
 pub fn settings_credential_stays(
     id: &str,
     mo: Option<&Value>,
@@ -638,39 +527,45 @@ pub fn carries_other_values(m: &Value, l: Option<&Value>) -> bool {
     }
 }
 
-/// Keep this machine's extension settings wherever the backup's are
-/// absent (see the module docs). The extensions in `keep_whole` (their
-/// credential stays on this machine: [`settings_credential_stays`], or a
-/// data file the backup doesn't replace) keep this machine's settings
-/// whole, so the backup can't point that credential somewhere else.
-/// Returns the ids whose sign-in couldn't be kept (`lost`), and those of
-/// `keep_whole` whose backup settings carried something else (`kept`).
+/// Merge the backup's extension settings (`merged`) with this machine's
+/// (`local`; see the module docs). An extension in `keep_whole` (folded
+/// ids: its credential stays on this machine) keeps this machine's settings
+/// whole, under whichever spelling of its id the backup used: none of the
+/// backup's are taken. Returns the ids of those whose backup settings
+/// carried something else, so the user is told.
 pub fn extensions(
     merged: &mut Map<String, Value>,
     local: &Map<String, Value>,
-    rules: &Rules,
-    keep_whole: &std::collections::BTreeSet<String>,
-) -> ExtensionsMerge {
-    let mut out = ExtensionsMerge::default();
-    for id in keep_whole {
-        let lv = local.get(id);
-        if merged
-            .get(id)
-            .is_some_and(|mv| carries_other_values(mv, lv))
-        {
-            out.kept.push(id.clone());
-        }
-        match lv {
-            Some(lv) => {
-                merged.insert(id.clone(), lv.clone());
-            }
-            None => {
-                merged.remove(id);
-            }
+    keep_whole: &BTreeSet<String>,
+) -> Vec<String> {
+    use super::sensitive::fold;
+    let whole = |id: &str| keep_whole.contains(&fold(id));
+    let local_of = |id: &str| {
+        local
+            .iter()
+            .find(|(k, _)| fold(k) == fold(id))
+            .map(|(k, v)| (k.clone(), v))
+    };
+    let mut kept: Vec<String> = Vec::new();
+    let backup_ids: Vec<String> = merged.keys().filter(|id| whole(id)).cloned().collect();
+    for id in backup_ids {
+        let Some(mv) = merged.remove(&id) else {
+            continue;
+        };
+        let (name, lv) = match local_of(&id) {
+            Some((k, v)) => (k, Some(v)),
+            None => (id.clone(), None),
+        };
+        if carries_other_values(&mv, lv) && !kept.iter().any(|k| fold(k) == fold(&name)) {
+            kept.push(name);
         }
     }
     for (id, lv) in local {
-        if is_empty(lv) || keep_whole.contains(id) {
+        if whole(id) {
+            merged.insert(id.clone(), lv.clone());
+            continue;
+        }
+        if is_empty(lv) {
             continue;
         }
         let Some(mv) = merged.get_mut(id) else {
@@ -685,26 +580,10 @@ pub fn extensions(
             continue;
         }
         if let (Value::Object(mo), Value::Object(lo)) = (mv, lv) {
-            let keep = KeepRules {
-                secret: &|k| rules.is_sensitive_setting(id, k),
-                nested_secret: &crate::extensions::is_sensitive_name,
-            };
-            if !keep_local(mo, lo, &keep) {
-                out.lost.push(id.clone());
-            }
+            keep_local(mo, lo);
         }
     }
-    out
-}
-
-/// What [`extensions`] did beyond merging.
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct ExtensionsMerge {
-    /// Sign-ins that couldn't be kept.
-    pub lost: Vec<String>,
-    /// Extensions whose settings stayed this machine's though the backup
-    /// had others.
-    pub kept: Vec<String>,
+    kept
 }
 
 /// What import does with one extension-data file from a backup.
@@ -941,46 +820,50 @@ mod tests {
 
     /// `extensions` the way a full import calls it: the extensions whose
     /// settings credential stays here are kept whole.
-    fn merge_settings(
-        merged: &mut Map<String, Value>,
-        local: &Map<String, Value>,
-    ) -> ExtensionsMerge {
-        let keep: std::collections::BTreeSet<String> = local
+    fn merge_settings(merged: &mut Map<String, Value>, local: &Map<String, Value>) -> Vec<String> {
+        let keep: BTreeSet<String> = local
             .iter()
             .filter(|(id, lv)| settings_credential_stays(id, merged.get(*id), lv, &rules(), false))
-            .map(|(id, _)| id.clone())
+            .map(|(id, _)| super::super::sensitive::fold(id))
             .collect();
-        extensions(merged, local, &rules(), &keep)
+        extensions(merged, local, &keep)
     }
 
     #[test]
-    fn extension_settings_keep_local_values_unless_they_point_elsewhere() {
-        // No credential here: missing values are this machine's while the
-        // object points where this machine's does.
+    fn extension_settings_without_a_credential_here_merge_by_name() {
+        // No credential here: missing values are this machine's, wherever
+        // the backup's object points.
         let local = obj(json!({ "github": { "trigger": "gh", "units": "m" },
                                 "vault": { "endpoint": "https://vault-b.corp.example", "region": "eu" },
                                 "gone": { "x": 1 } }));
         let mut merged = obj(json!({ "github": { "trigger": "gh2" } }));
-        let out = merge_settings(&mut merged, &local);
-        assert_eq!(out, ExtensionsMerge::default());
+        let kept = merge_settings(&mut merged, &local);
+        assert!(kept.is_empty());
         assert_eq!(merged["github"], json!({ "trigger": "gh2", "units": "m" }));
         assert_eq!(merged["vault"], local["vault"], "missing extension");
         assert_eq!(merged["gone"], local["gone"]);
-        // The endpoint moved: the backup's object as it is.
         let mut merged = obj(json!({ "vault": { "endpoint": "https://evil.example" } }));
-        merge_settings(&mut merged, &local);
+        assert!(merge_settings(&mut merged, &local).is_empty());
         assert_eq!(
             merged["vault"],
-            json!({ "endpoint": "https://evil.example" })
+            json!({ "endpoint": "https://evil.example", "region": "eu" })
         );
-        // Same origin, other path: the same server.
-        let mut merged = obj(json!({ "vault": { "endpoint": "https://vault-b.corp.example/v2" } }));
-        merge_settings(&mut merged, &local);
-        assert_eq!(merged["vault"]["region"], "eu");
         // Settings are an object: anything else keeps this machine's.
         let mut merged = obj(json!({ "github": 0 }));
         merge_settings(&mut merged, &local);
         assert_eq!(merged["github"], local["github"]);
+    }
+
+    #[test]
+    fn an_extension_kept_whole_takes_nothing_under_any_spelling_of_its_id() {
+        let local = obj(json!({ "github": { "pat": "ghp_local", "server": "https://a.corp" } }));
+        let mut merged = obj(json!({
+            "github": { "server": "https://evil.example" },
+            "GitHub": { "server": "https://evil.example" }
+        }));
+        let kept = merge_settings(&mut merged, &local);
+        assert_eq!(merged, local);
+        assert_eq!(kept, vec!["github".to_string()]);
     }
 
     #[test]
@@ -1003,12 +886,10 @@ mod tests {
             "spelled": { "server": { "url": "https://evil.example" },
                          "server\u{1f}url": "https://vault.corp" }
         }));
-        let out = merge_settings(&mut merged, &local);
+        let mut kept = merge_settings(&mut merged, &local);
         assert_eq!(merged, local);
-        let mut kept = out.kept.clone();
         kept.sort();
         assert_eq!(kept, vec!["a", "b", "github", "spelled", "vault"]);
-        assert!(out.lost.is_empty());
         // Empty or missing values never replace a sign-in, and a backup
         // with nothing else to say isn't reported.
         for incoming in [
@@ -1016,9 +897,9 @@ mod tests {
             json!({ "trigger": "gh" }),
         ] {
             let mut merged = obj(json!({ "github": incoming }));
-            let out = merge_settings(&mut merged, &local);
+            let kept = merge_settings(&mut merged, &local);
             assert_eq!(merged["github"], local["github"]);
-            assert!(out.kept.is_empty(), "{:?}", out.kept);
+            assert!(kept.is_empty(), "{:?}", kept);
         }
         // A backup carrying its own token replaces this machine's settings.
         let mut merged = obj(json!({ "github": { "pat": "ghp_backup", "trigger": "x" } }));

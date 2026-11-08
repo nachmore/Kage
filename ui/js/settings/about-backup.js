@@ -402,7 +402,18 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                 : '';
             const list = (v) => (Array.isArray(v) ? v : []);
             const approve = list(summary.needs_approval);
-            const withApprovals = (sentences) => {
+            const keptWhole = list(summary.kept_local);
+            // Either kind of import: extensions signed in here that kept
+            // this machine's settings whole, then those awaiting approval.
+            const withKeptAndApprovals = (sentences) => {
+                if (keptWhole.length) {
+                    sentences.push(
+                        t('settings.about.import.summary.kept_local_settings', {
+                            count: keptWhole.length,
+                            names: formatList(keptWhole),
+                        })
+                    );
+                }
                 if (approve.length) {
                     sentences.push(
                         t('settings.about.import.summary.needs_approval', {
@@ -414,7 +425,7 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                 return sentences.join(' ');
             };
             if (summary.kind === MODE_SETTINGS_ONLY) {
-                return withApprovals([
+                return withKeptAndApprovals([
                     t('settings.about.import.summary.settings_only', {
                         count: summary.settings || 0,
                         exported_at: exportedAt,
@@ -456,16 +467,7 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                     t('settings.about.import.summary.kept_local', { count: summary.left_out })
                 );
             }
-            const keptWhole = list(summary.kept_local);
-            if (keptWhole.length) {
-                sentences.push(
-                    t('settings.about.import.summary.kept_local_settings', {
-                        count: keptWhole.length,
-                        names: formatList(keptWhole),
-                    })
-                );
-            }
-            return withApprovals(sentences);
+            return withKeptAndApprovals(sentences);
         },
 
         async _runBackupImport() {

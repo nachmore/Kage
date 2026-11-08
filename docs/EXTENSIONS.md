@@ -410,10 +410,10 @@ Without an installed manifest nothing of yours is copied.
 Restoring a settings-only backup sets only the settings it carries,
 re-checked against the manifest installed there (if you aren't installed
 there yet, only booleans and numbers), and leaves everything else of
-yours alone. It never changes an endpoint-like setting (`url`,
-`server`, `region`, …) while that machine holds a credential of yours,
-in your settings or your stored data: a shared settings file can't point
-your token somewhere else.
+yours alone. While that machine holds a credential of yours — in your
+settings or your stored data, or a stored file Kage can't read — it
+changes none of your settings there, and the user is told: a shared
+settings file can't point your token somewhere else.
 
 ### Declaring sensitive data
 
@@ -448,22 +448,19 @@ Every restore keeps this machine's value wherever the backup's is
 missing or empty, and never replaces a sensitive setting or data file
 (declared, or caught by the safety net) with an empty or missing one: a
 user who restores a backup made on a machine where they never signed in
-to your extension stays signed in. Settings merge by name, recursively,
-but a local token is only kept while the object still points where this
-machine's does: if a URL or endpoint-like field (`url`, `endpoint`,
-`server`, `host`, `authority`, …), anywhere in the object, changed
-origin, the backup's object is kept without the local token and the user
-is asked to sign in again. Keep an
-account's token next to the address it belongs to. A data file whose
-backup copy holds nothing (`{}`, `{"token": ""}`) never replaces one that
-holds something; a JSON object keeps this machine's credential-named keys
-(every key, for a declared file) its backup copy lacks. Whenever this
-machine keeps a credential of yours that the backup doesn't replace with
-its own — a sensitive setting, or a stored data file holding one, judged
-file by file — your settings and stored data on this machine are kept
-whole: none of the backup's settings or files for you are taken, so it
-can't point that token somewhere else, and the user is told. Treat a
-missing token the way you treat a first run.
+to your extension stays signed in. A data file whose backup copy holds
+nothing (`{}`, `{"token": ""}`) never replaces one that holds something;
+a JSON object keeps this machine's credential-named keys (every key, for
+a declared file) its backup copy lacks. Whenever this machine keeps a
+credential of yours that the backup doesn't replace with its own — a
+sensitive setting, or a stored data file holding one, judged file by
+file, or a stored file Kage can't read (or a link, which it never
+follows) — your settings and stored data on this machine are kept whole:
+none of the backup's settings or files for you are taken, whatever they
+are called, so it can't point that token somewhere else, and the user is
+told. Otherwise your settings merge by name, recursively, a missing or
+empty value keeping this machine's. Treat a missing token the way you
+treat a first run.
 
 What your extension may do is never restored from a backup: the
 capability grant is the one approved on this machine. If a backup has

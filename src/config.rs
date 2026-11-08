@@ -407,6 +407,14 @@ impl Config {
     /// API keys, hence owner-only) live in this file; truncating it via
     /// plain fs::write meant a poorly-timed crash could lose all of them.
     pub fn save(&self) -> Result<()> {
+        self.save_recorded(|_| Ok(()))
+    }
+
+    /// [`Self::save`], handing `record` the exact bytes before they're
+    /// written (a backup import journals the config.json it saves). An
+    /// error from `record` saves nothing. Not called while saves are
+    /// suspended: nothing is written then.
+    pub fn save_recorded(&self, record: impl FnOnce(&[u8]) -> Result<()>) -> Result<()> {
         if PRESERVE_NEWER_FILE.load(Ordering::SeqCst) {
             // Ok, not Err: callers `?` this into user-facing errors, and the
             // skip is deliberate. Logged once to keep the log readable.
@@ -419,17 +427,26 @@ impl Config {
             return Ok(());
         }
         let config_path = Self::get_config_path()?;
-        Self::save_to(self, &config_path)
+        self.save_to_recorded(&config_path, record)
     }
 
     /// Inner save — exposed so tests can drive the atomic-write logic
     /// against a temp path without depending on the user's config dir.
     pub fn save_to(&self, config_path: &std::path::Path) -> Result<()> {
+        self.save_to_recorded(config_path, |_| Ok(()))
+    }
+
+    fn save_to_recorded(
+        &self,
+        config_path: &std::path::Path,
+        record: impl FnOnce(&[u8]) -> Result<()>,
+    ) -> Result<()> {
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent).context("Failed to create config directory")?;
         }
 
         let content = serde_json::to_string_pretty(self).context("Failed to serialize config")?;
+        record(content.as_bytes())?;
 
         // Several callers save a snapshot from another thread after
         // releasing the config mutex, so in-process saves can overlap.
