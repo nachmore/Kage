@@ -382,7 +382,7 @@ export class AutomationsSettingsModule extends SettingsModule {
                 sigOpts +
                 '</select><input class="auto-signal-filter setting-input" value="' +
                 escapeAutomationHtml(auto.trigger.filter || '') +
-                '" placeholder="Optional filter (text match on signal data)">';
+                '" placeholder="Optional filter (text match on signal data)" spellcheck="false">';
         } else {
             trigConfig =
                 '<div style="font-size:11px;color:var(--kage-text-secondary);margin-top:4px;">Runs via inline assist hotkey or quick actions.</div>';
@@ -395,7 +395,7 @@ export class AutomationsSettingsModule extends SettingsModule {
 
         return `<div id="autoValidation_${i}" style="display:none;"></div>
             <div class="auto-header-row">
-                <input class="auto-icon-input" value="${escapeAutomationHtml(auto.icon)}" maxlength="2">
+                <input class="auto-icon-input" value="${escapeAutomationHtml(auto.icon)}" maxlength="2" spellcheck="false">
                 <input class="auto-name-input" value="${escapeAutomationHtml(auto.name)}" placeholder="Automation name" style="flex:1;font-weight:500;font-size:14px;">
                 <span style="font-size:11px;color:var(--kage-text-secondary);flex-shrink:0;">Output:</span>
                 <select class="auto-output-select">${outOpts}</select>

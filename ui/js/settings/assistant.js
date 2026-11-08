@@ -536,7 +536,7 @@ export class AssistantSettingsModule extends SettingsModule {
         row.innerHTML = `
             <div style="display:flex;gap:8px;align-items:center;">
                 <input type="text" class="setting-input am-name" placeholder="${t('settings.assistant.app_modes.row.name_placeholder')}" value="${nameVal}" style="flex:1;">
-                <input type="text" class="setting-input am-exe" placeholder="${t('settings.assistant.app_modes.row.exe_placeholder')}" value="${exeVal}" style="flex:1;">
+                <input type="text" class="setting-input am-exe" spellcheck="false" placeholder="${t('settings.assistant.app_modes.row.exe_placeholder')}" value="${exeVal}" style="flex:1;">
                 <label class="kage-checkbox" title="${t('settings.assistant.app_modes.enable_rule.title')}" style="margin-left:4px;">
                     <input type="checkbox" class="am-enabled"${enabledChecked}>
                     <span style="font-size:11px;">${t('settings.assistant.app_modes.row.enabled_label')}</span>

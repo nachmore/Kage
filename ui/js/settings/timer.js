@@ -53,7 +53,7 @@ export class TimerSettingsModule extends SettingsModule {
                     </div>
                     <div id="timerCustomPathRow" style="display:none;margin-top:8px;">
                         <div class="setting-control">
-                            <input type="text" class="setting-input" id="timerCustomSoundPath" placeholder="${t('settings.timer.custom_path.placeholder')}" style="max-width:350px;">
+                            <input type="text" class="setting-input" id="timerCustomSoundPath" spellcheck="false" placeholder="${t('settings.timer.custom_path.placeholder')}" style="max-width:350px;">
                         </div>
                     </div>
                     <div style="margin-top:8px;">

@@ -64,7 +64,7 @@ export class PrivacySettingsModule extends SettingsModule {
                     <div class="setting-label">${t('settings.privacy.install_id.label')}</div>
                     <div class="setting-description">${t('settings.privacy.install_id.description')}</div>
                     <div class="setting-control-with-action">
-                        <input type="text" class="setting-input" id="telemetryInstallId" readonly style="font-family:monospace;font-size:12px;">
+                        <input type="text" class="setting-input" id="telemetryInstallId" readonly spellcheck="false" style="font-family:monospace;font-size:12px;">
                         <button class="setting-button" id="resetTelemetryIdBtn" style="min-width:80px;">${t('settings.privacy.install_id.reset')}</button>
                     </div>
                 </div>

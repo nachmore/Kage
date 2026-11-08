@@ -281,13 +281,13 @@ export class McpSettingsModule extends SettingsModule {
             <div class="mcp-dialog">
                 <div class="mcp-dialog-title">${isEdit ? t('settings.mcp.dialog.edit_title') : t('settings.mcp.dialog.add_title')}</div>
                 <label class="mcp-dialog-label">${t('settings.mcp.dialog.name.label')}</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogKey" value="${isEdit ? escapeAttr(editKey) : ''}" ${isEdit ? 'disabled' : ''} placeholder="${t('settings.mcp.dialog.name.placeholder')}">
+                <input class="setting-input mcp-dialog-input" id="mcpDialogKey" spellcheck="false" value="${isEdit ? escapeAttr(editKey) : ''}" ${isEdit ? 'disabled' : ''} placeholder="${t('settings.mcp.dialog.name.placeholder')}">
                 <label class="mcp-dialog-label">${t('settings.mcp.dialog.command.label')}</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogCmd" value="${escapeAttr(existing.command || '')}" placeholder="${t('settings.mcp.dialog.command.placeholder')}">
+                <input class="setting-input mcp-dialog-input" id="mcpDialogCmd" spellcheck="false" value="${escapeAttr(existing.command || '')}" placeholder="${t('settings.mcp.dialog.command.placeholder')}">
                 <label class="mcp-dialog-label">${t('settings.mcp.dialog.args.label')}</label>
-                <textarea class="setting-input mcp-dialog-input" id="mcpDialogArgs" rows="3" placeholder="${t('settings.mcp.dialog.args.placeholder')}">${escapeHtml((existing.args || []).join('\n'))}</textarea>
+                <textarea class="setting-input mcp-dialog-input" id="mcpDialogArgs" rows="3" spellcheck="false" placeholder="${t('settings.mcp.dialog.args.placeholder')}">${escapeHtml((existing.args || []).join('\n'))}</textarea>
                 <label class="mcp-dialog-label">${t('settings.mcp.dialog.cwd.label')}</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogCwd" value="${escapeAttr(existing.cwd || '')}" placeholder="${t('settings.mcp.dialog.cwd.placeholder')}">
+                <input class="setting-input mcp-dialog-input" id="mcpDialogCwd" spellcheck="false" value="${escapeAttr(existing.cwd || '')}" placeholder="${t('settings.mcp.dialog.cwd.placeholder')}">
                 <div class="mcp-dialog-actions">
                     <button class="setting-button" id="mcpDialogCancel">${t('common.cancel')}</button>
                     <button class="setting-button mcp-dialog-save" id="mcpDialogSave">${isEdit ? t('settings.mcp.dialog.save') : t('settings.mcp.dialog.add')}</button>

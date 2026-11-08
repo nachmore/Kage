@@ -67,7 +67,11 @@ export function mountPromptForm(container, formCmd, callbacks = {}) {
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'setting-input prompt-form-input';
-        input.spellcheck = false;
+        // Values are usually words (a language, a sentence to rewrite), so
+        // keep spell-check underlines. Autocorrect stays off, as in the
+        // launcher input this form sits under.
+        input.setAttribute('autocorrect', 'off');
+        input.setAttribute('autocapitalize', 'off');
         input.dataset.paramName = slot.name;
         // Pre-fill with anything already known (from positional args
         // earlier in the chain). Most of the time these slots are

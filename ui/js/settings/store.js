@@ -40,7 +40,7 @@ export class StoreSettingsModule extends SettingsModule {
                 ${this.createControlRow(
                     t('settings.store.url.label'),
                     t('settings.store.url.description'),
-                    '<input type="text" class="setting-input" id="storeUrl" placeholder="https://your-store.example.com">'
+                    '<input type="text" class="setting-input" id="storeUrl" placeholder="https://your-store.example.com" spellcheck="false">'
                 )}
 
                 <div class="setting-section-label">${t('settings.store.sources.section')}</div>
@@ -141,7 +141,7 @@ export class StoreSettingsModule extends SettingsModule {
             <div class="store-source-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
                 <input type="checkbox" class="source-enabled" ${s.enabled ? 'checked' : ''} title="${enabledTitle}">
                 <input type="text" class="setting-input source-name" value="${this._esc(s.name)}" placeholder="${namePlaceholder}" style="width:120px;">
-                <input type="text" class="setting-input source-url" value="${this._esc(s.url)}" placeholder="https://store.example.com" style="flex:1;">
+                <input type="text" class="setting-input source-url" value="${this._esc(s.url)}" placeholder="https://store.example.com" spellcheck="false" style="flex:1;">
                 <button class="setting-button" style="font-size:11px;padding:4px 8px;" data-action="store.removeSourceRow">✕</button>
             </div>
         `

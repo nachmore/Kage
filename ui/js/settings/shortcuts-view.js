@@ -50,13 +50,13 @@ export function renderShortcutsSettings(module) {
                         </div>
                         <div class="dialog-field">
                             <label>${t('settings.shortcuts.dialog.trigger.label')}</label>
-                            <input type="text" id="shortcutTrigger" class="setting-input" placeholder="${t('settings.shortcuts.dialog.trigger.placeholder')}">
+                            <input type="text" id="shortcutTrigger" class="setting-input" spellcheck="false" placeholder="${t('settings.shortcuts.dialog.trigger.placeholder')}">
                         </div>
                         <div class="dialog-field">
                             <label>${t('settings.shortcuts.dialog.icon.label')}</label>
                             <div style="display:flex;gap:8px;align-items:center;">
                                 <div id="shortcutIconPreview" class="shortcut-icon-preview">⚡</div>
-                                <input type="text" id="shortcutIconEmoji" class="setting-input" style="width:60px;text-align:center;" placeholder="${t('settings.shortcuts.dialog.icon.placeholder')}" maxlength="4">
+                                <input type="text" id="shortcutIconEmoji" class="setting-input" spellcheck="false" style="width:60px;text-align:center;" placeholder="${t('settings.shortcuts.dialog.icon.placeholder')}" maxlength="4">
                                 <button class="setting-button" data-action="shortcuts.openIconFilePicker">${t('settings.shortcuts.dialog.icon.image_btn')}</button>
                                 <button class="setting-button" id="shortcutFaviconBtn" style="display:none" data-action="shortcuts.fetchFavicon">${t('settings.shortcuts.dialog.icon.favicon_btn')}</button>
                                 <button class="setting-button" id="shortcutIconClear" style="display:none" data-action="shortcuts.clearIcon">✕</button>
@@ -78,15 +78,15 @@ export function renderShortcutsSettings(module) {
                         <div id="runProgramFields">
                             <div class="dialog-field">
                                 <label>${t('settings.shortcuts.dialog.run.path.label')}</label>
-                                <input type="text" id="shortcutPath" class="setting-input" placeholder="e.g., C:\\Program Files\\VSCode\\code.exe">
+                                <input type="text" id="shortcutPath" class="setting-input" spellcheck="false" placeholder="e.g., C:\\Program Files\\VSCode\\code.exe">
                             </div>
                             <div class="dialog-field">
                                 <label>${t('settings.shortcuts.dialog.run.work_dir.label')}</label>
-                                <input type="text" id="shortcutWorkDir" class="setting-input" placeholder="${t('settings.shortcuts.dialog.run.work_dir.placeholder')}">
+                                <input type="text" id="shortcutWorkDir" class="setting-input" spellcheck="false" placeholder="${t('settings.shortcuts.dialog.run.work_dir.placeholder')}">
                             </div>
                             <div class="dialog-field">
                                 <label>${t('settings.shortcuts.dialog.run.args.label')}</label>
-                                <input type="text" id="shortcutArgs" class="setting-input" placeholder="${t('settings.shortcuts.dialog.run.args.placeholder')}">
+                                <input type="text" id="shortcutArgs" class="setting-input" spellcheck="false" placeholder="${t('settings.shortcuts.dialog.run.args.placeholder')}">
                                 <div class="setting-description" style="margin-top: 4px;">
                                     ${t('settings.shortcuts.dialog.run.args.help')}
                                 </div>
@@ -97,7 +97,7 @@ export function renderShortcutsSettings(module) {
                         <div id="openUrlFields" style="display: none;">
                             <div class="dialog-field">
                                 <label>${t('settings.shortcuts.dialog.url.label')}</label>
-                                <input type="text" id="shortcutUrl" class="setting-input" placeholder="${t('settings.shortcuts.dialog.url.placeholder')}">
+                                <input type="text" id="shortcutUrl" class="setting-input" spellcheck="false" placeholder="${t('settings.shortcuts.dialog.url.placeholder')}">
                                 <div class="setting-description" style="margin-top: 4px;">
                                     ${t('settings.shortcuts.dialog.url.help')}
                                 </div>
@@ -159,7 +159,7 @@ export function renderShortcutsSettings(module) {
                         <div id="shortcutTestBody" style="display:none;">
                             <div class="dialog-field" style="margin-bottom:8px;">
                                 <div style="display:flex;gap:8px;">
-                                    <input type="text" id="shortcutTestArgs" class="setting-input" placeholder="${t('settings.shortcuts.dialog.test.placeholder')}" style="flex:1;">
+                                    <input type="text" id="shortcutTestArgs" class="setting-input" spellcheck="false" placeholder="${t('settings.shortcuts.dialog.test.placeholder')}" style="flex:1;">
                                     <button class="setting-button" data-action="shortcuts.runTest">${t('settings.shortcuts.dialog.test.run')}</button>
                                 </div>
                             </div>

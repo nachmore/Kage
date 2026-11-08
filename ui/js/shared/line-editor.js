@@ -85,7 +85,7 @@ export function createLineEditor(container, opts = {}) {
         row.innerHTML = `
             <button type="button" class="${NS}-btn ${NS}-up" title="${escapeAttr(t('shared.line_editor.move_up_title'))}" aria-label="${escapeAttr(t('shared.line_editor.move_up_aria'))}">▲</button>
             <button type="button" class="${NS}-btn ${NS}-down" title="${escapeAttr(t('shared.line_editor.move_down_title'))}" aria-label="${escapeAttr(t('shared.line_editor.move_down_aria'))}">▼</button>
-            <input type="text" class="${NS}-input setting-input" value="${escapeAttr(text)}" placeholder="${escapeAttr(rowPlaceholder)}" spellcheck="false">
+            <input type="text" class="${NS}-input setting-input" value="${escapeAttr(text)}" placeholder="${escapeAttr(rowPlaceholder)}">
             <button type="button" class="${NS}-btn ${NS}-remove" title="${escapeAttr(t('shared.line_editor.delete_title'))}" aria-label="${escapeAttr(t('shared.line_editor.delete_aria'))}">✕</button>
         `;
         return row;

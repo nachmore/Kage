@@ -137,7 +137,7 @@ export function renderSpeechSettings(module) {
                                 ${t('settings.speech.pocket.custom.help_html')}
                             </div>
                             <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                <input type="text" class="setting-input" id="pocketTtsVoiceUrl" placeholder="${t('settings.speech.pocket.custom.url_placeholder')}" style="flex:1;">
+                                <input type="text" class="setting-input" id="pocketTtsVoiceUrl" spellcheck="false" placeholder="${t('settings.speech.pocket.custom.url_placeholder')}" style="flex:1;">
                                 <input type="text" class="setting-input" id="pocketTtsVoiceName" placeholder="${t('settings.speech.pocket.custom.name_placeholder')}" style="width:100px;">
                                 <button class="setting-button" id="pocketTtsAddVoiceBtn" data-action="speech.pocketTtsAddVoice">${t('settings.speech.pocket.custom.add_btn')}</button>
                             </div>

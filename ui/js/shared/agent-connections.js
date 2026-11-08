@@ -444,7 +444,7 @@ export function renderEditForm(connection, opts) {
             <div class="${wrap}">
                 <div class="${labelClass}">${t('shared.agent.form.spawn.label')}</div>
                 ${desc(t('shared.agent.form.spawn.description'))}
-                ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}SpawnCommand"
+                ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}SpawnCommand" spellcheck="false"
                     value="${escapeAttr(isLocal ? c.mode?.spawn_command || '' : '')}"
                     placeholder="${escapeAttr(t('shared.agent.form.spawn.placeholder'))}">${ctrlClose}
             </div>
@@ -453,7 +453,7 @@ export function renderEditForm(connection, opts) {
         <div id="${prefix}RemoteSettings" ${hidden(isLocal)}>
             <div class="${wrap}">
                 <div class="${labelClass}">${t('shared.agent.form.host.label')}</div>
-                ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}Host"
+                ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}Host" spellcheck="false"
                     value="${escapeAttr(!isLocal ? c.mode?.host || '127.0.0.1' : '127.0.0.1')}">${ctrlClose}
             </div>
             <div style="display:flex;gap:12px;">
@@ -476,7 +476,7 @@ export function renderEditForm(connection, opts) {
         <div class="${wrap}">
             <div class="${labelClass}">${t('shared.agent.form.sessions.label')}</div>
             ${desc(t('shared.agent.form.sessions.description'))}
-            ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}SessionsDir"
+            ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}SessionsDir" spellcheck="false"
                 value="${escapeAttr(c.sessions_directory || '')}"
                 placeholder="${escapeAttr(t('shared.agent.form.sessions.placeholder'))}">${ctrlClose}
         </div>`

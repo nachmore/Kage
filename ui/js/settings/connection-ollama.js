@@ -67,7 +67,7 @@ class ConnectionOllamaMethods {
                 <div class="setting-label">${t('settings.connection.ollama.base_url.label')}</div>
                 <div class="setting-description">${t('settings.connection.ollama.base_url.description')}</div>
                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                    <input type="text" class="setting-input" id="ollEditBaseUrl"
+                    <input type="text" class="setting-input" id="ollEditBaseUrl" spellcheck="false"
                         value="${escape(settings.base_url || 'http://localhost:11434')}"
                         placeholder="http://localhost:11434" style="flex:1;">
                     <button class="setting-button" type="button" id="ollEditTestBtn">${t('settings.connection.ollama.test_btn')}</button>

@@ -452,7 +452,7 @@ export class InternalSitesSettingsModule extends SettingsModule {
                 (r, i) => `
             <div class="internal-site-rule">
                 <select class="setting-input" data-is-field="url-kind" data-is-index="${i}">${options(URL_RULE_KINDS, r.kind, 'settings.internal_sites.rule.url_kind')}</select>
-                <input type="text" class="setting-input internal-site-pattern" data-is-field="url-pattern" data-is-index="${i}" value="${escapeAttr(r.pattern || '')}" placeholder="${escapeAttr(t('settings.internal_sites.rule.pattern_placeholder'))}" dir="ltr">
+                <input type="text" class="setting-input internal-site-pattern" data-is-field="url-pattern" data-is-index="${i}" value="${escapeAttr(r.pattern || '')}" placeholder="${escapeAttr(t('settings.internal_sites.rule.pattern_placeholder'))}" dir="ltr" spellcheck="false">
                 <button class="setting-button" data-is-action="remove-url-rule" data-is-index="${i}" style="${SECONDARY_BTN}" title="${escapeAttr(t('settings.internal_sites.rule.remove'))}" aria-label="${escapeAttr(t('settings.internal_sites.rule.remove'))}">✕</button>
             </div>`
             )
@@ -464,7 +464,7 @@ export class InternalSitesSettingsModule extends SettingsModule {
             <div class="internal-site-rule">
                 <select class="setting-input" data-is-field="content-target" data-is-index="${i}">${options(CONTENT_TARGETS, r.target, 'settings.internal_sites.rule.target')}</select>
                 <select class="setting-input" data-is-field="content-kind" data-is-index="${i}">${options(MATCH_KINDS, r.kind, 'settings.internal_sites.rule.match_kind')}</select>
-                <input type="text" class="setting-input internal-site-pattern" data-is-field="content-pattern" data-is-index="${i}" value="${escapeAttr(r.pattern || '')}" placeholder="${escapeAttr(t('settings.internal_sites.rule.pattern_placeholder'))}" dir="ltr">
+                <input type="text" class="setting-input internal-site-pattern" data-is-field="content-pattern" data-is-index="${i}" value="${escapeAttr(r.pattern || '')}" placeholder="${escapeAttr(t('settings.internal_sites.rule.pattern_placeholder'))}" dir="ltr" spellcheck="false">
                 <button class="setting-button" data-is-action="remove-content-rule" data-is-index="${i}" style="${SECONDARY_BTN}" title="${escapeAttr(t('settings.internal_sites.rule.remove'))}" aria-label="${escapeAttr(t('settings.internal_sites.rule.remove'))}">✕</button>
             </div>`
             )

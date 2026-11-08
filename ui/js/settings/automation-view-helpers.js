@@ -228,7 +228,7 @@ export function stepHtml(step, si, total) {
         fields =
             '<div class="field-row"><input class="step-find" value="' +
             escapeAutomationHtml(step.find) +
-            '" placeholder="Find (regex)"><input class="step-replace" value="' +
+            '" placeholder="Find (regex)" spellcheck="false"><input class="step-replace" value="' +
             escapeAutomationHtml(step.replace) +
             '" placeholder="Replace with"></div>';
     else if (t === 'transform') {

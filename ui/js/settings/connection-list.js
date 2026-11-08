@@ -55,7 +55,7 @@ class ConnectionListMethods {
                     ${t('settings.connection.workspace.description')}
                 </div>
                 <div class="setting-control">
-                    <input type="text" class="setting-input" id="workingDirectory"
+                    <input type="text" class="setting-input" id="workingDirectory" spellcheck="false"
                         value="${escape(this._workingDirectory)}"
                         placeholder="${escape(wdPlaceholder)}">
                 </div>
