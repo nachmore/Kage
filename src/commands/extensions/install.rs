@@ -4,6 +4,37 @@
 
 use super::*;
 
+/// Where each staged install came from, until `commit_extension_install`
+/// records it in the grant (`origin`, docs/design/SYNC.md §4.5).
+static PENDING_ORIGINS: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, String>>,
+> = std::sync::LazyLock::new(Default::default);
+
+/// Note where the install of `id` being staged comes from:
+/// `store:<hash>` or `sideload`.
+pub(super) fn set_pending_origin(id: &str, origin: String) {
+    let mut m = PENDING_ORIGINS.lock().unwrap_or_else(|e| e.into_inner());
+    if m.len() > 256 {
+        m.clear();
+    }
+    m.insert(id.to_string(), origin);
+}
+
+fn take_pending_origin(id: &str) -> Option<String> {
+    PENDING_ORIGINS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(id)
+}
+
+/// Wake folder sync after a change to what is installed or granted.
+fn notify_sync() {
+    crate::sync::notify(
+        crate::sync::sources::extensions::SOURCE_ID,
+        crate::sync::types::Origin::User,
+    );
+}
+
 /// Stage a manual install from a local zip or directory path.
 /// Like `store_install`, this does NOT emit `extensions_changed` — the
 /// caller must show the permission prompt and call
@@ -28,6 +59,7 @@ pub async fn install_extension_from_path<R: tauri::Runtime>(
         extensions::install_from_directory(&source, mode)
             .map_err(|e| format!("Installation failed: {}", e))?
     };
+    set_pending_origin(&installed.item.manifest.id, "sideload".to_string());
 
     // Mark a fresh install enabled so the commit step can flip the grant
     // and load it. A parked upgrade is enabled by the commit itself.
@@ -121,6 +153,10 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
         }
     }
 
+    // Folder sync records the removal; it deletes nothing elsewhere
+    // (docs/design/SYNC.md §8.2).
+    notify_sync();
+
     crate::telemetry::track(
         &app,
         "extension_uninstalled",
@@ -173,11 +209,20 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
         // staging does for a fresh install.
         config.extension_states.insert(extension_id.clone(), true);
     }
+    // Where this copy came from (folder sync keeps one extension's data
+    // away from another with the same id, §4.5): what staging noted, else
+    // what the grant already said.
+    let origin = take_pending_origin(&extension_id).or_else(|| {
+        config
+            .extension_grants
+            .get(&extension_id)
+            .and_then(|g| g.origin.clone())
+    });
     let record = crate::config::ExtensionGrant {
         granted,
         approved_version,
         approved_at: chrono::Utc::now().to_rfc3339(),
-        origin: None,
+        origin,
     };
     info!(
         "Committing install for '{}': capabilities {:?}",
@@ -210,6 +255,8 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
     // Anonymous install-success event. We send only the extension id,
     // which is a published identifier (visible in the extension store),
     // so this doesn't leak anything the user hasn't already chosen.
+    notify_sync();
+
     crate::telemetry::track(
         &app,
         "extension_installed",
@@ -249,5 +296,100 @@ pub async fn remove_extension_grant<R: tauri::Runtime>(
     drop(config);
     features.agent_calls.on_extension_changed(&extension_id);
     crate::ext_views::close_for_extension(&app, &extension_id);
+    notify_sync();
     Ok(())
+}
+
+/// Install a theme another computer installed from a store this computer
+/// uses too (folder sync, docs/design/SYNC.md §4.5). A theme runs no code;
+/// the store's checksum is checked as for any install. `store` is the
+/// item's origin, `store:<hash of the store URL>`.
+pub async fn install_synced_theme<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    id: String,
+    store: String,
+) -> Result<(), String> {
+    extensions::validate_extension_id(&id).map_err(|e| format!("Invalid theme id: {e}"))?;
+    let features = app.state::<FeatureServices>();
+    let ui = app.state::<UiState>();
+    let base = {
+        let config = features.config.lock_or_recover();
+        let mut urls: Vec<String> = config
+            .store_sources
+            .iter()
+            .filter(|s| s.enabled)
+            .map(|s| s.url.trim_end_matches('/').to_string())
+            .collect();
+        urls.push(resolve_store_url(&config, ui.dev_mode));
+        urls.into_iter()
+            .find(|u| crate::sync::sources::extensions::store_origin(u) == store)
+    };
+    let Some(base) = base else {
+        return Err("No store on this computer matches the synced theme".into());
+    };
+    extensions::validate_store_url(&base).map_err(|e| e.to_string())?;
+    let item = super::store::store_install_inner(
+        &base,
+        &id,
+        &features,
+        &app,
+        false,
+        extensions::InstallMode::Replace,
+    )
+    .await?;
+    if item.manifest.kind != "theme" {
+        // The store's id names something else now: never run code that
+        // nobody approved here.
+        let _ = extensions::uninstall(&id, &item.manifest.kind);
+        return Err("The synced item is no longer a theme".into());
+    }
+    let mut config = features.config.lock_or_recover();
+    config.extension_states.insert(id.clone(), true);
+    config.extension_grants.insert(
+        id.clone(),
+        crate::config::ExtensionGrant {
+            granted: Vec::new(),
+            approved_version: item.manifest.version.clone(),
+            approved_at: chrono::Utc::now().to_rfc3339(),
+            origin: Some(store),
+        },
+    );
+    config.save().map_err(|e| e.to_string())?;
+    drop(config);
+    info!("Installed the synced theme '{}'", id);
+    notify_sync();
+    if let Err(e) = app.emit(events::EXTENSIONS_CHANGED, ()) {
+        error!("Failed to emit extensions_changed: {}", e);
+    }
+    Ok(())
+}
+
+/// What folder sync asks the app to do for extensions
+/// (`sync::sources::extensions::ExtensionHost`). WP-S4 hands one to the
+/// extension source.
+pub struct AppExtensionHost<R: tauri::Runtime> {
+    pub app: tauri::AppHandle<R>,
+}
+
+impl<R: tauri::Runtime> crate::sync::sources::extensions::ExtensionHost for AppExtensionHost<R> {
+    fn install_store_theme(&self, id: &str, store: &str) {
+        let (app, id, store) = (self.app.clone(), id.to_string(), store.to_string());
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = install_synced_theme(app, id.clone(), store).await {
+                warn!("Couldn't install the synced theme '{}': {}", id, e);
+            }
+        });
+    }
+
+    fn resolve_origins(&self, ids: &[String]) {
+        let (app, ids) = (self.app.clone(), ids.to_vec());
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = super::store::backfill_grant_origins(app, ids).await {
+                warn!(
+                    "Couldn't work out where installed extensions came from: {}",
+                    e
+                );
+            }
+        });
+    }
 }

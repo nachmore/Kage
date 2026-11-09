@@ -503,6 +503,8 @@ async fn run() {
                 if let Some(procs) = window.try_state::<state::ChildProcesses>() {
                     procs.host_commands.approvals.close_window(window.label());
                 }
+                // Folder sync forgets what its extension instances read.
+                sync::sources::extensions::journal().forget_window(window.label());
             }
         })
         .on_page_load(|webview, payload| {
