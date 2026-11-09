@@ -1,6 +1,6 @@
 # Extension Development Guide
 
-This document describes how to create extensions for Kage. Extensions can add search providers (instant results in the floating window), settings pages, widget slots, and custom themes.
+This document describes how to create extensions for Kage. Extensions can add search providers (instant results in the floating window), settings pages, widget slots, windows of their own ([views](#views)), and custom themes.
 
 > **Where extensions live**
 >
@@ -173,6 +173,7 @@ value, and may switch your extension off. Give that setting another id.
 | `toolProvider` | Path to an ES module that default-exports a tool provider (exposes tools to the LLM). |
 | `triggerProvider` | Path to an ES module that default-exports a trigger provider (emits automation signals). |
 | `mascotActivities` | Array of generic mascot activity names the extension may hint — `"music"`, `"meeting"`, `"timer"`. See [Mascot activity hints](#mascot-activity-hints). |
+| `views` | Array of windows the extension draws itself (at most 4). Needs the `views` capability. See [Views](#views). |
 
 ## Permissions
 
@@ -239,6 +240,7 @@ for users.
 | `activity`      | 📊  | `start_activity_tracker`, `stop_activity_tracker`, `get_activity_report`, `is_activity_tracker_running`. |
 | `automation`    | ⚡   | `emit_automation_signal`, `list_automation_signals`, `get_power_status`. |
 | `tts`           | 🔈  | `pocket_tts_test`, `pocket_tts_voices`. |
+| `views`         | 🖼️  | Show the windows the manifest declares in `contributes.views`, drawn by the extension itself. No command maps to it: it lets the host open those windows (see [Views](#views)). |
 
 The authoritative command-to-capability mapping is in
 [`ui/js/shared/extension-permissions.js`](../ui/js/shared/extension-permissions.js).
@@ -523,6 +525,7 @@ whole sandbox on pathological inputs (e.g. mathjs on `2^2^2^2^2`).
 | `messageFormatters`    | ✅ Yes (HTML-in, HTML-out; host sanitizes) |
 | `widgets`              | ✅ Yes (refresh-loop render with declared actions) |
 | Custom `renderResult`  | ✅ Yes (sandbox returns sanitized HTML for result rows) |
+| `views`                | ✅ Yes (a visible sandboxed iframe in its own window; see [Views](#views)) |
 | `css`                  | Trusted path (host injects scoped stylesheet) |
 
 See [`SECURITY_MODEL.md`](./SECURITY_MODEL.md) for the plan to close
@@ -558,9 +561,14 @@ the remaining gaps.
   manipulate parent DOM. `document.*` inside the sandbox exists
   but it's the sandbox's own empty document — writes have no
   visible effect.
+- `context.storage.onChanged` tells you when another instance of your
+  extension changed its stored data — see
+  [Change events](#change-events-contextstorageonchanged).
+- `context.view` exists only in a view window — see [Views](#views).
 - You can't write the clipboard from the sandbox (and an RPC to the
   host would arrive after the click's user activation has expired).
   On a settings page, use a [copy action](#copy-to-clipboard) instead.
+  In a view, use [`context.view.copyText`](#contextview).
 
 ### Shared JavaScript modules
 
@@ -612,6 +620,12 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 | `export.sensitive_data` | Restoring a backup never replaces what the manifest's `sensitiveData` and `config.<field>.sensitive` declare with an empty or missing copy, and none of it is in an unencrypted backup (see [Sensitive data and backups](#sensitive-data-and-backups)). |
 | `export.plain_settings` | A settings-only (unencrypted) backup copies the settings the manifest's `config` declares as booleans, numbers, `enum` choices or `backup: "plain"` strings (see [Marking settings safe to copy](#marking-settings-safe-to-copy)). |
 | `storage.atomic_write` | `save_extension_data` replaces a key atomically, so a crash or force quit mid-write never leaves a truncated value (see [Your extension runs as MULTIPLE instances](#your-extension-runs-as-multiple-instances--design-for-it)). On older hosts, keep a backup copy of anything you can't afford to lose. |
+| `storage.change_events` | `context.storage.onChanged` tells this instance when your stored data changed (see [Change events](#change-events-contextstorageonchanged)). |
+| `views` | This window can open your [views](#views), and you hold the `views` capability. In a view window, `context.view` exists. Unlike the rows above, it depends on the window and on your grant. |
+
+A host with `storage.change_events` but without `views` supports views,
+and the user hasn't approved `views` for your extension yet. A host with
+neither predates views.
 
 ### Errors from `invoke()`
 
@@ -638,7 +652,8 @@ without `invoke.error_kind` never set either field — see
 "the extension process". Every Kage window that uses one of your
 contribution points (floating, chat, settings, peer chat windows)
 hosts its **own sandbox iframe with its own copy of your
-modules**. Consequences:
+modules**. Each open [view](#views) window is one more instance,
+which loads only that view's module. Consequences:
 
 - **Module-level variables are per-window.** A `let cachedToken`
   in one window is invisible to every other window. An in-flight
@@ -667,6 +682,11 @@ modules**. Consequences:
   [`context.hostFeatures`](#feature-detection). Atomic isn't
   serialized: two instances writing the same key still race, and
   the last write wins.
+- **Other instances' writes are announced.** On hosts with
+  `storage.change_events`, `context.storage.onChanged` tells an
+  instance which of your keys another instance saved or deleted, so
+  nobody has to poll (see
+  [Change events](#change-events-contextstorageonchanged)).
 
 Rules for anything with side effects (auth flows, credential
 refresh, write-behind caches, migrations):
@@ -697,6 +717,47 @@ implementation of these rules: single-flight within an instance
 via an in-flight promise, cross-instance healing via
 re-read-on-`invalid_grant`, and a persisted status marker so all
 windows agree on connection state.
+
+#### Change events (`context.storage.onChanged`)
+
+When one instance saves or deletes one of your keys, the host tells
+your instances in every window, the writer's included. Every surface
+has it (hidden sandboxes and views), on hosts that list
+`storage.change_events` in [`context.hostFeatures`](#feature-detection):
+
+```js
+const off = context.storage.onChanged((changes) => {
+    // changes: [{ key: 'notes', op: 'save', self: false, source: 'window' }, …]
+    if (changes.some((c) => !c.self && (c.key === 'notes' || c.op === 'bulk'))) {
+        this.reload();
+    }
+});
+off(); // unsubscribe
+```
+
+- You need the `storage` capability. Without it, no changes arrive.
+- Each change is `{ key, op, self, source }`:
+  - `op` is `save`, `delete` or `bulk`. A `bulk` change has the key `*`:
+    any of your keys may have changed, so re-read everything you use.
+  - `self` is `true` when this window's instance made the change.
+  - `source` is `window` (one of your instances saved or deleted the
+    key), `import` (restoring a backup wrote your data), `uninstall`, or
+    `sync` (folder sync wrote it).
+- Changes come in batches. The host collects your changes for 100 ms
+  from the first one, keeps the last change per key, and sends one
+  frozen array. A batch of more than 64 keys becomes one `bulk` change.
+- A batch arrives after the data is readable. It carries key names
+  only, never values: load what you need.
+- **They are hints, not a log.** An instance that was loading, or a
+  window that wasn't open, misses them. When an instance starts, and
+  when a view comes back from hidden, check your own revision marker
+  (a counter or timestamp you store with the data) instead of trusting
+  what you have in memory.
+- A failed write sends nothing, and so does deleting a key that doesn't
+  exist. Your settings send no change events: you get `onConfigUpdate`.
+  You never hear about another extension's keys.
+- Each `onChanged` call is its own subscription. A callback that throws
+  is logged and doesn't stop the others.
 
 ## Terminable compute with `runSandboxed`
 
@@ -883,6 +944,7 @@ Returned by `execute()`:
 | `replace_input` | Replace the floating window input text and trigger a new search | `value: string` |
 | `refresh_widgets` | Repaint this window's mounted widgets now, instead of at their next refresh (e.g. after a change the widget shows) | — |
 | `open_extension_settings` | Open Settings deep-linked to this extension's own settings page (the target is derived from the extension's id by the host — an extension cannot navigate to any other section) | — |
+| `open_view` | Open one of this extension's own windows. Needs the `views` capability. The launcher or chat window stays open. See [Opening a view](#opening-a-view) | `view: string`, `params?: object` |
 | `custom` | Nothing for the host to do: `execute()` already did the work | `data: any` |
 
 The host runs `open_url` and `open_path` for you, with the same checks as
@@ -1248,6 +1310,7 @@ download) that the sandbox can't perform. Return a `host` object from
 | `download`            | `filename`, `content`, `mime?`                             | —                            |
 | `pick_file`           | `accept?` (e.g. `.json`), `action?` (routed back)          | `onFileSelected`             |
 | `play_timer_sound`    | `soundId`, `customPath?`, `repeats?`                       | —                            |
+| `open_view`           | `view`, `params?` (see [Opening a view](#opening-a-view)) | —                            |
 
 `refresh` re-fetches `getSettings()` and re-renders the page in place,
 so an action that changed derived state (signed in/out, a step of a
@@ -1351,7 +1414,10 @@ export default class MyWidget {
 ```
 
 Return `{ rerender: true }` from `onAction` to force an immediate
-re-render (outside the normal refresh interval).
+re-render (outside the normal refresh interval). `onAction` may also
+return `{ host: { type: 'open_view', view, params? } }` to open one of
+your [views](#opening-a-view), with or without `rerender`. Other `host`
+types are logged and ignored.
 
 A render that returns exactly what is on screen (the same `html`,
 `className` and `actions`) leaves the widget's DOM alone, so keyboard
@@ -1434,6 +1500,7 @@ getButtons() {
 | `set_chat_input`         | `value: string`                          | Replace the chat input text and focus it.                           |
 | `append_chat_input`      | `value: string`                          | Append to the chat input (with a space separator).                  |
 | `show_ephemeral_message` | `tag?`, `title?`, `html`                 | Render a sanitized ephemeral bubble in the chat. Same `tag` replaces the previous bubble from this extension. |
+| `open_view`              | `view`, `params?`                        | Open one of this extension's [views](#opening-a-view). Needs the `views` capability. |
 
 ## Message Formatter API
 
@@ -1522,6 +1589,12 @@ export default class MySearchProvider {
     }
 }
 ```
+
+`onResultAction` also handles the `data-ext-action` buttons in your
+[message formatter](#message-formatter-api)'s HTML. Its return value is
+ignored, except `{ host: { type: 'open_view', view, params? } }`, which
+opens one of your [views](#opening-a-view). Other `host` types are
+logged and ignored.
 
 ## Extension HTML sanitization
 
@@ -1752,6 +1825,434 @@ These signals are always available (no extension needed):
 | `system:window_focus` | A window gained focus |
 | `system:idle_5m` | System idle for 5 minutes |
 | `system:resume` | System resumed from sleep |
+
+## Views
+
+A **view** is a full Kage window that your extension draws: DOM, Canvas
+2D, SVG, and pointer, wheel and keyboard input. Think of a pan-and-zoom
+map or a board. Your view runs in the same kind of sandbox as your other
+code, so the rules don't change: it never reaches Tauri, and every
+`invoke()` goes through the host's capability check.
+
+A view window is a normal window. It shows in the taskbar, the Dock and
+⌘Tab / Alt+Tab, and the user can move, resize, minimise and maximise it
+(and, on macOS, put it in full screen). Kage opens it only when the user
+asks, keeps one window per view, and remembers its size and position on
+this computer.
+
+### Declaring a view
+
+```json
+{
+  "permissions": ["storage", "views"],
+  "contributes": {
+    "views": [
+      {
+        "id": "explorer",
+        "title": "__MSG_view.explorer.title__",
+        "icon": "🗺️",
+        "module": "./explorer.js",
+        "css": ["./explorer.css"],
+        "defaultSize": { "width": 1200, "height": 800 },
+        "minSize": { "width": 640, "height": 420 }
+      }
+    ]
+  }
+}
+```
+
+| Field | Required | Rule |
+|---|---|---|
+| `id` | yes | `^[a-z][a-z0-9-]{0,31}$`, unique within the extension. |
+| `title` | yes | 1–60 characters, or a whole `__MSG_key__` token, resolved from your `_locales` and then cut to 60. Control and bidi-override characters are removed. Missing or empty: your extension's name. |
+| `icon` | no | One emoji: 1–8 characters, none of them ASCII, whitespace or control characters. Default: your extension's icon. |
+| `module` | yes | A bundle-relative `.js` path: an optional `./`, then `/`-separated segments that aren't empty, `.` or `..`, with no `\`, `:`, `?`, `#` or `%`. It may import other files of your bundle. |
+| `css` | no | At most 8 bundle-relative `.css` files, each at most 256 KiB and 1 MiB together. They style the view's document only. |
+| `defaultSize` | no | Logical pixels. Width 480–3840, height 360–2160. Default 1100 × 760. |
+| `minSize` | no | Logical pixels, from 320 × 240 up to `defaultSize`. Default 480 × 360. |
+
+- At most 4 views. Only the first 4 entries are read.
+- An entry is dropped, with a warning in the log, when it isn't an
+  object, its `id` is invalid or repeats an earlier one, or its `module`
+  is invalid. Other bad fields fall back to their defaults. A bad
+  `views` value never breaks the rest of your manifest.
+- Lengths count characters (Unicode code points).
+- Anything else in an entry is ignored. A view can't ask for a position,
+  always-on-top, transparency, no frame, full screen or "skip taskbar".
+
+### The `views` capability
+
+Add `views` to `permissions`. The install prompt lists it as
+🖼️ **Its own windows**: "Show windows the extension draws itself, such
+as a map or a board. What you type in those windows goes to the
+extension. Kage labels them with the extension's name."
+
+- No command maps to `views`. It lets the host open the windows you
+  declare. Kage checks your grant again each time a view opens or loads.
+- In a view, you may `invoke()` what your grant allows, minus a few
+  commands that act on the calling window (see
+  [What a view can't do](#what-a-view-cant-do)). `views` doesn't widen
+  anything else.
+- An update that adds `views` runs without it until the user approves
+  it (Store → Approve). Until then your `open_view` effects are refused
+  and `views` is missing from `context.hostFeatures`, so hide whatever
+  opens a view:
+
+  ```js
+  const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.includes(f);
+  if (has('views')) {
+      // Offer "Open explorer".
+  } else if (has('storage.change_events')) {
+      // This Kage has views, but the user hasn't approved them for this extension yet.
+  }
+  ```
+
+### Opening a view
+
+Views open only from something the user clicked or pressed. Return an
+`open_view` effect from a handler the host calls for that click; the
+host checks it and opens the window:
+
+| The user… | You return |
+|---|---|
+| picks a result row in the launcher or chat (click or Enter) | `execute()` → `{ type: 'open_view', view, params? }` |
+| clicks a `data-ext-action` button in a custom result row or a formatter card | `onResultAction()` → `{ host: { type: 'open_view', view, params? } }` |
+| clicks a widget button | `onAction()` → `{ host: { type: 'open_view', view, params? }, rerender? }` |
+| clicks a chat toolbar button | `onClick()` → `{ host: { type: 'open_view', view, params? } }` |
+| clicks a settings action | `runAction()` → `{ host: { type: 'open_view', view, params? } }` |
+| clicks something in one of your views | `context.view.open(viewId, params?)` |
+
+When you hold `views`, your extension's Settings page also gets a
+**Windows** block: **Open** for each view, and **Reset window size and
+position**. (Only extensions with a `settingsProvider` have a Settings
+page.)
+
+Nothing else opens a view. There is no call your code can make at any
+other time, so a timer or a tool call can't pop windows. If the agent
+should lead the user to a view, show a formatter card with an Open
+button.
+
+`view` names one of your views. `params` is optional: a plain JSON
+object (objects, arrays, strings, finite numbers, booleans and null),
+at most 4096 bytes as compact JSON and at most 4 levels deep (the object
+itself is level 1). Your view gets it in `mount` or `onOpen`. It's never
+put in a URL.
+
+Before anything opens, the host checks, in order: the window can open
+views, you hold `views`, your manifest declares the view, and the params
+are valid. Kage checks all of that again against your installed manifest
+and grant, and that your extension is installed and switched on. A
+refusal opens nothing and is logged as
+`[ext <id>] open_view refused: <reason>`. From a result row in the
+launcher or chat, the user sees why as a reply; from a settings action,
+next to its button.
+
+Each view is a singleton. Opening a view that is open, or closed but
+still cached, brings its window to the front and calls your
+`onOpen({ params, source })` with the new params. A view opened from the
+launcher keeps the launcher open beside it.
+
+### The view module
+
+`contributes.views[].module` default-exports a class:
+
+```js
+export default class ExplorerView {
+    /** The same context as your other providers, plus context.view. */
+    initialize(context) {
+        this.ctx = context;
+    }
+
+    /**
+     * Draw into `root`, an element that fills the window below Kage's bar.
+     * Resolve when the first frame is drawn.
+     * @param {HTMLElement} root
+     * @param {{ params: object|null, source: string, reloaded: boolean }} info
+     */
+    async mount(root, info) {}
+
+    /** Opened again while loaded, with new params (e.g. a new focus). */
+    onOpen({ params, source }) {}
+
+    /** The user closed the window (onHide) or opened it again (onShow). */
+    onHide() {}
+    onShow() {}
+
+    /** Kage's theme changed (also in context.view.theme). */
+    onThemeChange(theme) {}
+
+    /** The user saved this extension's settings. */
+    onConfigUpdate(config) {}
+
+    destroy() {}
+}
+```
+
+- `mount` is called once per load. If it rejects or takes more than
+  10 s, the host shows "<view> couldn't open." with Reload and Extension
+  settings.
+- `info.source` says what opened the view: `launcher`, `chat`,
+  `formatter`, `widget`, `toolbar`, `settings` or `view`.
+  `info.reloaded` is `true` when the host loaded the view again in the
+  same window. Both are informational.
+- Stop animation loops and timers in `onHide`. Minimising the window
+  calls neither `onHide` nor `onShow`. Don't rely on
+  `document.visibilityState`: not every engine updates it when a native
+  window hides.
+
+### When a view closes or reloads
+
+Your view's in-memory state doesn't last. Keep anything worth keeping in
+extension storage, and restore it in `mount`.
+
+- **Closing hides.** The window's close button, ⌘W / Ctrl+W, Alt+F4 and
+  the ✕ in Kage's bar hide the window and call `onHide`. Opening it
+  again within 10 minutes is instant and keeps its state. After 10
+  minutes hidden, the window is destroyed. On macOS, a view closed while
+  in native full screen is destroyed at once.
+- **Reload in place.** The host tears your sandbox down and loads the
+  view again, in the same window, when your extension updates (the bar
+  says "Updated to <version>." for 3 seconds), when your grant changes
+  but still holds `views`, when Kage's language changes, and when the
+  user presses Reload.
+- **Gone.** Switching your extension off, uninstalling it, or taking
+  `views` out of its grant destroys its view windows at once. If an
+  update no longer declares the view a window shows, the window says
+  "<extension> no longer has this window." with Close.
+- **Limits.** At most 4 view windows exist at once, across all
+  extensions, and at most 2 of them hidden. To make room, Kage destroys
+  the hidden one that was closed longest ago. When all 4 are visible, a
+  new one fails to open with `errors.ext_view.too_many_open`.
+- **Not responding.** While the window is visible, the host pings your
+  sandbox every 5 seconds. After 15 seconds without an answer, the bar
+  says "<view> isn't responding." with Reload and Close. Kage never
+  stops the view by itself, and the window's own close button always
+  works. Do heavy work in [`runSandboxed`](#terminable-compute-with-runsandboxed).
+
+### `context.view`
+
+`context.view` exists only in a view window. Elsewhere it's `undefined`.
+
+```js
+context.view = {
+    id: 'explorer',          // this view's id
+    theme,                   // the current theme snapshot (frozen)
+    setTitle(text),          // subtitle in Kage's bar and the window title; null clears it
+    close(),                 // close (hide) this window
+    open(viewId, params?),   // open one of your views, or this one with new params
+    compose(text),           // put text in the launcher's input and show the launcher; never sends
+    copyText(text),          // copy plain text to the clipboard
+    openSettings(),          // open your extension's Settings page
+};
+```
+
+| Method | Rules | Resolves with |
+|---|---|---|
+| `setTitle(text)` | A string or `null`. Control and bidi-override characters are removed, the text is trimmed and cut to 80 characters; empty or `null` clears it. At most 10 a second. | the subtitle it set, or `null` |
+| `close()` | — | `null` |
+| `open(viewId, params?)` | One of your views, with params as for `open_view`. Needs a recent click or key press. At most 1 a second. | `{ reused }` |
+| `compose(text)` | Plain text, 1–2000 characters. Needs a recent click or key press, and the view window in front. At most 2 a second. It fills the launcher's input and shows the launcher. It never sends: the user reads it and presses Enter. | `null` |
+| `copyText(text)` | Plain text, 1–8192 characters. Needs a recent click or key press, and the view window in front. At most 2 a second. | `null` |
+| `openSettings()` | Needs a recent click or key press. At most 1 a second. Brings Settings to the front on your extension's page. | `null` |
+
+- **Plain text** may hold tabs and line breaks, but no other control
+  characters and no bidi overrides. Lengths count UTF-16 units, as
+  JavaScript's `text.length` does.
+- **A recent click or key press** means the view window is in front and,
+  where the engine reports it (`navigator.userActivation`), the user just
+  clicked or pressed a key in it. Script can't fake that, so call these
+  methods straight from your click and key handlers.
+
+Every method returns a promise. A refusal rejects with an `Error` that
+carries `kind` and `key`, like [`invoke()` errors](#errors-from-invoke):
+
+| `err.kind` | `err.key` | Why |
+|---|---|---|
+| `not_permitted` | `errors.ext_view.needs_user_action` | No recent click or key press, or the window isn't in front. |
+| `not_permitted` | `errors.ext_view.not_focused` | `compose`, `copyText`: the view window isn't in front. |
+| `rate_limited` | `errors.ext_view.too_fast` | Too many calls in a second. |
+| `invalid_input` | `errors.ext_view.text_invalid` | The text is missing, empty, too long or not plain text. |
+| `invalid_input` | `errors.ext_view.unknown_view`, `errors.ext_view.params_invalid`, `errors.ext_view.params_too_large` | `open`: no such view, or bad params. |
+| `rate_limited` | `errors.ext_view.too_many_open` | `open`: 4 view windows are visible already. |
+| `internal` | `errors.ext_view.clipboard_failed` | `copyText`: the clipboard write failed. |
+
+Other errors from the host pass through with their own `kind` and `key`.
+
+### Kage's bar, the window title and placement
+
+Kage draws a 32 px bar above your view, outside your iframe: the view's
+icon, your extension's name, the view's title, your subtitle, an
+**Extension** badge, and Reload, Extension settings and Close buttons.
+Your iframe is laid out below the bar and can't draw over it. The window
+title is "<view> — <extension>", or "<subtitle> — <view> — <extension>"
+with a subtitle. You set only the subtitle, so your extension's name
+always ends the title.
+
+A new window opens below the launcher when it was opened from there and
+fits, otherwise centred on the screen of the window that opened it. After
+that Kage remembers its size, its position and whether it was maximised,
+per view, on this computer only. That's never in a backup and never
+synced. On Wayland the compositor decides where windows go, so only the
+size is kept. **Reset window size and position** in your extension's
+Settings page forgets it.
+
+**Kage never asks for a password, a passphrase or a permission inside a
+view window.** Its prompts appear in the launcher, chat or Settings.
+Don't draw anything that looks like a Kage prompt, a request for a
+backup passphrase, or a sign-in to Kage. If your extension needs a
+credential, ask for it on your Settings page, or sign in through the
+browser ([OAuth loopback](#oauth-loopback)).
+
+### What a view can't do
+
+A view runs in a sandboxed iframe (`sandbox="allow-scripts"`, so a null
+origin), like your other code, with more limits because it's visible and
+takes input:
+
+- **No network of its own.** The view's document has a Content Security
+  Policy that allows only `blob:` and `data:` for images, fonts, media
+  and fetches. `fetch`, XHR, WebSocket, EventSource, beacons, and remote
+  `<img>`, CSS and fonts all fail, and WebRTC is removed. Get remote
+  data through host commands your grant allows, such as
+  `fetch_link_metadata` and `fetch_favicon` under `network`.
+- **No frames, pop-ups or dialogs.** No `<iframe>` or `<object>`
+  content, `window.open`, `alert` / `confirm` / `prompt`, forms,
+  downloads, pointer lock or full screen. Camera, microphone,
+  geolocation, the clipboard API, screen capture, payment, USB, serial,
+  HID, Bluetooth, MIDI, wake lock, web share and autoplay are denied.
+- **Links.** A click on `<a href>` never navigates. With the `urls`
+  capability, absolute `http(s)` and `mailto` links open in the browser
+  through `open_url`; without it they do nothing, and a warning is
+  logged. Links in host-rendered HTML open on a click without `urls`,
+  but your code controls a view's document and could fake that click,
+  so a view gets no free link opening.
+- **No navigating away.** If the iframe loads anything after its first
+  document (`location.href = …`), Kage stops the view and shows
+  "<view> tried to show a web page, so Kage stopped it." with Reload.
+- **Clipboard.** Write with `context.view.copyText`. Reading still needs
+  `clipboard` (`read_clipboard`).
+- **Dropped files** never reach the view, as `File` objects or as paths.
+  HTML5 drag and drop of files isn't available: use pointer events for
+  dragging inside your view.
+- **Window-bound commands are refused**, because they act on the calling
+  window and assume it's the launcher or a chat window:
+  `send_message_streaming`, `cancel_generation`,
+  `send_steering_message`, `extension_tool_response`,
+  `get_window_session`, `resize_floating_window`,
+  `set_floating_opacity`, `apply_chat_window_size`,
+  `save_window_position`, `save_chat_window_geometry`,
+  `notify_frontend_ready`, and the background agent calls
+  (`agent_call_reserve`, `agent_call_ready`, `agent_call_send`,
+  `agent_call_cancel`, `agent_call_status`). `open_chat_with_message`
+  (under `agent`) still works. A view lives only while it's open, so
+  long-running work belongs to your other instances: ask them through
+  storage.
+- **Only the view module loads**, with what it imports. Your other
+  providers and your manifest's top-level `css` aren't loaded in a view,
+  and neither are `sandboxVendor` libraries: `runSandboxed` works, but
+  without them.
+
+### Input
+
+- Pointer, wheel, keyboard, `dblclick` and `contextmenu` events are the
+  browser's own; the host doesn't translate them. Register `wheel` with
+  `{ passive: false }` on your drawing surface and call
+  `preventDefault()` there, so the page never scrolls or zooms.
+- Pinch to zoom differs by engine. WebView2 (Windows) sends `wheel` with
+  `ctrlKey: true`. WebKit (macOS, Linux) may send `gesturestart` /
+  `gesturechange` / `gestureend` with `scale` instead, or as well.
+  Handle both, and ignore one kind while the other is active in the same
+  gesture.
+- When the window gets focus, keys go to your view without a click.
+  Kage's global hotkeys still work over it.
+- ⌘W / Ctrl+W closes the window. Esc is yours. Tab can move focus out to
+  the bar's buttons.
+- Right-click: draw your own menu. Kage's context menu isn't available
+  in views.
+
+### Theme, language and direction
+
+`context.view.theme` is a frozen snapshot:
+
+```js
+{
+    scheme: 'dark',          // or 'light': Kage's theme, not the OS's
+    fontSize: 14,            // Kage's font size, in CSS pixels
+    reducedMotion: false,    // the user prefers reduced motion
+    tokens: { 'kage-bg': '#1e1e1e', 'kage-text': '…', /* … */ },
+}
+```
+
+- The tokens are `kage-bg`, `kage-bg-elevated`, `kage-bg-input`,
+  `kage-text`, `kage-text-bright`, `kage-text-muted`, `kage-border`,
+  `kage-border-subtle`, `kage-accent`, `kage-accent-hover`,
+  `kage-accent-active`, `kage-accent-light`, `kage-accent-glow`,
+  `kage-link`, `kage-success`, `kage-warning`, `kage-danger`,
+  `kage-error`, `kage-font` and `kage-font-mono`. A value that isn't a
+  plain colour or a plain font list (a theme extension's `url(…)`, say)
+  is left out, so read tokens with a fallback.
+- The same tokens are CSS variables on `:root` of your view's document,
+  with `color-scheme` and `font-size`, so your CSS can use
+  `var(--kage-bg)`. Canvas code reads `context.view.theme.tokens`.
+- When Kage's theme changes, `context.view.theme` is replaced and
+  `onThemeChange(theme)` runs: redraw there. Use `theme.scheme`, not
+  `prefers-color-scheme`, which follows the OS inside the iframe.
+- Skip animations when `theme.reducedMotion` is `true`.
+- Your document has `<html lang="…" dir="ltr|rtl">` from Kage's
+  language, and `context.i18n` works as everywhere. On a canvas, set
+  `ctx.direction = context.i18n.isRtl() ? 'rtl' : 'ltr'` and mirror the
+  layout where it carries meaning. Keep URLs, ids and hotkeys
+  left-to-right.
+- A language change reloads the view, so every string comes from the
+  new catalog.
+
+### Talking to your other instances
+
+There is no message bus between your instances. They share your
+extension storage, and [change events](#change-events-contextstorageonchanged)
+tell each one when another wrote:
+
+| You want | Use |
+|---|---|
+| The launcher saved something; the open view should show it | The launcher writes the data. The view's `onChanged` sees the key and re-reads. |
+| The launcher wants the view to show X | `open_view` with params. The view's `onOpen` gets them, with no disk round trip. |
+| The view wants the user to ask the agent | `context.view.compose(text)`. The user sees it in the launcher and presses Enter. |
+| Two instances must not both do a one-shot job | A lease in extension data (see [MULTIPLE instances](#your-extension-runs-as-multiple-instances--design-for-it)). |
+
+Never assume a view's in-memory copy is current. Re-read on change
+events, and check your revision marker in `mount` and `onShow`.
+
+### Performance
+
+Each view has its own window and WebView, so a busy view doesn't slow
+the launcher down. Your view still has to stay smooth:
+
+- **Size the canvas to the window, not the world.** Backing store = CSS
+  size × `devicePixelRatio`, at most 8192 px a side and 32 megapixels.
+  Pan and zoom with a transform. Never allocate a canvas for the whole
+  map.
+- **Redraw on demand.** Keep a dirty flag and request one
+  `requestAnimationFrame` when something changed. No loop while idle,
+  and none after `onHide`.
+- **Cull and index.** Keep a spatial index (a uniform grid or a
+  quadtree) for what's visible and for hit tests. Draw only what's in
+  view.
+- **Level of detail.** When zoomed far out, draw dots or plain shapes
+  without text. Cache `measureText` results. Avoid `shadowBlur`,
+  `filter` and `getImageData` in hot paths.
+- **Heavy work off the main thread.** Run layout passes in
+  [`runSandboxed`](#terminable-compute-with-runsandboxed) with a
+  timeout of a few hundred milliseconds, and keep the last good result
+  when one times out.
+- **DPI changes.** On `resize`, and when
+  `matchMedia('(resolution: <dpr>dppx)')` stops matching (the window
+  moved to another screen), re-read `devicePixelRatio` and resize the
+  backing store.
+- `OffscreenCanvas` in a worker is optional: check for it, since older
+  WebKitGTK may lack it.
+- Loads cost IPC. Load once in `mount`, then update from change events.
+- `invoke()` is limited to 100 calls a second per sandbox, in a view as
+  anywhere.
 
 ## Mascot activity hints
 
@@ -1998,6 +2499,7 @@ Install methods:
 
 Each extension has an Enable/Disable toggle in its settings page. Disabled extensions:
 - Don't appear in search results
+- Have their [view](#views) windows closed
 - Settings are greyed out but visible
 - Can be re-enabled without reinstalling
 
