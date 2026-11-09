@@ -1066,7 +1066,7 @@ planned tree with `cargo deny check licenses` (§6.1).
 | PDF repair | `lopdf` 0.47, `default-features = false` | MIT | Only when `lopdf` 0.42 can't load a file: 0.47 rebuilds a broken cross-reference table, and the worker saves the result for `pdf-extract` (§6.2). |
 | Stream cap | `flate2` (already in the tree through `zip` and `lopdf`) | MIT or Apache-2.0 | Counts a stream's inflated size (§6.2). |
 | Right-to-left lines | `unicode-bidi` (new) | MIT or Apache-2.0 | Visual to logical order for PDF lines (§6.2). |
-| CJK fonts without a ToUnicode map | Adobe `cmap-resources`: the `Adobe-Japan1-UCS2`, `Adobe-Korea1-UCS2`, `Adobe-GB1-UCS2` and `Adobe-CNS1-UCS2` CMaps, turned into compact tables at build time | BSD-3-Clause | §6.2. The licence text ships with the other notices. |
+| CJK fonts without a ToUnicode map | Adobe's `Adobe-Japan1-UCS2`, `Adobe-Korea1-UCS2`, `Adobe-GB1-UCS2` and `Adobe-CNS1-UCS2` CMaps (now in Adobe's `mapping-resources-pdf`, `pdf2unicode/`), turned into compact tables by a generator test and checked in under `kage-file-text/src/pdf/cmaps/` (132 KB in all) | BSD-3-Clause | §6.2. The licence text (`cmaps/LICENSE.txt`) ships with the other notices. |
 | HTML | `html5ever` tokenizer | MIT or Apache-2.0 | Already in the lock file through `wry`. |
 | Decoding | `encoding_rs` (already in the lock file) | (Apache-2.0 or MIT) and BSD-3-Clause | WHATWG encodings. |
 | Encoding detection | `chardetng` (new) | Apache-2.0 or MIT | Firefox's detector. |
@@ -1143,8 +1143,9 @@ resources, absurd matrix numbers, deep arrays in a content stream, a
 reference cycle, a predefined CJK CMap, and the ToUnicode bomb after the
 cap emptied it. No real-world or generated file made `pdf-extract` panic.
 The one worker kill is the Form XObject that draws itself: the stack
-overflows after 68 ms, which the parent reports as `too_complex`. The
-other load errors are icons and broken files with no text.
+overflows after 68 ms, which the parent reports as `too_complex` (FT3's
+form check, §6.2 step 3, now leaves such a form out). The other load
+errors are icons and broken files with no text.
 
 Large files, worker, peak heap at most 114 MiB:
 
@@ -1272,17 +1273,38 @@ builds these into `kage-file-text/src/pdf/`:
    counted through a capped decoder, passes 32 MiB. For anything that
    isn't a stream it returns a clone of the object: objects from object
    streams take the returned value. For a file that was encrypted, run
-   the same function over `doc.objects` after loading. The bombs then
-   cost at most 5 MiB and 20 ms. The allocator cap stays the backstop
-   (object streams inside encrypted files).
+   the same function over `doc.objects` after loading, and do the same
+   for streams whose `/Length` the loader only resolves after loading
+   (they reach the filter empty). ASCII85 and ASCIIHex stages in front of
+   a `FlateDecode` are decoded to reach it. The bombs then cost at most
+   5 MiB and 20 ms. The allocator cap stays the backstop (LZW bombs, and
+   object streams inside encrypted files).
 2. **One page at a time, cheaply.** Call `get_pages()` once. Before each
    page, set the root `/Pages` node's `/Kids` to that page and `/Count`
    to 1, then call `output_doc_page(&doc, out, 1)` inside
    `catch_unwind`. A panic loses only the rest of that page.
 3. **Check each page first.** Walk `/Parent` with a visited set, at most
-   64 steps; a cycle skips the page. A page with no inherited
-   `/MediaBox` gets `[0 0 612 792]`. A document whose pages were all
-   skipped or all panicked is `malformed`.
+   64 steps, and set the inherited `/Resources` and `/MediaBox` on the
+   page itself, so `pdf-extract` never walks `/Parent` (a cycle then
+   costs nothing and no page is skipped for it). A page with no usable
+   `/MediaBox` gets `[0 0 612 792]`; a broken `/ArtBox` is dropped. A
+   document with no pages, or whose pages all failed without giving any
+   text, is `malformed`.
+   - **What a page draws** (FT3 addition). `pdf-extract` draws a Form
+     XObject by recursing into it with no depth limit. Before a page,
+     the worker reads the `Do` calls of the page and its forms (a form's
+     with `lopdf`'s content parser, the one `pdf-extract` uses; every
+     XObject a page's resources name counts as drawn): a form
+     that would draw a form it is inside of, or sits more than 32 forms
+     deep, or whose drawing would cost more than 64 MiB of content, is
+     emptied; a page that would still cost more is skipped. So a form
+     that draws itself no longer overflows the stack (which would also
+     crash an in-process fuzzer): its page is read without it.
+   - **Font streams** (FT3 addition). The CMap and Type 1 parsers recurse
+     once per nested bracket and panic on an empty stream (which a capped
+     bomb becomes). A ToUnicode map or Type 1 or CFF font program that is
+     empty or nested deeper than 256 levels is dropped from its font; a
+     bad Type0 encoding CMap becomes `Identity-H`.
 4. **Caps while writing.** Give `PlainTextOutput` a writer that refuses
    text past the remaining `max_chars`; its error means `truncated`.
    Record `page_starts` between pages.
@@ -1295,20 +1317,31 @@ builds these into `kage-file-text/src/pdf/`:
      runs and the run order back into logical order, with
      `unicode-bidi` for the levels. Measured with a simple run reversal:
      Hebrew 0.10 → 0.95, Persian 0.08 → 0.94 and Arabic 0.15 → 0.81
-     (Quartz).
+     (Quartz). Built in FT3: a line that mixes both directions takes the
+     page's (right to left when the page has more right-to-left letters);
+     brackets inside right-to-left runs are mirrored back (Quartz records
+     the shape drawn); spaces at the ends of lines are dropped.
    - Apply NFKC to Latin ligatures (U+FB00–U+FB06), Arabic presentation
      forms (U+FB50–U+FDFF, U+FE70–U+FEFF) and Kangxi radicals
      (U+2F00–U+2FDF) only. Chrome writes `ﬁ` and `⾳`, NFC keeps them, and
-     a search for "file" or `音` would miss them.
+     a search for "file" or `音` would miss them. This runs after the
+     reordering, so a lam-alef ligature becomes lam, then alef.
 7. **CJK fonts without a ToUnicode map.** Quartz embeds Hiragino and
    Apple SD Gothic Neo as CID fonts with the Adobe-Japan1 or Adobe-Korea1
    ordering and no ToUnicode map. Apple's own Japanese and Korean licence
    PDFs are made this way, and neither crate reads them. For a Type0 font
    without `/ToUnicode` whose `/CIDSystemInfo` names Adobe-Japan1,
-   Adobe-Korea1, Adobe-GB1 or Adobe-CNS1, the worker adds a ToUnicode
-   stream built from that ordering's table, for all CIDs (`/W` lists only
-   glyphs with a non-default width). The spike injected such a stream
-   and `pdf-extract` used it.
+   Adobe-Korea1, Adobe-GB1 or Adobe-CNS1, and `Identity-H` or
+   `Identity-V` encoding (so a code is its CID), the worker adds a
+   ToUnicode stream built from that ordering's table. The spike injected
+   such a stream and `pdf-extract` used it. FT3 found that a map of all
+   CIDs is too slow: `pdf-extract` parses a font's map again on every
+   page, about 140 ms for a whole table (70 s for 500 pages). So the map
+   holds only the CIDs the page shows, refilled before each page from
+   the page's content (strings shown after `Tf`, with `q` and `Q`
+   followed): 500 pages then take 60 ms. The tables drop variation
+   selectors (a glyph variant maps to its base character) and `U+FFFD`
+   entries.
 8. **Gaps in P0.** Not read: form field values (they live in widget
    annotations, not in page content); text in other annotations; text in
    non-embedded fonts with a predefined CJK CMap such as `UniJIS-UCS2-H`
@@ -1322,7 +1355,9 @@ builds these into `kage-file-text/src/pdf/`:
 9. **Dependencies.** FT1 adds `pdf-extract = "=0.12.1"`,
    `lopdf = { version = "0.47", default-features = false }`, `flate2` and
    `unicode-bidi` to `kage-file-text/Cargo.toml`. FT3 adds the Adobe CMap
-   tables under `kage-file-text/src/pdf/`.
+   tables under `kage-file-text/src/pdf/cmaps/`, with Adobe's licence and
+   a README that says how to rebuild them (the `regenerate_adobe_tables`
+   test).
 
 ## 7. Security analysis
 
@@ -1728,7 +1763,7 @@ Item {
 - PDF cases from WP-FT0 (§6.1, §6.2): bombs in a content, image, object
   and ToUnicode stream, and one in an encrypted file; 20,000 pages (the
   first 2,000 read in under a second); a `/Parent` cycle; a Form XObject
-  that draws itself (`too_complex`); a page without `/MediaBox`; an xref
+  that draws itself (left out, the page read); a page without `/MediaBox`; an xref
   only the repair step can read; a Hebrew page; a CID font without a
   ToUnicode map; Chrome's `ﬁ` and Kangxi radicals.
 - The allocator cap aborts a large allocation; `catch_unwind` maps a panic
@@ -1924,6 +1959,20 @@ with EXTENSION_AGENT_CALLS's `AC-X1` and `AC-MM1`…`AC-MM3`.
   `no_text`, title.
 - Accept: §12 PDF cases; the corpus run finishes every file within the
   deadline; fuzz target runs 10 minutes clean.
+- Done: `kage-file-text/src/pdf/` as §6.2 says, with the three FT3
+  additions there (the form check, the font stream check, per-page CJK
+  maps). Tests in `tests/pdf_reader.rs` and `tests/pdf_limits.rs`
+  (fixtures built with `lopdf` 0.47 in `tests/pdf_fixtures/`), fuzz seeds
+  from `tests/pdf_seeds.rs`. The `pdf` fuzz target swaps libfuzzer-sys's
+  aborting panic hook for a silent one, because the reader catches
+  `pdf-extract`'s panics per page; a panic that escapes still aborts. The
+  first fuzz run found a form drawing itself through its first `Do`
+  operand, which a lexer-only check missed; forms are now checked with
+  `lopdf`'s parser. Local corpus (1,003 PDFs shipped with macOS and the
+  cargo registry): all finish, median 10 ms, p95 33 ms. Left as is:
+  `lopdf` resolves an indirect `/Length` while parsing, recursively, so a
+  long enough chain of them overflows its stack (20,000 overflow 8 MiB;
+  the worker has 64 MiB). The parent reports that as `too_complex`.
 
 **WP-FT4 HTML and RTF** (P1: `kage-file-text/src/html/**`,
 `kage-file-text/src/rtf/**`, their tests and fuzz targets)
