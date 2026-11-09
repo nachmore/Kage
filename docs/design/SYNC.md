@@ -764,7 +764,13 @@ CREATE TABLE ext_view  (win TEXT, ext TEXT, key TEXT, ids BLOB, PRIMARY KEY (win
   `origin_mismatch`.
 - A corrupt `replica.db` is moved aside. The engine rebuilds it from the
   folder and then joins with "use the other computers' values"; local
-  differences go to the conflicts list (§15).
+  differences go to the conflicts list (§15). A replica whose
+  `user_version` is newer than this build's (the user went back to an
+  older Kage) is moved aside the same way.
+- `records.bucket` holds the record's 16-bit bucket hash,
+  `Keys::bucket(ns, id, 1 << 16)`. The bucket for any power-of-two count
+  up to 65,536 is that hash modulo the count, so a change of count needs
+  no rewrite of the table.
 
 ---
 
