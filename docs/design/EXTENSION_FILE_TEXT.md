@@ -830,15 +830,21 @@ fails with `wrong_content`. `text` and `markdown` count as one family.
   skipped.
 
 **PDF** (`kage-file-text/src/pdf/`)
-- Parse from memory with the crate chosen in WP-FT0 (§6). Page by page,
-  so the page cap and `max_chars` stop work early, and `page_starts` can be
-  recorded.
+- Parse from memory with `pdf-extract` 0.12.1, chosen in WP-FT0, set up
+  as §6.2 says. Page by page, so the page cap and `max_chars` stop work
+  early, and `page_starts` can be recorded. A file `lopdf` 0.42 can't
+  load gets one repair try through `lopdf` 0.47 (§6.2).
 - A document that needs a user password → `encrypted`. One with only an
   owner password (permission bits) is decrypted with the empty password
   and read (`restricted`).
-- Streams are inflated through the parser. Where the crate allows a cap,
-  set it (32 MiB per stream). Elsewhere the worker's allocator cap is the
-  backstop.
+- The crate has no inflate cap, so the worker sets one while loading
+  (§6.2): image streams are emptied, and so is any Flate stream that
+  inflates past 32 MiB. The allocator cap stays the backstop.
+- Before §5.10: right-to-left lines go back to logical order, and Latin
+  ligatures, Arabic presentation forms and Kangxi radicals get NFKC
+  (§6.2).
+- A Type0 font with no ToUnicode map and an Adobe CJK ordering gets one
+  from Adobe's tables (§6.2).
 - Fewer than 16 characters per page on average → `no_text`.
 - Info `/Title` → `title`.
 
@@ -972,16 +978,20 @@ No new `Config` field.
 ## 6. Crates and licences
 
 Kage is Apache-2.0. Only permissive licences (MIT, Apache-2.0, BSD,
-Zlib, Unicode) are allowed in the worker's tree. WP-FT0 confirms the full
-tree with `cargo deny check licenses` (or `cargo about`) before WP-FT1 adds
-the dependencies.
+Zlib, Unicode) are allowed in the worker's tree, with one named
+exception: `option-ext` (MPL-2.0). It comes through `kage-core` → `dirs`,
+not from a parser, and the app already ships it. WP-FT0 checked the
+planned tree with `cargo deny check licenses` (§6.1).
 
 | Need | Choice | Licence | Notes |
 |---|---|---|---|
 | ZIP | `zip` (already used, 8.x, `deflate` only) | MIT | Same version as the app. |
 | XML | `quick-xml` (already in the lock file) | MIT | Streaming reader, no DTD processing. |
-| PDF | `pdf-extract` on `lopdf` (default) | MIT | Font encodings and ToUnicode maps, which `lopdf`'s own `extract_text` handles less well. Use its per-page API if the chosen version has one; otherwise iterate pages with `lopdf` and run the extractor per page. |
-| PDF, fallback | `lopdf` alone | MIT | If FT0 finds `pdf-extract` too slow or panicky on the corpus. |
+| PDF | `pdf-extract` `=0.12.1`, on `lopdf` 0.42 | MIT | Chosen in WP-FT0 (§6.2). Pin the exact version: the worker uses its public `output_doc_page`, `OutputDev` and `PlainTextOutput`. |
+| PDF repair | `lopdf` 0.47, `default-features = false` | MIT | Only when `lopdf` 0.42 can't load a file: 0.47 rebuilds a broken cross-reference table, and the worker saves the result for `pdf-extract` (§6.2). |
+| Stream cap | `flate2` (already in the tree through `zip` and `lopdf`) | MIT or Apache-2.0 | Counts a stream's inflated size (§6.2). |
+| Right-to-left lines | `unicode-bidi` (new) | MIT or Apache-2.0 | Visual to logical order for PDF lines (§6.2). |
+| CJK fonts without a ToUnicode map | Adobe `cmap-resources`: the `Adobe-Japan1-UCS2`, `Adobe-Korea1-UCS2`, `Adobe-GB1-UCS2` and `Adobe-CNS1-UCS2` CMaps, turned into compact tables at build time | BSD-3-Clause | §6.2. The licence text ships with the other notices. |
 | HTML | `html5ever` tokenizer | MIT or Apache-2.0 | Already in the lock file through `wry`. |
 | Decoding | `encoding_rs` (already in the lock file) | (Apache-2.0 or MIT) and BSD-3-Clause | WHATWG encodings. |
 | Encoding detection | `chardetng` (new) | Apache-2.0 or MIT | Firefox's detector. |
@@ -990,6 +1000,10 @@ the dependencies.
 | RTF | in-house (default), or `rtf-parser` | — / MIT | Decided in FT4. |
 
 Rejected:
+- `lopdf` alone (0.42 or 0.47) as the PDF extractor: in WP-FT0 it read no
+  text from TeX and groff manuals, from text in Form XObjects, or from
+  most CJK and Indic files, and it breaks lines only at `T*` and `ET`
+  (§6.1).
 - `pdfium-render` + PDFium: best PDF quality, but a native C++ library to
   ship and sign per platform. Kept as the upgrade path if users report
   poor PDF text (§14).
@@ -997,6 +1011,243 @@ Rejected:
 - `docx-rs`, `dotext` and similar: little gained over `zip` + `quick-xml`,
   and less control over limits.
 - `html2text`: builds a full DOM; the tokenizer is enough.
+
+### 6.1 WP-FT0: the PDF spike
+
+**Corpus.** 2,438 files. None are checked in.
+- 1,016 real-world PDFs: the PDFs shipped with macOS and the installed
+  apps on the test machine (licence agreements in 40 languages,
+  regulatory labels, manuals, TeX and groff documentation, icons and
+  other vector art), and the PDFs in the local cargo registry's test
+  fixtures. Deduplicated by hash. 191 of the macOS and app files have
+  20 or more words.
+- 129 generated documents with known text: the repo's own docs and its
+  32 locale catalogs, written by Quartz (CoreText: 1 to 3 columns,
+  slides, scans, 2,100 pages, 30 MB with images), Chrome's print to PDF
+  (Skia), Inkscape (cairo), the CUPS text filter, PDFKit (filled form
+  fields) and `lopdf`'s encryption (RC4 40 and 128, AES 128 and 256; with
+  a user password, and with only an owner password that forbids copying).
+- 43 hand-written edge cases: bombs (content, image, object stream and
+  ToUnicode streams of 0.5 to 1 GiB), cycles (`/Parent`, `/Kids`,
+  references, a Form XObject that draws itself), nesting 300 and 100,000
+  deep, 2,001 and 20,000 pages, broken, missing and shifted xref tables,
+  truncation, garbage, unusual filters, WinAnsi, `/Differences`, Type3,
+  Type0 with and without ToUnicode, a predefined CJK CMap, a page of 6
+  million characters, an invisible OCR layer, a rotated page.
+- 1,250 byte-level mutants (flips, inserts, deletes, truncation, splices,
+  bad numbers and brackets) of 25 seeds, 5 of them uncompressed.
+
+**Method.** One process per file and candidate, set up as the worker
+will be: the parser on a 64 MiB stack, a counting allocator capped at
+768 MiB, a 30-second deadline from the parent, `catch_unwind` per page,
+at most 1,000,000 characters and 2,000 pages. Peak heap comes from the
+allocator, peak RSS from `wait4`. Text quality is the F1 score of word
+counts (characters for CJK and Thai) after NFKC and lower case: against
+the source text for generated files, against macOS PDFKit's text for
+real-world files. Apple M3 Pro, four runs at a time. Times include
+process start (about 8 ms).
+
+Candidates: `pdf-extract` 0.12.1 set up as in §6.2 ("worker"); its
+whole-document `extract_text_from_mem`; `lopdf` 0.42 and 0.47 alone
+(`extract_text` per page; 0.47 with its 32 MiB decompression limit).
+
+**Robustness, time and memory** (1,188 files, without the mutants)
+
+| | Worker | Whole document | `lopdf` 0.42 | `lopdf` 0.47 |
+|---|---|---|---|---|
+| Read | 1,164 | 1,134 | 1,145 | 1,164 |
+| Refused: user password | 13 | 13 | 13 | 13 |
+| Other load errors | 10 | 29 | 29 | 11 |
+| Lost to a panic | 8 pages | 8 files | 0 | 0 |
+| Killed (abort or deadline) | 1 | 4 | 1 | 0 |
+| Time, median / p95 / max | 13 / 37 / 854 ms | 13 / 36 / 3,052 ms | 13 / 25 / 14,013 ms | 13 / 25 / 11,338 ms |
+| Peak heap, p95 / max | 15 / 114 MiB | 15 / 511 MiB | 15 / 511 MiB | 15 / 121 MiB |
+
+The 8 panics are all in hand-written files: a missing font or font
+resources, absurd matrix numbers, deep arrays in a content stream, a
+reference cycle, a predefined CJK CMap, and the ToUnicode bomb after the
+cap emptied it. No real-world or generated file made `pdf-extract` panic.
+The one worker kill is the Form XObject that draws itself: the stack
+overflows after 68 ms, which the parent reports as `too_complex`. The
+other load errors are icons and broken files with no text.
+
+Large files, worker, peak heap at most 114 MiB:
+
+| File | 100,000 chars (default) | 1,000,000 chars |
+|---|---|---|
+| Quartz, 2,100 pages, 12 MB | 0.2 s (30 pages) | 0.5 s (280 pages) |
+| Chrome, 5.8 MB | 0.2 s (28 pages) | 0.8 s (321 pages) |
+| Quartz, 13 pages with images, 30 MB | 40 ms (all 37,000 chars) | 40 ms |
+| 20,000 tiny pages, 6 MB | 0.4 s (2,000 pages) | 0.4 s |
+| One page of 6 million characters | 70 ms | 170 ms |
+
+**Text quality** (F1 on generated documents, Quartz / Chrome)
+
+| Script | `pdf-extract` | `lopdf` 0.47 | PDFKit |
+|---|---|---|---|
+| English (11 docs each) | 1.00 / 0.97 | 0.99 / 1.00 | 1.00 / 0.97 |
+| Latin, Cyrillic, Greek (21 locales each) | 1.00 / 0.98 | 0.87 / 0.99 | 1.00 / 1.00 |
+| Chinese | 1.00 / 1.00 | 0.12 / 0.10 | 1.00 / 1.00 |
+| Japanese, Korean | 0.00 / 1.00 | 0.05 / 0.06 | 1.00 / 1.00 |
+| Hebrew, Arabic, Persian, Urdu | 0.09 / 0.08; 0.69 / 0.46 after the RTL pass | 0.11 / 0.09 | 0.76 / 0.99 |
+| Hindi, Bengali | 0.75 / 0.81 | 0.05 / 0.06 | 0.75 / 0.81 |
+| Thai | 1.00 / 1.00 | 1.00 / 1.00 | 1.00 / 1.00 |
+
+On those 191 real-world files, against PDFKit: `pdf-extract` 0.95 (25
+files under 0.9), `lopdf` 0.81 (101 under 0.9). `lopdf` read
+nothing from the TeX and groff manuals. `pdf-extract`'s low scores are
+label layouts read in a different order, and Apple's Japanese, Korean,
+Hebrew and Arabic licence PDFs (the gaps below).
+
+**Mutants** (1,250 files)
+
+| | Worker | Worker without repair | Whole document | `lopdf` 0.47 |
+|---|---|---|---|---|
+| Load errors | 170 | 850 | 850 | 152 |
+| Files with text | 735 | 324 | 260 | 730 |
+| Panics | 269 files lost a page | 95 files lost a page | 97 files lost | 0 |
+| Killed (abort or deadline) | 0 | 0 | 0 | 0 |
+| Slowest | 0.6 s | 45 ms | 41 ms | 41 ms |
+
+**Hand-checked files** (23, worker output against the source or PDFKit):
+- Five English documents (Chrome and Quartz reports, 2 and 3 columns,
+  slides): exact text, columns in reading order, a blank line between
+  paragraphs, soft line breaks kept, bullets kept as `•` where the PDF
+  draws them as text.
+- A groff manual (Type 1 fonts): exact. `lopdf` gave nothing.
+- A regulatory label: all text, in another order than PDFKit's.
+- Thai (Quartz), CUPS text, cairo (Inkscape, and a spec from the cargo
+  registry), WinAnsi accents, `/Differences`: exact. CUPS pads lines with
+  spaces (§5.10 trims them). cairo and Chrome keep `ﬁ` as one code point.
+- Hindi (Quartz): vowel signs and repha in visual order, as in PDFKit.
+- Japanese and Chinese (Chrome): right text, but some ideographs come as
+  Kangxi radicals (`⾳` for `音`) and some Latin words are split
+  (`Ka ge`).
+- Japanese (Quartz) and Apple's Japanese licence: no text at all.
+- Hebrew (Quartz): visual order; right after the RTL pass.
+- Arabic (Chrome): visual order, one word per line, spaces inside words.
+- AES-256 with an owner password only: same text as the plain file;
+  `restricted` detected.
+- A PDFKit form: page text exact; the field values are not read (by any
+  candidate, nor by PDFKit's page text).
+- A Quartz scan: no text, so `no_text`.
+
+**What `pdf-extract` 0.12.1 offers, confirmed**
+- Per-page API: `output_doc_page(&doc, &mut dyn OutputDev, n)` and
+  `extract_text_from_mem_by_pages`. Both call `Document::get_pages()` for
+  each page, which walks the whole page tree: 2,000 pages of a
+  20,000-page file took 14.3 s. With the root trick in §6.2 it takes
+  0.4 s.
+- `PlainTextOutput::new` takes any `ConvertToFmt`, so a writer can refuse
+  text past `max_chars` and stop a page early.
+- `OutputDev` is a public trait: `begin_page` and `end_page` mark pages,
+  and `output_character` gets each glyph with its position, so a custom
+  layout is possible.
+- No stream cap. `pdf-extract` pins `lopdf` 0.42, which has none (0.47 has
+  `max_decompressed_size`). `LoadOptions::filter`, a `fn` called on each
+  object while loading, lets the worker set one (§6.2). `lopdf` 0.42 skips
+  the filter for encrypted files.
+- Without the steps in §6.2: a `/Parent` cycle loops until the deadline;
+  a missing `/MediaBox` panics; image XObjects are inflated on `Do` (a
+  900 MiB image bomb took 454 MiB); a 1 GiB content bomb and a 900 MiB
+  ToUnicode bomb hit the allocator cap.
+- Encryption: `lopdf` 0.42 opens RC4 40 and 128 and AES 128 and 256
+  (revisions 2 to 6). The empty user password opens owner-only files at
+  load; `encryption_state.permissions()` without `COPYABLE` means
+  `restricted`. With a user password, `is_encrypted()` stays true, so
+  `encrypted`.
+- `Document::load_mem` parses every object first, so at the default
+  100,000 characters, load time is most of the cost.
+- `pdf-extract` 0.12.1 builds against `lopdf` 0.47 with a one-line change
+  (`get_page_content` no longer returns a `Result`). A release on a newer
+  `lopdf` would make the repair step and the load filter unnecessary.
+
+**Licences.** `cargo deny check licenses` (cargo-deny 0.20.2) on the
+planned worker tree: `kage-core`, `serde`, `serde_json`, `zip`
+(`deflate`), `quick-xml`, `encoding_rs`, `chardetng`, `icu_normalizer`,
+`html5ever`, `unicode-bidi`, `flate2`, `libc`, `windows`, and each PDF
+candidate. All targets. It passes with this configuration:
+
+```toml
+[licenses]
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "Zlib", "Unicode-3.0"]
+exceptions = [{ name = "option-ext", allow = ["MPL-2.0"] }]
+[licenses.private]
+ignore = true
+```
+
+The exception is the one MPL-2.0 crate, through `kage-core` → `dirs` →
+`dirs-sys`. `pdf-extract`'s own 78 crates are MIT, Apache-2.0,
+BSD-3-Clause (`encoding_rs`), Zlib (`zlib-rs`) and Unicode-3.0;
+`lopdf` 0.47 adds BSD-3-Clause (`brotli-decompressor`, `alloc-stdlib`).
+To drop the exception, FT1 can put `dirs` behind a `kage-core` feature
+that the worker turns off.
+
+### 6.2 Decision: `pdf-extract`
+
+`pdf-extract` 0.12.1 reads the most text by a wide margin (font
+encodings, CID fonts, Form XObjects), and no real file made it panic.
+Its weak points can all be handled in the worker without a fork. FT3
+builds these into `kage-file-text/src/pdf/`:
+
+1. **Cap streams while loading.** Load with
+   `LoadOptions { filter: Some(cap_streams), .. }`. The filter empties
+   image XObjects (text never needs them, and `pdf-extract` inflates them
+   on `Do`) and empties any `FlateDecode` stream whose inflated size,
+   counted through a capped decoder, passes 32 MiB. For anything that
+   isn't a stream it returns a clone of the object: objects from object
+   streams take the returned value. For a file that was encrypted, run
+   the same function over `doc.objects` after loading. The bombs then
+   cost at most 5 MiB and 20 ms. The allocator cap stays the backstop
+   (object streams inside encrypted files).
+2. **One page at a time, cheaply.** Call `get_pages()` once. Before each
+   page, set the root `/Pages` node's `/Kids` to that page and `/Count`
+   to 1, then call `output_doc_page(&doc, out, 1)` inside
+   `catch_unwind`. A panic loses only the rest of that page.
+3. **Check each page first.** Walk `/Parent` with a visited set, at most
+   64 steps; a cycle skips the page. A page with no inherited
+   `/MediaBox` gets `[0 0 612 792]`. A document whose pages were all
+   skipped or all panicked is `malformed`.
+4. **Caps while writing.** Give `PlainTextOutput` a writer that refuses
+   text past the remaining `max_chars`; its error means `truncated`.
+   Record `page_starts` between pages.
+5. **Repair.** If `lopdf` 0.42 can't load the file, load it with `lopdf`
+   0.47 (`max_decompressed_size` 32 MiB), save it to memory, and load that
+   with 0.42. Take `restricted` from the 0.47 load. On the mutants this
+   raised the files with text from 324 to 735.
+6. **Fix the text, PDF only, before §5.10.**
+   - On each line with right-to-left letters, put the right-to-left
+     runs and the run order back into logical order, with
+     `unicode-bidi` for the levels. Measured with a simple run reversal:
+     Hebrew 0.10 → 0.95, Persian 0.08 → 0.94 and Arabic 0.15 → 0.81
+     (Quartz).
+   - Apply NFKC to Latin ligatures (U+FB00–U+FB06), Arabic presentation
+     forms (U+FB50–U+FDFF, U+FE70–U+FEFF) and Kangxi radicals
+     (U+2F00–U+2FDF) only. Chrome writes `ﬁ` and `⾳`, NFC keeps them, and
+     a search for "file" or `音` would miss them.
+7. **CJK fonts without a ToUnicode map.** Quartz embeds Hiragino and
+   Apple SD Gothic Neo as CID fonts with the Adobe-Japan1 or Adobe-Korea1
+   ordering and no ToUnicode map. Apple's own Japanese and Korean licence
+   PDFs are made this way, and neither crate reads them. For a Type0 font
+   without `/ToUnicode` whose `/CIDSystemInfo` names Adobe-Japan1,
+   Adobe-Korea1, Adobe-GB1 or Adobe-CNS1, the worker adds a ToUnicode
+   stream built from that ordering's table, for all CIDs (`/W` lists only
+   glyphs with a non-default width). The spike injected such a stream
+   and `pdf-extract` used it.
+8. **Gaps in P0.** Not read: form field values (they live in widget
+   annotations, not in page content); text in other annotations; text in
+   non-embedded fonts with a predefined CJK CMap such as `UniJIS-UCS2-H`
+   (`pdf-extract` panics and the page is lost). Weak: Indic vowel signs
+   and repha stay in visual order, as in PDFKit. Chrome's Arabic and Urdu
+   come out one word per line with spaces inside words (F1 0.25 and 0.23
+   after the RTL pass), because `PlainTextOutput`'s spacing rules misread
+   Chrome's glyph positions. Urdu Nastaliq from Quartz has no usable
+   ToUnicode map (PDFKit fails too). A custom `OutputDev` layout is the
+   fix for the spacing (§14).
+9. **Dependencies.** FT1 adds `pdf-extract = "=0.12.1"`,
+   `lopdf = { version = "0.47", default-features = false }`, `flate2` and
+   `unicode-bidi` to `kage-file-text/Cargo.toml`. FT3 adds the Adobe CMap
+   tables under `kage-file-text/src/pdf/`.
 
 ## 7. Security analysis
 
@@ -1015,7 +1266,7 @@ unchanged. The new surface is three commands under one new capability.
 | A crafted file exploits a parser | Pure-Rust parsers (no C), in a separate process with a 768 MiB allocator cap, OS memory and CPU limits, a 30 s deadline, no file access and no network need, a fixed `--v1` protocol, capped output. A crash is an error message. | A logic bug can still return wrong or partial text. Fuzzing (§12) lowers the odds. |
 | ZIP bombs, overlapping entries | Only named parts are inflated; per-part and total caps counted while inflating; entry count cap. | — |
 | XML attacks (XXE, entity expansion, deep nesting) | `quick-xml` doesn't resolve DTDs or external entities; depth cap. | — |
-| PDF bombs (huge streams, object loops, deep nesting) | Page cap, stream cap where possible, allocator cap, big worker stack plus depth limits, deadline. | Lost work on hostile files only. |
+| PDF bombs (huge streams, object loops, deep nesting) | Page cap, a 32 MiB stream cap set while loading, a `/Parent` cycle check (§6.2), allocator cap, big worker stack plus depth limits, deadline. | Lost work on hostile files only. |
 | Huge output floods IPC or storage | `max_chars` ≤ 1,000,000; worker stdout cap; the extension stores what it chooses. | — |
 | FIFO, device or directory chosen | Regular-file check, `O_NONBLOCK` open with a second check on Unix, size check before reading. | — |
 | A file still syncing from the cloud hangs Kage | The read runs off the async runtime with a 60 s timeout. The single slot is released. | The abandoned read thread finishes on its own. |
@@ -1399,6 +1650,12 @@ Item {
   its declared size, 300-deep XML, a PDF with 2,001 pages, a Flate bomb
   stream, a broken xref, a user-password PDF, an owner-password PDF
   (`restricted`), 300-deep RTF groups, `\bin` past the end.
+- PDF cases from WP-FT0 (§6.1, §6.2): bombs in a content, image, object
+  and ToUnicode stream, and one in an encrypted file; 20,000 pages (the
+  first 2,000 read in under a second); a `/Parent` cycle; a Form XObject
+  that draws itself (`too_complex`); a page without `/MediaBox`; an xref
+  only the repair step can read; a Hebrew page; a CID font without a
+  ToUnicode map; Chrome's `ﬁ` and Kangxi radicals.
 - The allocator cap aborts a large allocation; `catch_unwind` maps a panic
   to `malformed`; the stack guard thread survives deep but legal input.
 - A local corpus test, skipped unless `KAGE_FILE_TEXT_CORPUS` points at a
@@ -1518,6 +1775,8 @@ with EXTENSION_AGENT_CALLS's `AC-X1` and `AC-MM1`…`AC-MM3`.
   chosen version. Run `cargo deny check licenses` on the worker's planned
   tree.
 - Accept: a written choice with numbers; licences all permissive.
+- Done: `pdf-extract`, with the worker steps in §6.2. Results in §6.1.
+  One licence exception, outside the parsers (§6).
 
 **WP-FT-C Contracts** (first, small)
 - Files:
@@ -1666,6 +1925,11 @@ for F1 also `explorer.js` and `explorer-panel.js`)
 - More formats: `.odt`/`.odp` (same ZIP + XML path), `.epub`, `.eml`,
   spreadsheets (`calamine`, MIT) as tab-separated text.
 - PDFium for better PDF text, if users report poor results.
+- A PDF layout of our own (a custom `pdf-extract` `OutputDev`: lines by
+  baseline, spaces from glyph gaps, direction-aware), for Chrome's Arabic
+  and Urdu and its split words (§6.2).
+- Drop the `lopdf` 0.47 repair step and the load filter once
+  `pdf-extract` is released on `lopdf` 0.47 or later (§6.1).
 - `reveal_picked_file(file_ref)`: the host keeps a machine-only map from
   ref to path and reveals the file in Finder or Explorer on a click. Needs
   its own consent story.
