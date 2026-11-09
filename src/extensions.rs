@@ -251,6 +251,23 @@ pub struct ConfigFieldDecl {
     /// `enum: [...]`: the only values the setting takes (strings, numbers
     /// or booleans).
     pub choices: Option<Vec<serde_json::Value>>,
+    /// `sync: "shared" | "os" | "machine" | "never"`: where folder sync
+    /// puts the setting (docs/design/SYNC.md §12.1). `None`: the default
+    /// rule.
+    pub sync: Option<SyncScopeDecl>,
+}
+
+/// A manifest `config.<field>.sync` value (docs/design/SYNC.md §12.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncScopeDecl {
+    /// Synced, one value for all computers.
+    Shared,
+    /// Synced, a new value applies to this kind of computer.
+    Os,
+    /// Never leaves this computer.
+    Machine,
+    /// Never synced.
+    Never,
 }
 
 /// Every entry of a manifest's `config` block, read for backups. Malformed
@@ -328,12 +345,28 @@ pub fn config_field_decls(
                 None
             }
         };
+        let sync = match entry.get("sync") {
+            None => None,
+            Some(serde_json::Value::String(s)) if s == "shared" => Some(SyncScopeDecl::Shared),
+            Some(serde_json::Value::String(s)) if s == "os" => Some(SyncScopeDecl::Os),
+            Some(serde_json::Value::String(s)) if s == "machine" => Some(SyncScopeDecl::Machine),
+            Some(serde_json::Value::String(s)) if s == "never" => Some(SyncScopeDecl::Never),
+            Some(_) => {
+                log::warn!(
+                    "Extension '{}': config.{}.sync must be \"shared\", \"os\", \"machine\" or \"never\" — ignored",
+                    context,
+                    field
+                );
+                None
+            }
+        };
         out.push(ConfigFieldDecl {
             field: field.clone(),
             ty,
             sensitive,
             plain: plain && !sensitive,
             choices,
+            sync,
         });
     }
     out
@@ -343,6 +376,414 @@ pub fn config_field_decls(
 pub const MAX_CONFIG_ENUM_VALUES: usize = 64;
 /// Longest string value a manifest `config.<field>.enum` may list.
 pub const MAX_CONFIG_ENUM_LEN: usize = 128;
+
+// --- The manifest `sync` block (docs/design/SYNC.md §12.2) -------------------
+
+/// Longest `sync.description`, in characters. Rust checks the raw text;
+/// the install prompt checks it again after `__MSG_…__` resolution.
+pub const MAX_SYNC_DESCRIPTION: usize = 140;
+/// Most `sync.keys` entries.
+pub const MAX_SYNC_KEYS: usize = 32;
+/// Most `sync.lists` entries.
+pub const MAX_SYNC_LISTS: usize = 16;
+/// Most `sync.collections` entries.
+pub const MAX_SYNC_COLLECTIONS: usize = 16;
+/// A collection record's default size limit.
+pub const DEFAULT_RECORD_BYTES: u64 = 64 * 1024;
+/// The largest `maxBytes` of a collection, and of a `large` one.
+pub const MAX_RECORD_BYTES: u64 = 1024 * 1024;
+pub const MAX_LARGE_RECORD_BYTES: u64 = 4 * 1024 * 1024;
+
+/// One `sync.lists` entry: the key's file holds a list of items with ids.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncListDecl {
+    /// The top-level field holding the array, or `""` when the file is
+    /// itself an array.
+    pub array: String,
+    /// The element field holding its unique id.
+    pub id: String,
+    /// The element field that names it in the conflicts list.
+    pub label: Option<String>,
+}
+
+/// One `sync.collections` entry: records the extension pushes and pulls.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SyncCollectionDecl {
+    /// The record is one cell.
+    pub whole: bool,
+    pub together: Vec<Vec<String>>,
+    pub sets: Vec<String>,
+    pub maps: Vec<String>,
+    /// Fields the host drops before storing a record.
+    pub local: Vec<String>,
+    pub label: Option<String>,
+    /// The field that marks a record private.
+    pub private: Option<String>,
+    pub max_bytes: u64,
+    /// Records may be up to 4 MiB and are stored as blobs.
+    pub large: bool,
+}
+
+/// The validated `sync` block.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SyncDecl {
+    pub description: Option<String>,
+    pub schema: u32,
+    /// Keys mode: storage keys, exact or with a trailing `*`.
+    pub keys: Vec<SensitiveKeyPattern>,
+    /// Lists mode, by storage key.
+    pub lists: std::collections::BTreeMap<String, SyncListDecl>,
+    /// Collections mode, by name.
+    pub collections: std::collections::BTreeMap<String, SyncCollectionDecl>,
+}
+
+impl SyncDecl {
+    /// Whether keys mode covers `key`. A lists key never is.
+    pub fn key_syncs(&self, key: &str) -> bool {
+        !self.lists.contains_key(key) && self.keys.iter().any(|p| p.matches(key))
+    }
+}
+
+/// Whether `name` is a valid collection name: `^[a-z][a-z0-9_]{0,31}$`.
+pub fn valid_collection_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    name.len() <= 32
+        && chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// Whether `name` can be a top-level record field a cell carries.
+pub fn valid_sync_field(name: &str) -> bool {
+    crate::sync::split::valid_field_name(name) && name.len() <= 128
+}
+
+fn sync_field_list(v: Option<&serde_json::Value>) -> Option<Vec<String>> {
+    match v {
+        None => Some(Vec::new()),
+        Some(serde_json::Value::Array(a)) => a
+            .iter()
+            .map(|x| {
+                x.as_str()
+                    .filter(|s| valid_sync_field(s))
+                    .map(str::to_string)
+            })
+            .collect(),
+        Some(_) => None,
+    }
+}
+
+fn optional_sync_field(v: Option<&serde_json::Value>) -> Result<Option<String>, ()> {
+    match v {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(s)) if valid_sync_field(s) => Ok(Some(s.clone())),
+        Some(_) => Err(()),
+    }
+}
+
+/// One collection entry, or why it is ignored.
+fn sync_collection(raw: &serde_json::Value) -> Result<SyncCollectionDecl, &'static str> {
+    let o = raw.as_object().ok_or("must be an object")?;
+    let flag = |k: &str| match o.get(k) {
+        None => Ok(false),
+        Some(serde_json::Value::Bool(b)) => Ok(*b),
+        Some(_) => Err("whole and large must be true or false"),
+    };
+    let whole = flag("whole")?;
+    let large = flag("large")?;
+    let cap = if large {
+        MAX_LARGE_RECORD_BYTES
+    } else {
+        MAX_RECORD_BYTES
+    };
+    let max_bytes = match o.get("maxBytes") {
+        None => DEFAULT_RECORD_BYTES,
+        Some(v) => match v.as_u64() {
+            Some(n) if (1..=cap).contains(&n) => n,
+            _ => return Err("maxBytes is out of range"),
+        },
+    };
+    let together: Vec<Vec<String>> = match o.get("together") {
+        None => Vec::new(),
+        Some(serde_json::Value::Array(groups)) => groups
+            .iter()
+            .map(|g| sync_field_list(Some(g)).filter(|g| !g.is_empty()))
+            .collect::<Option<_>>()
+            .ok_or("together must be a list of lists of field names")?,
+        Some(_) => return Err("together must be a list of lists of field names"),
+    };
+    let sets = sync_field_list(o.get("sets")).ok_or("sets must be a list of field names")?;
+    let maps = sync_field_list(o.get("maps")).ok_or("maps must be a list of field names")?;
+    let local = sync_field_list(o.get("local")).ok_or("local must be a list of field names")?;
+    let mut seen = std::collections::BTreeSet::new();
+    for f in together
+        .iter()
+        .flatten()
+        .chain(&sets)
+        .chain(&maps)
+        .chain(&local)
+    {
+        if f == "id" {
+            return Err("can't name the id field");
+        }
+        if !seen.insert(f.as_str()) {
+            return Err("has fields in more than one of together, sets, maps and local");
+        }
+    }
+    let label = optional_sync_field(o.get("label")).map_err(|_| "label must be a field name")?;
+    let private =
+        optional_sync_field(o.get("private")).map_err(|_| "private must be a field name")?;
+    Ok(SyncCollectionDecl {
+        whole,
+        together,
+        sets,
+        maps,
+        local,
+        label,
+        private,
+        max_bytes,
+        large,
+    })
+}
+
+/// Whether a storage key (or a key pattern's literal part) names
+/// credentials: the manifest's `sensitiveData` or the safety net.
+fn sensitive_key(key: &str, sensitive: &[SensitiveKeyPattern]) -> bool {
+    is_sensitive_name(key) || sensitive.iter().any(|p| p.matches(key))
+}
+
+/// Validate a manifest's raw `sync` block, following the
+/// [`normalize_sensitive_data`] contract: a malformed part is ignored with
+/// a warning and the rest still loads. A block on a manifest without the
+/// `sync` permission (`permissions`, normalised) is ignored: only
+/// settings sync then. Keys and lists that `sensitiveData` or the safety
+/// net match are dropped: they never sync.
+pub fn normalize_sync(
+    raw: Option<&serde_json::Value>,
+    permissions: &[String],
+    sensitive: &[SensitiveKeyPattern],
+    context: &str,
+) -> Option<SyncDecl> {
+    let obj = match raw {
+        None | Some(serde_json::Value::Null) => return None,
+        Some(serde_json::Value::Object(o)) => o,
+        Some(_) => {
+            log::warn!("Extension '{}': sync must be an object — ignored", context);
+            return None;
+        }
+    };
+    if !permissions.iter().any(|p| p == "sync") {
+        log::warn!(
+            "Extension '{}': a sync block without the sync permission is ignored; only settings sync",
+            context
+        );
+        return None;
+    }
+    let mut out = SyncDecl {
+        schema: 1,
+        ..SyncDecl::default()
+    };
+    match obj.get("description") {
+        None | Some(serde_json::Value::Null) => {}
+        Some(serde_json::Value::String(s)) if s.chars().count() <= MAX_SYNC_DESCRIPTION => {
+            out.description = Some(s.clone());
+        }
+        Some(_) => log::warn!(
+            "Extension '{}': sync.description must be text of at most {} characters — ignored",
+            context,
+            MAX_SYNC_DESCRIPTION
+        ),
+    }
+    if let Some(v) = obj.get("schema") {
+        match v.as_u64().and_then(|n| u32::try_from(n).ok()) {
+            Some(n) if n >= 1 => out.schema = n,
+            _ => log::warn!(
+                "Extension '{}': sync.schema must be a whole number from 1 — using 1",
+                context
+            ),
+        }
+    }
+    normalize_sync_keys(obj.get("keys"), sensitive, context, &mut out);
+    normalize_sync_lists(obj.get("lists"), sensitive, context, &mut out);
+    match obj.get("collections") {
+        None => {}
+        Some(serde_json::Value::Object(colls)) => {
+            for (i, (name, decl)) in colls.iter().enumerate() {
+                if i >= MAX_SYNC_COLLECTIONS {
+                    log::warn!(
+                        "Extension '{}': sync.collections has more than {} entries; the rest are ignored",
+                        context,
+                        MAX_SYNC_COLLECTIONS
+                    );
+                    break;
+                }
+                if !valid_collection_name(name) {
+                    log::warn!(
+                        "Extension '{}': sync.collections name {:?} is invalid — ignored",
+                        context,
+                        name
+                    );
+                    continue;
+                }
+                match sync_collection(decl) {
+                    Ok(d) => {
+                        out.collections.insert(name.clone(), d);
+                    }
+                    Err(why) => log::warn!(
+                        "Extension '{}': sync.collections.{} {} — ignored",
+                        context,
+                        name,
+                        why
+                    ),
+                }
+            }
+        }
+        Some(_) => log::warn!(
+            "Extension '{}': sync.collections must be an object — ignored",
+            context
+        ),
+    }
+    Some(out)
+}
+
+fn normalize_sync_keys(
+    raw: Option<&serde_json::Value>,
+    sensitive: &[SensitiveKeyPattern],
+    context: &str,
+    out: &mut SyncDecl,
+) {
+    let list = match raw {
+        None => return,
+        Some(serde_json::Value::Array(list)) => list,
+        Some(_) => {
+            log::warn!(
+                "Extension '{}': sync.keys must be a list — ignored",
+                context
+            );
+            return;
+        }
+    };
+    for (i, entry) in list.iter().enumerate() {
+        if i >= MAX_SYNC_KEYS {
+            log::warn!(
+                "Extension '{}': sync.keys has more than {} entries; the rest are ignored",
+                context,
+                MAX_SYNC_KEYS
+            );
+            break;
+        }
+        let Some(text) = entry.as_str() else {
+            log::warn!(
+                "Extension '{}': sync.keys entry {} is not text — ignored",
+                context,
+                i
+            );
+            continue;
+        };
+        match SensitiveKeyPattern::parse(text) {
+            Ok(p) => {
+                let literal = text.trim_end_matches('*');
+                if !literal.is_empty() && sensitive_key(literal, sensitive) {
+                    log::warn!(
+                        "Extension '{}': sync.keys entry {:?} names sensitive data; it never syncs",
+                        context,
+                        text
+                    );
+                } else if !out.keys.contains(&p) {
+                    out.keys.push(p);
+                }
+            }
+            Err(e) => log::warn!(
+                "Extension '{}': invalid sync.keys entry {:?} ({}) — ignored",
+                context,
+                text,
+                e
+            ),
+        }
+    }
+}
+
+fn normalize_sync_lists(
+    raw: Option<&serde_json::Value>,
+    sensitive: &[SensitiveKeyPattern],
+    context: &str,
+    out: &mut SyncDecl,
+) {
+    let lists = match raw {
+        None => return,
+        Some(serde_json::Value::Object(lists)) => lists,
+        Some(_) => {
+            log::warn!(
+                "Extension '{}': sync.lists must be an object — ignored",
+                context
+            );
+            return;
+        }
+    };
+    for (i, (key, decl)) in lists.iter().enumerate() {
+        if i >= MAX_SYNC_LISTS {
+            log::warn!(
+                "Extension '{}': sync.lists has more than {} entries; the rest are ignored",
+                context,
+                MAX_SYNC_LISTS
+            );
+            break;
+        }
+        if validate_data_key(key).is_err() || sensitive_key(key, sensitive) {
+            log::warn!(
+                "Extension '{}': sync.lists key {:?} is not a storage key it may sync — ignored",
+                context,
+                key
+            );
+            continue;
+        }
+        let parsed = decl.as_object().and_then(|o| {
+            let array = match o.get("array") {
+                Some(serde_json::Value::String(a)) if a.is_empty() || valid_sync_field(a) => {
+                    a.clone()
+                }
+                _ => return None,
+            };
+            let id = o
+                .get("id")
+                .and_then(|v| v.as_str())
+                .filter(|s| valid_sync_field(s))?
+                .to_string();
+            let label = optional_sync_field(o.get("label")).ok()?;
+            Some(SyncListDecl { array, id, label })
+        });
+        match parsed {
+            Some(d) => {
+                out.lists.insert(key.clone(), d);
+            }
+            None => log::warn!(
+                "Extension '{}': sync.lists.{} needs array and id field names — ignored",
+                context,
+                key
+            ),
+        }
+    }
+}
+
+/// The lock `save_extension_data`, `delete_extension_data` and folder
+/// sync's projection take around a write of one data key, so a synced
+/// value never lands half-way through an extension's own save
+/// (docs/design/SYNC.md §12.4). Keys fold to lowercase, as the macOS and
+/// Windows file systems do.
+pub fn data_key_lock(extension_id: &str, key: &str) -> std::sync::Arc<std::sync::Mutex<()>> {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    type Locks = Mutex<HashMap<(String, String), Arc<Mutex<()>>>>;
+    static LOCKS: std::sync::LazyLock<Locks> =
+        std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+    let mut map = LOCKS.lock().unwrap_or_else(|e| e.into_inner());
+    if map.len() > 4096 {
+        // Locks nobody holds can go; they are made again on demand.
+        map.retain(|_, l| Arc::strong_count(l) > 1);
+    }
+    map.entry((extension_id.to_string(), key.to_ascii_lowercase()))
+        .or_default()
+        .clone()
+}
 
 /// Canonical list of valid capability names. Must stay in sync with
 /// `CAPABILITIES` in `ui/js/shared/extension-permissions.js`.
@@ -366,6 +807,7 @@ pub const VALID_CAPABILITIES: &[&str] = &[
     "views",
     "file_text",
     "agent_background",
+    "sync",
 ];
 
 /// Filter a raw permission list to a deduped, lowercase set of known
@@ -430,6 +872,11 @@ pub struct ExtensionManifest {
     /// [`ExtensionManifest::agent_background_decl`].
     #[serde(default, rename = "agentBackground")]
     pub agent_background: Option<serde_json::Value>,
+    /// The `sync` block: what of the extension's data folder sync copies
+    /// (`sync` capability, docs/design/SYNC.md §12.2). Kept raw, like
+    /// `sensitiveData`; read it through [`ExtensionManifest::sync_decl`].
+    #[serde(default)]
+    pub sync: Option<serde_json::Value>,
 }
 
 impl ExtensionManifest {
@@ -450,6 +897,18 @@ impl ExtensionManifest {
         self.agent_background
             .as_ref()
             .and_then(crate::agent_calls::AgentBackgroundDecl::from_manifest)
+    }
+
+    /// The validated `sync` block (see [`normalize_sync`]). `None` when it
+    /// is absent, malformed, or the manifest doesn't ask for `sync`.
+    pub fn sync_decl(&self) -> Option<SyncDecl> {
+        let perms = normalize_permissions(self.permissions.as_deref().unwrap_or(&[]), &self.id);
+        normalize_sync(
+            self.sync.as_ref(),
+            &perms,
+            &self.sensitive_data_patterns(),
+            &self.id,
+        )
     }
 
     /// The valid `contributes.views` entries (see [`views::normalize_views`]).
@@ -935,6 +1394,153 @@ mod tests {
         ] {
             assert!(!is_sensitive_name(name), "{} should not match", name);
         }
+    }
+
+    #[test]
+    fn sync_is_a_valid_capability() {
+        assert!(VALID_CAPABILITIES.contains(&"sync"));
+    }
+
+    fn sync_manifest(sync: serde_json::Value) -> ExtensionManifest {
+        parse_manifest(serde_json::json!({
+            "permissions": ["storage", "sync"],
+            "sensitiveData": ["creds", "auth_*"],
+            "sync": sync
+        }))
+    }
+
+    #[test]
+    fn a_full_sync_block_normalizes() {
+        let d = sync_manifest(serde_json::json!({
+            "description": "__MSG_sync.description__",
+            "schema": 2,
+            "keys": ["prefs", "view-*"],
+            "lists": { "todos": { "array": "items", "id": "id", "label": "title" },
+                       "plain": { "array": "", "id": "key" } },
+            "collections": {
+                "items": {
+                    "label": "title", "private": "private", "maxBytes": 65536,
+                    "together": [["status", "doneAt"], ["title", "titleSource"]],
+                    "sets": ["entityIds"], "maps": ["mentionOrigin"], "local": ["rev"]
+                },
+                "bodies": { "whole": true, "large": true, "maxBytes": 4194304 }
+            }
+        }))
+        .sync_decl()
+        .expect("a valid block");
+        assert_eq!(d.description.as_deref(), Some("__MSG_sync.description__"));
+        assert_eq!(d.schema, 2);
+        assert!(d.key_syncs("prefs") && d.key_syncs("view-main") && !d.key_syncs("other"));
+        assert!(
+            !d.key_syncs("todos"),
+            "a lists key is never a keys-mode key"
+        );
+        assert_eq!(d.lists["todos"].label.as_deref(), Some("title"));
+        assert_eq!(d.lists["plain"].array, "");
+        let items = &d.collections["items"];
+        assert_eq!(items.together.len(), 2);
+        assert_eq!(items.max_bytes, 65_536);
+        assert!(!items.whole && !items.large);
+        let bodies = &d.collections["bodies"];
+        assert!(bodies.whole && bodies.large);
+        assert_eq!(bodies.max_bytes, MAX_LARGE_RECORD_BYTES);
+    }
+
+    #[test]
+    fn a_malformed_sync_part_is_ignored_and_the_rest_loads() {
+        let d = sync_manifest(serde_json::json!({
+            "description": "x".repeat(141),
+            "schema": 0,
+            "keys": ["prefs", "creds", "auth_token", "token", "bad key", 3, "ok-*"],
+            "lists": {
+                "todos": { "array": "items", "id": "id" },
+                "nolist": { "array": "items" },
+                "creds": { "array": "", "id": "id" },
+                "../x": { "array": "", "id": "id" }
+            },
+            "collections": {
+                "Items": {},
+                "overlap": { "sets": ["a"], "local": ["a"] },
+                "idfield": { "sets": ["id"] },
+                "big": { "maxBytes": 2000000 },
+                "bigok": { "maxBytes": 2000000, "large": true },
+                "fine": {}
+            }
+        }))
+        .sync_decl()
+        .expect("the valid parts load");
+        assert_eq!(d.description, None, "over 140 characters");
+        assert_eq!(d.schema, 1);
+        assert_eq!(
+            d.keys,
+            vec![
+                SensitiveKeyPattern::Exact("prefs".into()),
+                SensitiveKeyPattern::Prefix("ok-".into())
+            ],
+            "sensitive keys (declared or by the safety net) never sync"
+        );
+        assert_eq!(d.lists.keys().collect::<Vec<_>>(), ["todos"]);
+        let colls: Vec<&String> = d.collections.keys().collect();
+        assert_eq!(colls, ["bigok", "fine"]);
+        assert_eq!(d.collections["fine"].max_bytes, DEFAULT_RECORD_BYTES);
+    }
+
+    #[test]
+    fn a_sync_block_needs_the_sync_permission() {
+        let m = parse_manifest(serde_json::json!({
+            "permissions": ["storage"],
+            "sync": { "keys": ["prefs"] }
+        }));
+        assert!(m.sync_decl().is_none(), "only settings sync without it");
+        assert!(parse_manifest(serde_json::json!({})).sync_decl().is_none());
+        let m = parse_manifest(serde_json::json!({
+            "permissions": ["sync"],
+            "sync": ["prefs"]
+        }));
+        assert!(m.sync_decl().is_none(), "not an object");
+        let too_many: Vec<String> = (0..40).map(|i| format!("k{i}")).collect();
+        let d = sync_manifest(serde_json::json!({ "keys": too_many }))
+            .sync_decl()
+            .unwrap();
+        assert_eq!(d.keys.len(), MAX_SYNC_KEYS);
+    }
+
+    #[test]
+    fn config_fields_read_their_sync_scope() {
+        let m = parse_manifest(serde_json::json!({
+            "config": {
+                "a": { "type": "string", "sync": "shared" },
+                "b": { "type": "string", "sync": "os" },
+                "c": { "type": "boolean", "sync": "machine" },
+                "d": { "type": "boolean", "sync": "never" },
+                "e": { "type": "boolean", "sync": "everywhere" },
+                "f": { "type": "boolean" }
+            }
+        }));
+        let by = |f: &str| {
+            m.config_field_decls()
+                .into_iter()
+                .find(|d| d.field == f)
+                .unwrap()
+                .sync
+        };
+        assert_eq!(by("a"), Some(SyncScopeDecl::Shared));
+        assert_eq!(by("b"), Some(SyncScopeDecl::Os));
+        assert_eq!(by("c"), Some(SyncScopeDecl::Machine));
+        assert_eq!(by("d"), Some(SyncScopeDecl::Never));
+        assert_eq!(by("e"), None, "an unknown value is ignored");
+        assert_eq!(by("f"), None);
+    }
+
+    #[test]
+    fn the_data_key_lock_is_shared_per_key_ignoring_case() {
+        let a = data_key_lock("lock-test", "Prefs");
+        let b = data_key_lock("lock-test", "prefs");
+        assert!(std::sync::Arc::ptr_eq(&a, &b));
+        assert!(!std::sync::Arc::ptr_eq(
+            &a,
+            &data_key_lock("lock-test", "other")
+        ));
     }
 
     #[test]
