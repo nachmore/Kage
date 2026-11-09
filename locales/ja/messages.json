@@ -10186,5 +10186,71 @@
     "description": "Small badge next to an extension in the Settings sidebar after Update all updated it; cleared when Settings closes",
     "_machine_translated": true,
     "_source_hash": "d747ffeba0ebb293"
+  },
+  "errors.spell_check.invalid_word": {
+    "message": "スペル辞書に追加できるのは 1 つの単語のみです。",
+    "description": "Learn spelling (right-click menu) was asked to learn empty text, several words, or an overly long word",
+    "_machine_translated": true,
+    "_source_hash": "39135470640fab22"
+  },
+  "context_menu.no_guesses": {
+    "message": "候補が見つかりません",
+    "description": "Right-click menu on a misspelled word — shown (disabled) when the spell checker has no replacement to suggest",
+    "_machine_translated": true,
+    "_source_hash": "3eeb18806e76fde1"
+  },
+  "context_menu.learn_spelling": {
+    "message": "スペルを学習",
+    "description": "Right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged",
+    "_machine_translated": true,
+    "_source_hash": "6803872d0761ede6"
+  },
+  "command.update.description": {
+    "message": "アップデートを確認して今すぐインストールします",
+    "description": ">update command description",
+    "_machine_translated": true,
+    "_source_hash": "546c0c58d70f3e2f"
+  },
+  "command.update.checking": {
+    "message": "_アップデートを確認しています…_",
+    "description": "Status line shown while >update polls for updates (italic markdown)",
+    "_machine_translated": true,
+    "_source_hash": "33fb4cd66b83520a"
+  },
+  "command.update.up_to_date": {
+    "message": "✓ 最新バージョンです (v{version})。",
+    "description": "Status shown by >update when on the latest version ({version} = e.g. 0.9.0)",
+    "_machine_translated": true,
+    "_source_hash": "5451d1a8db69476a"
+  },
+  "command.update.installing": {
+    "message": "⬆ v{version} にアップデートしています。インストールが完了すると Kage が再起動します。",
+    "description": "Status shown by >update while it downloads and installs an update ({version} = the new version)",
+    "_machine_translated": true,
+    "_source_hash": "d8cd4eca338bb79a"
+  },
+  "command.update.already_running": {
+    "message": "⏳ すでにアップデートを確認またはインストールしています。しばらくお待ちください。",
+    "description": "Response when >update is run again while an earlier >update is still checking or installing",
+    "_machine_translated": true,
+    "_source_hash": "7c437db61f328bd4"
+  },
+  "command.update.check_failed": {
+    "message": "✕ アップデートを確認できませんでした",
+    "description": "Error label when >update's update check fails; the error message follows after a colon",
+    "_machine_translated": true,
+    "_source_hash": "9124e7fe89cdb9ad"
+  },
+  "command.update.install_failed": {
+    "message": "✕ アップデートをインストールできませんでした",
+    "description": "Error label when >update's download or install fails; the error message follows after a colon",
+    "_machine_translated": true,
+    "_source_hash": "188d28d692d05396"
+  },
+  "errors.update.install_in_progress": {
+    "message": "アップデートはすでにダウンロードおよびインストール中です。完了すると Kage が再起動します。",
+    "description": "Returned when an update install is started (Install now / >update / Settings) while another one is still running",
+    "_machine_translated": true,
+    "_source_hash": "84cc11e42e58b662"
   }
 }

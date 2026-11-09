@@ -10186,5 +10186,71 @@
     "description": "Small badge next to an extension in the Settings sidebar after Update all updated it; cleared when Settings closes",
     "_machine_translated": true,
     "_source_hash": "d747ffeba0ebb293"
+  },
+  "errors.spell_check.invalid_word": {
+    "message": "Es kann nur ein einzelnes Wort zum Wörterbuch hinzugefügt werden.",
+    "description": "Learn spelling (right-click menu) was asked to learn empty text, several words, or an overly long word",
+    "_machine_translated": true,
+    "_source_hash": "39135470640fab22"
+  },
+  "context_menu.no_guesses": {
+    "message": "Keine Vorschläge gefunden",
+    "description": "Right-click menu on a misspelled word — shown (disabled) when the spell checker has no replacement to suggest",
+    "_machine_translated": true,
+    "_source_hash": "3eeb18806e76fde1"
+  },
+  "context_menu.learn_spelling": {
+    "message": "Schreibweise lernen",
+    "description": "Right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged",
+    "_machine_translated": true,
+    "_source_hash": "6803872d0761ede6"
+  },
+  "command.update.description": {
+    "message": "Nach einem Update suchen und es jetzt installieren",
+    "description": ">update command description",
+    "_machine_translated": true,
+    "_source_hash": "546c0c58d70f3e2f"
+  },
+  "command.update.checking": {
+    "message": "_Suche nach Updates…_",
+    "description": "Status line shown while >update polls for updates (italic markdown)",
+    "_machine_translated": true,
+    "_source_hash": "33fb4cd66b83520a"
+  },
+  "command.update.up_to_date": {
+    "message": "✓ Sie sind auf dem neuesten Stand (v{version}).",
+    "description": "Status shown by >update when on the latest version ({version} = e.g. 0.9.0)",
+    "_machine_translated": true,
+    "_source_hash": "5451d1a8db69476a"
+  },
+  "command.update.installing": {
+    "message": "⬆ Update auf v{version} – Kage wird nach der Installation neu gestartet.",
+    "description": "Status shown by >update while it downloads and installs an update ({version} = the new version)",
+    "_machine_translated": true,
+    "_source_hash": "d8cd4eca338bb79a"
+  },
+  "command.update.already_running": {
+    "message": "⏳ Es wird bereits nach einem Update gesucht oder eines installiert – bitte warten Sie.",
+    "description": "Response when >update is run again while an earlier >update is still checking or installing",
+    "_machine_translated": true,
+    "_source_hash": "7c437db61f328bd4"
+  },
+  "command.update.check_failed": {
+    "message": "✕ Suche nach Updates fehlgeschlagen",
+    "description": "Error label when >update's update check fails; the error message follows after a colon",
+    "_machine_translated": true,
+    "_source_hash": "9124e7fe89cdb9ad"
+  },
+  "command.update.install_failed": {
+    "message": "✕ Update konnte nicht installiert werden",
+    "description": "Error label when >update's download or install fails; the error message follows after a colon",
+    "_machine_translated": true,
+    "_source_hash": "188d28d692d05396"
+  },
+  "errors.update.install_in_progress": {
+    "message": "Ein Update wird bereits heruntergeladen und installiert. Kage wird danach neu gestartet.",
+    "description": "Returned when an update install is started (Install now / >update / Settings) while another one is still running",
+    "_machine_translated": true,
+    "_source_hash": "84cc11e42e58b662"
   }
 }
