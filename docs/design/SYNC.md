@@ -575,7 +575,16 @@ tag     16 bytes
 
 - AAD: `"kage-sync|1|" + folder_id + "|" + device_id + "|" + kind + "|" + file_name`.
   A file copied into another device's directory, renamed, or moved to
-  another folder fails to open.
+  another folder fails to open. `kind` is the header's letter (`H`, `S`,
+  `B`); `file_name` is the whole name, with `.kage`.
+- `deflate` is raw DEFLATE (RFC 1951). Golden files of version 1 are in
+  `tests/fixtures/sync/envelope/`.
+- Limits, checked before decrypting (sealed size) and while inflating
+  (plaintext): head 64 KiB, shard 4 MiB, blob 16 MiB of plaintext (a chat
+  of 8 MiB escaped as JSON). A file over them opens as `TooLarge`.
+- A file shorter than the header and tag opens as `Truncated`; one cut
+  later fails its tag (`BadTag`), as the format has no length field. A
+  file of zeros (a download not filled in yet) is `Truncated` too.
 - Shard and blob names are `hex(HMAC-SHA256(name key, canonical plaintext))[..32]`.
   After decrypting, the reader recomputes the HMAC and requires it to
   equal the name. Two computers with the same state produce the same
@@ -1747,6 +1756,21 @@ Key file (plain JSON, written once by one computer):
 - **Every computer loses its key**: the data on each computer is
   untouched. "Start over" makes a new folder from one computer.
 - The DEK lives in memory in `Zeroizing` buffers.
+- Fixed labels (v1, golden vectors in `sync::crypto`'s tests): HKDF-SHA256
+  of the DEK with no salt and the infos `kage-sync/v1/enc`,
+  `kage-sync/v1/name` and `kage-sync/v1/extdev`. A bucket is the first two
+  bytes of `HMAC-SHA256(name, ns "|" id)`, big-endian, modulo the count. A
+  device tag is `HKDF-Expand(extdev, "kage-sync/v1/ext-device|" ext "|"
+  device)`, 12 bytes as 24 lowercase hex characters.
+- Argon2 gets the passphrase in NFC, so a passphrase typed on macOS and
+  on Windows gives the same key. A passphrase that reads as a generated
+  one (25 Crockford characters, any case, with or without the dashes and
+  spaces, `I`/`L` for `1`, `O` for `0`) is used in its canonical
+  `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX` form.
+- Unwrapping refuses a key file whose AAD doesn't name this folder and
+  its epoch (`Malformed`), and one asking for more than 256 MiB, t = 8 or
+  p = 4 (`UnsupportedKdf`): a key file is plain JSON anyone with write
+  access to the folder could plant.
 
 ### 11.4 Key store
 
@@ -1778,6 +1802,14 @@ launch path.
     `CRED_PERSIST_LOCAL_MACHINE`, never `CRED_PERSIST_ENTERPRISE` (which
     roams with a roaming profile, and is the default of some key store
     crates).
+- The stored value is 37 bytes: version `1`, the epoch as u32 LE, the
+  DEK. `key.bin` is `{ "v": 1, "keys": { "<folder_id>": "<base64>" } }`.
+- Linux never shows a Secret Service prompt: a locked collection fails
+  as unavailable, which is the "Keychain entry gone or denied" row of §15.
+- `default_key_store` is the selection above, for a new setup.
+  `key_store_for(kind)` reopens the store `DevicePrefs::key_store`
+  recorded, so a key kept in the file is still found after an update makes
+  the keychain reliable. `file_key_store` is the store §15 offers.
 - Settings → Sync → Advanced shows where the key is kept.
 
 ### 11.5 What counts as a credential
@@ -2079,7 +2111,8 @@ Host semantics:
 - **Schema.** Records carry the manifest's `sync.schema`. An older
   extension version doesn't receive newer-schema records, and a push for
   such an id returns `newer_schema`.
-- **Device tag.** `deviceTag` is `HKDF(extdev, extension id ‖ device id)[..12]`:
+- **Device tag.** `deviceTag` is `HKDF(extdev, extension id ‖ device id)[..12]`,
+  as 24 lowercase hex characters (§11.3):
   stable per extension, not linkable across extensions, meaningless
   outside your computers.
 - **Ids** match `^[A-Za-z0-9_.:-]{1,128}$`.
@@ -2449,10 +2482,13 @@ syncing until you join them again. Their settings stay as they are.
 ### 14.2 Threads
 
 - One `kage-sync` engine thread owns the replica and does all the work.
-- A `kage-sync-io` pool of 2 threads does folder reads, with a 20-second
-  timeout each. A read stuck in a cloud driver is abandoned. At most 4
-  abandoned threads; then the status says the folder isn't responding and
-  sync pauses for 10 minutes.
+- A `kage-sync-io` pool of 2 threads does all folder I/O: reads with a
+  20-second timeout each, listings with 20 seconds, writes, renames and
+  removes with 60. A call stuck in a cloud driver is abandoned and its
+  thread replaced. At most 4 abandoned threads; then every call fails at
+  once with `fsio::Unresponsive`, the status says the folder isn't
+  responding, and sync pauses for 10 minutes. The threads start on the
+  first call, not at app start.
 - Argon2 runs on the engine thread only at setup, join, unlock and
   passphrase change.
 - Tauri commands send a request over a channel and wait with a timeout.
@@ -2836,7 +2872,11 @@ WP-S1 lands **C0** before anyone else branches. It:
 
 After C0, each file belongs to the package that owns it in §20. Later
 EN strings go through fragments `docs/design/sync-i18n/<wp>.en.json`,
-which WP-S6 merges into the catalog and deletes.
+which WP-S6 merges into the catalog and deletes. Exception: WP-S2's Rust
+code returns `settings.sync.folder.reason.*` keys, which its tests check
+against the EN catalog, so WP-S2 added those 12 keys to
+`locales/en/messages.json` directly; the other catalogs need a
+`scripts/translate.py` run.
 
 ### 19.2 Core (WP-S1): `src/sync/types.rs`, `hlc.rs`, `merge.rs`, `scope.rs`, `split.rs`, `canonical.rs`, `replica.rs`, `conflicts.rs`
 
@@ -3006,6 +3046,55 @@ pub fn set(service: &str, account: &str, secret: &[u8]) -> anyhow::Result<()>;
 pub fn delete(service: &str, account: &str) -> anyhow::Result<()>;
 pub fn keychain_is_reliable() -> bool;   // macOS: stable Developer ID signature
 ```
+
+What WP-S2 built, beyond the signatures above:
+- `SyncFs` semantics. `write_once`, `create_new` and `rename` fail with
+  `AlreadyExists` rather than replace a file. `read` fails with
+  `FileTooLarge` past `max_len` and with `TimedOut` past its timeout.
+  `list` leaves out links and names that aren't UTF-8. `remove` takes a
+  file or a whole directory. A link inside the folder fails the call
+  (`fsio::is_link_refused`); an exhausted pool fails it at once
+  (`fsio::is_unresponsive`); `fsio::is_sharing_violation` matches a
+  Windows sharing violation and `FaultyFs`'s fake one. `RealFs::stats()`
+  reports the pool's threads.
+- `envelope`: `max_plain(kind)` and `max_sealed(kind)` (pass the latter
+  to `read`), `peek_epoch(bytes)`, `seal_with_nonce` (golden files only).
+- `crypto`: `random_id()` (a folder or device id), `device_text`,
+  `parse_device_text`, `is_id_text` (WP-S1's text form of `DeviceId` may
+  replace the first two), `normalize_passphrase`, and `wrap_dek_with` at
+  a cheap `KdfCost` for tests.
+- `keystore`: `key_store_for(kind, dir)`, `file_key_store(dir)`,
+  `KeyStoreKind::wire()`/`from_wire()` for `DevicePrefs::key_store`,
+  `StoredKey::new`, and `KeyStoreError` (`Denied`, `Unavailable`) inside
+  the stores' errors.
+- `folder`: `Layout::{in_chosen, resolve, descriptor, keys_dir,
+  device_dir, shards_dir, blobs_dir, archive_dir, …}` (`resolve` takes the
+  picked folder itself when it already holds `kage-sync.json`),
+  `head_name`, `data_name`, `key_file_name`, `write_key_file` (the next
+  key file of this computer, for Change passphrase), and `NotReady`
+  (`is_not_ready`): `read_descriptor` returns it when a descriptor exists
+  but isn't downloaded or readable yet, never `None`. With two
+  descriptors it returns the §5.3 winner. `create_folder` writes the key
+  file, the README and, last, the descriptor; if the descriptor exists,
+  it removes its key file again and fails with `AlreadyExists`.
+  `inspect_in` takes the forbidden `Places` so tests can use temp
+  folders. `FolderInfo::reason` is `settings.sync.folder.reason.<why>`:
+  `missing`, `not_a_folder`, `drive_root`, `kage_folder`, `temp`,
+  `read_only`, `denied`, `unreadable`, `not_responding`, `inside_sync`,
+  `not_downloaded`, `incomplete`. A new folder whose provider is `Other`
+  is `unknown_sync`.
+- `os::secret_store`: `SecretError` (`Denied`, `Unavailable`,
+  `Isolated`), `backend()`, and `os_calls()` for the isolation test.
+  `Provider::FileProvider` also covers other Windows Cloud Files apps.
+- `testing`: `FaultyFs` is one computer's view of the folder; a simulated
+  cloud copies between several with `put`, `get`, `delete`, `snapshot`
+  and `restore`. Faults (`Fault::{NoSpace, Denied, ReadOnly, Sharing,
+  Slow, Hang, Missing}`) aim at an `FsOp` under a path, always or for N
+  calls. `Hang` fails with `TimedOut` at once, without waiting.
+  `MemoryKeyStore::fail(KeyFault::{NotFound, Denied, Unavailable})`,
+  `FakeCloudFiles::{set_residency, download_requests,
+  complete_downloads, fail_pinning, …}`, `FakeClock::{advance,
+  set_power}`.
 
 ### 19.4 Engine (WP-S3): `src/sync/mod.rs`, `engine.rs`, `ingest.rs`, `publish.rs`, `gc.rs`, `identity.rs`, `membership.rs`, `guards.rs`, `scheduler.rs`, `status.rs`, `prefs.rs`, `catalog.rs`, `sources.rs`, `sources/{config,lists,steering,chats}.rs`
 

@@ -7601,6 +7601,54 @@
     "message": "Its data stays in your sync folder and on your other computers. To delete it everywhere, use Settings → Sync → Extensions → Remove its data from the sync folder.",
     "description": "Added to the uninstall confirmation of an extension whose data syncs."
   },
+  "settings.sync.folder.reason.missing": {
+    "message": "This folder doesn't exist.",
+    "description": "Sync setup, choosing a folder: why the picked folder can't be used."
+  },
+  "settings.sync.folder.reason.not_a_folder": {
+    "message": "That's a file, not a folder.",
+    "description": "Sync setup, choosing a folder: the picked path, or the “Kage Sync” inside it, is a file."
+  },
+  "settings.sync.folder.reason.drive_root": {
+    "message": "Choose a folder, not the top of a drive.",
+    "description": "Sync setup, choosing a folder: the user picked a drive root such as C:\\ or /."
+  },
+  "settings.sync.folder.reason.kage_folder": {
+    "message": "This is one of Kage's own folders. Choose a folder that your sync app syncs.",
+    "description": "Sync setup, choosing a folder: the folder is inside Kage's settings or data folders."
+  },
+  "settings.sync.folder.reason.temp": {
+    "message": "This is a temporary folder. Its files can be deleted at any time.",
+    "description": "Sync setup, choosing a folder: the folder is inside the system's temporary folder."
+  },
+  "settings.sync.folder.reason.read_only": {
+    "message": "Kage can't create files in this folder.",
+    "description": "Sync setup, choosing a folder: the folder is read-only."
+  },
+  "settings.sync.folder.reason.denied": {
+    "message": "Kage isn't allowed to open this folder.",
+    "description": "Sync setup, choosing a folder: the OS denied access to the folder."
+  },
+  "settings.sync.folder.reason.unreadable": {
+    "message": "Kage can't read this folder.",
+    "description": "Sync setup, choosing a folder: listing or reading the folder failed for another reason."
+  },
+  "settings.sync.folder.reason.not_responding": {
+    "message": "This folder isn't responding. Check that your sync app is running, then try again.",
+    "description": "Sync setup, choosing a folder: reading the folder timed out (for example a stalled cloud drive)."
+  },
+  "settings.sync.folder.reason.inside_sync": {
+    "message": "This folder is inside a “Kage Sync” folder. Choose the folder that holds “Kage Sync”.",
+    "description": "Sync setup, choosing a folder: the user picked a folder inside Kage's own sync folder structure. “Kage Sync” is the folder name and stays untranslated."
+  },
+  "settings.sync.folder.reason.not_downloaded": {
+    "message": "This folder hasn't finished downloading. Try again in a moment.",
+    "description": "Sync setup, choosing a folder: the sync folder's files are still placeholders in the cloud app."
+  },
+  "settings.sync.folder.reason.incomplete": {
+    "message": "This “Kage Sync” folder is missing a file. Wait for your sync app to finish, or choose another folder.",
+    "description": "Sync setup, choosing a folder: the folder has computers' data but no kage-sync.json. “Kage Sync” is the folder name and stays untranslated."
+  },
   "settings.sync_scope.all": {
     "message": "All computers",
     "description": "Where a setting applies: every computer."

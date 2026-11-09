@@ -514,6 +514,52 @@ when new). Replacing is a rename,
 so another hard link to a replaced file keeps the old content. An
 encrypted backup is recognised by its first bytes, whatever it is called.
 
+## Folder sync
+
+Folder sync (docs/design/SYNC.md) keeps computers in step through a
+folder a cloud app already syncs. Anyone who can read or write that
+folder (the cloud provider, a shared link, a leaked cloud account) is
+outside the trust boundary. The folder layer (`src/sync/envelope.rs`,
+`crypto.rs`, `folder.rs`, `fsio.rs`, `keystore.rs`) enforces:
+
+- **Everything Kage writes there is encrypted and authenticated.** Each
+  `.kage` file is AES-256-GCM with a random nonce. The authenticated data
+  is `kage-sync|1|<folder id>|<device id>|<kind>|<file name>`, so a
+  planted or edited file fails to open, and so does one copied into
+  another computer's directory, renamed, or moved to another folder.
+  Shards and blobs are named by a keyed hash of their content, and the
+  reader checks the name after decrypting. Plaintext is compressed before
+  it is encrypted; no credential is ever in it.
+- **Opening is bounded.** A file over its kind's limit is refused before
+  it is decrypted, and decompression stops at the plaintext limit (64 KiB
+  for a head, 4 MiB for a shard, 16 MiB for a blob), so a small file
+  can't inflate into a large one.
+- **The data key never leaves a computer in the clear.** A random 32-byte
+  key per epoch is wrapped in a key file by Argon2id of the sync
+  passphrase (64 MiB, t = 3; a key file asking for more than 256 MiB,
+  t = 8 or p = 4 is refused, since anyone with folder access can plant
+  one). Its AAD names the folder and epoch. The passphrase is never
+  stored or logged. Subkeys come from HKDF-SHA256 with fixed labels.
+- **The key store doesn't roam.** The OS keychain where it is reliable
+  (macOS only with a team identifier in the build's signature; Windows
+  Credential Manager with `CRED_PERSIST_LOCAL_MACHINE`; the Linux Secret
+  Service), else an owner-only `key.bin` in the non-roaming local data
+  folder. Isolated runs (tests, the mock-app sweep) only ever use memory.
+  Key buffers are zeroized on drop.
+- **Links aren't followed.** A symlink or junction inside the sync folder
+  is never followed: a directory Kage made there that turns out to be a
+  link fails the call, listings leave links out, and only regular files
+  are read. Files are created with exclusive create or a temp-then-rename
+  that refuses to replace anything.
+- **A cloud driver can't hang Kage.** Every folder call runs on a pool of
+  two threads with a timeout. A stuck call is abandoned; after four the
+  pool stops taking calls and sync pauses, rather than growing threads.
+- **Names are strict.** File names are classified by fixed patterns;
+  anything else is never read and never deleted.
+
+Credentials, tool permissions, capability grants and consent never sync,
+not even encrypted (docs/design/SYNC.md §11.5).
+
 ## Summary of current guarantees
 
 | Threat                                                | Status | Notes |
@@ -538,6 +584,8 @@ encrypted backup is recognised by its first bytes, whatever it is called.
 | Undoing an import deletes data written since          | ✅ Blocked | Each undo step is recorded before the next; a target, `config.json` included, is removed or replaced only while it's the file the import wrote (hash, length, inode). |
 | A backup grants an extension capabilities             | ✅ Blocked | Grants are never imported, in any kind of backup; an extension the backup would switch on stays off until this machine's grant covers its manifest. |
 | A backup points a credential kept here somewhere else | ✅ Blocked | In every kind of import, an extension whose credential stays here (or with a data file Kage can't read) keeps its settings and data whole; no field is compared to decide. |
+| Someone with write access to the sync folder plants or edits a file | ✅ Blocked | AES-256-GCM bound to folder, computer, kind and name; content names checked after decrypting. See "Folder sync". |
+| A planted link in the sync folder makes Kage write elsewhere | ✅ Blocked | Links inside the folder are never followed. |
 
 ## Known gaps being worked on
 
