@@ -262,6 +262,35 @@ pub struct SyncEngine {
     pub(crate) kdf: KdfCost,
 }
 
+/// Named places a test can make the engine crash at (§18.3), to check that
+/// a restart from the same directories loses nothing. Inert unless armed,
+/// which only tests do.
+#[doc(hidden)]
+pub mod kill {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ARMED: Cell<Option<&'static str>> = const { Cell::new(None) };
+    }
+
+    /// Crash at `name` the next time the engine passes it on this thread.
+    pub fn arm(name: &'static str) {
+        ARMED.with(|a| a.set(Some(name)));
+    }
+
+    pub fn disarm() {
+        ARMED.with(|a| a.set(None));
+    }
+
+    /// A kill point: panics if armed for `name`.
+    pub(crate) fn point(name: &'static str) {
+        if ARMED.with(|a| a.get()) == Some(name) {
+            disarm();
+            panic!("kill point {name}");
+        }
+    }
+}
+
 /// The engine's own error, as the frontend sees it.
 pub(crate) fn internal(e: anyhow::Error) -> AppError {
     log::warn!("sync: {e:#}");
@@ -346,7 +375,9 @@ impl SyncEngine {
             if is_disk_full(&e) {
                 self.rt.disk_full = true;
             }
-        } else {
+        } else if !self.rt.write_failed {
+            // A write to the folder that failed for lack of space keeps
+            // `disk_full` until a publish goes through.
             self.rt.disk_full = false;
         }
         self.after_tick();
@@ -962,6 +993,7 @@ impl SyncEngine {
             }
             match self.sources[si].project(writes.clone(), Origin::Sync)? {
                 ProjectResult::Applied { read_back } => {
+                    kill::point("after_config_commit_before_projected");
                     self.after_project(&writes, &read_back)?;
                     self.notify_ext_changes(&writes);
                     return Ok(writes.len());

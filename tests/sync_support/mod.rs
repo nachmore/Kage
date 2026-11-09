@@ -265,6 +265,29 @@ impl SimComputer {
         c
     }
 
+    /// A copy so exact even the fingerprint matches (a VM snapshot): it
+    /// keeps the device id until the folder shows the clash.
+    pub fn twin(&self, name: &str) -> SimComputer {
+        let mut c = SimComputer::with_config(name, self.os, self.clock.clone(), self.config());
+        copy_dir(&self.local, &c.local);
+        c.keys = self.keys.clone();
+        c.fingerprint = self.fingerprint.clone();
+        c.reopen();
+        c
+    }
+
+    /// This computer's device id.
+    pub fn device_id(&self) -> String {
+        kage::sync::prefs::DevicePrefs::load(&self.local)
+            .device_id
+            .unwrap_or_default()
+    }
+
+    /// The folder path of this computer's directory.
+    pub fn own_dir(&self) -> PathBuf {
+        PathBuf::from(format!("{CHOSEN}/Kage Sync/devices/{}", self.device_id()))
+    }
+
     pub fn ask(&mut self, req: EngineRequest) -> EngineReply {
         match self.engine.handle(req) {
             Ok(r) => r,
@@ -418,6 +441,15 @@ pub struct SimCloud {
     master: BTreeMap<PathBuf, Vec<u8>>,
     /// What each computer's copy held after the last step, by name.
     last: BTreeMap<String, BTreeMap<PathBuf, Vec<u8>>>,
+    /// Files each computer is still downloading: never uploaded back.
+    partial: BTreeMap<String, std::collections::BTreeSet<PathBuf>>,
+}
+
+/// `name (Who's conflicted copy).ext`, as Dropbox names one.
+fn conflicted_copy(p: &Path, who: &str) -> PathBuf {
+    let name = p.file_name().unwrap().to_string_lossy();
+    let (stem, ext) = name.rsplit_once('.').unwrap_or((&name, ""));
+    p.with_file_name(format!("{stem} ({who}'s conflicted copy).{ext}"))
 }
 
 fn is_own_temp(p: &Path) -> bool {
@@ -449,8 +481,20 @@ impl SimCloud {
                     .filter(|(p, _)| !is_own_temp(p))
                     .collect();
             let last = self.last.entry(c.name.clone()).or_default();
+            let partial = self.partial.entry(c.name.clone()).or_default();
             for (p, b) in &now {
-                if last.get(p) != Some(b) {
+                if last.get(p) == Some(b) || partial.contains(p) {
+                    continue;
+                }
+                // Another computer wrote this path since this one last
+                // synced: the sync app keeps both, as a conflicted copy.
+                let clash = self
+                    .master
+                    .get(p)
+                    .is_some_and(|m| m != b && last.get(p) != Some(m));
+                if clash {
+                    self.master.insert(conflicted_copy(p, &c.name), b.clone());
+                } else {
                     self.master.insert(p.clone(), b.clone());
                 }
             }
@@ -466,10 +510,17 @@ impl SimCloud {
                 if now.get(p) == Some(b) {
                     continue;
                 }
+                let partial = self.partial.entry(c.name.clone()).or_default();
                 match policy(&c.name, p) {
-                    Deliver::Now => c.fs.put(p, b.clone()),
+                    Deliver::Now => {
+                        partial.remove(p);
+                        c.fs.put(p, b.clone());
+                    }
                     Deliver::Later => {}
-                    Deliver::Truncated => c.fs.put(p, b[..b.len() / 2].to_vec()),
+                    Deliver::Truncated => {
+                        partial.insert(p.clone());
+                        c.fs.put(p, b[..b.len() / 2].to_vec());
+                    }
                 }
             }
             for p in now.keys() {

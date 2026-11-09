@@ -416,12 +416,15 @@ impl SyncEngine {
             if let Err(e) = write_once_retrying(&*fs, &blobs_dir, &file, &sealed) {
                 return self.write_failed(now, e);
             }
+            super::engine::kill::point("after_blob_write");
         }
         for p in &shards {
             if let Err(e) = write_once_retrying(&*fs, &shards_dir, &p.name, &p.bytes) {
                 return self.write_failed(now, e);
             }
+            super::engine::kill::point("after_shard_write");
         }
+        super::engine::kill::point("before_head_write");
         // The head.
         let (head, seq) = self.build_head(now, &states, false)?;
         let plain = canonical(&serde_json::to_value(&head)?);
@@ -491,6 +494,7 @@ impl SyncEngine {
         self.rt.last_own_ms = None;
         self.rt.write_backoff = None;
         self.rt.write_failed = false;
+        self.rt.disk_full = false;
         log::info!("sync: published head {seq}");
         Ok(true)
     }

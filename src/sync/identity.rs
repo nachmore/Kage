@@ -196,10 +196,14 @@ impl SyncEngine {
         let instances = self.instances()?;
         // Provider duplicates of my heads: a different instance is a clone.
         for (name, of) in &dups {
-            if let Ok(plain) = self.read_open(&dir.join(name), FileKind::Head, me, None, now) {
+            // A copy opens under the name it was sealed with.
+            if let Ok(plain) = self.read_open_as(&dir.join(name), of, FileKind::Head, me, None, now)
+            {
                 if let Ok(h) = serde_json::from_slice::<HeadFile>(&plain) {
-                    let _ = of;
                     if !instances.contains(&h.instance) {
+                        if let Err(e) = fs.remove(&dir.join(name)) {
+                            log::info!("sync: couldn't remove a sync app's copy: {e}");
+                        }
                         return self.collision();
                     }
                 }

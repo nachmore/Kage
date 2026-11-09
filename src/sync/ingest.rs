@@ -367,6 +367,7 @@ impl SyncEngine {
                     }
                     found += conflicts::record_detected(tx, &name_key, &out.conflicts, &bucket)?;
                 }
+                super::engine::kill::point("mid_merge_txn");
             }
             tx.add_applied(name)?;
             Ok(())
@@ -409,6 +410,25 @@ impl SyncEngine {
         modified_ms: Option<i64>,
         now: i64,
     ) -> Result<Vec<u8>, NotYet> {
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .to_string();
+        self.read_open_as(path, &name, kind, dev, modified_ms, now)
+    }
+
+    /// [`Self::read_open`] for a file a sync app copied under another
+    /// name: it opens under the name it was sealed with.
+    pub(crate) fn read_open_as(
+        &self,
+        path: &Path,
+        name: &str,
+        kind: FileKind,
+        dev: DeviceId,
+        modified_ms: Option<i64>,
+        now: i64,
+    ) -> Result<Vec<u8>, NotYet> {
         let core = self.core.as_ref().ok_or(NotYet::Waiting)?;
         if self.env.cloud.residency(path) == Residency::Placeholder {
             self.env.cloud.request_download(path);
@@ -423,10 +443,6 @@ impl SyncEngine {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(NotYet::Missing),
             Err(_) => return Err(NotYet::Waiting),
         };
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default();
         let aad = Aad {
             folder_id: &core.folder_id,
             device: dev,

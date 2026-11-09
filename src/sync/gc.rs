@@ -201,6 +201,7 @@ impl SyncEngine {
             if let Some(f) = floor {
                 tx.set_meta("gc_floor", &f.to_string())?;
             }
+            super::engine::kill::point("mid_gc");
             conflicts::retention_pass(tx, now, me, hlc)?;
             tx.set_meta("hlc_last", &hlc.last().to_string())?;
             for d in devices {
