@@ -10258,5 +10258,1643 @@
     "description": "Windows/Linux right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged. Use the exact wording Windows and Chrome use in this language.",
     "_machine_translated": true,
     "_source_hash": "684ea001b4dcd10f"
+  },
+  "tray.agent_call_tooltip": {
+    "message": "Kage · {extension} está usando tu agente",
+    "description": "Tray icon tooltip while an extension's background AI request runs",
+    "_machine_translated": true,
+    "_source_hash": "f85d7b6bc63877f3"
+  },
+  "settings.tool_permissions.audit.filter.background_ai": {
+    "message": "IA en segundo plano",
+    "description": "Filter — only background AI events",
+    "_machine_translated": true,
+    "_source_hash": "adda8c3bcdce2798"
+  },
+  "settings.tool_permissions.audit.filter.file_read": {
+    "message": "Lecturas de archivos",
+    "description": "Filter — only files that extensions read",
+    "_machine_translated": true,
+    "_source_hash": "f1add51b84c7731e"
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_call": {
+    "message": "<strong>{extension}</strong> envió {chars} caracteres a {agent} ({purpose}): {outcome}",
+    "description": "Audit row summary — one background AI request (HTML allowed). {chars} is a number; {purpose} is an id; {outcome} is an outcome string.",
+    "_machine_translated": true,
+    "_source_hash": "0637e1e50d1d4a53"
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_access_on": {
+    "message": "IA en segundo plano activada para <strong>{extension}</strong> ({agent})",
+    "description": "Audit row summary — background AI switched on for an extension (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "5be8fb65111e205f"
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_access_off": {
+    "message": "IA en segundo plano desactivada para <strong>{extension}</strong>",
+    "description": "Audit row summary — background AI switched off for an extension (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "f96b8fdd1edd419d"
+  },
+  "settings.tool_permissions.audit.summary.extension_file_read": {
+    "message": "<strong>{extension}</strong> leyó {file} ({format}, {size}, {chars} caracteres)",
+    "description": "Audit row summary — an extension read a file the user picked (HTML allowed). {file} is the file name; {format} is an id such as pdf; {size} is a size such as 48.2 MB; {chars} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "76a08e50353518f7"
+  },
+  "settings.tool_permissions.audit.summary.extension_file_read_failed": {
+    "message": "<strong>{extension}</strong> no pudo leer {file}",
+    "description": "Audit row summary — an extension's read of a file the user picked failed (HTML allowed). {file} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "d17fc79dd1be8cd5"
+  },
+  "settings.manager.cap.agent_background.label": {
+    "message": "IA en segundo plano",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "d1bdffa9a8ba6de9"
+  },
+  "settings.manager.cap.agent_background.desc": {
+    "message": "Pide ayuda a tu agente de IA en segundo plano, sin un chat. No se envía nada hasta que lo actives para esta extensión y confirmes qué agente recibe el texto.",
+    "description": "Capability badge tooltip and install-prompt description",
+    "_machine_translated": true,
+    "_source_hash": "47811cab3e620ac4"
+  },
+  "settings.manager.cap.file_text.label": {
+    "message": "Archivos que elijas",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "4095631a0b8cd8ca"
+  },
+  "settings.manager.cap.file_text.desc": {
+    "message": "Te pide que elijas un archivo y luego lee su texto (texto sin formato, Markdown, PDF, Word, …). Solo recibe el archivo que elijas cada vez, nunca su carpeta ni ningún otro archivo.",
+    "description": "Capability badge tooltip and install-prompt description",
+    "_machine_translated": true,
+    "_source_hash": "27f1f284afa5ab1c"
+  },
+  "settings.manager.cap.views.label": {
+    "message": "Sus propias ventanas",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "0da457df850644f7"
+  },
+  "settings.manager.cap.views.desc": {
+    "message": "Muestra ventanas que dibuja la propia extensión, como un mapa o un tablero. Lo que escribas en esas ventanas va a la extensión. Kage las etiqueta con el nombre de la extensión.",
+    "description": "Capability badge tooltip and install-prompt description",
+    "_machine_translated": true,
+    "_source_hash": "5a6303949fadd3c8"
+  },
+  "settings.manager.cap.sync.label": {
+    "message": "Sincronización entre tus equipos",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "3ca612b458025d9a"
+  },
+  "settings.manager.cap.sync.desc": {
+    "message": "Copia los datos de esta extensión, cifrados, a tu carpeta de sincronización para que tus otros equipos los reciban. Solo cuando la sincronización de Kage está activada.",
+    "description": "Capability badge tooltip and install-prompt description",
+    "_machine_translated": true,
+    "_source_hash": "1a4f23ee50d03de7"
+  },
+  "settings.manager.ext.agent.section_title": {
+    "message": "IA en segundo plano",
+    "description": "Heading of the Background AI panel on an extension's settings page",
+    "_machine_translated": true,
+    "_source_hash": "5598e3dc542ff73c"
+  },
+  "settings.manager.ext.agent.toggle.label": {
+    "message": "Permitir que {extension} use tu agente en segundo plano",
+    "description": "Switch in the Background AI panel. Off by default.",
+    "_machine_translated": true,
+    "_source_hash": "a33fdb8848c1555b"
+  },
+  "settings.manager.ext.agent.toggle.desc": {
+    "message": "Confirmas qué agente recibe el texto antes de que se envíe nada. Al desactivar esta opción, se detienen al instante las solicitudes en curso y en espera.",
+    "description": "Help text under the Background AI switch",
+    "_machine_translated": true,
+    "_source_hash": "3e16c5803986419b"
+  },
+  "settings.manager.ext.agent.status.off": {
+    "message": "Desactivado",
+    "description": "Background AI panel status line: switched off",
+    "_machine_translated": true,
+    "_source_hash": "323fef50cb9bd693"
+  },
+  "settings.manager.ext.agent.status.on": {
+    "message": "Activado · envía a {agent}",
+    "description": "Background AI panel status line: on. {agent} is the agent connection's name.",
+    "_machine_translated": true,
+    "_source_hash": "0a594671d1501a80"
+  },
+  "settings.manager.ext.agent.status.needs_consent": {
+    "message": "Necesita tu aprobación",
+    "description": "Background AI panel status line: switched on, but no consent is recorded (for example after a hand-edited config)",
+    "_machine_translated": true,
+    "_source_hash": "47b14c88cf80e0db"
+  },
+  "settings.manager.ext.agent.status.stale": {
+    "message": "En pausa: tu agente cambió a {agent}.",
+    "description": "Background AI panel status line: the active agent changed since the user agreed. Followed by an Allow again button. {agent} is the new agent's name.",
+    "_machine_translated": true,
+    "_source_hash": "3e04020ebec03454"
+  },
+  "settings.manager.ext.agent.status.paused_failures": {
+    "message": "En pausa hasta las {time} tras {n} solicitudes fallidas.",
+    "description": "Background AI panel status line: paused after several failed requests in a row. {time} is a local time; {n} is a number (3 or more).",
+    "_machine_translated": true,
+    "_source_hash": "2f540735a0321131"
+  },
+  "settings.manager.ext.agent.status.paused_tools": {
+    "message": "En pausa hasta las {time}: tu agente intentó usar una herramienta dos veces hoy.",
+    "description": "Background AI panel status line: paused until local midnight because the agent started tools in two background requests today. {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "9340d72dd41faab6"
+  },
+  "settings.manager.ext.agent.status.paused_stopped": {
+    "message": "En pausa hasta las {time} porque lo detuviste.",
+    "description": "Background AI panel status line: paused for an hour after the user pressed Stop now. {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "60c70c6471a00cae"
+  },
+  "settings.manager.ext.agent.status.unavailable": {
+    "message": "No disponible: el manifiesto de {extension} no declara IA en segundo plano.",
+    "description": "Background AI panel status line: the extension holds the permission but its manifest has no valid agentBackground block",
+    "_machine_translated": true,
+    "_source_hash": "8fa6e4a53feafe9a"
+  },
+  "settings.manager.ext.agent.allow_again": {
+    "message": "Volver a permitir",
+    "description": "Button in the Background AI panel that opens the consent dialog again after the agent changed",
+    "_machine_translated": true,
+    "_source_hash": "70ca50b46c6a7705"
+  },
+  "settings.manager.ext.agent.usage": {
+    "message": "{calls} de {limit} solicitudes hoy en este equipo · {chars} caracteres",
+    "description": "Background AI panel usage line. {calls}, {limit} and {chars} are numbers.",
+    "_machine_translated": true,
+    "_source_hash": "0e6cbd3f76c11c08"
+  },
+  "settings.manager.ext.agent.usage.resets": {
+    "message": "Se restablece a las {time}",
+    "description": "Background AI panel: when today's allowance resets. {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "865c2969d3a0a9b4"
+  },
+  "settings.manager.ext.agent.allowance.label": {
+    "message": "Límite diario",
+    "description": "Label of the daily allowance choice in the Background AI panel",
+    "_machine_translated": true,
+    "_source_hash": "64d2b4f7724029d6"
+  },
+  "settings.manager.ext.agent.allowance.low": {
+    "message": "Bajo",
+    "description": "Daily allowance choice: fewest requests a day",
+    "_machine_translated": true,
+    "_source_hash": "ec80946038c7ac47"
+  },
+  "settings.manager.ext.agent.allowance.normal": {
+    "message": "Normal",
+    "description": "Daily allowance choice: the default",
+    "_machine_translated": true,
+    "_source_hash": "eca7f61b78628b7c"
+  },
+  "settings.manager.ext.agent.allowance.high": {
+    "message": "Alto",
+    "description": "Daily allowance choice: most requests a day",
+    "_machine_translated": true,
+    "_source_hash": "ffa76a2eb096de69"
+  },
+  "settings.manager.ext.agent.stop.btn": {
+    "message": "Detener ahora",
+    "description": "Button that cancels the running and waiting background requests and pauses the extension for an hour",
+    "_machine_translated": true,
+    "_source_hash": "0dbf21d2042a3278"
+  },
+  "settings.manager.ext.agent.stop.done": {
+    "message": "Detenido. La IA en segundo plano está en pausa durante una hora.",
+    "description": "Shown after the user pressed Stop now",
+    "_machine_translated": true,
+    "_source_hash": "cb2c98a0f16e4fbc"
+  },
+  "settings.manager.ext.agent.log.title": {
+    "message": "Solicitudes recientes",
+    "description": "Heading of the list of recent background requests",
+    "_machine_translated": true,
+    "_source_hash": "9cc8a9e9804053ba"
+  },
+  "settings.manager.ext.agent.log.empty": {
+    "message": "Aún no hay solicitudes.",
+    "description": "Shown when the extension made no background requests",
+    "_machine_translated": true,
+    "_source_hash": "85759816d5d2ef48"
+  },
+  "settings.manager.ext.agent.log.row": {
+    "message": "{time} · {purpose} · {outcome} · {chars} caracteres · {agent}",
+    "description": "One row of the recent requests list. {time} is a local time, {purpose} an id from the manifest, {outcome} one of the outcome strings, {chars} a number, {agent} the agent's name.",
+    "_machine_translated": true,
+    "_source_hash": "11fe849fde1c5292"
+  },
+  "settings.manager.ext.agent.log.view_sent": {
+    "message": "Mostrar lo enviado",
+    "description": "Button on a recent request row that opens the exact prompt and reply",
+    "_machine_translated": true,
+    "_source_hash": "6f99cfdb61fc1115"
+  },
+  "settings.manager.ext.agent.log.sent_unavailable": {
+    "message": "Solo se pueden mostrar las solicitudes de esta sesión.",
+    "description": "Shown on recent request rows from before Kage last started",
+    "_machine_translated": true,
+    "_source_hash": "b6d0a5f1d9643414"
+  },
+  "settings.manager.ext.agent.log.sent_title": {
+    "message": "Lo enviado y la respuesta",
+    "description": "Title of the read-only view of one background request's prompt and reply",
+    "_machine_translated": true,
+    "_source_hash": "f9c5cf4f8818d545"
+  },
+  "settings.manager.ext.agent.outcome.ok": {
+    "message": "Completado",
+    "description": "Outcome of a background request: success",
+    "_machine_translated": true,
+    "_source_hash": "8af79c01b9ba7fa2"
+  },
+  "settings.manager.ext.agent.outcome.invalid_response": {
+    "message": "La respuesta no coincidía con el formato",
+    "description": "Outcome of a background request: the reply didn't match the extension's schema",
+    "_machine_translated": true,
+    "_source_hash": "2a5d5166c5880bf8"
+  },
+  "settings.manager.ext.agent.outcome.not_json": {
+    "message": "La respuesta no era JSON",
+    "description": "Outcome of a background request: the extension asked for JSON and the reply had none",
+    "_machine_translated": true,
+    "_source_hash": "6381842b167c56d2"
+  },
+  "settings.manager.ext.agent.outcome.response_too_large": {
+    "message": "Respuesta demasiado larga",
+    "description": "Outcome of a background request: the reply went over the size limit",
+    "_machine_translated": true,
+    "_source_hash": "98592c36e48739b2"
+  },
+  "settings.manager.ext.agent.outcome.timeout": {
+    "message": "Tiempo de espera agotado",
+    "description": "Outcome of a background request: the agent didn't finish in time",
+    "_machine_translated": true,
+    "_source_hash": "68f186a64d3e8d73"
+  },
+  "settings.manager.ext.agent.outcome.cancelled": {
+    "message": "Cancelado",
+    "description": "Outcome of a background request: cancelled",
+    "_machine_translated": true,
+    "_source_hash": "3fb67756d1efd0c8"
+  },
+  "settings.manager.ext.agent.outcome.tool_attempted": {
+    "message": "Detenido: el agente intentó usar una herramienta",
+    "description": "Outcome of a background request: the agent started a tool, so Kage stopped it",
+    "_machine_translated": true,
+    "_source_hash": "3de56ad5dd100866"
+  },
+  "settings.manager.ext.agent.outcome.agent_error": {
+    "message": "Error del agente",
+    "description": "Outcome of a background request: the agent reported an error",
+    "_machine_translated": true,
+    "_source_hash": "e5c18275ebd50acd"
+  },
+  "settings.manager.ext.agent.outcome.connection_lost": {
+    "message": "Agente desconectado",
+    "description": "Outcome of a background request: the agent connection dropped",
+    "_machine_translated": true,
+    "_source_hash": "b2d4a7c6b9330877"
+  },
+  "settings.manager.ext.agent.consent.title": {
+    "message": "¿Permitir que {extension} use {agent} en segundo plano?",
+    "description": "Title of the Background AI consent dialog. {agent} is the agent connection's name.",
+    "_machine_translated": true,
+    "_source_hash": "38263694bcc7d36e"
+  },
+  "settings.manager.ext.agent.consent.where.cloud": {
+    "message": "{agent} envía lo que recibe a su servicio en línea.",
+    "description": "Consent dialog: the agent is a known cloud service",
+    "_machine_translated": true,
+    "_source_hash": "099f52e560694940"
+  },
+  "settings.manager.ext.agent.consent.where.local": {
+    "message": "{agent} se ejecuta en este equipo.",
+    "description": "Consent dialog: the agent is a local model on this computer",
+    "_machine_translated": true,
+    "_source_hash": "60a162093e4d82a6"
+  },
+  "settings.manager.ext.agent.consent.where.remote": {
+    "message": "{agent} se ejecuta en otro equipo ({host}).",
+    "description": "Consent dialog: the agent runs on another computer. {host} is its host name or address.",
+    "_machine_translated": true,
+    "_source_hash": "1bea0fc10cee5a65"
+  },
+  "settings.manager.ext.agent.consent.where.unknown": {
+    "message": "Kage no puede saber adónde envía {agent} lo que recibe. Podría ser un servicio en línea.",
+    "description": "Consent dialog: Kage doesn't know where the agent sends text",
+    "_machine_translated": true,
+    "_source_hash": "70d2d3f6e19f198a"
+  },
+  "settings.manager.ext.agent.consent.reason": {
+    "message": "{extension} dice: «{reason}»",
+    "description": "Consent dialog: the extension's own explanation, quoted. {reason} is the extension's text, shown as is.",
+    "_machine_translated": true,
+    "_source_hash": "173d9076f5275672"
+  },
+  "settings.manager.ext.agent.consent.what": {
+    "message": "{extension} elige qué enviar. Puede enviar texto de sus propios datos, hasta {calls} solicitudes al día.",
+    "description": "Consent dialog bullet. {calls} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "aafaf70531a9071f"
+  },
+  "settings.manager.ext.agent.consent.reads": {
+    "message": "{extension} también puede leer: {capabilities}.",
+    "description": "Consent dialog bullet, shown only when the extension holds data permissions. {capabilities} is a list of permission names.",
+    "_machine_translated": true,
+    "_source_hash": "d915b1f821fba10f"
+  },
+  "settings.manager.ext.agent.consent.when": {
+    "message": "Las solicitudes se ejecutan mientras no usa Kage. Iniciar un chat las detiene.",
+    "description": "Consent dialog bullet",
+    "_machine_translated": true,
+    "_source_hash": "8766b66916d6c49b"
+  },
+  "settings.manager.ext.agent.consent.tools": {
+    "message": "Kage pide al agente que no use herramientas y rechaza todas las solicitudes de herramientas. Si su agente está configurado para ejecutar herramientas sin preguntar, Kage detiene la solicitud en cuanto detecta que se inicia una.",
+    "description": "Consent dialog bullet",
+    "_machine_translated": true,
+    "_source_hash": "94d34f5cc1cf23e4"
+  },
+  "settings.manager.ext.agent.consent.history": {
+    "message": "Las solicitudes no aparecen en sus chats. Su agente puede guardar sus propios registros, como hace con todas las conversaciones.",
+    "description": "Consent dialog bullet",
+    "_machine_translated": true,
+    "_source_hash": "3dce68bb8b693b21"
+  },
+  "settings.manager.ext.agent.consent.log": {
+    "message": "Todas las solicitudes aparecen en esta página y en Ajustes → Permisos de herramientas.",
+    "description": "Consent dialog bullet",
+    "_machine_translated": true,
+    "_source_hash": "d1c8a9c74e6778a1"
+  },
+  "settings.manager.ext.agent.consent.allow": {
+    "message": "Permitir",
+    "description": "Consent dialog button that turns background AI on",
+    "_machine_translated": true,
+    "_source_hash": "05eacb945b9f706e"
+  },
+  "settings.manager.ext.agent.consent.cancel": {
+    "message": "Ahora no",
+    "description": "Consent dialog button that leaves background AI off",
+    "_machine_translated": true,
+    "_source_hash": "e6d9438bfebbd0b7"
+  },
+  "settings.manager.ext.views.heading": {
+    "message": "Ventanas",
+    "description": "Heading of the block on an extension's settings page that lists the windows the extension draws itself",
+    "_machine_translated": true,
+    "_source_hash": "6d8807b1539b3c77"
+  },
+  "settings.manager.ext.views.open": {
+    "message": "Abrir",
+    "description": "Button: open one of the extension's own windows",
+    "_machine_translated": true,
+    "_source_hash": "c556f1726dce3388"
+  },
+  "settings.manager.ext.views.reset": {
+    "message": "Restablecer tamaño y posición de las ventanas",
+    "description": "Button: forget the saved size and position of the extension's windows",
+    "_machine_translated": true,
+    "_source_hash": "fffa3ce5c3815e00"
+  },
+  "settings.manager.ext.views.reset_done": {
+    "message": "Tamaño y posición de las ventanas restablecidos.",
+    "description": "Confirmation after resetting the extension windows' size and position",
+    "_machine_translated": true,
+    "_source_hash": "17a8f47a6457923b"
+  },
+  "settings.manager.ext.sync.settings_and_data": {
+    "message": "Sincroniza ajustes y datos",
+    "description": "Chip in an extension's settings header: its settings and its data sync between the user's computers.",
+    "_machine_translated": true,
+    "_source_hash": "6b31987889be2d9a"
+  },
+  "settings.manager.ext.sync.settings_only": {
+    "message": "Sincroniza ajustes",
+    "description": "Chip in an extension's settings header: only its settings sync between the user's computers.",
+    "_machine_translated": true,
+    "_source_hash": "57a5c238bdd95771"
+  },
+  "settings.manager.ext.sync.sign_in_local": {
+    "message": "El inicio de sesión se queda en este equipo",
+    "description": "Chip in an extension's settings header: its sign-in or API key never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "6ee1cdb14a40fd77"
+  },
+  "floating.agent_call.chip": {
+    "message": "{extension} está usando su agente",
+    "description": "Small chip in the launcher while an extension's background AI request runs. The moon icon is separate.",
+    "_machine_translated": true,
+    "_source_hash": "9f93ee5bbd9bfee3"
+  },
+  "floating.agent_call.waiting": {
+    "message": "+{n} en espera",
+    "description": "Added to the background AI chip when more requests wait. {n} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "3425a5757e25921b"
+  },
+  "floating.agent_call.stop": {
+    "message": "Detener",
+    "description": "Button on the background AI chip that stops the requests",
+    "_machine_translated": true,
+    "_source_hash": "1b17043e3fbec049"
+  },
+  "floating.agent_call.settings": {
+    "message": "Configuración",
+    "description": "Button on the background AI chip that opens the extension's settings",
+    "_machine_translated": true,
+    "_source_hash": "0110c94efac2c9d3"
+  },
+  "errors.agent_call.not_available": {
+    "message": "{extension} no puede usar la IA en segundo plano. No tiene el permiso de IA en segundo plano o su manifiesto no lo declara.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension lacks the permission or its manifest has no valid agentBackground block. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "1573b5e5a16735da"
+  },
+  "errors.agent_call.access_off": {
+    "message": "La IA en segundo plano está desactivada para {extension}. Actívela en Configuración → Extensiones → {extension}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user hasn't turned background AI on for this extension on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "6e3f5310852f3f68"
+  },
+  "errors.agent_call.consent_required": {
+    "message": "{extension} necesita su autorización antes de enviar texto a su agente.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Background AI is switched on, but the user hasn't confirmed the consent dialog.",
+    "_machine_translated": true,
+    "_source_hash": "5fb303f99e380903"
+  },
+  "errors.agent_call.consent_stale": {
+    "message": "Su agente ha cambiado. Vuelva a permitir {extension} en su configuración.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The active agent connection changed since the user gave consent, so the consent no longer applies.",
+    "_machine_translated": true,
+    "_source_hash": "1b40b74258448691"
+  },
+  "errors.agent_call.extension_disabled": {
+    "message": "{extension} está desactivada.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension is disabled, so it can't make requests.",
+    "_machine_translated": true,
+    "_source_hash": "a11d7487ddac3b57"
+  },
+  "errors.agent_call.agent_changed": {
+    "message": "Su agente cambió mientras esto estaba abierto. Compruebe el nombre del agente e inténtelo de nuevo.",
+    "description": "Consent dialog: the active agent connection changed while the dialog was open, so the user must confirm again.",
+    "_machine_translated": true,
+    "_source_hash": "62760b4ff7e50094"
+  },
+  "errors.agent_call.purpose_not_declared": {
+    "message": "{extension} no declaró el propósito «{purpose}».",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the request named a purpose the manifest's agentBackground.purposes doesn't list. {purpose} is the id.",
+    "_machine_translated": true,
+    "_source_hash": "61795b46490e1a1a"
+  },
+  "errors.agent_call.field_too_long": {
+    "message": "«{field}» tiene {size} caracteres. El límite es {limit}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: one field of the request is too long. {field} is the field name; {size} and {limit} are numbers.",
+    "_machine_translated": true,
+    "_source_hash": "a25fa18dcf4710b2"
+  },
+  "errors.agent_call.prompt_too_large": {
+    "message": "La solicitud tiene {size} caracteres. El límite es {limit}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The whole prompt Kage would send is over the size limit. {size} and {limit} are numbers.",
+    "_machine_translated": true,
+    "_source_hash": "2057f85b797d88f4"
+  },
+  "errors.agent_call.schema_unsupported": {
+    "message": "El esquema de respuesta usa algo que Kage no admite: {keyword}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the JSON schema uses a keyword outside the supported subset. {keyword} is the keyword.",
+    "_machine_translated": true,
+    "_source_hash": "0c06ba1afb5a79a9"
+  },
+  "errors.agent_call.contains_credential": {
+    "message": "La solicitud contiene una de las credenciales guardadas de {extension}, por lo que Kage no la envió.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The request text contains a password or key from the extension's own settings, so nothing was sent.",
+    "_machine_translated": true,
+    "_source_hash": "0c94ff6e82cc3a43"
+  },
+  "errors.agent_call.duplicate": {
+    "message": "Ya hay una solicitud en segundo plano con esta clave en espera.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Another request with the same de-duplication key is already queued.",
+    "_machine_translated": true,
+    "_source_hash": "bf35c01be5138a60"
+  },
+  "errors.agent_call.queue_full": {
+    "message": "{extension} ya tiene {limit} solicitudes en segundo plano en espera.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension's queue of waiting requests is full. {limit} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "83e59d6397c7a7df"
+  },
+  "errors.agent_call.rate_limited": {
+    "message": "Demasiadas solicitudes en segundo plano. Inténtelo de nuevo después de las {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Too many requests in a short time. {time} is a local time of day.",
+    "_machine_translated": true,
+    "_source_hash": "c96c62fb0fb70605"
+  },
+  "errors.agent_call.budget_exhausted": {
+    "message": "{extension} ha agotado el límite diario de IA en segundo plano. Se restablece a las {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension used its daily allowance on this computer. {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "643188121da9b7dc"
+  },
+  "errors.agent_call.paused": {
+    "message": "La IA en segundo plano para {extension} está en pausa hasta las {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Requests are paused (after failures, tool attempts, or the user pressing Stop). {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "48e6970bffec07bd"
+  },
+  "errors.agent_call.agent_unavailable": {
+    "message": "Su agente no está conectado.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). No agent is connected. Kage never starts the agent for a background request.",
+    "_machine_translated": true,
+    "_source_hash": "0e5d5f3dc25c664a"
+  },
+  "errors.agent_call.agent_disconnected": {
+    "message": "El agente se desconectó antes de terminar.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent connection dropped while a request was running.",
+    "_machine_translated": true,
+    "_source_hash": "7c774aa148db6bd0"
+  },
+  "errors.agent_call.timeout": {
+    "message": "El agente no terminó en {seconds} segundos.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The request ran out of time. {seconds} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "039633dc66c8c325"
+  },
+  "errors.agent_call.turn_expired": {
+    "message": "La solicitud no se envió en los {seconds} segundos posteriores a su turno, por lo que se perdió el turno.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the extension took too long to send its request after Kage gave it a turn. {seconds} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "9dbb18f9a036c160"
+  },
+  "errors.agent_call.cancelled_by_extension": {
+    "message": "La extensión canceló la solicitud.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension itself cancelled its request.",
+    "_machine_translated": true,
+    "_source_hash": "2e5b49a2f82fe258"
+  },
+  "errors.agent_call.cancelled_by_user": {
+    "message": "Ha detenido la solicitud.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user pressed Stop now.",
+    "_machine_translated": true,
+    "_source_hash": "82b9246dde30f164"
+  },
+  "errors.agent_call.cancelled_user_activity": {
+    "message": "Se detuvo porque empezó a usar Kage.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user started a chat prompt, which stops background requests.",
+    "_machine_translated": true,
+    "_source_hash": "56f67a0a6acfadec"
+  },
+  "errors.agent_call.cancelled_shutdown": {
+    "message": "Se detuvo porque Kage se está cerrando.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Kage is shutting down.",
+    "_machine_translated": true,
+    "_source_hash": "2b19fb0375805114"
+  },
+  "errors.agent_call.cancelled_access_off": {
+    "message": "Se detuvo porque se desactivó la IA en segundo plano para {extension}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user turned background AI off, or disabled or removed the extension, while a request was waiting or running.",
+    "_machine_translated": true,
+    "_source_hash": "e440580836e7691c"
+  },
+  "errors.agent_call.tool_attempted": {
+    "message": "El agente intentó usar una herramienta, así que Kage detuvo la solicitud.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Background requests may not use tools; the agent started one, so Kage stopped the request.",
+    "_machine_translated": true,
+    "_source_hash": "e4d42b3caaf7aa88"
+  },
+  "errors.agent_call.response_too_large": {
+    "message": "La respuesta del agente superó los {limit} caracteres, así que Kage la detuvo.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent's reply was too long. {limit} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "94a72027d4304da4"
+  },
+  "errors.agent_call.not_json": {
+    "message": "La respuesta del agente no era JSON.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension asked for a JSON reply, and the reply had none.",
+    "_machine_translated": true,
+    "_source_hash": "8d0f9994ffc8dd97"
+  },
+  "errors.agent_call.invalid_response": {
+    "message": "La respuesta del agente no coincidía con el formato esperado en {path}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The JSON reply didn't match the extension's schema. {path} is a JSON path such as $.items[3].text; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "c8a7c619517aa826"
+  },
+  "errors.agent_call.agent_error": {
+    "message": "El agente devolvió un error: {reason}",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent reported an error. {reason} is the agent's own text, not translated.",
+    "_machine_translated": true,
+    "_source_hash": "bc9f02c01197c7a0"
+  },
+  "errors.agent_call.unknown_call": {
+    "message": "Solicitud en segundo plano desconocida o finalizada.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the request id is unknown, belongs to another extension, or already finished.",
+    "_machine_translated": true,
+    "_source_hash": "2314c7d53e5c7520"
+  },
+  "errors.agent_call.not_ready": {
+    "message": "A esta solicitud aún no le ha llegado su turno.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the extension tried to send before Kage gave the request its turn.",
+    "_machine_translated": true,
+    "_source_hash": "1fb87f25d0a6d7b4"
+  },
+  "errors.file_text.not_granted": {
+    "message": "{extension} no tiene permiso para leer los archivos que elijas.",
+    "description": "Reading a file the user picked for an extension. The extension lacks the Files you choose permission. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "da78166b5d44b3f3"
+  },
+  "errors.file_text.extension_disabled": {
+    "message": "{extension} está desactivada.",
+    "description": "Reading a file the user picked for an extension. The extension is disabled, so it can't ask for a file. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "f9e1827a4976697f"
+  },
+  "errors.file_text.invalid_formats": {
+    "message": "Se solicitó un tipo de archivo desconocido. Kage lee: {formats}.",
+    "description": "Reading a file the user picked for an extension. Developer-facing: the extension asked for a format Kage doesn't know. {formats} is a list of file extensions such as .txt, .md, .pdf; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "605fe0fcf1c989a5"
+  },
+  "errors.file_text.invalid_max_chars": {
+    "message": "El límite de caracteres debe estar entre 1 y {max}.",
+    "description": "Reading a file the user picked for an extension. Developer-facing: the extension asked for a character limit out of range. {max} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "d7ef1ac27d172367"
+  },
+  "errors.file_text.busy": {
+    "message": "Kage ya está leyendo un archivo. Inténtalo de nuevo cuando termine.",
+    "description": "Reading a file the user picked for an extension. Only one file can be read at a time, or the ask bar is already showing.",
+    "_machine_translated": true,
+    "_source_hash": "d4dd430eb0bf31a7"
+  },
+  "errors.file_text.too_soon": {
+    "message": "Espera un momento antes de elegir otro archivo.",
+    "description": "Reading a file the user picked for an extension. The extension asked for another file within a few seconds of the last dialog.",
+    "_machine_translated": true,
+    "_source_hash": "b15028905568c40a"
+  },
+  "errors.file_text.declined": {
+    "message": "Elegiste «Ahora no». Inténtalo de nuevo en un momento.",
+    "description": "Reading a file the user picked for an extension. The user clicked Not now on the ask bar, and the extension asked again too soon. \"Not now\" is the button label (file_text.ask.dismiss).",
+    "_machine_translated": true,
+    "_source_hash": "43d4ec13e67fceb6"
+  },
+  "errors.file_text.no_window": {
+    "message": "Abre Kage para elegir un archivo.",
+    "description": "Reading a file the user picked for an extension. The window that would show the ask bar is hidden, so Kage didn't ask.",
+    "_machine_translated": true,
+    "_source_hash": "e24b2c410289fb00"
+  },
+  "errors.file_text.unavailable": {
+    "message": "La lectura de archivos no está disponible en esta copia de Kage.",
+    "description": "Reading a file the user picked for an extension. The file reader that ships with Kage is missing from the install.",
+    "_machine_translated": true,
+    "_source_hash": "879bd04ba623260a"
+  },
+  "errors.file_text.dialog_failed": {
+    "message": "No se pudo abrir el selector de archivos.",
+    "description": "Reading a file the user picked for an extension. The system's file dialog failed to open.",
+    "_machine_translated": true,
+    "_source_hash": "f0c89936562bef2d"
+  },
+  "errors.file_text.not_a_file": {
+    "message": "{name} no es un archivo normal.",
+    "description": "Reading a file the user picked for an extension. The user picked a folder, a package or a device. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "6a8dba2d44f9de19"
+  },
+  "errors.file_text.unsupported": {
+    "message": "Kage no puede leer archivos .{ext} aquí. Lee: {formats}.",
+    "description": "Reading a file the user picked for an extension. The picked file's type isn't one the extension asked for. {ext} is the file's extension without the dot; {formats} is a list of file extensions such as .txt, .md, .pdf. Keep both verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "706505c18e350f47"
+  },
+  "errors.file_text.wrong_content": {
+    "message": "El contenido de {name} no corresponde a su extensión .{ext}.",
+    "description": "Reading a file the user picked for an extension. The file's contents don't match its extension (for example a renamed file). {name} is the file name; {ext} is its extension without the dot.",
+    "_machine_translated": true,
+    "_source_hash": "0d87882e21edaf09"
+  },
+  "errors.file_text.too_large": {
+    "message": "{name} ocupa {size}. Kage lee archivos de hasta {limit}.",
+    "description": "Reading a file the user picked for an extension. The file is over the size limit. {name} is the file name; {size} and {limit} are sizes such as 48.2 MB.",
+    "_machine_translated": true,
+    "_source_hash": "c2bc01f2bc741ca7"
+  },
+  "errors.file_text.read_failed": {
+    "message": "No se pudo leer {name}.",
+    "description": "Reading a file the user picked for an extension. The operating system refused or failed the read. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "4ce41fb505bd4569"
+  },
+  "errors.file_text.not_downloaded": {
+    "message": "{name} no terminó de descargarse. Inténtalo de nuevo cuando esté en este equipo.",
+    "description": "Reading a file the user picked for an extension. The file lives on a cloud drive and didn't download in time. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "4dd959a5a51b4ff9"
+  },
+  "errors.file_text.encrypted": {
+    "message": "{name} está protegido con contraseña. Quita la contraseña e inténtalo de nuevo.",
+    "description": "Reading a file the user picked for an extension. The document needs a password to open. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "66c7272de66e7bcd"
+  },
+  "errors.file_text.legacy_format": {
+    "message": "{name} usa un formato antiguo que Kage no puede leer. Guárdalo como .docx o PDF e inténtalo de nuevo.",
+    "description": "Reading a file the user picked for an extension. An old binary Office file (such as .doc) saved with a new extension. {name} is the file name; keep .docx and PDF verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "007048733070d4ec"
+  },
+  "errors.file_text.not_text": {
+    "message": "{name} no parece un archivo de texto.",
+    "description": "Reading a file the user picked for an extension. A file named as text holds binary data. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "fca75ba19811309e"
+  },
+  "errors.file_text.malformed": {
+    "message": "{name} parece estar dañado y no se ha podido leer.",
+    "description": "Reading a file the user picked for an extension. The document is broken or not what it claims to be. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "b1afb9ce5c687db8"
+  },
+  "errors.file_text.too_complex": {
+    "message": "{name} es demasiado complejo para leerlo de forma segura.",
+    "description": "Reading a file the user picked for an extension. The document went over a safety limit (size, nesting or memory). {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "8f8e2db8eda6f5d4"
+  },
+  "errors.file_text.timeout": {
+    "message": "La lectura de {name} tardó demasiado, así que Kage la detuvo.",
+    "description": "Reading a file the user picked for an extension. Extracting the text went over the time limit. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "812bdfe5e3df96a7"
+  },
+  "errors.file_text.cancelled": {
+    "message": "Se canceló la lectura de {name}.",
+    "description": "Reading a file the user picked for an extension. The user or the extension cancelled the read. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "f529a9103b9ded06"
+  },
+  "errors.file_text.worker_failed": {
+    "message": "El lector de archivos se detuvo de forma inesperada.",
+    "description": "Reading a file the user picked for an extension. Kage's separate file reader process failed or returned something it couldn't use.",
+    "_machine_translated": true,
+    "_source_hash": "925c217a186b6108"
+  },
+  "errors.ext_view.opener_refused": {
+    "message": "Esta ventana no puede abrir ventanas de extensiones.",
+    "description": "Opening an extension's own window from a Kage window that isn't allowed to (for example the Store).",
+    "_machine_translated": true,
+    "_source_hash": "632f6580e4b38c90"
+  },
+  "errors.ext_view.unknown_extension": {
+    "message": "No hay ninguna extensión instalada llamada {id}.",
+    "description": "Opening an extension window for an extension that isn't installed. {id} is the extension's id.",
+    "_machine_translated": true,
+    "_source_hash": "9c2c81deb0c63361"
+  },
+  "errors.ext_view.disabled": {
+    "message": "{extension} está desactivada.",
+    "description": "Opening an extension window for an extension the user turned off. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "5b41a8ae72cf83c7"
+  },
+  "errors.ext_view.not_granted": {
+    "message": "{extension} necesita tu aprobación para abrir sus propias ventanas.",
+    "description": "Opening an extension window without the Its own windows permission. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "73a6cb643f31c042"
+  },
+  "errors.ext_view.unknown_view": {
+    "message": "{extension} no tiene ninguna ventana llamada {view}.",
+    "description": "The extension doesn't declare the window it asked to open. {extension} is the extension's name; {view} is the window's id.",
+    "_machine_translated": true,
+    "_source_hash": "8e0f475fe32e477a"
+  },
+  "errors.ext_view.wrong_extension": {
+    "message": "Una ventana de extensión solo puede abrir ventanas de la misma extensión.",
+    "description": "An extension window tried to open another extension's window.",
+    "_machine_translated": true,
+    "_source_hash": "a26c495d2020e106"
+  },
+  "errors.ext_view.params_invalid": {
+    "message": "Los datos iniciales de la ventana no son válidos: {reason}",
+    "description": "The data an extension passes to a window it opens is malformed. {reason} is a short technical reason in English.",
+    "_machine_translated": true,
+    "_source_hash": "fb335b1b4b7c16cb"
+  },
+  "errors.ext_view.params_too_large": {
+    "message": "Los datos iniciales de la ventana son demasiado grandes ({size} bytes; el límite es {limit}).",
+    "description": "The data an extension passes to a window it opens is too large. {size} and {limit} are numbers of bytes.",
+    "_machine_translated": true,
+    "_source_hash": "c54df884fb804f9d"
+  },
+  "errors.ext_view.too_many_open": {
+    "message": "Hay demasiadas ventanas de extensiones abiertas (límite: {limit}). Cierra una e inténtalo de nuevo.",
+    "description": "Every allowed extension window is already open and visible. {limit} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "c8e672f15b0dc6c9"
+  },
+  "errors.ext_view.not_a_view_window": {
+    "message": "Esta no es una ventana de extensión.",
+    "description": "A command for extension windows was called from another Kage window.",
+    "_machine_translated": true,
+    "_source_hash": "99aa0a8fed59d550"
+  },
+  "errors.ext_view.not_focused": {
+    "message": "La ventana de la extensión no está en primer plano.",
+    "description": "An extension window tried to copy or send text while another window had focus.",
+    "_machine_translated": true,
+    "_source_hash": "ec126845e28e94ae"
+  },
+  "errors.ext_view.text_invalid": {
+    "message": "No se puede usar el texto: {reason}",
+    "description": "Text from an extension window is too long or isn't plain text. {reason} is a short technical reason in English.",
+    "_machine_translated": true,
+    "_source_hash": "95fe20cf5dc1e5d3"
+  },
+  "errors.ext_view.too_fast": {
+    "message": "Demasiadas solicitudes. Inténtalo de nuevo en un momento.",
+    "description": "An extension window copied or sent text too often in a short time.",
+    "_machine_translated": true,
+    "_source_hash": "b958047e802e7c05"
+  },
+  "errors.ext_view.clipboard_failed": {
+    "message": "No se ha podido copiar al portapapeles.",
+    "description": "Copying text from an extension window to the system clipboard failed.",
+    "_machine_translated": true,
+    "_source_hash": "225528debd840a54"
+  },
+  "errors.ext_view.geometry_write_failed": {
+    "message": "No se han podido guardar las posiciones de las ventanas: {reason}",
+    "description": "Saving or resetting the size and position of extension windows failed. {reason} is a system error message.",
+    "_machine_translated": true,
+    "_source_hash": "b179bdc10940f426"
+  },
+  "file_text.dialog.title": {
+    "message": "{extension}: elige un archivo para leer",
+    "description": "Title of the system file dialog an extension opens. {extension} is the extension's name. On macOS it shows as the dialog's message line.",
+    "_machine_translated": true,
+    "_source_hash": "98c865982e59109e"
+  },
+  "file_text.dialog.filter": {
+    "message": "Archivos compatibles",
+    "description": "File type filter in the system file dialog: the file types Kage can read",
+    "_machine_translated": true,
+    "_source_hash": "05186b1475cc0da4"
+  },
+  "file_text.ask.message": {
+    "message": "{extension} quiere leer un archivo que elijas.",
+    "description": "Ask bar shown when an extension asks for a file without a click. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "288df0df96619dec"
+  },
+  "file_text.ask.choose": {
+    "message": "Elegir archivo…",
+    "description": "Ask bar button: open the file dialog",
+    "_machine_translated": true,
+    "_source_hash": "18f853e4d299e25b"
+  },
+  "file_text.ask.dismiss": {
+    "message": "Ahora no",
+    "description": "Ask bar button: don't open the file dialog",
+    "_machine_translated": true,
+    "_source_hash": "e3f8ae6303f87d33"
+  },
+  "file_text.progress.reading": {
+    "message": "Leyendo {file}…",
+    "description": "Progress chip while Kage reads a file the user picked. {file} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "fef9e5a6d96e76cc"
+  },
+  "file_text.progress.downloading": {
+    "message": "Descargando {file}…",
+    "description": "Progress chip while a cloud drive downloads the file the user picked. {file} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "3708f6c1aa9181c1"
+  },
+  "file_text.progress.cancel": {
+    "message": "Cancelar",
+    "description": "Progress chip button: stop reading the file",
+    "_machine_translated": true,
+    "_source_hash": "b736e680b4c45cfa"
+  },
+  "ext_view.window_title": {
+    "message": "{view} — {extension}",
+    "description": "Title of an extension's own window, in the title bar and the taskbar. {view} is the window's name; {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "038fa3819a7c0593"
+  },
+  "ext_view.window_title_sub": {
+    "message": "{subtitle} — {view} — {extension}",
+    "description": "Title of an extension's own window when the extension adds a subtitle. {subtitle} comes from the extension; {view} is the window's name; {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "f055d9b18c99dd41"
+  },
+  "ext_view.iframe_label": {
+    "message": "{view}, mostrado por {extension}",
+    "description": "Accessible name of the area an extension draws in its own window. {view} is the window's name; {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "888f0ae2ab73f238"
+  },
+  "ext_view.badge": {
+    "message": "Extensión",
+    "description": "Badge in the bar at the top of an extension's own window, so it can't pass for a Kage window",
+    "_machine_translated": true,
+    "_source_hash": "53c358039b3a857b"
+  },
+  "ext_view.badge_tip": {
+    "message": "Esta ventana la muestra la extensión {extension}.",
+    "description": "Tooltip of the Extension badge in an extension's own window. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "601ce781e09a2892"
+  },
+  "ext_view.bar.reload": {
+    "message": "Recargar",
+    "description": "Button in the bar of an extension's own window: start the window's content again",
+    "_machine_translated": true,
+    "_source_hash": "f8d44ce1d3b5016a"
+  },
+  "ext_view.bar.settings": {
+    "message": "Configuración de la extensión",
+    "description": "Button in the bar of an extension's own window: open the extension's settings page",
+    "_machine_translated": true,
+    "_source_hash": "6b55debd416e55ba"
+  },
+  "ext_view.bar.close": {
+    "message": "Cerrar",
+    "description": "Button in the bar of an extension's own window: close the window",
+    "_machine_translated": true,
+    "_source_hash": "39d692fba63b54df"
+  },
+  "ext_view.loading": {
+    "message": "Abriendo {view}…",
+    "description": "Shown while an extension's own window loads. {view} is the window's name.",
+    "_machine_translated": true,
+    "_source_hash": "25111f9c1b9a0958"
+  },
+  "ext_view.state.load_failed": {
+    "message": "No se pudo abrir {view}.",
+    "description": "An extension's own window failed to load. {view} is the window's name.",
+    "_machine_translated": true,
+    "_source_hash": "8bb8bc10cf4169c3"
+  },
+  "ext_view.state.not_responding": {
+    "message": "{view} no responde.",
+    "description": "Banner when an extension's own window stops answering. {view} is the window's name.",
+    "_machine_translated": true,
+    "_source_hash": "96a37f5088e82610"
+  },
+  "ext_view.state.navigated": {
+    "message": "{view} intentó mostrar una página web, así que Kage lo detuvo.",
+    "description": "An extension's own window tried to load a web page and Kage closed its content. {view} is the window's name.",
+    "_machine_translated": true,
+    "_source_hash": "32f9506cc7c2e27d"
+  },
+  "ext_view.state.removed": {
+    "message": "{extension} ya no tiene esta ventana.",
+    "description": "After an update the extension no longer declares the open window. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "05c1ff2321aa4331"
+  },
+  "ext_view.state.updated": {
+    "message": "Actualizado a {version}.",
+    "description": "Shown briefly in an extension's own window after the extension updated. {version} is a version number such as 1.2.0.",
+    "_machine_translated": true,
+    "_source_hash": "8dd943af9a68275c"
+  },
+  "errors.sync.unavailable": {
+    "message": "La sincronización no está disponible en este momento.",
+    "description": "A sync action was refused because sync is off, locked or paused on this computer, or not in this version.",
+    "_machine_translated": true,
+    "_source_hash": "2afccf9b0dc5610f"
+  },
+  "errors.sync.needs_confirmation": {
+    "message": "Confirma esto primero y vuelve a intentarlo.",
+    "description": "A destructive sync action (turn off, start over, remove a computer) came without a fresh confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "57537049195ee6ae"
+  },
+  "errors.sync.quota_exceeded": {
+    "message": "Los datos sincronizados de esta extensión superan su límite.",
+    "description": "An extension tried to sync more data than its limit allows.",
+    "_machine_translated": true,
+    "_source_hash": "88eb080dbf6b4001"
+  },
+  "settings.sync.title": {
+    "message": "Sincronización",
+    "description": "Settings sidebar item and page title for syncing between the user's computers.",
+    "_machine_translated": true,
+    "_source_hash": "9a41b2a09464e651"
+  },
+  "settings.sync.intro": {
+    "message": "Mantén la misma configuración, los mismos atajos y las mismas extensiones en todos tus ordenadores.",
+    "description": "First line of Settings → Sync.",
+    "_machine_translated": true,
+    "_source_hash": "2c27024e524743f0"
+  },
+  "settings.sync.no_server": {
+    "message": "Kage usa una carpeta que ya sincronizas, como Dropbox, iCloud Drive u OneDrive. Nada se envía a un servidor de Kage y todo lo que Kage guarda ahí está cifrado.",
+    "description": "Settings → Sync while sync is off: how sync works. Dropbox, iCloud Drive and OneDrive are product names.",
+    "_machine_translated": true,
+    "_source_hash": "9d132967d1bf8c1f"
+  },
+  "settings.sync.setup": {
+    "message": "Configurar sincronización…",
+    "description": "Button that starts sync setup.",
+    "_machine_translated": true,
+    "_source_hash": "5a5eb348c408007d"
+  },
+  "settings.sync.passphrase.lost": {
+    "message": "Kage no puede recuperar esta frase de contraseña. Si la pierdes, puedes cambiarla desde cualquier ordenador que siga sincronizando.",
+    "description": "Setup: warning under the new sync passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "0769245973fe9aac"
+  },
+  "settings.sync.passphrase.wrong": {
+    "message": "Esa frase de contraseña no desbloquea esta carpeta.",
+    "description": "The sync passphrase the user typed doesn't unlock the sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "d500e1eeb022bf31"
+  },
+  "settings.sync.categories.per_computer": {
+    "message": "Estas opciones son para este ordenador. Cada ordenador elige las suyas.",
+    "description": "Under the list of what syncs: the choice is made on each computer.",
+    "_machine_translated": true,
+    "_source_hash": "e82d4332d8cb1ad8"
+  },
+  "settings.sync.category.settings": {
+    "message": "Ajustes",
+    "description": "Sync category: preferences, agents, app modes.",
+    "_machine_translated": true,
+    "_source_hash": "558b2ed3d3e2db8c"
+  },
+  "settings.sync.category.automations": {
+    "message": "Atajos y automatizaciones",
+    "description": "Sync category: shortcuts, automations and custom actions.",
+    "_machine_translated": true,
+    "_source_hash": "6e3cef1d32035416"
+  },
+  "settings.sync.category.extensions": {
+    "message": "Extensiones y sus datos",
+    "description": "Sync category: which extensions are installed, their settings and their data.",
+    "_machine_translated": true,
+    "_source_hash": "40fdc7b5c3cbbcee"
+  },
+  "settings.sync.category.chats": {
+    "message": "Historial de chats",
+    "description": "Sync category: copies of chats, off by default.",
+    "_machine_translated": true,
+    "_source_hash": "e295b19a5de52bdc"
+  },
+  "settings.sync.join.theirs": {
+    "message": "Usar los ajustes de mis otros ordenadores",
+    "description": "Joining sync: the other computers' values win where they differ.",
+    "_machine_translated": true,
+    "_source_hash": "b055804026cb163d"
+  },
+  "settings.sync.join.mine": {
+    "message": "Usar los ajustes de este ordenador en todos los ordenadores",
+    "description": "Joining sync: this computer's values win where they differ.",
+    "_machine_translated": true,
+    "_source_hash": "67962b384fb0f72a"
+  },
+  "settings.sync.join.safe": {
+    "message": "No se pierde nada. Los valores reemplazados van a Conflictos, donde puedes restaurarlos. Puedes deshacer la unión durante 30 días.",
+    "description": "Joining sync: under the two choices.",
+    "_machine_translated": true,
+    "_source_hash": "0e8609f266cbcbaa"
+  },
+  "settings.sync.stays_local": {
+    "message": "Se queda en cada ordenador: inicios de sesión y claves de API, permisos, posiciones de ventanas, registros.",
+    "description": "What never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "277df0a7ffd824e8"
+  },
+  "settings.sync.ext.origin_mismatch": {
+    "message": "Aquí hay instalada otra extensión con este ID, así que sus datos no se sincronizan.",
+    "description": "Settings → Sync → Extensions: an extension with the same id came from somewhere else on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "b258dabf88885366"
+  },
+  "settings.sync.ext.sideload_hint": {
+    "message": "Actívalo solo si es la misma extensión en todos tus ordenadores.",
+    "description": "Settings → Sync → Extensions: next to the data switch of an extension installed from a file.",
+    "_machine_translated": true,
+    "_source_hash": "babba6d3804dd21e"
+  },
+  "settings.sync.uninstall_note": {
+    "message": "Sus datos se quedan en tu carpeta de sincronización y en tus otros ordenadores. Para eliminarlos de todas partes, ve a Ajustes → Sincronización → Extensiones → Eliminar sus datos de la carpeta de sincronización.",
+    "description": "Added to the uninstall confirmation of an extension whose data syncs.",
+    "_machine_translated": true,
+    "_source_hash": "4779b615667f5982"
+  },
+  "settings.sync_scope.all": {
+    "message": "Todos los ordenadores",
+    "description": "Where a setting applies: every computer.",
+    "_machine_translated": true,
+    "_source_hash": "c7f70dcf9f321ccf"
+  },
+  "settings.sync_scope.os_only": {
+    "message": "{os, select, macos {Solo Macs} windows {Solo PC con Windows} other {Solo PC con Linux}}",
+    "description": "Where a setting applies: only computers with this OS. {os} is macos, windows or linux.",
+    "_machine_translated": true,
+    "_source_hash": "cd651a5f2e155fbf"
+  },
+  "settings.sync_scope.this_computer": {
+    "message": "Este ordenador",
+    "description": "Where a setting applies: only this computer.",
+    "_machine_translated": true,
+    "_source_hash": "b9bd2b9dbf14c53e"
+  },
+  "settings.sync_scope.per_os": {
+    "message": "Cada tipo de ordenador tiene el suyo",
+    "description": "Where a setting applies: Macs, Windows PCs and Linux PCs each have their own value (hotkeys, paths).",
+    "_machine_translated": true,
+    "_source_hash": "f91c8fcf8b8f8335"
+  },
+  "settings.sync_scope.not_synced": {
+    "message": "No se sincroniza. {reason}",
+    "description": "Tooltip of a setting that never syncs. {reason} is one of the settings.sync_scope.reason.* sentences.",
+    "_machine_translated": true,
+    "_source_hash": "78f11482eb7c39b9"
+  },
+  "settings.sync_scope.changed_everywhere": {
+    "message": "Cambiado en todos tus ordenadores.",
+    "description": "Toast after the user changed a setting that is shared by all their computers.",
+    "_machine_translated": true,
+    "_source_hash": "c2023b166baf1605"
+  },
+  "settings.sync_scope.action.all": {
+    "message": "Igual en todos los ordenadores",
+    "description": "Menu item: use this value on every computer.",
+    "_machine_translated": true,
+    "_source_hash": "e4a80abeb3ee0cc9"
+  },
+  "settings.sync_scope.action.os": {
+    "message": "{os, select, macos {Solo en Macs} windows {Solo en PC con Windows} other {Solo en PC con Linux}}",
+    "description": "Menu item: use this value only on computers with this OS. {os} is macos, windows or linux.",
+    "_machine_translated": true,
+    "_source_hash": "659356dd1381f524"
+  },
+  "settings.sync_scope.action.use_shared": {
+    "message": "Usar el valor de todos los ordenadores ({value})",
+    "description": "Menu item: drop this OS's own value. {value} is the shared value, as text.",
+    "_machine_translated": true,
+    "_source_hash": "dd410179755cbfd1"
+  },
+  "settings.sync_scope.action.this_computer": {
+    "message": "Solo en este ordenador",
+    "description": "Menu item: keep this value on this computer only.",
+    "_machine_translated": true,
+    "_source_hash": "12ed8711c79b52c9"
+  },
+  "settings.sync_scope.action.stop_this_computer": {
+    "message": "Dejar de mantener un valor solo aquí",
+    "description": "Menu item: follow the synced value again.",
+    "_machine_translated": true,
+    "_source_hash": "34bada568f914e0b"
+  },
+  "settings.sync_scope.action.avail_all": {
+    "message": "Disponible en todos los ordenadores",
+    "description": "Menu item for a list item: it exists on every computer.",
+    "_machine_translated": true,
+    "_source_hash": "5989307a9f853dff"
+  },
+  "settings.sync_scope.action.avail_os": {
+    "message": "{os, select, macos {Solo en Mac} windows {Solo en PC con Windows} other {Solo en PC con Linux}}",
+    "description": "Menu item for a list item: it exists only on computers with this OS. {os} is macos, windows or linux.",
+    "_machine_translated": true,
+    "_source_hash": "38d31ea8889133eb"
+  },
+  "settings.sync_scope.action.avail_this_computer": {
+    "message": "Solo en este ordenador",
+    "description": "Menu item for a list item: it exists only on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "4f394a07b85ba816"
+  },
+  "settings.sync_scope.reason.writes_file": {
+    "message": "Indica un archivo que Kage escribe en este ordenador.",
+    "description": "Why a setting doesn't sync: it is a path Kage writes to.",
+    "_machine_translated": true,
+    "_source_hash": "19d191f6b4119cea"
+  },
+  "settings.sync_scope.reason.shell_files": {
+    "message": "Decide si se ejecutan los archivos de inicio del shell de este ordenador.",
+    "description": "Why the login shell setting doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "c7c54b50585af4ae"
+  },
+  "settings.sync_scope.reason.login_item": {
+    "message": "El inicio al iniciar sesión se configura en cada ordenador.",
+    "description": "Why Start at login doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "43b107ee38b9d86d"
+  },
+  "settings.sync_scope.reason.mac_workaround": {
+    "message": "Soluciona un problema de la versión de macOS de este Mac.",
+    "description": "Why a macOS workaround setting doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "17ae5195e7e05b05"
+  },
+  "settings.sync_scope.reason.diagnostics": {
+    "message": "Los ajustes de solución de problemas se configuran en cada ordenador.",
+    "description": "Why logging and debug settings don't sync.",
+    "_machine_translated": true,
+    "_source_hash": "8a4a76a8ff22e26d"
+  },
+  "settings.sync_scope.reason.permissions": {
+    "message": "Los permisos se conceden en cada ordenador.",
+    "description": "Why tool permissions and extension grants don't sync.",
+    "_machine_translated": true,
+    "_source_hash": "c4a6e45dd14f7958"
+  },
+  "settings.sync_scope.reason.consent": {
+    "message": "Cada ordenador solicita su propio consentimiento.",
+    "description": "Why consent choices (analytics, background AI) don't sync.",
+    "_machine_translated": true,
+    "_source_hash": "21c48fa9be579c50"
+  },
+  "settings.sync_scope.reason.first_run": {
+    "message": "Cada ordenador muestra su propia bienvenida.",
+    "description": "Why the welcome-done flag doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "254b77e636ab4ae6"
+  },
+  "settings.sync_scope.reason.local_voice": {
+    "message": "La voz local se instala en cada ordenador.",
+    "description": "Why the local text-to-speech server settings don't sync.",
+    "_machine_translated": true,
+    "_source_hash": "1f6ee827e964cf3e"
+  },
+  "settings.sync_scope.reason.looks_like_key": {
+    "message": "Parece que contiene una clave.",
+    "description": "Why a value stays on this computer: it may hold a password or API key.",
+    "_machine_translated": true,
+    "_source_hash": "7d470c3576c0118c"
+  },
+  "settings.sync_scope.reason.not_this_version": {
+    "message": "No funciona en esta versión de Kage.",
+    "description": "Why a synced value isn't used here: it came from a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "d82a6dea87b81880"
+  },
+  "settings.sync_scope.reason.needs_approval": {
+    "message": "Necesita aprobación en este ordenador.",
+    "description": "Why a synced value isn't used here yet: it can start programs, or turn an extension on.",
+    "_machine_translated": true,
+    "_source_hash": "83c7aebc3d359eaf"
+  },
+  "settings.sync_scope.reason.not_installed": {
+    "message": "No está instalado en este ordenador.",
+    "description": "Why a synced extension setting isn't used here.",
+    "_machine_translated": true,
+    "_source_hash": "4e089cd92f9c79ee"
+  },
+  "settings.sync_scope.reason.custom_path": {
+    "message": "Se guarda en una ruta personalizada.",
+    "description": "Why the user's steering file doesn't sync when it is at a custom path.",
+    "_machine_translated": true,
+    "_source_hash": "bd472a4338ae61e1"
+  },
+  "settings.sync_scope.reason.sign_in": {
+    "message": "Los inicios de sesión no se sincronizan.",
+    "description": "Why an extension's sign-in or API key field doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "0fbabe3dda6a160c"
+  },
+  "sync.status.off": {
+    "message": "Desactivada",
+    "description": "Sync status: not set up on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "d0eaf78ab0fa2ffa"
+  },
+  "sync.status.setting_up": {
+    "message": "Configurando…",
+    "description": "Sync status: setup is in progress.",
+    "_machine_translated": true,
+    "_source_hash": "71f7fb0f41634ca1"
+  },
+  "sync.status.up_to_date": {
+    "message": "Al día · Última sincronización {time}",
+    "description": "Sync status. {time} is a relative time such as '2 minutes ago'.",
+    "_machine_translated": true,
+    "_source_hash": "7f77918c80cf746f"
+  },
+  "sync.status.syncing": {
+    "message": "Sincronizando…",
+    "description": "Sync status.",
+    "_machine_translated": true,
+    "_source_hash": "328584a367a9fa49"
+  },
+  "sync.status.waiting": {
+    "message": "Esperando a que se {count, plural, one {descargue # archivo} other {descarguen # archivos}} de {computer}",
+    "description": "Sync status: the sync app hasn't downloaded files yet. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "27164c2855476403"
+  },
+  "sync.status.placeholders": {
+    "message": "La carpeta de sincronización aún no ha descargado algunos archivos",
+    "description": "Sync status: some files in the sync folder are online-only.",
+    "_machine_translated": true,
+    "_source_hash": "43eda773affc48ec"
+  },
+  "sync.status.paused": {
+    "message": "En pausa hasta {time}",
+    "description": "Sync status. {time} is a date and time.",
+    "_machine_translated": true,
+    "_source_hash": "c50cb8dec2d811ad"
+  },
+  "sync.status.paused_forever": {
+    "message": "En pausa",
+    "description": "Sync status: paused until the user resumes.",
+    "_machine_translated": true,
+    "_source_hash": "b7201ea8d81c1c86"
+  },
+  "sync.status.locked": {
+    "message": "Introduce tu frase de contraseña de sincronización para seguir sincronizando",
+    "description": "Sync status: the key isn't available on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "3873f2623a8ac626"
+  },
+  "sync.status.folder_missing": {
+    "message": "No se encuentra tu carpeta de sincronización",
+    "description": "Sync status.",
+    "_machine_translated": true,
+    "_source_hash": "7c0f69eb2aedc1b0"
+  },
+  "sync.status.folder_denied": {
+    "message": "Kage no tiene permiso para abrir tu carpeta de sincronización",
+    "description": "Sync status: the OS denied access.",
+    "_machine_translated": true,
+    "_source_hash": "b1fccde94b5a918f"
+  },
+  "sync.status.folder_empty": {
+    "message": "Tu carpeta de sincronización ya no contiene datos de Kage",
+    "description": "Sync status: the Kage Sync folder was emptied.",
+    "_machine_translated": true,
+    "_source_hash": "da297edc2b0881b3"
+  },
+  "sync.status.reset": {
+    "message": "La sincronización se reinició en {computer}",
+    "description": "Sync status. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "c494fc25fafc95c0"
+  },
+  "sync.status.removed": {
+    "message": "Este ordenador se quitó de la sincronización en {computer}",
+    "description": "Sync status. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "8021b818792b5660"
+  },
+  "sync.status.update_required": {
+    "message": "Actualiza Kage en este ordenador para seguir sincronizando",
+    "description": "Sync status: another computer uses a newer sync format.",
+    "_machine_translated": true,
+    "_source_hash": "8ae0ebee48d4a6c4"
+  },
+  "sync.status.disk_full": {
+    "message": "Tu disco está lleno. La sincronización continuará cuando haya espacio.",
+    "description": "Sync status.",
+    "_machine_translated": true,
+    "_source_hash": "2619c165bdd943c0"
+  },
+  "sync.status.write_failed": {
+    "message": "Kage no puede escribir en tu carpeta de sincronización",
+    "description": "Sync status.",
+    "_machine_translated": true,
+    "_source_hash": "40202447b13a5585"
+  },
+  "sync.status.folder_reverting": {
+    "message": "Tu aplicación de sincronización sigue deshaciendo los archivos de Kage",
+    "description": "Sync status: the cloud app keeps rolling the folder back.",
+    "_machine_translated": true,
+    "_source_hash": "745cad7191471c95"
+  },
+  "sync.status.other_engine": {
+    "message": "Otra copia de Kage está sincronizando este perfil",
+    "description": "Sync status: a second Kage on this computer uses the same profile.",
+    "_machine_translated": true,
+    "_source_hash": "37d06ad9e6241a5e"
+  },
+  "sync.problem.clock_warning": {
+    "message": "El reloj de {computer} tiene un desfase de unos {minutes, plural, one {# minuto} other {# minutos}}. Sus cambios podrían prevalecer sobre otros más recientes.",
+    "description": "Sync problem. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "d2680059a947212e"
+  },
+  "sync.problem.unreadable": {
+    "message": "No se {count, plural, one {puede leer # archivo} other {pueden leer # archivos}} de {computer}. Kage usa sus otros datos.",
+    "description": "Sync problem. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "756dbf513c8e92a8"
+  },
+  "sync.conflicts.title": {
+    "message": "Conflictos",
+    "description": "Title of the sync conflicts list.",
+    "_machine_translated": true,
+    "_source_hash": "8eb9f42fe3f5ec19"
+  },
+  "sync.conflicts.intro": {
+    "message": "Cuando dos ordenadores cambiaron lo mismo, Kage conservó el cambio más reciente. El otro se guarda aquí durante 90 días.",
+    "description": "Top of the sync conflicts list.",
+    "_machine_translated": true,
+    "_source_hash": "484760b9aaca204b"
+  },
+  "sync.conflicts.tab.replaced": {
+    "message": "Reemplazados",
+    "description": "Conflicts tab: values replaced by a newer change.",
+    "_machine_translated": true,
+    "_source_hash": "daefa0ef714e4e9e"
+  },
+  "sync.conflicts.tab.deleted": {
+    "message": "Eliminados recientemente",
+    "description": "Conflicts tab: items deleted in the last 30 days.",
+    "_machine_translated": true,
+    "_source_hash": "7a86da7ed88d0331"
+  },
+  "sync.conflicts.tab.resolved": {
+    "message": "Resueltos",
+    "description": "Conflicts tab: entries restored or dismissed.",
+    "_machine_translated": true,
+    "_source_hash": "1e2108a71e4c04a5"
+  },
+  "sync.conflicts.generated": {
+    "message": "Generado por Kage",
+    "description": "Conflicts group for documents Kage writes itself, such as what it learned about the user.",
+    "_machine_translated": true,
+    "_source_hash": "bbaee0e41a24f808"
+  },
+  "sync.conflicts.private_item": {
+    "message": "Elemento privado",
+    "description": "Label of a private extension item in the conflicts list.",
+    "_machine_translated": true,
+    "_source_hash": "f53746c921587c3f"
+  },
+  "sync.conflicts.now": {
+    "message": "Ahora: {value} ({computer}, {time})",
+    "description": "Conflict entry: the current value. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "1cc189d46e4bc251"
+  },
+  "sync.conflicts.replaced": {
+    "message": "Reemplazado: {value} ({computer}, {time})",
+    "description": "Conflict entry: the value that was replaced. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "afb575051c443567"
+  },
+  "sync.conflicts.now_changed": {
+    "message": "Ahora: cambiado en {computer}, {time}",
+    "description": "Conflict entry for an item: the current version.",
+    "_machine_translated": true,
+    "_source_hash": "3ae8a8464e30ce8a"
+  },
+  "sync.conflicts.replaced_changed": {
+    "message": "Reemplazado: modificado en {computer}, {time}",
+    "description": "Conflict entry for an item: the replaced version.",
+    "_machine_translated": true,
+    "_source_hash": "ea2d9f4e7826bf1b"
+  },
+  "sync.conflicts.kind.concurrent_edit": {
+    "message": "{item} · {scope}",
+    "description": "Conflict entry title: one setting or item changed on two computers. {scope} is where it applies, such as 'All computers'.",
+    "_machine_translated": true,
+    "_source_hash": "8a14029f20a31fae"
+  },
+  "sync.conflicts.kind.edit_vs_delete": {
+    "message": "{item} se eliminó en {deleter}. Se había modificado en {editor}.",
+    "description": "Conflict entry. {deleter} and {editor} are computer names.",
+    "_machine_translated": true,
+    "_source_hash": "dad4be417631691c"
+  },
+  "sync.conflicts.kind.delete_vs_edit": {
+    "message": "Eliminaste {item} en {deleter}. Se modificó más tarde en {editor}, así que se ha restaurado.",
+    "description": "Conflict entry. {deleter} and {editor} are computer names.",
+    "_machine_translated": true,
+    "_source_hash": "1ccf09d7baac0e3a"
+  },
+  "sync.conflicts.kind.replaced_on_join": {
+    "message": "Te uniste desde {computer}: {count, plural, one {1 ajuste era diferente} other {# ajustes eran diferentes}}.",
+    "description": "Grouped conflict entry after joining sync. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "04d4dcfb44472093"
+  },
+  "sync.conflicts.kind.restore_backup": {
+    "message": "Se restauró una copia de seguridad en {computer}: {count, plural, one {1 ajuste reemplazado} other {# ajustes reemplazados}}.",
+    "description": "Grouped conflict entry after a backup import. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "9857cb0ac961385d"
+  },
+  "sync.conflicts.kind.replaced_by_restore": {
+    "message": "Se restauró un valor anterior de {item}. Reemplazado: {value}.",
+    "description": "Conflict entry after the user restored an older value.",
+    "_machine_translated": true,
+    "_source_hash": "0f408b2b80ae555c"
+  },
+  "sync.conflicts.kind.deleted_while_away": {
+    "message": "{computer} no se sincronizaba desde {date}. {count, plural, one {Se quitó 1 elemento eliminado en otro equipo} other {Se quitaron # elementos eliminados en otros equipos}}.",
+    "description": "Grouped conflict entry for a computer that came back after a long time. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "238e9c58b35a2781"
+  },
+  "sync.conflicts.restore": {
+    "message": "Restaurar",
+    "description": "Conflict entry button: bring the replaced version back.",
+    "_machine_translated": true,
+    "_source_hash": "0e44f9d5f22e9e43"
+  },
+  "sync.conflicts.dismiss": {
+    "message": "Descartar",
+    "description": "Conflict entry button: keep the current version.",
+    "_machine_translated": true,
+    "_source_hash": "33439b42cb62c84b"
+  },
+  "sync.conflicts.dismiss_all": {
+    "message": "Descartar todo",
+    "description": "Conflicts list button.",
+    "_machine_translated": true,
+    "_source_hash": "ef5284e68c2af393"
+  },
+  "sync.conflicts.delete_anyway": {
+    "message": "Eliminar de todos modos",
+    "description": "Conflict entry button: delete an item that came back because another computer changed it.",
+    "_machine_translated": true,
+    "_source_hash": "78bb8093c36deda9"
+  },
+  "sync.conflicts.compare": {
+    "message": "Comparar",
+    "description": "Conflict entry button: show both versions side by side.",
+    "_machine_translated": true,
+    "_source_hash": "8ed08660a5c6988c"
+  },
+  "sync.review.runnable_title": {
+    "message": "{count, plural, one {1 elemento sincronizado puede ejecutar programas en este equipo} other {# elementos sincronizados pueden ejecutar programas en este equipo}}",
+    "description": "Needs your attention: synced agents, scripts or automations wait for approval here.",
+    "_machine_translated": true,
+    "_source_hash": "48f847b6a2adeeb5"
+  },
+  "sync.review.mass_delete": {
+    "message": "{computer} eliminó {count, plural, one {1 elemento} other {# elementos}} de {what}.",
+    "description": "Needs your attention: a bulk delete from another computer waits for an answer. {computer} is a computer's name; {what} is a list name.",
+    "_machine_translated": true,
+    "_source_hash": "db83860cf5780298"
+  },
+  "sync.os.macos": {
+    "message": "macOS",
+    "description": "OS name.",
+    "_machine_translated": true,
+    "_source_hash": "b13bea0e87bdb8e5"
+  },
+  "sync.os.windows": {
+    "message": "Windows",
+    "description": "OS name.",
+    "_machine_translated": true,
+    "_source_hash": "88f55bcfc1b46e45"
+  },
+  "sync.os.linux": {
+    "message": "Linux",
+    "description": "OS name.",
+    "_machine_translated": true,
+    "_source_hash": "04f7a9e2d412fa2a"
+  },
+  "sync.this_computer.macos": {
+    "message": "Este Mac",
+    "description": "This computer, on a Mac.",
+    "_machine_translated": true,
+    "_source_hash": "efb5f7fa3f677645"
+  },
+  "sync.this_computer.windows": {
+    "message": "Este PC",
+    "description": "This computer, on Windows.",
+    "_machine_translated": true,
+    "_source_hash": "f275fd761a483131"
+  },
+  "sync.this_computer.linux": {
+    "message": "Este equipo",
+    "description": "This computer, on Linux.",
+    "_machine_translated": true,
+    "_source_hash": "a6f357481b09b459"
+  },
+  "tray.sync_status": {
+    "message": "Sincronización: {status}",
+    "description": "Disabled tray menu line. {status} is a short sync status, such as 'Up to date'.",
+    "_machine_translated": true,
+    "_source_hash": "e32b63a931989ee0"
+  },
+  "tray.sync_now": {
+    "message": "Sincronizar ahora",
+    "description": "Tray menu item: sync with the other computers now.",
+    "_machine_translated": true,
+    "_source_hash": "a715fd867f40c578"
   }
 }

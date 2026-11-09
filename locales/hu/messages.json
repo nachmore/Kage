@@ -10258,5 +10258,1643 @@
     "description": "Windows/Linux right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged. Use the exact wording Windows and Chrome use in this language.",
     "_machine_translated": true,
     "_source_hash": "684ea001b4dcd10f"
+  },
+  "tray.agent_call_tooltip": {
+    "message": "Kage · {extension} az Ön ügynökét használja",
+    "description": "Tray icon tooltip while an extension's background AI request runs",
+    "_machine_translated": true,
+    "_source_hash": "f85d7b6bc63877f3"
+  },
+  "settings.tool_permissions.audit.filter.background_ai": {
+    "message": "Háttér-AI",
+    "description": "Filter — only background AI events",
+    "_machine_translated": true,
+    "_source_hash": "adda8c3bcdce2798"
+  },
+  "settings.tool_permissions.audit.filter.file_read": {
+    "message": "Fájlolvasások",
+    "description": "Filter — only files that extensions read",
+    "_machine_translated": true,
+    "_source_hash": "f1add51b84c7731e"
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_call": {
+    "message": "<strong>{extension}</strong> {chars} karaktert küldött ide: {agent} ({purpose}): {outcome}",
+    "description": "Audit row summary — one background AI request (HTML allowed). {chars} is a number; {purpose} is an id; {outcome} is an outcome string.",
+    "_machine_translated": true,
+    "_source_hash": "0637e1e50d1d4a53"
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_access_on": {
+    "message": "Háttér-AI bekapcsolva ehhez: <strong>{extension}</strong> ({agent})",
+    "description": "Audit row summary — background AI switched on for an extension (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "5be8fb65111e205f"
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_access_off": {
+    "message": "Háttér-AI kikapcsolva ehhez: <strong>{extension}</strong>",
+    "description": "Audit row summary — background AI switched off for an extension (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "f96b8fdd1edd419d"
+  },
+  "settings.tool_permissions.audit.summary.extension_file_read": {
+    "message": "<strong>{extension}</strong> beolvasta ezt a fájlt: {file} ({format}, {size}, {chars} karakter)",
+    "description": "Audit row summary — an extension read a file the user picked (HTML allowed). {file} is the file name; {format} is an id such as pdf; {size} is a size such as 48.2 MB; {chars} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "76a08e50353518f7"
+  },
+  "settings.tool_permissions.audit.summary.extension_file_read_failed": {
+    "message": "<strong>{extension}</strong> nem tudta beolvasni ezt a fájlt: {file}",
+    "description": "Audit row summary — an extension's read of a file the user picked failed (HTML allowed). {file} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "d17fc79dd1be8cd5"
+  },
+  "settings.manager.cap.agent_background.label": {
+    "message": "Háttér-AI",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "d1bdffa9a8ba6de9"
+  },
+  "settings.manager.cap.agent_background.desc": {
+    "message": "Segítséget kérhet az AI-ügynökétől a háttérben, csevegés nélkül. Semmi sem kerül elküldésre, amíg be nem kapcsolja ennél a bővítménynél, és meg nem erősíti, melyik ügynök kapja a szöveget.",
+    "description": "Capability badge tooltip and install-prompt description",
+    "_machine_translated": true,
+    "_source_hash": "47811cab3e620ac4"
+  },
+  "settings.manager.cap.file_text.label": {
+    "message": "Ön által választott fájlok",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "4095631a0b8cd8ca"
+  },
+  "settings.manager.cap.file_text.desc": {
+    "message": "Megkérheti, hogy válasszon egy fájlt, majd beolvassa annak szövegét (egyszerű szöveg, Markdown, PDF, Word, …). Minden alkalommal csak a kiválasztott fájlt kapja meg, soha a mappáját vagy más fájlt.",
+    "description": "Capability badge tooltip and install-prompt description",
+    "_machine_translated": true,
+    "_source_hash": "27f1f284afa5ab1c"
+  },
+  "settings.manager.cap.views.label": {
+    "message": "Saját ablakok",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "0da457df850644f7"
+  },
+  "settings.manager.cap.views.desc": {
+    "message": "A bővítmény által rajzolt ablakokat jeleníthet meg, például térképet vagy táblát. Amit ezekbe az ablakokba beír, az a bővítményhez kerül. A Kage a bővítmény nevével jelöli őket.",
+    "description": "Capability badge tooltip and install-prompt description",
+    "_machine_translated": true,
+    "_source_hash": "5a6303949fadd3c8"
+  },
+  "settings.manager.cap.sync.label": {
+    "message": "Szinkronizálás a számítógépei között",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "3ca612b458025d9a"
+  },
+  "settings.manager.cap.sync.desc": {
+    "message": "Titkosítva a szinkronizálási mappába másolja a bővítmény adatait, így a többi számítógépe is megkapja őket. Csak akkor, ha a Kage szinkronizálás be van kapcsolva.",
+    "description": "Capability badge tooltip and install-prompt description",
+    "_machine_translated": true,
+    "_source_hash": "1a4f23ee50d03de7"
+  },
+  "settings.manager.ext.agent.section_title": {
+    "message": "Háttér-AI",
+    "description": "Heading of the Background AI panel on an extension's settings page",
+    "_machine_translated": true,
+    "_source_hash": "5598e3dc542ff73c"
+  },
+  "settings.manager.ext.agent.toggle.label": {
+    "message": "{extension} használhatja az ügynökét a háttérben",
+    "description": "Switch in the Background AI panel. Off by default.",
+    "_machine_translated": true,
+    "_source_hash": "a33fdb8848c1555b"
+  },
+  "settings.manager.ext.agent.toggle.desc": {
+    "message": "Mielőtt bármi elküldésre kerülne, Ön erősíti meg, melyik ügynök kapja a szöveget. Ha kikapcsolja, a futó és várakozó kérések azonnal leállnak.",
+    "description": "Help text under the Background AI switch",
+    "_machine_translated": true,
+    "_source_hash": "3e16c5803986419b"
+  },
+  "settings.manager.ext.agent.status.off": {
+    "message": "Ki",
+    "description": "Background AI panel status line: switched off",
+    "_machine_translated": true,
+    "_source_hash": "323fef50cb9bd693"
+  },
+  "settings.manager.ext.agent.status.on": {
+    "message": "Be · küldés ide: {agent}",
+    "description": "Background AI panel status line: on. {agent} is the agent connection's name.",
+    "_machine_translated": true,
+    "_source_hash": "0a594671d1501a80"
+  },
+  "settings.manager.ext.agent.status.needs_consent": {
+    "message": "Az Ön jóváhagyására vár",
+    "description": "Background AI panel status line: switched on, but no consent is recorded (for example after a hand-edited config)",
+    "_machine_translated": true,
+    "_source_hash": "47b14c88cf80e0db"
+  },
+  "settings.manager.ext.agent.status.stale": {
+    "message": "Szüneteltetve: az ügynöke erre változott: {agent}.",
+    "description": "Background AI panel status line: the active agent changed since the user agreed. Followed by an Allow again button. {agent} is the new agent's name.",
+    "_machine_translated": true,
+    "_source_hash": "3e04020ebec03454"
+  },
+  "settings.manager.ext.agent.status.paused_failures": {
+    "message": "Szüneteltetve eddig: {time}, {n} sikertelen kérés után.",
+    "description": "Background AI panel status line: paused after several failed requests in a row. {time} is a local time; {n} is a number (3 or more).",
+    "_machine_translated": true,
+    "_source_hash": "2f540735a0321131"
+  },
+  "settings.manager.ext.agent.status.paused_tools": {
+    "message": "Szüneteltetve eddig: {time}. Az ügynöke ma kétszer próbált eszközt használni.",
+    "description": "Background AI panel status line: paused until local midnight because the agent started tools in two background requests today. {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "9340d72dd41faab6"
+  },
+  "settings.manager.ext.agent.status.paused_stopped": {
+    "message": "Szüneteltetve eddig: {time}, mert Ön leállította.",
+    "description": "Background AI panel status line: paused for an hour after the user pressed Stop now. {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "60c70c6471a00cae"
+  },
+  "settings.manager.ext.agent.status.unavailable": {
+    "message": "Nem érhető el: a(z) {extension} bővítmény jegyzékfájlja nem deklarál háttér-AI-t.",
+    "description": "Background AI panel status line: the extension holds the permission but its manifest has no valid agentBackground block",
+    "_machine_translated": true,
+    "_source_hash": "8fa6e4a53feafe9a"
+  },
+  "settings.manager.ext.agent.allow_again": {
+    "message": "Engedélyezés újra",
+    "description": "Button in the Background AI panel that opens the consent dialog again after the agent changed",
+    "_machine_translated": true,
+    "_source_hash": "70ca50b46c6a7705"
+  },
+  "settings.manager.ext.agent.usage": {
+    "message": "Ma {calls}/{limit} kérés ezen a számítógépen · {chars} karakter",
+    "description": "Background AI panel usage line. {calls}, {limit} and {chars} are numbers.",
+    "_machine_translated": true,
+    "_source_hash": "0e6cbd3f76c11c08"
+  },
+  "settings.manager.ext.agent.usage.resets": {
+    "message": "Visszaállás ekkor: {time}",
+    "description": "Background AI panel: when today's allowance resets. {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "865c2969d3a0a9b4"
+  },
+  "settings.manager.ext.agent.allowance.label": {
+    "message": "Napi keret",
+    "description": "Label of the daily allowance choice in the Background AI panel",
+    "_machine_translated": true,
+    "_source_hash": "64d2b4f7724029d6"
+  },
+  "settings.manager.ext.agent.allowance.low": {
+    "message": "Alacsony",
+    "description": "Daily allowance choice: fewest requests a day",
+    "_machine_translated": true,
+    "_source_hash": "ec80946038c7ac47"
+  },
+  "settings.manager.ext.agent.allowance.normal": {
+    "message": "Normál",
+    "description": "Daily allowance choice: the default",
+    "_machine_translated": true,
+    "_source_hash": "eca7f61b78628b7c"
+  },
+  "settings.manager.ext.agent.allowance.high": {
+    "message": "Magas",
+    "description": "Daily allowance choice: most requests a day",
+    "_machine_translated": true,
+    "_source_hash": "ffa76a2eb096de69"
+  },
+  "settings.manager.ext.agent.stop.btn": {
+    "message": "Leállítás most",
+    "description": "Button that cancels the running and waiting background requests and pauses the extension for an hour",
+    "_machine_translated": true,
+    "_source_hash": "0dbf21d2042a3278"
+  },
+  "settings.manager.ext.agent.stop.done": {
+    "message": "Leállítva. A háttér-AI egy órára szünetel.",
+    "description": "Shown after the user pressed Stop now",
+    "_machine_translated": true,
+    "_source_hash": "cb2c98a0f16e4fbc"
+  },
+  "settings.manager.ext.agent.log.title": {
+    "message": "Legutóbbi kérések",
+    "description": "Heading of the list of recent background requests",
+    "_machine_translated": true,
+    "_source_hash": "9cc8a9e9804053ba"
+  },
+  "settings.manager.ext.agent.log.empty": {
+    "message": "Még nincsenek kérések.",
+    "description": "Shown when the extension made no background requests",
+    "_machine_translated": true,
+    "_source_hash": "85759816d5d2ef48"
+  },
+  "settings.manager.ext.agent.log.row": {
+    "message": "{time} · {purpose} · {outcome} · {chars} karakter · {agent}",
+    "description": "One row of the recent requests list. {time} is a local time, {purpose} an id from the manifest, {outcome} one of the outcome strings, {chars} a number, {agent} the agent's name.",
+    "_machine_translated": true,
+    "_source_hash": "11fe849fde1c5292"
+  },
+  "settings.manager.ext.agent.log.view_sent": {
+    "message": "Elküldött tartalom megjelenítése",
+    "description": "Button on a recent request row that opens the exact prompt and reply",
+    "_machine_translated": true,
+    "_source_hash": "6f99cfdb61fc1115"
+  },
+  "settings.manager.ext.agent.log.sent_unavailable": {
+    "message": "Csak az ebben a munkamenetben küldött kérések jeleníthetők meg.",
+    "description": "Shown on recent request rows from before Kage last started",
+    "_machine_translated": true,
+    "_source_hash": "b6d0a5f1d9643414"
+  },
+  "settings.manager.ext.agent.log.sent_title": {
+    "message": "Az elküldött tartalom és a válasz",
+    "description": "Title of the read-only view of one background request's prompt and reply",
+    "_machine_translated": true,
+    "_source_hash": "f9c5cf4f8818d545"
+  },
+  "settings.manager.ext.agent.outcome.ok": {
+    "message": "Kész",
+    "description": "Outcome of a background request: success",
+    "_machine_translated": true,
+    "_source_hash": "8af79c01b9ba7fa2"
+  },
+  "settings.manager.ext.agent.outcome.invalid_response": {
+    "message": "A válasz nem felelt meg a formátumnak",
+    "description": "Outcome of a background request: the reply didn't match the extension's schema",
+    "_machine_translated": true,
+    "_source_hash": "2a5d5166c5880bf8"
+  },
+  "settings.manager.ext.agent.outcome.not_json": {
+    "message": "A válasz nem JSON volt",
+    "description": "Outcome of a background request: the extension asked for JSON and the reply had none",
+    "_machine_translated": true,
+    "_source_hash": "6381842b167c56d2"
+  },
+  "settings.manager.ext.agent.outcome.response_too_large": {
+    "message": "Túl hosszú válasz",
+    "description": "Outcome of a background request: the reply went over the size limit",
+    "_machine_translated": true,
+    "_source_hash": "98592c36e48739b2"
+  },
+  "settings.manager.ext.agent.outcome.timeout": {
+    "message": "Időtúllépés",
+    "description": "Outcome of a background request: the agent didn't finish in time",
+    "_machine_translated": true,
+    "_source_hash": "68f186a64d3e8d73"
+  },
+  "settings.manager.ext.agent.outcome.cancelled": {
+    "message": "Megszakítva",
+    "description": "Outcome of a background request: cancelled",
+    "_machine_translated": true,
+    "_source_hash": "3fb67756d1efd0c8"
+  },
+  "settings.manager.ext.agent.outcome.tool_attempted": {
+    "message": "Leállítva: az ügynök eszközt próbált használni",
+    "description": "Outcome of a background request: the agent started a tool, so Kage stopped it",
+    "_machine_translated": true,
+    "_source_hash": "3de56ad5dd100866"
+  },
+  "settings.manager.ext.agent.outcome.agent_error": {
+    "message": "Ügynökhiba",
+    "description": "Outcome of a background request: the agent reported an error",
+    "_machine_translated": true,
+    "_source_hash": "e5c18275ebd50acd"
+  },
+  "settings.manager.ext.agent.outcome.connection_lost": {
+    "message": "Az ügynök kapcsolata megszakadt",
+    "description": "Outcome of a background request: the agent connection dropped",
+    "_machine_translated": true,
+    "_source_hash": "b2d4a7c6b9330877"
+  },
+  "settings.manager.ext.agent.consent.title": {
+    "message": "Engedélyezi, hogy a(z) {extension} a háttérben használja a(z) {agent} ügynököt?",
+    "description": "Title of the Background AI consent dialog. {agent} is the agent connection's name.",
+    "_machine_translated": true,
+    "_source_hash": "38263694bcc7d36e"
+  },
+  "settings.manager.ext.agent.consent.where.cloud": {
+    "message": "A(z) {agent} a kapott tartalmat elküldi az online szolgáltatásának.",
+    "description": "Consent dialog: the agent is a known cloud service",
+    "_machine_translated": true,
+    "_source_hash": "099f52e560694940"
+  },
+  "settings.manager.ext.agent.consent.where.local": {
+    "message": "A(z) {agent} ezen a számítógépen fut.",
+    "description": "Consent dialog: the agent is a local model on this computer",
+    "_machine_translated": true,
+    "_source_hash": "60a162093e4d82a6"
+  },
+  "settings.manager.ext.agent.consent.where.remote": {
+    "message": "A(z) {agent} egy másik számítógépen fut ({host}).",
+    "description": "Consent dialog: the agent runs on another computer. {host} is its host name or address.",
+    "_machine_translated": true,
+    "_source_hash": "1bea0fc10cee5a65"
+  },
+  "settings.manager.ext.agent.consent.where.unknown": {
+    "message": "A Kage nem tudja megállapítani, hová küldi a(z) {agent} a kapott tartalmat. Lehet, hogy egy online szolgáltatás.",
+    "description": "Consent dialog: Kage doesn't know where the agent sends text",
+    "_machine_translated": true,
+    "_source_hash": "70d2d3f6e19f198a"
+  },
+  "settings.manager.ext.agent.consent.reason": {
+    "message": "A(z) {extension} indoklása: „{reason}”",
+    "description": "Consent dialog: the extension's own explanation, quoted. {reason} is the extension's text, shown as is.",
+    "_machine_translated": true,
+    "_source_hash": "173d9076f5275672"
+  },
+  "settings.manager.ext.agent.consent.what": {
+    "message": "A(z) {extension} dönti el, mit küld. Saját adataiból küldhet szöveget, naponta legfeljebb {calls} kérésben.",
+    "description": "Consent dialog bullet. {calls} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "aafaf70531a9071f"
+  },
+  "settings.manager.ext.agent.consent.reads": {
+    "message": "A(z) {extension} ezeket is olvashatja: {capabilities}.",
+    "description": "Consent dialog bullet, shown only when the extension holds data permissions. {capabilities} is a list of permission names.",
+    "_machine_translated": true,
+    "_source_hash": "d915b1f821fba10f"
+  },
+  "settings.manager.ext.agent.consent.when": {
+    "message": "A kérések akkor futnak, amikor nem használja a Kage-et. Csevegés indításakor leállnak.",
+    "description": "Consent dialog bullet",
+    "_machine_translated": true,
+    "_source_hash": "8766b66916d6c49b"
+  },
+  "settings.manager.ext.agent.consent.tools": {
+    "message": "A Kage arra kéri az ügynököt, hogy ne használjon eszközöket, és minden eszközkérést elutasít. Ha az ügynöke kérdezés nélkül futtathat eszközöket, a Kage leállítja a kérést, amint észleli egy eszköz indulását.",
+    "description": "Consent dialog bullet",
+    "_machine_translated": true,
+    "_source_hash": "94d34f5cc1cf23e4"
+  },
+  "settings.manager.ext.agent.consent.history": {
+    "message": "A kérések nem jelennek meg a csevegései között. Az ügynöke saját nyilvántartást vezethet, ahogy minden beszélgetésnél.",
+    "description": "Consent dialog bullet",
+    "_machine_translated": true,
+    "_source_hash": "3dce68bb8b693b21"
+  },
+  "settings.manager.ext.agent.consent.log": {
+    "message": "Minden kérés megjelenik ezen az oldalon és a Beállítások → Eszközengedélyek részben.",
+    "description": "Consent dialog bullet",
+    "_machine_translated": true,
+    "_source_hash": "d1c8a9c74e6778a1"
+  },
+  "settings.manager.ext.agent.consent.allow": {
+    "message": "Engedélyezés",
+    "description": "Consent dialog button that turns background AI on",
+    "_machine_translated": true,
+    "_source_hash": "05eacb945b9f706e"
+  },
+  "settings.manager.ext.agent.consent.cancel": {
+    "message": "Most nem",
+    "description": "Consent dialog button that leaves background AI off",
+    "_machine_translated": true,
+    "_source_hash": "e6d9438bfebbd0b7"
+  },
+  "settings.manager.ext.views.heading": {
+    "message": "Ablakok",
+    "description": "Heading of the block on an extension's settings page that lists the windows the extension draws itself",
+    "_machine_translated": true,
+    "_source_hash": "6d8807b1539b3c77"
+  },
+  "settings.manager.ext.views.open": {
+    "message": "Megnyitás",
+    "description": "Button: open one of the extension's own windows",
+    "_machine_translated": true,
+    "_source_hash": "c556f1726dce3388"
+  },
+  "settings.manager.ext.views.reset": {
+    "message": "Ablakméret és -pozíció visszaállítása",
+    "description": "Button: forget the saved size and position of the extension's windows",
+    "_machine_translated": true,
+    "_source_hash": "fffa3ce5c3815e00"
+  },
+  "settings.manager.ext.views.reset_done": {
+    "message": "Az ablakméret és -pozíció visszaállítva.",
+    "description": "Confirmation after resetting the extension windows' size and position",
+    "_machine_translated": true,
+    "_source_hash": "17a8f47a6457923b"
+  },
+  "settings.manager.ext.sync.settings_and_data": {
+    "message": "Beállításokat és adatokat szinkronizál",
+    "description": "Chip in an extension's settings header: its settings and its data sync between the user's computers.",
+    "_machine_translated": true,
+    "_source_hash": "6b31987889be2d9a"
+  },
+  "settings.manager.ext.sync.settings_only": {
+    "message": "Beállításokat szinkronizál",
+    "description": "Chip in an extension's settings header: only its settings sync between the user's computers.",
+    "_machine_translated": true,
+    "_source_hash": "57a5c238bdd95771"
+  },
+  "settings.manager.ext.sync.sign_in_local": {
+    "message": "A bejelentkezés ezen a számítógépen marad",
+    "description": "Chip in an extension's settings header: its sign-in or API key never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "6ee1cdb14a40fd77"
+  },
+  "floating.agent_call.chip": {
+    "message": "A(z) {extension} használja az ügynökét",
+    "description": "Small chip in the launcher while an extension's background AI request runs. The moon icon is separate.",
+    "_machine_translated": true,
+    "_source_hash": "9f93ee5bbd9bfee3"
+  },
+  "floating.agent_call.waiting": {
+    "message": "+{n} várakozik",
+    "description": "Added to the background AI chip when more requests wait. {n} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "3425a5757e25921b"
+  },
+  "floating.agent_call.stop": {
+    "message": "Leállítás",
+    "description": "Button on the background AI chip that stops the requests",
+    "_machine_translated": true,
+    "_source_hash": "1b17043e3fbec049"
+  },
+  "floating.agent_call.settings": {
+    "message": "Beállítások",
+    "description": "Button on the background AI chip that opens the extension's settings",
+    "_machine_translated": true,
+    "_source_hash": "0110c94efac2c9d3"
+  },
+  "errors.agent_call.not_available": {
+    "message": "A(z) {extension} bővítmény nem használhatja a háttér-AI-t. Nincs Háttér-AI engedélye, vagy a manifestje nem deklarálja.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension lacks the permission or its manifest has no valid agentBackground block. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "1573b5e5a16735da"
+  },
+  "errors.agent_call.access_off": {
+    "message": "A háttér-AI ki van kapcsolva a(z) {extension} bővítménynél. Kapcsolja be itt: Beállítások → Bővítmények → {extension}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user hasn't turned background AI on for this extension on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "6e3f5310852f3f68"
+  },
+  "errors.agent_call.consent_required": {
+    "message": "A(z) {extension} bővítménynek az Ön jóváhagyására van szüksége, mielőtt szöveget küld az ügynökének.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Background AI is switched on, but the user hasn't confirmed the consent dialog.",
+    "_machine_translated": true,
+    "_source_hash": "5fb303f99e380903"
+  },
+  "errors.agent_call.consent_stale": {
+    "message": "Az ügynöke megváltozott. Engedélyezze újra a(z) {extension} bővítményt a beállításaiban.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The active agent connection changed since the user gave consent, so the consent no longer applies.",
+    "_machine_translated": true,
+    "_source_hash": "1b40b74258448691"
+  },
+  "errors.agent_call.extension_disabled": {
+    "message": "A(z) {extension} bővítmény ki van kapcsolva.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension is disabled, so it can't make requests.",
+    "_machine_translated": true,
+    "_source_hash": "a11d7487ddac3b57"
+  },
+  "errors.agent_call.agent_changed": {
+    "message": "Az ügynöke megváltozott, amíg ez nyitva volt. Ellenőrizze az ügynök nevét, és próbálja újra.",
+    "description": "Consent dialog: the active agent connection changed while the dialog was open, so the user must confirm again.",
+    "_machine_translated": true,
+    "_source_hash": "62760b4ff7e50094"
+  },
+  "errors.agent_call.purpose_not_declared": {
+    "message": "A(z) {extension} bővítmény nem deklarálta a(z) „{purpose}” célt.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the request named a purpose the manifest's agentBackground.purposes doesn't list. {purpose} is the id.",
+    "_machine_translated": true,
+    "_source_hash": "61795b46490e1a1a"
+  },
+  "errors.agent_call.field_too_long": {
+    "message": "A(z) „{field}” mező {size} karakter hosszú. A korlát: {limit}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: one field of the request is too long. {field} is the field name; {size} and {limit} are numbers.",
+    "_machine_translated": true,
+    "_source_hash": "a25fa18dcf4710b2"
+  },
+  "errors.agent_call.prompt_too_large": {
+    "message": "A kérés {size} karakter hosszú. A korlát: {limit}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The whole prompt Kage would send is over the size limit. {size} and {limit} are numbers.",
+    "_machine_translated": true,
+    "_source_hash": "2057f85b797d88f4"
+  },
+  "errors.agent_call.schema_unsupported": {
+    "message": "A válaszséma olyasmit használ, amit a Kage nem támogat: {keyword}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the JSON schema uses a keyword outside the supported subset. {keyword} is the keyword.",
+    "_machine_translated": true,
+    "_source_hash": "0c06ba1afb5a79a9"
+  },
+  "errors.agent_call.contains_credential": {
+    "message": "A kérés tartalmazza a(z) {extension} bővítmény egyik mentett hitelesítő adatát, ezért a Kage nem küldte el.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The request text contains a password or key from the extension's own settings, so nothing was sent.",
+    "_machine_translated": true,
+    "_source_hash": "0c94ff6e82cc3a43"
+  },
+  "errors.agent_call.duplicate": {
+    "message": "Már vár egy háttérkérés ezzel a kulccsal.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Another request with the same de-duplication key is already queued.",
+    "_machine_translated": true,
+    "_source_hash": "bf35c01be5138a60"
+  },
+  "errors.agent_call.queue_full": {
+    "message": "A(z) {extension} bővítménynek már {limit} háttérkérése vár.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension's queue of waiting requests is full. {limit} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "83e59d6397c7a7df"
+  },
+  "errors.agent_call.rate_limited": {
+    "message": "Túl sok háttérkérés. Próbálja újra ennyi után: {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Too many requests in a short time. {time} is a local time of day.",
+    "_machine_translated": true,
+    "_source_hash": "c96c62fb0fb70605"
+  },
+  "errors.agent_call.budget_exhausted": {
+    "message": "A(z) {extension} bővítmény felhasználta a mai háttér-AI-keretét. A keret ekkor nullázódik: {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension used its daily allowance on this computer. {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "643188121da9b7dc"
+  },
+  "errors.agent_call.paused": {
+    "message": "A(z) {extension} bővítmény háttér-AI-ja szüneteltetve van eddig: {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Requests are paused (after failures, tool attempts, or the user pressing Stop). {time} is a local time.",
+    "_machine_translated": true,
+    "_source_hash": "48e6970bffec07bd"
+  },
+  "errors.agent_call.agent_unavailable": {
+    "message": "Az ügynöke nincs csatlakoztatva.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). No agent is connected. Kage never starts the agent for a background request.",
+    "_machine_translated": true,
+    "_source_hash": "0e5d5f3dc25c664a"
+  },
+  "errors.agent_call.agent_disconnected": {
+    "message": "Az ügynök kapcsolata megszakadt, mielőtt befejezte volna.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent connection dropped while a request was running.",
+    "_machine_translated": true,
+    "_source_hash": "7c774aa148db6bd0"
+  },
+  "errors.agent_call.timeout": {
+    "message": "Az ügynök nem végzett {seconds} másodpercen belül.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The request ran out of time. {seconds} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "039633dc66c8c325"
+  },
+  "errors.agent_call.turn_expired": {
+    "message": "A kérés nem lett elküldve a sorra kerülést követő {seconds} másodpercen belül, ezért a sorra kerülés elveszett.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the extension took too long to send its request after Kage gave it a turn. {seconds} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "9dbb18f9a036c160"
+  },
+  "errors.agent_call.cancelled_by_extension": {
+    "message": "A bővítmény megszakította a kérést.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension itself cancelled its request.",
+    "_machine_translated": true,
+    "_source_hash": "2e5b49a2f82fe258"
+  },
+  "errors.agent_call.cancelled_by_user": {
+    "message": "Ön leállította a kérést.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user pressed Stop now.",
+    "_machine_translated": true,
+    "_source_hash": "82b9246dde30f164"
+  },
+  "errors.agent_call.cancelled_user_activity": {
+    "message": "Leállítva, mert elkezdte használni a Kage-et.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user started a chat prompt, which stops background requests.",
+    "_machine_translated": true,
+    "_source_hash": "56f67a0a6acfadec"
+  },
+  "errors.agent_call.cancelled_shutdown": {
+    "message": "Leállítva, mert a Kage kilép.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Kage is shutting down.",
+    "_machine_translated": true,
+    "_source_hash": "2b19fb0375805114"
+  },
+  "errors.agent_call.cancelled_access_off": {
+    "message": "A kérés leállt, mert a háttérben futó MI ki lett kapcsolva a(z) {extension} bővítménynél.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user turned background AI off, or disabled or removed the extension, while a request was waiting or running.",
+    "_machine_translated": true,
+    "_source_hash": "e440580836e7691c"
+  },
+  "errors.agent_call.tool_attempted": {
+    "message": "Az ügynök eszközt próbált használni, ezért a Kage leállította a kérést.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Background requests may not use tools; the agent started one, so Kage stopped the request.",
+    "_machine_translated": true,
+    "_source_hash": "e4d42b3caaf7aa88"
+  },
+  "errors.agent_call.response_too_large": {
+    "message": "Az ügynök válasza túllépte a(z) {limit} karakteres korlátot, ezért a Kage leállította.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent's reply was too long. {limit} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "94a72027d4304da4"
+  },
+  "errors.agent_call.not_json": {
+    "message": "Az ügynök válasza nem JSON formátumú volt.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension asked for a JSON reply, and the reply had none.",
+    "_machine_translated": true,
+    "_source_hash": "8d0f9994ffc8dd97"
+  },
+  "errors.agent_call.invalid_response": {
+    "message": "Az ügynök válasza nem felelt meg a várt formátumnak itt: {path}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The JSON reply didn't match the extension's schema. {path} is a JSON path such as $.items[3].text; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "c8a7c619517aa826"
+  },
+  "errors.agent_call.agent_error": {
+    "message": "Az ügynök hibát jelzett: {reason}",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent reported an error. {reason} is the agent's own text, not translated.",
+    "_machine_translated": true,
+    "_source_hash": "bc9f02c01197c7a0"
+  },
+  "errors.agent_call.unknown_call": {
+    "message": "Ismeretlen vagy már befejeződött háttérkérés.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the request id is unknown, belongs to another extension, or already finished.",
+    "_machine_translated": true,
+    "_source_hash": "2314c7d53e5c7520"
+  },
+  "errors.agent_call.not_ready": {
+    "message": "Ez a kérés még nem került sorra.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the extension tried to send before Kage gave the request its turn.",
+    "_machine_translated": true,
+    "_source_hash": "1fb87f25d0a6d7b4"
+  },
+  "errors.file_text.not_granted": {
+    "message": "A(z) {extension} bővítménynek nincs engedélye az Ön által kiválasztott fájlok olvasására.",
+    "description": "Reading a file the user picked for an extension. The extension lacks the Files you choose permission. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "da78166b5d44b3f3"
+  },
+  "errors.file_text.extension_disabled": {
+    "message": "A(z) {extension} bővítmény ki van kapcsolva.",
+    "description": "Reading a file the user picked for an extension. The extension is disabled, so it can't ask for a file. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "f9e1827a4976697f"
+  },
+  "errors.file_text.invalid_formats": {
+    "message": "Ismeretlen fájltípus lett kérve. A Kage által olvasható formátumok: {formats}.",
+    "description": "Reading a file the user picked for an extension. Developer-facing: the extension asked for a format Kage doesn't know. {formats} is a list of file extensions such as .txt, .md, .pdf; keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "605fe0fcf1c989a5"
+  },
+  "errors.file_text.invalid_max_chars": {
+    "message": "A karakterkorlátnak 1 és {max} között kell lennie.",
+    "description": "Reading a file the user picked for an extension. Developer-facing: the extension asked for a character limit out of range. {max} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "d7ef1ac27d172367"
+  },
+  "errors.file_text.busy": {
+    "message": "A Kage már olvas egy fájlt. Próbálja újra, ha végzett.",
+    "description": "Reading a file the user picked for an extension. Only one file can be read at a time, or the ask bar is already showing.",
+    "_machine_translated": true,
+    "_source_hash": "d4dd430eb0bf31a7"
+  },
+  "errors.file_text.too_soon": {
+    "message": "Várjon egy kicsit, mielőtt másik fájlt választ.",
+    "description": "Reading a file the user picked for an extension. The extension asked for another file within a few seconds of the last dialog.",
+    "_machine_translated": true,
+    "_source_hash": "b15028905568c40a"
+  },
+  "errors.file_text.declined": {
+    "message": "A „Most nem” lehetőséget választotta. Próbálja újra egy kis idő múlva.",
+    "description": "Reading a file the user picked for an extension. The user clicked Not now on the ask bar, and the extension asked again too soon. \"Not now\" is the button label (file_text.ask.dismiss).",
+    "_machine_translated": true,
+    "_source_hash": "43d4ec13e67fceb6"
+  },
+  "errors.file_text.no_window": {
+    "message": "Fájl kiválasztásához nyissa meg a Kage alkalmazást.",
+    "description": "Reading a file the user picked for an extension. The window that would show the ask bar is hidden, so Kage didn't ask.",
+    "_machine_translated": true,
+    "_source_hash": "e24b2c410289fb00"
+  },
+  "errors.file_text.unavailable": {
+    "message": "A fájlolvasás nem érhető el a Kage ezen példányában.",
+    "description": "Reading a file the user picked for an extension. The file reader that ships with Kage is missing from the install.",
+    "_machine_translated": true,
+    "_source_hash": "879bd04ba623260a"
+  },
+  "errors.file_text.dialog_failed": {
+    "message": "Nem sikerült megnyitni a fájlválasztót.",
+    "description": "Reading a file the user picked for an extension. The system's file dialog failed to open.",
+    "_machine_translated": true,
+    "_source_hash": "f0c89936562bef2d"
+  },
+  "errors.file_text.not_a_file": {
+    "message": "A(z) {name} nem normál fájl.",
+    "description": "Reading a file the user picked for an extension. The user picked a folder, a package or a device. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "6a8dba2d44f9de19"
+  },
+  "errors.file_text.unsupported": {
+    "message": "A Kage itt nem tud .{ext} fájlokat olvasni. Olvasható formátumok: {formats}.",
+    "description": "Reading a file the user picked for an extension. The picked file's type isn't one the extension asked for. {ext} is the file's extension without the dot; {formats} is a list of file extensions such as .txt, .md, .pdf. Keep both verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "706505c18e350f47"
+  },
+  "errors.file_text.wrong_content": {
+    "message": "A(z) {name} tartalma nem felel meg a .{ext} kiterjesztésnek.",
+    "description": "Reading a file the user picked for an extension. The file's contents don't match its extension (for example a renamed file). {name} is the file name; {ext} is its extension without the dot.",
+    "_machine_translated": true,
+    "_source_hash": "0d87882e21edaf09"
+  },
+  "errors.file_text.too_large": {
+    "message": "A(z) {name} mérete {size}. A Kage legfeljebb {limit} méretű fájlokat olvas.",
+    "description": "Reading a file the user picked for an extension. The file is over the size limit. {name} is the file name; {size} and {limit} are sizes such as 48.2 MB.",
+    "_machine_translated": true,
+    "_source_hash": "c2bc01f2bc741ca7"
+  },
+  "errors.file_text.read_failed": {
+    "message": "Nem sikerült beolvasni: {name}.",
+    "description": "Reading a file the user picked for an extension. The operating system refused or failed the read. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "4ce41fb505bd4569"
+  },
+  "errors.file_text.not_downloaded": {
+    "message": "A(z) {name} letöltése nem fejeződött be. Próbálja újra, amikor már ezen a számítógépen van.",
+    "description": "Reading a file the user picked for an extension. The file lives on a cloud drive and didn't download in time. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "4dd959a5a51b4ff9"
+  },
+  "errors.file_text.encrypted": {
+    "message": "A(z) {name} jelszóval védett. Távolítsa el a jelszót, és próbálja újra.",
+    "description": "Reading a file the user picked for an extension. The document needs a password to open. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "66c7272de66e7bcd"
+  },
+  "errors.file_text.legacy_format": {
+    "message": "A(z) {name} fájl régi formátumú, amelyet a Kage nem tud beolvasni. Mentse .docx vagy PDF formátumban, majd próbálja újra.",
+    "description": "Reading a file the user picked for an extension. An old binary Office file (such as .doc) saved with a new extension. {name} is the file name; keep .docx and PDF verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "007048733070d4ec"
+  },
+  "errors.file_text.not_text": {
+    "message": "A(z) {name} fájl nem tűnik szövegfájlnak.",
+    "description": "Reading a file the user picked for an extension. A file named as text holds binary data. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "fca75ba19811309e"
+  },
+  "errors.file_text.malformed": {
+    "message": "A(z) {name} fájl sérültnek tűnik, ezért nem sikerült beolvasni.",
+    "description": "Reading a file the user picked for an extension. The document is broken or not what it claims to be. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "b1afb9ce5c687db8"
+  },
+  "errors.file_text.too_complex": {
+    "message": "A(z) {name} fájl túl összetett a biztonságos beolvasáshoz.",
+    "description": "Reading a file the user picked for an extension. The document went over a safety limit (size, nesting or memory). {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "8f8e2db8eda6f5d4"
+  },
+  "errors.file_text.timeout": {
+    "message": "A(z) {name} fájl beolvasása túl sokáig tartott, ezért a Kage leállította.",
+    "description": "Reading a file the user picked for an extension. Extracting the text went over the time limit. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "812bdfe5e3df96a7"
+  },
+  "errors.file_text.cancelled": {
+    "message": "A(z) {name} fájl beolvasása megszakítva.",
+    "description": "Reading a file the user picked for an extension. The user or the extension cancelled the read. {name} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "f529a9103b9ded06"
+  },
+  "errors.file_text.worker_failed": {
+    "message": "A fájlolvasó váratlanul leállt.",
+    "description": "Reading a file the user picked for an extension. Kage's separate file reader process failed or returned something it couldn't use.",
+    "_machine_translated": true,
+    "_source_hash": "925c217a186b6108"
+  },
+  "errors.ext_view.opener_refused": {
+    "message": "Ez az ablak nem nyithat meg bővítményablakokat.",
+    "description": "Opening an extension's own window from a Kage window that isn't allowed to (for example the Store).",
+    "_machine_translated": true,
+    "_source_hash": "632f6580e4b38c90"
+  },
+  "errors.ext_view.unknown_extension": {
+    "message": "Nincs telepítve {id} azonosítójú bővítmény.",
+    "description": "Opening an extension window for an extension that isn't installed. {id} is the extension's id.",
+    "_machine_translated": true,
+    "_source_hash": "9c2c81deb0c63361"
+  },
+  "errors.ext_view.disabled": {
+    "message": "A(z) {extension} bővítmény ki van kapcsolva.",
+    "description": "Opening an extension window for an extension the user turned off. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "5b41a8ae72cf83c7"
+  },
+  "errors.ext_view.not_granted": {
+    "message": "A(z) {extension} bővítménynek az Ön jóváhagyására van szüksége a saját ablakai megnyitásához.",
+    "description": "Opening an extension window without the Its own windows permission. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "73a6cb643f31c042"
+  },
+  "errors.ext_view.unknown_view": {
+    "message": "A(z) {extension} bővítménynek nincs {view} nevű ablaka.",
+    "description": "The extension doesn't declare the window it asked to open. {extension} is the extension's name; {view} is the window's id.",
+    "_machine_translated": true,
+    "_source_hash": "8e0f475fe32e477a"
+  },
+  "errors.ext_view.wrong_extension": {
+    "message": "Egy bővítményablak csak ugyanannak a bővítménynek az ablakait nyithatja meg.",
+    "description": "An extension window tried to open another extension's window.",
+    "_machine_translated": true,
+    "_source_hash": "a26c495d2020e106"
+  },
+  "errors.ext_view.params_invalid": {
+    "message": "Az ablak indítási adatai érvénytelenek: {reason}",
+    "description": "The data an extension passes to a window it opens is malformed. {reason} is a short technical reason in English.",
+    "_machine_translated": true,
+    "_source_hash": "fb335b1b4b7c16cb"
+  },
+  "errors.ext_view.params_too_large": {
+    "message": "Az ablak indítási adatai túl nagyok ({size} bájt; a korlát {limit}).",
+    "description": "The data an extension passes to a window it opens is too large. {size} and {limit} are numbers of bytes.",
+    "_machine_translated": true,
+    "_source_hash": "c54df884fb804f9d"
+  },
+  "errors.ext_view.too_many_open": {
+    "message": "Túl sok bővítményablak van megnyitva (korlát: {limit}). Zárjon be egyet, majd próbálja újra.",
+    "description": "Every allowed extension window is already open and visible. {limit} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "c8e672f15b0dc6c9"
+  },
+  "errors.ext_view.not_a_view_window": {
+    "message": "Ez nem bővítményablak.",
+    "description": "A command for extension windows was called from another Kage window.",
+    "_machine_translated": true,
+    "_source_hash": "99aa0a8fed59d550"
+  },
+  "errors.ext_view.not_focused": {
+    "message": "A bővítményablak nincs előtérben.",
+    "description": "An extension window tried to copy or send text while another window had focus.",
+    "_machine_translated": true,
+    "_source_hash": "ec126845e28e94ae"
+  },
+  "errors.ext_view.text_invalid": {
+    "message": "A szöveg nem használható: {reason}",
+    "description": "Text from an extension window is too long or isn't plain text. {reason} is a short technical reason in English.",
+    "_machine_translated": true,
+    "_source_hash": "95fe20cf5dc1e5d3"
+  },
+  "errors.ext_view.too_fast": {
+    "message": "Túl sok kérés. Próbálja újra egy pillanat múlva.",
+    "description": "An extension window copied or sent text too often in a short time.",
+    "_machine_translated": true,
+    "_source_hash": "b958047e802e7c05"
+  },
+  "errors.ext_view.clipboard_failed": {
+    "message": "Nem sikerült a vágólapra másolni.",
+    "description": "Copying text from an extension window to the system clipboard failed.",
+    "_machine_translated": true,
+    "_source_hash": "225528debd840a54"
+  },
+  "errors.ext_view.geometry_write_failed": {
+    "message": "Nem sikerült menteni az ablakok pozícióját: {reason}",
+    "description": "Saving or resetting the size and position of extension windows failed. {reason} is a system error message.",
+    "_machine_translated": true,
+    "_source_hash": "b179bdc10940f426"
+  },
+  "file_text.dialog.title": {
+    "message": "{extension}: válasszon egy beolvasandó fájlt",
+    "description": "Title of the system file dialog an extension opens. {extension} is the extension's name. On macOS it shows as the dialog's message line.",
+    "_machine_translated": true,
+    "_source_hash": "98c865982e59109e"
+  },
+  "file_text.dialog.filter": {
+    "message": "Támogatott fájlok",
+    "description": "File type filter in the system file dialog: the file types Kage can read",
+    "_machine_translated": true,
+    "_source_hash": "05186b1475cc0da4"
+  },
+  "file_text.ask.message": {
+    "message": "A(z) {extension} bővítmény be szeretne olvasni egy Ön által kiválasztott fájlt.",
+    "description": "Ask bar shown when an extension asks for a file without a click. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "288df0df96619dec"
+  },
+  "file_text.ask.choose": {
+    "message": "Fájl kiválasztása…",
+    "description": "Ask bar button: open the file dialog",
+    "_machine_translated": true,
+    "_source_hash": "18f853e4d299e25b"
+  },
+  "file_text.ask.dismiss": {
+    "message": "Most nem",
+    "description": "Ask bar button: don't open the file dialog",
+    "_machine_translated": true,
+    "_source_hash": "e3f8ae6303f87d33"
+  },
+  "file_text.progress.reading": {
+    "message": "Olvasás: {file}…",
+    "description": "Progress chip while Kage reads a file the user picked. {file} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "fef9e5a6d96e76cc"
+  },
+  "file_text.progress.downloading": {
+    "message": "Letöltés: {file}…",
+    "description": "Progress chip while a cloud drive downloads the file the user picked. {file} is the file name.",
+    "_machine_translated": true,
+    "_source_hash": "3708f6c1aa9181c1"
+  },
+  "file_text.progress.cancel": {
+    "message": "Mégse",
+    "description": "Progress chip button: stop reading the file",
+    "_machine_translated": true,
+    "_source_hash": "b736e680b4c45cfa"
+  },
+  "ext_view.window_title": {
+    "message": "{view} — {extension}",
+    "description": "Title of an extension's own window, in the title bar and the taskbar. {view} is the window's name; {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "038fa3819a7c0593"
+  },
+  "ext_view.window_title_sub": {
+    "message": "{subtitle} — {view} — {extension}",
+    "description": "Title of an extension's own window when the extension adds a subtitle. {subtitle} comes from the extension; {view} is the window's name; {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "f055d9b18c99dd41"
+  },
+  "ext_view.iframe_label": {
+    "message": "{view}, megjeleníti: {extension}",
+    "description": "Accessible name of the area an extension draws in its own window. {view} is the window's name; {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "888f0ae2ab73f238"
+  },
+  "ext_view.badge": {
+    "message": "Bővítmény",
+    "description": "Badge in the bar at the top of an extension's own window, so it can't pass for a Kage window",
+    "_machine_translated": true,
+    "_source_hash": "53c358039b3a857b"
+  },
+  "ext_view.badge_tip": {
+    "message": "Ezt az ablakot a(z) {extension} bővítmény jeleníti meg.",
+    "description": "Tooltip of the Extension badge in an extension's own window. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "601ce781e09a2892"
+  },
+  "ext_view.bar.reload": {
+    "message": "Újratöltés",
+    "description": "Button in the bar of an extension's own window: start the window's content again",
+    "_machine_translated": true,
+    "_source_hash": "f8d44ce1d3b5016a"
+  },
+  "ext_view.bar.settings": {
+    "message": "Bővítménybeállítások",
+    "description": "Button in the bar of an extension's own window: open the extension's settings page",
+    "_machine_translated": true,
+    "_source_hash": "6b55debd416e55ba"
+  },
+  "ext_view.bar.close": {
+    "message": "Bezárás",
+    "description": "Button in the bar of an extension's own window: close the window",
+    "_machine_translated": true,
+    "_source_hash": "39d692fba63b54df"
+  },
+  "ext_view.loading": {
+    "message": "Megnyitás: {view}…",
+    "description": "Shown while an extension's own window loads. {view} is the window's name.",
+    "_machine_translated": true,
+    "_source_hash": "25111f9c1b9a0958"
+  },
+  "ext_view.state.load_failed": {
+    "message": "Nem sikerült megnyitni: {view}.",
+    "description": "An extension's own window failed to load. {view} is the window's name.",
+    "_machine_translated": true,
+    "_source_hash": "8bb8bc10cf4169c3"
+  },
+  "ext_view.state.not_responding": {
+    "message": "Nem válaszol: {view}.",
+    "description": "Banner when an extension's own window stops answering. {view} is the window's name.",
+    "_machine_translated": true,
+    "_source_hash": "96a37f5088e82610"
+  },
+  "ext_view.state.navigated": {
+    "message": "{view} weboldalt próbált megjeleníteni, ezért a Kage leállította.",
+    "description": "An extension's own window tried to load a web page and Kage closed its content. {view} is the window's name.",
+    "_machine_translated": true,
+    "_source_hash": "32f9506cc7c2e27d"
+  },
+  "ext_view.state.removed": {
+    "message": "A(z) {extension} bővítmény már nem tartalmazza ezt az ablakot.",
+    "description": "After an update the extension no longer declares the open window. {extension} is the extension's name.",
+    "_machine_translated": true,
+    "_source_hash": "05c1ff2321aa4331"
+  },
+  "ext_view.state.updated": {
+    "message": "Frissítve: {version}.",
+    "description": "Shown briefly in an extension's own window after the extension updated. {version} is a version number such as 1.2.0.",
+    "_machine_translated": true,
+    "_source_hash": "8dd943af9a68275c"
+  },
+  "errors.sync.unavailable": {
+    "message": "A szinkronizálás jelenleg nem érhető el.",
+    "description": "A sync action was refused because sync is off, locked or paused on this computer, or not in this version.",
+    "_machine_translated": true,
+    "_source_hash": "2afccf9b0dc5610f"
+  },
+  "errors.sync.needs_confirmation": {
+    "message": "Előbb erősítse meg, majd próbálja újra.",
+    "description": "A destructive sync action (turn off, start over, remove a computer) came without a fresh confirmation.",
+    "_machine_translated": true,
+    "_source_hash": "57537049195ee6ae"
+  },
+  "errors.sync.quota_exceeded": {
+    "message": "A bővítmény szinkronizált adatai túllépték a korlátot.",
+    "description": "An extension tried to sync more data than its limit allows.",
+    "_machine_translated": true,
+    "_source_hash": "88eb080dbf6b4001"
+  },
+  "settings.sync.title": {
+    "message": "Szinkronizálás",
+    "description": "Settings sidebar item and page title for syncing between the user's computers.",
+    "_machine_translated": true,
+    "_source_hash": "9a41b2a09464e651"
+  },
+  "settings.sync.intro": {
+    "message": "Tartsa egyformán beállításait, billentyűparancsait és bővítményeit minden számítógépén.",
+    "description": "First line of Settings → Sync.",
+    "_machine_translated": true,
+    "_source_hash": "2c27024e524743f0"
+  },
+  "settings.sync.no_server": {
+    "message": "A Kage egy már szinkronizált mappát használ, például Dropboxot, iCloud Drive-ot vagy OneDrive-ot. Semmi sem kerül Kage-szerverre, és minden, amit a Kage oda helyez, titkosítva van.",
+    "description": "Settings → Sync while sync is off: how sync works. Dropbox, iCloud Drive and OneDrive are product names.",
+    "_machine_translated": true,
+    "_source_hash": "9d132967d1bf8c1f"
+  },
+  "settings.sync.setup": {
+    "message": "Szinkronizálás beállítása…",
+    "description": "Button that starts sync setup.",
+    "_machine_translated": true,
+    "_source_hash": "5a5eb348c408007d"
+  },
+  "settings.sync.passphrase.lost": {
+    "message": "A Kage nem tudja visszaállítani ezt a jelmondatot. Ha elveszíti, bármelyik olyan számítógépen megváltoztathatja, amely még szinkronizál.",
+    "description": "Setup: warning under the new sync passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "0769245973fe9aac"
+  },
+  "settings.sync.passphrase.wrong": {
+    "message": "Ez a jelmondat nem oldja fel ezt a mappát.",
+    "description": "The sync passphrase the user typed doesn't unlock the sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "d500e1eeb022bf31"
+  },
+  "settings.sync.categories.per_computer": {
+    "message": "Ezek a beállítások erre a számítógépre vonatkoznak. Minden számítógép maga dönt.",
+    "description": "Under the list of what syncs: the choice is made on each computer.",
+    "_machine_translated": true,
+    "_source_hash": "e82d4332d8cb1ad8"
+  },
+  "settings.sync.category.settings": {
+    "message": "Beállítások",
+    "description": "Sync category: preferences, agents, app modes.",
+    "_machine_translated": true,
+    "_source_hash": "558b2ed3d3e2db8c"
+  },
+  "settings.sync.category.automations": {
+    "message": "Billentyűparancsok és automatizálások",
+    "description": "Sync category: shortcuts, automations and custom actions.",
+    "_machine_translated": true,
+    "_source_hash": "6e3cef1d32035416"
+  },
+  "settings.sync.category.extensions": {
+    "message": "Bővítmények és adataik",
+    "description": "Sync category: which extensions are installed, their settings and their data.",
+    "_machine_translated": true,
+    "_source_hash": "40fdc7b5c3cbbcee"
+  },
+  "settings.sync.category.chats": {
+    "message": "Csevegési előzmények",
+    "description": "Sync category: copies of chats, off by default.",
+    "_machine_translated": true,
+    "_source_hash": "e295b19a5de52bdc"
+  },
+  "settings.sync.join.theirs": {
+    "message": "A többi számítógépem beállításainak használata",
+    "description": "Joining sync: the other computers' values win where they differ.",
+    "_machine_translated": true,
+    "_source_hash": "b055804026cb163d"
+  },
+  "settings.sync.join.mine": {
+    "message": "Ennek a számítógépnek a beállításai legyenek érvényesek minden számítógépen",
+    "description": "Joining sync: this computer's values win where they differ.",
+    "_machine_translated": true,
+    "_source_hash": "67962b384fb0f72a"
+  },
+  "settings.sync.join.safe": {
+    "message": "Semmi sem vész el. A lecserélt értékek az Ütközések közé kerülnek, ahonnan visszaállíthatók. A csatlakozást 30 napig visszavonhatja.",
+    "description": "Joining sync: under the two choices.",
+    "_machine_translated": true,
+    "_source_hash": "0e8609f266cbcbaa"
+  },
+  "settings.sync.stays_local": {
+    "message": "Minden számítógépen helyben marad: bejelentkezések és API-kulcsok, engedélyek, ablakpozíciók, naplók.",
+    "description": "What never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "277df0a7ffd824e8"
+  },
+  "settings.sync.ext.origin_mismatch": {
+    "message": "Itt egy másik, ugyanilyen azonosítójú bővítmény van telepítve, ezért az adatai nem szinkronizálódnak.",
+    "description": "Settings → Sync → Extensions: an extension with the same id came from somewhere else on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "b258dabf88885366"
+  },
+  "settings.sync.ext.sideload_hint": {
+    "message": "Csak akkor kapcsolja be, ha minden számítógépén ugyanaz a bővítmény van.",
+    "description": "Settings → Sync → Extensions: next to the data switch of an extension installed from a file.",
+    "_machine_translated": true,
+    "_source_hash": "babba6d3804dd21e"
+  },
+  "settings.sync.uninstall_note": {
+    "message": "Az adatai a szinkronizálási mappában és a többi számítógépén maradnak. Ha mindenhonnan törölni szeretné, használja a Beállítások → Szinkronizálás → Bővítmények → Adatok eltávolítása a szinkronizálási mappából lehetőséget.",
+    "description": "Added to the uninstall confirmation of an extension whose data syncs.",
+    "_machine_translated": true,
+    "_source_hash": "4779b615667f5982"
+  },
+  "settings.sync_scope.all": {
+    "message": "Minden számítógép",
+    "description": "Where a setting applies: every computer.",
+    "_machine_translated": true,
+    "_source_hash": "c7f70dcf9f321ccf"
+  },
+  "settings.sync_scope.os_only": {
+    "message": "{os, select, macos {Csak Macek} windows {Csak Windows PC-k} other {Csak Linux PC-k}}",
+    "description": "Where a setting applies: only computers with this OS. {os} is macos, windows or linux.",
+    "_machine_translated": true,
+    "_source_hash": "cd651a5f2e155fbf"
+  },
+  "settings.sync_scope.this_computer": {
+    "message": "Ez a számítógép",
+    "description": "Where a setting applies: only this computer.",
+    "_machine_translated": true,
+    "_source_hash": "b9bd2b9dbf14c53e"
+  },
+  "settings.sync_scope.per_os": {
+    "message": "Minden számítógéptípusnak saját értéke van",
+    "description": "Where a setting applies: Macs, Windows PCs and Linux PCs each have their own value (hotkeys, paths).",
+    "_machine_translated": true,
+    "_source_hash": "f91c8fcf8b8f8335"
+  },
+  "settings.sync_scope.not_synced": {
+    "message": "Nincs szinkronizálva. {reason}",
+    "description": "Tooltip of a setting that never syncs. {reason} is one of the settings.sync_scope.reason.* sentences.",
+    "_machine_translated": true,
+    "_source_hash": "78f11482eb7c39b9"
+  },
+  "settings.sync_scope.changed_everywhere": {
+    "message": "Minden számítógépén módosítva.",
+    "description": "Toast after the user changed a setting that is shared by all their computers.",
+    "_machine_translated": true,
+    "_source_hash": "c2023b166baf1605"
+  },
+  "settings.sync_scope.action.all": {
+    "message": "Minden számítógépen ugyanaz",
+    "description": "Menu item: use this value on every computer.",
+    "_machine_translated": true,
+    "_source_hash": "e4a80abeb3ee0cc9"
+  },
+  "settings.sync_scope.action.os": {
+    "message": "{os, select, macos {Csak Maceken} windows {Csak Windows PC-ken} other {Csak Linux PC-ken}}",
+    "description": "Menu item: use this value only on computers with this OS. {os} is macos, windows or linux.",
+    "_machine_translated": true,
+    "_source_hash": "659356dd1381f524"
+  },
+  "settings.sync_scope.action.use_shared": {
+    "message": "Az összes számítógépre vonatkozó érték használata ({value})",
+    "description": "Menu item: drop this OS's own value. {value} is the shared value, as text.",
+    "_machine_translated": true,
+    "_source_hash": "dd410179755cbfd1"
+  },
+  "settings.sync_scope.action.this_computer": {
+    "message": "Csak ezen a számítógépen",
+    "description": "Menu item: keep this value on this computer only.",
+    "_machine_translated": true,
+    "_source_hash": "12ed8711c79b52c9"
+  },
+  "settings.sync_scope.action.stop_this_computer": {
+    "message": "Az érték csak itt tárolásának megszüntetése",
+    "description": "Menu item: follow the synced value again.",
+    "_machine_translated": true,
+    "_source_hash": "34bada568f914e0b"
+  },
+  "settings.sync_scope.action.avail_all": {
+    "message": "Minden számítógépen elérhető",
+    "description": "Menu item for a list item: it exists on every computer.",
+    "_machine_translated": true,
+    "_source_hash": "5989307a9f853dff"
+  },
+  "settings.sync_scope.action.avail_os": {
+    "message": "{os, select, macos {Csak Mac gépeken} windows {Csak Windows rendszerű gépeken} other {Csak Linux rendszerű gépeken}}",
+    "description": "Menu item for a list item: it exists only on computers with this OS. {os} is macos, windows or linux.",
+    "_machine_translated": true,
+    "_source_hash": "38d31ea8889133eb"
+  },
+  "settings.sync_scope.action.avail_this_computer": {
+    "message": "Csak ezen a számítógépen",
+    "description": "Menu item for a list item: it exists only on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "4f394a07b85ba816"
+  },
+  "settings.sync_scope.reason.writes_file": {
+    "message": "Egy olyan fájlt ad meg, amelyet a Kage ezen a számítógépen ír.",
+    "description": "Why a setting doesn't sync: it is a path Kage writes to.",
+    "_machine_translated": true,
+    "_source_hash": "19d191f6b4119cea"
+  },
+  "settings.sync_scope.reason.shell_files": {
+    "message": "Azt határozza meg, hogy lefussanak-e a számítógép shell indítófájljai.",
+    "description": "Why the login shell setting doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "c7c54b50585af4ae"
+  },
+  "settings.sync_scope.reason.login_item": {
+    "message": "A bejelentkezéskori indítás számítógépenként állítható be.",
+    "description": "Why Start at login doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "43b107ee38b9d86d"
+  },
+  "settings.sync_scope.reason.mac_workaround": {
+    "message": "Egy, a Mac gépen futó macOS-verzióval kapcsolatos problémát kerül meg.",
+    "description": "Why a macOS workaround setting doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "17ae5195e7e05b05"
+  },
+  "settings.sync_scope.reason.diagnostics": {
+    "message": "A hibaelhárítási beállítások számítógépenként állíthatók be.",
+    "description": "Why logging and debug settings don't sync.",
+    "_machine_translated": true,
+    "_source_hash": "8a4a76a8ff22e26d"
+  },
+  "settings.sync_scope.reason.permissions": {
+    "message": "Az engedélyeket számítógépenként kell megadni.",
+    "description": "Why tool permissions and extension grants don't sync.",
+    "_machine_translated": true,
+    "_source_hash": "c4a6e45dd14f7958"
+  },
+  "settings.sync_scope.reason.consent": {
+    "message": "Minden számítógép külön kér hozzájárulást.",
+    "description": "Why consent choices (analytics, background AI) don't sync.",
+    "_machine_translated": true,
+    "_source_hash": "21c48fa9be579c50"
+  },
+  "settings.sync_scope.reason.first_run": {
+    "message": "Minden számítógépen külön fut le az üdvözlés.",
+    "description": "Why the welcome-done flag doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "254b77e636ab4ae6"
+  },
+  "settings.sync_scope.reason.local_voice": {
+    "message": "A helyi hang számítógépenként van telepítve.",
+    "description": "Why the local text-to-speech server settings don't sync.",
+    "_machine_translated": true,
+    "_source_hash": "1f6ee827e964cf3e"
+  },
+  "settings.sync_scope.reason.looks_like_key": {
+    "message": "Úgy tűnik, kulcsot tartalmaz.",
+    "description": "Why a value stays on this computer: it may hold a password or API key.",
+    "_machine_translated": true,
+    "_source_hash": "7d470c3576c0118c"
+  },
+  "settings.sync_scope.reason.not_this_version": {
+    "message": "A Kage ezen verziójában nem működik.",
+    "description": "Why a synced value isn't used here: it came from a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "d82a6dea87b81880"
+  },
+  "settings.sync_scope.reason.needs_approval": {
+    "message": "Jóváhagyás szükséges hozzá ezen a számítógépen.",
+    "description": "Why a synced value isn't used here yet: it can start programs, or turn an extension on.",
+    "_machine_translated": true,
+    "_source_hash": "83c7aebc3d359eaf"
+  },
+  "settings.sync_scope.reason.not_installed": {
+    "message": "Nincs telepítve ezen a számítógépen.",
+    "description": "Why a synced extension setting isn't used here.",
+    "_machine_translated": true,
+    "_source_hash": "4e089cd92f9c79ee"
+  },
+  "settings.sync_scope.reason.custom_path": {
+    "message": "Az Ön által választott útvonalon van tárolva.",
+    "description": "Why the user's steering file doesn't sync when it is at a custom path.",
+    "_machine_translated": true,
+    "_source_hash": "bd472a4338ae61e1"
+  },
+  "settings.sync_scope.reason.sign_in": {
+    "message": "A bejelentkezések nem szinkronizálódnak.",
+    "description": "Why an extension's sign-in or API key field doesn't sync.",
+    "_machine_translated": true,
+    "_source_hash": "0fbabe3dda6a160c"
+  },
+  "sync.status.off": {
+    "message": "Ki",
+    "description": "Sync status: not set up on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "d0eaf78ab0fa2ffa"
+  },
+  "sync.status.setting_up": {
+    "message": "Beállítás…",
+    "description": "Sync status: setup is in progress.",
+    "_machine_translated": true,
+    "_source_hash": "71f7fb0f41634ca1"
+  },
+  "sync.status.up_to_date": {
+    "message": "Naprakész · Utolsó szinkronizálás: {time}",
+    "description": "Sync status. {time} is a relative time such as '2 minutes ago'.",
+    "_machine_translated": true,
+    "_source_hash": "7f77918c80cf746f"
+  },
+  "sync.status.syncing": {
+    "message": "Szinkronizálás…",
+    "description": "Sync status.",
+    "_machine_translated": true,
+    "_source_hash": "328584a367a9fa49"
+  },
+  "sync.status.waiting": {
+    "message": "Várakozás {count, plural, one {# fájl} other {# fájl}} letöltésére innen: {computer}",
+    "description": "Sync status: the sync app hasn't downloaded files yet. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "27164c2855476403"
+  },
+  "sync.status.placeholders": {
+    "message": "A szinkronizálási mappa még nem töltött le néhány fájlt",
+    "description": "Sync status: some files in the sync folder are online-only.",
+    "_machine_translated": true,
+    "_source_hash": "43eda773affc48ec"
+  },
+  "sync.status.paused": {
+    "message": "Szüneteltetve eddig: {time}",
+    "description": "Sync status. {time} is a date and time.",
+    "_machine_translated": true,
+    "_source_hash": "c50cb8dec2d811ad"
+  },
+  "sync.status.paused_forever": {
+    "message": "Szüneteltetve",
+    "description": "Sync status: paused until the user resumes.",
+    "_machine_translated": true,
+    "_source_hash": "b7201ea8d81c1c86"
+  },
+  "sync.status.locked": {
+    "message": "A szinkronizálás folytatásához adja meg a szinkronizálási jelmondatát",
+    "description": "Sync status: the key isn't available on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "3873f2623a8ac626"
+  },
+  "sync.status.folder_missing": {
+    "message": "A szinkronizálási mappa nem található",
+    "description": "Sync status.",
+    "_machine_translated": true,
+    "_source_hash": "7c0f69eb2aedc1b0"
+  },
+  "sync.status.folder_denied": {
+    "message": "A Kage nem kapott engedélyt a szinkronizálási mappa megnyitására",
+    "description": "Sync status: the OS denied access.",
+    "_machine_translated": true,
+    "_source_hash": "b1fccde94b5a918f"
+  },
+  "sync.status.folder_empty": {
+    "message": "A szinkronizálási mappa már nem tartalmaz Kage-adatokat",
+    "description": "Sync status: the Kage Sync folder was emptied.",
+    "_machine_translated": true,
+    "_source_hash": "da297edc2b0881b3"
+  },
+  "sync.status.reset": {
+    "message": "A szinkronizálást újrakezdték a következő számítógépen: {computer}",
+    "description": "Sync status. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "c494fc25fafc95c0"
+  },
+  "sync.status.removed": {
+    "message": "Ezt a számítógépet eltávolították a szinkronizálásból a következő számítógépen: {computer}",
+    "description": "Sync status. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "8021b818792b5660"
+  },
+  "sync.status.update_required": {
+    "message": "A szinkronizálás folytatásához frissítse a Kage alkalmazást ezen a számítógépen",
+    "description": "Sync status: another computer uses a newer sync format.",
+    "_machine_translated": true,
+    "_source_hash": "8ae0ebee48d4a6c4"
+  },
+  "sync.status.disk_full": {
+    "message": "A lemez megtelt. A szinkronizálás folytatódik, amint lesz szabad hely.",
+    "description": "Sync status.",
+    "_machine_translated": true,
+    "_source_hash": "2619c165bdd943c0"
+  },
+  "sync.status.write_failed": {
+    "message": "A Kage nem tud írni a szinkronizálási mappába",
+    "description": "Sync status.",
+    "_machine_translated": true,
+    "_source_hash": "40202447b13a5585"
+  },
+  "sync.status.folder_reverting": {
+    "message": "A szinkronizáló alkalmazás folyamatosan visszaállítja a Kage fájljait",
+    "description": "Sync status: the cloud app keeps rolling the folder back.",
+    "_machine_translated": true,
+    "_source_hash": "745cad7191471c95"
+  },
+  "sync.status.other_engine": {
+    "message": "A Kage egy másik példánya szinkronizálja ezt a profilt",
+    "description": "Sync status: a second Kage on this computer uses the same profile.",
+    "_machine_translated": true,
+    "_source_hash": "37d06ad9e6241a5e"
+  },
+  "sync.problem.clock_warning": {
+    "message": "A(z) {computer} számítógép órája körülbelül {minutes, plural, one {# perccel} other {# perccel}} eltér. Az onnan érkező módosítások felülírhatják az újabbakat.",
+    "description": "Sync problem. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "d2680059a947212e"
+  },
+  "sync.problem.unreadable": {
+    "message": "A(z) {computer} számítógépről származó {count, plural, one {# fájl} other {# fájl}} nem olvasható. A Kage a többi adatot használja.",
+    "description": "Sync problem. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "756dbf513c8e92a8"
+  },
+  "sync.conflicts.title": {
+    "message": "Ütközések",
+    "description": "Title of the sync conflicts list.",
+    "_machine_translated": true,
+    "_source_hash": "8eb9f42fe3f5ec19"
+  },
+  "sync.conflicts.intro": {
+    "message": "Ha két számítógép ugyanazt módosította, a Kage a legújabb módosítást tartotta meg. A másikat 90 napig itt őrzi.",
+    "description": "Top of the sync conflicts list.",
+    "_machine_translated": true,
+    "_source_hash": "484760b9aaca204b"
+  },
+  "sync.conflicts.tab.replaced": {
+    "message": "Lecserélve",
+    "description": "Conflicts tab: values replaced by a newer change.",
+    "_machine_translated": true,
+    "_source_hash": "daefa0ef714e4e9e"
+  },
+  "sync.conflicts.tab.deleted": {
+    "message": "Nemrég törölt",
+    "description": "Conflicts tab: items deleted in the last 30 days.",
+    "_machine_translated": true,
+    "_source_hash": "7a86da7ed88d0331"
+  },
+  "sync.conflicts.tab.resolved": {
+    "message": "Megoldva",
+    "description": "Conflicts tab: entries restored or dismissed.",
+    "_machine_translated": true,
+    "_source_hash": "1e2108a71e4c04a5"
+  },
+  "sync.conflicts.generated": {
+    "message": "A Kage által létrehozott",
+    "description": "Conflicts group for documents Kage writes itself, such as what it learned about the user.",
+    "_machine_translated": true,
+    "_source_hash": "bbaee0e41a24f808"
+  },
+  "sync.conflicts.private_item": {
+    "message": "Privát elem",
+    "description": "Label of a private extension item in the conflicts list.",
+    "_machine_translated": true,
+    "_source_hash": "f53746c921587c3f"
+  },
+  "sync.conflicts.now": {
+    "message": "Jelenlegi: {value} ({computer}, {time})",
+    "description": "Conflict entry: the current value. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "1cc189d46e4bc251"
+  },
+  "sync.conflicts.replaced": {
+    "message": "Lecserélt: {value} ({computer}, {time})",
+    "description": "Conflict entry: the value that was replaced. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "afb575051c443567"
+  },
+  "sync.conflicts.now_changed": {
+    "message": "Jelenlegi: módosítva itt: {computer}, {time}",
+    "description": "Conflict entry for an item: the current version.",
+    "_machine_translated": true,
+    "_source_hash": "3ae8a8464e30ce8a"
+  },
+  "sync.conflicts.replaced_changed": {
+    "message": "Lecserélve: módosítva ezen a gépen: {computer}, {time}",
+    "description": "Conflict entry for an item: the replaced version.",
+    "_machine_translated": true,
+    "_source_hash": "ea2d9f4e7826bf1b"
+  },
+  "sync.conflicts.kind.concurrent_edit": {
+    "message": "{item} · {scope}",
+    "description": "Conflict entry title: one setting or item changed on two computers. {scope} is where it applies, such as 'All computers'.",
+    "_machine_translated": true,
+    "_source_hash": "8a14029f20a31fae"
+  },
+  "sync.conflicts.kind.edit_vs_delete": {
+    "message": "{item} törölve ezen a gépen: {deleter}. Korábban módosították ezen a gépen: {editor}.",
+    "description": "Conflict entry. {deleter} and {editor} are computer names.",
+    "_machine_translated": true,
+    "_source_hash": "dad4be417631691c"
+  },
+  "sync.conflicts.kind.delete_vs_edit": {
+    "message": "Ön törölte ezt: {item}, ezen a gépen: {deleter}. Később módosították ezen a gépen: {editor}, ezért visszakerült.",
+    "description": "Conflict entry. {deleter} and {editor} are computer names.",
+    "_machine_translated": true,
+    "_source_hash": "1ccf09d7baac0e3a"
+  },
+  "sync.conflicts.kind.replaced_on_join": {
+    "message": "Csatlakozott a(z) {computer} géphez: {count, plural, one {1 beállítás eltért} other {# beállítás eltért}}.",
+    "description": "Grouped conflict entry after joining sync. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "04d4dcfb44472093"
+  },
+  "sync.conflicts.kind.restore_backup": {
+    "message": "Biztonsági mentés visszaállítva a(z) {computer} gépen: {count, plural, one {1 beállítás lecserélve} other {# beállítás lecserélve}}.",
+    "description": "Grouped conflict entry after a backup import. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "9857cb0ac961385d"
+  },
+  "sync.conflicts.kind.replaced_by_restore": {
+    "message": "Egy korábbi érték visszaállítva ennél: {item}. Lecserélve: {value}.",
+    "description": "Conflict entry after the user restored an older value.",
+    "_machine_translated": true,
+    "_source_hash": "0f408b2b80ae555c"
+  },
+  "sync.conflicts.kind.deleted_while_away": {
+    "message": "A(z) {computer} gép {date} óta nem szinkronizált. {count, plural, one {1 máshol törölt elem eltávolítva róla} other {# máshol törölt elem eltávolítva róla}}.",
+    "description": "Grouped conflict entry for a computer that came back after a long time. {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "238e9c58b35a2781"
+  },
+  "sync.conflicts.restore": {
+    "message": "Visszaállítás",
+    "description": "Conflict entry button: bring the replaced version back.",
+    "_machine_translated": true,
+    "_source_hash": "0e44f9d5f22e9e43"
+  },
+  "sync.conflicts.dismiss": {
+    "message": "Elvetés",
+    "description": "Conflict entry button: keep the current version.",
+    "_machine_translated": true,
+    "_source_hash": "33439b42cb62c84b"
+  },
+  "sync.conflicts.dismiss_all": {
+    "message": "Összes elvetése",
+    "description": "Conflicts list button.",
+    "_machine_translated": true,
+    "_source_hash": "ef5284e68c2af393"
+  },
+  "sync.conflicts.delete_anyway": {
+    "message": "Törlés mindenképp",
+    "description": "Conflict entry button: delete an item that came back because another computer changed it.",
+    "_machine_translated": true,
+    "_source_hash": "78bb8093c36deda9"
+  },
+  "sync.conflicts.compare": {
+    "message": "Összehasonlítás",
+    "description": "Conflict entry button: show both versions side by side.",
+    "_machine_translated": true,
+    "_source_hash": "8ed08660a5c6988c"
+  },
+  "sync.review.runnable_title": {
+    "message": "{count, plural, one {1 szinkronizált elem futtathat programokat ezen a számítógépen} other {# szinkronizált elem futtathat programokat ezen a számítógépen}}",
+    "description": "Needs your attention: synced agents, scripts or automations wait for approval here.",
+    "_machine_translated": true,
+    "_source_hash": "48f847b6a2adeeb5"
+  },
+  "sync.review.mass_delete": {
+    "message": "A(z) {computer} gép {count, plural, one {1 elemet} other {# elemet}} törölt innen: {what}.",
+    "description": "Needs your attention: a bulk delete from another computer waits for an answer. {computer} is a computer's name; {what} is a list name.",
+    "_machine_translated": true,
+    "_source_hash": "db83860cf5780298"
+  },
+  "sync.os.macos": {
+    "message": "macOS",
+    "description": "OS name.",
+    "_machine_translated": true,
+    "_source_hash": "b13bea0e87bdb8e5"
+  },
+  "sync.os.windows": {
+    "message": "Windows",
+    "description": "OS name.",
+    "_machine_translated": true,
+    "_source_hash": "88f55bcfc1b46e45"
+  },
+  "sync.os.linux": {
+    "message": "Linux",
+    "description": "OS name.",
+    "_machine_translated": true,
+    "_source_hash": "04f7a9e2d412fa2a"
+  },
+  "sync.this_computer.macos": {
+    "message": "Ez a Mac",
+    "description": "This computer, on a Mac.",
+    "_machine_translated": true,
+    "_source_hash": "efb5f7fa3f677645"
+  },
+  "sync.this_computer.windows": {
+    "message": "Ez a PC",
+    "description": "This computer, on Windows.",
+    "_machine_translated": true,
+    "_source_hash": "f275fd761a483131"
+  },
+  "sync.this_computer.linux": {
+    "message": "Ez a számítógép",
+    "description": "This computer, on Linux.",
+    "_machine_translated": true,
+    "_source_hash": "a6f357481b09b459"
+  },
+  "tray.sync_status": {
+    "message": "Szinkronizálás: {status}",
+    "description": "Disabled tray menu line. {status} is a short sync status, such as 'Up to date'.",
+    "_machine_translated": true,
+    "_source_hash": "e32b63a931989ee0"
+  },
+  "tray.sync_now": {
+    "message": "Szinkronizálás most",
+    "description": "Tray menu item: sync with the other computers now.",
+    "_machine_translated": true,
+    "_source_hash": "a715fd867f40c578"
   }
 }
