@@ -8752,5 +8752,29 @@
   "sync.readme": {
     "message": "This folder holds Kage sync data. Kage uses it to keep your settings the same on all your computers. Everything in it is encrypted. Please don't edit, move or rename the files in it.",
     "description": "README.txt written once into a new sync folder. Shown in the user's language with English below."
+  },
+  "sync.review.suggestion": {
+    "message": "{name} is on your other computers",
+    "description": "Needs your attention: an extension or command pack installed on another computer isn't installed here. [Review] opens the install prompt. {name} is the item's id or name."
+  },
+  "sync.review.suggestion_sideload": {
+    "message": "{name} is on your other computers. Install it on this computer from where you got it.",
+    "description": "Needs your attention: an item installed from a file on another computer isn't installed here. {name} is the item's id or name."
+  },
+  "sync.review.removal": {
+    "message": "{name} was removed on {computer}",
+    "description": "Needs your attention: an item still installed here was uninstalled on another computer. Buttons: Remove here, Keep. {name} is the item's id or name; {computer} is a computer's name."
+  },
+  "errors.sync.bad_cursor": {
+    "message": "That sync cursor isn't one Kage gave out.",
+    "description": "Error to an extension: context.sync.ack got a cursor that isn't a number from pull."
+  },
+  "errors.sync.ext_bad_request": {
+    "message": "That isn't a valid extension id.",
+    "description": "Error to an extension: a context.sync call named an invalid extension id."
+  },
+  "errors.sync.ext_push_too_large": {
+    "message": "A sync push can carry at most 500 records and deletes, and 4 MB.",
+    "description": "Error to an extension: context.sync.push was over the per-call limits. Push in smaller batches."
   }
 }
