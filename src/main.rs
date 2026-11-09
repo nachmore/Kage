@@ -7,6 +7,10 @@ use kage_core::lock_ext;
 
 mod acp_client;
 mod activity_tracker;
+// The binary reaches the engine through its commands; the rest of its public
+// API (re-exports, helpers) serves the library and its tests.
+#[allow(dead_code, unused_imports)]
+mod agent_calls;
 mod agent_commands;
 mod agent_presets;
 mod agent_sessions;
