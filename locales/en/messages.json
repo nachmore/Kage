@@ -4833,6 +4833,10 @@
     "message": "Another command is running in this window. Wait for it to finish, or stop it first.",
     "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Shown when another command the user started from Kage is still running; only one runs at a time per window."
   },
+  "shared.shell.sandbox.confirm.long": {
+    "message": "It's a long command ({lines, plural, one {# line} other {# lines}}). Scroll through all of it before you run it.",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Shown under the command box when the command is too long to fit in it, so the user scrolls to read the rest. {lines} is the number of lines in the command."
+  },
   "shared.shell.sandbox.confirm.cancel": {
     "message": "Cancel",
     "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Button that closes the confirm without running anything."
@@ -7100,6 +7104,10 @@
   "errors.user_shell.terminal_unsupported": {
     "message": "Running a command in the terminal isn't supported on this system. Copy it instead.",
     "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Run in Terminal is macOS only."
+  },
+  "errors.user_shell.terminal_control_chars": {
+    "message": "This command contains a tab or another control character, which Terminal would read as a key press. Copy it instead.",
+    "description": "Error from Run in Terminal, for a command the user chose to run themselves outside the AI agent's sandbox. Terminal types the command into the shell as if it were typed on the keyboard, so a tab would trigger completion; such a command is only copied."
   },
   "errors.user_shell.terminal_not_authorized": {
     "message": "macOS didn't let Kage control Terminal. Allow it in System Settings → Privacy & Security → Automation, or copy the command instead.",

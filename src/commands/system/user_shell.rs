@@ -73,6 +73,11 @@ fn invalid(e: InvalidRun) -> AppError {
         InvalidRun::BadRunId => {
             AppError::keyed(ErrorKind::Internal, "errors.user_shell.invalid_run_id", &[])
         }
+        InvalidRun::ControlCharForTerminal => AppError::keyed(
+            ErrorKind::Internal,
+            "errors.user_shell.terminal_control_chars",
+            &[],
+        ),
         InvalidRun::NoHome => {
             AppError::keyed(ErrorKind::Internal, "errors.user_shell.no_home", &[])
         }
@@ -176,6 +181,20 @@ impl UserShellRuns {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Stop `label`'s run, whichever it is: its window closed or its page
+    /// reloaded, so nothing is left to show the run or its Stop button.
+    /// Returns whether one was going.
+    pub fn cancel_window(&self, label: &str) -> bool {
+        let active = self.active.lock_or_recover();
+        match active.get(label) {
+            Some(run) => {
+                run.cancel.store(true, Ordering::SeqCst);
+                true
+            }
+            None => false,
         }
     }
 
@@ -286,7 +305,7 @@ enum RunFailure {
 }
 
 /// Run `command` — exactly as given — for the user, outside the agent's
-/// sandbox: their login shell (`$SHELL -l -c`; Windows: PowerShell, or
+/// sandbox: their login shell (`$SHELL -l -c --`; Windows: PowerShell, or
 /// `cmd` when `shell` is `"cmd"`), in `cwd` (else their home directory),
 /// stdin closed, with [`runner::RUN_TIMEOUT`]. Output streams to the
 /// calling window as `user_shell_output` events tagged with `run_id` (the
@@ -433,7 +452,10 @@ pub async fn cancel_user_shell_command<R: tauri::Runtime>(
 /// directory), in a new window, as if typed there ("Run in Terminal").
 /// macOS only (Terminal.app; the first time, macOS asks whether Kage may
 /// control it); elsewhere it's refused and the notice copies instead.
-/// Kage sees nothing of the run after handing it over.
+/// Kage sees nothing of the run after handing it over. Terminal types the
+/// command as keystrokes, so one holding a tab or another control
+/// character (other than newlines) is refused
+/// ([`runner::validate_terminal_command`]).
 #[tauri::command]
 pub async fn run_command_in_terminal<R: tauri::Runtime>(
     command: String,
@@ -444,7 +466,7 @@ pub async fn run_command_in_terminal<R: tauri::Runtime>(
 ) -> Result<(), AppError> {
     let label = window.label().to_string();
     ensure_caller(&label)?;
-    runner::validate_command(&command).map_err(invalid)?;
+    runner::validate_terminal_command(&command).map_err(invalid)?;
     let task_command = command.clone();
     let (cwd, result) = tauri::async_runtime::spawn_blocking(move || {
         let home = crate::paths::home_dir();

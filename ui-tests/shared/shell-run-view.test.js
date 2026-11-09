@@ -179,10 +179,71 @@ describe('the confirm', () => {
         const runCalls = tauri.calls.filter(([c]) => c === 'run_user_shell_command');
         expect(runCalls).toHaveLength(1);
         expect(runCalls[0][1]).toMatchObject({ command: cmd, cwd: '/repo', shell: null });
-        expect(runCalls[0][1].runId).toMatch(/^kage-run-\d+$/);
+        // Random, not a per-window counter: output events reach every
+        // listening window, so ids must not collide across windows.
+        expect(runCalls[0][1].runId).toMatch(/^kage-run-[0-9a-f]{24}$/);
         expect(confirmBox(block)).toBeNull();
         expect(isShellRunActive()).toBe(true);
         expect(tauri.listenedTo()).toBe('user_shell_output');
+    });
+
+    it('ignores the rest of a double-click that lands on Run', async () => {
+        const tauri = fakeTauri();
+        const block = createShellCommandBlock(blockedRecord('brew install awscli'));
+        document.body.append(block);
+        await openConfirm(block);
+        const run = confirmRun(block);
+        // The confirm opened under the pointer: a second (and third) click
+        // of the same multi-click on "Run it here" runs nothing.
+        run.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 }));
+        run.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 3 }));
+        await flush();
+        expect(tauri.commands()).not.toContain('run_user_shell_command');
+        expect(confirmBox(block)).not.toBeNull();
+        // A click of its own does.
+        run.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        expect(tauri.commands().filter((c) => c === 'run_user_shell_command')).toHaveLength(1);
+    });
+
+    it('runs in the shell the confirm was opened for', async () => {
+        const tauri = fakeTauri({ ctx: { cwd: 'C:\\Users\\me', shell: 'cmd', terminal: false } });
+        const rec = blockedRecord('dir /b');
+        rec.title = 'execute_cmd';
+        const block = createShellCommandBlock(rec);
+        document.body.append(block);
+        await openConfirm(block);
+        expect(tauri.calls[0][1]).toEqual({ cwd: null, shell: 'cmd' });
+        // The record changing under the open confirm doesn't change the shell it named.
+        rec.title = 'shell';
+        confirmRun(block).click();
+        await flush();
+        expect(tauri.runs[0].args.shell).toBe('cmd');
+    });
+
+    it('says when the command is longer than its box shows', async () => {
+        fakeTauri();
+        const short = createShellCommandBlock(blockedRecord('brew install awscli'));
+        document.body.append(short);
+        const sbox = await openConfirm(short);
+        expect(q(sbox, '.shell-run-confirm-long').hidden).toBe(true);
+
+        const lines = Array.from({ length: 12 }, (_, i) => `echo step ${i}`).join('\n');
+        const tall = createShellCommandBlock(blockedRecord(`${lines}\nrm -rf ~/x`));
+        document.body.append(tall);
+        const tbox = await openConfirm(tall);
+        const note = q(tbox, '.shell-run-confirm-long');
+        expect(note.hidden).toBe(false);
+        expect(note.textContent).toBe('shared.shell.sandbox.confirm.long');
+        // Right under the command, before anything else.
+        expect(q(tbox, '.shell-run-confirm-command').nextElementSibling).toBe(note);
+
+        const wide = createShellCommandBlock(
+            blockedRecord(`brew install awscli ${'x'.repeat(600)} && echo done`)
+        );
+        document.body.append(wide);
+        const wbox = await openConfirm(wide);
+        expect(q(wbox, '.shell-run-confirm-long').hidden).toBe(false);
     });
 
     it('needs its own click for every run', async () => {
@@ -490,6 +551,28 @@ describe('Run in Terminal (macOS)', () => {
         expect(q(block, '.shell-cmd-sandbox-status').textContent).toBe(
             'shared.shell.sandbox.terminal.sent'
         );
+    });
+
+    it('only copies a command with a tab (Terminal would complete it)', async () => {
+        const tauri = fakeTauri();
+        const cmd = 'cat <<-EOF > out.txt\n\thello\nEOF';
+        const block = createShellCommandBlock(blockedRecord(cmd));
+        document.body.append(block);
+        // Running it here is fine (no line editor); typing it isn't.
+        expect(runHereBtn(block).hidden).toBe(false);
+        expect(q(block, '.shell-run-terminal').hidden).toBe(true);
+
+        const sudo = createShellCommandBlock(blockedRecord('sudo tee /etc/x <<-EOF\n\ty\nEOF'));
+        document.body.append(sudo);
+        const box = await openConfirm(sudo);
+        expect(q(box, '.shell-run-risk').textContent).toBe(
+            'shared.shell.sandbox.risk.sudo_here_copy'
+        );
+        expect(confirmRun(sudo).textContent).toBe('shared.shell.sandbox.open_terminal');
+        confirmRun(sudo).click();
+        await flush();
+        await flush();
+        expect(tauri.commands()).not.toContain('run_command_in_terminal');
     });
 
     it('offers Run in Terminal from the sudo confirm of "Run it here"', async () => {

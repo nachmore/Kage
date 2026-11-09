@@ -362,10 +362,13 @@ The trust boundary:
   outside the agent's sandbox with the user's full permissions, and a
   caution line per risky pattern (`sudo`, `rm -rf`, `curl … | sh`,
   `chmod/chown -R` on `/`, a top-level folder or home, writes to shell
-  startup files). Only the confirm's Run button starts a run, once.
-  There is no "always allow" and nothing is remembered: the next run
-  needs its own confirm. A command with hidden characters gets no run
-  button at all (only Copy).
+  startup files). A command taller than its box gets a line saying
+  so, since an overlay scrollbar may not show there's more. Only the
+  confirm's Run button starts a run, once, on a click of its own (the
+  rest of a double-click that opened the confirm is ignored); focus
+  starts on Cancel. There is no "always allow" and nothing is
+  remembered: the next run needs its own confirm. A command with hidden
+  characters gets no run button at all (only Copy).
 - **Kage never runs agent commands on its own.** Nothing the agent sends
   — output, tool calls, markdown — becomes a click: it's rendered as
   text, and the run path starts only from the confirm's click handler.
@@ -377,14 +380,18 @@ The trust boundary:
   granted. (Extension iframes have no Tauri IPC of their own: no
   `window.__TAURI__`, no invoke key.)
 - **How it runs.** The exact string, unchanged, through the user's login
-  shell — `$SHELL -l -c` when `$SHELL` is a POSIX shell, else `/bin/zsh`,
-  else `/bin/sh`; on Windows PowerShell (`-NoProfile -NonInteractive
+  shell — `$SHELL -l -c -- <command>` when `$SHELL` is a POSIX shell, else
+  `/bin/zsh`, else `/bin/sh` (the `--` keeps a command that starts with
+  `-` or `+` from being read as shell options); on Windows PowerShell (`-NoProfile -NonInteractive
   -Command`), or `cmd /D /S /C` when the agent's tool was `cmd`
   (kiro-cli's `execute_cmd`) — with the login-shell environment overlay,
   stdin closed, in its own session and process group (no terminal, so
   `sudo` fails at once instead of prompting where nobody sees it; the
   confirm offers Terminal for those). It is stopped (the whole process
-  group) by Stop or after 10 minutes. One run per window at a time.
+  group) by Stop, after 10 minutes, when its window closes or its page
+  reloads (nothing would be left to show it or stop it), and when Kage
+  quits. One run per window at a time. Run ids are random, because
+  Tauri delivers the output events to every Kage window that listens.
 - **What's kept.** The calling window receives the output as it streams
   and the last 64 KiB with the exit status. If the user left "Tell the
   agent the result" on, Kage sends the agent the command, exit status and
@@ -401,7 +408,10 @@ The trust boundary:
   window over Apple Events (`osascript` with a constant script; the
   directory and command travel as arguments, never spliced into script
   source), where it runs in the user's interactive shell with a real
-  TTY, so `sudo` can ask for a password. The first time, macOS asks
+  TTY, so `sudo` can ask for a password. Terminal types the command
+  into that shell as keystrokes, so a command with a tab (completion)
+  or any control character other than a newline is only copied; the
+  backend refuses it too. The first time, macOS asks
   whether Kage may control Terminal. Elsewhere there's no safe
   equivalent (Windows Terminal re-parses `;`; Linux terminals each quote
   differently), so the notice only copies the command.

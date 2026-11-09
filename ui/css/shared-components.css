@@ -3005,6 +3005,11 @@ body.light-theme .conn-edit-actions {
     outline: 2px solid var(--kage-accent);
     outline-offset: -2px;
 }
+.shell-run-confirm-long {
+    margin: 0;
+    color: var(--kage-term-mark);
+    font-weight: 600;
+}
 .shell-run-confirm-where {
     color: var(--kage-term-muted);
 }
@@ -3039,6 +3044,7 @@ body.light-theme .conn-edit-actions {
     justify-content: flex-end;
     gap: 6px;
 }
+.shell-run-confirm-long[hidden],
 .shell-run-confirm-where[hidden],
 .shell-run-confirm-risks[hidden],
 .shell-run-confirm-tell[hidden],

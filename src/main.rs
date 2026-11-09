@@ -155,6 +155,16 @@ fn main() {
     rt.block_on(run());
 }
 
+/// Stop the command `label`'s window is running from a sandbox notice, if
+/// any (`commands::system::user_shell`), because `why` (English, for the log).
+fn stop_user_shell_run<R: tauri::Runtime>(app: &tauri::AppHandle<R>, label: &str, why: &str) {
+    if let Some(procs) = app.try_state::<state::ChildProcesses>() {
+        if procs.user_shell_runs.cancel_window(label) {
+            info!("User shell run in window '{label}' stopped: {why}");
+        }
+    }
+}
+
 /// Async entry point. Split out from `main` so the helper-process
 /// subcommand can return before we spin up Tokio. See `fn main` for the
 /// rationale.
@@ -458,9 +468,17 @@ async fn run() {
                         .lock_or_recover()
                         .forget_window(window.label());
                 }
+                // A command the user was running from one of its sandbox
+                // notices has nothing left to show it or its Stop button.
+                stop_user_shell_run(window.app_handle(), window.label(), "its window closed");
             }
         })
-        .on_page_load(|webview, _payload| {
+        .on_page_load(|webview, payload| {
+            // A reload loses the page's run view (and the run id its Stop
+            // needs): stop the run rather than leave it going unseen.
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                stop_user_shell_run(webview.app_handle(), webview.label(), "its page reloaded");
+            }
             // Subscribe to WebView2's ProcessFailed event the moment a
             // webview finishes its first navigation. Earliest hook that
             // works for both pre-declared (main/floating/inline-assist)

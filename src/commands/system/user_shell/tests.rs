@@ -60,6 +60,44 @@ fn commands_must_be_non_blank_bounded_and_nul_free() {
 }
 
 #[test]
+fn terminal_commands_may_hold_newlines_but_no_other_control_character() {
+    // Terminal.app types the command as keystrokes: Return runs a line…
+    assert_eq!(
+        validate_terminal_command("brew update\nbrew install awscli\n"),
+        Ok(())
+    );
+    assert_eq!(validate_terminal_command("echo 'été' ✓"), Ok(()));
+    // …but a tab completes, and CR / ESC / DEL / C1 are editing keys.
+    for bad in [
+        "rm -rf ./bui\t",
+        "echo a\r\nb",
+        "echo \x1b[A",
+        "echo \x15gone",
+        "echo \x7f",
+        "echo \u{9b}",
+    ] {
+        assert_eq!(
+            validate_terminal_command(bad),
+            Err(InvalidRun::ControlCharForTerminal),
+            "{bad:?}"
+        );
+    }
+    // The plain checks still apply first.
+    assert_eq!(
+        validate_terminal_command(" \n"),
+        Err(InvalidRun::EmptyCommand)
+    );
+    assert_eq!(
+        validate_terminal_command("a\0b"),
+        Err(InvalidRun::NulInCommand)
+    );
+    assert_eq!(
+        invalid(InvalidRun::ControlCharForTerminal).key,
+        "errors.user_shell.terminal_control_chars"
+    );
+}
+
+#[test]
 fn invalid_arguments_map_to_keyed_errors() {
     assert_eq!(
         invalid(InvalidRun::EmptyCommand).key,
@@ -171,7 +209,12 @@ fn posix_shells_get_the_command_unchanged_as_one_argument() {
     let cmd = "brew install awscli && echo \"done\" # it's fine\n";
     let inv = posix_invocation(Path::new("/bin/zsh"), cmd);
     assert_eq!(inv.program, PathBuf::from("/bin/zsh"));
-    assert_eq!(inv.args, vec!["-l".to_string(), "-c".into(), cmd.into()]);
+    // `--` ends the shell's options, so even a command starting with `-`
+    // or `+` is the command string rather than more options.
+    assert_eq!(
+        inv.args,
+        vec!["-l".to_string(), "-c".into(), "--".into(), cmd.into()]
+    );
     assert_eq!(inv.raw_tail, None);
     assert_eq!(inv.label, "zsh");
 }
@@ -340,6 +383,20 @@ fn one_run_per_window_and_only_its_own_window_can_stop_it() {
 }
 
 #[test]
+fn a_closed_or_reloaded_window_stops_only_its_own_run() {
+    let runs = Arc::new(UserShellRuns::new());
+    assert!(!runs.cancel_window("main"), "nothing running");
+    let main = runs.begin("main", "r1").unwrap();
+    let floating = runs.begin("floating", "r2").unwrap();
+    assert!(runs.cancel_window("main"));
+    assert!(main.cancel_flag().load(Ordering::SeqCst));
+    assert!(!floating.cancel_flag().load(Ordering::SeqCst));
+    drop(main);
+    assert!(!runs.cancel_window("main"), "its run ended");
+    assert!(runs.is_running("floating"));
+}
+
+#[test]
 fn shutdown_stops_every_run_and_waits_for_them() {
     let runs = Arc::new(UserShellRuns::new());
     // Nothing running: returns at once.
@@ -410,6 +467,26 @@ mod running {
         assert_eq!(streamed, report.output);
         assert!(!report.truncated);
         assert_eq!(report.output_bytes, 8);
+    }
+
+    #[test]
+    fn a_command_starting_with_a_dash_runs_as_written() {
+        // What `posix_invocation` passes, minus `-l` (no login profile in
+        // tests): without `--`, `sh -c '-x; …'` reads `-x; …` as options.
+        let dir = tempdir();
+        let inv = ShellInvocation {
+            program: PathBuf::from("/bin/sh"),
+            args: vec![
+                "-c".into(),
+                "--".into(),
+                "-kage-no-such-program 2>/dev/null; echo ran-as-written".into(),
+            ],
+            raw_tail: None,
+            label: "sh".into(),
+        };
+        let (report, _) = run_collecting(&inv, &dir, &control(Duration::from_secs(30)));
+        assert_eq!(report.exit_code, Some(0), "{:?}", report.output);
+        assert_eq!(report.output, "ran-as-written\n");
     }
 
     #[test]

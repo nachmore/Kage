@@ -55,6 +55,10 @@ pub enum InvalidRun {
     /// command line).
     NulInCommand,
     BadRunId,
+    /// Run in Terminal types the command into an interactive shell, which
+    /// reads a tab as "complete this" and a carriage return or escape as
+    /// a keystroke: what ran would differ from what the user approved.
+    ControlCharForTerminal,
     NoHome,
     CwdNotAbsolute(String),
     CwdMissing(String),
@@ -73,6 +77,20 @@ pub fn validate_command(command: &str) -> Result<(), InvalidRun> {
     }
     if command.contains('\0') {
         return Err(InvalidRun::NulInCommand);
+    }
+    Ok(())
+}
+
+/// [`validate_command`], plus what Run in Terminal needs: Terminal.app
+/// types the command into the user's interactive shell as keystrokes, so
+/// the only control character it may hold is `\n` (Return, which runs the
+/// line). A tab would trigger completion and insert text the user never
+/// saw; a carriage return, escape or other control character would be
+/// read as an editing key.
+pub fn validate_terminal_command(command: &str) -> Result<(), InvalidRun> {
+    validate_command(command)?;
+    if command.chars().any(|c| c.is_control() && c != '\n') {
+        return Err(InvalidRun::ControlCharForTerminal);
     }
     Ok(())
 }
@@ -200,13 +218,17 @@ pub fn is_executable_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// `<shell> -l -c <command>`: a login shell, so `.zprofile` / `.profile`
+/// `<shell> -l -c -- <command>`: a login shell, so `.zprofile` / `.profile`
 /// set it up the way a terminal would (on top of `os::login_env`'s overlay).
+/// The `--` matters: `sh`/`bash`/`zsh` take the command from the first
+/// argument after `-c` that isn't an option, so a command starting with
+/// `-` or `+` would otherwise be read as shell options and not run as
+/// written.
 #[cfg_attr(not(unix), allow(dead_code))]
 pub fn posix_invocation(shell: &Path, command: &str) -> ShellInvocation {
     ShellInvocation {
         program: shell.to_path_buf(),
-        args: vec!["-l".into(), "-c".into(), command.into()],
+        args: vec!["-l".into(), "-c".into(), "--".into(), command.into()],
         raw_tail: None,
         label: shell
             .file_name()

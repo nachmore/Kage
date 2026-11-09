@@ -84,9 +84,31 @@ function tauriInvoke() {
     return invoke;
 }
 
-/** Terminal.app can be handed a command (macOS). */
-function canRunInTerminal() {
-    return typeof navigator !== 'undefined' && /^Mac/.test(navigator.platform || '');
+/**
+ * Terminal.app can be handed `command` (macOS). It types the command into
+ * the user's interactive shell as keystrokes, so a tab would trigger
+ * completion and insert text nobody approved: such a command is copied
+ * instead. (Every other control character already keeps the run buttons
+ * away — `isPlainShellCommand` — and the backend refuses them too.)
+ */
+function canRunInTerminal(command) {
+    return (
+        typeof navigator !== 'undefined' &&
+        /^Mac/.test(navigator.platform || '') &&
+        typeof command === 'string' &&
+        !command.includes('\t')
+    );
+}
+
+/**
+ * A run id no other window will pick: output events reach every Kage
+ * window that listens (Tauri delivers `emit_to` to any-target listeners),
+ * so a per-window counter could feed one window's run another's output.
+ */
+function newRunId() {
+    const bytes = new Uint8Array(12);
+    globalThis.crypto.getRandomValues(bytes);
+    return `kage-run-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 
 // --- Runs ---------------------------------------------------------------------
@@ -170,6 +192,30 @@ function onClick(btn, fn) {
 }
 
 /**
+ * The confirm's Run: a single, deliberate click. The second click of a
+ * double-click (`detail` 2+) is ignored — the confirm opens under the
+ * pointer, and the window can scroll or resize as it does, so the rest
+ * of a double-click on "Run it here" must not land on Run.
+ */
+function onDeliberateClick(btn, fn) {
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (e.detail > 1) return;
+        fn();
+    });
+}
+
+/** Lines the confirm's command box shows before it scrolls (max-height in CSS). */
+const CONFIRM_VISIBLE_LINES = 8;
+/** Characters that fill that box in a narrow (floating) window. */
+const CONFIRM_VISIBLE_CHARS = 480;
+
+/** Lines in `command`, ignoring a trailing newline. */
+function lineCount(command) {
+    return command.replace(/\n+$/, '').split('\n').length;
+}
+
+/**
  * The run buttons for `root`'s sandbox notice and the slot their panels
  * open in. `deps`: `{ appendCommandText(parent, command), setStatus(root,
  * text, isError), layoutChanged(node), copyAndOpenTerminal(root, button) }`
@@ -223,7 +269,7 @@ export function syncRunControls(root) {
     if (rc.confirm && rc.confirm.command !== command) closeConfirm(root, false);
     const run = runsByRecord.get(record) || null;
     rc.runHere.hidden = !runnable;
-    rc.terminal.hidden = !runnable || !canRunInTerminal();
+    rc.terminal.hidden = !runnable || !canRunInTerminal(command);
     const busy = !!rc.confirm || rc.opening || run?.phase === 'running';
     rc.runHere.disabled = busy;
     rc.terminal.disabled = busy;
@@ -257,15 +303,18 @@ async function openConfirm(root, mode) {
     const record = st.record;
     const command = record?.command || '';
     if (!command || !isPlainShellCommand(command)) return;
+    if (mode === 'terminal' && !canRunInTerminal(command)) return;
     rc.opening = true;
     syncRunControls(root);
     rc.deps.setStatus(root, '');
     let ctx = null;
     let ctxError = null;
+    // Read once: the shell the confirm names is the one that runs it.
+    const shellHint = agentShellHint(record);
     try {
         ctx = await tauriInvoke()('user_shell_run_context', {
             cwd: typeof record.cwd === 'string' && record.cwd ? record.cwd : null,
-            shell: agentShellHint(record),
+            shell: shellHint,
         });
     } catch (e) {
         ctxError = errMessage(e);
@@ -276,8 +325,12 @@ async function openConfirm(root, mode) {
         syncRunControls(root);
         return;
     }
-    rc.confirm = buildConfirm(root, rc, { mode, command, record, ctx, ctxError });
+    rc.confirm = buildConfirm(root, rc, { mode, command, shellHint, record, ctx, ctxError });
     rc.slot.prepend(rc.confirm.el);
+    // A command taller than its box: say so, since (macOS overlay
+    // scrollbars) nothing else may show there's more of it.
+    const { pre, longNote } = rc.confirm;
+    if (longNote.hidden && pre.scrollHeight > pre.clientHeight + 2) longNote.hidden = false;
     syncRunControls(root);
     rc.deps.layoutChanged(root);
     rc.confirm.cancel.focus();
@@ -294,7 +347,7 @@ function closeConfirm(root, focusBack) {
     if (focusBack) (mode === 'terminal' ? rc.terminal : rc.runHere).focus();
 }
 
-function buildConfirm(root, rc, { mode, command, record, ctx, ctxError }) {
+function buildConfirm(root, rc, { mode, command, shellHint, record, ctx, ctxError }) {
     const st = root._kageShell;
     const box = el('div', 'shell-run-confirm');
     box.setAttribute('role', 'group');
@@ -319,6 +372,12 @@ function buildConfirm(root, rc, { mode, command, record, ctx, ctxError }) {
     const text = el('span', 'shell-run-confirm-command-text');
     rc.deps.appendCommandText(text, command);
     pre.append(prompt, text);
+    // More command than the box shows: the rest is only a scroll away,
+    // and it runs too.
+    const lines = lineCount(command);
+    const longNote = el('p', 'shell-run-confirm-long');
+    longNote.textContent = t('shared.shell.sandbox.confirm.long', { lines });
+    longNote.hidden = lines <= CONFIRM_VISIBLE_LINES && command.length <= CONFIRM_VISIBLE_CHARS;
 
     const where = el('div', 'shell-run-confirm-where');
     if (ctx) {
@@ -345,12 +404,13 @@ function buildConfirm(root, rc, { mode, command, record, ctx, ctxError }) {
     const risks = shellCommandRisks(command);
     // sudo asks for a password, and a run here has no terminal to ask in.
     const sudoHere = mode === 'here' && risks.includes('sudo');
+    const terminalOk = canRunInTerminal(command);
     const list = el('ul', 'shell-run-confirm-risks');
     for (const id of risks) {
         const li = el('li', 'shell-run-risk');
         li.dataset.risk = id;
         if (id === 'sudo' && sudoHere) {
-            li.textContent = canRunInTerminal()
+            li.textContent = terminalOk
                 ? t('shared.shell.sandbox.risk.sudo_here')
                 : t('shared.shell.sandbox.risk.sudo_here_copy');
         } else {
@@ -385,22 +445,25 @@ function buildConfirm(root, rc, { mode, command, record, ctx, ctxError }) {
         el: box,
         mode,
         command,
+        shellHint,
         ctx,
         tell,
         cancel,
+        pre,
+        longNote,
         primary: null,
         used: false,
     };
     let primary;
-    if (sudoHere && canRunInTerminal()) {
+    if (sudoHere && terminalOk) {
         primary = button('shell-run-go', t('shared.shell.sandbox.run_terminal'), 'terminal');
         primary.title = t('shared.shell.sandbox.run_terminal_title');
         primary.disabled = !ctx;
-        onClick(primary, () => runInTerminal(root, confirm));
+        onDeliberateClick(primary, () => runInTerminal(root, confirm));
     } else if (sudoHere) {
         // No terminal Kage can hand it to: copy it, open the terminal app.
         primary = button('shell-run-go', t('shared.shell.sandbox.open_terminal'), 'terminal');
-        onClick(primary, () => {
+        onDeliberateClick(primary, () => {
             if (confirm.used) return;
             confirm.used = true;
             closeConfirm(root, false);
@@ -416,7 +479,7 @@ function buildConfirm(root, rc, { mode, command, record, ctx, ctxError }) {
         );
         if (mode === 'terminal') primary.title = t('shared.shell.sandbox.run_terminal_title');
         primary.disabled = !ctx || busy;
-        onClick(primary, () =>
+        onDeliberateClick(primary, () =>
             mode === 'terminal' ? runInTerminal(root, confirm) : runHere(root, confirm, record)
         );
     }
@@ -424,7 +487,7 @@ function buildConfirm(root, rc, { mode, command, record, ctx, ctxError }) {
     onClick(cancel, () => closeConfirm(root, true));
     actions.append(cancel, primary);
 
-    box.append(title, pre, where, warn, list, tellRow, error, actions);
+    box.append(title, pre, longNote, where, warn, list, tellRow, error, actions);
     box.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             e.preventDefault();
@@ -447,7 +510,7 @@ function runHere(root, confirm, record) {
     startRun(root, record, {
         command: confirm.command,
         cwd: confirm.ctx.cwd,
-        shellHint: agentShellHint(record),
+        shellHint: confirm.shellHint,
         tellAgent,
         sessionId,
     });
@@ -482,7 +545,7 @@ async function runInTerminal(root, confirm) {
 
 async function startRun(root, record, opts) {
     const run = {
-        runId: uid('kage-run'),
+        runId: newRunId(),
         record,
         command: opts.command,
         cwd: opts.cwd,
