@@ -22,6 +22,7 @@ use kage_core::host_bridge::{
 };
 use kage_core::os::host_bridge as transport;
 use std::io::Write;
+#[cfg(unix)]
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
