@@ -304,15 +304,27 @@ normalisation in §5.10.
   Multi-column pages may interleave columns. Title: the document's
   `/Title`.
 - **DOCX**: paragraphs separated by a blank line. Heading styles 1–3 (and
-  `Title`) become `#`, `##`, `###`. List paragraphs start with `- `.
-  Table cells are separated by a tab, rows by a line break. Text boxes
-  inline. Footnotes and endnotes at the end under `Notes`. Skipped:
-  comments, headers and footers, deleted tracked changes, field codes,
-  hidden text. Title: `dc:title`, else the first heading.
-- **PPTX**: each visible slide starts with `## Slide N` (or `## ` and the
-  slide's title placeholder text). Speaker notes follow under `Notes:`.
-  Hidden slides are skipped. Title: `dc:title`, else the first slide's
-  title.
+  `Title`) become `#`, `##`, `###`. A heading is found by the style's
+  outline level or its built-in name, so localised style ids work. List
+  paragraphs start with `- ` (two more spaces per level), one line each.
+  Table cells are separated by a tab, rows by a line break; paragraphs
+  in a cell and nested tables join with spaces. Text boxes inline, as
+  paragraphs of their own. A footnote or endnote reference becomes
+  `[n]`, numbered in reading order, and the notes follow at the end
+  under `Notes` as `[n] …`. Skipped: comments, headers and footers,
+  deleted and moved-away tracked changes, field codes (their results
+  stay), hidden text (set on the run, through a style or as the
+  document default). Title: `dc:title`, else the first heading.
+- **PPTX**: each visible slide starts with `## ` and the text of its
+  first visible title placeholder, or `## Slide N` without one. N counts
+  hidden slides too, as PowerPoint does. Then each shape's text as a
+  block of lines, in drawing order; a table is tab-separated rows.
+  Speaker notes follow under `Notes:`. Skipped: hidden slides and hidden
+  shapes (`hidden_text_skipped` if they hold text), and the slide
+  number, date, header and footer placeholders. `pages.count` counts
+  every slide, `pages.read` the visible slides read; `page_starts` has
+  one entry per slide read. Title: `dc:title`, else the first visible
+  slide's title.
 - **HTML**: visible text. Skipped: `script`, `style`, `noscript`,
   `template`, `svg`, `head` (except `title`), elements with the `hidden`
   attribute or an inline `display:none`. `h1`–`h3` become headings, `li`
@@ -847,12 +859,15 @@ Three details:
 **DOCX and PPTX** (`kage-file-text/src/ooxml/`)
 - Open the ZIP from memory with the `zip` crate. More than 20,000 entries
   → `too_complex`. Encrypted entries → `encrypted`.
-- Read only the parts needed: `[Content_Types].xml`, the main part,
-  its `.rels`, `docProps/core.xml`, footnotes and endnotes (DOCX), the
-  slides and notes reached through `ppt/_rels/presentation.xml.rels` in
-  `p:sldIdLst` order (PPTX). Media and everything else are never inflated.
-  Overlapping-entry bombs don't help an attacker, because only these few
-  entries are read and the total inflate cap applies.
+- Read only the parts needed, found through the relationships
+  (`_rels/.rels`, then each part's own `.rels`; types matched by their
+  last segment, so Strict's `purl.oclc.org` types work too):
+  `[Content_Types].xml`, the main part (its usual name if the package
+  names none), its `.rels`, the core properties, `styles.xml`, footnotes
+  and endnotes (DOCX), the slides in `p:sldIdLst` order and each slide's
+  `.rels` and notes slide (PPTX). Media and everything else are never
+  inflated. Overlapping-entry bombs don't help an attacker, because only
+  these few entries are read and the total inflate cap applies.
 - Each part is inflated through a counting reader (64 MiB per part,
   256 MiB in all). A part that declares a size and inflates past it →
   `malformed`.
@@ -860,15 +875,28 @@ Three details:
   name, so Strict OOXML namespaces work too. `quick-xml` doesn't load
   DTDs or external entities and doesn't expand custom entities, so there is
   no XXE and no "billion laughs". Depth over 256 → `too_complex`.
+- Damage: bad XML in the main part or a slide → `malformed`. Bad XML in
+  styles, notes, notes slides or the core properties only loses that
+  part. The safety limits (nesting depth, inflate caps, encrypted
+  entries) always stop the whole read.
+- The readers write into the `Normalizer` as they go and stop once it is
+  full, so `max_chars` bounds the work. `total_chars` is known only when
+  the whole document fits.
 - DOCX: `w:t` text, `w:tab` → tab, `w:br`/`w:cr` → line break, `w:p` →
-  paragraph, `w:tc`/`w:tr` → tab/row. `w:pStyle` of `Title` or
-  `Heading1`–`3` → `#`–`###`. `w:numPr` → `- `. Skip `w:delText`,
-  `w:instrText`, runs with `w:vanish` (`hidden_text_skipped`), comments,
-  headers, footers. In `mc:AlternateContent` read `mc:Choice` only, so
-  text isn't doubled.
+  paragraph, `w:tc`/`w:tr` → tab/row. A `w:pStyle` whose style (along
+  `basedOn`) has outline level 0–2, or the built-in name `Title` or
+  `heading 1`–`3`, → `#`–`###`; without a styles part the id itself
+  (`Heading1`). A direct `w:outlineLvl` counts too. `w:numPr` (direct or
+  from the style; `numId` 0 turns it off) → `- `. Skip `w:del`,
+  `w:moveFrom`, `w:instrText` and runs between a field's `begin` and
+  `separate`, runs with `w:vanish` (`hidden_text_skipped`; also through
+  the character style, the paragraph style or the document defaults),
+  comments, headers, footers. In `mc:AlternateContent` read the first
+  branch only (`mc:Choice`), so text isn't doubled.
 - PPTX: `a:t` text, `a:p` → line break, `a:br` → line break, the
   `title`/`ctrTitle` placeholder → the slide heading, `show="0"` slides
-  skipped.
+  and `hidden="1"` shapes skipped. A slide is read twice: once for the
+  heading, which may be drawn after other shapes, once for the rest.
 
 **PDF** (`kage-file-text/src/pdf/`)
 - Parse from memory with `pdf-extract` 0.12.1, chosen in WP-FT0, set up
@@ -1714,7 +1742,10 @@ Item {
   few minutes. The targets call `extract_as`, which skips the
   `READS_P1_FORMATS` check, so FT4 can fuzz HTML and RTF before FT8
   switches them on. `fuzz/` is its own workspace; `cargo fuzz build -s
-  none` works on stable Rust.
+  none` works on stable Rust. A mutated ZIP rarely passes its CRC
+  checks, so the `ooxml` target also takes raw XML (a document, its
+  side parts, or a slide) and packs it into a valid package itself;
+  `tests/ooxml_seeds.rs` writes its seeds from the test fixtures.
 
 **App crate**
 - Unit (`src/file_text/*`): args validation; grant and enabled checks;
@@ -1869,13 +1900,24 @@ with EXTENSION_AGENT_CALLS's `AC-X1` and `AC-MM1`…`AC-MM3`.
     files under 500 lines.
 
 **WP-FT2 OOXML** (`kage-file-text/src/ooxml/**`,
-`kage-file-text/tests/ooxml_*.rs`, `kage-file-text/fuzz/fuzz_targets/ooxml.rs`)
+`kage-file-text/tests/ooxml_*.rs` with the shared
+`kage-file-text/tests/ooxml_fixtures/`, `kage-file-text/fuzz/fuzz_targets/ooxml.rs`)
 - DOCX in P0. PPTX in the same package but reported through
   `file_text_support` only once FT8's P1 switch is flipped
   (`READS_P1_FORMATS` in the wire crate's format table, owned by FT-C,
   changed in FT8).
 - Accept: §3.7 conventions; §12 limit cases; Strict OOXML; fuzz target
   runs 10 minutes clean.
+- Done: `package.rs` (parts through relationships, the inflate budget),
+  `xml.rs` (local names, depth cap), `styles.rs`, `docx.rs` with
+  `docx/paragraphs.rs`, `pptx.rs` with `pptx/slide.rs`. Beyond the
+  first draft of §3.7 and §5.9: headings through `styles.rs` (outline
+  level or built-in name, for localised style ids), hidden text through
+  styles and defaults, `[n]` note markers, one line per list item, the
+  slide number, date, header and footer placeholders skipped, and
+  hidden shapes. Internal caps: 10,000 styles, 10,000 numbered notes,
+  20,000 relationships per part (the rest are ignored). The fuzz target
+  ran 10 minutes (7.7 million inputs) with no finding.
 
 **WP-FT3 PDF** (`kage-file-text/src/pdf/**`, its tests and fuzz target)
 - With the FT0 choice. Page cap, `page_starts`, encryption handling,
