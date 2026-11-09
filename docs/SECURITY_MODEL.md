@@ -445,8 +445,9 @@ The trust boundary:
   example `~/Library/Application Support/kage/bridge/`). Kage creates that
   directory `0700` and refuses to listen when it — or the socket path —
   is a symlink, isn't owned by the user, or allows group or others
-  anything, or when its parent is writable by others; a leftover socket
-  is removed only when it's the user's and nothing listens on it. Every
+  anything, or when its parent is writable by others or owned by anyone
+  but the user or root; a leftover socket is removed only when it's the
+  user's and nothing listens on it. Every
   connection's peer uid (`getpeereid` on macOS, `SO_PEERCRED` on Linux)
   must equal Kage's effective uid, else it is dropped unread; the
   sidecar checks the server's uid the same way. On Windows it is a named
@@ -465,13 +466,21 @@ The trust boundary:
   duplicate or mistyped ones are refused), at most 64 KiB (command
   32 KiB, reason 2 KiB, working directory 4 KiB). One reply line: the
   outcome, exit code, duration and the output's last 32 KiB — or
-  "denied", "timed out waiting for approval", or an error. At most 16
-  connections are handled at once and 8 prompts wait at once.
+  "denied", "timed out waiting for approval", or an error. A client has
+  five seconds in all to send its request line (however slowly it
+  trickles in; on Windows the pipe read polls for data so the same limit
+  holds), else it is dropped. At most 16 connections are handled at once
+  and 8 prompts wait at once.
 - **Kage matches the request to the session that asked.** The
   notification handler remembers the agent's in-flight
-  `run_outside_sandbox` tool calls; a request is matched to the newest
-  open call with exactly its command (`rawInput.command`), which names the
-  ACP session and so the window to ask in. A request Kage can't match —
+  `run_outside_sandbox` tool calls (MCP calls only: a call whose kind is
+  a built-in tool's, such as a shell command titled like this tool, is
+  never one); a request is matched to the newest open call with exactly
+  its command and working directory (`rawInput.command`, `rawInput.cwd`),
+  which names the ACP session and so the window to ask in. The folder is
+  part of the match because a match is what lets rules apply: a request
+  from elsewhere naming a visible call's command can't get that call's
+  standing in a folder of its own choosing. A request Kage can't match —
   an agent outside Kage, or any other process of the user — is shown in
   the floating window with a system notification naming the program that
   asked, as the sidecar reports it.
@@ -499,8 +508,9 @@ The trust boundary:
 - **Rules are narrow.** "Always allow commands starting with …" saves a
   rule (`config.tool_permissions.host_command_rules`) that covers only a
   *simple* command — printable ASCII, no `; & |`, no redirection, no
-  `$`, backticks or `( )`, no escapes, globs, braces, `!` or `#`, no line
-  breaks, and no `NAME=value` before the program — whose first words are
+  `$`, backticks or `( )`, no escapes, globs, braces, `!`, `#`, `^` (zsh's
+  extended-glob negation) or `%` (Windows `%VAR%`), no line breaks, and no
+  `NAME=value` before the program — whose first words are
   exactly the rule's (`brew install` covers `brew install awscli`, not
   `brew installer`, `sudo brew install` or `brew install x; rm …`). When in
   doubt, Kage asks. "Run every command without asking"
@@ -521,10 +531,15 @@ The trust boundary:
   files, `~/Library/Keychains`), asks a CLI for credentials (`security
   find-*-password`, `dump-keychain`, `aws configure export-credentials`,
   `aws sts get-session-token`, `gh auth token`, `gcloud auth
-  print-access-token`, …), names a credential environment variable, dumps
-  the whole environment (`env`, `printenv`, `set`, `export -p`, …) or
-  globs into hidden folders, prompts with a line saying why
-  (`src/host_commands/guard.rs`). It is best-effort: it reads the
+  print-access-token`, `aws secretsmanager get-secret-value`, …), names a
+  credential environment variable, dumps the whole environment (`env`,
+  `printenv`, `set`, `export -p`, `ps e`, PowerShell's `env:` drive, …)
+  or globs into hidden folders — or runs in a folder inside one of those
+  stores (the working directory as given and as it resolves, so a link
+  into `~/.aws` counts) — prompts with a line saying why
+  (`src/host_commands/guard.rs`). A working directory with hidden or
+  control characters is refused outright: the user would approve a
+  different folder from the one the command runs in. It is best-effort: it reads the
   command's text, so a script, an alias, a program that reads those
   files itself or an obfuscated path gets past it — which is why rules
   cover only simple commands and the user still reads what runs. It
