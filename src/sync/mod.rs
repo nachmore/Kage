@@ -3,9 +3,14 @@
 //! through a folder the user already syncs. Each computer writes only its
 //! own encrypted, write-once files; every computer merges them the same way.
 //!
-//! This is the C0 skeleton of §19: every interface with stub bodies. Every
-//! request answers `sync_unavailable`, and nothing touches the disk. The
-//! work packages of §20 fill it in.
+//! - [`engine`]: one tick captures, ingests, merges, projects and
+//!   publishes, on the `kage-sync` thread ([`scheduler`]).
+//! - [`sources`]: the parts of Kage that sync plugs into.
+//! - [`types`], [`merge`], [`replica`]: the data model and its merge.
+//! - [`folder`], [`envelope`], [`crypto`], [`keystore`]: the folder.
+//!
+//! Sync is offered only where [`sync_available`] says so: debug builds and
+//! the dev channel, until the owner turns it on for everyone.
 
 pub mod canonical;
 pub mod catalog;
@@ -50,8 +55,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use types::{Category, OsKind, ScopeAction};
 
-/// Log text for a stub that isn't written yet. Logs stay English.
-pub(crate) const NOT_BUILT: &str = "folder sync isn't built yet";
+/// Sync is offered to everyone. Until the owner flips this, only debug
+/// builds and the dev channel get it (docs/design/SYNC.md §20, WP-S4).
+pub const RELEASED: bool = false;
+
+/// Whether this build offers folder sync: a released feature, a debug
+/// build, or a dev-channel build (`+dev.` in the version).
+pub fn sync_available() -> bool {
+    RELEASED || cfg!(debug_assertions) || env!("CARGO_PKG_VERSION").contains("+dev.")
+}
 
 /// Sync is off, locked or paused on this computer, or not in this build.
 pub fn unavailable() -> AppError {

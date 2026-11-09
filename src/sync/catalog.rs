@@ -399,6 +399,159 @@ pub fn list_spec(ns: &str) -> Option<&'static ListSpec> {
     SYNC_LISTS.iter().find(|l| l.ns == ns)
 }
 
+/// The list at `config.json` path `path` (`shortcuts`, `acp.connections`).
+pub fn list_at(path: &str) -> Option<&'static ListSpec> {
+    SYNC_LISTS.iter().find(|l| l.path == path)
+}
+
+/// The namespace of single settings: one record per `Shared` or `PerOs`
+/// row, its id the setting's path, its one field `v` (§7.1).
+pub const CFG_NS: &str = "cfg";
+
+/// The version of this table. A head reports it; while an active computer
+/// reports an older one, a renamed path is written under both names
+/// (§8.11).
+pub const CATALOG_VERSION: u32 = 1;
+
+/// Config paths a migration renamed: `(old, new)`. While any active
+/// computer reports an older [`CATALOG_VERSION`], a change of `new` is
+/// also written as `old`, and a value that arrives for `old` counts for
+/// `new` (§8.11). None so far.
+pub const RENAMED: &[(&str, &str)] = &[];
+
+/// The `cfg` row of a setting path: the row itself, or `extension_states.*`
+/// for one extension's on/off. Only `Shared` and `PerOs` rows are `cfg`
+/// records.
+pub fn cfg_row(path: &str) -> Option<&'static Row> {
+    let r = match path.strip_prefix("extension_states.") {
+        Some(id) if !id.is_empty() && !id.contains('.') => row("extension_states.*"),
+        _ => row(path),
+    }?;
+    matches!(r.rule, Rule::Shared | Rule::PerOs).then_some(r)
+}
+
+/// The row that decides what sync does with `path`: an exact row, the
+/// `extension_states.*` row, or the nearest row above it (a row covers
+/// everything under its path).
+pub fn row_for(path: &str) -> Option<&'static Row> {
+    if let Some(r) = cfg_row(path) {
+        return Some(r);
+    }
+    let mut p = path;
+    loop {
+        if let Some(r) = row(p) {
+            return Some(r);
+        }
+        p = p.rsplit_once('.')?.0;
+    }
+}
+
+/// The Settings → Sync category a record syncs with. `None` for a record
+/// this build doesn't know (an opaque namespace from a newer Kage), which
+/// is always carried.
+pub fn category_of(ns: &str, id: &str) -> Option<Category> {
+    if ns == CFG_NS {
+        return cfg_row(id).and_then(|r| r.category);
+    }
+    if let Some(l) = list_spec(ns) {
+        return Some(l.category);
+    }
+    if ns.starts_with("sync.") {
+        return Some(Category::System);
+    }
+    if ns == "doc.steering" {
+        return Some(Category::Settings);
+    }
+    if ns == "chat.sessions" {
+        return Some(Category::Chats);
+    }
+    if ns == "installs" || ns == "cfg.ext" || ns.starts_with("ext.") {
+        return Some(Category::Extensions);
+    }
+    None
+}
+
+/// The item field that names a list item in the conflicts list.
+pub fn label_field(ns: &str) -> Option<&'static str> {
+    Some(match ns {
+        "list.shortcuts"
+        | "list.macros"
+        | "list.internal_sites"
+        | "list.connections"
+        | "list.store_sources" => "name",
+        "list.quick_actions" => "label",
+        "list.app_modes" => "friendly_name",
+        _ => return None,
+    })
+}
+
+/// The i18n key that names a synced row or list in Settings → Sync and the
+/// conflicts list. Existing Settings labels where there is one.
+pub fn label_key(path: &str) -> Option<&'static str> {
+    if path.starts_with("extension_states.") {
+        return Some("sync.label.extension_state");
+    }
+    Some(match path {
+        "hotkey" => "settings.hotkey.global.label",
+        "clipboard_hotkey" => "settings.hotkey.clipboard.label",
+        "inline_assist_hotkey" => "settings.hotkey.inline_assist.label",
+        "voice_hotkey" => "settings.hotkey.voice.label",
+        "acp.connections" => "sync.label.connections",
+        "acp.active_connection_id" => "sync.label.active_connection",
+        "acp.agent.start_session_on_launch" => "settings.connection.session.start_on_launch.label",
+        "acp.agent.auto_steering_enabled" => "settings.assistant.learn.label",
+        "acp.agent.default_model" => "settings.model.default.label",
+        "acp.agent.working_directory" => "settings.connection.workspace.label",
+        "acp.agent.auto_compact_threshold" => "settings.model.auto_compact.label",
+        "ui.theme" => "settings.appearance.theme.label",
+        "ui.floating_window_opacity" => "settings.appearance.opacity.label",
+        "ui.preserve_last_response" => "settings.appearance.preserve_last_response.label",
+        "ui.window_start_position" => "settings.appearance.start_position.label",
+        "ui.font_size" => "settings.appearance.font_size.label",
+        "ui.show_time" => "settings.appearance.show_time.label",
+        "ui.show_date" => "settings.appearance.show_date.label",
+        "ui.show_speech_button" => "settings.speech.show_button.label",
+        "ui.speech_read_back" => "settings.speech.read_back.label",
+        "ui.show_response_actions" => "sync.label.show_response_actions",
+        "ui.show_floating_toolbar" => "settings.appearance.show_toolbar.label",
+        "ui.remember_launcher_size" => "settings.appearance.remember_size.label",
+        "ui.speech_silence_timeout" => "settings.speech.silence.label",
+        "ui.speech_voice" => "settings.speech.system_voice.label",
+        "ui.time_format" => "settings.appearance.time_format.label",
+        "ui.date_format" => "settings.appearance.date_format.label",
+        "ui.language" => "settings.appearance.language.label",
+        "ui.mascot_animations" => "sync.label.mascot_animations",
+        "ui.mascot_extension_hints" => "sync.label.mascot_extension_hints",
+        "system.capture_selection" => "settings.integration.capture_selection.label",
+        "system.capture_selection_blocklist" => "settings.integration.blocklist.label",
+        "system.show_notifications" => "settings.integration.show_notifications.label",
+        "system.screen_context" => "settings.integration.screen_context.label",
+        "shortcuts" => "settings.shortcuts.title",
+        "updates.auto_check" => "settings.updates.auto_check.label",
+        "updates.silent_update" => "settings.updates.silent.label",
+        "updates.channel" => "settings.updates.channel.label",
+        "quick_actions.enabled" => "settings.assistant.quick_actions.show_selection.label",
+        "quick_actions.translate_language" => {
+            "settings.assistant.quick_actions.translate_lang.label"
+        }
+        "quick_actions.custom_actions" => "settings.assistant.quick_actions.custom.label",
+        "pocket_tts.voice" => "settings.speech.pocket.voice.label",
+        "pocket_tts.temp" => "settings.speech.pocket.temp.label",
+        "pocket_tts.eos_threshold" => "settings.speech.pocket.eos.label",
+        "store_url" => "settings.store.url.label",
+        "store_sources" => "sync.label.store_sources",
+        "auto_update_extensions" => "settings.store.auto_update.label",
+        "macros" => "settings.automations.title",
+        "automation_power.mode" => "settings.automations.power_mode.label",
+        "automation_power.battery_multiplier" => "sync.label.battery_multiplier",
+        "automation_power.low_battery_multiplier" => "sync.label.low_battery_multiplier",
+        "automation_power.disable_signals_on_low_battery" => "sync.label.disable_signals",
+        "context_rules" => "settings.assistant.app_modes.label",
+        "internal_sites" => "settings.internal_sites.title",
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -442,6 +595,7 @@ mod tests {
                 granted: vec!["storage".into()],
                 approved_version: "1.0.0".into(),
                 approved_at: "2026-01-01T00:00:00Z".into(),
+                origin: Some("sideload".into()),
             },
         );
         c.extension_agent_access.insert(
@@ -605,6 +759,88 @@ mod tests {
                     key
                 );
             }
+        }
+    }
+
+    /// Every row that syncs is named in Settings → Sync and the conflicts
+    /// list by a key the EN catalog has.
+    #[test]
+    fn every_synced_row_has_an_english_label() {
+        crate::i18n::init(Some("en"));
+        for r in SYNC_FIELDS {
+            if matches!(r.rule, Rule::ThisComputer(_) | Rule::Never) || r.path == "extensions" {
+                continue;
+            }
+            let key = label_key(r.path).unwrap_or_else(|| panic!("{} has no label", r.path));
+            assert_ne!(
+                crate::i18n::translate_in("en", key, &[]),
+                key,
+                "{} has no EN string",
+                key
+            );
+        }
+        for l in SYNC_LISTS {
+            assert!(label_field(l.ns).is_some(), "{} has no label field", l.ns);
+        }
+    }
+
+    /// Each rename names a path this build has a row for, and an old path
+    /// it doesn't.
+    #[test]
+    fn renamed_paths_resolve() {
+        for (old, new) in RENAMED {
+            assert!(cfg_row(new).is_some(), "{} isn't a synced row", new);
+            assert!(row(old).is_none(), "{} still has a row", old);
+        }
+    }
+
+    #[test]
+    fn cfg_rows_and_categories() {
+        assert_eq!(cfg_row("ui.theme").map(|r| r.rule), Some(Rule::Shared));
+        assert_eq!(cfg_row("hotkey").map(|r| r.rule), Some(Rule::PerOs));
+        assert!(cfg_row("extension_states.weather").is_some());
+        assert!(cfg_row("extension_states.").is_none());
+        assert!(cfg_row("system.auto_start").is_none());
+        assert!(cfg_row("shortcuts").is_none());
+        assert_eq!(
+            row_for("tool_permissions.trust_all").map(|r| r.path),
+            Some("tool_permissions")
+        );
+        assert_eq!(
+            category_of(CFG_NS, "automation_power.mode"),
+            Some(Category::Automations)
+        );
+        assert_eq!(category_of(CFG_NS, "ui.theme"), Some(Category::Settings));
+        assert_eq!(
+            category_of("list.store_sources", "s1"),
+            Some(Category::Extensions)
+        );
+        assert_eq!(category_of("sync.conflicts", "c1"), Some(Category::System));
+        assert_eq!(category_of("future.thing", "x"), None);
+    }
+
+    /// Credentials, as backups name them, never become synced rows: every
+    /// path the backup allowlist leaves out as a permission is This
+    /// computer here too (§4.7 `credential_rules_match_backup`).
+    #[test]
+    fn credential_rules_match_backup() {
+        use crate::config_export::allowlist::{Rule as BackupRule, Why as BackupWhy, FIELDS};
+        for (path, rule) in FIELDS {
+            if let BackupRule::Leave(BackupWhy::Permissions) = rule {
+                let r = row_for(path).unwrap_or_else(|| panic!("{} has no sync row", path));
+                assert!(
+                    matches!(r.rule, Rule::ThisComputer(_)),
+                    "{} is a permission in backups but syncs",
+                    path
+                );
+            }
+        }
+        // The extension settings rule asks `Rules` field by field; a field
+        // the safety net calls a credential is sensitive whatever the
+        // manifest says.
+        let rules = crate::config_export::sensitive::Rules::new(&[]);
+        for name in ["api_key", "token", "password", "client_secret"] {
+            assert!(rules.is_sensitive_setting("any", name), "{}", name);
         }
     }
 }
