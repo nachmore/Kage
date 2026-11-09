@@ -12,6 +12,15 @@
  *   - Validating and forwarding generic mascot activity hints
  *     (`context.mascot` → `type: 'mascot-activity'` → `window.__kageMascotHint`)
  *
+ * Two surfaces:
+ *   - `hidden` (default): a 1px iframe in the launcher, chat and settings
+ *     windows that runs the extension's providers.
+ *   - `view`: the visible iframe of an extension view window
+ *     (docs/design/EXTENSION_VIEWS.md §8). It runs only the view module,
+ *     has a CSP with no network, explicit `allow` denials, a navigation
+ *     detector, the view RPCs and the `view-request` messages, and refuses
+ *     the window-bound commands of `VIEW_SURFACE_DENIED_COMMANDS`.
+ *
  * Security:
  *   - iframes are loaded with `sandbox="allow-scripts"` only. No
  *     `allow-same-origin`, so the iframe gets a null origin: no cookies,
@@ -27,9 +36,42 @@
 import { getConfig, onConfigChange } from './config-cache.js';
 import { decideInvoke } from './extension-permissions.js';
 import { validateExtensionInvokeArgs } from './extension-url-policy.js';
+import {
+    buildViewSrcdoc,
+    createRateWindow,
+    escapeInlineScript,
+    isValidViewId,
+    isViewRequestKind,
+    MAX_COMPOSE_CHARS,
+    MAX_COPY_CHARS,
+    MAX_CSS_FILE_BYTES,
+    MAX_CSS_TOTAL_BYTES,
+    MAX_SUBTITLE_CHARS,
+    normalizeViewSource,
+    normalizeViews,
+    sanitizeStorageChanges,
+    sanitizeViewTheme,
+    sanitizeViewTitle,
+    VIEW_IFRAME_ALLOW,
+    VIEW_IFRAME_SANDBOX,
+    VIEW_REQUEST_RATES,
+    validateOpenViewEffect,
+    viewTextError,
+    viewThemesEqual,
+} from './extension-view-policy.js';
+import { t } from './i18n.js';
 
 const BOOT_TIMEOUT_MS = 10_000;
 const RPC_TIMEOUT_MS = 10_000;
+
+/** The two sandbox surfaces (see the file comment). */
+export const SURFACE_HIDDEN = 'hidden';
+export const SURFACE_VIEW = 'view';
+
+/** How long `mount` may take before the view page shows its error (§8.5). */
+export const VIEW_MOUNT_TIMEOUT_MS = 10_000;
+/** How long one watchdog ping may go unanswered (§8.7: one ping per 5 s). */
+export const VIEW_PING_TIMEOUT_MS = 5_000;
 
 // --- Mascot activity hints --------------------------------------------------
 
@@ -157,6 +199,7 @@ export const RUNTIME_SOURCE_PATHS = [
     'js/shared/icu-message.js',
     'js/extension-sandbox/runtime/sandboxed-worker.js',
     'js/extension-sandbox/runtime/host-api.js',
+    'js/extension-sandbox/runtime/view-api.js',
     'js/extension-sandbox/runtime.js',
 ];
 
@@ -231,7 +274,55 @@ const IDENTITY_SCOPED_COMMANDS = Object.freeze({
  *   the extension, already filtered by {@link hostFeaturesFor}. Surfaced to
  *   extension code as the frozen `context.hostFeatures` array so it can feature-
  *   detect (older hosts send nothing → `undefined`).
+ * @property {'hidden'|'view'} [surface] - `'view'` for an extension view
+ *   window's sandbox. Anything else is the hidden surface.
+ *
+ * View surface only (docs/design/EXTENSION_VIEWS.md §8):
+ * @property {string} [viewId] - the view this window shows; the manifest
+ *   (`views`) must declare it
+ * @property {unknown} [views] - the manifest's `contributes.views` (raw or
+ *   normalised), for `context.view.open` checks
+ * @property {string} [viewTitle] - the view's title, `__MSG_*__` resolved
+ * @property {string} [extensionName] - the extension's display name
+ * @property {unknown} [viewTheme] - the theme snapshot (`readViewTheme`)
+ * @property {string[]} [viewCss] - the view's CSS file contents, in order
+ * @property {ViewHooks} [viewHooks]
+ * `sources` holds `{ view: <module source>, sourcePaths: { view: <path> } }`.
  */
+
+/**
+ * What the view page does for its sandbox. `setTitle` and `close` are
+ * the page's; the rest default to the Tauri commands of §16.1.
+ *
+ * @typedef {object} ViewHooks
+ * @property {(subtitle: string|null) => (void|Promise<void>)} [setTitle] -
+ *   a cleaned subtitle (≤ 80 characters) or null to clear it
+ * @property {() => (void|Promise<void>)} [close] - hide the window
+ * @property {(viewId: string, params: object|null) => Promise<unknown>} [openView] -
+ *   default: `ext_view_open` with `source: 'view'`
+ * @property {(text: string) => Promise<unknown>} [compose] - default `ext_view_compose`
+ * @property {(text: string) => Promise<unknown>} [copyText] - default `ext_view_copy_text`
+ * @property {() => Promise<unknown>} [openSettings] - default
+ *   `open_settings_window({ section: 'ext-<id>' })`
+ * @property {() => void} [onNavigated] - the iframe navigated away from its
+ *   document; the sandbox is already destroyed (§8.8)
+ * @property {() => boolean} [hasUserActivation] - the window is focused and
+ *   has a recent click or key press (§13.4). Default: `document.hasFocus()`
+ *   and `navigator.userActivation.isActive` where the engine has it.
+ */
+
+/**
+ * Whether this page has a recent user activation (§13.4): it has focus,
+ * and `navigator.userActivation.isActive` where the engine supports it.
+ * Activation in the view iframe reaches the page, its ancestor.
+ */
+export function defaultUserActivation() {
+    try {
+        if (typeof document !== 'undefined' && !document.hasFocus()) return false;
+    } catch {}
+    const ua = typeof navigator !== 'undefined' ? navigator.userActivation : undefined;
+    return ua && typeof ua.isActive === 'boolean' ? ua.isActive : true;
+}
 
 // --- Host features ----------------------------------------------------------
 
@@ -256,9 +347,18 @@ export const HOST_FEATURE_SYNC_KEYS = 'sync.keys';
 export const HOST_FEATURE_SYNC_LISTS = 'sync.lists';
 export const HOST_FEATURE_SYNC_RECORDS = 'sync.records';
 
+/**
+ * Extension views (docs/design/EXTENSION_VIEWS.md §9.4): `open_view`
+ * actions and effects work in this window, and in a view window
+ * `context.view` exists. Needs the `views` capability. Offered by the
+ * floating, chat, settings and view windows.
+ */
+export const HOST_FEATURE_VIEWS = 'views';
+
 /** Capability each host feature requires. A feature with no entry needs none. */
 const HOST_FEATURE_CAPABILITY = Object.freeze({
     [HOST_FEATURE_DATE_PICKER]: 'calendar',
+    [HOST_FEATURE_VIEWS]: 'views',
 });
 
 /**
@@ -326,6 +426,9 @@ export class ExtensionSandbox {
          * @type {string[]}
          */
         this.hostFeatures = hostFeaturesFor(spec.hostFeatures, this.capabilities);
+        /** `'hidden'` or `'view'` (see the file comment). */
+        this.surface = spec.surface === SURFACE_VIEW ? SURFACE_VIEW : SURFACE_HIDDEN;
+        if (this.surface === SURFACE_VIEW) this._initViewSpec(spec);
         /** The activity we last forwarded and haven't cleared, else null. */
         this._mascotActivity = null;
         /**
@@ -359,6 +462,8 @@ export class ExtensionSandbox {
         this.hasSettings = false;
         this.hasToolbar = false;
         this.hasFormatter = false;
+        /** View surface: the view module loaded (else `viewMount` fails). */
+        this.hasView = false;
         /**
          * Search provider implements `onDateSelected` AND this window
          * offered it the date picker. Only then does the host route date
@@ -388,18 +493,7 @@ export class ExtensionSandbox {
         // Fetch the runtime source (cached after first call).
         const runtimeSource = await getSandboxRuntimeSource();
 
-        const iframe = document.createElement('iframe');
-        iframe.dataset.extensionId = this.extensionId;
-        iframe.setAttribute('sandbox', 'allow-scripts');
-        iframe.setAttribute('aria-hidden', 'true');
-        // We position offscreen rather than using visibility:hidden or
-        // width/height:0, because Chromium throttles timers and task
-        // scheduling in frames that never intersect the viewport. A
-        // zero-sized hidden iframe would run the extension sandbox at a
-        // crawl (observed: 1-second setTimeouts firing after 3+ seconds
-        // during rapid keystrokes), causing RPCs to time out.
-        iframe.style.cssText =
-            'position:fixed;top:0;left:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+        const iframe = this._createIframe();
         this._iframe = iframe;
         this._container.appendChild(iframe);
         // Use srcdoc with the runtime inlined as a classic script. This
@@ -408,7 +502,15 @@ export class ExtensionSandbox {
         // in production builds. The runtime uses dynamic import() for
         // extension code (via blob URLs, which are same-origin to the
         // iframe), so module loading still works for extensions.
-        iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body><script>${runtimeSource.replace(/<\/script/gi, '<\x2fscript')}</script></body></html>`;
+        iframe.srcdoc =
+            this.surface === SURFACE_VIEW
+                ? buildViewSrcdoc({
+                      runtimeSource,
+                      lang: this.i18nLanguage,
+                      dir: this.i18nRtl ? 'rtl' : 'ltr',
+                      theme: this.viewTheme,
+                  })
+                : `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body><script>${escapeInlineScript(runtimeSource)}</script></body></html>`;
 
         const channel = new MessageChannel();
         this._port = channel.port1;
@@ -421,6 +523,8 @@ export class ExtensionSandbox {
         // Wait for the iframe to load before handshaking — otherwise the
         // postMessage could race past the runtime's message listener.
         await this._waitForIframeLoad();
+        // That load was the srcdoc. Any later one means the frame navigated.
+        if (this.surface === SURFACE_VIEW) this._watchViewNavigation();
 
         const readyPromise = this._waitForReady();
         iframe.contentWindow.postMessage({ type: 'handshake' }, '*', [channel.port2]);
@@ -443,6 +547,18 @@ export class ExtensionSandbox {
                 i18nLanguage: this.i18nLanguage || 'en',
                 i18nRtl: !!this.i18nRtl,
                 hostFeatures: this.hostFeatures.slice(),
+                ...(this.surface === SURFACE_VIEW
+                    ? {
+                          surface: SURFACE_VIEW,
+                          view: {
+                              id: this.viewId,
+                              theme: this.viewTheme,
+                              css: this._viewCss.slice(),
+                              // Links in a view open only with `urls` (§8.8).
+                              links: this.capabilities.has('urls'),
+                          },
+                      }
+                    : {}),
             },
             { ackType: 'init-ack' }
         );
@@ -456,6 +572,7 @@ export class ExtensionSandbox {
         this.hasSettings = !!initResult.result?.hasSettings;
         this.hasToolbar = !!initResult.result?.hasToolbar;
         this.hasFormatter = !!initResult.result?.hasFormatter;
+        this.hasView = this.surface === SURFACE_VIEW && !!initResult.result?.hasView;
         // The sandbox's claim is ANDed with what the host offered: an
         // extension can't become a date provider in a window that never
         // gave it the feature (or without the `calendar` grant behind it).
@@ -513,6 +630,98 @@ export class ExtensionSandbox {
         }
     }
 
+    /**
+     * Tell the sandbox that its extension's stored data changed elsewhere
+     * (docs/design/EXTENSION_VIEWS.md §10). Fire-and-forget, every surface.
+     * The caller has matched the batch to this extension and set `self`;
+     * this drops anything but `{ key, op, self, source }`, and sends
+     * nothing unless the extension holds `storage`.
+     *
+     * @param {unknown} changes
+     * @returns {boolean} whether a message was posted
+     */
+    notifyStorageChanged(changes) {
+        if (this._destroyed || !this._ready || !this._port) return false;
+        if (!this.capabilities.has('storage')) return false;
+        const clean = sanitizeStorageChanges(changes);
+        if (clean.length === 0) return false;
+        try {
+            this._port.postMessage({ type: 'storage-changed', changes: clean });
+            return true;
+        } catch (e) {
+            console.warn(`[sandbox ${this.extensionId}] storage-changed failed:`, e);
+            return false;
+        }
+    }
+
+    // --- view surface (docs/design/EXTENSION_VIEWS.md §8.6) -------------------
+
+    /**
+     * `viewMount`: the view module's `mount(root, info)`. Rejects after
+     * {@link VIEW_MOUNT_TIMEOUT_MS} unless `opts.timeoutMs` says otherwise.
+     *
+     * @param {{params?: object|null, source?: string, reloaded?: boolean}} info
+     */
+    mountView({ params = null, source, reloaded = false } = {}, opts = {}) {
+        this._requireViewSurface('mountView');
+        const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : VIEW_MOUNT_TIMEOUT_MS;
+        return this.call(
+            'viewMount',
+            { params: params ?? null, source: normalizeViewSource(source), reloaded: !!reloaded },
+            { timeoutMs }
+        );
+    }
+
+    /** `viewReopen`: opened again while loaded; reaches the view's `onOpen`. */
+    reopenView({ params = null, source } = {}) {
+        this._requireViewSurface('reopenView');
+        return this.call('viewReopen', {
+            params: params ?? null,
+            source: normalizeViewSource(source),
+        });
+    }
+
+    /** `viewVisibility`: the window was shown or hidden (`onShow` / `onHide`). */
+    setViewVisibility(visible) {
+        this._requireViewSurface('setViewVisibility');
+        return this.call('viewVisibility', { visible: !!visible });
+    }
+
+    /**
+     * `viewTheme`, only when the snapshot changed (§11). The theme is
+     * sanitised first: allowlisted tokens with safe values only.
+     *
+     * @returns {Promise<boolean>} whether the view was told
+     */
+    async setViewTheme(theme) {
+        this._requireViewSurface('setViewTheme');
+        const next = sanitizeViewTheme(theme);
+        if (viewThemesEqual(next, this.viewTheme)) return false;
+        this.viewTheme = next;
+        await this.call('viewTheme', { theme: next });
+        return true;
+    }
+
+    /** `viewPing`: the watchdog's heartbeat (§8.7). The runtime answers. */
+    pingView(opts = {}) {
+        this._requireViewSurface('pingView');
+        const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : VIEW_PING_TIMEOUT_MS;
+        return this.call('viewPing', {}, { timeoutMs });
+    }
+
+    /**
+     * Whether the view window has a recent user activation (§13.4): the
+     * `hasUserActivation` hook, else {@link defaultUserActivation}.
+     */
+    hasUserActivation() {
+        const hook = this._viewHooks?.hasUserActivation;
+        try {
+            return typeof hook === 'function' ? hook() === true : defaultUserActivation();
+        } catch {
+            return false;
+        }
+    }
+
     /** Tear down the iframe and reject all in-flight RPCs. */
     destroy() {
         if (this._destroyed) return;
@@ -555,6 +764,276 @@ export class ExtensionSandbox {
     }
 
     // --- internals ---------------------------------------------------------
+
+    /** Read and check the view-surface fields of the spec. */
+    _initViewSpec(spec) {
+        const declared = normalizeViews(spec.views, '', '', this.extensionId, { warn: null });
+        if (!isValidViewId(spec.viewId) || !declared.some((v) => v.id === spec.viewId)) {
+            throw new Error(
+                `sandbox '${this.extensionId}': view surface needs a view id the manifest declares`
+            );
+        }
+        this.viewId = spec.viewId;
+        /** The manifest's views, for `context.view.open` checks. */
+        this._viewDecls = declared;
+        this.viewTitle = sanitizeViewTitle(spec.viewTitle) || this.viewId;
+        this.extensionName = sanitizeViewTitle(spec.extensionName, 120) || this.extensionId;
+        this.viewTheme = sanitizeViewTheme(spec.viewTheme);
+        this._viewCss = this._limitViewCss(spec.viewCss);
+        /** @type {ViewHooks} */
+        this._viewHooks =
+            spec.viewHooks && typeof spec.viewHooks === 'object' ? spec.viewHooks : {};
+        this._viewRates = {};
+        for (const [kind, [max, windowMs]] of Object.entries(VIEW_REQUEST_RATES)) {
+            this._viewRates[kind] = createRateWindow(max, windowMs);
+        }
+        /** Kinds whose rate-limit refusal was logged and not allowed since. */
+        this._viewRateLogged = new Set();
+    }
+
+    /** The view's CSS texts within the §4 limits; the rest are dropped. */
+    _limitViewCss(list) {
+        const out = [];
+        let total = 0;
+        const encoder = new TextEncoder();
+        for (const text of Array.isArray(list) ? list : []) {
+            if (typeof text !== 'string' || !text) continue;
+            const size = encoder.encode(text).length;
+            if (size > MAX_CSS_FILE_BYTES || total + size > MAX_CSS_TOTAL_BYTES) {
+                console.warn(
+                    `[sandbox ${this.extensionId}] view CSS over the size limits (256 KiB each, 1 MiB in total) — dropped`
+                );
+                continue;
+            }
+            total += size;
+            out.push(text);
+        }
+        return out;
+    }
+
+    _requireViewSurface(method) {
+        if (this.surface !== SURFACE_VIEW) {
+            throw new Error(`${method} is only for view sandboxes`);
+        }
+    }
+
+    /**
+     * The sandbox iframe. Hidden surface: 1px and transparent. View
+     * surface: fills its container, takes input, and carries the `allow`
+     * denials, `referrerpolicy` and a title (§8.3). Both get exactly
+     * `sandbox="allow-scripts"`.
+     */
+    _createIframe() {
+        const iframe = document.createElement('iframe');
+        iframe.dataset.extensionId = this.extensionId;
+        if (this.surface === SURFACE_VIEW) {
+            iframe.dataset.viewId = this.viewId;
+            iframe.setAttribute('sandbox', VIEW_IFRAME_SANDBOX);
+            iframe.setAttribute('allow', VIEW_IFRAME_ALLOW);
+            iframe.setAttribute('referrerpolicy', 'no-referrer');
+            iframe.title = t('ext_view.iframe_label', {
+                view: this.viewTitle,
+                extension: this.extensionName,
+            });
+            iframe.className = 'kv-frame';
+            iframe.style.cssText = 'display:block;width:100%;height:100%;border:0;';
+            return iframe;
+        }
+        iframe.setAttribute('sandbox', 'allow-scripts');
+        iframe.setAttribute('aria-hidden', 'true');
+        // We position offscreen rather than using visibility:hidden or
+        // width/height:0, because Chromium throttles timers and task
+        // scheduling in frames that never intersect the viewport. A
+        // zero-sized hidden iframe would run the extension sandbox at a
+        // crawl (observed: 1-second setTimeouts firing after 3+ seconds
+        // during rapid keystrokes), causing RPCs to time out.
+        iframe.style.cssText =
+            'position:fixed;top:0;left:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+        return iframe;
+    }
+
+    /**
+     * After the srcdoc's load, any further `load` of the view iframe means
+     * it navigated itself (`location.href = …`). The Rust guard doesn't
+     * see iframe navigations on Windows, so the page tears the sandbox
+     * down on every platform (§8.8).
+     */
+    _watchViewNavigation() {
+        const iframe = this._iframe;
+        if (!iframe) return;
+        iframe.addEventListener('load', () => this._onViewNavigated());
+    }
+
+    _onViewNavigated() {
+        if (this._destroyed) return;
+        console.warn(
+            `[sandbox ${this.extensionId}] view '${this.viewId}' navigated away from its document — stopped`
+        );
+        this.destroy();
+        try {
+            this._viewHooks.onNavigated?.();
+        } catch (e) {
+            console.warn(`[sandbox ${this.extensionId}] onNavigated hook failed:`, e);
+        }
+    }
+
+    /**
+     * A `view-request` from the view sandbox (§8.6). Every field is
+     * type-checked; the answer is a `view-response` with `result`, or with
+     * `error` plus the `errorKind` / `errorKey` the extension can branch on.
+     * Unknown kinds, and any request on the hidden surface, are ignored
+     * (warned about once, so a loop can't flood the log).
+     */
+    async _handleViewRequest(msg) {
+        if (this.surface !== SURFACE_VIEW || !isViewRequestKind(msg?.kind)) {
+            if (!this._warnedStrayViewRequest) {
+                this._warnedStrayViewRequest = true;
+                console.warn(
+                    this.surface !== SURFACE_VIEW
+                        ? `[sandbox ${this.extensionId}] view-request outside a view window — ignored`
+                        : `[sandbox ${this.extensionId}] unknown view request '${String(msg?.kind)}' — ignored`
+                );
+            }
+            return;
+        }
+        const id = msg.id;
+        if (!Number.isSafeInteger(id)) return;
+        let response;
+        try {
+            const outcome = await this._runViewRequest(msg.kind, msg);
+            if (outcome?.refused) {
+                const { kind, key, vars, reason } = outcome.refused;
+                // Rate-limit refusals log once until that kind is allowed again.
+                const quiet = kind === 'rate_limited' && this._viewRateLogged.has(msg.kind);
+                if (kind === 'rate_limited') this._viewRateLogged.add(msg.kind);
+                if (!quiet) {
+                    const what = msg.kind === 'open-view' ? 'open_view' : `view ${msg.kind}`;
+                    console.warn(`[ext ${this.extensionId}] ${what} refused: ${reason}`);
+                }
+                response = {
+                    type: 'view-response',
+                    id,
+                    error: key ? t(key, vars || {}) : reason,
+                    errorKind: kind,
+                    ...(key ? { errorKey: key } : {}),
+                };
+            } else {
+                response = { type: 'view-response', id, result: outcome?.result ?? null };
+            }
+        } catch (e) {
+            response = { type: 'view-response', id, error: String(e?.message || e) };
+            if (typeof e?.kind === 'string') response.errorKind = e.kind;
+            if (typeof e?.key === 'string') response.errorKey = e.key;
+        }
+        if (this._destroyed || !this._port) return;
+        this._port.postMessage(response);
+    }
+
+    /** Rate check for a view request kind; true when allowed (and counted). */
+    _viewRateOk(kind) {
+        const ok = this._viewRates[kind] ? this._viewRates[kind].take() : true;
+        if (ok) this._viewRateLogged.delete(kind);
+        return ok;
+    }
+
+    async _runViewRequest(kind, msg) {
+        const refuse = (errorKind, key, vars, reason) => ({
+            refused: { kind: errorKind, key, vars, reason },
+        });
+        const tooFast = (what) =>
+            refuse('rate_limited', 'errors.ext_view.too_fast', {}, `${what} is rate-limited`);
+        const notActive = () =>
+            refuse(
+                'not_permitted',
+                'errors.ext_view.not_focused',
+                {},
+                'needs the window in front and a recent click or key press'
+            );
+        const textInvalid = (reason) =>
+            refuse('invalid_input', 'errors.ext_view.text_invalid', { reason }, reason);
+        const hooks = this._viewHooks;
+        switch (kind) {
+            case 'set-title': {
+                const text = msg.text;
+                if (text !== null && typeof text !== 'string') {
+                    return textInvalid('the title must be a string or null');
+                }
+                if (typeof hooks.setTitle !== 'function') {
+                    return refuse('not_permitted', null, null, 'this window has no title bar hook');
+                }
+                if (!this._viewRateOk(kind)) return tooFast('setTitle');
+                const clean =
+                    text === null ? null : sanitizeViewTitle(text, MAX_SUBTITLE_CHARS) || null;
+                await hooks.setTitle(clean);
+                return { result: clean };
+            }
+            case 'close': {
+                if (typeof hooks.close !== 'function') {
+                    return refuse('not_permitted', null, null, 'this window has no close hook');
+                }
+                await hooks.close();
+                return { result: null };
+            }
+            case 'open-view': {
+                const check = validateOpenViewEffect(
+                    { type: 'open_view', view: msg.view, params: msg.params ?? null },
+                    {
+                        hostFeatures: this.hostFeatures,
+                        capabilities: this.capabilities,
+                        views: this._viewDecls,
+                        extensionId: this.extensionId,
+                        extensionName: this.extensionName,
+                    }
+                );
+                if (!check.ok) return { refused: check };
+                if (!this.hasUserActivation()) return notActive();
+                if (!this._viewRateOk(kind)) return tooFast('open');
+                const result = await (typeof hooks.openView === 'function'
+                    ? hooks.openView(check.view, check.params)
+                    : this._rawInvoke('ext_view_open', {
+                          extensionId: this.extensionId,
+                          viewId: check.view,
+                          params: check.params,
+                          source: 'view',
+                      }));
+                return { result: { reused: !!result?.reused } };
+            }
+            case 'compose':
+            case 'copy-text': {
+                const max = kind === 'compose' ? MAX_COMPOSE_CHARS : MAX_COPY_CHARS;
+                const problem = viewTextError(msg.text, max);
+                if (problem) return textInvalid(problem);
+                if (!this.hasUserActivation()) return notActive();
+                if (!this._viewRateOk(kind)) return tooFast(kind);
+                if (kind === 'compose') {
+                    await (typeof hooks.compose === 'function'
+                        ? hooks.compose(msg.text)
+                        : this._rawInvoke('ext_view_compose', { text: msg.text }));
+                } else {
+                    await (typeof hooks.copyText === 'function'
+                        ? hooks.copyText(msg.text)
+                        : this._rawInvoke('ext_view_copy_text', { text: msg.text }));
+                }
+                return { result: null };
+            }
+            case 'open-settings': {
+                // Settings comes to the front, so it needs a user action
+                // like opening a view does.
+                if (!this.hasUserActivation()) return notActive();
+                if (!this._viewRateOk(kind)) return tooFast('openSettings');
+                // The section is the host's idea of this extension, never
+                // something the sandbox names.
+                await (typeof hooks.openSettings === 'function'
+                    ? hooks.openSettings()
+                    : this._rawInvoke('open_settings_window', {
+                          section: `ext-${this.extensionId}`,
+                      }));
+                return { result: null };
+            }
+            default:
+                return refuse('invalid_input', null, null, `unknown view request '${kind}'`);
+        }
+    }
 
     _waitForIframeLoad() {
         return new Promise((resolve, reject) => {
@@ -659,6 +1138,11 @@ export class ExtensionSandbox {
                 this._handleMascotActivity(msg);
                 break;
             }
+            case 'view-request': {
+                // View surface only; checked field by field there.
+                this._handleViewRequest(msg);
+                break;
+            }
             default:
                 // unknown — ignore
                 break;
@@ -692,7 +1176,9 @@ export class ExtensionSandbox {
 
     async _handleInvoke(msg) {
         const { id, command, args } = msg;
-        const decision = decideInvoke(command, this.capabilities);
+        // A view window's sandbox also can't call the window-bound
+        // commands of VIEW_SURFACE_DENIED_COMMANDS (§8.6).
+        const decision = decideInvoke(command, this.capabilities, { surface: this.surface });
         if (!decision.allow) {
             this._port.postMessage({
                 type: 'invoke-response',
@@ -975,6 +1461,18 @@ export class ExtensionSandboxPool {
     unloadAll() {
         for (const sb of this._sandboxes.values()) sb.destroy();
         this._sandboxes.clear();
+    }
+
+    /**
+     * Forward one extension's storage changes to its sandbox only (§10.1).
+     * `changes` already carry `self`; see
+     * {@link ExtensionSandbox#notifyStorageChanged}.
+     *
+     * @returns {boolean} whether a sandbox was told
+     */
+    notifyStorageChanged(extensionId, changes) {
+        const sb = this._sandboxes.get(extensionId);
+        return sb ? sb.notifyStorageChanged(changes) : false;
     }
 
     *entries() {

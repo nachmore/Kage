@@ -150,13 +150,19 @@ export function isScratchId(id) {
  * characters, so a value can't smuggle terminal escape sequences or render
  * differently from what gets pasted. Tab and newlines are fine.
  *
+ * `max` overrides the length limit (in UTF-16 code units, like
+ * `text.length`). Extension views copy and compose with their own limits
+ * (docs/design/EXTENSION_VIEWS.md §13.3, §16.1).
+ *
  * @param {unknown} text
+ * @param {{max?: number}} [options]
  * @returns {string|null}
  */
-export function copyTextError(text) {
+export function copyTextError(text, { max = MAX_COPY_LENGTH } = {}) {
+    const limit = Number.isSafeInteger(max) && max > 0 ? max : MAX_COPY_LENGTH;
     if (typeof text !== 'string') return 'must be a string';
     if (text.length === 0) return 'must not be empty';
-    if (text.length > MAX_COPY_LENGTH) return `must be at most ${MAX_COPY_LENGTH} characters`;
+    if (text.length > limit) return `must be at most ${limit} characters`;
     for (let i = 0; i < text.length; i++) {
         const c = text.charCodeAt(i);
         const control =

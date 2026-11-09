@@ -44,4 +44,39 @@ describe('sandbox runtime srcdoc assembly', () => {
             expect(() => readFileSync(resolve(UI_ROOT, p), 'utf8'), p).not.toThrow();
         }
     });
+
+    it('assembles with the view surface (runtime/view-api.js) before runtime.js', () => {
+        const view = RUNTIME_SOURCE_PATHS.indexOf('js/extension-sandbox/runtime/view-api.js');
+        const runtime = RUNTIME_SOURCE_PATHS.indexOf('js/extension-sandbox/runtime.js');
+        expect(view).toBeGreaterThanOrEqual(0);
+        expect(view).toBeLessThan(runtime);
+        const joined = assembleRuntime();
+        expect(joined).toContain('function createViewSurface(');
+        expect(joined).toContain('function createStorageEvents(');
+    });
+
+    it('every import of runtime.js is listed before it', () => {
+        const runtime = readFileSync(resolve(UI_ROOT, 'js/extension-sandbox/runtime.js'), 'utf8');
+        const imports = [...runtime.matchAll(/^import\s[^\n]*from '([^']+)';$/gm)].map((m) =>
+            resolve(UI_ROOT, 'js/extension-sandbox', m[1])
+        );
+        const listed = RUNTIME_SOURCE_PATHS.map((p) => resolve(UI_ROOT, p));
+        const at = listed.indexOf(resolve(UI_ROOT, 'js/extension-sandbox/runtime.js'));
+        for (const file of imports) {
+            expect(listed.indexOf(file), file).toBeGreaterThanOrEqual(0);
+            expect(listed.indexOf(file), file).toBeLessThan(at);
+        }
+    });
+
+    it('top-level names are unique across the parts', () => {
+        const names = [];
+        for (const p of RUNTIME_SOURCE_PATHS) {
+            const text = stripModuleSyntax(readFileSync(resolve(UI_ROOT, p), 'utf8'));
+            for (const m of text.matchAll(/^(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm)) {
+                names.push(m[1]);
+            }
+        }
+        const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+        expect(dupes).toEqual([]);
+    });
 });

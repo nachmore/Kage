@@ -1,0 +1,199 @@
+{
+  "_comment": "Shared by tests/extension_view_policy_test.rs (src/extensions/views.rs) and ui-tests/shared/extension-view-policy.test.js (ui/js/shared/extension-view-policy.js), so the two normalisations of contributes.views and the open_view params rule stay equal. docs/design/EXTENSION_VIEWS.md §4, §6.2.",
+  "name": "Mind Map",
+  "icon": "🧠",
+  "normalize": [
+    {
+      "case": "a valid entry keeps every field and drops unknown ones",
+      "views": [
+        {
+          "id": "explorer",
+          "title": "__MSG_view.explorer.title__",
+          "icon": "🗺️",
+          "module": "./explorer.js",
+          "css": ["./explorer.css"],
+          "defaultSize": { "width": 1200, "height": 800 },
+          "minSize": { "width": 640, "height": 420 },
+          "alwaysOnTop": true,
+          "x": 10
+        }
+      ],
+      "expected": [
+        {
+          "id": "explorer",
+          "title": "__MSG_view.explorer.title__",
+          "icon": "🗺️",
+          "module": "./explorer.js",
+          "css": ["./explorer.css"],
+          "defaultSize": { "width": 1200, "height": 800 },
+          "minSize": { "width": 640, "height": 420 }
+        }
+      ]
+    },
+    {
+      "case": "a minimal entry gets the defaults",
+      "views": [{ "id": "board", "module": "board.js" }],
+      "expected": [
+        {
+          "id": "board",
+          "title": "Mind Map",
+          "icon": "🧠",
+          "module": "board.js",
+          "css": [],
+          "defaultSize": { "width": 1100, "height": 760 },
+          "minSize": { "width": 480, "height": 360 }
+        }
+      ]
+    },
+    {
+      "case": "bad entries are dropped",
+      "views": [
+        "explorer",
+        { "module": "./v.js" },
+        { "id": "a", "module": 42 },
+        { "id": "Map", "module": "./m.js" },
+        { "id": "c", "module": "./c.js" }
+      ],
+      "expected": []
+    },
+    {
+      "case": "bad ids and module paths",
+      "views": [
+        { "id": "2map", "module": "./v.js" },
+        { "id": "map_view", "module": "./v.js" },
+        { "id": "ok", "module": "../escape.js" }
+      ],
+      "expected": []
+    },
+    {
+      "case": "a bad entry uses up one of the four places",
+      "views": [
+        { "id": "BAD", "module": "./v.js" },
+        { "id": "v0", "module": "./v.js" },
+        { "id": "v1", "module": "./v.js" },
+        { "id": "v2", "module": "./v.js" },
+        { "id": "v3", "module": "./v.js" }
+      ],
+      "expected": [
+        { "id": "v0", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "v1", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "v2", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } }
+      ]
+    },
+    {
+      "case": "a duplicate id keeps the first",
+      "views": [
+        { "id": "map", "module": "./one.js" },
+        { "id": "map", "module": "./two.js" }
+      ],
+      "expected": [
+        { "id": "map", "title": "Mind Map", "icon": "🧠", "module": "./one.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } }
+      ]
+    },
+    {
+      "case": "titles are cleaned, capped and fall back",
+      "views": [
+        { "id": "t1", "module": "./v.js", "title": "  Explorer  " },
+        { "id": "t2", "module": "./v.js", "title": "Ex\u202Eplo\u0007rer\u2066" },
+        { "id": "t3", "module": "./v.js", "title": "\u202E\n " },
+        { "id": "t4", "module": "./v.js", "title": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé" }
+      ],
+      "expected": [
+        { "id": "t1", "title": "Explorer", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "t2", "title": "Explorer", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "t3", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "t4", "title": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } }
+      ]
+    },
+    {
+      "case": "a non-string title and a long token",
+      "views": [
+        { "id": "n", "module": "./v.js", "title": 42 },
+        { "id": "k", "module": "./v.js", "title": "__MSG_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk__" }
+      ],
+      "expected": [
+        { "id": "n", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "k", "title": "__MSG_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk__", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } }
+      ]
+    },
+    {
+      "case": "icons are one emoji or the extension's icon",
+      "views": [
+        { "id": "i1", "module": "./v.js", "icon": " 👨‍👩‍👧 " },
+        { "id": "i2", "module": "./v.js", "icon": "map" },
+        { "id": "i3", "module": "./v.js", "icon": "🗺️ 🗺️" },
+        { "id": "i4", "module": "./v.js", "icon": "🗺️\u202E" },
+        { "id": "i5", "module": "./v.js", "icon": "🗺️🗺️🗺️🗺️🗺️" },
+        { "id": "i6", "module": "./v.js", "icon": 7 }
+      ],
+      "expected": [
+        { "id": "i1", "title": "Mind Map", "icon": "👨‍👩‍👧", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "i2", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "i3", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "i4", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } }
+      ]
+    },
+    {
+      "case": "sizes are rounded and clamped",
+      "views": [
+        { "id": "s1", "module": "./v.js", "defaultSize": { "width": 100, "height": 99999 } },
+        { "id": "s2", "module": "./v.js", "defaultSize": { "width": 1000.6, "height": -5 }, "minSize": { "width": 10, "height": 5000 } },
+        { "id": "s3", "module": "./v.js", "defaultSize": "big", "minSize": { "width": "wide" } },
+        { "id": "s4", "module": "./v.js", "defaultSize": { "width": 3840, "height": 2160 }, "minSize": { "width": 4000, "height": 3000 } }
+      ],
+      "expected": [
+        { "id": "s1", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 480, "height": 2160 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "s2", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1001, "height": 360 }, "minSize": { "width": 320, "height": 360 } },
+        { "id": "s3", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "s4", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 3840, "height": 2160 }, "minSize": { "width": 3840, "height": 2160 } }
+      ]
+    },
+    {
+      "case": "css entries drop one by one, collapse and stop at eight",
+      "views": [
+        { "id": "c1", "module": "./v.js", "css": ["./a.css", "./a.css", "../b.css", 3, "c.css", "./d.js"] },
+        { "id": "c2", "module": "./v.js", "css": "./a.css" },
+        { "id": "c3", "module": "./v.js", "css": ["./s0.css", "./s1.css", "./s2.css", "./s3.css", "./s4.css", "./s5.css", "./s6.css", "./s7.css", "./s8.css", "./s9.css"] }
+      ],
+      "expected": [
+        { "id": "c1", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": ["./a.css", "c.css"], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "c2", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } },
+        { "id": "c3", "title": "Mind Map", "icon": "🧠", "module": "./v.js", "css": ["./s0.css", "./s1.css", "./s2.css", "./s3.css", "./s4.css", "./s5.css", "./s6.css", "./s7.css"], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } }
+      ]
+    },
+    {
+      "case": "module paths with forbidden characters or segments",
+      "views": [
+        { "id": "p1", "module": "./lib/view.js" },
+        { "id": "p2", "module": "./lib//view.js" },
+        { "id": "p3", "module": "/abs/view.js" },
+        { "id": "p4", "module": "lib\\view.js" }
+      ],
+      "expected": [
+        { "id": "p1", "title": "Mind Map", "icon": "🧠", "module": "./lib/view.js", "css": [], "defaultSize": { "width": 1100, "height": 760 }, "minSize": { "width": 480, "height": 360 } }
+      ]
+    },
+    {
+      "case": "a non-array views value is ignored",
+      "views": { "id": "v", "module": "./v.js" },
+      "expected": []
+    },
+    {
+      "case": "null views",
+      "views": null,
+      "expected": []
+    }
+  ],
+  "params": [
+    { "case": "absent", "params": null, "error": null },
+    { "case": "empty object", "params": {}, "error": null },
+    { "case": "mixed values", "params": { "focus": "e1", "n": 1.5, "ok": true, "list": [1, null] }, "error": null },
+    { "case": "an array", "params": [], "error": "errors.ext_view.params_invalid" },
+    { "case": "a string", "params": "x", "error": "errors.ext_view.params_invalid" },
+    { "case": "a number", "params": 3, "error": "errors.ext_view.params_invalid" },
+    { "case": "a boolean", "params": false, "error": "errors.ext_view.params_invalid" },
+    { "case": "four levels", "params": { "a": { "b": { "c": [1] } } }, "error": null },
+    { "case": "five levels", "params": { "a": { "b": { "c": [[]] } } }, "error": "errors.ext_view.params_invalid" },
+    { "case": "five levels in an array", "params": { "l": [[[{}]]] }, "error": "errors.ext_view.params_invalid" }
+  ]
+}

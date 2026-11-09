@@ -1,5 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { HOST_FEATURES, invokeError } from '../../ui/js/extension-sandbox/runtime/host-api.js';
+import {
+    HOST_FEATURE_DATE_PICKER,
+    HOST_FEATURE_SYNC_RECORDS,
+    HOST_FEATURE_VIEWS,
+    hostFeaturesFor,
+} from '../../ui/js/shared/extension-sandbox-host.js';
+
+describe('storage change events and views (docs/design/EXTENSION_VIEWS.md §9.4)', () => {
+    it('every runtime advertises storage.change_events', () => {
+        expect(HOST_FEATURES).toContain('storage.change_events');
+    });
+
+    it('views is offered only to an extension holding the views capability', () => {
+        expect(HOST_FEATURE_VIEWS).toBe('views');
+        expect(hostFeaturesFor([HOST_FEATURE_VIEWS], ['views'])).toEqual(['views']);
+        expect(hostFeaturesFor([HOST_FEATURE_VIEWS], ['storage', 'window'])).toEqual([]);
+        expect(hostFeaturesFor([HOST_FEATURE_VIEWS, HOST_FEATURE_VIEWS], new Set(['views']))).toEqual([
+            'views',
+        ]);
+        expect(
+            hostFeaturesFor([HOST_FEATURE_DATE_PICKER, HOST_FEATURE_VIEWS], ['calendar', 'views'])
+        ).toEqual([HOST_FEATURE_DATE_PICKER, HOST_FEATURE_VIEWS]);
+        // A runtime feature isn't something a window offers.
+        expect(hostFeaturesFor(['storage.change_events'], ['storage'])).toEqual([]);
+        // Sync isn't offered yet (WP-S5).
+        expect(hostFeaturesFor([HOST_FEATURE_SYNC_RECORDS], ['sync', 'views'])).toEqual([]);
+    });
+});
 
 describe('sandbox runtime host API', () => {
     it('advertises the settings copy action, structured invoke errors, manifest-default config, minimized windows, and atomic data writes', () => {
