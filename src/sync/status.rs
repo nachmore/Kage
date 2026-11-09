@@ -102,6 +102,10 @@ pub struct SyncStatus {
     pub key_store: Option<KeyStoreKind>,
     pub undo_join_until: Option<String>,
     pub used_bytes: u64,
+    /// Extensions whose data sync is off on this computer, so Settings →
+    /// Sync → Extensions can show each data switch (§13.3).
+    #[serde(default)]
+    pub ext_data_off: Vec<String>,
 }
 
 impl SyncStatus {
@@ -436,6 +440,7 @@ impl SyncEngine {
                 .or(self.prefs.enabled.then(|| self.env.keys.kind())),
             undo_join_until: c.undo_join_until.clone(),
             used_bytes: self.rt.used_bytes,
+            ext_data_off: self.prefs.ext_data_off.clone(),
         }
     }
 
@@ -1438,6 +1443,19 @@ mod build_tests {
         ));
         assert_eq!(parse_path("ui.chat_window_x"), PathTarget::Never);
         assert_eq!(parse_path("shortcuts/s1/bad@name"), PathTarget::Never);
+    }
+
+    #[test]
+    fn status_names_the_extensions_whose_data_is_off_here() {
+        let mut s = SyncStatus::unavailable();
+        s.ext_data_off = vec!["mindmap".into()];
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["ext_data_off"], json!(["mindmap"]));
+        // A status without the field (an older build) still reads.
+        let mut older = v.clone();
+        older.as_object_mut().unwrap().remove("ext_data_off");
+        let back: SyncStatus = serde_json::from_value(older).unwrap();
+        assert!(back.ext_data_off.is_empty());
     }
 
     #[test]

@@ -3307,9 +3307,14 @@ what the matching command takes) and `JoinPreview`.
                 "last_seen_at": 1762686000000, "this": true, "state": "ok|stale|inactive|needs_update|retired" }],
   "conflicts_open": 2, "held": 2, "reviews": 1, "suggestions": 2,
   "problems": [{ "kind": "clock_warning", "key": "sync.problem.clock_warning", "params": { "computer": "Home Mac", "minutes": "42" } }],
-  "key_store": "keychain", "undo_join_until": "2026-12-02T10:00:00Z", "used_bytes": 15728640
+  "key_store": "keychain", "undo_join_until": "2026-12-02T10:00:00Z", "used_bytes": 15728640,
+  "ext_data_off": ["timer"]
 }
 ```
+
+`ext_data_off` (added by WP-S6) names the extensions whose data switch
+is off on this computer, so Settings → Sync → Extensions can show each
+switch; no other command reports it.
 
 What WP-S3 built, beyond the signatures above:
 - **Source conventions** (`sources.rs`), so the engine stays generic:

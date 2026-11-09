@@ -400,6 +400,7 @@ mod tests {
             "key_store",
             "undo_join_until",
             "used_bytes",
+            "ext_data_off",
         ];
         want.sort_unstable();
         assert_eq!(keys, want);
