@@ -260,6 +260,14 @@ body.clipboard-mode .floating-banner {
  * Widgets mount into these slots via the ExtensionManager.setWidgetSlot()
  * contract. We keep them flush with no padding so widgets render in
  * their own styling; empty slots take up no layout. */
+/* Commands the agent asks Kage to run outside its sandbox, and runs whose
+   block a reset removed (shared-components.css .host-cmd-tray). Never
+   shrunk by the bubble's flex layout: its prompt must stay readable. */
+.speech-bubble > .host-cmd-tray {
+    flex-shrink: 0;
+    padding: 6px 12px 0;
+}
+
 .ext-widget-slot {
     display: flex;
     flex-direction: column;

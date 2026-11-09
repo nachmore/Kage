@@ -8316,5 +8316,289 @@
   "host_commands.notify.body": {
     "message": "Open Kage to review it. Nothing runs unless you approve it.",
     "description": "System notification body for a command an AI agent asked Kage to run outside its sandbox."
+  },
+  "shared.host_command.title": {
+    "message": "{agent} wants to run a command outside its sandbox",
+    "description": "Heading of the prompt shown when an AI agent asks Kage to run a shell command outside the agent's own sandbox (its sandbox refused the command). {agent} is the agent's name, for example Kiro."
+  },
+  "shared.host_command.title_unknown": {
+    "message": "An agent wants to run a command outside its sandbox",
+    "description": "Heading of the prompt shown when an AI agent asks Kage to run a shell command outside the agent's own sandbox, when Kage doesn't know which agent asked."
+  },
+  "shared.host_command.auto_title": {
+    "message": "{agent} is running a command outside its sandbox",
+    "description": "Heading shown when Kage runs a command an AI agent asked for, outside the agent's sandbox, without asking (a rule the user made covers it). {agent} is the agent's name."
+  },
+  "shared.host_command.auto_title_unknown": {
+    "message": "An agent is running a command outside its sandbox",
+    "description": "Heading shown when Kage runs a command an AI agent asked for, outside the agent's sandbox, without asking, when Kage doesn't know which agent asked."
+  },
+  "shared.host_command.unmatched": {
+    "message": "This request didn't come from one of Kage's chats, so no rule applies to it.",
+    "description": "Note in the prompt for a command an AI agent asked Kage to run outside its sandbox: Kage couldn't tie the request to one of its own conversations (for example an agent running in a terminal)."
+  },
+  "shared.host_command.background": {
+    "message": "It came from a background task working on text from another app, so no rule applies to it.",
+    "description": "Note in the prompt for a command an AI agent asked Kage to run outside its sandbox: the request came from a hidden background task (inline assist, a macro…) that works on text from other apps."
+  },
+  "shared.host_command.reason_label": {
+    "message": "The agent's reason:",
+    "description": "Label in the prompt for a command an AI agent asked Kage to run outside its sandbox, before the agent's own explanation of why its sandbox can't run it. The explanation follows in the agent's words."
+  },
+  "shared.host_command.run_once": {
+    "message": "Run once",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: run it this one time."
+  },
+  "shared.host_command.always": {
+    "message": "Always allow commands starting with",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: run it, and from now on run commands that start with the words in the text field next to it without asking. The field follows the button."
+  },
+  "shared.host_command.prefix_label": {
+    "message": "Words the commands must start with",
+    "description": "Accessible label of the editable text field next to the 'Always allow commands starting with' button: the first words of a command, for example 'brew install'."
+  },
+  "shared.host_command.deny": {
+    "message": "Deny",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: don't run it."
+  },
+  "shared.host_command.expires": {
+    "message": "If you don't answer within {minutes, plural, one {# minute} other {# minutes}}, Kage says no.",
+    "description": "Line in the prompt for a command an AI agent asked Kage to run outside its sandbox. {minutes} is the time left before Kage denies the request on its own."
+  },
+  "shared.host_command.guard": {
+    "message": "This command may touch credentials ({kinds}). Kage always asks before running a command like this, whatever your rules say.",
+    "description": "Warning in the prompt for a command an AI agent asked Kage to run outside its sandbox. {kinds} is a comma-separated list such as 'AWS credentials, SSH keys'."
+  },
+  "shared.host_command.guard_kind.aws": {
+    "message": "AWS credentials",
+    "description": "Item in the list of what a command may touch, in the credential warning."
+  },
+  "shared.host_command.guard_kind.sandbox_session": {
+    "message": "the credential sandbox's session",
+    "description": "Item in the list of what a command may touch, in the credential warning: the session file of the sandbox that holds the agent's credentials."
+  },
+  "shared.host_command.guard_kind.ssh": {
+    "message": "SSH keys",
+    "description": "Item in the list of what a command may touch, in the credential warning."
+  },
+  "shared.host_command.guard_kind.netrc": {
+    "message": "saved logins (.netrc)",
+    "description": "Item in the list of what a command may touch, in the credential warning. Keep '.netrc' as is (a file name)."
+  },
+  "shared.host_command.guard_kind.git": {
+    "message": "GitHub or Git credentials",
+    "description": "Item in the list of what a command may touch, in the credential warning."
+  },
+  "shared.host_command.guard_kind.gcloud": {
+    "message": "Google Cloud credentials",
+    "description": "Item in the list of what a command may touch, in the credential warning."
+  },
+  "shared.host_command.guard_kind.cloud": {
+    "message": "cloud credentials",
+    "description": "Item in the list of what a command may touch, in the credential warning: Azure, Kubernetes or Docker credential files."
+  },
+  "shared.host_command.guard_kind.keychain": {
+    "message": "the keychain",
+    "description": "Item in the list of what a command may touch, in the credential warning: the macOS keychain, where passwords are stored."
+  },
+  "shared.host_command.guard_kind.env_dump": {
+    "message": "all environment variables",
+    "description": "Item in the list of what a command may touch, in the credential warning: the command prints every environment variable, which can include secrets."
+  },
+  "shared.host_command.guard_kind.credential_env": {
+    "message": "credential environment variables",
+    "description": "Item in the list of what a command may touch, in the credential warning: environment variables that hold secrets, such as AWS_SECRET_ACCESS_KEY."
+  },
+  "shared.host_command.guard_kind.hidden_glob": {
+    "message": "hidden folders",
+    "description": "Item in the list of what a command may touch, in the credential warning: a wildcard into hidden folders, where credentials are often kept."
+  },
+  "shared.host_command.by_rule": {
+    "message": "Allowed by your rule: commands starting with “{rule}”.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, run without asking because of a rule the user made. {rule} is the rule's words, for example 'brew install'."
+  },
+  "shared.host_command.by_allow_all": {
+    "message": "Allowed because you let every command run without asking.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, run without asking because the user turned on 'Run every command without asking' in Settings."
+  },
+  "shared.host_command.starting": {
+    "message": "Starting…",
+    "description": "Status after the user approved a command an AI agent asked Kage to run outside its sandbox, until it starts."
+  },
+  "shared.host_command.rule_added": {
+    "message": "From now on, commands starting with “{rule}” run without asking.",
+    "description": "Status after the user chose 'Always allow commands starting with …'. {rule} is the words they allowed, for example 'brew install'."
+  },
+  "shared.host_command.denied": {
+    "message": "Denied. The agent was told.",
+    "description": "Status after the user denied a command an AI agent asked Kage to run outside its sandbox."
+  },
+  "shared.host_command.closed": {
+    "message": "This request isn't waiting any more.",
+    "description": "Status when the user answers a prompt for a command an AI agent asked Kage to run outside its sandbox, but the request already ended."
+  },
+  "shared.host_command.expired": {
+    "message": "Nobody answered in time, so Kage said no.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the prompt went unanswered for five minutes and Kage denied it."
+  },
+  "shared.host_command.withdrawn": {
+    "message": "The agent stopped waiting for an answer.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the agent gave up (its turn was stopped) before the user answered."
+  },
+  "shared.host_command.busy": {
+    "message": "Too many commands were already running, so Kage said no.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, refused because several were already running."
+  },
+  "shared.host_command.shutdown": {
+    "message": "Kage is quitting, so the command didn't run.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, when Kage quits before it runs."
+  },
+  "shared.host_command.answer_failed": {
+    "message": "Couldn't send your answer: {error}",
+    "description": "Error under the prompt for a command an AI agent asked Kage to run outside its sandbox. {error} is the reason."
+  },
+  "shared.host_command.result_returned": {
+    "message": "The result went back to the agent.",
+    "description": "Line under a command an AI agent asked Kage to run outside its sandbox, once it ended: its exit code and output were returned to the agent."
+  },
+  "shared.shell.run_chip.label": {
+    "message": "A command still running outside the agent's sandbox",
+    "description": "Accessible label of the compact chip that keeps a running command (with its Stop button) visible after the window cleared the answer it belonged to."
+  },
+  "settings.tool_permissions.host.section": {
+    "message": "Commands outside the agent's sandbox",
+    "description": "Settings → Tool permissions: heading of the section about commands an AI agent asks Kage to run outside the agent's own sandbox."
+  },
+  "settings.tool_permissions.host.rules_label": {
+    "message": "Run without asking",
+    "description": "Settings → Tool permissions: label above the list of rules ('commands starting with …') that run without asking."
+  },
+  "settings.tool_permissions.host.description": {
+    "message": "When the agent's own sandbox refuses a command (installing with Homebrew, for example), the agent can ask Kage to run it for you. You approve each one, unless a rule below covers it. Commands that may touch credentials always ask.",
+    "description": "Settings → Tool permissions: explanation of commands an AI agent asks Kage to run outside its sandbox, and of the rules listed below it."
+  },
+  "settings.tool_permissions.host.rules_empty": {
+    "message": "No rules yet. Choose “Always allow commands starting with …” when the agent asks, to make one.",
+    "description": "Settings → Tool permissions: shown when there are no rules for commands outside the agent's sandbox."
+  },
+  "settings.tool_permissions.host.rule": {
+    "message": "Commands starting with {prefix}",
+    "description": "Settings → Tool permissions: one rule in the list. {prefix} is the words a command must start with, for example 'brew install'."
+  },
+  "settings.tool_permissions.host.rule_added_at": {
+    "message": "added {date}",
+    "description": "Settings → Tool permissions: when a rule was made. {date} is a date."
+  },
+  "settings.tool_permissions.host.remove": {
+    "message": "Remove",
+    "description": "Settings → Tool permissions: button that deletes a rule for commands outside the agent's sandbox."
+  },
+  "settings.tool_permissions.host.remove_title": {
+    "message": "Ask again before running commands starting with “{prefix}”",
+    "description": "Tooltip of the button that deletes a rule. {prefix} is the rule's words."
+  },
+  "settings.tool_permissions.host.remove_failed": {
+    "message": "Couldn't remove the rule: {error}",
+    "description": "Settings → Tool permissions: error when deleting a rule fails. {error} is the reason."
+  },
+  "settings.tool_permissions.host.allow_all.label": {
+    "message": "Run every command without asking",
+    "description": "Settings → Tool permissions: switch that lets every command an AI agent asks Kage to run outside its sandbox run without asking."
+  },
+  "settings.tool_permissions.host.allow_all.description": {
+    "message": "Commands the agent asks for then run with full access to your computer — your files and your AWS and other credentials — without asking you first. Commands that may touch credentials, and commands with hidden characters, still ask.",
+    "description": "Settings → Tool permissions: plain warning under the 'Run every command without asking' switch."
+  },
+  "settings.tool_permissions.host.allow_all.confirm": {
+    "message": "Run every command the agent asks for outside its sandbox without asking? They run with full access to your computer, including your AWS credentials. Commands that may touch credentials still ask.",
+    "description": "Confirmation dialog before turning on 'Run every command without asking'."
+  },
+  "settings.tool_permissions.host.allow_all.dialog_title": {
+    "message": "Run every command without asking?",
+    "description": "Title of the confirmation dialog before turning on 'Run every command without asking'."
+  },
+  "settings.tool_permissions.host.audit_link": {
+    "message": "See what ran in the audit log",
+    "description": "Settings → Tool permissions: link that shows the audit log filtered to commands the agent asked Kage to run outside its sandbox."
+  },
+  "settings.tool_permissions.audit.filter.host_command": {
+    "message": "Commands for the agent",
+    "description": "Filter option in the tool-permission audit log: entries for commands an AI agent asked Kage to run outside its sandbox."
+  },
+  "settings.tool_permissions.audit.summary.host.requested": {
+    "message": "The agent asked to run a command outside its sandbox",
+    "description": "Audit log entry: an AI agent asked Kage to run a shell command outside the agent's sandbox. The command follows below it."
+  },
+  "settings.tool_permissions.audit.summary.host.guard": {
+    "message": "The credential guard flagged a command",
+    "description": "Audit log entry: the command may touch credentials, so Kage asks the user whatever their rules say. What it found follows."
+  },
+  "settings.tool_permissions.audit.summary.host.auto_approved": {
+    "message": "A command ran without asking",
+    "description": "Audit log entry: a command an AI agent asked for ran without a prompt (a rule or the allow-all switch). Which one follows."
+  },
+  "settings.tool_permissions.audit.summary.host.approved": {
+    "message": "You approved a command",
+    "description": "Audit log entry: the user approved a command an AI agent asked to run outside its sandbox."
+  },
+  "settings.tool_permissions.audit.summary.host.denied": {
+    "message": "You denied a command",
+    "description": "Audit log entry: the user denied a command an AI agent asked to run outside its sandbox."
+  },
+  "settings.tool_permissions.audit.summary.host.expired": {
+    "message": "Nobody answered, so a command was denied",
+    "description": "Audit log entry: a prompt for a command an AI agent asked for went unanswered for five minutes."
+  },
+  "settings.tool_permissions.audit.summary.host.withdrawn": {
+    "message": "The agent stopped waiting",
+    "description": "Audit log entry: the agent gave up on a command before the user answered."
+  },
+  "settings.tool_permissions.audit.summary.host.refused": {
+    "message": "Kage refused a command",
+    "description": "Audit log entry: Kage refused a command an AI agent asked for before asking (bad working directory, too many waiting…). Why follows."
+  },
+  "settings.tool_permissions.audit.summary.host.finished": {
+    "message": "A command finished",
+    "description": "Audit log entry: a command an AI agent asked Kage to run outside its sandbox ended. Its exit code follows."
+  },
+  "settings.tool_permissions.audit.summary.host.rule_added": {
+    "message": "Rule added: commands starting with <strong>{rule}</strong> run without asking",
+    "description": "Audit log entry (HTML allowed): the user made a rule. {rule} is its words."
+  },
+  "settings.tool_permissions.audit.summary.host.rule_removed": {
+    "message": "Rule removed: commands starting with <strong>{rule}</strong>",
+    "description": "Audit log entry (HTML allowed): the user deleted a rule. {rule} is its words."
+  },
+  "settings.tool_permissions.audit.summary.host.allow_all_on": {
+    "message": "<strong>Every command the agent asks for now runs without asking</strong>",
+    "description": "Audit log entry (HTML allowed): the user turned on 'Run every command without asking'."
+  },
+  "settings.tool_permissions.audit.summary.host.allow_all_off": {
+    "message": "Commands the agent asks for ask again",
+    "description": "Audit log entry: the user turned off 'Run every command without asking'."
+  },
+  "settings.tool_permissions.audit.summary.host.unknown": {
+    "message": "Command outside the agent's sandbox",
+    "description": "Audit log entry about a command an AI agent asked Kage to run, of a kind this version doesn't know."
+  },
+  "settings.tool_permissions.audit.meta.host_by.rule": {
+    "message": "by a rule",
+    "description": "Detail of an audit log entry: a rule let the command run without asking."
+  },
+  "settings.tool_permissions.audit.meta.host_by.allow_all": {
+    "message": "by “Run every command without asking”",
+    "description": "Detail of an audit log entry: the allow-all switch let the command run without asking."
+  },
+  "settings.tool_permissions.audit.meta.host_by.once": {
+    "message": "once",
+    "description": "Detail of an audit log entry: the user chose 'Run once'."
+  },
+  "settings.tool_permissions.audit.meta.host_by.always": {
+    "message": "and made a rule",
+    "description": "Detail of an audit log entry: the user chose 'Always allow commands starting with …'."
+  },
+  "settings.tool_permissions.audit.meta.host_by.other": {
+    "message": "approved",
+    "description": "Detail of an audit log entry: the command was let run in a way this version does not know."
   }
 }

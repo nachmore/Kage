@@ -19,12 +19,22 @@
  *
  * A run belongs to the shell record, not the block: a block rebuilt for
  * the same record (the chip list re-rendering) shows it too.
+ *
+ * The same run view shows commands an agent asked Kage to run outside its
+ * sandbox (`attachAgentRun`, driven by host-command-view.js), and a window
+ * can name a tray (`setRunChipTray`) where a run whose views have all left
+ * the page (the floating window's reset) stays visible as a compact chip
+ * with its Stop button until it ends.
  */
 
 import { errMessage } from './error-message.js';
 import { EVT } from './events.js';
 import { t } from './i18n.js';
-import { isPlainShellCommand, sanitizeTerminalText } from './shell-commands.js';
+import {
+    isPlainShellCommand,
+    sanitizeTerminalText,
+    shellCommandDisplayText,
+} from './shell-commands.js';
 import {
     AGENT_OUTPUT_CAP,
     agentShellHint,
@@ -37,7 +47,7 @@ import {
     tailOf,
     utf8Length,
 } from './shell-run.js';
-import { copyButton, el, icon, uid } from './tool-call-dom.js';
+import { copyButton, el, icon, layoutChanged, uid } from './tool-call-dom.js';
 
 // --- The window's agent hook --------------------------------------------------
 
@@ -119,12 +129,16 @@ const runsByRecord = new WeakMap();
 const runsById = new Map();
 let listening = null;
 
-/** Whether a run is going in this window (the backend allows one). */
+/**
+ * Whether one of the user's own runs is going in this window (the backend
+ * allows one; runs an agent asked for have slots of their own).
+ */
 export function isShellRunActive() {
-    return runsById.size > 0;
+    for (const run of runsById.values()) if (run.origin !== 'agent') return true;
+    return false;
 }
 
-/** Test hook: forget runs, the host and the queue. */
+/** Test hook: forget runs, the host, the queue and the chip tray. */
 export function _resetShellRunsForTests() {
     for (const run of runsById.values()) clearInterval(run.timer);
     runsById.clear();
@@ -132,6 +146,8 @@ export function _resetShellRunsForTests() {
     queue = null;
     host = null;
     listening = null;
+    chipTray = null;
+    chips.clear();
 }
 
 function ensureOutputListener() {
@@ -197,7 +213,7 @@ function onClick(btn, fn) {
  * pointer, and the window can scroll or resize as it does, so the rest
  * of a double-click on "Run it here" must not land on Run.
  */
-function onDeliberateClick(btn, fn) {
+export function onDeliberateClick(btn, fn) {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (e.detail > 1) return;
@@ -249,8 +265,18 @@ export function createRunControls(root, deps) {
     return controls;
 }
 
+/**
+ * Where a view shows its run: a shell block's notice controls, or the
+ * holder a host-command card carries (`{ slot, live, liveRun, deps }`).
+ */
 function controlsOf(root) {
-    return root?._kageShell?.notice?.run || null;
+    return root?._kageShell?.notice?.run || root?._kageRunHolder || null;
+}
+
+/** Whether `root` still shows `run` (a shell block may have moved on to another record). */
+function viewShows(root, run) {
+    if (root?._kageRunHolder) return root._kageRunHolder.run === run;
+    return runsByRecord.get(root?._kageShell?.record) === run;
 }
 
 /**
@@ -296,6 +322,55 @@ const RISK_TEXT = Object.freeze({
     shell_rc: () => t('shared.shell.sandbox.risk.shell_rc'),
 });
 
+/**
+ * The confirm's command box: the whole command, exactly the text that
+ * runs, with hidden characters marked by `appendCommandText` (shell-
+ * command-view's `appendShellCommandText`), and the note that says when
+ * there's more of it than the box shows. Shared with the prompt for
+ * commands an agent asks to run (host-command-view.js).
+ */
+export function buildConfirmCommand(command, appendCommandText) {
+    const pre = el('pre', 'shell-run-confirm-command');
+    pre.dir = 'ltr';
+    pre.tabIndex = 0;
+    pre.setAttribute('role', 'group');
+    pre.setAttribute('aria-label', t('shared.shell.command_label'));
+    const prompt = el('span', 'shell-cmd-prompt');
+    prompt.setAttribute('aria-hidden', 'true');
+    prompt.textContent = '$ ';
+    const text = el('span', 'shell-run-confirm-command-text');
+    appendCommandText(text, command);
+    pre.append(prompt, text);
+    // More command than the box shows: the rest is only a scroll away,
+    // and it runs too.
+    const lines = lineCount(command);
+    const longNote = el('p', 'shell-run-confirm-long');
+    longNote.textContent = t('shared.shell.sandbox.confirm.long', { lines });
+    longNote.hidden = lines <= CONFIRM_VISIBLE_LINES && command.length <= CONFIRM_VISIBLE_CHARS;
+    return { pre, longNote };
+}
+
+/** Say when the box holds more command than it shows (call once it's in the page). */
+export function revealLongNote({ pre, longNote }) {
+    if (longNote.hidden && pre.scrollHeight > pre.clientHeight + 2) longNote.hidden = false;
+}
+
+/**
+ * A caution line per risk `shellCommandRisks` finds in `command`, as a
+ * list (hidden when there are none).
+ */
+export function buildRiskList(command) {
+    const list = el('ul', 'shell-run-confirm-risks');
+    for (const id of shellCommandRisks(command)) {
+        const li = el('li', 'shell-run-risk');
+        li.dataset.risk = id;
+        li.textContent = RISK_TEXT[id]();
+        list.append(li);
+    }
+    list.hidden = !list.childElementCount;
+    return list;
+}
+
 async function openConfirm(root, mode) {
     const rc = controlsOf(root);
     if (!rc || rc.confirm || rc.opening) return;
@@ -329,8 +404,7 @@ async function openConfirm(root, mode) {
     rc.slot.prepend(rc.confirm.el);
     // A command taller than its box: say so, since (macOS overlay
     // scrollbars) nothing else may show there's more of it.
-    const { pre, longNote } = rc.confirm;
-    if (longNote.hidden && pre.scrollHeight > pre.clientHeight + 2) longNote.hidden = false;
+    revealLongNote(rc.confirm);
     syncRunControls(root);
     rc.deps.layoutChanged(root);
     rc.confirm.cancel.focus();
@@ -359,25 +433,7 @@ function buildConfirm(root, rc, { mode, command, shellHint, record, ctx, ctxErro
             : t('shared.shell.sandbox.confirm.title');
     box.setAttribute('aria-labelledby', title.id);
 
-    // The whole command, exactly the text that runs (hidden characters
-    // marked — though a command with any never gets this far).
-    const pre = el('pre', 'shell-run-confirm-command');
-    pre.dir = 'ltr';
-    pre.tabIndex = 0;
-    pre.setAttribute('role', 'group');
-    pre.setAttribute('aria-label', t('shared.shell.command_label'));
-    const prompt = el('span', 'shell-cmd-prompt');
-    prompt.setAttribute('aria-hidden', 'true');
-    prompt.textContent = '$ ';
-    const text = el('span', 'shell-run-confirm-command-text');
-    rc.deps.appendCommandText(text, command);
-    pre.append(prompt, text);
-    // More command than the box shows: the rest is only a scroll away,
-    // and it runs too.
-    const lines = lineCount(command);
-    const longNote = el('p', 'shell-run-confirm-long');
-    longNote.textContent = t('shared.shell.sandbox.confirm.long', { lines });
-    longNote.hidden = lines <= CONFIRM_VISIBLE_LINES && command.length <= CONFIRM_VISIBLE_CHARS;
+    const { pre, longNote } = buildConfirmCommand(command, rc.deps.appendCommandText);
 
     const where = el('div', 'shell-run-confirm-where');
     if (ctx) {
@@ -568,7 +624,7 @@ async function startRun(root, record, opts) {
     runsByRecord.set(record, run);
     runsById.set(run.runId, run);
     syncRunControls(root);
-    run.timer = setInterval(() => renderRun(run, { elapsed: true }), 1000);
+    run.timer = setInterval(() => tick(run), 1000);
     try {
         await ensureOutputListener();
         const result = await tauriInvoke()('run_user_shell_command', {
@@ -595,6 +651,7 @@ async function startRun(root, record, opts) {
     // The run buttons come back (each next run needs its own confirm).
     for (const view of [...run.views]) syncRunControls(view);
     renderRun(run);
+    syncRunChips();
     // A stopped run isn't reported on its own: the user stepped in.
     if (run.phase === 'done' && run.tellAgent && run.result.outcome !== 'cancelled') {
         tellAgent(run);
@@ -638,10 +695,16 @@ function tellAgent(run) {
     renderRun(run);
 }
 
+/** Once a second while a run goes: its elapsed time, and its chip. */
+function tick(run) {
+    renderRun(run, { elapsed: true });
+    syncRunChips();
+}
+
 function renderRun(run, what = {}) {
     for (const root of run.views) {
         const rc = controlsOf(root);
-        if (!rc || runsByRecord.get(root._kageShell.record) !== run) {
+        if (!rc || !viewShows(root, run)) {
             run.views.delete(root);
             continue;
         }
@@ -662,7 +725,9 @@ function stateText(run) {
     const r = run.result;
     if (r.outcome === 'cancelled') return t('shared.shell.sandbox.run.cancelled');
     if (r.outcome === 'timed_out') {
-        return t('shared.shell.sandbox.run.timed_out', { minutes: RUN_TIMEOUT_MINUTES });
+        return t('shared.shell.sandbox.run.timed_out', {
+            minutes: run.timeoutMinutes ?? RUN_TIMEOUT_MINUTES,
+        });
     }
     if (r.exitCode === 0) return t('shared.shell.sandbox.run.succeeded');
     if (Number.isInteger(r.exitCode)) {
@@ -775,7 +840,18 @@ function renderAgentLine(run, live) {
     agentActions.textContent = '';
     let text = '';
     let canTell = false;
-    if (run.phase === 'done') {
+    if (run.origin === 'agent') {
+        // An agent's run: its result goes back as the tool's result.
+        if (run.phase !== 'running') text = t('shared.host_command.result_returned');
+        if (run.phase === 'done' && run.output) {
+            agentActions.append(
+                copyButton(
+                    () => t('shared.shell.copy_output'),
+                    () => sanitizeTerminalText(run.output)
+                )
+            );
+        }
+    } else if (run.phase === 'done') {
         switch (run.agent) {
             case 'pending':
                 text = t('shared.shell.sandbox.agent.sending');
@@ -824,4 +900,164 @@ function renderAgentLine(run, live) {
     agentText.textContent = text;
     agentText.hidden = !text;
     agent.hidden = !text && !agentActions.childElementCount;
+}
+
+// --- Runs an agent asked for ----------------------------------------------------
+
+/**
+ * Show a run Kage started for an agent (`run_outside_sandbox`) in `card`:
+ * output arrives as the same `user_shell_output` events, Stop is the same
+ * `cancel_user_shell_command`, and the backend's `finished` / `failed`
+ * update ends it (`finishAgentRun` / `failAgentRun`). `card` gets a
+ * holder whose `slot` the run view renders into; it stays the run's view
+ * until the card leaves the page (then the chip tray shows the run).
+ */
+export function attachAgentRun({ runId, command, cwd, timeoutSeconds, card, slot, layout }) {
+    const run = {
+        runId,
+        origin: 'agent',
+        record: null,
+        command,
+        cwd,
+        sessionId: null,
+        tellAgent: false,
+        phase: 'running',
+        startedAt: Date.now(),
+        endedAt: null,
+        output: '',
+        trimmed: false,
+        result: null,
+        error: null,
+        stopping: false,
+        agent: null,
+        agentError: null,
+        queueId: null,
+        timeoutMinutes: Number.isFinite(timeoutSeconds)
+            ? Math.max(1, Math.round(timeoutSeconds / 60))
+            : RUN_TIMEOUT_MINUTES,
+        views: new Set([card]),
+        timer: null,
+    };
+    card._kageRunHolder = {
+        run,
+        slot,
+        live: null,
+        liveRun: null,
+        deps: { layoutChanged: (node) => layout?.(node) },
+    };
+    runsById.set(runId, run);
+    ensureOutputListener();
+    run.timer = setInterval(() => tick(run), 1000);
+    renderRun(run);
+    return run;
+}
+
+function endAgentRun(run) {
+    clearInterval(run.timer);
+    run.timer = null;
+    run.endedAt = Date.now();
+    runsById.delete(run.runId);
+    renderRun(run);
+    syncRunChips();
+}
+
+/** The backend's result for an agent's run (a `RunReport`). */
+export function finishAgentRun(run, result) {
+    if (!run || run.phase !== 'running') return;
+    run.result = result || {};
+    run.phase = 'done';
+    if (typeof run.result.output === 'string') run.output = run.result.output;
+    if (run.result.truncated) run.trimmed = true;
+    endAgentRun(run);
+}
+
+/** An agent's run that couldn't start. */
+export function failAgentRun(run, error) {
+    if (!run || run.phase !== 'running') return;
+    run.phase = 'failed';
+    run.error = typeof error === 'string' ? error : errMessage(error);
+    endAgentRun(run);
+}
+
+// --- Runs nothing shows any more --------------------------------------------------
+
+let chipTray = null;
+/** run id → its chip in the tray. */
+const chips = new Map();
+const CHIP_COMMAND_MAX = 120;
+
+/**
+ * Where this window keeps runs nothing else shows (the floating window
+ * drops its response on a new prompt or Ctrl/⌘+L): each running one, user
+ * or agent, gets a compact chip with its command, time and Stop until it
+ * ends.
+ */
+export function setRunChipTray(tray) {
+    for (const chip of chips.values()) chip.el.remove();
+    chips.clear();
+    chipTray = tray || null;
+    syncRunChips();
+}
+
+/** Whether any of `run`'s views is still in the page. */
+function shownInPage(run) {
+    for (const view of run.views) {
+        if (view?.isConnected && controlsOf(view) && viewShows(view, run)) return true;
+    }
+    return false;
+}
+
+/** Add a chip for each running run with no view in the page; drop the rest. */
+export function syncRunChips() {
+    for (const [runId, chip] of chips) {
+        const run = runsById.get(runId);
+        if (!chipTray || !run || run.phase !== 'running' || shownInPage(run)) {
+            chip.el.remove();
+            chips.delete(runId);
+        }
+    }
+    if (!chipTray) return;
+    let changed = false;
+    for (const run of runsById.values()) {
+        if (run.phase !== 'running' || shownInPage(run)) continue;
+        let chip = chips.get(run.runId);
+        if (!chip) {
+            chip = buildChip(run);
+            chips.set(run.runId, chip);
+            chipTray.append(chip.el);
+            changed = true;
+        }
+        chip.elapsed.textContent = formatElapsed(Date.now() - run.startedAt);
+        chip.state.textContent = run.stopping
+            ? t('shared.shell.sandbox.run.stopping')
+            : t('shared.shell.sandbox.run.running');
+        chip.stop.disabled = run.stopping;
+    }
+    chipTray.hidden = chips.size === 0;
+    if (changed) layoutChanged(chipTray);
+}
+
+function buildChip(run) {
+    const chip = el('div', 'shell-run-chip');
+    chip.setAttribute('role', 'group');
+    chip.dir = 'auto';
+    const spinner = el('span', 'shell-cmd-spinner');
+    spinner.setAttribute('aria-hidden', 'true');
+    const state = el('span', 'shell-run-chip-state');
+    state.setAttribute('role', 'status');
+    const command = el('code', 'shell-run-chip-command');
+    command.dir = 'ltr';
+    const shown =
+        run.command.length > CHIP_COMMAND_MAX
+            ? `${run.command.slice(0, CHIP_COMMAND_MAX)}…`
+            : run.command;
+    command.textContent = `$ ${shellCommandDisplayText(shown).replace(/\s+/g, ' ')}`;
+    command.title = shellCommandDisplayText(run.command.slice(0, 500));
+    const elapsed = el('span', 'shell-run-elapsed');
+    elapsed.dir = 'ltr';
+    const stop = button('shell-run-stop', t('shared.shell.sandbox.run.stop'), 'stop');
+    onClick(stop, () => stopRun(run, stop));
+    chip.append(spinner, state, command, elapsed, stop);
+    chip.setAttribute('aria-label', t('shared.shell.run_chip.label'));
+    return { el: chip, state, elapsed, stop };
 }

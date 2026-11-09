@@ -12,6 +12,8 @@ import { getConfig, onConfigChange } from '../shared/config-cache.js';
 import { trackEventOnce } from '../shared/telemetry.js';
 import { WINDOW } from '../shared/window-labels.js';
 import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
+import { installHostCommandUi } from '../shared/host-command-view.js';
+import { setRunChipTray } from '../shared/shell-run-view.js';
 
 const _t0 = performance.now();
 const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] ${label}`);
@@ -77,6 +79,13 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
     const app = new FloatingApp(invoke, appWindow, listen);
     window._floatingApp = app; // Expose for permission modal resize
+    // Commands the agent asks Kage to run outside its sandbox (prompts and
+    // their runs), and runs whose block a new prompt or reset removed:
+    // both in the tray above the input, which a reset never clears.
+    setRunChipTray(document.getElementById('shellRunChips'));
+    installHostCommandUi({ tray: document.getElementById('hostCommandTray') }).catch((e) =>
+        console.warn('[floating] host command prompts unavailable:', e)
+    );
     // Extension manager will be set asynchronously after extensions load in background
     app._onExtensionsReady = () => setMarkdownExtManager(app.extensionManager);
     // Don't await — init() does extension loading in the background and

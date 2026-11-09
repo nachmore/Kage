@@ -170,6 +170,13 @@ KNOWN_DYNAMIC_KEYS: set[str] = {
     # to drop in a future cleanup pass once the dialog code is gone.
     "settings.manager.dialog.restart.title",
     "settings.manager.dialog.restart.message",
+    # Commands an agent asks Kage to run outside its sandbox: the credential
+    # guard's findings are named via `shared.host_command.guard_kind.${id}`
+    # (shared/host-command-view.js), and the audit log picks a summary and
+    # an approver label by the entry's action (settings/tool-permissions.js).
+    "shared.host_command.guard_kind.*",
+    "settings.tool_permissions.audit.summary.host.*",
+    "settings.tool_permissions.audit.meta.host_by.*",
     # Shortcut-list strings that the renderer toggles in/out of the DOM
     # depending on whether a shortcut list is empty / has duplicates.
     "settings.shortcuts.alert.duplicate_trigger",

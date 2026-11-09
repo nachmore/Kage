@@ -14,16 +14,16 @@ use crate::window_labels;
 use log::{info, warn};
 use tauri::{Emitter, State, WebviewWindow};
 
-fn err(kind: ErrorKind, key: &str) -> AppError {
-    AppError::keyed(kind, key, &[])
-}
-
 fn not_pending(e: AnswerError) -> AppError {
     match e {
-        AnswerError::NotPending => err(ErrorKind::InvalidInput, "errors.host_command.not_pending"),
-        AnswerError::WrongWindow => {
-            err(ErrorKind::NotPermitted, "errors.host_command.wrong_window")
+        AnswerError::NotPending => {
+            AppError::keyed(ErrorKind::Cancelled, "errors.host_command.not_pending", &[])
         }
+        AnswerError::WrongWindow => AppError::keyed(
+            ErrorKind::NotPermitted,
+            "errors.host_command.wrong_window",
+            &[],
+        ),
     }
 }
 
@@ -56,9 +56,10 @@ pub async fn answer_host_command<R: tauri::Runtime>(
 ) -> Result<(), AppError> {
     let label = window.label().to_string();
     if !crate::commands::system::user_shell::caller_allowed(&label) {
-        return Err(err(
+        return Err(AppError::keyed(
             ErrorKind::NotPermitted,
             "errors.host_command.wrong_window",
+            &[],
         ));
     }
     let approvals = &procs.host_commands.approvals;
@@ -68,25 +69,34 @@ pub async fn answer_host_command<R: tauri::Runtime>(
     let answer = match decision.as_str() {
         "deny" => Answer::Deny,
         "run_once" | "always" if !info.plain => {
-            return Err(err(
+            return Err(AppError::keyed(
                 ErrorKind::NotPermitted,
                 "errors.host_command.hidden_chars",
+                &[],
             ));
         }
         "run_once" => Answer::RunOnce,
         "always" => {
             if !info.can_always {
-                return Err(err(
+                return Err(AppError::keyed(
                     ErrorKind::NotPermitted,
                     "errors.host_command.cannot_always",
+                    &[],
                 ));
             }
-            let prefix = rules::normalize_prefix(prefix.as_deref().unwrap_or(""))
-                .map_err(|_| err(ErrorKind::InvalidInput, "errors.host_command.bad_prefix"))?;
+            let prefix =
+                rules::normalize_prefix(prefix.as_deref().unwrap_or("")).map_err(|_| {
+                    AppError::keyed(
+                        ErrorKind::InvalidInput,
+                        "errors.host_command.bad_prefix",
+                        &[],
+                    )
+                })?;
             if !rules::rule_matches(&prefix, &info.command) {
-                return Err(err(
+                return Err(AppError::keyed(
                     ErrorKind::InvalidInput,
                     "errors.host_command.prefix_mismatch",
+                    &[],
                 ));
             }
             add_rule(&features, &prefix)?;
@@ -103,9 +113,10 @@ pub async fn answer_host_command<R: tauri::Runtime>(
             Answer::Always(prefix)
         }
         _ => {
-            return Err(err(
+            return Err(AppError::keyed(
                 ErrorKind::InvalidInput,
                 "errors.host_command.bad_decision",
+                &[],
             ))
         }
     };
@@ -123,9 +134,10 @@ fn add_rule(features: &FeatureServices, prefix: &str) -> Result<(), AppError> {
         return Ok(());
     }
     if rules.len() >= crate::config::MAX_HOST_COMMAND_RULES {
-        return Err(err(
+        return Err(AppError::keyed(
             ErrorKind::InvalidInput,
             "errors.host_command.too_many_rules",
+            &[],
         ));
     }
     rules.push(crate::config::HostCommandRule {
@@ -203,9 +215,10 @@ pub async fn set_host_commands_allow_all<R: tauri::Runtime>(
     features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
     if enabled && window.label() != window_labels::SETTINGS {
-        return Err(err(
+        return Err(AppError::keyed(
             ErrorKind::NotPermitted,
             "errors.host_command.allow_all_settings_only",
+            &[],
         ));
     }
     {

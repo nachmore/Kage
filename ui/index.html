@@ -106,6 +106,13 @@
                 <div class="message-placeholder" data-i18n="chat.placeholder.start_conversation">Start a conversation with Kage...</div>
             </div>
 
+            <!-- Commands the agent asks Kage to run outside its sandbox that
+                 aren't shown in the answer itself, and runs still going whose
+                 block left the page (shared/host-command-view.js). -->
+            <div class="host-cmd-tray chat-host-cmd-tray" id="hostCommandTray">
+                <div class="shell-run-chips" id="shellRunChips" hidden></div>
+            </div>
+
             <div class="chat-input-container">
                 <div class="chat-suggestions" id="chatSuggestions"></div>
                 <div class="chat-input-wrapper">

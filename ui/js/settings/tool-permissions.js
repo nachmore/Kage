@@ -1,5 +1,6 @@
 import { SettingsModule } from './base.js';
 import { getToolEmoji, escapeHtml, LTR_SLOT, setTextWithLtrValue } from '../shared/tool-utils.js';
+import { errMessage } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 /**
@@ -14,6 +15,9 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         this.trustCommands = false;
         /** MCP servers whose every tool is trusted (backend-owned). */
         this.trustedServers = [];
+        /** Rules for commands the agent runs outside its sandbox (backend-owned). */
+        this.hostRules = [];
+        this.hostAllowAll = false;
         this.tools = [];
     }
 
@@ -32,6 +36,27 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 <button class="reset-permissions-btn" id="resetPermissionsBtn" style="margin-top: 12px;">${t('settings.tool_permissions.reset_btn')}</button>
             </div>
 
+            <div class="setting-section-label" style="margin-top: 32px;">${t('settings.tool_permissions.host.section')}</div>
+            <div class="setting-row">
+                <div class="setting-label">${t('settings.tool_permissions.host.rules_label')}</div>
+                <div class="setting-description">
+                    ${t('settings.tool_permissions.host.description')}
+                </div>
+                <div class="agent-tools-list host-rules-list" id="hostCommandRulesList" style="margin-top: 8px;">
+                    <div class="tools-empty">${t('settings.tool_permissions.host.rules_empty')}</div>
+                </div>
+                <div class="trusted-servers-status" id="hostCommandRulesStatus" role="status"></div>
+            </div>
+            ${this.createCheckboxRow(
+                t('settings.tool_permissions.host.allow_all.label'),
+                t('settings.tool_permissions.host.allow_all.description'),
+                'hostCommandsAllowAll',
+                false
+            )}
+            <div class="setting-row">
+                <button type="button" class="host-audit-link" id="hostCommandAuditLink">${t('settings.tool_permissions.host.audit_link')}</button>
+            </div>
+
             <div class="setting-section-label" style="margin-top: 32px;">${t('settings.tool_permissions.audit.section')}</div>
             <div class="setting-row">
                 <div class="setting-label">${t('settings.tool_permissions.audit.label')}</div>
@@ -47,6 +72,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                         <option value="expired">${t('settings.tool_permissions.audit.filter.expired')}</option>
                         <option value="terminator_mode_changed">${t('settings.tool_permissions.audit.filter.terminator')}</option>
                         <option value="user_ran_command">${t('settings.tool_permissions.audit.filter.user_ran')}</option>
+                        <option value="host_command">${t('settings.tool_permissions.audit.filter.host_command')}</option>
                     </select>
                     <button id="auditLogRefreshBtn" class="reset-permissions-btn" style="background:#3a3640;">${t('settings.tool_permissions.audit.refresh')}</button>
                     <button id="auditLogClearBtn" class="reset-permissions-btn">${t('settings.tool_permissions.audit.clear')}</button>
@@ -165,6 +191,42 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             });
         }
 
+        // Commands outside the agent's sandbox: allow-all is applied at once
+        // through its audited command, after a plain warning.
+        const allowAllBox = document.getElementById('hostCommandsAllowAll');
+        if (allowAllBox) {
+            allowAllBox.addEventListener('change', async (e) => {
+                const enable = e.target.checked;
+                if (enable) {
+                    const { ask } = window.__TAURI__?.dialog || {};
+                    const message = t('settings.tool_permissions.host.allow_all.confirm');
+                    const confirmed = ask
+                        ? await ask(message, {
+                              title: t('settings.tool_permissions.host.allow_all.dialog_title'),
+                              kind: 'warning',
+                          })
+                        : confirm(message);
+                    if (!confirmed) {
+                        e.target.checked = false;
+                        return;
+                    }
+                }
+                try {
+                    await window.__TAURI__.core.invoke('set_host_commands_allow_all', {
+                        enabled: enable,
+                    });
+                    this.hostAllowAll = enable;
+                } catch (err) {
+                    console.error('Failed to update allow-all for host commands:', err);
+                    e.target.checked = this.hostAllowAll;
+                }
+            });
+        }
+        const auditLink = document.getElementById('hostCommandAuditLink');
+        if (auditLink) {
+            auditLink.addEventListener('click', () => this.showHostCommandAudit());
+        }
+
         const resetBtn = document.getElementById('resetPermissionsBtn');
         if (resetBtn) {
             resetBtn.addEventListener('click', async () => {
@@ -186,6 +248,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                     (e) => console.error('Failed to revoke command trust:', e)
                 );
                 await this._revokeAllServers(invoke);
+                await this._clearHostCommandRules(invoke);
                 try {
                     const config = await invoke('get_config');
                     config.tool_permissions = {
@@ -193,11 +256,15 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                         terminator_mode: false,
                         trusted_kinds: config.tool_permissions?.trusted_kinds ?? [],
                         trusted_mcp_servers: config.tool_permissions?.trusted_mcp_servers ?? [],
+                        host_command_rules: config.tool_permissions?.host_command_rules ?? [],
+                        host_commands_allow_all:
+                            config.tool_permissions?.host_commands_allow_all ?? false,
                         tools: [],
                     };
                     await invoke('save_config', { config });
                     this._syncTrustCommands(config);
                     this._syncTrustedServers(config);
+                    this._syncHostCommands(config);
                 } catch (e) {
                     console.error('Failed to reset permissions:', e);
                 }
@@ -247,6 +314,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         this.tools = config.tool_permissions?.tools || [];
         this._syncTrustCommands(config);
         this._syncTrustedServers(config);
+        this._syncHostCommands(config);
 
         const terminatorCheckbox = document.getElementById('terminatorMode');
         if (terminatorCheckbox) {
@@ -269,6 +337,8 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             // "Trust all tools from …") — always reflect them.
             this._syncTrustCommands(config);
             this._syncTrustedServers(config);
+            // Rules can be added from a prompt in another window.
+            this._syncHostCommands(config);
         } catch (e) {
             console.warn('Failed to refresh tool permissions:', e);
         }
@@ -286,6 +356,110 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             ? servers.filter((s) => typeof s === 'string')
             : [];
         this.renderTrustedServers();
+    }
+
+    _syncHostCommands(config) {
+        const rules = config?.tool_permissions?.host_command_rules;
+        this.hostRules = Array.isArray(rules)
+            ? rules.filter((r) => r && typeof r.prefix === 'string')
+            : [];
+        this.hostAllowAll = !!config?.tool_permissions?.host_commands_allow_all;
+        const box = document.getElementById('hostCommandsAllowAll');
+        if (box) box.checked = this.hostAllowAll;
+        this.renderHostRules();
+    }
+
+    /** Rules for commands outside the agent's sandbox, each with Remove. */
+    renderHostRules() {
+        const list = document.getElementById('hostCommandRulesList');
+        if (!list) return;
+        list.textContent = '';
+        if (this.hostRules.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'tools-empty';
+            empty.textContent = t('settings.tool_permissions.host.rules_empty');
+            list.append(empty);
+            return;
+        }
+        // Built with the DOM API: a prefix is words of an agent's command.
+        for (const rule of this.hostRules) {
+            const row = document.createElement('div');
+            row.className = 'agent-tool-item host-rule-item';
+            const info = document.createElement('div');
+            info.className = 'agent-tool-info';
+            const name = document.createElement('div');
+            name.className = 'agent-tool-name host-rule-name';
+            setTextWithLtrValue(
+                name,
+                t('settings.tool_permissions.host.rule', { prefix: LTR_SLOT }),
+                rule.prefix
+            );
+            info.append(name);
+            if (rule.created_at) {
+                const meta = document.createElement('div');
+                meta.className = 'agent-tool-meta';
+                meta.textContent = t('settings.tool_permissions.host.rule_added_at', {
+                    date: new Date(rule.created_at).toLocaleDateString(),
+                });
+                info.append(meta);
+            }
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'trusted-server-revoke host-rule-remove';
+            remove.textContent = t('settings.tool_permissions.host.remove');
+            remove.title = t('settings.tool_permissions.host.remove_title', {
+                prefix: rule.prefix,
+            });
+            remove.addEventListener('click', () => this.removeHostRule(rule.prefix, remove));
+            row.append(info, remove);
+            list.append(row);
+        }
+    }
+
+    /** Remove one rule, through the audited backend command. */
+    async removeHostRule(prefix, button) {
+        if (button) button.disabled = true;
+        const status = document.getElementById('hostCommandRulesStatus');
+        if (status) status.textContent = '';
+        try {
+            await window.__TAURI__.core.invoke('remove_host_command_rule', { prefix });
+            this.hostRules = this.hostRules.filter((r) => r.prefix !== prefix);
+        } catch (e) {
+            console.error('Failed to remove host command rule:', e);
+            if (status) {
+                status.textContent = t('settings.tool_permissions.host.remove_failed', {
+                    error: errMessage(e),
+                });
+            }
+        }
+        this.renderHostRules();
+    }
+
+    /** Reset: every rule goes, and allow-all is turned off. */
+    async _clearHostCommandRules(invoke) {
+        let rules = this.hostRules;
+        try {
+            const config = await invoke('get_config');
+            rules = config?.tool_permissions?.host_command_rules ?? rules;
+        } catch (e) {
+            console.warn('Failed to read host command rules:', e);
+        }
+        for (const rule of rules) {
+            await invoke('remove_host_command_rule', { prefix: rule.prefix }).catch((e) =>
+                console.error('Failed to remove host command rule:', e)
+            );
+        }
+        await invoke('set_host_commands_allow_all', { enabled: false }).catch((e) =>
+            console.error('Failed to turn off allow-all for host commands:', e)
+        );
+    }
+
+    /** The audit log, showing only commands for the agent. */
+    showHostCommandAudit() {
+        const filter = document.getElementById('auditLogFilter');
+        if (filter) filter.value = 'host_command';
+        this.renderAuditLog();
+        document.getElementById('auditLogList')?.scrollIntoView({ block: 'nearest' });
     }
 
     _setServersStatus(text) {
@@ -378,6 +552,10 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             // fresh from get_config.
             trusted_kinds: config.tool_permissions?.trusted_kinds ?? [],
             trusted_mcp_servers: config.tool_permissions?.trusted_mcp_servers ?? [],
+            // Owned by answer_host_command / remove_host_command_rule /
+            // set_host_commands_allow_all; kept as the backend has them.
+            host_command_rules: config.tool_permissions?.host_command_rules ?? [],
+            host_commands_allow_all: config.tool_permissions?.host_commands_allow_all ?? false,
             // Every per-tool edit (policy, remove, reset) is persisted
             // immediately, so keep the backend's current list (config is
             // fresh from get_config) rather than this window's snapshot —
@@ -621,6 +799,55 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 meta = details.join(' · ');
                 break;
             }
+            case 'host_command': {
+                // A command an agent asked Kage to run outside its sandbox.
+                const action = HOST_AUDIT_ACTIONS.includes(entry.action) ? entry.action : 'unknown';
+                icon = HOST_AUDIT_ICONS[action] || '🛡️';
+                summary = t(`settings.tool_permissions.audit.summary.host.${action}`, {
+                    rule: escapeHtml(entry.rule || ''),
+                });
+                const details = [];
+                if (entry.by) {
+                    details.push(
+                        t(
+                            `settings.tool_permissions.audit.meta.host_by.${HOST_AUDIT_BY.includes(entry.by) ? entry.by : 'other'}`
+                        )
+                    );
+                }
+                if (Array.isArray(entry.guard) && entry.guard.length) {
+                    details.push(escapeHtml(entry.guard.join(', ')));
+                }
+                if (entry.outcome === 'exited' && Number.isInteger(entry.exit_code)) {
+                    details.push(
+                        t('settings.tool_permissions.audit.meta.exit_code', {
+                            code: entry.exit_code,
+                        })
+                    );
+                } else if (entry.outcome === 'cancelled') {
+                    details.push(t('settings.tool_permissions.audit.meta.stopped'));
+                } else if (entry.outcome === 'timed_out') {
+                    details.push(t('settings.tool_permissions.audit.meta.timed_out'));
+                } else if (entry.outcome === 'failed_to_start') {
+                    details.push(t('settings.tool_permissions.audit.meta.not_started'));
+                } else if (entry.outcome) {
+                    details.push(escapeHtml(String(entry.outcome).slice(0, 140)));
+                }
+                if (entry.agent) details.push(escapeHtml(String(entry.agent).slice(0, 64)));
+                if (entry.session_id) {
+                    details.push(
+                        t('settings.tool_permissions.audit.meta.session', {
+                            id: escapeHtml(entry.session_id.slice(0, 8)),
+                        })
+                    );
+                }
+                if (entry.command) {
+                    details.push(
+                        `<code dir="ltr">${escapeHtml(String(entry.command).slice(0, 140))}</code>`
+                    );
+                }
+                meta = details.join(' · ');
+                break;
+            }
             default:
                 icon = '❔';
                 summary = t('settings.tool_permissions.audit.summary.unknown', {
@@ -643,6 +870,39 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         `;
     }
 }
+
+/** `host_command` audit actions (src/permission_audit/types.rs `HostCommand`). */
+const HOST_AUDIT_ACTIONS = Object.freeze([
+    'requested',
+    'guard',
+    'auto_approved',
+    'approved',
+    'denied',
+    'expired',
+    'withdrawn',
+    'refused',
+    'finished',
+    'rule_added',
+    'rule_removed',
+    'allow_all_on',
+    'allow_all_off',
+]);
+const HOST_AUDIT_BY = Object.freeze(['rule', 'allow_all', 'once', 'always']);
+const HOST_AUDIT_ICONS = Object.freeze({
+    requested: '🛡️',
+    guard: '🔐',
+    auto_approved: '⚡',
+    approved: '✅',
+    denied: '⛔',
+    expired: '⏳',
+    withdrawn: '↩️',
+    refused: '⛔',
+    finished: '▶️',
+    rule_added: '➕',
+    rule_removed: '🗑️',
+    allow_all_on: '⚠️',
+    allow_all_off: '🛡️',
+});
 
 // Global functions for onclick handlers
 function updateToolPolicy(index, policy, grantType) {
@@ -828,6 +1088,21 @@ toolPermStyle.textContent = `
     }
     .trusted-servers-status:empty {
         display: none;
+    }
+    .host-rules-list .tools-empty {
+        padding: 14px 16px;
+    }
+    .host-rule-name {
+        overflow-wrap: anywhere;
+    }
+    .host-audit-link {
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--kage-accent);
+        font-size: 13px;
+        text-decoration: underline;
+        cursor: pointer;
     }
 
     .terminator-row {
