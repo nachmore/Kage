@@ -106,6 +106,11 @@ export const KNOWN_EVENTS = Object.freeze([
     // Payload: extension_id, widget_id, reason ('overlap'|'slow_absolute'|
     // 'slow_relative'|'throw').
     'extension_widget_disabled',
+    // Fired from Rust (src/ext_views.rs) each time an extension view window
+    // opens or comes back (docs/design/EXTENSION_VIEWS.md §18.6). Payload:
+    // source ('launcher'|'chat'|'formatter'|'widget'|'toolbar'|'settings'|
+    // 'view') and reused (0|1) — no extension id, params or titles.
+    'extension_view_opened',
 ]);
 
 /**

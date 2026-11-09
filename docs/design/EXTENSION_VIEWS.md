@@ -223,14 +223,25 @@ UI, §17), so the user should see it at install time.
 | Launcher or chat result row (Enter or click) | `execute()` → `{ type: 'open_view', view, params? }` | `ui/js/shared/result-executor.js` |
 | `data-ext-action` button in a formatter card or custom result row | `onResultAction()` → `{ host: { type: 'open_view', view, params? } }` | `ui/js/shared/extension-manager/ui.js` |
 | Widget button | `onAction()` → `{ host: { type: 'open_view', ... }, rerender? }` | `ui/js/shared/extension-manager/ui.js` |
-| Chat toolbar button | `onClick()` → `{ host: { type: 'open_view', ... } }` | `ui/js/shared/toolbar-host-effects.js` |
+| Chat toolbar button | `onClick()` → `{ host: { type: 'open_view', ... } }` | `ExtensionManager.runToolbarClick` (`ui/js/shared/extension-manager/ui.js`); `toolbar-host-effects.js` ignores the type |
 | Extension settings action | `runAction()` → `{ host: { type: 'open_view', ... } }` | `ui/js/shared/settings-host-effects.js` |
-| Host "Open" button in Settings → the extension's page | none (host-rendered) | `ui/js/settings/manager.js` |
+| Host "Open" button in Settings → the extension's page | none (host-rendered) | `ui/js/settings/extension-views-block.js` (one call from `manager.js`) |
 | Inside a view | `context.view.open(viewId, params?)` (another view of the same extension) | view page |
 
 Today `onResultAction`'s return value is ignored. It becomes honoured for
 `host.type === 'open_view'` only. Widget actions keep `rerender` and gain
-`host`.
+`host`. Other `host` types from these two are logged and dropped.
+
+Every opener but the view page goes through `runOpenViewEffect`
+(`ui/js/shared/extension-host-effects.js`). The extension manager wraps
+it as `openView(extensionId, effect, { source })`, with
+`extensionViewDenial` as the §6.2 check. The `source` is the entry
+point's: `formatter` for a formatter card's button, `widget`, `toolbar`,
+`settings`, and for a result row or a custom result row's button the
+window's (`launcher` in the floating window, `chat` in chat windows,
+the manager's `resultSource` option). The toolbar case lives in the
+manager because it knows which extension answered; the windows' toolbar
+appliers don't.
 
 All of these run inside the handling of a user's click or key press, so
 "views only open from a user action" holds without a separate gesture
@@ -258,6 +269,12 @@ logged as `[ext <id>] open_view refused: <reason>` and nothing opens.
 2. The extension holds `views` in this window's grant.
 3. The manifest declares `view`.
 4. `params` passes the shape and size rules.
+
+Check 1 reads what the window offers before the grant cuts it down (a
+sandbox's own `hostFeatures` list is already cut, §9.4), so a missing
+grant is refused as `not_granted`, not `opener_refused`. The extension
+manager first refuses an extension it hasn't loaded
+(`unknown_extension`) or one that is turned off (`disabled`).
 
 Rust then repeats checks 2–4 against the installed manifest and
 `config.extension_grants` (authoritative), and also checks:
@@ -300,7 +317,9 @@ Window already exists (visible or cached hidden):
 
 Failure: `ext_view_open` rejects with an `AppError` (§16). The launcher
 shows its localised message as a reply; other openers log it, and settings
-shows it on the action row.
+shows it on the action row. A host-side refusal (§6.2) is shown the same
+way, from its `key`: a result row in the launcher or chat shows it as a
+reply, a settings action on its row.
 
 ## 7. Window lifecycle
 
@@ -889,6 +908,13 @@ direct message bus between instances (§26).
     `sandboxFor(extensionId)` and, when the sandbox holds `storage`
     (`holdsStorage`), its `notifyStorageChanged(changes)` (§8.6, V4).
     Callers use it rather than repeat the `storage` check.
+  - The extension manager installs it once, in `initialize()`, from its
+    `listen` and `windowLabel` options (the floating and chat windows
+    pass theirs; the defaults are the window's Tauri globals, and no
+    Tauri means no listener). It stays for the manager's life, because
+    `destroy()` empties the pool and a later `reload()` fills it again.
+    The settings window installs it in `settings/main.js` for its
+    settings sandboxes.
 - Events carry key names only, never data. An instance re-reads what it
   needs.
 

@@ -18,6 +18,9 @@
  */
 
 import { ExtensionSandboxPool, hostFeaturesFor } from './extension-sandbox-host.js';
+import { deliverToSandbox, installExtensionDataEvents } from './extension-data-events.js';
+import { openViewDenial, runOpenViewEffect } from './extension-host-effects.js';
+import { normalizeViews, normalizeViewSource } from './extension-view-policy.js';
 import {
     normalizeSensitiveData,
     plainBackupFields,
@@ -210,10 +213,26 @@ export class ExtensionManager {
      *   implements (e.g. `HOST_FEATURE_DATE_PICKER` in the floating
      *   window). Each extension is offered the subset its capabilities
      *   allow — see `hostFeaturesFor` in extension-sandbox-host.js.
+     * @param {string} [opts.resultSource] - the `source` of a view opened
+     *   from a result row here: `launcher` (default) or `chat`
+     *   (docs/design/EXTENSION_VIEWS.md §9.1)
+     * @param {() => void} [opts.onBeforeOpenView] - runs just before this
+     *   window asks Rust to open a view (the launcher's blur rule, §15.2)
+     * @param {Function} [opts.listen] - Tauri's `listen`, for storage change
+     *   events (§10.1). Default: the window's global one, when there is one.
+     * @param {string} [opts.windowLabel] - this window's label, so a sandbox
+     *   learns which changes it made itself. Default: the current window's.
      */
     constructor(invoke, opts = {}) {
         this.invoke = invoke;
         this._hostFeatures = Array.isArray(opts.hostFeatures) ? opts.hostFeatures.slice() : [];
+        this._resultViewSource = normalizeViewSource(opts.resultSource);
+        this._onBeforeOpenView =
+            typeof opts.onBeforeOpenView === 'function' ? opts.onBeforeOpenView : null;
+        this._listen = typeof opts.listen === 'function' ? opts.listen : null;
+        this._windowLabel = typeof opts.windowLabel === 'string' ? opts.windowLabel : null;
+        /** Set once the `extension_data_changed` listener is installed. */
+        this._dataEventsInstalled = false;
         /** @type {Map<string, LoadedExtension>} */
         this.extensions = new Map();
         this._configCache = null;
@@ -235,6 +254,7 @@ export class ExtensionManager {
      * Discover and load all enabled extensions.
      */
     async initialize() {
+        this._installDataEvents();
         try {
             this._configCache = await this.invoke('get_config');
         } catch (e) {
@@ -465,6 +485,127 @@ export class ExtensionManager {
         try {
             await this._refreshToolbarButtons();
         } catch {}
+    }
+
+    // --- Views and storage change events (docs/design/EXTENSION_VIEWS.md) ---
+
+    /**
+     * Forward `extension_data_changed` batches to the matching extension's
+     * sandbox in this window, when it holds `storage` (§10.1). Installed
+     * once and kept for the manager's life: `destroy()` empties the pool,
+     * and a later `reload()` fills it again.
+     */
+    _installDataEvents() {
+        if (this._dataEventsInstalled) return;
+        const listen = this._listen || globalThis.window?.__TAURI__?.event?.listen;
+        if (typeof listen !== 'function') return;
+        this._dataEventsInstalled = true;
+        const myLabel = () => {
+            if (this._windowLabel) return this._windowLabel;
+            try {
+                return (
+                    globalThis.window?.__TAURI__?.webviewWindow?.getCurrentWebviewWindow?.()
+                        ?.label || ''
+                );
+            } catch {
+                return '';
+            }
+        };
+        installExtensionDataEvents({
+            listen,
+            myLabel,
+            deliver: deliverToSandbox((id) => this._pool.get(id)),
+        }).catch((e) => {
+            this._dataEventsInstalled = false;
+            console.warn('ExtensionManager: storage change events unavailable:', e);
+        });
+    }
+
+    /** The `source` of a view opened from a result row in this window. */
+    get resultViewSource() {
+        return this._resultViewSource;
+    }
+
+    /**
+     * Why extension `id` may not open the view `effect` asks for in this
+     * window, or null when it may: the extension is loaded and enabled,
+     * then the §6.2 checks (`views` host feature, `views` grant, declared
+     * view, params). Refusals carry Rust's `kind` and `key`.
+     *
+     * @param {string} id
+     * @param {unknown} effect - `{ type: 'open_view', view, params? }`
+     * @returns {null | {ok: false, kind: string, key: string, vars: object, reason: string}}
+     */
+    extensionViewDenial(id, effect) {
+        const ext = this.extensions.get(id);
+        if (!ext) {
+            return {
+                ok: false,
+                kind: 'invalid_input',
+                key: 'errors.ext_view.unknown_extension',
+                vars: { id: String(id) },
+                reason: `extension '${id}' is not loaded`,
+            };
+        }
+        const extension = extensionDisplay(ext, id).name;
+        if (!this._isEnabled(id)) {
+            return {
+                ok: false,
+                kind: 'not_permitted',
+                key: 'errors.ext_view.disabled',
+                vars: { extension },
+                reason: `extension '${id}' is disabled`,
+            };
+        }
+        return openViewDenial(effect, {
+            // What the window offers, before the grant cuts it down: a
+            // missing grant then reads as not_granted, not opener_refused.
+            hostFeatures: this._hostFeatures,
+            capabilities: ext.capabilities,
+            views: ext.manifest?.contributes?.views,
+            extensionId: id,
+            extensionName: extension,
+        });
+    }
+
+    /**
+     * Open the view an extension's `open_view` effect asks for, from a user
+     * action in this window. `extensionId` is the host's (the row stamp, the
+     * sandbox that answered), never the effect's. Never throws; see
+     * `runOpenViewEffect`.
+     *
+     * @param {string} extensionId
+     * @param {unknown} effect
+     * @param {object} [opts]
+     * @param {string} [opts.source] - default: {@link resultViewSource}
+     * @param {Function} [opts.invoke] - default: the manager's
+     */
+    openView(extensionId, effect, { source, invoke } = {}) {
+        return runOpenViewEffect(effect, {
+            extensionId,
+            source: source ?? this._resultViewSource,
+            invoke: invoke || this.invoke,
+            check: (e) => this.extensionViewDenial(extensionId, e),
+            beforeOpen: this._onBeforeOpenView,
+        });
+    }
+
+    /**
+     * Whether any enabled extension here holds `views` and declares one. A
+     * view window exists only for such an extension (Rust closes them on
+     * disable and when the grant goes), so the launcher's blur handler
+     * asks Rust about view focus only when this is true.
+     */
+    hasViewCapableExtensions() {
+        for (const [id, ext] of this.extensions) {
+            if (!this._isEnabled(id)) continue;
+            if (!new Set(ext.capabilities || []).has('views')) continue;
+            const views = normalizeViews(ext.manifest?.contributes?.views, '', '', id, {
+                warn: null,
+            });
+            if (views.length > 0) return true;
+        }
+        return false;
     }
 
     // --- Tool providers ----------------------------------------------------

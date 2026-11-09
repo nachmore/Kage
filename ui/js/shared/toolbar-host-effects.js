@@ -5,6 +5,10 @@
 // pass those specifics in. Contract mirrors the settings-page effects
 // (settings-host-effects.js), narrowed to what makes sense from a
 // toolbar click.
+//
+// `open_view` (docs/design/EXTENSION_VIEWS.md §6.1) never gets here: the
+// extension manager opens the view inside `runToolbarClick`, because it
+// knows which extension answered, and drops the effect.
 
 /**
  * Apply a toolbar host effect.
@@ -54,6 +58,9 @@ export function runToolbarHostEffect(host, opts) {
             }
             break;
         }
+        case 'open_view':
+            // Opened already by ExtensionManager.runToolbarClick (see above).
+            break;
         default:
             console.warn(`[${logTag}] Unknown toolbar host effect:`, host.type);
             break;

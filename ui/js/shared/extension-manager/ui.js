@@ -1,4 +1,5 @@
 import { sanitizeExtensionHtml, findExtActions } from '../extension-html-sanitizer.js';
+import { isOpenViewEffect } from '../extension-host-effects.js';
 import { activeLanguage, t, tHtml } from '../i18n.js';
 import { applyMixin } from '../mixin.js';
 import { extensionDisplay } from './i18n.js';
@@ -570,6 +571,11 @@ export function installExtensionUiMethods(ExtensionManager) {
                     actionId,
                     context: {},
                 });
+                // A host effect the click asked for. Only `open_view` so far
+                // (docs/design/EXTENSION_VIEWS.md §6.1).
+                if (out?.host) {
+                    await this._runActionHostEffect(controller.extensionId, out.host, 'widget');
+                }
                 // If the action returns an immediate re-render request, do it.
                 if (out?.rerender) {
                     await this._renderWidget(controller);
@@ -673,7 +679,16 @@ export function installExtensionUiMethods(ExtensionManager) {
                     buttonId,
                     context: safeCtx,
                 });
-                return out && typeof out === 'object' ? out : null;
+                if (!out || typeof out !== 'object') return null;
+                // The manager opens views itself: it knows which extension
+                // answered, and the window's toolbar applier
+                // (toolbar-host-effects.js) doesn't.
+                if (isOpenViewEffect(out.host)) {
+                    await this.openView(extensionId, out.host, { source: 'toolbar' });
+                    const { host: _opened, ...rest } = out;
+                    return rest;
+                }
+                return out;
             } catch (e) {
                 console.warn(`toolbar onClick in '${extensionId}' failed:`, e);
                 return null;
@@ -739,7 +754,7 @@ export function installExtensionUiMethods(ExtensionManager) {
                     // and the host click handler sees data-href again.
                     neutralizeLinks(container);
                     // Wire any declared extension actions in the new DOM.
-                    this._wireExtActionsFor(id, container);
+                    this._wireExtActionsFor(id, container, 'formatter');
                     this._wireDateAffordances(id, container);
                 }
             } catch (e) {
@@ -785,7 +800,20 @@ export function installExtensionUiMethods(ExtensionManager) {
         },
 
         // --- Shared: wire data-ext-action buttons in sanitized HTML -----------
-        _wireExtActionsFor(extensionId, root) {
+
+        /**
+         * Wire the `data-ext-action` buttons in `root` to the search
+         * provider's `onResultAction`. Its answer may carry a host effect;
+         * `{ host: { type: 'open_view', … } }` opens one of the extension's
+         * views (docs/design/EXTENSION_VIEWS.md §6.1). Anything else it
+         * returns is ignored, as before.
+         *
+         * @param {string} extensionId
+         * @param {HTMLElement} root
+         * @param {string} [source] - `formatter` for a formatter card; a
+         *   custom result row defaults to this window's result source
+         */
+        _wireExtActionsFor(extensionId, root, source) {
             const hits = findExtActions(root);
             for (const { element, actionId } of hits) {
                 // Defensive: prevent double-wiring when the same container is
@@ -807,9 +835,33 @@ export function installExtensionUiMethods(ExtensionManager) {
                             actionId,
                             resultId: root.dataset?.extResultId || null,
                         })
+                        .then((out) =>
+                            out?.host
+                                ? this._runActionHostEffect(
+                                      extensionId,
+                                      out.host,
+                                      source ?? this.resultViewSource
+                                  )
+                                : null
+                        )
                         .catch((e) => console.warn(`onResultAction '${actionId}' failed:`, e));
                 });
             }
+        },
+
+        /**
+         * The `host` effect a button's action returned (a result-row or
+         * formatter-card button, a widget button). Only `open_view` is
+         * honoured; other types are logged and dropped. Refusals and
+         * failures are logged by `openView`.
+         */
+        async _runActionHostEffect(extensionId, host, source) {
+            if (isOpenViewEffect(host)) {
+                await this.openView(extensionId, host, { source });
+                return;
+            }
+            const type = host && typeof host === 'object' ? String(host.type) : typeof host;
+            console.warn(`[ext ${extensionId}] host effect '${type}' isn't supported here`);
         },
     });
 }
