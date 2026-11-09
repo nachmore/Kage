@@ -4417,6 +4417,14 @@
     "message": "Ask you to pick a file, then read its text (plain text, Markdown, PDF, Word, …). It gets only the file you pick, each time, never its folder or any other file.",
     "description": "Capability badge tooltip and install-prompt description"
   },
+  "settings.manager.cap.views.label": {
+    "message": "Its own windows",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.views.desc": {
+    "message": "Show windows the extension draws itself, such as a map or a board. What you type in those windows goes to the extension. Kage labels them with the extension's name.",
+    "description": "Capability badge tooltip and install-prompt description"
+  },
   "settings.manager.error.failed_load": {
     "message": "Failed to load settings",
     "description": "errLabel passed when loading settings throws"
@@ -4664,6 +4672,22 @@
   "settings.manager.ext.agent.consent.cancel": {
     "message": "Not now",
     "description": "Consent dialog button that leaves background AI off"
+  },
+  "settings.manager.ext.views.heading": {
+    "message": "Windows",
+    "description": "Heading of the block on an extension's settings page that lists the windows the extension draws itself"
+  },
+  "settings.manager.ext.views.open": {
+    "message": "Open",
+    "description": "Button: open one of the extension's own windows"
+  },
+  "settings.manager.ext.views.reset": {
+    "message": "Reset window size and position",
+    "description": "Button: forget the saved size and position of the extension's windows"
+  },
+  "settings.manager.ext.views.reset_done": {
+    "message": "Window size and position reset.",
+    "description": "Confirmation after resetting the extension windows' size and position"
   },
   "settings.ext_settings.action.working": {
     "message": "Working…",
@@ -7325,6 +7349,66 @@
     "message": "The file reader stopped unexpectedly.",
     "description": "Reading a file the user picked for an extension. Kage's separate file reader process failed or returned something it couldn't use."
   },
+  "errors.ext_view.opener_refused": {
+    "message": "This window can't open extension windows.",
+    "description": "Opening an extension's own window from a Kage window that isn't allowed to (for example the Store)."
+  },
+  "errors.ext_view.unknown_extension": {
+    "message": "No extension called {id} is installed.",
+    "description": "Opening an extension window for an extension that isn't installed. {id} is the extension's id."
+  },
+  "errors.ext_view.disabled": {
+    "message": "{extension} is turned off.",
+    "description": "Opening an extension window for an extension the user turned off. {extension} is the extension's name."
+  },
+  "errors.ext_view.not_granted": {
+    "message": "{extension} needs your approval to open its own windows.",
+    "description": "Opening an extension window without the Its own windows permission. {extension} is the extension's name."
+  },
+  "errors.ext_view.unknown_view": {
+    "message": "{extension} has no window called {view}.",
+    "description": "The extension doesn't declare the window it asked to open. {extension} is the extension's name; {view} is the window's id."
+  },
+  "errors.ext_view.wrong_extension": {
+    "message": "An extension window can only open windows of the same extension.",
+    "description": "An extension window tried to open another extension's window."
+  },
+  "errors.ext_view.params_invalid": {
+    "message": "The window's start data isn't valid: {reason}",
+    "description": "The data an extension passes to a window it opens is malformed. {reason} is a short technical reason in English."
+  },
+  "errors.ext_view.params_too_large": {
+    "message": "The window's start data is too large ({size} bytes; the limit is {limit}).",
+    "description": "The data an extension passes to a window it opens is too large. {size} and {limit} are numbers of bytes."
+  },
+  "errors.ext_view.too_many_open": {
+    "message": "Too many extension windows are open (limit {limit}). Close one and try again.",
+    "description": "Every allowed extension window is already open and visible. {limit} is a number."
+  },
+  "errors.ext_view.not_a_view_window": {
+    "message": "This isn't an extension window.",
+    "description": "A command for extension windows was called from another Kage window."
+  },
+  "errors.ext_view.not_focused": {
+    "message": "The extension window isn't in front.",
+    "description": "An extension window tried to copy or send text while another window had focus."
+  },
+  "errors.ext_view.text_invalid": {
+    "message": "The text can't be used: {reason}",
+    "description": "Text from an extension window is too long or isn't plain text. {reason} is a short technical reason in English."
+  },
+  "errors.ext_view.too_fast": {
+    "message": "Too many requests. Try again in a moment.",
+    "description": "An extension window copied or sent text too often in a short time."
+  },
+  "errors.ext_view.clipboard_failed": {
+    "message": "Couldn't copy to the clipboard.",
+    "description": "Copying text from an extension window to the system clipboard failed."
+  },
+  "errors.ext_view.geometry_write_failed": {
+    "message": "Couldn't save window positions: {reason}",
+    "description": "Saving or resetting the size and position of extension windows failed. {reason} is a system error message."
+  },
   "file_text.dialog.title": {
     "message": "{extension}: choose a file to read",
     "description": "Title of the system file dialog an extension opens. {extension} is the extension's name. On macOS it shows as the dialog's message line."
@@ -7356,5 +7440,61 @@
   "file_text.progress.cancel": {
     "message": "Cancel",
     "description": "Progress chip button: stop reading the file"
+  },
+  "ext_view.window_title": {
+    "message": "{view} — {extension}",
+    "description": "Title of an extension's own window, in the title bar and the taskbar. {view} is the window's name; {extension} is the extension's name."
+  },
+  "ext_view.window_title_sub": {
+    "message": "{subtitle} — {view} — {extension}",
+    "description": "Title of an extension's own window when the extension adds a subtitle. {subtitle} comes from the extension; {view} is the window's name; {extension} is the extension's name."
+  },
+  "ext_view.iframe_label": {
+    "message": "{view}, drawn by {extension}",
+    "description": "Accessible name of the area an extension draws in its own window. {view} is the window's name; {extension} is the extension's name."
+  },
+  "ext_view.badge": {
+    "message": "Extension",
+    "description": "Badge in the bar at the top of an extension's own window, so it can't pass for a Kage window"
+  },
+  "ext_view.badge_tip": {
+    "message": "This window is drawn by the {extension} extension.",
+    "description": "Tooltip of the Extension badge in an extension's own window. {extension} is the extension's name."
+  },
+  "ext_view.bar.reload": {
+    "message": "Reload",
+    "description": "Button in the bar of an extension's own window: start the window's content again"
+  },
+  "ext_view.bar.settings": {
+    "message": "Extension settings",
+    "description": "Button in the bar of an extension's own window: open the extension's settings page"
+  },
+  "ext_view.bar.close": {
+    "message": "Close",
+    "description": "Button in the bar of an extension's own window: close the window"
+  },
+  "ext_view.loading": {
+    "message": "Opening {view}…",
+    "description": "Shown while an extension's own window loads. {view} is the window's name."
+  },
+  "ext_view.state.load_failed": {
+    "message": "{view} couldn't open.",
+    "description": "An extension's own window failed to load. {view} is the window's name."
+  },
+  "ext_view.state.not_responding": {
+    "message": "{view} isn't responding.",
+    "description": "Banner when an extension's own window stops answering. {view} is the window's name."
+  },
+  "ext_view.state.navigated": {
+    "message": "{view} tried to show a web page, so Kage stopped it.",
+    "description": "An extension's own window tried to load a web page and Kage closed its content. {view} is the window's name."
+  },
+  "ext_view.state.removed": {
+    "message": "{extension} no longer has this window.",
+    "description": "After an update the extension no longer declares the open window. {extension} is the extension's name."
+  },
+  "ext_view.state.updated": {
+    "message": "Updated to {version}.",
+    "description": "Shown briefly in an extension's own window after the extension updated. {version} is a version number such as 1.2.0."
   }
 }

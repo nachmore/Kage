@@ -3589,7 +3589,7 @@ Files listed by more than one design:
 | `src/events.rs`, `ui/js/shared/events.js` | AC0, FT-C, V1, C0, S4 |
 | `locales/*/messages.json` | AC0, FT-C, V1, C0, then later strings of every package (S6 merges sync's fragments) |
 | `src/lib.rs` | V1, FT5, AC1, C0 |
-| `src/main.rs` | V2, FT5, S4 |
+| `src/main.rs` | V1, V2, FT5, S4 |
 | `src/state.rs` | V2, AC3, S4 |
 | `src/setup.rs` | V2, S4 |
 | `src/commands/registry.rs` | V1, FT5, AC3, C0, S4 |
@@ -3613,7 +3613,7 @@ Files listed by more than one design:
 | `ui/js/shared/settings-host-effects.js` | V5, FT6, AC6 |
 | `ui/js/shared/settings-renderer.js` | FT6, S6 |
 | `ui/js/settings/manager.js` | V5, FT7, AC6, S6 |
-| `ui/js/settings/extension-capabilities.js` | FT7, AC6, S5 |
+| `ui/js/settings/extension-capabilities.js` | V1, FT7, AC6, S5 |
 | `ui/js/settings/tool-permissions.js` | FT7, AC6, S6 |
 | `ui/js/floating/app.js`, `ui/js/floating/app/lifecycle-visibility.js`, `ui/js/chat/app/lifecycle.js` | V5, FT6 |
 | `ui/js/extension-view/main.js` | V6, then FT6 and S5 (their host features, §9.4 there) |

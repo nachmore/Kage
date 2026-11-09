@@ -52,6 +52,8 @@ pub mod window_labels;
 pub mod automation;
 pub mod commands;
 pub mod event_targets;
+pub mod ext_views;
+pub mod extension_data_events;
 pub mod navigation_guard;
 pub mod overlay_windows;
 pub mod setup;

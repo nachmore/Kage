@@ -50,4 +50,13 @@ export const EVT = {
 
     // Extension file text (the calling window only)
     FILE_TEXT_PROGRESS: 'file_text_progress',
+
+    // Extension views: REOPEN and VISIBILITY go to one view window,
+    // FOCUS_LOST and FLOATING_COMPOSE to the launcher, DATA_CHANGED to every
+    // window that runs extension instances.
+    EXT_VIEW_REOPEN: 'ext_view_reopen',
+    EXT_VIEW_VISIBILITY: 'ext_view_visibility',
+    EXT_VIEW_FOCUS_LOST: 'ext_view_focus_lost',
+    FLOATING_COMPOSE: 'floating_compose',
+    EXTENSION_DATA_CHANGED: 'extension_data_changed',
 };

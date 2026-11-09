@@ -60,6 +60,48 @@ pub fn is_session_host_label(label: &str) -> bool {
     label == MAIN || is_chat_label(label)
 }
 
+/// Extension view windows are labelled `ext-view:<extensionId>:<viewId>`
+/// (docs/design/EXTENSION_VIEWS.md §7.1). Use `ext_view_label` to build
+/// one and `parse_ext_view_label` / `is_ext_view_label` to match — never
+/// inline the prefix.
+pub const EXT_VIEW_PREFIX: &str = "ext-view:";
+
+/// Build the label for an extension's view window. `None` when either id
+/// is invalid, so a label can never carry a second `:` separator.
+#[allow(dead_code)] // `ext_view_open` will build labels; the app doesn't yet.
+pub fn ext_view_label(extension_id: &str, view_id: &str) -> Option<String> {
+    valid_ext_view_parts(extension_id, view_id)
+        .then(|| format!("{}{}:{}", EXT_VIEW_PREFIX, extension_id, view_id))
+}
+
+/// Split a view window label into `(extension_id, view_id)`. `None` for
+/// any other label, including a prefixed one with invalid ids.
+#[allow(dead_code)] // The view commands will parse labels; the app doesn't yet.
+pub fn parse_ext_view_label(label: &str) -> Option<(&str, &str)> {
+    let (extension_id, view_id) = label.strip_prefix(EXT_VIEW_PREFIX)?.split_once(':')?;
+    valid_ext_view_parts(extension_id, view_id).then_some((extension_id, view_id))
+}
+
+/// Whether a label refers to an extension view window.
+pub fn is_ext_view_label(label: &str) -> bool {
+    parse_ext_view_label(label).is_some()
+}
+
+fn valid_ext_view_parts(extension_id: &str, view_id: &str) -> bool {
+    crate::extensions::validate_extension_id(extension_id).is_ok()
+        && crate::extensions::views::is_valid_view_id(view_id)
+}
+
+/// Whether a label refers to a window that runs extension instances:
+/// the launcher, chat hosts, settings and view windows. The audience of
+/// `event_targets::emit_to_extension_hosts`.
+pub fn is_extension_host_label(label: &str) -> bool {
+    label == FLOATING
+        || label == SETTINGS
+        || is_session_host_label(label)
+        || is_ext_view_label(label)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,12 +128,79 @@ mod tests {
             WELCOME,
             STORE,
             INLINE_ASSIST,
+            "ext-view:mindmap:explorer",
         ] {
             assert!(
                 !is_chat_label(label),
                 "{} should not be a chat label",
                 label
             );
+        }
+    }
+
+    #[test]
+    fn ext_view_label_round_trips() {
+        let label = ext_view_label("mindmap", "explorer").expect("valid ids");
+        assert_eq!(label, "ext-view:mindmap:explorer");
+        assert!(label.starts_with(EXT_VIEW_PREFIX));
+        assert_eq!(parse_ext_view_label(&label), Some(("mindmap", "explorer")));
+        assert!(is_ext_view_label(&label));
+        assert!(!is_session_host_label(&label));
+        let label = ext_view_label("my_ext-2", "map-2").expect("valid ids");
+        assert_eq!(parse_ext_view_label(&label), Some(("my_ext-2", "map-2")));
+    }
+
+    #[test]
+    fn ext_view_label_refuses_ids_that_would_inject_a_separator() {
+        assert_eq!(ext_view_label("mind:map", "explorer"), None);
+        assert_eq!(ext_view_label("mindmap", "explorer:x"), None);
+        assert_eq!(ext_view_label("", "explorer"), None);
+        assert_eq!(ext_view_label("mindmap", ""), None);
+        assert_eq!(ext_view_label("MindMap", "explorer"), None);
+        assert_eq!(ext_view_label("mindmap", "Explorer"), None);
+        assert_eq!(ext_view_label("../x", "explorer"), None);
+        for label in [
+            "ext-view:",
+            "ext-view:mindmap",
+            "ext-view:mindmap:",
+            "ext-view::explorer",
+            "ext-view:mind:map:explorer",
+            "ext-view:mindmap:explorer:",
+            "ext-view:mindmap:Explorer",
+            "ext-view:mindmap:2d",
+            "ext-view:-x:explorer",
+            "ext-view-mindmap:explorer",
+            "EXT-VIEW:mindmap:explorer",
+            MAIN,
+            FLOATING,
+            SETTINGS,
+            &chat_label("x"),
+        ] {
+            assert_eq!(parse_ext_view_label(label), None, "{label:?}");
+            assert!(!is_ext_view_label(label), "{label:?}");
+        }
+    }
+
+    #[test]
+    fn extension_hosts_are_launcher_chat_settings_and_views() {
+        for label in [
+            FLOATING,
+            MAIN,
+            SETTINGS,
+            &chat_label("11111111-2222-3333-4444-555555555555"),
+            "ext-view:mindmap:explorer",
+        ] {
+            assert!(is_extension_host_label(label), "{label:?}");
+        }
+        for label in [
+            CONTEXT_MENU,
+            WELCOME,
+            STORE,
+            INLINE_ASSIST,
+            "ext-view:bad:Label",
+            "",
+        ] {
+            assert!(!is_extension_host_label(label), "{label:?}");
         }
     }
 

@@ -6,6 +6,7 @@
 //!   - `install` — local install/uninstall, install commit, grant removal.
 //!   - `store` — store window plus the catalog/detail/install HTTP surface.
 //!   - `welcome` — first-run batch provisioning from the welcome screen.
+//!   - `views` — extension view windows (open, boot, compose, copy, list).
 //!
 //! Submodules pull this module's shared imports via `use super::*`, and the
 //! flat re-exports below preserve the original `commands::extensions::*`
@@ -26,6 +27,7 @@ mod discovery;
 mod files;
 mod install;
 mod store;
+mod views;
 mod welcome;
 
 // Flat re-export preserves the previous `commands::extensions::*` surface.
@@ -33,6 +35,7 @@ pub use discovery::*;
 pub use files::*;
 pub use install::*;
 pub use store::*;
+pub use views::*;
 pub use welcome::*;
 
 /// Dev server URL used as default store in dev mode.

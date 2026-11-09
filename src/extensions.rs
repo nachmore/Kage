@@ -7,6 +7,9 @@
 mod archive;
 mod discovery;
 mod install;
+// `ext_view_open` will use it; the app doesn't open views yet.
+#[allow(dead_code)]
+pub mod views;
 
 pub use archive::{extract_zip, install_from_zip};
 pub use discovery::{discover_all_items, discover_items};
@@ -360,6 +363,7 @@ pub const VALID_CAPABILITIES: &[&str] = &[
     "activity",
     "automation",
     "tts",
+    "views",
 ];
 
 /// Filter a raw permission list to a deduped, lowercase set of known
@@ -430,6 +434,17 @@ impl ExtensionManifest {
     pub fn config_field_decls(&self) -> Vec<ConfigFieldDecl> {
         config_field_decls(self.config.as_ref(), &self.id)
     }
+
+    /// The valid `contributes.views` entries (see [`views::normalize_views`]).
+    #[allow(dead_code)] // `ext_view_open` will read it; the app doesn't yet.
+    pub fn views(&self) -> Vec<views::ViewDecl> {
+        views::normalize_views(
+            self.contributes.as_ref().and_then(|c| c.views.as_ref()),
+            &self.name,
+            &self.icon,
+            &self.id,
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -461,6 +476,11 @@ pub struct ExtensionContributes {
     /// manifest round-trip at install time instead of being silently dropped.
     #[serde(default)]
     pub mascot_activities: Option<Vec<String>>,
+    /// Windows the extension draws itself (`views` capability). Kept raw
+    /// so a malformed value can't make the manifest unreadable; read it
+    /// through [`ExtensionManifest::views`].
+    #[serde(default)]
+    pub views: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -576,6 +596,47 @@ mod tests {
             normalize_permissions(&raw, "test").len(),
             VALID_CAPABILITIES.len()
         );
+    }
+
+    #[test]
+    fn views_is_a_valid_capability() {
+        assert!(VALID_CAPABILITIES.contains(&"views"));
+        assert_eq!(
+            normalize_permissions(&["Views".to_string()], "test"),
+            vec!["views"]
+        );
+    }
+
+    #[test]
+    fn manifest_views_survive_round_trip_and_normalize() {
+        let json = r#"{
+            "id": "mindmap", "name": "Mind Map", "version": "1.0.0",
+            "type": "extension", "icon": "🧠",
+            "contributes": { "views": [
+                {"id": "explorer", "module": "./explorer.js", "extra": 1},
+                {"id": "Bad", "module": "./bad.js"}
+            ] }
+        }"#;
+        let manifest: ExtensionManifest = serde_json::from_str(json).expect("parse");
+        let value = serde_json::to_value(&manifest).expect("serialize");
+        assert_eq!(
+            value["contributes"]["views"][0]["extra"], 1,
+            "the raw value round-trips untouched"
+        );
+        let views = manifest.views();
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].id, "explorer");
+        assert_eq!(views[0].title, "Mind Map");
+        assert_eq!(views[0].icon, "🧠");
+    }
+
+    #[test]
+    fn malformed_views_leave_the_manifest_readable() {
+        let m = parse_manifest(serde_json::json!({
+            "contributes": { "views": "explorer" }
+        }));
+        assert!(m.views().is_empty());
+        assert!(parse_manifest(serde_json::json!({})).views().is_empty());
     }
 
     #[test]
@@ -827,7 +888,8 @@ mod tests {
                 "themes": {"dark": "dark.json", "light": "light.json"},
                 "toolbarButtons": "./toolbar.js", "messageFormatters": "./fmt.js",
                 "toolProvider": "./tools.js", "triggerProvider": "./triggers.js",
-                "mascotActivities": ["music"]
+                "mascotActivities": ["music"],
+                "views": [{"id": "explorer", "title": "Explorer", "module": "./explorer.js"}]
             }
         }"#;
         let input: serde_json::Value = serde_json::from_str(json).expect("parse input");

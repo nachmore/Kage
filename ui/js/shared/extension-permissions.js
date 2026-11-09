@@ -386,7 +386,49 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // --- shortcut frecency (used by Kage's own search) ----------------------
     record_shortcut_usage: null,
     get_shortcut_history: null,
+
+    // --- extension view windows (host code only) ---------------------------
+    // The view page, the openers and Settings call these. The `views`
+    // capability gates host behaviour, not commands: Rust re-checks the
+    // grant on every open and boot, and a view never calls these itself.
+    ext_view_open: null,
+    ext_view_boot: null,
+    ext_view_compose: null,
+    ext_view_copy_text: null,
+    ext_view_focus_state: null,
+    ext_view_list: null,
+    ext_view_reset_geometry: null,
 });
+
+/**
+ * Commands a view window's sandbox may never call, whatever it holds
+ * (docs/design/EXTENSION_VIEWS.md §8.6). They act on the calling window
+ * and assume it is the launcher or a chat window: a prompt sent from a
+ * view would route its permission requests to a window with no
+ * permission UI. The `agent_call_*` names are EXTENSION_AGENT_CALLS'
+ * (§3.5): background agent work belongs to the extension's long-lived
+ * instances, not to a view that is torn down 10 minutes after it hides.
+ */
+export const VIEW_SURFACE_DENIED_COMMANDS = Object.freeze([
+    'send_message_streaming',
+    'cancel_generation',
+    'send_steering_message',
+    'extension_tool_response',
+    'get_window_session',
+    'resize_floating_window',
+    'set_floating_opacity',
+    'apply_chat_window_size',
+    'save_window_position',
+    'save_chat_window_geometry',
+    'notify_frontend_ready',
+    'agent_call_reserve',
+    'agent_call_ready',
+    'agent_call_send',
+    'agent_call_cancel',
+    'agent_call_status',
+]);
+
+const VIEW_SURFACE_DENIED = new Set(VIEW_SURFACE_DENIED_COMMANDS);
 
 /**
  * Full set of valid capability names, with user-facing metadata.
@@ -470,6 +512,12 @@ export const CAPABILITIES = Object.freeze({
         description: 'Emit signals that can trigger automations.',
     },
     tts: { icon: '🔈', label: 'Text-to-speech', description: 'Use text-to-speech voices.' },
+    views: {
+        icon: '🖼️',
+        label: 'Its own windows',
+        description:
+            'Show windows the extension draws itself, such as a map or a board. What you type in those windows goes to the extension. Kage labels them with the extension\u2019s name.',
+    },
 });
 
 /** Ordered list of capability names (stable order for UI display). */
@@ -530,11 +578,20 @@ export function grantCovers(record, permissions, extensionId) {
  *
  * @param {string} command
  * @param {Set<string>} held
+ * @param {{surface?: 'hidden'|'view'}} [options] - `surface: 'view'` for a
+ *   view window's sandbox, which also refuses {@link VIEW_SURFACE_DENIED_COMMANDS}.
+ *   Anything else is the hidden surface.
  * @returns {InvokeDecision}
  */
-export function decideInvoke(command, held) {
+export function decideInvoke(command, held, { surface = 'hidden' } = {}) {
     if (typeof command !== 'string') {
         return { allow: false, reason: 'command name must be a string' };
+    }
+    if (surface === 'view' && VIEW_SURFACE_DENIED.has(command)) {
+        return {
+            allow: false,
+            reason: `command '${command}' isn't available in an extension window: it acts on the calling window, which must be the launcher or a chat window`,
+        };
     }
     if (!Object.hasOwn(COMMAND_CAPABILITIES, command)) {
         return { allow: false, reason: `command '${command}' is not available to extensions` };

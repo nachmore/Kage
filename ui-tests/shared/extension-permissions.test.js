@@ -6,7 +6,18 @@ import {
     normalizePermissions,
     grantCovers,
     decideInvoke,
+    VIEW_SURFACE_DENIED_COMMANDS,
 } from '../../ui/js/shared/extension-permissions.js';
+
+const EXT_VIEW_COMMANDS = [
+    'ext_view_open',
+    'ext_view_boot',
+    'ext_view_compose',
+    'ext_view_copy_text',
+    'ext_view_focus_state',
+    'ext_view_list',
+    'ext_view_reset_geometry',
+];
 
 describe('COMMAND_CAPABILITIES table', () => {
     it('maps every value to either a known capability or null', () => {
@@ -157,5 +168,86 @@ describe('decideInvoke', () => {
         expect(decideInvoke(42, held).allow).toBe(false);
         expect(decideInvoke(null, held).allow).toBe(false);
         expect(decideInvoke(undefined, held).allow).toBe(false);
+    });
+});
+
+describe('views capability', () => {
+    it('is a known capability with its install-prompt text', () => {
+        expect(KNOWN_CAPABILITIES).toContain('views');
+        expect(CAPABILITIES.views.icon).toBe('🖼️');
+        expect(CAPABILITIES.views.label).toBe('Its own windows');
+        expect(CAPABILITIES.views.description).toMatch(/What you type in those windows/);
+        expect(normalizePermissions(['Views'], 'x')).toEqual(['views']);
+    });
+
+    it('maps no command to views: it gates host behaviour only', () => {
+        expect(Object.values(COMMAND_CAPABILITIES)).not.toContain('views');
+    });
+
+    it('every view window command is host-only (null)', () => {
+        for (const cmd of EXT_VIEW_COMMANDS) {
+            expect(Object.hasOwn(COMMAND_CAPABILITIES, cmd), cmd).toBe(true);
+            expect(COMMAND_CAPABILITIES[cmd], cmd).toBeNull();
+            const d = decideInvoke(cmd, new Set(KNOWN_CAPABILITIES), { surface: 'view' });
+            expect(d.allow, cmd).toBe(false);
+        }
+    });
+});
+
+describe('decideInvoke view-surface denylist', () => {
+    const all = new Set(KNOWN_CAPABILITIES);
+
+    it('lists the window-bound commands and the background agent calls', () => {
+        expect([...VIEW_SURFACE_DENIED_COMMANDS].sort()).toEqual(
+            [
+                'send_message_streaming',
+                'cancel_generation',
+                'send_steering_message',
+                'extension_tool_response',
+                'get_window_session',
+                'resize_floating_window',
+                'set_floating_opacity',
+                'apply_chat_window_size',
+                'save_window_position',
+                'save_chat_window_geometry',
+                'notify_frontend_ready',
+                'agent_call_reserve',
+                'agent_call_ready',
+                'agent_call_send',
+                'agent_call_cancel',
+                'agent_call_status',
+            ].sort()
+        );
+        expect(Object.isFrozen(VIEW_SURFACE_DENIED_COMMANDS)).toBe(true);
+    });
+
+    it('refuses every listed command on the view surface, whatever is held', () => {
+        for (const cmd of VIEW_SURFACE_DENIED_COMMANDS) {
+            const d = decideInvoke(cmd, all, { surface: 'view' });
+            expect(d.allow, cmd).toBe(false);
+            expect(d.reason, cmd).toMatch(/isn't available in an extension window/);
+        }
+    });
+
+    it('leaves the hidden surface unchanged', () => {
+        for (const cmd of VIEW_SURFACE_DENIED_COMMANDS) {
+            const expected = decideInvoke(cmd, all);
+            expect(decideInvoke(cmd, all, { surface: 'hidden' }), cmd).toEqual(expected);
+            expect(decideInvoke(cmd, all, {}), cmd).toEqual(expected);
+        }
+        expect(decideInvoke('send_message_streaming', new Set(['agent'])).allow).toBe(true);
+        expect(decideInvoke('resize_floating_window', new Set(['window'])).allow).toBe(true);
+    });
+
+    it('applies the normal rules to everything else in a view', () => {
+        const view = { surface: 'view' };
+        expect(decideInvoke('open_chat_with_message', new Set(['agent']), view).allow).toBe(true);
+        expect(decideInvoke('read_clipboard', new Set(['clipboard']), view).allow).toBe(true);
+        expect(decideInvoke('read_clipboard', new Set(['storage']), view).reason).toMatch(
+            /missing capability 'clipboard'/
+        );
+        expect(decideInvoke('quit_app', all, view).reason).toMatch(/never callable/);
+        expect(decideInvoke('no_such_command', all, view).reason).toMatch(/not available/);
+        expect(decideInvoke(42, all, view).allow).toBe(false);
     });
 });

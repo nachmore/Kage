@@ -18,6 +18,7 @@ const CAPABILITY_ICONS = Object.freeze({
     activity: '📊',
     automation: '⚡',
     tts: '🔈',
+    views: '🖼️',
 });
 
 export function renderCapabilityBadges(capabilities, legacy) {

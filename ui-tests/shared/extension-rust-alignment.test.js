@@ -45,6 +45,7 @@ import {
     CAPABILITIES,
     COMMAND_CAPABILITIES,
     KNOWN_CAPABILITIES,
+    VIEW_SURFACE_DENIED_COMMANDS,
 } from '../../ui/js/shared/extension-permissions.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -115,10 +116,11 @@ function parseTauriCommands(rustPath) {
             if (!arg) continue;
             const argName = arg[1];
             const argType = arg[2];
-            // Don't surface Tauri-injected args (AppHandle, State, Window).
+            // Don't surface Tauri-injected args (AppHandle, State, Window),
+            // runtime-generic (`WebviewWindow<R>`) or not.
             if (
                 /tauri::AppHandle|tauri::Window|tauri::WebviewWindow|State\s*</.test(argType) ||
-                /AppHandle$|WebviewWindow$|^Window$/.test(argType.trim())
+                /(?:AppHandle|WebviewWindow)(?:<\w+>)?$|^Window(?:<\w+>)?$/.test(argType.trim())
             ) {
                 continue;
             }
@@ -201,6 +203,39 @@ describe('extension permission table — Rust ↔ JS alignment', () => {
                 KNOWN_CAPABILITIES.includes(cap),
                 `${cmd} → '${cap}' is not in KNOWN_CAPABILITIES`
             ).toBe(true);
+        }
+    });
+});
+
+describe('extension view commands — Rust ↔ JS alignment', () => {
+    it('every command in src/commands/extensions/views.rs is host-only (null)', () => {
+        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions/views.rs'));
+        expect(cmds.size, 'no #[tauri::command] found in views.rs').toBe(7);
+        for (const name of cmds.keys()) {
+            expect(Object.hasOwn(COMMAND_CAPABILITIES, name), `${name} has no entry`).toBe(true);
+            expect(COMMAND_CAPABILITIES[name], `${name} must be null`).toBeNull();
+        }
+    });
+
+    it('view commands take the arg names the host sends', () => {
+        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions/views.rs'));
+        expect(cmds.get('ext_view_open')).toEqual(['extension_id', 'view_id', 'params', 'source']);
+        expect(cmds.get('ext_view_boot')).toEqual([]);
+        expect(cmds.get('ext_view_compose')).toEqual(['text']);
+        expect(cmds.get('ext_view_copy_text')).toEqual(['text']);
+        expect(cmds.get('ext_view_reset_geometry')).toEqual(['extension_id', 'view_id']);
+    });
+
+    it('every view-surface denylist entry names a registered command or a planned agent call', () => {
+        const registry = readFileSync(path.join(repoRoot, 'src/commands/registry.rs'), 'utf8');
+        const registered = new Set(
+            [...registry.matchAll(/^\s*crate::[\w:]*::(\w+),\s*$/gm)].map((m) => m[1])
+        );
+        expect(registered.size).toBeGreaterThan(150);
+        for (const cmd of VIEW_SURFACE_DENIED_COMMANDS) {
+            // EXTENSION_AGENT_CALLS §3.5 fixes these names; they register later.
+            if (/^agent_call_(reserve|ready|send|cancel|status)$/.test(cmd)) continue;
+            expect(registered.has(cmd), `${cmd} isn't registered in registry.rs (typo?)`).toBe(true);
         }
     });
 });

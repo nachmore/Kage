@@ -91,6 +91,43 @@ where
     emit_to_label(app, event, payload, window_labels::SETTINGS);
 }
 
+/// Emit to every window that runs extension instances: the floating
+/// launcher, chat hosts (`main` + `chat-*`), settings and extension view
+/// windows (`ext-view:*`). The audience of `extension_data_changed`; each
+/// window's host code forwards a batch only to the matching extension's
+/// sandbox.
+#[allow(dead_code)] // The storage change coalescer will call it; the app doesn't yet.
+pub fn emit_to_extension_hosts<R, S>(app: &impl Emitter<R>, event: &str, payload: &S)
+where
+    R: Runtime,
+    S: Serialize + Clone,
+{
+    if let Err(e) = app.emit_filter(event, payload, |t| match t {
+        EventTarget::Window { label }
+        | EventTarget::Webview { label }
+        | EventTarget::WebviewWindow { label }
+        | EventTarget::AnyLabel { label } => window_labels::is_extension_host_label(label),
+        _ => false,
+    }) {
+        log::debug!("emit_to_extension_hosts({event}) failed: {e}");
+    }
+}
+
+/// Emit to one extension view window. Refuses any label that isn't a view
+/// window's, so it can't be used to reach the launcher or a chat window.
+#[allow(dead_code)] // The view window lifecycle will call it; the app doesn't yet.
+pub fn emit_to_ext_view<R, S>(app: &impl Emitter<R>, label: &str, event: &str, payload: &S)
+where
+    R: Runtime,
+    S: Serialize + Clone,
+{
+    if !window_labels::is_ext_view_label(label) {
+        log::warn!("emit_to_ext_view({event}): {label:?} is not a view window label");
+        return;
+    }
+    emit_to_label(app, event, payload, label);
+}
+
 /// Emit back to the source window of a Tauri command. `WebviewWindow::emit`
 /// looks targeted but actually broadcasts to every webview that has a
 /// listener; `emit_to_self` is what most reply-to-caller paths actually

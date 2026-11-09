@@ -162,6 +162,23 @@ Anything else in an entry is ignored. In particular a manifest can't ask
 for position, always-on-top, transparency, no frame, full screen, or
 "skip taskbar".
 
+Details both sides apply (`src/extensions/views.rs`):
+- Only the first 4 entries are read, valid or not.
+- An entry is dropped when it isn't an object, its `id` is invalid or
+  repeats an earlier one, or its `module` is invalid. Other bad fields
+  fall back: `title` to the extension's name, `icon` to the extension's
+  icon, `css` entries one at a time, a size dimension to its default.
+- Lengths count Unicode code points (JS: `Array.from(s).length`).
+- A `title` that is a whole `__MSG_key__` token is kept as it is. The view
+  page resolves it, then applies the 60-character limit. A longer literal
+  title is cut to 60.
+- An `icon` is valid with 1–8 code points, none of them ASCII,
+  whitespace, control or bidi-override characters.
+- A path is valid with an optional `./`, then `/`-separated segments that
+  aren't empty, `.` or `..`, and no `\`, `:`, `?`, `#`, `%` or control
+  characters. The view page checks CSS sizes (256 KiB each, 1 MiB in
+  total) when it reads the files.
+
 The Rust `ExtensionContributes` struct gains `views` so the field survives
 the manifest round trip through `list_extensions` (the same reason
 `mascot_activities` is modelled there). The round-trip test in
@@ -230,8 +247,10 @@ provider at any time: a tool provider or a timer can't pop windows.
 - `view`: a view id the manifest declares.
 - `params`: optional. A JSON object (plain objects, arrays, strings,
   finite numbers, booleans, null), at most 4096 bytes serialised and
-  nesting depth ≤ 4. It reaches the view as `params` (§9). It never goes
-  into a URL.
+  nesting depth ≤ 4 (the top-level object is depth 1; each nested object
+  or array adds one). Rust measures the size as compact JSON
+  (`extensions::views::validate_params`). It reaches the view as
+  `params` (§9). It never goes into a URL.
 
 Host-side checks before `ext_view_open`, in this order. A failure is
 logged as `[ext <id>] open_view refused: <reason>` and nothing opens.
@@ -283,12 +302,17 @@ shows it on the action row.
 ### 7.1 Labels
 
 - `window_labels::EXT_VIEW_PREFIX = "ext-view:"`, with
-  `ext_view_label(ext, view)`, `parse_ext_view_label(label) ->
+  `ext_view_label(ext, view) -> Option<String>`, `parse_ext_view_label(label) ->
   Option<(&str, &str)>` and `is_ext_view_label(label)`. The JS mirror lives
-  in `ui/js/shared/window-labels.js`. Never build or match the prefix
-  inline.
+  in `ui/js/shared/window-labels.js` (`extViewLabel`, `parseExtViewLabel`
+  returning `{ extensionId, viewId }` or `null`, `isExtViewLabel`). Never
+  build or match the prefix inline.
 - Both parts are validated before a label is built (extension id rules as
   today, view id rule §4), so a label can't contain another separator.
+  Building with an invalid id gives `None`; a prefixed label with invalid
+  ids doesn't parse and isn't a view label.
+- `is_extension_host_label(label)`: `floating`, `main`, `chat-*`,
+  `settings` or a view label. The audience of `emit_to_extension_hosts`.
 
 ### 7.2 Window shape
 
@@ -600,7 +624,9 @@ Every field is type-checked. Unknown kinds are ignored with a warning.
 
 **View-surface denylist.** `decideInvoke(command, held, { surface: 'view' })`
 also refuses these commands in a view window, because they act on the
-calling window and assume it is the launcher or a chat window:
+calling window and assume it is the launcher or a chat window. The list
+is exported as `VIEW_SURFACE_DENIED_COMMANDS` from
+`ui/js/shared/extension-permissions.js`:
 
 `send_message_streaming`, `cancel_generation`, `send_steering_message`,
 `extension_tool_response`, `get_window_session`, `resize_floating_window`,
@@ -1207,7 +1233,8 @@ checks both).
 | `extension_data_changed` | extension hosts (floating, main, `chat-*`, settings, `ext-view:*`) | `{ extension_id, changes: [{ key, op, source, window? }] }` |
 
 `event_targets.rs` gains `emit_to_extension_hosts` and
-`emit_to_ext_view(label)`. No new event uses a plain `emit`.
+`emit_to_ext_view(app, label, event, payload)`, which refuses a label
+that isn't a view window's. No new event uses a plain `emit`.
 
 ### 16.4 i18n keys (EN, `locales/en/messages.json`)
 
@@ -1632,10 +1659,11 @@ package codes against this document.
 
 - **Files (owned):**
   - `src/extensions.rs` (manifest `views` field, `VALID_CAPABILITIES`,
-    `mod views;`)
+    `pub mod views;`, `ExtensionManifest::views()`)
   - `src/extensions/views.rs` (new: `ViewDecl`, `normalize_views`,
     limits, params validation)
-  - `src/window_labels.rs`, `ui/js/shared/window-labels.js`
+  - `src/window_labels.rs`, `ui/js/shared/window-labels.js` (also
+    `is_extension_host_label`)
   - `src/events.rs`, `ui/js/shared/events.js`,
     `ui-tests/shared/events-and-windows.test.js` (the `ext-view:` label
     helpers)
@@ -1643,19 +1671,28 @@ package codes against this document.
     `emit_to_ext_view`, complete: both are a few lines, and V2 and V3
     need them in parallel)
   - `src/lib.rs` (`pub mod ext_views; pub mod extension_data_events;`)
+  - `src/main.rs` (the same two `mod` lines, allowed dead code: the
+    binary declares its own modules, and the commands use `ext_views`'
+    types)
   - `src/ext_views.rs` (new, skeleton: types `ExtViewOpened`,
-    `ExtViewBoot`, `ExtViewFocusState`, `ExtViewInfo`, `Registry`; stub
-    bodies that return errors, never `todo!()`)
+    `ExtViewBoot`, `ExtViewFocusState`, `ExtViewInfo`, a placeholder
+    `Registry`, and the closed `source` list `VIEW_SOURCES` with
+    `normalize_source`. No functions with stub bodies: the command stubs
+    answer directly)
   - `src/extension_data_events.rs` (new, skeleton: `Change`, `Batch`
     types)
   - `src/commands/extensions/mod.rs` (`mod views; pub use views::*;`)
   - `src/commands/extensions/views.rs` (new: the seven command signatures
-    from §16.1, each returning `errors.ext_view.not_a_view_window` or an
-    empty result)
+    from §16.1. `ext_view_open` refuses with
+    `errors.ext_view.opener_refused`; `ext_view_boot`, `ext_view_compose`
+    and `ext_view_copy_text` with `errors.ext_view.not_a_view_window`; the
+    other three return an empty result)
   - `src/commands/registry.rs` (register the seven commands)
   - `ui/js/shared/extension-permissions.js` (`views` capability, `null`
     entries, view-surface denylist and the `surface` option of
     `decideInvoke`)
+  - `ui/js/settings/extension-capabilities.js` (the 🖼️ badge icon,
+    SYNC §23.3)
   - `ui-tests/shared/extension-permissions.test.js`,
     `ui-tests/shared/extension-rust-alignment.test.js`
   - `locales/en/messages.json` and the other catalogs (all keys of §16.4,

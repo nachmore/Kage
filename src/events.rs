@@ -139,6 +139,36 @@ pub const AGENT_CALLS_ACTIVITY: &str = "agent_calls_activity";
 #[allow(dead_code)] // The file text commands will emit it; the app doesn't yet.
 pub const FILE_TEXT_PROGRESS: &str = "file_text_progress";
 
+// --- Extension views ------------------------------------------------
+
+/// A view window was opened again while it exists. Payload: `{ params,
+/// open_seq, source }`. Sent only to that view window.
+#[allow(dead_code)] // `ext_view_open` will emit it; the app doesn't yet.
+pub const EXT_VIEW_REOPEN: &str = "ext_view_reopen";
+
+/// A view window was shown or hidden. Payload: `{ visible }`. Sent only to
+/// that view window.
+#[allow(dead_code)] // The view window lifecycle will emit it; the app doesn't yet.
+pub const EXT_VIEW_VISIBILITY: &str = "ext_view_visibility";
+
+/// Focus left a view window, and neither the launcher nor another view
+/// has it. No payload. Sent to the floating launcher, which hides if it
+/// stayed open as the view's companion.
+#[allow(dead_code)] // The view window lifecycle will emit it; the app doesn't yet.
+pub const EXT_VIEW_FOCUS_LOST: &str = "ext_view_focus_lost";
+
+/// Put text in the launcher's input without sending it. Payload:
+/// `{ text }`. Sent to the floating launcher by `ext_view_compose`.
+#[allow(dead_code)] // `ext_view_compose` will emit it; the app doesn't yet.
+pub const FLOATING_COMPOSE: &str = "floating_compose";
+
+/// An extension's stored data changed. Payload: `{ extension_id, changes:
+/// [{ key, op, source, window? }] }`, key names only, never data. Sent to
+/// the windows that run extension instances
+/// (`event_targets::emit_to_extension_hosts`).
+#[allow(dead_code)] // The storage change coalescer will emit it; the app doesn't yet.
+pub const EXTENSION_DATA_CHANGED: &str = "extension_data_changed";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +201,11 @@ mod tests {
             AUTOMATION_STEP_COMPLETE,
             AGENT_CALLS_ACTIVITY,
             FILE_TEXT_PROGRESS,
+            EXT_VIEW_REOPEN,
+            EXT_VIEW_VISIBILITY,
+            EXT_VIEW_FOCUS_LOST,
+            FLOATING_COMPOSE,
+            EXTENSION_DATA_CHANGED,
         ];
         for name in all {
             assert!(

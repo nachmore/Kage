@@ -18,9 +18,13 @@ import { EVT } from '../../ui/js/shared/events.js';
 import {
     WINDOW,
     CHAT_PREFIX,
+    EXT_VIEW_PREFIX,
     chatLabel,
+    extViewLabel,
     isChatLabel,
+    isExtViewLabel,
     isSessionHostLabel,
+    parseExtViewLabel,
 } from '../../ui/js/shared/window-labels.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -88,6 +92,11 @@ describe('events.js / window-labels.js — Rust alignment', () => {
         expect(rustLabels.get('CHAT_PREFIX')).toBe(CHAT_PREFIX);
     });
 
+    it('EXT_VIEW_PREFIX matches the Rust constant', () => {
+        const rustLabels = parseRustStringConsts(path.join(repoRoot, 'src/window_labels.rs'));
+        expect(rustLabels.get('EXT_VIEW_PREFIX')).toBe(EXT_VIEW_PREFIX);
+    });
+
     it('every JS event name is snake_case (matches the Rust convention)', () => {
         for (const [name, value] of Object.entries(EVT)) {
             expect(value, `${name} contains a hyphen`).not.toMatch(/-/);
@@ -123,5 +132,65 @@ describe('window-labels.js — helpers', () => {
         expect(isChatLabel(null)).toBe(false);
         expect(isChatLabel(undefined)).toBe(false);
         expect(isChatLabel(123)).toBe(false);
+    });
+});
+
+describe('window-labels.js — extension view labels', () => {
+    it('extViewLabel builds ext-view:<extension>:<view>', () => {
+        expect(extViewLabel('mindmap', 'explorer')).toBe('ext-view:mindmap:explorer');
+        expect(extViewLabel('my_ext-2', 'map-2')).toBe('ext-view:my_ext-2:map-2');
+    });
+
+    it('parseExtViewLabel round-trips', () => {
+        expect(parseExtViewLabel(extViewLabel('mindmap', 'explorer'))).toEqual({
+            extensionId: 'mindmap',
+            viewId: 'explorer',
+        });
+        expect(isExtViewLabel('ext-view:mindmap:explorer')).toBe(true);
+    });
+
+    it('refuses ids that would inject a separator or break the rules', () => {
+        for (const [ext, view] of [
+            ['mind:map', 'explorer'],
+            ['mindmap', 'explorer:x'],
+            ['', 'explorer'],
+            ['mindmap', ''],
+            ['MindMap', 'explorer'],
+            ['mindmap', 'Explorer'],
+            ['mindmap', '2d'],
+            ['../x', 'explorer'],
+            [null, 'explorer'],
+            ['mindmap', undefined],
+        ]) {
+            expect(extViewLabel(ext, view), `${ext} / ${view}`).toBeNull();
+        }
+        for (const label of [
+            'ext-view:',
+            'ext-view:mindmap',
+            'ext-view:mindmap:',
+            'ext-view::explorer',
+            'ext-view:mind:map:explorer',
+            'ext-view:mindmap:explorer:',
+            'ext-view:mindmap:explorer\n',
+            'ext-view-mindmap:explorer',
+            'EXT-VIEW:mindmap:explorer',
+            WINDOW.MAIN,
+            chatLabel('x'),
+            null,
+            undefined,
+            42,
+        ]) {
+            expect(parseExtViewLabel(label), String(label)).toBeNull();
+            expect(isExtViewLabel(label), String(label)).toBe(false);
+        }
+    });
+
+    it('a view label is not a chat or session-host label', () => {
+        const label = extViewLabel('mindmap', 'explorer');
+        expect(isChatLabel(label)).toBe(false);
+        expect(isSessionHostLabel(label)).toBe(false);
+        for (const value of Object.values(WINDOW)) {
+            expect(isExtViewLabel(value)).toBe(false);
+        }
     });
 });
