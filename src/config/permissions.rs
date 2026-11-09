@@ -401,6 +401,12 @@ pub struct ExtensionGrant {
     /// ISO 8601 timestamp of the approval.
     #[serde(default)]
     pub approved_at: String,
+    /// Where the installed copy came from: `store:<16 hex of SHA-256 of
+    /// the store URL>`, `sideload` or `bundled` (docs/design/SYNC.md §4.5).
+    /// Part of the grant, so it stays on this computer and is
+    /// backend-owned. `None` on grants made before it existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
 }
 
 /// Background AI for one extension on this machine

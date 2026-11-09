@@ -259,6 +259,9 @@ pub const FIELDS: &[(&str, Rule)] = &[
     ("extension_grants.*.granted", Include(Capabilities)),
     ("extension_grants.*.approved_version", Include(GrantVersion)),
     ("extension_grants.*.approved_at", Include(Timestamp)),
+    // Where the installed copy came from (folder sync, SYNC.md §4.5): this
+    // machine's install.
+    ("extension_grants.*.origin", Leave(DeviceLocal)),
     // Background AI switch, consent and allowance: consent named an agent
     // on this machine.
     ("extension_agent_access", Leave(Permissions)),
@@ -565,6 +568,31 @@ fn check(shape: Shape, v: &Value, path: &[String], ctx: &Ctx) -> Checked {
             other => other,
         },
         ExtensionSettings | SchemaVersion => Checked::Nothing,
+    }
+}
+
+/// The shape a settings-only backup checks the value at `path` against,
+/// when it copies that field. Folder sync validates a synced value with it
+/// before applying it (docs/design/SYNC.md §8.11).
+pub(crate) fn shape_of(path: &str) -> Option<Shape> {
+    FIELDS.iter().find_map(|(p, rule)| match rule {
+        Include(shape) if *p == path => Some(*shape),
+        _ => None,
+    })
+}
+
+/// Whether `v` is a value of `shape` that another computer may hand this
+/// one: [`check`] as on import, so ids need only be well-formed. A value
+/// that holds nothing is accepted (the setting's own default applies).
+pub(crate) fn accepts(shape: Shape, v: &Value, rules: &Rules) -> bool {
+    let ctx = Ctx {
+        rules,
+        side: Side::Import,
+    };
+    match check(shape, v, &[], &ctx) {
+        Checked::Ok(_) => true,
+        Checked::Nothing => is_empty(v),
+        Checked::Flagged => false,
     }
 }
 
@@ -967,6 +995,7 @@ mod tests {
                 granted: vec!["storage".into()],
                 approved_version: "1.0.0".into(),
                 approved_at: "2026-01-01T00:00:00Z".into(),
+                origin: Some("sideload".into()),
             },
         );
         c.extension_agent_access.insert(

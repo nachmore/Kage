@@ -1188,6 +1188,7 @@ mod tests {
             granted: caps.iter().map(|c| c.to_string()).collect(),
             approved_version: "1.0.0".into(),
             approved_at: String::new(),
+            origin: None,
         }
     }
 

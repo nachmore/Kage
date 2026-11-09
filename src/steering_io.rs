@@ -160,6 +160,8 @@ pub fn write_lines(kind: SteeringKind, config: &Config, lines: &[String]) -> Res
     // Atomic so a crash mid-save can't truncate the document.
     crate::atomic_write::write(&path, to_write, write_perms(kind))
         .with_context(|| format!("Failed to write steering doc at {:?}", path))?;
+    // Folder sync reads the change from the file; this only wakes it.
+    crate::sync::notify("steering", crate::sync::types::Origin::User);
     Ok(path)
 }
 

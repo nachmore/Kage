@@ -83,8 +83,8 @@
 //! extension's API keys, and what Kage learned about the user); the user's
 //! own steering doc keeps its permissions, and is owner-only when new.
 
-mod allowlist;
-mod consent;
+pub(crate) mod allowlist;
+pub(crate) mod consent;
 mod journal;
 mod merge;
 pub mod sensitive;

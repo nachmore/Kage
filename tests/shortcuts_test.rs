@@ -14,6 +14,7 @@ fn test_shortcut_config_serialization() {
         prompt: None,
         script: None,
         script_action: None,
+        sync_id: String::new(),
     };
 
     let json = serde_json::to_string(&shortcut).unwrap();
@@ -40,6 +41,7 @@ fn test_shortcut_config_optional_fields() {
         prompt: None,
         script: None,
         script_action: None,
+        sync_id: String::new(),
     };
 
     let json = serde_json::to_string(&shortcut).unwrap();
@@ -66,6 +68,7 @@ fn test_config_with_shortcuts() {
         prompt: None,
         script: None,
         script_action: None,
+        sync_id: String::new(),
     });
 
     let json = serde_json::to_string_pretty(&config).unwrap();

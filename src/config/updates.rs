@@ -12,6 +12,9 @@ pub struct StoreSource {
     pub url: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// Stable id for folder sync (docs/design/SYNC.md §4.4).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub sync_id: String,
 }
 
 /// Update channel. Resolved to a concrete endpoint URL by

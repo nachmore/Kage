@@ -98,6 +98,7 @@ fn test_config_with_shortcuts_roundtrip() {
         prompt: None,
         script: None,
         script_action: None,
+        sync_id: String::new(),
     });
 
     let json = serde_json::to_string(&config).unwrap();
