@@ -1312,6 +1312,11 @@ async fn a_disconnect_keeps_the_waiting_ones_for_a_reconnect() {
     h.svc.on_disconnect();
     let e = task.await.unwrap().unwrap_err();
     assert_eq!(key(&e), "agent_disconnected");
+    // The caller hears "disconnected" as soon as the stop lands; the
+    // runner frees the turn a moment later, once the cancelled prompt
+    // returns. Wait for that rather than racing it.
+    let svc = h.svc.clone();
+    until(move || svc.state.lock_or_recover().sched.active().is_none()).await;
     h.clock.advance_secs(30);
     h.svc.pump();
     assert_eq!(h.svc.status(OTHER).waiting, 1);
