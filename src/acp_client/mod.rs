@@ -304,6 +304,17 @@ impl AcpClient {
             .unwrap_or_default()
     }
 
+    /// Byte length of the bucket for `session_id`, or 0 if there is none.
+    /// Lets a watchdog stop a reply that runs past its cap while it
+    /// streams, without copying the text (background agent calls poll it).
+    #[allow(dead_code)] // Used by the background agent-call engine.
+    pub fn accumulator_len(&self, session_id: &str) -> usize {
+        self.streaming_accumulators
+            .lock_or_recover()
+            .get(session_id)
+            .map_or(0, String::len)
+    }
+
     /// Reset the bucket for `session_id` to empty. Called before send when
     /// a caller wants to read the response back via take_session_accumulator
     /// without contamination from a prior incomplete response.
@@ -821,6 +832,22 @@ mod tests {
             client.send_prompt_with_prefix("session-a", &prefix, &|_| serde_json::json!({}));
         assert!(result.is_err());
         assert_eq!(*prefix.events.lock_or_recover(), vec![("text_for", true)]);
+    }
+
+    #[test]
+    fn accumulator_len_counts_bytes_of_one_session_without_taking_them() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        assert_eq!(client.accumulator_len("session-a"), 0);
+        client.accumulate_chunk("session-a", "héllo");
+        client.accumulate_chunk("session-b", "other session");
+        assert_eq!(client.accumulator_len("session-a"), "héllo".len());
+        assert_eq!(client.accumulator_len("session-a"), 6, "bytes, not chars");
+        assert_eq!(client.peek_session_accumulator("session-a"), "héllo");
+        client.take_session_accumulator("session-a");
+        assert_eq!(client.accumulator_len("session-a"), 0);
+        assert_eq!(client.accumulator_len("session-b"), "other session".len());
     }
 
     #[test]
