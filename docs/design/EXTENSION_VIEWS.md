@@ -470,10 +470,16 @@ DPI:
   `shared-components.css`, `shared-rtl.css`, `extension-view.css`, and
   `js/extension-view/main.js`. It installs the shared link handler (as
   every window must).
-- `ui/js/extension-view/main.js`: boot and event wiring.
+- `ui/js/extension-view/main.js`: wiring only. It installs the link
+  handler, lists the host features the page offers
+  (`OFFERED_HOST_FEATURES`, §9.4) and hands the real modules to `page.js`.
+- `ui/js/extension-view/page.js`: the boot sequence, the events, the
+  reloads and the view's requests. Every module it uses from outside its
+  folder is passed in, so the tests drive it with fakes.
 - `ui/js/extension-view/chrome.js`: host bar, loading, error and
   not-responding states.
 - `ui/js/extension-view/watchdog.js`: ping/pong timer (pure, testable).
+- `ui/js/extension-view/theme-snapshot.js`: the §11 token snapshot (pure).
 
 The view page is first-party and trusted. Its Tauri permissions come from a
 separate capability file, `capabilities/extension-view.json`, with window
@@ -568,9 +574,15 @@ base-uri 'none'; form-action 'none'
 ### 8.5 Boot sequence (view page)
 
 1. `initLinkHandler()`, apply theme (`loadAndApplyTheme`), load the Kage
-   catalog, apply static translations and RTL.
+   catalog, apply static translations and RTL. Then subscribe to the
+   events of step 9. They go in before step 2: Rust marks the window booted
+   when it answers `ext_view_boot`, so a reopen can arrive before the view
+   is mounted. The page keeps the newest one and delivers it after
+   `viewMount` if its `open_seq` is newer than the boot record's.
 2. `ext_view_boot` → `{ extension_id, view_id, params, open_seq, source,
-   reloaded }`. Errors show the matching error state.
+   reloaded }`. Errors show the matching error state. Every reload in place
+   calls it again, so Rust re-checks the install, the enabled state, the
+   grant and the view each time.
 3. `list_extensions` → find the manifest. `get_config` → the grant
    (requested ∩ granted, the same rule Settings uses) and the effective
    extension config (`resolveExtensionConfig`).
@@ -585,9 +597,12 @@ base-uri 'none'; form-action 'none'
    until it resolves, up to **10 s**; then show the error state with
    Reload.
 8. Set the window title (§18.2). Focus the iframe.
-9. Start the watchdog (§8.7). Subscribe to `ext_view_reopen`,
-   `ext_view_visibility`, `config_updated`, `extensions_changed`,
-   `extension_data_changed`, and window focus.
+9. Start the watchdog (§8.7) if the window is visible; otherwise send
+   `viewVisibility { visible: false }`. The subscriptions (made in step 1)
+   are `ext_view_reopen`, `ext_view_visibility`, `config_updated` (through
+   `onConfigChange`), `kage:i18n-changed`, `extensions_changed`,
+   `extension_data_changed` (through `installExtensionDataEvents`), and
+   window focus.
 
 ### 8.6 Port protocol additions
 
@@ -772,8 +787,8 @@ in a view:
 | `date-picker` (existing, floating only today) | yes | no | no | no |
 
 Each design's package that adds a feature also adds it to the view
-page's offered list (`ui/js/extension-view/main.js`), after this
-design's V6 has merged.
+page's offered list (`OFFERED_HOST_FEATURES` in
+`ui/js/extension-view/main.js`), after this design's V6 has merged.
 
 An extension can tell "old host" from "not approved yet": a host with
 `storage.change_events` but without `views` supports views, and the user
@@ -844,7 +859,9 @@ direct message bus between instances (§26).
 ## 11. Theming
 
 The view page computes a token snapshot from its own document after
-applying the theme (`getComputedStyle(document.documentElement)`):
+applying the theme (`getComputedStyle(document.body)`: the light theme
+overrides the tokens on `body.light-theme`, so the root element would
+always report the dark values):
 
 ```js
 theme = {
@@ -876,8 +893,10 @@ theme = {
   `context.view.theme.tokens`.
 - Changes (Settings → Appearance, OS dark mode under "system", a theme
   extension) reach the page through `config_updated` and the theme
-  module's OS listener. The page recomputes and sends `viewTheme` only
-  when the snapshot changed.
+  module's OS listener. Both end in a change to the body's class or the
+  root's inline variables, which the page watches. It recomputes and sends
+  `viewTheme` only when the snapshot differs from the one the running
+  sandbox has.
 - `prefers-color-scheme` inside the iframe follows the OS, not Kage. Views
   should use `theme.scheme`.
 
@@ -970,6 +989,17 @@ The view page accepts `open-view`, `compose` and `copy-text` only when:
 None of these actions can do harm without the user seeing it (a window
 opens, text appears in the launcher, the clipboard changes), so focus and
 rate limits are enough.
+
+The rule is `recentUserActivation(focused, navigator.userActivation)` in
+`ui/js/extension-view/page.js`, for FT6's file broker to reuse.
+
+When the rule doesn't hold, the page refuses with `not_permitted`
+`errors.ext_view.needs_user_action` ("Click or press a key in the window
+first."). For `open-view` the page also checks the rate (1 a second,
+`rate_limited` `errors.ext_view.too_fast`), that the manifest declares the
+view (`errors.ext_view.unknown_view`) and that `params` is an object or
+null (`errors.ext_view.params_invalid`). The size and depth of `params`
+are left to `ext_view_open`, which checks them anyway.
 
 The same rule stands in for the host-seen click that
 EXTENSION_FILE_TEXT §5.2 needs before it opens a file dialog. A view
@@ -1255,6 +1285,7 @@ Backend errors:
 | `errors.ext_view.not_focused` | The extension window isn't in front. |
 | `errors.ext_view.text_invalid` | The text can't be used: {reason} |
 | `errors.ext_view.too_fast` | Too many requests. Try again in a moment. |
+| `errors.ext_view.needs_user_action` | Click or press a key in the window first. (Raised by the view page, §13.4.) |
 | `errors.ext_view.clipboard_failed` | Couldn't copy to the clipboard. |
 | `errors.ext_view.geometry_write_failed` | Couldn't save window positions: {reason} |
 
@@ -1276,6 +1307,7 @@ Frontend:
 | `ext_view.state.navigated` | {view} tried to show a web page, so Kage stopped it. |
 | `ext_view.state.removed` | {extension} no longer has this window. |
 | `ext_view.state.updated` | Updated to {version}. |
+| `ext_view.state.approve` | Approve |
 | `settings.manager.cap.views.label` | Its own windows |
 | `settings.manager.cap.views.desc` | Show windows the extension draws itself, such as a map or a board. What you type in those windows goes to the extension. Kage labels them with the extension's name. |
 | `settings.manager.ext.views.heading` | Windows |
@@ -1365,7 +1397,7 @@ Measured against [`docs/SECURITY_MODEL.md`](../SECURITY_MODEL.md).
 | State | Shown by the host |
 |---|---|
 | Loading | Centred spinner and "Opening Explorer…" until `mount` resolves (≤ 10 s). |
-| Can't open | "Explorer couldn't open." with Reload and Extension settings. The detail goes to the log. Same panel for "not approved" (`errors.ext_view.not_granted`, with an Approve button that opens the Store's Approve flow), "turned off", and "no longer has this window" (with Close). |
+| Can't open | "Explorer couldn't open." with Reload and Extension settings. The detail goes to the log. Same panel for "not approved" (`errors.ext_view.not_granted`, with an Approve button that opens the Store on its Extensions tab, `open_store_window({ tab: 'extensions' })`, where the card offers Approve), "turned off" (Extension settings), and "no longer has this window" (with Close). A panel for "not approved" or "turned off" goes away by itself when `config_updated` shows the grant or the switch back; one shown after an update tries again on the next `extensions_changed`. |
 | Not responding | Banner: "Explorer isn't responding." with Reload and Close. |
 | Stopped navigation | "Explorer tried to show a web page, so Kage stopped it." with Reload. |
 | Updated in place | "Updated to 1.2.0." in the bar for 3 s. |
@@ -1802,10 +1834,40 @@ package codes against this document.
 ### WP-V6 The view page
 
 - **Files (owned):** `ui/extension-view.html`,
-  `ui/js/extension-view/main.js`, `ui/js/extension-view/chrome.js`,
-  `ui/js/extension-view/watchdog.js`, `ui/css/extension-view.css`,
-  `ui-tests/extension-view/*.test.js` (new),
-  `ui-tests/shared/link-handler.test.js` (add the page).
+  `ui/js/extension-view/main.js`, `ui/js/extension-view/page.js`,
+  `ui/js/extension-view/chrome.js`, `ui/js/extension-view/watchdog.js`,
+  `ui/js/extension-view/theme-snapshot.js`, `ui/css/extension-view.css`,
+  `ui-tests/extension-view/*` (new),
+  `ui-tests/shared/link-handler.test.js` (add the page), and two keys in
+  `locales/en/messages.json` (`errors.ext_view.needs_user_action`,
+  `ext_view.state.approve`).
+- **Interfaces the view page uses** from V3 and V4. V6 was built in
+  parallel with them, so these are its assumptions. `main.js` wires them
+  and `ui-tests/extension-view/main-wiring.test.js` checks them once both
+  modules exist.
+  - `new ExtensionSandbox(spec, invoke, container)` (V4), where `spec` has
+    the usual fields plus `surface: 'view'`, `viewId`, `viewCss` (the CSS
+    texts, already size-checked), `theme` (the §11 snapshot) and
+    `iframeTitle`. `sources` is `{ view, sourcePaths: { view } }`.
+    `container` is the stage (`.kv-frame`).
+  - Two hooks, set on the instance before `start()` (like
+    `onReformatRequest`): `onViewRequest(request)`, called with a
+    type-checked `view-request` (`{ kind, ...fields }`); it resolves with
+    the answer or rejects with an `Error` (or Rust `AppError`) carrying
+    `kind` and `key`. And `onNavigated()`, called after the navigation
+    detector tore the frame down.
+  - The §8.6 RPCs through `call(method, params, opts)`: `viewMount` (with
+    `{ timeoutMs: 10000 }`), `viewReopen`, `viewVisibility`, `viewTheme`,
+    and `viewPing` (with `{ timeoutMs: 0 }`, the watchdog counts the wait).
+    Plus `notifyStorageChanged(changes)` and `updateConfig(config)`.
+  - `extension-view-policy.js` (V4): `normalizeViews(raw, name, icon,
+    context)` (the mirror of `normalize_views`, camelCase `ViewDecl`s),
+    `sanitizeViewTitle(text, maxChars)` and `isSafeTokenValue(name,
+    value)`.
+  - `extension-data-events.js` (V3): `installExtensionDataEvents({ listen,
+    myLabel, deliver })`, calling `deliver(extensionId, changes)` with
+    `self` already set. The page forwards a batch to its sandbox only for
+    its own extension and only with `storage`.
 - **Done when:**
   - The vitest files pass.
   - Manual: matrix items 4–9 on macOS and Windows with the hostile
