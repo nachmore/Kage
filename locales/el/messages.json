@@ -12898,5 +12898,233 @@
     "description": "Detail of an audit log entry: the command was let run in a way this version does not know.",
     "_machine_translated": true,
     "_source_hash": "46704bb2d9efd20b"
+  },
+  "errors.sync.failed": {
+    "message": "Ο συγχρονισμός δεν μπόρεσε να το κάνει αυτό. Δοκιμάστε ξανά.",
+    "description": "A sync action failed for an internal reason.",
+    "_machine_translated": true,
+    "_source_hash": "96761559ea84be5a"
+  },
+  "errors.sync.timeout": {
+    "message": "Ο συγχρονισμός δεν απάντησε εγκαίρως. Δοκιμάστε ξανά.",
+    "description": "A sync action waited too long for the sync engine.",
+    "_machine_translated": true,
+    "_source_hash": "6497e3c20731cc05"
+  },
+  "errors.sync.passphrase_short": {
+    "message": "Χρησιμοποιήστε φράση πρόσβασης με τουλάχιστον 12 χαρακτήρες.",
+    "description": "Sync setup: the passphrase is too short.",
+    "_machine_translated": true,
+    "_source_hash": "3efc09bd5719e9a7"
+  },
+  "errors.sync.already_on": {
+    "message": "Ο συγχρονισμός είναι ήδη ενεργός σε αυτόν τον υπολογιστή.",
+    "description": "Sync setup was started while sync is already set up here.",
+    "_machine_translated": true,
+    "_source_hash": "45a3658e4853fd17"
+  },
+  "errors.sync.folder_exists": {
+    "message": "Αυτός ο φάκελος έχει ήδη συγχρονισμό Kage. Συνδεθείτε σε αυτόν.",
+    "description": "Sync setup: creating a sync folder where one exists.",
+    "_machine_translated": true,
+    "_source_hash": "37e9aeb045c87a32"
+  },
+  "errors.sync.folder_write": {
+    "message": "Το Kage δεν μπόρεσε να δημιουργήσει τον φάκελό του εκεί.",
+    "description": "Sync setup: writing the new sync folder failed.",
+    "_machine_translated": true,
+    "_source_hash": "1672cc9a9e49bc07"
+  },
+  "errors.sync.not_a_sync_folder": {
+    "message": "Αυτός ο φάκελος δεν έχει ακόμη συγχρονισμό Kage.",
+    "description": "Sync join: the chosen folder has no Kage sync data.",
+    "_machine_translated": true,
+    "_source_hash": "fceae014d2d3ae20"
+  },
+  "errors.sync.not_ready": {
+    "message": "Η λήψη του φακέλου συγχρονισμού δεν έχει ολοκληρωθεί. Δοκιμάστε ξανά σε λίγο.",
+    "description": "Sync join or unlock: the folder's files aren't downloaded yet.",
+    "_machine_translated": true,
+    "_source_hash": "50d1e9302cdd06b1"
+  },
+  "errors.sync.newer_format": {
+    "message": "Αυτός ο φάκελος συγχρονισμού απαιτεί νεότερη έκδοση του Kage. Ενημερώστε πρώτα το Kage σε αυτόν τον υπολογιστή.",
+    "description": "Sync join: the folder was made by a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "89d671ef799e4711"
+  },
+  "errors.sync.no_such_item": {
+    "message": "Αυτό το στοιχείο δεν υπάρχει πια.",
+    "description": "A sync action named a setting, item or computer that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "f088c0b9e680e83f"
+  },
+  "errors.sync.no_such_conflict": {
+    "message": "Αυτή η διένεξη δεν υπάρχει πια.",
+    "description": "A conflicts-list action named an entry that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "a5874457651fdffe"
+  },
+  "errors.sync.no_join_backup": {
+    "message": "Δεν υπάρχει τίποτα για αναίρεση.",
+    "description": "Undo joining was asked for, but this computer has no join backup.",
+    "_machine_translated": true,
+    "_source_hash": "382e2839e95581ae"
+  },
+  "errors.sync.not_this_folder": {
+    "message": "Αυτός είναι διαφορετικός φάκελος συγχρονισμού.",
+    "description": "Find folder: the chosen folder belongs to another sync setup.",
+    "_machine_translated": true,
+    "_source_hash": "dd488629a1a49171"
+  },
+  "errors.sync.no_name": {
+    "message": "Δώστε ένα όνομα σε αυτόν τον υπολογιστή.",
+    "description": "Renaming this computer for sync with an empty name.",
+    "_machine_translated": true,
+    "_source_hash": "74ac7c076b0b68fd"
+  },
+  "sync.problem.device_collision": {
+    "message": "Ένας άλλος υπολογιστής χρησιμοποίησε την ταυτότητα συγχρονισμού αυτού του υπολογιστή. Αυτός έχει πλέον νέα.",
+    "description": "Sync problem: a copied profile or clone was detected and fixed.",
+    "_machine_translated": true,
+    "_source_hash": "b7903660336d2de3"
+  },
+  "sync.problem.held_back": {
+    "message": "{count, plural, one {1 τιμή παραμένει σε αυτόν τον υπολογιστή επειδή μοιάζει με κλειδί} other {# τιμές παραμένουν σε αυτόν τον υπολογιστή επειδή μοιάζουν με κλειδιά}}",
+    "description": "Sync: values that look like credentials are not synced.",
+    "_machine_translated": true,
+    "_source_hash": "92dbb113f87cb0ce"
+  },
+  "sync.problem.not_this_version": {
+    "message": "{count, plural, one {1 ρύθμιση από τους άλλους υπολογιστές σας δεν λειτουργεί σε αυτήν την έκδοση} other {# ρυθμίσεις από τους άλλους υπολογιστές σας δεν λειτουργούν σε αυτήν την έκδοση}}",
+    "description": "Sync: values from a newer Kage that this version can't use.",
+    "_machine_translated": true,
+    "_source_hash": "3fbb8e7ecc601bca"
+  },
+  "sync.problem.churn": {
+    "message": "{count, plural, one {Το Kage σταμάτησε τον συγχρονισμό 1 στοιχείου που άλλαζε συνεχώς} other {Το Kage σταμάτησε τον συγχρονισμό # στοιχείων που άλλαζαν συνεχώς}}",
+    "description": "Sync: values two computers kept changing back and forth are paused for this session.",
+    "_machine_translated": true,
+    "_source_hash": "79587664e1d601cc"
+  },
+  "sync.problem.duplicates": {
+    "message": "{count, plural, one {Η εφαρμογή συγχρονισμού σας δημιούργησε 1 αντίγραφο ενός αρχείου Kage. Το Kage το αφαίρεσε.} other {Η εφαρμογή συγχρονισμού σας δημιούργησε # αντίγραφα αρχείων Kage. Το Kage τα αφαίρεσε.}}",
+    "description": "Sync: conflicted copies the sync app made in this computer's folder.",
+    "_machine_translated": true,
+    "_source_hash": "0e1eea8f68904a77"
+  },
+  "sync.problem.config_reset": {
+    "message": "Δεν ήταν δυνατή η ανάγνωση των ρυθμίσεών σας σε αυτόν τον υπολογιστή, οπότε το Kage τις επανέφερε από τον συγχρονισμό.",
+    "description": "Sync: config.json was reset at load and the synced values were applied.",
+    "_machine_translated": true,
+    "_source_hash": "af8847f8250c3bb5"
+  },
+  "sync.review.consent": {
+    "message": "Το {extension} χρειάζεται την έγκρισή σας σε αυτόν τον υπολογιστή",
+    "description": "Needs your attention: an extension switched on elsewhere stays off here until approved. {extension} is an extension id or name.",
+    "_machine_translated": true,
+    "_source_hash": "612290557b91ae3e"
+  },
+  "sync.review.mass_delete_out": {
+    "message": "Θα διαγραφούν {count, plural, one {1 στοιχείο} other {# στοιχεία}} από {what} σε όλους τους υπολογιστές σας.",
+    "description": "Needs your attention: this computer deleted many items at once. {what} is a list name.",
+    "_machine_translated": true,
+    "_source_hash": "e6488593b0966898"
+  },
+  "sync.label.setting": {
+    "message": "Ρύθμιση {path}",
+    "description": "Conflicts list: a setting this version has no name for. {path} is its path.",
+    "_machine_translated": true,
+    "_source_hash": "d019b5ad0798aeff"
+  },
+  "sync.label.extension_state": {
+    "message": "{extension} ενεργό ή ανενεργό",
+    "description": "Conflicts list: whether an extension is switched on. {extension} is its id.",
+    "_machine_translated": true,
+    "_source_hash": "1b162c352f679729"
+  },
+  "sync.label.connections": {
+    "message": "Πράκτορες",
+    "description": "Conflicts list and Settings → Sync: the agent connections list.",
+    "_machine_translated": true,
+    "_source_hash": "8016b778770c70f6"
+  },
+  "sync.label.active_connection": {
+    "message": "Ενεργός πράκτορας",
+    "description": "Conflicts list: which agent connection is in use.",
+    "_machine_translated": true,
+    "_source_hash": "2e6d51c7c2af3ccd"
+  },
+  "sync.label.show_response_actions": {
+    "message": "Εμφάνιση ενεργειών κάτω από τις απαντήσεις",
+    "description": "Conflicts list: the setting that shows copy/retry buttons under agent responses.",
+    "_machine_translated": true,
+    "_source_hash": "b78c79fda1c1ad2d"
+  },
+  "sync.label.mascot_animations": {
+    "message": "Κίνηση του Kage",
+    "description": "Conflicts list: the mascot animation setting.",
+    "_machine_translated": true,
+    "_source_hash": "87f2f4129598ef31"
+  },
+  "sync.label.mascot_extension_hints": {
+    "message": "Να επιτρέπεται στις επεκτάσεις να κινούν το Kage",
+    "description": "Conflicts list: the setting that lets extensions animate the mascot.",
+    "_machine_translated": true,
+    "_source_hash": "68906d118a020beb"
+  },
+  "sync.label.store_sources": {
+    "message": "Πρόσθετα καταστήματα",
+    "description": "Conflicts list: the list of extra extension stores.",
+    "_machine_translated": true,
+    "_source_hash": "040f5e862c95105e"
+  },
+  "sync.label.battery_multiplier": {
+    "message": "Αυτοματισμοί με μπαταρία",
+    "description": "Conflicts list: how much slower scheduled automations run on battery.",
+    "_machine_translated": true,
+    "_source_hash": "1128b4a6b2e15c2c"
+  },
+  "sync.label.low_battery_multiplier": {
+    "message": "Αυτοματισμοί με χαμηλή μπαταρία",
+    "description": "Conflicts list: how much slower scheduled automations run on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "8e29fa29a34c5e13"
+  },
+  "sync.label.disable_signals": {
+    "message": "Παύση αυτοματισμών σημάτων με χαμηλή μπαταρία",
+    "description": "Conflicts list: the setting that pauses signal-triggered automations on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "b2c657ef6a530167"
+  },
+  "sync.label.steering.user": {
+    "message": "Το έγγραφο καθοδήγησής σας",
+    "description": "Conflicts list: the user's own steering document.",
+    "_machine_translated": true,
+    "_source_hash": "b823322aa0e52063"
+  },
+  "sync.label.steering.auto": {
+    "message": "Τι έμαθε το Kage για εσάς",
+    "description": "Conflicts list: the auto-generated steering document.",
+    "_machine_translated": true,
+    "_source_hash": "ff9f9361b38a97fa"
+  },
+  "sync.conflicts.label.item": {
+    "message": "«{name}»",
+    "description": "Conflicts list: a list item, by its name. {name} is the item's name.",
+    "_machine_translated": true,
+    "_source_hash": "a027c1151634beb9"
+  },
+  "sync.conflicts.label.record": {
+    "message": "«{name}»",
+    "description": "Conflicts list: an extension's record, by its name. {name} is the record's name.",
+    "_machine_translated": true,
+    "_source_hash": "d1ef2ec5e540d249"
+  },
+  "sync.readme": {
+    "message": "Αυτός ο φάκελος περιέχει δεδομένα συγχρονισμού του Kage. Το Kage τον χρησιμοποιεί για να διατηρεί τις ρυθμίσεις σας ίδιες σε όλους τους υπολογιστές σας. Όλο το περιεχόμενό του είναι κρυπτογραφημένο. Μην επεξεργάζεστε, μετακινείτε ή μετονομάζετε τα αρχεία του.",
+    "description": "README.txt written once into a new sync folder. Shown in the user's language with English below.",
+    "_machine_translated": true,
+    "_source_hash": "03e4679308a20b74"
   }
 }

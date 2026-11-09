@@ -12898,5 +12898,233 @@
     "description": "Detail of an audit log entry: the command was let run in a way this version does not know.",
     "_machine_translated": true,
     "_source_hash": "46704bb2d9efd20b"
+  },
+  "errors.sync.failed": {
+    "message": "Sinkronisasi tidak dapat melakukannya. Coba lagi.",
+    "description": "A sync action failed for an internal reason.",
+    "_machine_translated": true,
+    "_source_hash": "96761559ea84be5a"
+  },
+  "errors.sync.timeout": {
+    "message": "Sinkronisasi tidak merespons tepat waktu. Coba lagi.",
+    "description": "A sync action waited too long for the sync engine.",
+    "_machine_translated": true,
+    "_source_hash": "6497e3c20731cc05"
+  },
+  "errors.sync.passphrase_short": {
+    "message": "Gunakan frasa sandi minimal 12 karakter.",
+    "description": "Sync setup: the passphrase is too short.",
+    "_machine_translated": true,
+    "_source_hash": "3efc09bd5719e9a7"
+  },
+  "errors.sync.already_on": {
+    "message": "Sinkronisasi sudah aktif di komputer ini.",
+    "description": "Sync setup was started while sync is already set up here.",
+    "_machine_translated": true,
+    "_source_hash": "45a3658e4853fd17"
+  },
+  "errors.sync.folder_exists": {
+    "message": "Folder ini sudah memiliki sinkronisasi Kage. Bergabunglah dengannya.",
+    "description": "Sync setup: creating a sync folder where one exists.",
+    "_machine_translated": true,
+    "_source_hash": "37e9aeb045c87a32"
+  },
+  "errors.sync.folder_write": {
+    "message": "Kage tidak dapat membuat foldernya di sana.",
+    "description": "Sync setup: writing the new sync folder failed.",
+    "_machine_translated": true,
+    "_source_hash": "1672cc9a9e49bc07"
+  },
+  "errors.sync.not_a_sync_folder": {
+    "message": "Folder ini belum memiliki sinkronisasi Kage.",
+    "description": "Sync join: the chosen folder has no Kage sync data.",
+    "_machine_translated": true,
+    "_source_hash": "fceae014d2d3ae20"
+  },
+  "errors.sync.not_ready": {
+    "message": "Folder sinkronisasi belum selesai diunduh. Coba lagi sebentar lagi.",
+    "description": "Sync join or unlock: the folder's files aren't downloaded yet.",
+    "_machine_translated": true,
+    "_source_hash": "50d1e9302cdd06b1"
+  },
+  "errors.sync.newer_format": {
+    "message": "Folder sinkronisasi ini memerlukan Kage versi lebih baru. Perbarui Kage di komputer ini terlebih dahulu.",
+    "description": "Sync join: the folder was made by a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "89d671ef799e4711"
+  },
+  "errors.sync.no_such_item": {
+    "message": "Item tersebut sudah tidak ada.",
+    "description": "A sync action named a setting, item or computer that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "f088c0b9e680e83f"
+  },
+  "errors.sync.no_such_conflict": {
+    "message": "Konflik tersebut sudah tidak ada.",
+    "description": "A conflicts-list action named an entry that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "a5874457651fdffe"
+  },
+  "errors.sync.no_join_backup": {
+    "message": "Tidak ada yang perlu diurungkan.",
+    "description": "Undo joining was asked for, but this computer has no join backup.",
+    "_machine_translated": true,
+    "_source_hash": "382e2839e95581ae"
+  },
+  "errors.sync.not_this_folder": {
+    "message": "Itu folder sinkronisasi yang berbeda.",
+    "description": "Find folder: the chosen folder belongs to another sync setup.",
+    "_machine_translated": true,
+    "_source_hash": "dd488629a1a49171"
+  },
+  "errors.sync.no_name": {
+    "message": "Beri nama untuk komputer ini.",
+    "description": "Renaming this computer for sync with an empty name.",
+    "_machine_translated": true,
+    "_source_hash": "74ac7c076b0b68fd"
+  },
+  "sync.problem.device_collision": {
+    "message": "Komputer lain menggunakan identitas sinkronisasi komputer ini. Komputer ini sekarang memiliki identitas baru.",
+    "description": "Sync problem: a copied profile or clone was detected and fixed.",
+    "_machine_translated": true,
+    "_source_hash": "b7903660336d2de3"
+  },
+  "sync.problem.held_back": {
+    "message": "{count, plural, other {# nilai tetap di komputer ini karena terlihat seperti kunci}}",
+    "description": "Sync: values that look like credentials are not synced.",
+    "_machine_translated": true,
+    "_source_hash": "92dbb113f87cb0ce"
+  },
+  "sync.problem.not_this_version": {
+    "message": "{count, plural, other {# pengaturan dari komputer Anda yang lain tidak berfungsi di versi ini}}",
+    "description": "Sync: values from a newer Kage that this version can't use.",
+    "_machine_translated": true,
+    "_source_hash": "3fbb8e7ecc601bca"
+  },
+  "sync.problem.churn": {
+    "message": "{count, plural, other {Kage berhenti menyinkronkan # item yang terus berubah}}",
+    "description": "Sync: values two computers kept changing back and forth are paused for this session.",
+    "_machine_translated": true,
+    "_source_hash": "79587664e1d601cc"
+  },
+  "sync.problem.duplicates": {
+    "message": "{count, plural, other {Aplikasi sinkronisasi Anda membuat # salinan file Kage. Kage telah menghapusnya.}}",
+    "description": "Sync: conflicted copies the sync app made in this computer's folder.",
+    "_machine_translated": true,
+    "_source_hash": "0e1eea8f68904a77"
+  },
+  "sync.problem.config_reset": {
+    "message": "Pengaturan Anda di komputer ini tidak dapat dibaca, jadi Kage memulihkannya dari sinkronisasi.",
+    "description": "Sync: config.json was reset at load and the synced values were applied.",
+    "_machine_translated": true,
+    "_source_hash": "af8847f8250c3bb5"
+  },
+  "sync.review.consent": {
+    "message": "{extension} memerlukan persetujuan Anda di komputer ini",
+    "description": "Needs your attention: an extension switched on elsewhere stays off here until approved. {extension} is an extension id or name.",
+    "_machine_translated": true,
+    "_source_hash": "612290557b91ae3e"
+  },
+  "sync.review.mass_delete_out": {
+    "message": "Tindakan ini akan menghapus {count, plural, other {# item}} dari {what} di semua komputer Anda.",
+    "description": "Needs your attention: this computer deleted many items at once. {what} is a list name.",
+    "_machine_translated": true,
+    "_source_hash": "e6488593b0966898"
+  },
+  "sync.label.setting": {
+    "message": "Pengaturan {path}",
+    "description": "Conflicts list: a setting this version has no name for. {path} is its path.",
+    "_machine_translated": true,
+    "_source_hash": "d019b5ad0798aeff"
+  },
+  "sync.label.extension_state": {
+    "message": "{extension} aktif atau nonaktif",
+    "description": "Conflicts list: whether an extension is switched on. {extension} is its id.",
+    "_machine_translated": true,
+    "_source_hash": "1b162c352f679729"
+  },
+  "sync.label.connections": {
+    "message": "Agen",
+    "description": "Conflicts list and Settings → Sync: the agent connections list.",
+    "_machine_translated": true,
+    "_source_hash": "8016b778770c70f6"
+  },
+  "sync.label.active_connection": {
+    "message": "Agen aktif",
+    "description": "Conflicts list: which agent connection is in use.",
+    "_machine_translated": true,
+    "_source_hash": "2e6d51c7c2af3ccd"
+  },
+  "sync.label.show_response_actions": {
+    "message": "Tampilkan tindakan di bawah respons",
+    "description": "Conflicts list: the setting that shows copy/retry buttons under agent responses.",
+    "_machine_translated": true,
+    "_source_hash": "b78c79fda1c1ad2d"
+  },
+  "sync.label.mascot_animations": {
+    "message": "Animasikan Kage",
+    "description": "Conflicts list: the mascot animation setting.",
+    "_machine_translated": true,
+    "_source_hash": "87f2f4129598ef31"
+  },
+  "sync.label.mascot_extension_hints": {
+    "message": "Izinkan ekstensi menganimasikan Kage",
+    "description": "Conflicts list: the setting that lets extensions animate the mascot.",
+    "_machine_translated": true,
+    "_source_hash": "68906d118a020beb"
+  },
+  "sync.label.store_sources": {
+    "message": "Toko tambahan",
+    "description": "Conflicts list: the list of extra extension stores.",
+    "_machine_translated": true,
+    "_source_hash": "040f5e862c95105e"
+  },
+  "sync.label.battery_multiplier": {
+    "message": "Otomatisasi saat memakai baterai",
+    "description": "Conflicts list: how much slower scheduled automations run on battery.",
+    "_machine_translated": true,
+    "_source_hash": "1128b4a6b2e15c2c"
+  },
+  "sync.label.low_battery_multiplier": {
+    "message": "Otomatisasi saat baterai lemah",
+    "description": "Conflicts list: how much slower scheduled automations run on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "8e29fa29a34c5e13"
+  },
+  "sync.label.disable_signals": {
+    "message": "Jeda otomatisasi sinyal saat baterai lemah",
+    "description": "Conflicts list: the setting that pauses signal-triggered automations on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "b2c657ef6a530167"
+  },
+  "sync.label.steering.user": {
+    "message": "Dokumen pengarahan Anda",
+    "description": "Conflicts list: the user's own steering document.",
+    "_machine_translated": true,
+    "_source_hash": "b823322aa0e52063"
+  },
+  "sync.label.steering.auto": {
+    "message": "Yang dipelajari Kage tentang Anda",
+    "description": "Conflicts list: the auto-generated steering document.",
+    "_machine_translated": true,
+    "_source_hash": "ff9f9361b38a97fa"
+  },
+  "sync.conflicts.label.item": {
+    "message": "“{name}”",
+    "description": "Conflicts list: a list item, by its name. {name} is the item's name.",
+    "_machine_translated": true,
+    "_source_hash": "a027c1151634beb9"
+  },
+  "sync.conflicts.label.record": {
+    "message": "“{name}”",
+    "description": "Conflicts list: an extension's record, by its name. {name} is the record's name.",
+    "_machine_translated": true,
+    "_source_hash": "d1ef2ec5e540d249"
+  },
+  "sync.readme": {
+    "message": "Folder ini berisi data sinkronisasi Kage. Kage menggunakannya agar pengaturan Anda tetap sama di semua komputer Anda. Semua isinya dienkripsi. Mohon jangan mengedit, memindahkan, atau mengganti nama file di dalamnya.",
+    "description": "README.txt written once into a new sync folder. Shown in the user's language with English below.",
+    "_machine_translated": true,
+    "_source_hash": "03e4679308a20b74"
   }
 }

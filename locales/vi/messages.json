@@ -12898,5 +12898,233 @@
     "description": "Detail of an audit log entry: the command was let run in a way this version does not know.",
     "_machine_translated": true,
     "_source_hash": "46704bb2d9efd20b"
+  },
+  "errors.sync.failed": {
+    "message": "Đồng bộ không thể thực hiện thao tác đó. Hãy thử lại.",
+    "description": "A sync action failed for an internal reason.",
+    "_machine_translated": true,
+    "_source_hash": "96761559ea84be5a"
+  },
+  "errors.sync.timeout": {
+    "message": "Đồng bộ không phản hồi kịp thời. Hãy thử lại.",
+    "description": "A sync action waited too long for the sync engine.",
+    "_machine_translated": true,
+    "_source_hash": "6497e3c20731cc05"
+  },
+  "errors.sync.passphrase_short": {
+    "message": "Hãy dùng cụm mật khẩu có ít nhất 12 ký tự.",
+    "description": "Sync setup: the passphrase is too short.",
+    "_machine_translated": true,
+    "_source_hash": "3efc09bd5719e9a7"
+  },
+  "errors.sync.already_on": {
+    "message": "Đồng bộ đã được bật trên máy tính này.",
+    "description": "Sync setup was started while sync is already set up here.",
+    "_machine_translated": true,
+    "_source_hash": "45a3658e4853fd17"
+  },
+  "errors.sync.folder_exists": {
+    "message": "Thư mục này đã có đồng bộ Kage. Hãy tham gia vào đó.",
+    "description": "Sync setup: creating a sync folder where one exists.",
+    "_machine_translated": true,
+    "_source_hash": "37e9aeb045c87a32"
+  },
+  "errors.sync.folder_write": {
+    "message": "Kage không thể tạo thư mục của mình tại đó.",
+    "description": "Sync setup: writing the new sync folder failed.",
+    "_machine_translated": true,
+    "_source_hash": "1672cc9a9e49bc07"
+  },
+  "errors.sync.not_a_sync_folder": {
+    "message": "Thư mục này chưa có đồng bộ Kage.",
+    "description": "Sync join: the chosen folder has no Kage sync data.",
+    "_machine_translated": true,
+    "_source_hash": "fceae014d2d3ae20"
+  },
+  "errors.sync.not_ready": {
+    "message": "Thư mục đồng bộ chưa tải xuống xong. Hãy thử lại sau giây lát.",
+    "description": "Sync join or unlock: the folder's files aren't downloaded yet.",
+    "_machine_translated": true,
+    "_source_hash": "50d1e9302cdd06b1"
+  },
+  "errors.sync.newer_format": {
+    "message": "Thư mục đồng bộ này cần phiên bản Kage mới hơn. Hãy cập nhật Kage trên máy tính này trước.",
+    "description": "Sync join: the folder was made by a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "89d671ef799e4711"
+  },
+  "errors.sync.no_such_item": {
+    "message": "Mục đó không còn nữa.",
+    "description": "A sync action named a setting, item or computer that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "f088c0b9e680e83f"
+  },
+  "errors.sync.no_such_conflict": {
+    "message": "Xung đột đó không còn nữa.",
+    "description": "A conflicts-list action named an entry that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "a5874457651fdffe"
+  },
+  "errors.sync.no_join_backup": {
+    "message": "Không có gì để hoàn tác.",
+    "description": "Undo joining was asked for, but this computer has no join backup.",
+    "_machine_translated": true,
+    "_source_hash": "382e2839e95581ae"
+  },
+  "errors.sync.not_this_folder": {
+    "message": "Đó là một thư mục đồng bộ khác.",
+    "description": "Find folder: the chosen folder belongs to another sync setup.",
+    "_machine_translated": true,
+    "_source_hash": "dd488629a1a49171"
+  },
+  "errors.sync.no_name": {
+    "message": "Hãy đặt tên cho máy tính này.",
+    "description": "Renaming this computer for sync with an empty name.",
+    "_machine_translated": true,
+    "_source_hash": "74ac7c076b0b68fd"
+  },
+  "sync.problem.device_collision": {
+    "message": "Một máy tính khác đã dùng danh tính đồng bộ của máy tính này. Máy này hiện đã có danh tính mới.",
+    "description": "Sync problem: a copied profile or clone was detected and fixed.",
+    "_machine_translated": true,
+    "_source_hash": "b7903660336d2de3"
+  },
+  "sync.problem.held_back": {
+    "message": "{count, plural, other {# giá trị được giữ lại trên máy tính này vì trông giống khóa}}",
+    "description": "Sync: values that look like credentials are not synced.",
+    "_machine_translated": true,
+    "_source_hash": "92dbb113f87cb0ce"
+  },
+  "sync.problem.not_this_version": {
+    "message": "{count, plural, other {# cài đặt từ các máy tính khác của bạn không hoạt động trên phiên bản này}}",
+    "description": "Sync: values from a newer Kage that this version can't use.",
+    "_machine_translated": true,
+    "_source_hash": "3fbb8e7ecc601bca"
+  },
+  "sync.problem.churn": {
+    "message": "{count, plural, other {Kage đã ngừng đồng bộ # mục liên tục thay đổi}}",
+    "description": "Sync: values two computers kept changing back and forth are paused for this session.",
+    "_machine_translated": true,
+    "_source_hash": "79587664e1d601cc"
+  },
+  "sync.problem.duplicates": {
+    "message": "{count, plural, other {Ứng dụng đồng bộ của bạn đã tạo # bản sao của tệp Kage. Kage đã xóa chúng.}}",
+    "description": "Sync: conflicted copies the sync app made in this computer's folder.",
+    "_machine_translated": true,
+    "_source_hash": "0e1eea8f68904a77"
+  },
+  "sync.problem.config_reset": {
+    "message": "Không thể đọc cài đặt của bạn trên máy tính này, vì vậy Kage đã khôi phục chúng từ bản đồng bộ.",
+    "description": "Sync: config.json was reset at load and the synced values were applied.",
+    "_machine_translated": true,
+    "_source_hash": "af8847f8250c3bb5"
+  },
+  "sync.review.consent": {
+    "message": "{extension} cần bạn phê duyệt trên máy tính này",
+    "description": "Needs your attention: an extension switched on elsewhere stays off here until approved. {extension} is an extension id or name.",
+    "_machine_translated": true,
+    "_source_hash": "612290557b91ae3e"
+  },
+  "sync.review.mass_delete_out": {
+    "message": "Thao tác này sẽ xóa {count, plural, other {# mục}} khỏi {what} trên tất cả máy tính của bạn.",
+    "description": "Needs your attention: this computer deleted many items at once. {what} is a list name.",
+    "_machine_translated": true,
+    "_source_hash": "e6488593b0966898"
+  },
+  "sync.label.setting": {
+    "message": "Cài đặt {path}",
+    "description": "Conflicts list: a setting this version has no name for. {path} is its path.",
+    "_machine_translated": true,
+    "_source_hash": "d019b5ad0798aeff"
+  },
+  "sync.label.extension_state": {
+    "message": "Bật hoặc tắt {extension}",
+    "description": "Conflicts list: whether an extension is switched on. {extension} is its id.",
+    "_machine_translated": true,
+    "_source_hash": "1b162c352f679729"
+  },
+  "sync.label.connections": {
+    "message": "Agent",
+    "description": "Conflicts list and Settings → Sync: the agent connections list.",
+    "_machine_translated": true,
+    "_source_hash": "8016b778770c70f6"
+  },
+  "sync.label.active_connection": {
+    "message": "Tác tử đang dùng",
+    "description": "Conflicts list: which agent connection is in use.",
+    "_machine_translated": true,
+    "_source_hash": "2e6d51c7c2af3ccd"
+  },
+  "sync.label.show_response_actions": {
+    "message": "Hiển thị thao tác dưới câu trả lời",
+    "description": "Conflicts list: the setting that shows copy/retry buttons under agent responses.",
+    "_machine_translated": true,
+    "_source_hash": "b78c79fda1c1ad2d"
+  },
+  "sync.label.mascot_animations": {
+    "message": "Tạo hoạt ảnh cho Kage",
+    "description": "Conflicts list: the mascot animation setting.",
+    "_machine_translated": true,
+    "_source_hash": "87f2f4129598ef31"
+  },
+  "sync.label.mascot_extension_hints": {
+    "message": "Cho phép tiện ích mở rộng tạo hoạt ảnh cho Kage",
+    "description": "Conflicts list: the setting that lets extensions animate the mascot.",
+    "_machine_translated": true,
+    "_source_hash": "68906d118a020beb"
+  },
+  "sync.label.store_sources": {
+    "message": "Cửa hàng bổ sung",
+    "description": "Conflicts list: the list of extra extension stores.",
+    "_machine_translated": true,
+    "_source_hash": "040f5e862c95105e"
+  },
+  "sync.label.battery_multiplier": {
+    "message": "Tự động hóa khi dùng pin",
+    "description": "Conflicts list: how much slower scheduled automations run on battery.",
+    "_machine_translated": true,
+    "_source_hash": "1128b4a6b2e15c2c"
+  },
+  "sync.label.low_battery_multiplier": {
+    "message": "Tự động hóa khi pin yếu",
+    "description": "Conflicts list: how much slower scheduled automations run on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "8e29fa29a34c5e13"
+  },
+  "sync.label.disable_signals": {
+    "message": "Tạm dừng tự động hóa theo tín hiệu khi pin yếu",
+    "description": "Conflicts list: the setting that pauses signal-triggered automations on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "b2c657ef6a530167"
+  },
+  "sync.label.steering.user": {
+    "message": "Tài liệu định hướng của bạn",
+    "description": "Conflicts list: the user's own steering document.",
+    "_machine_translated": true,
+    "_source_hash": "b823322aa0e52063"
+  },
+  "sync.label.steering.auto": {
+    "message": "Những gì Kage đã học về bạn",
+    "description": "Conflicts list: the auto-generated steering document.",
+    "_machine_translated": true,
+    "_source_hash": "ff9f9361b38a97fa"
+  },
+  "sync.conflicts.label.item": {
+    "message": "“{name}”",
+    "description": "Conflicts list: a list item, by its name. {name} is the item's name.",
+    "_machine_translated": true,
+    "_source_hash": "a027c1151634beb9"
+  },
+  "sync.conflicts.label.record": {
+    "message": "“{name}”",
+    "description": "Conflicts list: an extension's record, by its name. {name} is the record's name.",
+    "_machine_translated": true,
+    "_source_hash": "d1ef2ec5e540d249"
+  },
+  "sync.readme": {
+    "message": "Thư mục này chứa dữ liệu đồng bộ của Kage. Kage dùng thư mục này để giữ cài đặt của bạn giống nhau trên tất cả máy tính của bạn. Mọi nội dung trong thư mục đều được mã hóa. Vui lòng không chỉnh sửa, di chuyển hoặc đổi tên các tệp trong thư mục này.",
+    "description": "README.txt written once into a new sync folder. Shown in the user's language with English below.",
+    "_machine_translated": true,
+    "_source_hash": "03e4679308a20b74"
   }
 }

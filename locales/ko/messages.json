@@ -12898,5 +12898,233 @@
     "description": "Detail of an audit log entry: the command was let run in a way this version does not know.",
     "_machine_translated": true,
     "_source_hash": "46704bb2d9efd20b"
+  },
+  "errors.sync.failed": {
+    "message": "동기화에서 해당 작업을 수행할 수 없습니다. 다시 시도하십시오.",
+    "description": "A sync action failed for an internal reason.",
+    "_machine_translated": true,
+    "_source_hash": "96761559ea84be5a"
+  },
+  "errors.sync.timeout": {
+    "message": "동기화가 제시간에 응답하지 않았습니다. 다시 시도하십시오.",
+    "description": "A sync action waited too long for the sync engine.",
+    "_machine_translated": true,
+    "_source_hash": "6497e3c20731cc05"
+  },
+  "errors.sync.passphrase_short": {
+    "message": "12자 이상의 암호 문구를 사용하십시오.",
+    "description": "Sync setup: the passphrase is too short.",
+    "_machine_translated": true,
+    "_source_hash": "3efc09bd5719e9a7"
+  },
+  "errors.sync.already_on": {
+    "message": "이 컴퓨터에서는 이미 동기화가 켜져 있습니다.",
+    "description": "Sync setup was started while sync is already set up here.",
+    "_machine_translated": true,
+    "_source_hash": "45a3658e4853fd17"
+  },
+  "errors.sync.folder_exists": {
+    "message": "이 폴더에는 이미 Kage 동기화가 있습니다. 대신 참여하십시오.",
+    "description": "Sync setup: creating a sync folder where one exists.",
+    "_machine_translated": true,
+    "_source_hash": "37e9aeb045c87a32"
+  },
+  "errors.sync.folder_write": {
+    "message": "Kage가 해당 위치에 폴더를 만들 수 없습니다.",
+    "description": "Sync setup: writing the new sync folder failed.",
+    "_machine_translated": true,
+    "_source_hash": "1672cc9a9e49bc07"
+  },
+  "errors.sync.not_a_sync_folder": {
+    "message": "이 폴더에는 아직 Kage 동기화가 없습니다.",
+    "description": "Sync join: the chosen folder has no Kage sync data.",
+    "_machine_translated": true,
+    "_source_hash": "fceae014d2d3ae20"
+  },
+  "errors.sync.not_ready": {
+    "message": "동기화 폴더의 다운로드가 아직 완료되지 않았습니다. 잠시 후 다시 시도하십시오.",
+    "description": "Sync join or unlock: the folder's files aren't downloaded yet.",
+    "_machine_translated": true,
+    "_source_hash": "50d1e9302cdd06b1"
+  },
+  "errors.sync.newer_format": {
+    "message": "이 동기화 폴더를 사용하려면 최신 버전의 Kage가 필요합니다. 먼저 이 컴퓨터의 Kage를 업데이트하십시오.",
+    "description": "Sync join: the folder was made by a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "89d671ef799e4711"
+  },
+  "errors.sync.no_such_item": {
+    "message": "해당 항목이 더 이상 없습니다.",
+    "description": "A sync action named a setting, item or computer that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "f088c0b9e680e83f"
+  },
+  "errors.sync.no_such_conflict": {
+    "message": "해당 충돌이 더 이상 없습니다.",
+    "description": "A conflicts-list action named an entry that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "a5874457651fdffe"
+  },
+  "errors.sync.no_join_backup": {
+    "message": "실행 취소할 항목이 없습니다.",
+    "description": "Undo joining was asked for, but this computer has no join backup.",
+    "_machine_translated": true,
+    "_source_hash": "382e2839e95581ae"
+  },
+  "errors.sync.not_this_folder": {
+    "message": "다른 동기화 폴더입니다.",
+    "description": "Find folder: the chosen folder belongs to another sync setup.",
+    "_machine_translated": true,
+    "_source_hash": "dd488629a1a49171"
+  },
+  "errors.sync.no_name": {
+    "message": "이 컴퓨터의 이름을 입력하십시오.",
+    "description": "Renaming this computer for sync with an empty name.",
+    "_machine_translated": true,
+    "_source_hash": "74ac7c076b0b68fd"
+  },
+  "sync.problem.device_collision": {
+    "message": "다른 컴퓨터가 이 컴퓨터의 동기화 ID를 사용했습니다. 이 컴퓨터에는 이제 새 ID가 지정되었습니다.",
+    "description": "Sync problem: a copied profile or clone was detected and fixed.",
+    "_machine_translated": true,
+    "_source_hash": "b7903660336d2de3"
+  },
+  "sync.problem.held_back": {
+    "message": "{count, plural, other {키로 보이는 값 #개는 이 컴퓨터에만 유지됩니다}}",
+    "description": "Sync: values that look like credentials are not synced.",
+    "_machine_translated": true,
+    "_source_hash": "92dbb113f87cb0ce"
+  },
+  "sync.problem.not_this_version": {
+    "message": "{count, plural, other {다른 컴퓨터의 설정 #개는 이 버전에서 작동하지 않습니다}}",
+    "description": "Sync: values from a newer Kage that this version can't use.",
+    "_machine_translated": true,
+    "_source_hash": "3fbb8e7ecc601bca"
+  },
+  "sync.problem.churn": {
+    "message": "{count, plural, other {Kage가 계속 변경되는 항목 #개의 동기화를 중지했습니다}}",
+    "description": "Sync: values two computers kept changing back and forth are paused for this session.",
+    "_machine_translated": true,
+    "_source_hash": "79587664e1d601cc"
+  },
+  "sync.problem.duplicates": {
+    "message": "{count, plural, other {동기화 앱이 Kage 파일의 사본 #개를 만들었습니다. Kage가 이를 제거했습니다.}}",
+    "description": "Sync: conflicted copies the sync app made in this computer's folder.",
+    "_machine_translated": true,
+    "_source_hash": "0e1eea8f68904a77"
+  },
+  "sync.problem.config_reset": {
+    "message": "이 컴퓨터의 설정을 읽을 수 없어 Kage가 동기화에서 설정을 복원했습니다.",
+    "description": "Sync: config.json was reset at load and the synced values were applied.",
+    "_machine_translated": true,
+    "_source_hash": "af8847f8250c3bb5"
+  },
+  "sync.review.consent": {
+    "message": "이 컴퓨터에서 {extension}에 대한 승인이 필요합니다",
+    "description": "Needs your attention: an extension switched on elsewhere stays off here until approved. {extension} is an extension id or name.",
+    "_machine_translated": true,
+    "_source_hash": "612290557b91ae3e"
+  },
+  "sync.review.mass_delete_out": {
+    "message": "모든 컴퓨터의 {what}에서 {count, plural, other {항목 #개}}가 삭제됩니다.",
+    "description": "Needs your attention: this computer deleted many items at once. {what} is a list name.",
+    "_machine_translated": true,
+    "_source_hash": "e6488593b0966898"
+  },
+  "sync.label.setting": {
+    "message": "설정 {path}",
+    "description": "Conflicts list: a setting this version has no name for. {path} is its path.",
+    "_machine_translated": true,
+    "_source_hash": "d019b5ad0798aeff"
+  },
+  "sync.label.extension_state": {
+    "message": "{extension} 켜기 또는 끄기",
+    "description": "Conflicts list: whether an extension is switched on. {extension} is its id.",
+    "_machine_translated": true,
+    "_source_hash": "1b162c352f679729"
+  },
+  "sync.label.connections": {
+    "message": "에이전트",
+    "description": "Conflicts list and Settings → Sync: the agent connections list.",
+    "_machine_translated": true,
+    "_source_hash": "8016b778770c70f6"
+  },
+  "sync.label.active_connection": {
+    "message": "사용 중인 에이전트",
+    "description": "Conflicts list: which agent connection is in use.",
+    "_machine_translated": true,
+    "_source_hash": "2e6d51c7c2af3ccd"
+  },
+  "sync.label.show_response_actions": {
+    "message": "응답 아래에 작업 표시",
+    "description": "Conflicts list: the setting that shows copy/retry buttons under agent responses.",
+    "_machine_translated": true,
+    "_source_hash": "b78c79fda1c1ad2d"
+  },
+  "sync.label.mascot_animations": {
+    "message": "Kage 애니메이션",
+    "description": "Conflicts list: the mascot animation setting.",
+    "_machine_translated": true,
+    "_source_hash": "87f2f4129598ef31"
+  },
+  "sync.label.mascot_extension_hints": {
+    "message": "확장 프로그램의 Kage 애니메이션 허용",
+    "description": "Conflicts list: the setting that lets extensions animate the mascot.",
+    "_machine_translated": true,
+    "_source_hash": "68906d118a020beb"
+  },
+  "sync.label.store_sources": {
+    "message": "추가 스토어",
+    "description": "Conflicts list: the list of extra extension stores.",
+    "_machine_translated": true,
+    "_source_hash": "040f5e862c95105e"
+  },
+  "sync.label.battery_multiplier": {
+    "message": "배터리 사용 시 자동화",
+    "description": "Conflicts list: how much slower scheduled automations run on battery.",
+    "_machine_translated": true,
+    "_source_hash": "1128b4a6b2e15c2c"
+  },
+  "sync.label.low_battery_multiplier": {
+    "message": "배터리 부족 시 자동화",
+    "description": "Conflicts list: how much slower scheduled automations run on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "8e29fa29a34c5e13"
+  },
+  "sync.label.disable_signals": {
+    "message": "배터리 부족 시 신호 자동화 일시 중지",
+    "description": "Conflicts list: the setting that pauses signal-triggered automations on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "b2c657ef6a530167"
+  },
+  "sync.label.steering.user": {
+    "message": "내 지침 문서",
+    "description": "Conflicts list: the user's own steering document.",
+    "_machine_translated": true,
+    "_source_hash": "b823322aa0e52063"
+  },
+  "sync.label.steering.auto": {
+    "message": "Kage가 사용자에 대해 알게 된 내용",
+    "description": "Conflicts list: the auto-generated steering document.",
+    "_machine_translated": true,
+    "_source_hash": "ff9f9361b38a97fa"
+  },
+  "sync.conflicts.label.item": {
+    "message": "‘{name}’",
+    "description": "Conflicts list: a list item, by its name. {name} is the item's name.",
+    "_machine_translated": true,
+    "_source_hash": "a027c1151634beb9"
+  },
+  "sync.conflicts.label.record": {
+    "message": "‘{name}’",
+    "description": "Conflicts list: an extension's record, by its name. {name} is the record's name.",
+    "_machine_translated": true,
+    "_source_hash": "d1ef2ec5e540d249"
+  },
+  "sync.readme": {
+    "message": "이 폴더에는 Kage 동기화 데이터가 저장되어 있습니다. Kage는 이 데이터를 사용하여 모든 컴퓨터에서 설정을 동일하게 유지합니다. 이 폴더의 모든 내용은 암호화되어 있습니다. 이 폴더의 파일을 편집하거나 이동하거나 이름을 바꾸지 마십시오.",
+    "description": "README.txt written once into a new sync folder. Shown in the user's language with English below.",
+    "_machine_translated": true,
+    "_source_hash": "03e4679308a20b74"
   }
 }

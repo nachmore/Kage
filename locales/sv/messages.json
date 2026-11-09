@@ -12898,5 +12898,233 @@
     "description": "Detail of an audit log entry: the command was let run in a way this version does not know.",
     "_machine_translated": true,
     "_source_hash": "46704bb2d9efd20b"
+  },
+  "errors.sync.failed": {
+    "message": "Synkroniseringen kunde inte göra det. Försök igen.",
+    "description": "A sync action failed for an internal reason.",
+    "_machine_translated": true,
+    "_source_hash": "96761559ea84be5a"
+  },
+  "errors.sync.timeout": {
+    "message": "Synkroniseringen svarade inte i tid. Försök igen.",
+    "description": "A sync action waited too long for the sync engine.",
+    "_machine_translated": true,
+    "_source_hash": "6497e3c20731cc05"
+  },
+  "errors.sync.passphrase_short": {
+    "message": "Använd en lösenfras med minst 12 tecken.",
+    "description": "Sync setup: the passphrase is too short.",
+    "_machine_translated": true,
+    "_source_hash": "3efc09bd5719e9a7"
+  },
+  "errors.sync.already_on": {
+    "message": "Synkronisering är redan på på den här datorn.",
+    "description": "Sync setup was started while sync is already set up here.",
+    "_machine_translated": true,
+    "_source_hash": "45a3658e4853fd17"
+  },
+  "errors.sync.folder_exists": {
+    "message": "Den här mappen har redan Kage-synkronisering. Anslut till den i stället.",
+    "description": "Sync setup: creating a sync folder where one exists.",
+    "_machine_translated": true,
+    "_source_hash": "37e9aeb045c87a32"
+  },
+  "errors.sync.folder_write": {
+    "message": "Kage kunde inte skapa sin mapp där.",
+    "description": "Sync setup: writing the new sync folder failed.",
+    "_machine_translated": true,
+    "_source_hash": "1672cc9a9e49bc07"
+  },
+  "errors.sync.not_a_sync_folder": {
+    "message": "Den här mappen har ingen Kage-synkronisering än.",
+    "description": "Sync join: the chosen folder has no Kage sync data.",
+    "_machine_translated": true,
+    "_source_hash": "fceae014d2d3ae20"
+  },
+  "errors.sync.not_ready": {
+    "message": "Synkroniseringsmappen har inte laddats ned klart. Försök igen om en stund.",
+    "description": "Sync join or unlock: the folder's files aren't downloaded yet.",
+    "_machine_translated": true,
+    "_source_hash": "50d1e9302cdd06b1"
+  },
+  "errors.sync.newer_format": {
+    "message": "Den här synkroniseringsmappen kräver en nyare version av Kage. Uppdatera Kage på den här datorn först.",
+    "description": "Sync join: the folder was made by a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "89d671ef799e4711"
+  },
+  "errors.sync.no_such_item": {
+    "message": "Objektet finns inte längre.",
+    "description": "A sync action named a setting, item or computer that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "f088c0b9e680e83f"
+  },
+  "errors.sync.no_such_conflict": {
+    "message": "Konflikten finns inte längre.",
+    "description": "A conflicts-list action named an entry that doesn't exist.",
+    "_machine_translated": true,
+    "_source_hash": "a5874457651fdffe"
+  },
+  "errors.sync.no_join_backup": {
+    "message": "Det finns inget att ångra.",
+    "description": "Undo joining was asked for, but this computer has no join backup.",
+    "_machine_translated": true,
+    "_source_hash": "382e2839e95581ae"
+  },
+  "errors.sync.not_this_folder": {
+    "message": "Det är en annan synkroniseringsmapp.",
+    "description": "Find folder: the chosen folder belongs to another sync setup.",
+    "_machine_translated": true,
+    "_source_hash": "dd488629a1a49171"
+  },
+  "errors.sync.no_name": {
+    "message": "Ge den här datorn ett namn.",
+    "description": "Renaming this computer for sync with an empty name.",
+    "_machine_translated": true,
+    "_source_hash": "74ac7c076b0b68fd"
+  },
+  "sync.problem.device_collision": {
+    "message": "En annan dator använde den här datorns synkroniseringsidentitet. Den här datorn har nu fått en ny.",
+    "description": "Sync problem: a copied profile or clone was detected and fixed.",
+    "_machine_translated": true,
+    "_source_hash": "b7903660336d2de3"
+  },
+  "sync.problem.held_back": {
+    "message": "{count, plural, one {1 värde stannar på den här datorn eftersom det ser ut som en nyckel} other {# värden stannar på den här datorn eftersom de ser ut som nycklar}}",
+    "description": "Sync: values that look like credentials are not synced.",
+    "_machine_translated": true,
+    "_source_hash": "92dbb113f87cb0ce"
+  },
+  "sync.problem.not_this_version": {
+    "message": "{count, plural, one {1 inställning från dina andra datorer fungerar inte i den här versionen} other {# inställningar från dina andra datorer fungerar inte i den här versionen}}",
+    "description": "Sync: values from a newer Kage that this version can't use.",
+    "_machine_translated": true,
+    "_source_hash": "3fbb8e7ecc601bca"
+  },
+  "sync.problem.churn": {
+    "message": "{count, plural, one {Kage slutade synkronisera 1 objekt som ändrades hela tiden} other {Kage slutade synkronisera # objekt som ändrades hela tiden}}",
+    "description": "Sync: values two computers kept changing back and forth are paused for this session.",
+    "_machine_translated": true,
+    "_source_hash": "79587664e1d601cc"
+  },
+  "sync.problem.duplicates": {
+    "message": "{count, plural, one {Din synkroniseringsapp skapade 1 kopia av en Kage-fil. Kage tog bort den.} other {Din synkroniseringsapp skapade # kopior av Kage-filer. Kage tog bort dem.}}",
+    "description": "Sync: conflicted copies the sync app made in this computer's folder.",
+    "_machine_translated": true,
+    "_source_hash": "0e1eea8f68904a77"
+  },
+  "sync.problem.config_reset": {
+    "message": "Dina inställningar på den här datorn kunde inte läsas, så Kage återställde dem från synkroniseringen.",
+    "description": "Sync: config.json was reset at load and the synced values were applied.",
+    "_machine_translated": true,
+    "_source_hash": "af8847f8250c3bb5"
+  },
+  "sync.review.consent": {
+    "message": "{extension} behöver ditt godkännande på den här datorn",
+    "description": "Needs your attention: an extension switched on elsewhere stays off here until approved. {extension} is an extension id or name.",
+    "_machine_translated": true,
+    "_source_hash": "612290557b91ae3e"
+  },
+  "sync.review.mass_delete_out": {
+    "message": "Detta tar bort {count, plural, one {1 objekt} other {# objekt}} från {what} på alla dina datorer.",
+    "description": "Needs your attention: this computer deleted many items at once. {what} is a list name.",
+    "_machine_translated": true,
+    "_source_hash": "e6488593b0966898"
+  },
+  "sync.label.setting": {
+    "message": "Inställning {path}",
+    "description": "Conflicts list: a setting this version has no name for. {path} is its path.",
+    "_machine_translated": true,
+    "_source_hash": "d019b5ad0798aeff"
+  },
+  "sync.label.extension_state": {
+    "message": "{extension} på eller av",
+    "description": "Conflicts list: whether an extension is switched on. {extension} is its id.",
+    "_machine_translated": true,
+    "_source_hash": "1b162c352f679729"
+  },
+  "sync.label.connections": {
+    "message": "Agenter",
+    "description": "Conflicts list and Settings → Sync: the agent connections list.",
+    "_machine_translated": true,
+    "_source_hash": "8016b778770c70f6"
+  },
+  "sync.label.active_connection": {
+    "message": "Aktiv agent",
+    "description": "Conflicts list: which agent connection is in use.",
+    "_machine_translated": true,
+    "_source_hash": "2e6d51c7c2af3ccd"
+  },
+  "sync.label.show_response_actions": {
+    "message": "Visa åtgärder under svar",
+    "description": "Conflicts list: the setting that shows copy/retry buttons under agent responses.",
+    "_machine_translated": true,
+    "_source_hash": "b78c79fda1c1ad2d"
+  },
+  "sync.label.mascot_animations": {
+    "message": "Animera Kage",
+    "description": "Conflicts list: the mascot animation setting.",
+    "_machine_translated": true,
+    "_source_hash": "87f2f4129598ef31"
+  },
+  "sync.label.mascot_extension_hints": {
+    "message": "Låt tillägg animera Kage",
+    "description": "Conflicts list: the setting that lets extensions animate the mascot.",
+    "_machine_translated": true,
+    "_source_hash": "68906d118a020beb"
+  },
+  "sync.label.store_sources": {
+    "message": "Ytterligare butiker",
+    "description": "Conflicts list: the list of extra extension stores.",
+    "_machine_translated": true,
+    "_source_hash": "040f5e862c95105e"
+  },
+  "sync.label.battery_multiplier": {
+    "message": "Automatiseringar på batteri",
+    "description": "Conflicts list: how much slower scheduled automations run on battery.",
+    "_machine_translated": true,
+    "_source_hash": "1128b4a6b2e15c2c"
+  },
+  "sync.label.low_battery_multiplier": {
+    "message": "Automatiseringar vid låg batterinivå",
+    "description": "Conflicts list: how much slower scheduled automations run on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "8e29fa29a34c5e13"
+  },
+  "sync.label.disable_signals": {
+    "message": "Pausa signalautomatiseringar vid låg batterinivå",
+    "description": "Conflicts list: the setting that pauses signal-triggered automations on low battery.",
+    "_machine_translated": true,
+    "_source_hash": "b2c657ef6a530167"
+  },
+  "sync.label.steering.user": {
+    "message": "Ditt styrdokument",
+    "description": "Conflicts list: the user's own steering document.",
+    "_machine_translated": true,
+    "_source_hash": "b823322aa0e52063"
+  },
+  "sync.label.steering.auto": {
+    "message": "Vad Kage har lärt sig om dig",
+    "description": "Conflicts list: the auto-generated steering document.",
+    "_machine_translated": true,
+    "_source_hash": "ff9f9361b38a97fa"
+  },
+  "sync.conflicts.label.item": {
+    "message": "”{name}”",
+    "description": "Conflicts list: a list item, by its name. {name} is the item's name.",
+    "_machine_translated": true,
+    "_source_hash": "a027c1151634beb9"
+  },
+  "sync.conflicts.label.record": {
+    "message": "”{name}”",
+    "description": "Conflicts list: an extension's record, by its name. {name} is the record's name.",
+    "_machine_translated": true,
+    "_source_hash": "d1ef2ec5e540d249"
+  },
+  "sync.readme": {
+    "message": "Den här mappen innehåller synkdata för Kage. Kage använder den för att hålla dina inställningar likadana på alla dina datorer. Allt innehåll är krypterat. Redigera, flytta eller byt inte namn på filerna i mappen.",
+    "description": "README.txt written once into a new sync folder. Shown in the user's language with English below.",
+    "_machine_translated": true,
+    "_source_hash": "03e4679308a20b74"
   }
 }
