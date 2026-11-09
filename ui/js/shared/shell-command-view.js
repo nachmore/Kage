@@ -29,12 +29,14 @@
  * (`shellSandboxDenial`) gets a notice under its header, open or not: Kage's
  * approvals can't lift that sandbox, so the user is handed the command —
  * shown in full, with its hidden characters marked, and the user asked to
- * read it first, since any command can print a sandbox error itself. Copy
- * command, or Copy & open Terminal, which copies it and opens the terminal
- * app without typing or running anything; that one-click path is withheld
- * for a command with hidden characters, and a multi-line one gets a
- * warning. Such a block stays in the activity slot, and opens the command
- * list it's handed off to, so the notice stays in view.
+ * read it first, since any command can print a sandbox error itself. Run
+ * it here or Run in Terminal (macOS) open a confirm and run it only from
+ * that confirm's button (shell-run-view.js); Copy command; or Copy & open
+ * Terminal, which copies it and opens the terminal app without typing or
+ * running anything. Every path that runs it or opens a terminal is
+ * withheld for a command with hidden characters, and a multi-line one
+ * gets a warning. Such a block stays in the activity slot, and opens the
+ * command list it's handed off to, so the notice stays in view.
  */
 
 import { errMessage } from './error-message.js';
@@ -60,6 +62,7 @@ import {
     shellOutputOf,
     shellSandboxDenial,
 } from './shell-commands.js';
+import { createRunControls, syncRunControls } from './shell-run-view.js';
 import { settleToolCalls } from './tool-calls.js';
 
 /** Bubbling event fired from a block or the chip when its height changes. */
@@ -359,15 +362,18 @@ function buildSandboxNotice(root) {
         e.stopPropagation();
         copyAndOpenTerminal(root, open);
     });
-    actions.append(copy, open);
+    // Run it here / Run in Terminal, and the slot their confirm and the
+    // run's output open in (shell-run-view.js).
+    const run = createRunControls(root, RUN_DEPS);
+    actions.append(run.runHere, run.terminal, copy, open);
 
-    // Outcome of Copy & open Terminal. Always in the DOM (empty when idle)
-    // so screen readers announce what lands in it.
+    // Outcome of Copy & open Terminal / Run in Terminal. Always in the DOM
+    // (empty when idle) so screen readers announce what lands in it.
     const status = el('div', 'shell-cmd-sandbox-status');
     status.dir = 'auto';
     status.setAttribute('role', 'status');
 
-    notice.append(title, body, command, warn, actions, status);
+    notice.append(title, body, command, warn, actions, run.slot, status);
     return {
         el: notice,
         titleId: title.id,
@@ -378,8 +384,17 @@ function buildSandboxNotice(root) {
         actions,
         open,
         status,
+        run,
     };
 }
+
+/** shell-command-view's helpers, for shell-run-view (which can't import them). */
+const RUN_DEPS = Object.freeze({
+    appendCommandText: (parent, command) => appendShellCommandText(parent, command),
+    setStatus: (root, text, isError = false) => setNoticeStatus(root, text, isError),
+    layoutChanged: (node) => layoutChanged(node),
+    copyAndOpenTerminal: (root, button) => copyAndOpenTerminal(root, button),
+});
 
 /** Show the record's command in the notice, and what to watch out for in it. */
 function renderNoticeCommand(notice, command) {
@@ -425,6 +440,7 @@ function syncSandboxNotice(root, denial) {
     const changed = renderNoticeCommand(st.notice, command);
     // Nothing to hand over without a command (only its title is known).
     st.notice.actions.hidden = !command;
+    syncRunControls(root);
     if (created || changed) layoutChanged(root);
 }
 

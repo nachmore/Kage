@@ -2937,6 +2937,180 @@ body.light-theme .conn-edit-actions {
     color: var(--kage-term-error);
 }
 
+/* Run it here / Run in Terminal (shared/shell-run-view.js): the confirm
+   that opens in the notice, then the run's status, output and what the
+   agent was told. Translated text takes its own direction; the command,
+   paths and output stay LTR. */
+.shell-run-here,
+.shell-run-go {
+    border-color: var(--kage-accent);
+    background: var(--kage-accent);
+    color: #fff;
+}
+.shell-run-here:hover,
+.shell-run-go:hover {
+    background: var(--kage-accent);
+    filter: brightness(1.1);
+}
+.shell-run-btn:disabled,
+.shell-run-go:disabled,
+.shell-run-cancel:disabled,
+.shell-run-stop:disabled {
+    cursor: default;
+    opacity: 0.6;
+    filter: none;
+}
+.shell-run-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.shell-run-slot:empty {
+    display: none;
+}
+.shell-run-confirm,
+.shell-run-live {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg);
+}
+.shell-run-confirm {
+    border-color: var(--kage-term-mark-border);
+}
+.shell-run-confirm-title {
+    font-weight: 600;
+}
+.shell-run-confirm-command {
+    max-height: 160px;
+    margin: 0;
+    padding: 6px 8px;
+    overflow: auto;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg-strong);
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    font-size: 12px;
+    text-align: left;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+.shell-run-confirm-command:focus-visible,
+.shell-run-output:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: -2px;
+}
+.shell-run-confirm-long {
+    margin: 0;
+    color: var(--kage-term-mark);
+    font-weight: 600;
+}
+.shell-run-confirm-where {
+    color: var(--kage-term-muted);
+}
+.shell-run-confirm-path {
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    overflow-wrap: anywhere;
+}
+.shell-run-confirm-warn {
+    margin: 0;
+    font-weight: 600;
+}
+.shell-run-confirm-risks {
+    margin: 0;
+    padding-inline-start: 18px;
+    color: var(--kage-term-mark);
+    font-weight: 600;
+}
+.shell-run-confirm-tell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+.shell-run-confirm-error {
+    margin: 0;
+    color: var(--kage-term-error);
+}
+.shell-run-confirm-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+.shell-run-confirm-long[hidden],
+.shell-run-confirm-where[hidden],
+.shell-run-confirm-risks[hidden],
+.shell-run-confirm-tell[hidden],
+.shell-run-confirm-error[hidden],
+.shell-run-agent[hidden],
+.shell-run-agent-text[hidden] {
+    display: none;
+}
+.shell-run-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.shell-run-mark {
+    display: inline-flex;
+    flex-shrink: 0;
+}
+.shell-run-live[data-state="success"] .shell-run-mark {
+    color: var(--kage-term-success);
+}
+.shell-run-live[data-state="failed"] .shell-run-mark {
+    color: var(--kage-term-error);
+}
+.shell-run-state {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.shell-run-elapsed {
+    flex-shrink: 0;
+    color: var(--kage-term-muted);
+    font-family: var(--kage-font-mono);
+    font-size: 11px;
+}
+.shell-run-output {
+    max-height: 9.5em;
+    margin: 0;
+    padding: 6px 8px;
+    overflow: auto;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg-strong);
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    font-size: 12px;
+    text-align: left;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+.shell-run-agent {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--kage-term-muted);
+    font-size: 11px;
+}
+.shell-run-agent-text {
+    flex: 1 1 auto;
+}
+.shell-run-agent-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
 /* "shell ×N" chip: a toggle for the response's command list. */
 .tool-sources-static {
     display: contents;

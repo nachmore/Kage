@@ -266,6 +266,27 @@ export function extractShellCommand(rawInput, title) {
     return '';
 }
 
+const CWD_FIELDS = ['cwd', 'working_dir', 'workdir', 'workingDirectory', 'working_directory'];
+// POSIX absolute, `~` / `~/…`, a Windows drive path or a UNC path.
+const ABSOLUTE_DIR = /^(?:\/|~(?:\/|$)|[A-Za-z]:[\\/]|\\\\)/;
+
+/**
+ * The directory a shell call ran in, when its input says (Codex's `cwd`,
+ * other agents' `working_dir` / `workdir` / …): an absolute path, else
+ * `''`. Where "Run it here" runs the command (the backend checks it
+ * exists; without one it runs in the home folder).
+ */
+export function extractShellCwd(rawInput) {
+    if (!rawInput || typeof rawInput !== 'object') return '';
+    for (const key of CWD_FIELDS) {
+        const v = rawInput[key];
+        if (typeof v !== 'string') continue;
+        const dir = v.trim();
+        if (dir && dir.length <= 4096 && ABSOLUTE_DIR.test(dir)) return dir;
+    }
+    return '';
+}
+
 // --- Displaying commands ---------------------------------------------------
 
 // Characters a command line can't be shown as-is, because they're invisible
@@ -673,6 +694,7 @@ export function applyShellUpdate(entry, update, opts = {}) {
             title: typeof entry.title === 'string' ? entry.title : '',
             command: seedCommand,
             commandFromTitle: !!seedCommand,
+            cwd: '',
             description: '',
             status: null,
             rawOut: null,
@@ -702,6 +724,8 @@ export function applyShellUpdate(entry, update, opts = {}) {
     if (update.rawInput && typeof update.rawInput.description === 'string') {
         rec.description = update.rawInput.description.trim();
     }
+    const cwd = extractShellCwd(update.rawInput);
+    if (cwd) rec.cwd = cwd;
     if (KNOWN_STATUSES.has(update.status) && update.status !== rec.status) {
         rec.status = update.status;
         changed = true;

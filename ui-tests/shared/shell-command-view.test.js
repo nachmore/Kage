@@ -663,7 +663,7 @@ describe('agent sandbox notice', () => {
         const state = makeState();
         const cmd = 'brew install --cask betterdisplay && echo "done"';
         const block = createShellCommandBlock(blocked(state, 'a', cmd));
-        notice(block).querySelector('.shell-cmd-copy:not(.shell-cmd-open-terminal)').click();
+        notice(block).querySelector('.shell-cmd-copy:not(.shell-cmd-open-terminal):not(.shell-run-btn)').click();
         expect(writeText).toHaveBeenCalledWith(cmd);
     });
 
@@ -767,7 +767,7 @@ describe('agent sandbox notice', () => {
         expect(writeText).not.toHaveBeenCalled();
         expect(invoke).not.toHaveBeenCalled();
         // Copy command stays (as in the panel), under the warning.
-        const copy = n.querySelector('.shell-cmd-copy:not(.shell-cmd-open-terminal)');
+        const copy = n.querySelector('.shell-cmd-copy:not(.shell-cmd-open-terminal):not(.shell-run-btn)');
         expect(copy.hidden).toBe(false);
         copy.click();
         expect(writeText).toHaveBeenCalledWith(cmd);

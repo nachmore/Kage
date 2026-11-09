@@ -48,6 +48,37 @@ pub fn system_command_candidates(cmd: &str) -> Vec<(&'static str, Vec<&'static s
     candidates
 }
 
+/// Why [`run_in_terminal`] didn't run the command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TerminalRunError {
+    /// No safe way to hand the terminal a command on this platform.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    Unsupported,
+    /// macOS refused the Apple Event: the user said no to (or never saw)
+    /// "Kage wants to control Terminal" (Privacy & Security → Automation).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    NotAuthorized,
+    /// The terminal couldn't be reached; the detail is English, for logs.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    Failed(String),
+}
+
+/// Open a new window of the user's terminal app and run `command` in it,
+/// in `cwd`, as if they had typed it: their interactive shell, a real TTY
+/// (so `sudo` can ask for a password), output in front of them. Blocks
+/// until the terminal accepted it — on macOS that can include the
+/// one-time "Kage wants to control Terminal" prompt — so call it from a
+/// blocking thread.
+///
+/// macOS only (Terminal.app via Apple Events, the command passed as an
+/// argument, never spliced into script source). Windows and Linux return
+/// [`TerminalRunError::Unsupported`]: Windows Terminal re-parses `;` in its
+/// command line and Linux terminals each quote differently, so there the
+/// command is only copied for the user to paste.
+pub fn run_in_terminal(command: &str, cwd: &std::path::Path) -> Result<(), TerminalRunError> {
+    crate::os::platform::shell::run_in_terminal_impl(command, cwd)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{system_command, system_command_candidates};

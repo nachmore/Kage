@@ -52,6 +52,7 @@ import {
     pruneShellActivity,
     showShellActivity,
 } from '../shared/shell-command-view.js';
+import { setShellRunHost } from '../shared/shell-run-view.js';
 import { renderToolSources } from '../shared/tool-call-view.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
@@ -531,6 +532,14 @@ export class ChatApp {
         });
 
         this.elements = {};
+
+        // A command the user ran outside the agent's sandbox (a shell
+        // block's sandbox notice) reports back as their next prompt here.
+        setShellRunHost({
+            sessionId: () => app.activeSessionId,
+            canSend: (sessionId) => app.canSendAgentPrompt(sessionId),
+            send: (sessionId, text) => app.sendAgentPrompt(sessionId, text),
+        });
     }
 
     get _extensionToolCallHandled() {

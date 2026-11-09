@@ -67,4 +67,6 @@ export const EVT = {
     SYNC_CONFLICTS_CHANGED: 'sync_conflicts_changed',
     SYNC_APPLIED: 'sync_applied',
     EXTENSION_SYNC_CHANGES: 'extension_sync_changes',
+    // Commands the user runs themselves (shell-run-view.js)
+    USER_SHELL_OUTPUT: 'user_shell_output',
 };

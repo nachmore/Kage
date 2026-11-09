@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { marked } from 'marked';
 import { isShellCommandExpanded, setShellCommandExpanded } from '../../ui/js/shared/shell-command-view.js';
 import { isToolCallExpanded, setToolCallExpanded } from '../../ui/js/shared/tool-call-view.js';
+import { _resetShellRunsForTests } from '../../ui/js/shared/shell-run-view.js';
 
 let FloatingApp;
 beforeAll(async () => {
@@ -255,5 +256,101 @@ describe('floating window: other tools', () => {
         expect(isToolCallExpanded(block)).toBe(true);
         const grepList = document.getElementById(toolChip('shared.tool.kind.search').getAttribute('aria-controls'));
         expect(grepList.querySelector('.tool-call').dataset.state).toBe('unknown');
+    });
+});
+
+describe('floating window: running a blocked command yourself', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    afterEach(() => {
+        _resetShellRunsForTests();
+        delete window.__TAURI__;
+    });
+
+    it('runs it on the confirm, then sends the result as the next prompt', async () => {
+        const app = makeApp();
+        app.windowManager.resetHeightForNewMessage = vi.fn(async () => {});
+        app.startThinking = vi.fn();
+        app.banner = { dismiss: vi.fn() };
+        const runs = [];
+        const emit = vi.fn();
+        window.__TAURI__ = {
+            core: {
+                invoke: vi.fn((cmd, args) => {
+                    if (cmd === 'user_shell_run_context') {
+                        return Promise.resolve({ cwd: '/home/me', shell: 'zsh', terminal: false });
+                    }
+                    if (cmd === 'run_user_shell_command') {
+                        return new Promise((resolve) => runs.push({ args, resolve }));
+                    }
+                    return Promise.resolve(null);
+                }),
+            },
+            event: { listen: vi.fn(async () => () => {}), emit },
+        };
+        app.elements.input.value = 'half-typed question';
+
+        start(app, 'a', 'brew install awscli');
+        tool(app, {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'a',
+            status: 'failed',
+            rawOutput: {
+                items: [
+                    {
+                        Json: {
+                            exit_status: 'exit status: 1',
+                            stdout: '',
+                            stderr: 'sandbox-exec: sandbox_apply: Operation not permitted',
+                        },
+                    },
+                ],
+            },
+        });
+        chunk(app, 'The install was blocked.');
+        await completeTurn(app);
+        const block = document.querySelector('.shell-cmd[data-sandbox]');
+        block.querySelector('.shell-run-here').click();
+        await flush();
+        await flush();
+        // Nothing has run yet: only the confirm is up.
+        expect(runs).toHaveLength(0);
+        block.querySelector('.shell-run-confirm .shell-run-go').click();
+        await flush();
+        expect(runs).toHaveLength(1);
+        expect(runs[0].args).toMatchObject({ command: 'brew install awscli', sessionId: SID });
+
+        expect(app.canSendAgentPrompt(SID)).toBe(true);
+        runs[0].resolve({
+            outcome: 'exited',
+            exitCode: 1,
+            signal: null,
+            output: 'Error: no bottle\n',
+            truncated: false,
+        });
+        await flush();
+        await flush();
+        await flush();
+        const sends = app.invoke.mock.calls.filter(([c]) => c === 'send_message_streaming');
+        expect(sends).toHaveLength(1);
+        expect(sends[0][1]).toMatchObject({ sessionId: SID, attachments: null });
+        expect(sends[0][1].message).toContain('`brew install awscli` — exit code 1');
+        expect(sends[0][1].message).toContain('Error: no bottle');
+        // The chat window shows it as the user's bubble.
+        expect(emit).toHaveBeenCalledWith('floating_message_sent', {
+            message: sends[0][1].message,
+        });
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(app.elements.input.value).toBe('half-typed question');
+    });
+
+    it('holds the result while a turn is in flight', () => {
+        const app = makeApp();
+        expect(app.canSendAgentPrompt(SID)).toBe(false); // waiting for a response
+        app.isWaitingForResponse = false;
+        expect(app.canSendAgentPrompt(SID)).toBe(true);
+        expect(app.canSendAgentPrompt('another-session')).toBe(false);
+        app.bootstrappingSession = true;
+        expect(app.canSendAgentPrompt(SID)).toBe(false);
     });
 });

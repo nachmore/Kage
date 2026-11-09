@@ -179,6 +179,14 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     quit_app: null,
     restart_app: null,
     execute_system_command: null,
+    // Commands the user runs themselves from a shell block's sandbox
+    // notice (shell-run-view.js): arbitrary shell outside the agent's
+    // sandbox, each run only on the user's own click in Kage's confirm.
+    // Never reachable from an extension, whatever it was granted.
+    user_shell_run_context: null,
+    run_user_shell_command: null,
+    cancel_user_shell_command: null,
+    run_command_in_terminal: null,
     install_extension_from_path: null,
     uninstall_extension: null,
     welcome_provision_extensions: null,

@@ -232,6 +232,17 @@ pub fn system_command_fallbacks_impl(cmd: &str) -> Vec<(&'static str, Vec<&'stat
     }
 }
 
+/// Windows Terminal (`wt.exe new-tab …`) re-parses `;` in its command line
+/// as its own separator, and a console window can't be handed a command to
+/// type, so there is no safe way to run one there (see
+/// `os::shell::run_in_terminal`): the command is copied instead.
+pub fn run_in_terminal_impl(
+    _command: &str,
+    _cwd: &std::path::Path,
+) -> Result<(), crate::os::shell::TerminalRunError> {
+    Err(crate::os::shell::TerminalRunError::Unsupported)
+}
+
 #[cfg(test)]
 mod tests {
     use super::system_command_impl;

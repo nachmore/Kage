@@ -110,3 +110,13 @@ pub fn spawn_elevated_impl(program: &str, args: &[&str]) -> std::io::Result<std:
     cmd_args.extend(args);
     Command::new("pkexec").args(cmd_args).spawn()
 }
+
+/// Every Linux terminal takes its command differently (`-e`, `--`, `-x`,
+/// one string or an argv), so there is no one safe way to hand it one (see
+/// `os::shell::run_in_terminal`): the command is copied instead.
+pub fn run_in_terminal_impl(
+    _command: &str,
+    _cwd: &std::path::Path,
+) -> Result<(), crate::os::shell::TerminalRunError> {
+    Err(crate::os::shell::TerminalRunError::Unsupported)
+}

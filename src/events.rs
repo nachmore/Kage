@@ -192,6 +192,13 @@ pub const SYNC_APPLIED: &str = "sync_applied";
 /// `purged`. The sandbox hosts pass it to that extension only.
 #[allow(dead_code)] // The sync engine will emit it; the app doesn't yet.
 pub const EXTENSION_SYNC_CHANGES: &str = "extension_sync_changes";
+// --- Commands the user runs themselves -------------------------------
+
+/// Output of a command the user ran from a shell block's sandbox notice
+/// (`run_user_shell_command`), sent only to the window that started it.
+/// Payload: `{ runId, text, skipped }` — `skipped` counts bytes printed
+/// since the previous event that didn't fit in this one.
+pub const USER_SHELL_OUTPUT: &str = "user_shell_output";
 
 #[cfg(test)]
 mod tests {
@@ -234,6 +241,7 @@ mod tests {
             SYNC_CONFLICTS_CHANGED,
             SYNC_APPLIED,
             EXTENSION_SYNC_CHANGES,
+            USER_SHELL_OUTPUT,
         ];
         for name in all {
             assert!(
