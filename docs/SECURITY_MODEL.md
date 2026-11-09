@@ -456,9 +456,13 @@ The trust boundary:
   (`PIPE_REJECT_REMOTE_CLIENTS`), with a DACL granting only the user and
   SYSTEM; the client process's token user SID must equal Kage's, and the
   sidecar checks the server's. Kage creates the next pipe instance before
-  handing a connected one out, so the name is never free to claim. Both
+  handing a connected one out (or closing one whose client already left),
+  so the name is never free to claim. Both
   sides compute the endpoint the same way (`default_endpoint`), so
-  nothing is passed through the agent's `mcp.json`. "Same user" is the
+  nothing is passed through the agent's `mcp.json`; isolated user dirs
+  (tests, `KAGE_USER_DIRS`) move the socket with the data dir and add a
+  hash of the isolation root to the pipe's name, so a test never reaches
+  the user's running Kage. "Same user" is the
   boundary: any process of the user can reach the bridge — which can't
   get it more than a prompt, below.
 - **The protocol is small and strict.** One request per connection: one
@@ -500,10 +504,14 @@ The trust boundary:
   starting with [editable words, default the first two], and Deny. Each
   prompt answers only its own request, only from the window it was shown
   in (the backend checks), once. Nothing is focused when a prompt
-  appears, so keys typed elsewhere can't answer it; Run takes a single
-  click of its own; Enter in the words field approves nothing. With no
-  answer in five minutes the request is denied; if the agent goes away
-  first, the prompt is withdrawn. A command with hidden characters is
+  appears, so keys typed elsewhere can't answer it; Run and Always allow
+  take a single click of their own (or Space), never Enter — not in the
+  words field, and not on a button Tab or Shift+Tab from the composer
+  landed on. With no answer in five minutes the request is denied; if
+  the agent stops waiting first — it closes the connection, the user
+  stops its turn (`cancel_generation`), or its tool call ends (failed,
+  timed out on the agent's side) — the prompt is withdrawn and nothing
+  runs. A command with hidden characters is
   never run from Kage: its prompt offers Copy and Deny only.
 - **Rules are narrow.** "Always allow commands starting with …" saves a
   rule (`config.tool_permissions.host_command_rules`) that covers only a
@@ -576,7 +584,9 @@ keyboard tools when Kage is the active app or holds keyboard focus (a
 key panel included); mouse tools when their point — the cursor when none
 is given, both ends of a drag — lies on a Kage window; element tools
 when the element belongs to Kage (on Windows, WebView2 content reports
-`msedgewebview2.exe`, so the window under the element decides).
+`msedgewebview2.exe`, so a WebView2 process Kage started — its parent, or
+its parent's parent, is Kage — counts as Kage, whether or not another
+window covers it; failing that, the window under the element decides).
 Read-only tools still work. This is best-effort too: the agent's own
 shell could still script the UI (it runs inside its sandbox, behind the
 tool-permission prompt).
