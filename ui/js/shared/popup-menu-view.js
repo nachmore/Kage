@@ -39,6 +39,10 @@ export function renderMenuItems(root, items, t) {
         const label = document.createElement('span');
         label.className = 'menu-label';
         label.textContent = item.labelKey ? t(item.labelKey, item.labelVars || {}) : item.label;
+        // A literal label (a spelling suggestion) can be in another
+        // language than the menu: lay it out in its own direction, so an
+        // English "etc." in a Hebrew menu doesn't read ".etc".
+        if (!item.labelKey) label.setAttribute('dir', 'auto');
         el.appendChild(label);
         if (item.shortcut) {
             const hint = document.createElement('span');

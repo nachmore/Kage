@@ -246,6 +246,9 @@ describe('PopupMenuView', () => {
         expect(rows).toHaveLength(4);
         expect(rows[0].textContent).toBe('<b>not html</b>');
         expect(root.querySelector('b')).toBeNull();
+        // Literal labels take their own direction; translated ones the menu's.
+        expect(rows[0].querySelector('.menu-label').getAttribute('dir')).toBe('auto');
+        expect(rows[1].querySelector('.menu-label').hasAttribute('dir')).toBe(false);
         expect(rows[1].querySelector('.menu-shortcut').textContent).toBe('Enter');
         expect(rows[1].querySelector('.menu-shortcut').getAttribute('dir')).toBe('ltr');
         expect(rows[2].getAttribute('aria-disabled')).toBe('true');

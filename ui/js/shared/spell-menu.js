@@ -29,21 +29,29 @@ const SUGGESTION_ID_RE = /^spell:(\d+)$/;
 /** Labels the backend would cut anyway (MAX_LABEL_CHARS). */
 const MAX_LABEL_CHARS = 200;
 
-/** A run of word characters: letters, combining marks, apostrophes. */
-const WORD_RUN_RE = /[\p{L}\p{M}'’]+/gu;
-const WORD_ONLY_RE = /^[\p{L}\p{M}'’]+$/u;
+/**
+ * A run of word characters, roughly as Unicode word breaking (and so
+ * WebKit's right-click selection) sees one: letters, combining marks, the
+ * Hebrew geresh (a letter there), and joiners that only count inside a
+ * word: apostrophes, the Catalan middle dot (col·legi), Hebrew gershayim
+ * (צה״ל), and the zero-width non-joiner and joiner, which Persian and
+ * Indic scripts write between the parts of one word.
+ */
+const WORD_RUN_RE = /[\p{L}\p{M}\u05F3'\u2019\u00B7\u05F4\u200C\u200D]+/gu;
+const WORD_ONLY_RE = /^[\p{L}\p{M}\u05F3'\u2019\u00B7\u05F4\u200C\u200D]+$/u;
+/** The joiners above: dropped from a word's edges (quotes, stray marks). */
+const EDGE_JOINER_RE = /^['\u2019\u00B7\u05F4\u200C\u200D]$/u;
 const LETTER_RE = /\p{L}/u;
-const APOSTROPHE_RE = /^['’]$/;
 const SPACE_RE = /^\s$/;
 
 /**
  * `{ start, end, word }` for `text[start, end)` once leading and trailing
- * apostrophes (quotes) are dropped; `null` if nothing word-like is left or
- * it's too long to check.
+ * joiners (quotes, mostly) are dropped; `null` if nothing word-like is
+ * left or it's too long to check.
  */
 function wordRange(text, start, end) {
-    while (start < end && APOSTROPHE_RE.test(text[start])) start++;
-    while (end > start && APOSTROPHE_RE.test(text[end - 1])) end--;
+    while (start < end && EDGE_JOINER_RE.test(text[start])) start++;
+    while (end > start && EDGE_JOINER_RE.test(text[end - 1])) end--;
     const word = text.slice(start, end);
     if (!word || !LETTER_RE.test(word) || [...word].length > MAX_SPELL_WORD_CHARS) return null;
     return { start, end, word };

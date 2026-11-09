@@ -76,6 +76,27 @@ describe('wordAt', () => {
         expect(wordAt(astral, 3)).toEqual(range(astral, '\u{1D400}\u{1D401}'));
     });
 
+    it('keeps joiners inside a word, as word breaking does, but not at its edges', () => {
+        // Persian: a zero-width non-joiner between the parts of one word.
+        const fa = '\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645 \u0631\u0627';
+        const faWord = fa.split(' ')[0];
+        expect(wordAt(fa, 1)).toEqual(range(fa, faWord));
+        expect(wordAt(fa, faWord.length - 1)).toEqual(range(fa, faWord));
+        // Hebrew gershayim inside an acronym; geresh is a letter there.
+        const he = '\u05E6\u05D4\u05F4\u05DC \u05D2\u05F3';
+        expect(wordAt(he, 1)?.word).toBe('\u05E6\u05D4\u05F4\u05DC');
+        expect(wordAt(he, he.length)?.word).toBe('\u05D2\u05F3');
+        // Catalan middle dot.
+        const ca = 'el col\u00B7legi';
+        expect(wordAt(ca, 5)).toEqual(range(ca, 'col\u00B7legi'));
+        // A joiner at a word's edge isn't part of it.
+        const edge = 'x\u200C hello\u00B7';
+        expect(wordAt(edge, 0)).toEqual(range(edge, 'x'));
+        expect(wordAt(edge, 4)).toEqual(range(edge, 'hello'));
+        const sel = '\u200Cabc\u200C';
+        expect(wordInSelection(sel, 0, sel.length)).toEqual({ start: 1, end: 4, word: 'abc' });
+    });
+
     it('skips words too long to check', () => {
         const long = 'a'.repeat(MAX_SPELL_WORD_CHARS + 1);
         expect(wordAt(long, 3)).toBeNull();
@@ -338,6 +359,23 @@ describe('replaceWord', () => {
         });
         expect(replaceWord(input, range(input.value, 'helloo'), 'hello')).toBe(true);
         expect(input.value).toBe('hello');
+    });
+
+    it('replaces the occurrence that was clicked when the word appears twice', () => {
+        const input = makeInput('helloo and helloo');
+        const second = range(input.value, 'helloo', 1);
+        expect(second.start).toBe(11);
+        document.execCommand = vi.fn((_cmd, _ui, text) => {
+            input.setRangeText(text, input.selectionStart, input.selectionEnd, 'end');
+            return true;
+        });
+        expect(replaceWord(input, second, 'hello')).toBe(true);
+        expect(input.value).toBe('helloo and hello');
+        // The fallback path edits the same occurrence.
+        const other = makeInput('helloo and helloo');
+        document.execCommand = vi.fn(() => false);
+        expect(replaceWord(other, range(other.value, 'helloo', 1), 'hello')).toBe(true);
+        expect(other.value).toBe('helloo and hello');
     });
 
     it('leaves the text alone if the word is no longer there', () => {

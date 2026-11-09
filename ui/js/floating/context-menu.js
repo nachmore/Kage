@@ -113,22 +113,30 @@ function initContextMenu(invoke, appWindow, listen) {
      * the click was on one: `{ input, range, lookup }`, where `lookup`
      * resolves to the suggestions when the word is misspelled, else (or
      * if the backend takes too long) `null`. Synchronous up to the
-     * invoke, so it reads the selection as it was at the click.
+     * invoke, so it reads the selection as it was at the click. Never
+     * throws: whatever goes wrong here, the plain menu still opens.
      */
     function startSpellLookup(e) {
-        const input = e.target?.closest?.('.input-box');
-        if (!input || typeof input.value !== 'string' || input.spellcheck === false) return null;
-        const range = findSpellWord({
-            text: input.value,
-            selectionStart: input.selectionStart,
-            selectionEnd: input.selectionEnd,
-            pointOffset: inputOffsetAtPoint(input, e.clientX, e.clientY),
-        });
-        if (!range) return null;
-        const asked = Promise.resolve(invoke('spell_suggestions', { word: range.word })).then(
-            (r) => (r?.misspelled ? cleanSuggestions(r.suggestions) : null)
-        );
-        return { input, range, lookup: withTimeout(asked, SPELL_LOOKUP_TIMEOUT_MS, null) };
+        try {
+            const input = e.target?.closest?.('.input-box');
+            if (!input || typeof input.value !== 'string' || input.spellcheck === false) {
+                return null;
+            }
+            const range = findSpellWord({
+                text: input.value,
+                selectionStart: input.selectionStart,
+                selectionEnd: input.selectionEnd,
+                pointOffset: inputOffsetAtPoint(input, e.clientX, e.clientY),
+            });
+            if (!range) return null;
+            const asked = Promise.resolve(invoke('spell_suggestions', { word: range.word })).then(
+                (r) => (r?.misspelled ? cleanSuggestions(r.suggestions) : null)
+            );
+            return { input, range, lookup: withTimeout(asked, SPELL_LOOKUP_TIMEOUT_MS, null) };
+        } catch (err) {
+            console.warn('[context-menu] spell lookup failed:', err);
+            return null;
+        }
     }
 
     /** Show the spelling menu; false if the word is fine (caller falls back). */
