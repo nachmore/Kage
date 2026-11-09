@@ -1,7 +1,8 @@
 # Kage folder sync
 
-Status: being built. WP-S1, WP-S2 and WP-S3 (the engine and host
-sources) are in; the app wiring (WP-S4) and the rest follow §20.
+Status: being built. WP-S1, WP-S2, WP-S3 (the engine and host
+sources) and WP-S4 (the app wiring and commands) are in; the rest follow
+§20.
 
 Kage syncs through a folder the user already syncs: Dropbox, iCloud Drive,
 OneDrive, Google Drive, Syncthing, a network share, or any folder. There is
@@ -1233,7 +1234,7 @@ differed. [Review] [Keep all]".
 
 ```text
 fn check_identity_at_start():
-  if device.json.fingerprint != fingerprint():     // SHA-256(OS machine id + config dir path)[..16 hex]
+  if device.json.fingerprint != fingerprint():     // SHA-256(computer name + config dir path)[..16 hex] (§19.5)
     // copied profile, migration tool, disk image, VM clone
     previous_device_ids.push(device_id); device_id = new_id(); republish everything under the new directory
 
@@ -2615,8 +2616,12 @@ except in buckets, extension ids.
 | `sync_disabled` | Turned off, removed, start over | `reason`: `leave` / `removed` / `reset` |
 | `sync_daily` | With `app_daily_active`, while on | `computers`: `1`, `2`, `3-5`, `6+`; `categories`: 0–4; `ext_data`: `0`, `1-2`, `3-5`, `6+`; `conflicts_open`: `0`, `1-5`, `6+`; `held`: `0`, `1+`; `problems`: `0`, `1`, `2+` |
 | `sync_conflict_action` | Restore, dismiss | `action`: `restore` / `dismiss` / `dismiss_all`; `category`: `settings` / `automations` / `extensions` / `chats` |
-| `sync_problem` | First time per UTC day per kind | `kind`: one of the §13.4 problem states |
+| `sync_problem` | First time per UTC day per kind | `kind`: one of the §13.4 problem states, or a problem the status shows beside them: `device_collision`, `held_back`, `not_this_version`, `churn`, `duplicates`, `config_reset` |
 | `sync_scope_changed` | A scope action | `action`: one of the §9.3 actions |
+
+`sync_app::SYNC_EVENTS` holds this table as code. `TauriHostEvents::track`
+sends an event only with exactly these props and values, and a unit test
+checks every `track` call site against it.
 
 Which sync app the folder belongs to is deliberately not sent (§22).
 Add the names to `KNOWN_EVENTS` in `ui/js/shared/telemetry.js` and a
@@ -3441,6 +3446,7 @@ Owned by WP-S4 (`src/commands/sync.rs`):
 | `sync_undo_join` | `confirm` | `()` |
 | `sync_purge_extension` | `extensionId, confirm` | `()` |
 | `sync_find_folder` | | `Option<String>` path |
+| `sync_apply_folder` (added by WP-S4) | `path` | `()`: use the sync folder found, or picked again after a move or a refused access; it must have this folder's `folder_id` (`errors.sync.not_this_folder`) |
 | `get_config_snapshot` | | `{ revision: u64, config: Config }` |
 | `save_config` (changed) | `config, baseRevision?: u64` | `{ revision: u64 }` (callers that ignore it keep working) |
 
@@ -3465,6 +3471,99 @@ Owned by WP-S5 (`src/commands/extensions/sync.rs`), capability `sync`,
 | `ext_sync_push` | `extensionId, collection, records, deleted, initial` | `{ accepted, unchanged, rejected, off }` |
 | `ext_sync_pull` | `extensionId, max` | `{ cursor, more, changes }` |
 | `ext_sync_ack` | `extensionId, cursor` | `()` |
+
+What WP-S4 built, beyond the tables above (`src/sync_app.rs`,
+`src/sync_app/merge.rs`, `src/commands/sync.rs`):
+- **Commands.** Each asks the engine from the blocking pool. Unlock,
+  passphrase changes, removing a computer, undo joining, Sync now and
+  the folder search wait 60 s too. Until the engine thread runs (a build
+  without sync, the mock app), `sync_get_status` answers the
+  `unavailable` status and `sync_suggest_folders` an empty list;
+  everything else answers `sync_unavailable`. The token check comes
+  first, so a destructive command without one answers
+  `needs_confirmation` either way. A token is for one action and one
+  use. A path that isn't absolute, a pause time that isn't RFC 3339 or
+  `forever`, and an invalid extension id are `invalid_input`
+  (`errors.sync.bad_request`) before the engine sees them. While the
+  engine is busy in a long tick, `sync_get_status` answers the newest
+  status it reported (`sync_app::last_status`).
+- **Revisions** (`sync_app::ConfigRevisions`, in `FeatureServices`). A
+  revision names one state of the in-memory config: `observe` hands out
+  a new one whenever the config holds other values than the newest one
+  kept, whichever code path changed it (a grant, a tool policy, a
+  setting). So a backend change between the engine's snapshot and its
+  commit makes the commit `Stale`, and `save_config` merges against what
+  the window really saw. The last 64 are kept as canonical JSON.
+- **`save_config`** takes `baseRevision` and returns `{ revision }`. The
+  three-way merge (`sync_app::merge`) goes by `sync::catalog` rows:
+  settings by path, `extension_states` per extension, `extensions` per
+  extension and field, lists by item id and field. An item the window
+  removed goes; one added elsewhere stays; the window's order wins only
+  when it reordered. Items an editor rebuilt without their id get it back
+  (equal in every other field, or the same position with at most one
+  field changed, §4.4). It no longer takes the ACP state; the post-save
+  work is `config_io::commit_config_change`, shared with sync's commits.
+- **`TauriConfigPort::commit`**: under the config lock, a moved revision
+  is `Stale`; backend-owned fields are kept
+  (`preserve_backend_owned_fields`); one `Config::save`, restored in
+  memory if it fails; then `commit_config_change` (`config_updated`).
+  `installed()` reads the extension, theme and command-pack folders,
+  cached until the revision or a folder's time changes (at most a
+  minute), so an uninstall is never seen late.
+- **Events.** `sync_status_changed`, `sync_conflicts_changed` and
+  `sync_applied` go to Kage's own windows (not extension views);
+  `extension_sync_changes` to the extension hosts;
+  `extension_data_changed` through EXTENSION_VIEWS' coalescer with
+  `source: "sync"`.
+- **Tray.** The status line and **Sync now** are inserted after
+  Settings once the engine reports sync is set up here, and removed when
+  it is off. The line is `tray.sync_status` with a short
+  `tray.sync_state.*` label (up to date, syncing, waiting, paused, needs
+  your attention), because Rust renders no ICU plurals. **Sync now** is a
+  `Wake::Manual`.
+- **OS notifications** (§13.8): title `sync.notify.title`; the body is
+  `sync.status.locked`, `.folder_missing` or `.update_required`, or
+  `sync.notify.removed` / `.reset`, which name no computer (the status
+  carries none).
+- **Start and exit.** `setup::start_sync` runs last in `setup()`: it
+  installs the global handle and spawns the thread, which waits
+  `START_DELAY` (10 s), then for the first window to paint (at most 20 s
+  more), then builds the environment (`sync_app::engine_env`: the key
+  store recorded in `device.json`, else the §11.4 choice; the four host
+  sources). A window focus wakes it (`Wake::Focus`, from `main.rs`'s
+  window events). `graceful_shutdown` flushes right after background
+  agent calls stop: 1.5 s, or 500 ms while an update holds the
+  updater's install slot (`exit_budget`), so on the updater path it
+  ends before `release_kill_on_exit_job`. `RunEvent::Exit` flushes again
+  (1.5 s; a no-op when nothing is left).
+- **Telemetry**: `sync_daily` goes with the first status after
+  `app_daily_active` while sync is on (`main.rs` notes when that event
+  went out). `sync_dismiss_all` sends one `dismiss_all` per category
+  instead of one `dismiss` per entry.
+
+Decisions WP-S4 made where the design was open or didn't fit the code:
+- **`sync_apply_folder`** is new. The engine had `ApplyFolder` but no
+  command reached it, so **Find folder**, **Choose folder…** and
+  **Allow access** couldn't use the folder they found.
+- **Fingerprint** (§8.9): Kage has no OS machine-id API, so it is
+  SHA-256 of the computer's name (`whoami::devicename`) and the config
+  folder's path. A profile copied to another computer or user changes it;
+  a clone that keeps both (a cloned VM) is caught by the own-directory
+  check. Renaming the computer makes it take a new device id, which costs
+  a republish but loses nothing.
+- **Lists wake too.** `Config::save` wakes only the `config` source, and
+  lists live in the same file, so `save_config` and a backup import also
+  wake `lists` (an import also `steering`, all with `Origin::Import`).
+  Other backend writers of list items are captured at the next poll or
+  manual tick.
+- **Wake from sleep** isn't wired: the app has no OS power-resume hook
+  yet. A window focus after waking ingests, and the poll runs anyway.
+- **`get_config_snapshot`** stays in `src/commands/sync.rs`, where C0 put
+  it.
+- **Strings.** WP-S4's EN strings (`tray.sync_state.*`,
+  `sync.notify.*`, `errors.sync.bad_request`) went straight into
+  `locales/en/messages.json`, as WP-S3's did; the other catalogs need a
+  `scripts/translate.py` run.
 
 ### 19.6 Events (`src/events.rs`, `ui/js/shared/events.js`)
 
@@ -3626,10 +3725,17 @@ everyone branches from it.
   `base_revision` three-way merge, `Config::ensure_item_ids` on save,
   `commit_config_change`, the import hook with `Origin::Import`),
   `src/sync_app.rs` (new: `TauriConfigPort`,
-  `TauriHostEvents`, the real `Clock`, the fingerprint), `src/events.rs`,
+  `TauriHostEvents`, the real `Clock`, the fingerprint, the revision
+  ring, the destructive-command tokens), `src/sync_app/merge.rs` (new:
+  the three-way merge), `src/events.rs`,
   `ui/js/shared/events.js`, `src/error.rs`, `src/tray.rs`,
   `ui/js/shared/telemetry.js` (`KNOWN_EVENTS`), `docs/PRIVACY.md`,
-  `tests/sync_app_test.rs` (new).
+  `tests/sync_app_test.rs` (new); one line each in `src/lib.rs` (the
+  `sync_app` module), `ui/js/shared/extension-permissions.js`,
+  `ui-tests/shared/extension-permissions.test.js` and
+  `ui-tests/shared/extension-rust-alignment.test.js` (the
+  `sync_apply_folder` command, `null`), and its EN strings in
+  `locales/en/messages.json` (§19.5).
 - **Depends on:** S3 (`SyncHandle`, `EngineRequest`, the ports).
 - **Done when:**
   - Every §19.5 command in `src/commands/sync.rs` exists, returns
