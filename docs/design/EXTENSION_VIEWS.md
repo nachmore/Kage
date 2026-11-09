@@ -520,6 +520,11 @@ surface:
 | srcdoc head | charset | charset, CSP `<meta>` (§8.4), `<html lang dir>`, theme `<style>` |
 | Providers loaded | everything the manifest contributes | only the view module and what it imports |
 
+The view's CSS files reach the runtime in the `init` message. The runtime
+adds them as `<style>` elements, after the theme `<style>` and before the
+view module loads. They are never written into the srcdoc's HTML. The host
+drops a file over 256 KiB, or one that would take the total over 1 MiB.
+
 Missing sandbox tokens are deliberate: no `allow-same-origin` (null origin,
 no Tauri), no `allow-popups`, `allow-forms`, `allow-modals` (no
 `alert`/`confirm`/`prompt` look-alikes), `allow-top-navigation*`,
@@ -550,9 +555,14 @@ base-uri 'none'; form-action 'none'
   under `network`).
 - CSP doesn't cover WebRTC. Before it loads the view module, the view
   runtime deletes `RTCPeerConnection`, `webkitRTCPeerConnection` and
-  `RTCDataChannel` from the view document's global object. `frame-src
-  'none'` stops the module from getting fresh copies from a new frame,
-  and workers have no WebRTC.
+  `RTCDataChannel` from the view document's global object and pins them
+  to `undefined`. Workers have no WebRTC. `frame-src 'none'` does not
+  stop a child `about:blank` frame (it isn't a navigation), whose globals
+  would bring fresh copies. So the runtime also makes `contentWindow`,
+  `contentDocument` and `getSVGDocument()` of frame, object and embed
+  elements return `null`. A module can still reach such a frame through
+  `window[0]`; that is the same residual as the next bullets: defence in
+  depth, not a boundary.
 - Hidden sandboxes keep their current srcdoc (no CSP). Adding the same
   policy there is a follow-up (§25), because existing extensions may rely
   on direct requests.
@@ -613,14 +623,26 @@ ignored elsewhere):
 
 | `kind` | Fields | Host checks, then does |
 |---|---|---|
-| `set-title` | `text` (string or null) | ≤ 80 chars after removing control/bidi characters; ≤ 10 per second. Sets the subtitle in the bar and the OS title. |
+| `set-title` | `text` (string or null) | Control/bidi characters removed, trimmed, cut to 80 characters (empty clears it); ≤ 10 per second. Sets the subtitle in the bar and the OS title. |
 | `close` | none | Closes (hides) the window. |
 | `open-view` | `view`, `params` | §6.2 checks; recent user activation (§13.4); ≤ 1 per second. `ext_view_open` with `source: 'view'`. |
-| `compose` | `text` | `ext_view_compose` (§16). |
-| `copy-text` | `text` | `ext_view_copy_text` (§16). |
-| `open-settings` | none | `open_settings_window({ section: 'ext-<id>' })`. The id is the host's, never the sandbox's. |
+| `compose` | `text` | Plain text, ≤ 2000 characters; recent user activation; ≤ 2 per second. `ext_view_compose` (§16), which checks again. |
+| `copy-text` | `text` | Plain text, ≤ 8192 characters; recent user activation; ≤ 2 per second. `ext_view_copy_text` (§16), which checks again. |
+| `open-settings` | none | Recent user activation; ≤ 1 per second (Settings comes to the front, like a new view). `open_settings_window({ section: 'ext-<id>' })`. The id is the host's, never the sandbox's. |
 
-Every field is type-checked. Unknown kinds are ignored with a warning.
+Every field is type-checked. Unknown kinds are ignored with a warning
+(once per sandbox, so a loop can't flood the log).
+
+Every request carries an `id`. The host answers each one of a known kind
+with `view-response { id, result }`, or `{ id, error, errorKind?,
+errorKey? }`. `error` is the localised message. Host-side refusals use the
+§16.1 kinds and keys: `rate_limited` / `errors.ext_view.too_fast`,
+`invalid_input` / `errors.ext_view.text_invalid`, `not_permitted` /
+`errors.ext_view.not_focused` (no focus or no recent activation), and the
+§6.2 keys for `open-view`. Errors from the commands pass through with their
+own kind and key. That is how `context.view` methods reject (§9.2).
+`open-view` resolves with `{ reused }`, `set-title` with the subtitle it
+set, the rest with `null`.
 
 **View-surface denylist.** `decideInvoke(command, held, { surface: 'view' })`
 also refuses these commands in a view window, because they act on the
@@ -725,9 +747,9 @@ context.view = {
     setTitle(text | null),      // subtitle in the host bar and OS title
     close(),                    // hide this window
     open(viewId, params?),      // another view of this extension; needs a recent click or key press
-    compose(text),              // put text in the launcher's input and show the launcher; never sends
+    compose(text),              // put text in the launcher's input and show the launcher; never sends; needs a recent click or key press
     copyText(text),             // copy plain text; needs a recent click or key press
-    openSettings(),             // this extension's settings page
+    openSettings(),             // this extension's settings page; needs a recent click or key press
 };
 ```
 
@@ -744,7 +766,9 @@ const off = context.storage.onChanged((changes) => {
 off(); // unsubscribe
 ```
 
-Details in §10.
+The callback gets one frozen array per batch. Each `onChanged` call is its
+own subscription. A callback that throws is logged and doesn't stop the
+others. Details in §10.
 
 ### 9.4 Feature detection
 
@@ -869,7 +893,11 @@ theme = {
   `rgb[a]()`, `hsl[a]()` or a named colour; for fonts only letters,
   digits, spaces, commas, quotes and hyphens. Anything else (a theme
   extension's `url(…)`, a `;` or `}`) drops that token. Theme extensions
-  are untrusted too.
+  are untrusted too. The value is trimmed and inner whitespace runs
+  become one space first (computed custom properties keep the source's
+  line breaks). `rgb[a]()` and `hsl[a]()` may hold only numbers, units,
+  `none` and separators: no nested function. A named colour is letters
+  only.
 - The runtime writes the tokens into the view document as
   `:root { --kage-bg: …; …; color-scheme: dark; font-size: 14px }`, so
   extension CSS can use `var(--kage-bg)`. Canvas code reads
@@ -959,7 +987,8 @@ theme = {
 
 ### 13.4 "Recent user activation"
 
-The view page accepts `open-view`, `compose` and `copy-text` only when:
+The view page accepts `open-view`, `compose`, `copy-text` and
+`open-settings` only when:
 - the view window is focused (checked in Rust for `compose` and
   `copy-text`); and
 - `navigator.userActivation.isActive` is true in the view page, where the
@@ -968,8 +997,11 @@ The view page accepts `open-view`, `compose` and `copy-text` only when:
   rule.
 
 None of these actions can do harm without the user seeing it (a window
-opens, text appears in the launcher, the clipboard changes), so focus and
-rate limits are enough.
+opens, text appears in the launcher, the clipboard changes, Settings comes
+to the front), so focus and rate limits are enough. The sandbox host runs
+the check through `ExtensionSandbox.hasUserActivation()`: the view page's
+`hasUserActivation` hook, else `document.hasFocus()` plus
+`navigator.userActivation.isActive` where it exists.
 
 The same rule stands in for the host-seen click that
 EXTENSION_FILE_TEXT §5.2 needs before it opens a file dialog. A view
@@ -1546,7 +1578,9 @@ updater::`.
 ### 22.3 JS tests (vitest, `ui-tests/`)
 
 - `shared/extension-view-policy.test.js`: view normalisation mirrors Rust
-  (shared fixture file); `validateOpenViewEffect`; params rules;
+  (shared fixture file `tests/fixtures/extension-views-policy.json`, which
+  `tests/extension_view_policy_test.rs` runs through
+  `normalize_views` and `validate_params`); `validateOpenViewEffect`; params rules;
   `sanitizeViewTitle`; `isSafeTokenValue` (rejects `url(`, `;`, `}`,
   `expression(`, over-long values); the CSP string; `buildViewSrcdoc`
   puts the CSP meta first.
@@ -1766,13 +1800,44 @@ package codes against this document.
   `ui-tests/shared/extension-sandbox-host-view.test.js`,
   `ui-tests/shared/extension-sandbox-host-api.test.js`,
   `ui-tests/shared/extension-sandbox-runtime-assembly.test.js`,
-  `ui-tests/shared/extension-view-runtime.test.js`.
+  `ui-tests/shared/extension-view-runtime.test.js`, and the shared
+  fixture `tests/fixtures/extension-views-policy.json` with its Rust
+  half `tests/extension_view_policy_test.rs` (new; isolates user dirs).
 - **Done when:**
   - All listed vitest files pass, plus the existing
     `extension-sandbox-*.test.js`.
+  - `cargo test --test extension_view_policy_test` passes.
   - Hidden-surface behaviour is unchanged (existing tests untouched and
     green).
   - The view-surface srcdoc carries the CSP meta first.
+- **What V4 ships, for V5 and V6:**
+  - `extension-view-policy.js`: `normalizeViews(raw, name, icon, context,
+    { warn })` (mirror of `normalize_views`; `warn: null` is silent),
+    `validateViewParams(params)` (null or a refusal), and
+    `validateOpenViewEffect(effect, { hostFeatures, capabilities, views,
+    extensionId?, extensionName? })` → `{ ok: true, view, params }` or
+    `{ ok: false, kind, key, vars, reason }`, the §6.2 checks in order,
+    with Rust's kinds and keys. Also `sanitizeViewTitle(text, max)`,
+    `readViewTheme(computedStyle, { scheme, fontSize, reducedMotion })`,
+    `sanitizeViewTheme`, `viewThemesEqual`, `isSafeTokenValue`,
+    `normalizeViewSource`, `VIEW_SOURCES`, `VIEW_CSP`,
+    `VIEW_IFRAME_ALLOW`, `buildViewSrcdoc`, `viewTextError(text, max)`,
+    `sanitizeStorageChanges`, and the §4 limits.
+  - `extension-sandbox-host.js`: `HOST_FEATURE_VIEWS`, `SURFACE_VIEW`,
+    and `new ExtensionSandbox(spec, rawInvoke, stageElement)` with
+    `spec.surface: 'view'`, `viewId`, `views` (the manifest's
+    `contributes.views`), `viewTitle` (resolved), `extensionName`,
+    `viewTheme`, `viewCss` (file texts) and `viewHooks: { setTitle,
+    close, onNavigated, hasUserActivation?, openView?, compose?,
+    copyText?, openSettings? }` (the last four default to the §16.1
+    commands). After `start()`: `hasView`, `mountView({ params, source,
+    reloaded })`, `reopenView({ params, source })`,
+    `setViewVisibility(visible)`, `setViewTheme(theme)` (sends only a
+    change), `pingView()`, `hasUserActivation()`. Every sandbox has
+    `notifyStorageChanged(changes)`; the pool has
+    `notifyStorageChanged(extensionId, changes)`. The view page builds
+    the sandbox itself (not through the pool, whose container is the
+    hidden 1px one).
 
 ### WP-V5 Openers in existing windows, launcher focus rules
 

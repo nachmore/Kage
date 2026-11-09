@@ -4,7 +4,8 @@
 // single-line and pointing at self-contained modules.
 import { formatIcu } from '../shared/icu-message.js';
 import { createSandboxedRunner } from './runtime/sandboxed-worker.js';
-import { HOST_FEATURES, invokeError } from './runtime/host-api.js';
+import { HOST_FEATURES, createStorageEvents, invokeError } from './runtime/host-api.js';
+import { createViewSurface, removeWebRtc } from './runtime/view-api.js';
 import { extensionModuleOrder, rewriteExtensionModules } from '../shared/extension-modules.js';
 
 /**
@@ -22,6 +23,10 @@ import { extensionModuleOrder, rewriteExtensionModules } from '../shared/extensi
  *   - Dispatching RPC calls from the host to the loaded providers
  *     (match, matchAsync, execute, getTools, execute tool, getTriggers,
  *     onConfigUpdate, destroy).
+ *   - On the view surface (an extension view window, see
+ *     docs/design/EXTENSION_VIEWS.md §8–§9): loading only the view module,
+ *     `context.view`, and the viewMount / viewReopen / viewVisibility /
+ *     viewTheme / viewPing RPCs (runtime/view-api.js).
  *
  * Design properties:
  *   - The iframe is sandboxed with a *null origin*, so it has no
@@ -72,6 +77,19 @@ let hostFeatures;
 const pendingInvokes = new Map();
 let nextInvokeId = 1;
 
+/**
+ * Which surface this sandbox runs on: `'hidden'` (the 1px iframe in the
+ * launcher, chat and settings windows) or `'view'` (the visible iframe of
+ * an extension view window). Set by the host's `init`.
+ */
+let surface = 'hidden';
+
+/** The view surface (runtime/view-api.js), on the view surface only. */
+let viewSurface = null;
+
+/** `context.storage`: change events for every surface (§10). */
+const storageEvents = createStorageEvents({ log });
+
 /** Provider instances loaded from the extension bundle. */
 const providers = {
     searchProvider: null,
@@ -80,6 +98,8 @@ const providers = {
     settingsProvider: null,
     toolbarProvider: null,
     messageFormatter: null,
+    /** The view module, on the view surface only. */
+    view: null,
     /** Widget instances, keyed by widget id (from manifest). */
     widgets: {},
 };
@@ -116,17 +136,18 @@ function safePost(payload) {
  * The `invoke` here proxies to the host, which runs the authoritative
  * permission check before dispatching to Tauri.
  */
+function invoke(command, args) {
+    if (typeof command !== 'string') {
+        return Promise.reject(new Error('invoke() requires a string command name'));
+    }
+    const id = nextInvokeId++;
+    return new Promise((resolve, reject) => {
+        pendingInvokes.set(id, { resolve, reject });
+        safePost({ type: 'invoke', id, command, args: args ?? {} });
+    });
+}
+
 function buildContext() {
-    const invoke = (command, args) => {
-        if (typeof command !== 'string') {
-            return Promise.reject(new Error('invoke() requires a string command name'));
-        }
-        const id = nextInvokeId++;
-        return new Promise((resolve, reject) => {
-            pendingInvokes.set(id, { resolve, reject });
-            safePost({ type: 'invoke', id, command, args: args ?? {} });
-        });
-    };
     const extLog = {
         debug: (...a) => log('debug', ...a),
         info: (...a) => log('info', ...a),
@@ -150,7 +171,7 @@ function buildContext() {
             return !!i18nState.rtl;
         },
     };
-    return {
+    const context = {
         invoke,
         config: extensionConfig,
         log: extLog,
@@ -158,11 +179,17 @@ function buildContext() {
         i18n,
         mascot,
         formatter,
+        // Change events for this extension's stored data (every surface).
+        storage: storageEvents.api,
         // Feature detection for optional host behaviour: what this runtime
         // always supports (host-api.js) plus what the host granted this
         // extension at init (e.g. 'date-picker', capability-filtered).
         hostFeatures: Object.freeze([...new Set([...HOST_FEATURES, ...(hostFeatures || [])])]),
     };
+    // Only a view window's sandbox has `context.view`; elsewhere it's
+    // undefined, so extensions can feature-detect it.
+    if (viewSurface) context.view = viewSurface.api;
+    return context;
 }
 
 /**
@@ -370,6 +397,29 @@ async function initExtension(init) {
         ? Object.freeze(init.hostFeatures.filter((f) => typeof f === 'string'))
         : undefined;
 
+    surface = init.surface === 'view' ? 'view' : 'hidden';
+    if (surface === 'view') {
+        // Before any extension code runs: CSP doesn't cover WebRTC (§8.4).
+        removeWebRtc(window);
+        const view = init.view && typeof init.view === 'object' ? init.view : {};
+        viewSurface = createViewSurface({
+            viewId: typeof view.id === 'string' ? view.id : '',
+            theme: view.theme,
+            links: view.links === true,
+            post: (msg) => {
+                if (!hostPort) throw new Error('the host is gone');
+                hostPort.postMessage(msg);
+            },
+            invoke,
+            log,
+            toError: invokeError,
+            win: window,
+            doc: document,
+        });
+        viewSurface.applyStyles(view.css);
+        viewSurface.installGuards();
+    }
+
     const context = buildContext();
     const sources = init.sources || {};
     const sourcePaths = sources.sourcePaths || {};
@@ -379,6 +429,32 @@ async function initExtension(init) {
     // for them first so provider-level imports can be rewritten to
     // point at those blobs.
     registerSharedModules(init.sharedSources || {});
+
+    if (surface === 'view') {
+        // A view window loads only its view module and what it imports.
+        if (sources.view) {
+            try {
+                const Cls = await importFromSource(sources.view, 'view', sourcePaths.view);
+                providers.view = new Cls();
+                viewSurface.attach(providers.view);
+                providers.view.initialize?.(context);
+            } catch (e) {
+                log('error', `failed to load view: ${e?.message || e}`);
+            }
+        }
+        return {
+            hasSearch: false,
+            hasTools: false,
+            hasTriggers: false,
+            hasSettings: false,
+            hasToolbar: false,
+            hasFormatter: false,
+            hasDateProvider: false,
+            hasView: !!providers.view,
+            formatterOptsInStreaming: false,
+            widgetIds: [],
+        };
+    }
 
     if (sources.searchProvider) {
         try {
@@ -516,6 +592,12 @@ async function handleRpc(msg) {
     } catch (e) {
         safePost({ type: 'rpc-response', rpcId, error: String(e?.message || e) });
     }
+}
+
+/** The view surface, or the same error as an unknown method elsewhere. */
+function requireViewSurface(method) {
+    if (!viewSurface) throw new Error(`unknown method '${method}'`);
+    return viewSurface;
 }
 
 async function dispatchMethod(method, params) {
@@ -712,6 +794,18 @@ async function dispatchMethod(method, params) {
             const out = await w.onAction(params?.actionId || '', params?.context || {});
             return out && typeof out === 'object' ? out : {};
         }
+        case 'viewMount':
+            return requireViewSurface(method).mount(params);
+        case 'viewReopen':
+            return requireViewSurface(method).reopen(params);
+        case 'viewVisibility':
+            return requireViewSurface(method).visibility(params);
+        case 'viewTheme':
+            return requireViewSurface(method).setTheme(params);
+        case 'viewPing':
+            // The runtime answers; the view module isn't involved.
+            requireViewSurface(method);
+            return true;
         case 'onConfigUpdate': {
             extensionConfig = params?.config || {};
             for (const p of [
@@ -721,6 +815,7 @@ async function dispatchMethod(method, params) {
                 providers.settingsProvider,
                 providers.toolbarProvider,
                 providers.messageFormatter,
+                providers.view,
             ]) {
                 if (p?.onConfigUpdate) {
                     try {
@@ -749,6 +844,7 @@ async function dispatchMethod(method, params) {
                 providers.settingsProvider,
                 providers.toolbarProvider,
                 providers.messageFormatter,
+                providers.view,
                 ...Object.values(providers.widgets),
             ];
             for (const p of all) {
@@ -789,6 +885,13 @@ function handleHostMessage(ev) {
             else entry.resolve(msg.result);
             break;
         }
+        case 'storage-changed':
+            // Fire-and-forget hint from the host: key names only (§10).
+            storageEvents.deliver(msg.changes);
+            break;
+        case 'view-response':
+            viewSurface?.handleResponse(msg);
+            break;
         default:
             // Unknown messages are ignored — the host may be newer than us.
             break;
