@@ -86,7 +86,8 @@ export function formatToolSteeringBlock(defs) {
     block += 'Available extension tools:\n\n';
 
     for (const def of list) {
-        block += `Extension: ${def.extensionId} (${def.extensionIcon} ${def.extensionName})\n`;
+        // safeText: the name comes from the extension's own locale files.
+        block += `Extension: ${safeText(def.extensionId)} (${safeText(def.extensionIcon)} ${safeText(def.extensionName)})\n`;
         for (const tool of def.tools.filter(isToolEntry)) {
             block += `  - ${safeText(tool.name)}: ${safeText(tool.description)}\n`;
             const params =
@@ -159,8 +160,9 @@ export function formatToolParam(name, spec) {
 
 /**
  * `a|b|c` for an enum of strings and finite numbers, '' for anything else.
- * A value that would blur the list (a separator, a bracket, whitespace, or
- * an empty string) is JSON-quoted. Long lists end in `… (+N more)`.
+ * A value that would blur the list (a separator, a bracket, a double quote,
+ * whitespace, or an empty string) is JSON-quoted, so `"a"` and `a` can't
+ * print the same. Long lists end in `… (+N more)`.
  */
 function enumText(values) {
     if (!Array.isArray(values) || values.length === 0) return '';
@@ -173,7 +175,7 @@ function enumText(values) {
     const shown = list
         .slice(0, MAX_STEERING_ENUM_VALUES)
         .map((x) =>
-            typeof x === 'string' && !/^[^\s|,;()]+$/.test(x) ? JSON.stringify(x) : String(x)
+            typeof x === 'string' && !/^[^\s|,;()"]+$/.test(x) ? JSON.stringify(x) : String(x)
         );
     const rest = list.length - shown.length;
     return shown.join('|') + (rest > 0 ? `|… (+${rest} more)` : '');

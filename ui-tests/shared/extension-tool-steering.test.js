@@ -396,6 +396,26 @@ describe('formatToolSteeringBlock', () => {
         expect(block).toContain('  - t: does t');
         expect(block).toContain('a (undefined)');
     });
+
+    it("an unprintable extension name doesn't drop the other extensions' tools", () => {
+        const block = formatToolSteeringBlock([
+            {
+                extensionId: 'bad',
+                extensionName: structuredClone({ toString: 1 }),
+                extensionIcon: '🧩',
+                tools: [{ name: 'b', description: 'does b' }],
+            },
+            {
+                extensionId: 'stocks',
+                extensionName: 'Stocks',
+                extensionIcon: '📈',
+                tools: [QUOTE_TOOL],
+            },
+        ]);
+        expect(block).toContain('Extension: bad (🧩 )');
+        expect(block).toContain('Extension: stocks (📈 Stocks)');
+        expect(block).toContain('  - get_quote: Latest price for a ticker');
+    });
 });
 
 describe('formatToolParam', () => {
@@ -504,6 +524,10 @@ describe('formatToolParam', () => {
         expect(
             formatToolParam('x', { type: 'string', enum: ['a b', '', 'x|y', 'p(q)', 'ok', 'last week'] })
         ).toBe('x (string, one of: "a b"|""|"x|y"|"p(q)"|ok|"last week")');
+        // A value with quotes in it can't read as the quoted form of another.
+        expect(formatToolParam('x', { type: 'string', enum: ['"a"', 'a'] })).toBe(
+            'x (string, one of: "\\"a\\""|a)'
+        );
     });
 
     it('is what the steering block prints for each parameter', () => {

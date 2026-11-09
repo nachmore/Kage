@@ -20,6 +20,12 @@ function _stripCatalogMeta(catalog) {
  * `__MSG_` and `__` is a translation token. We only resolve `name` and
  * `description` for now — those are the user-visible ones; other manifest
  * fields are wire data.
+ *
+ * Only a string `message` replaces a token. The catalog is the extension's
+ * own JSON, so a `message` can be any value, and an object one (say
+ * `{ "toString": 1 }`) throws wherever the name is put in a string. That
+ * would break host text that lists every extension, such as the agent's
+ * tool steering.
  */
 export function applyManifestI18n(manifest, catalog, fallback) {
     const out = { ...manifest };
@@ -27,8 +33,8 @@ export function applyManifestI18n(manifest, catalog, fallback) {
         const v = manifest[field];
         if (typeof v !== 'string' || !v.startsWith('__MSG_') || !v.endsWith('__')) continue;
         const key = v.slice(6, -2);
-        const entry = catalog?.[key] || fallback?.[key];
-        if (entry?.message) out[field] = entry.message;
+        const message = (catalog?.[key] || fallback?.[key])?.message;
+        if (typeof message === 'string' && message) out[field] = message;
     }
     return out;
 }
@@ -58,12 +64,13 @@ export function extensionDisplay(ext, fallbackId = '') {
  * supplies keys directly, never raw user-facing text, so localisation isn't
  * something the author can forget. No ICU vars: keyword labels are static
  * noun phrases. Returns '' for a missing key with no fallback so callers can
- * skip empty descriptions.
+ * skip empty descriptions. A `message` that isn't a string counts as
+ * missing, as in `applyManifestI18n`.
  */
 export function resolveExtensionMessage(key, catalog, fallback, fallbackText = '') {
     if (typeof key !== 'string' || !key) return fallbackText;
-    const entry = catalog?.[key] || fallback?.[key];
-    return entry?.message ?? fallbackText;
+    const message = (catalog?.[key] || fallback?.[key])?.message;
+    return typeof message === 'string' ? message : fallbackText;
 }
 
 /**

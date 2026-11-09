@@ -1684,8 +1684,8 @@ kinds (array of string, one of: note|link|doc, required) — Only these kinds
 ```
 
 At most 12 allowed values are listed (the rest are counted), and values
-containing spaces or separators are quoted. Fields of the wrong shape are
-left out. Hosts from before `enum`, `items` and `required` were shown print
+containing spaces, double quotes or separators are quoted. Fields of the
+wrong shape are left out. Hosts from before `enum`, `items` and `required` were shown print
 only `type`, `default` and `description`, so if the allowed values matter,
 name them in the description too. The host doesn't validate parameters
 against these fields: check and coerce them in `execute()`.

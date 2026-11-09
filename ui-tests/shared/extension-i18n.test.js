@@ -13,7 +13,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { applyManifestI18n } from '../../ui/js/shared/extension-manager.js';
+import {
+    applyManifestI18n,
+    resolveExtensionMessage,
+} from '../../ui/js/shared/extension-manager.js';
 
 describe('applyManifestI18n', () => {
     it('resolves __MSG_*__ tokens against the catalog', () => {
@@ -95,5 +98,34 @@ describe('applyManifestI18n', () => {
             {}
         );
         expect(out.tags).toEqual(['__MSG_should_not_translate__']);
+    });
+
+    it('ignores a message that is not a string, so the name stays printable', () => {
+        // Locale files are the extension's own JSON. `{ "toString": 1 }`
+        // throws in a template literal, which would break every host text
+        // that lists extension names (e.g. the agent's tool steering).
+        const catalog = JSON.parse(
+            '{"manifest.name": {"message": {"toString": 1}}, "manifest.description": {"message": 7}}'
+        );
+        const out = applyManifestI18n(
+            { name: '__MSG_manifest.name__', description: '__MSG_manifest.description__' },
+            catalog,
+            {}
+        );
+        expect(out.name).toBe('__MSG_manifest.name__');
+        expect(out.description).toBe('__MSG_manifest.description__');
+        expect(() => `${out.name} ${out.description}`).not.toThrow();
+    });
+});
+
+describe('resolveExtensionMessage', () => {
+    it('returns the message, or the fallback text for a missing or non-string one', () => {
+        const catalog = JSON.parse(
+            '{"ok": {"message": "Notes"}, "bad": {"message": {"toString": 1}}, "num": {"message": 3}}'
+        );
+        expect(resolveExtensionMessage('ok', catalog, {}, 'x')).toBe('Notes');
+        expect(resolveExtensionMessage('bad', catalog, {}, 'x')).toBe('x');
+        expect(resolveExtensionMessage('num', catalog, {}, 'x')).toBe('x');
+        expect(resolveExtensionMessage('missing', catalog, {}, 'x')).toBe('x');
     });
 });
