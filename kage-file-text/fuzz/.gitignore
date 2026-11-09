@@ -1,0 +1,7 @@
+target
+corpus
+artifacts
+coverage
+# A separate workspace: its lock file is local, so the fuzzers always
+# build against what the app's Cargo.lock would resolve today.
+Cargo.lock

@@ -297,7 +297,9 @@ All formats end up as one string with `\n` line breaks, after the
 normalisation in §5.10.
 
 - **Text**: as decoded. Title: none.
-- **Markdown**: as decoded, markup kept. Title: the first `#` heading.
+- **Markdown**: as decoded, markup kept. Title: the YAML front matter's
+  `title:`, else the first level-1 heading (`# …`, or a line over `===`)
+  outside code fences.
 - **PDF**: page by page in content order, a blank line between pages.
   Multi-column pages may interleave columns. Title: the document's
   `/Title`.
@@ -654,9 +656,16 @@ for tests and fuzzing) and a binary (the worker). It depends on
 `kage-core` for the wire types and on the parser crates (§6). The app
 crate does not link the parsers.
 
+The worker links `kage-core` with `default-features = false`. Its `os`
+feature, on by default for the app and the other sidecars, gates the OS
+layer and everything built on it. Without it, the worker loads no
+AppKit, UI Automation or `dirs`: on macOS it links only `libSystem` and
+`libiconv`.
+
 **Provisioning.** Like the MCP sidecar: `build.rs` calls
 `provision_sidecar("kage-file-text")` on every platform (with
-`rerun-if-changed` on `kage-file-text/`), and `tauri.conf.json` and
+`rerun-if-changed` on `kage-file-text/src` and its `Cargo.toml`, not on
+`fuzz/`, which keeps a target dir and corpora), and `tauri.conf.json` and
 `tauri.macos.conf.json` list `src-tauri/binaries/kage-file-text` in
 `externalBin` (the macOS file replaces the base list, so both need it).
 On macOS tauri-bundler signs it with the app's entitlements, as it does
@@ -688,15 +697,26 @@ stdin:
 
 - A counting global allocator with a 768 MiB cap. Over the cap, the
   allocation fails and Rust aborts the worker.
-- Unix: `setrlimit(RLIMIT_CPU, 30 s)`. Linux also `RLIMIT_AS` (2 GiB),
-  `PR_SET_NO_NEW_PRIVS`, and `PR_SET_PDEATHSIG(SIGKILL)` so it dies with
-  Kage.
-- Windows: create a Job Object with a 1 GiB process memory limit and an
-  active-process limit of 1 (it can't start programs), and assign itself
-  to it. It is also inside Kage's kill-on-exit job, so it dies with Kage.
+- Unix: `setrlimit(RLIMIT_CPU)`, 30 s soft and 31 s hard, and
+  `RLIMIT_CORE` 0, so a crash never writes the document into a core
+  file. Linux also `RLIMIT_AS` (2 GiB), `PR_SET_NO_NEW_PRIVS`, and
+  `PR_SET_PDEATHSIG(SIGKILL)` so it dies with Kage. The death signal
+  fires when the thread that spawned the worker exits, so the app spawns
+  it and waits for it on the same thread.
+- Windows: create a Job Object with a 1 GiB process memory limit, an
+  active-process limit of 1 (it can't start programs) and death on an
+  unhandled exception, and assign itself to it. The error mode turns
+  off crash dialogs. It is also inside Kage's kill-on-exit job, so it
+  dies with Kage.
 - macOS doesn't enforce `RLIMIT_AS`, so there the allocator cap is the
   memory limit. `RLIMIT_CPU` still applies.
-- Read the request frame (header ≤ 4 KiB, payload ≤ 32 MiB).
+- Each limit is best effort: one that fails is noted on stderr and the
+  worker goes on. The deadline and the allocator cap still hold.
+- The panic hook prints only where a panic happened, never its message,
+  which could quote the file.
+- Read the request frame (header ≤ 4 KiB, payload ≤ 32 MiB). A bad frame
+  or an unknown `v` → `Err { code: Malformed }`. Any argument other than
+  `--v1` → usage on stderr, exit status 2.
 - Run the parser on a thread with a 64 MiB stack, inside
   `catch_unwind`. A panic → `malformed`.
 - Write one JSON response to stdout, exit 0.
@@ -799,16 +819,30 @@ In the worker, from the bytes, checked against the extension:
 
 If the detected format isn't the one the extension implies, the request
 fails with `wrong_content`. `text` and `markdown` count as one family.
+Three details:
+- An OLE file is `encrypted` or `legacy_format` whatever its extension.
+- For `text`, `markdown` and `html` the PDF header must be at offset 0,
+  so a note that mentions `%PDF-` near its top is still text.
+- A ZIP's entry count is read from its end record (and the ZIP64 one)
+  before the archive is parsed, so a huge directory is refused
+  (`too_complex`) without being built.
 
 ### 5.9 Per-format extraction rules
 
 **Text and Markdown**
-- BOM first (UTF-8, UTF-16 LE/BE). Then strict UTF-8. Then UTF-16 without a
-  BOM if the NUL pattern says so. Then `chardetng` picks an encoding and
+- BOM first (UTF-8, UTF-16 LE/BE). Then UTF-16 without a BOM if the NUL
+  pattern says so; this comes before UTF-8, because UTF-16 text in the
+  ASCII range is also valid UTF-8. Then strict UTF-8. Then UTF-8 with a
+  few bad sequences (at most one per 20 multi-byte characters, or one
+  cut-off character at the end), decoded with U+FFFD
+  (`replaced_characters`), so one bad byte doesn't turn a UTF-8 file
+  into a legacy guess. Then `chardetng` picks an encoding and
   `encoding_rs` decodes it (`legacy_encoding`).
-- More than 1% NUL or other control bytes in the first 8 KiB → `not_text`.
-- Decoding stops once `max_chars` is reached (`truncated`,
-  `total_chars` from a cheap count of the rest).
+- More than 1% control characters in the first 8 KiB → `not_text`.
+  Tab, line breaks, form feed, vertical tab and ESC (colour codes in
+  logs) don't count.
+- The whole file is decoded (at most 32 MiB), and the normaliser counts
+  past `max_chars`, so `total_chars` is exact.
 
 **DOCX and PPTX** (`kage-file-text/src/ooxml/`)
 - Open the ZIP from memory with the `zip` crate. More than 20,000 entries
@@ -876,18 +910,23 @@ fails with `wrong_content`. `text` and `markdown` count as one family.
 In the worker, after extraction, for every format, in this order:
 
 1. Unicode NFC.
-2. `\r\n` and `\r` → `\n`. U+2028 and U+2029 → `\n`.
-3. Remove: NUL and other C0 controls except tab and `\n`; C1 controls;
+2. `\r\n` and `\r` → `\n`. U+0085, U+2028 and U+2029 → `\n`.
+3. Remove: NUL and other C0 controls except tab and `\n`; DEL; C1 controls;
    U+FEFF; noncharacters; Unicode tag characters (U+E0000–U+E007F, used to
    hide instructions from people but not from AI models); the bidi
    overrides LRO and RLO (U+202D, U+202E). Embeddings, isolates and the
    LRM/RLM marks stay, because right-to-left documents use them.
 4. Trim trailing spaces on each line. Collapse three or more line breaks
-   into two.
+   into two. No blank lines at the start, no whitespace at the end.
 5. If the text is longer than `max_chars` (counted in Unicode scalar
    values), cut it. Prefer the last paragraph break in the final 5%, then
-   the last sentence end, then the last whitespace, then a hard cut. Set
-   `truncated`.
+   the last sentence end, then the last whitespace (all three within
+   that final 5%), then a hard cut. Set `truncated`.
+
+Parsers feed their text through one `Normalizer`
+(`kage-file-text/src/normalize.rs`), which also records `page_starts`
+and tells a parser when it can stop. NFC runs on each piece a parser
+pushes, so parsers push whole pages or paragraphs, not word fragments.
 
 File names and titles get the same treatment, plus: every bidi control
 removed, whitespace collapsed to single spaces, one line, trimmed, capped.
@@ -985,9 +1024,10 @@ No new `Config` field.
 ## 6. Crates and licences
 
 Kage is Apache-2.0. Only permissive licences (MIT, Apache-2.0, BSD,
-Zlib, Unicode) are allowed in the worker's tree, with one named
-exception: `option-ext` (MPL-2.0). It comes through `kage-core` → `dirs`,
-not from a parser, and the app already ships it. WP-FT0 checked the
+Zlib, Unicode) are allowed in the worker's tree. WP-FT0 found one
+exception, `option-ext` (MPL-2.0), through `kage-core` → `dirs`, not
+from a parser; since WP-FT1 the worker links `kage-core` without `dirs`
+(§5.5), so its tree has none. WP-FT0 checked the
 planned tree with `cargo deny check licenses` (§6.1).
 
 | Need | Choice | Licence | Notes |
@@ -1187,8 +1227,8 @@ The exception is the one MPL-2.0 crate, through `kage-core` → `dirs` →
 `dirs-sys`. `pdf-extract`'s own 78 crates are MIT, Apache-2.0,
 BSD-3-Clause (`encoding_rs`), Zlib (`zlib-rs`) and Unicode-3.0;
 `lopdf` 0.47 adds BSD-3-Clause (`brotli-decompressor`, `alloc-stdlib`).
-To drop the exception, FT1 can put `dirs` behind a `kage-core` feature
-that the worker turns off.
+FT1 dropped the exception: `dirs` is behind `kage-core`'s `os` feature,
+which the worker turns off.
 
 ### 6.2 Decision: `pdf-extract`
 
@@ -1671,7 +1711,10 @@ Item {
 - Fuzzing: `cargo fuzz` targets `text`, `ooxml`, `pdf`, `html`, `rtf`,
   seeded from the fixtures. Invariants: no panic escapes, output within
   caps, each input under the deadline. A nightly CI job runs each for a
-  few minutes.
+  few minutes. The targets call `extract_as`, which skips the
+  `READS_P1_FORMATS` check, so FT4 can fuzz HTML and RTF before FT8
+  switches them on. `fuzz/` is its own workspace; `cargo fuzz build -s
+  none` works on stable Rust.
 
 **App crate**
 - Unit (`src/file_text/*`): args validation; grant and enabled checks;
@@ -1687,8 +1730,11 @@ Item {
   first): spawn the real worker built by `build.rs` on fixture files; a
   hanging worker (debug-only `--v1-test-hang` flag) is killed at the
   deadline; a crashing one (`--v1-test-abort`) gives `too_complex`;
-  oversized stdout gives `worker_failed`. These flags exist only with
-  `debug_assertions`.
+  oversized stdout (`--v1-test-flood`) gives `worker_failed`. These
+  flags exist only with `debug_assertions`. The worker crate's own
+  process tests (`kage-file-text/tests/worker.rs`) also use
+  `--v1-test-limits` (prints the limits in effect before stdin is read),
+  `--v1-test-oom`, `--v1-test-panic` and `--v1-test-deep`.
 - Existing gates: `command_error_type_parity_test` (all three return
   `Result<_, AppError>`), `command_permissions_parity_test` (the JS table
   has them), `user_dirs_isolation_test` (the key goes through
@@ -1809,7 +1855,9 @@ with EXTENSION_AGENT_CALLS's `AC-X1` and `AC-MM1`…`AC-MM3`.
   `Unsupported`, `tests/`, `fuzz/` with all five targets, the `text` one
   real), root `Cargo.toml` (workspace member, `hmac` for the app),
   `Cargo.lock`, `build.rs`, `tauri.conf.json`, `tauri.macos.conf.json`,
-  `CLAUDE.md` (the binaries section names the new sidecar).
+  `CLAUDE.md` (the binaries section names the new sidecar). Also
+  `kage-core/Cargo.toml` and `kage-core/src/lib.rs` (the `os` feature,
+  §5.5) and `scripts/check_module_size.py` (the new source root).
 - Accept:
   - `cargo build` stages `kage-file-text-<triple>` and Tauri copies it
     next to `kage` on all three OSes; a warm no-op build stays under a

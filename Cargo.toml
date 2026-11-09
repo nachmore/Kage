@@ -135,6 +135,9 @@ zeroize = "1"
 # lets store_install_inner drop the heavyweight `ring` API.
 sha2 = "0.10"
 hex = "0.4"
+# Keyed `file_ref` for files an extension reads (EXTENSION_FILE_TEXT §5.11)
+# and folder sync's HMACs (SYNC.md). Matches `sha2` 0.10.
+hmac = "0.12"
 # OS locale detection so the i18n module can default to the user's system
 # language when `config.ui.language` is unset. Tiny, zero-deps crate that
 # wraps the platform-native API on each OS (CFLocale on macOS,
@@ -251,7 +254,7 @@ test = false
 # Sidecars are separate members (not [[bin]]s of this crate) to keep them
 # out of Tauri's app discovery; build.rs provisions them into
 # src-tauri/binaries/ for bundle.externalBin.
-members = ["computer_control_mcp", "kage-core", "kage-calendar-helper"]
+members = ["computer_control_mcp", "kage-core", "kage-calendar-helper", "kage-file-text"]
 default-members = ["."]
 resolver = "2"
 

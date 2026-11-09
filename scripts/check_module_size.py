@@ -20,6 +20,7 @@ SOURCE_ROOTS = (
     ROOT / "kage-core" / "src",
     ROOT / "computer_control_mcp" / "src",
     ROOT / "kage-calendar-helper" / "src",
+    ROOT / "kage-file-text" / "src",
     ROOT / "ui" / "js",
 )
 EXTENSIONS = {".rs", ".js", ".jsx", ".ts", ".tsx"}
