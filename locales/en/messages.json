@@ -7393,6 +7393,10 @@
     "message": "\"{field}\" is {size} characters. The limit is {limit}.",
     "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: one field of the request is too long. {field} is the field name; {size} and {limit} are numbers."
   },
+  "errors.agent_call.field_invalid": {
+    "message": "\"{field}\" isn't valid.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: one field of the request has characters or a shape Kage doesn't accept. {field} is the field name."
+  },
   "errors.agent_call.prompt_too_large": {
     "message": "The request is {size} characters. The limit is {limit}.",
     "description": "A background AI request (an extension asking the user's agent for help with no chat). The whole prompt Kage would send is over the size limit. {size} and {limit} are numbers."

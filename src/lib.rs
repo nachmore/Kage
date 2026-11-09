@@ -11,6 +11,7 @@ pub mod paths;
 // Pure modules — always available, including in test mode
 pub mod acp_client;
 pub mod activity_tracker;
+pub mod agent_calls;
 pub mod agent_commands;
 pub mod agent_presets;
 pub mod agent_sessions;
