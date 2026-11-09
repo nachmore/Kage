@@ -143,23 +143,19 @@ pub const FILE_TEXT_PROGRESS: &str = "file_text_progress";
 
 /// A view window was opened again while it exists. Payload: `{ params,
 /// open_seq, source }`. Sent only to that view window.
-#[allow(dead_code)] // `ext_view_open` will emit it; the app doesn't yet.
 pub const EXT_VIEW_REOPEN: &str = "ext_view_reopen";
 
 /// A view window was shown or hidden. Payload: `{ visible }`. Sent only to
 /// that view window.
-#[allow(dead_code)] // The view window lifecycle will emit it; the app doesn't yet.
 pub const EXT_VIEW_VISIBILITY: &str = "ext_view_visibility";
 
 /// Focus left a view window, and neither the launcher nor another view
 /// has it. No payload. Sent to the floating launcher, which hides if it
 /// stayed open as the view's companion.
-#[allow(dead_code)] // The view window lifecycle will emit it; the app doesn't yet.
 pub const EXT_VIEW_FOCUS_LOST: &str = "ext_view_focus_lost";
 
 /// Put text in the launcher's input without sending it. Payload:
 /// `{ text }`. Sent to the floating launcher by `ext_view_compose`.
-#[allow(dead_code)] // `ext_view_compose` will emit it; the app doesn't yet.
 pub const FLOATING_COMPOSE: &str = "floating_compose";
 
 /// An extension's stored data changed. Payload: `{ extension_id, changes:

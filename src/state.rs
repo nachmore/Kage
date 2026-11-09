@@ -292,6 +292,10 @@ pub struct UiState {
     /// happened at startup (before any window could listen) is still
     /// discoverable. Empty means the last registration pass was fully clean.
     pub hotkey_registration_failures: Arc<std::sync::Mutex<Vec<(String, String)>>>,
+    /// Extension view windows that exist, visible or cached hidden: their
+    /// boot records, teardown timers, geometry debounce and rate limits
+    /// (docs/design/EXTENSION_VIEWS.md §16.2).
+    pub ext_views: Arc<crate::ext_views::Registry>,
 }
 
 /// Child processes we spawn and need to clean up. Held as `Option<Child>`
@@ -375,6 +379,7 @@ pub fn build_managed_state(
             source_window: Arc::new(std::sync::Mutex::new(None)),
             frontend_ready: Arc::new(AtomicBool::new(false)),
             hotkey_registration_failures: Arc::new(std::sync::Mutex::new(Vec::new())),
+            ext_views: Arc::new(crate::ext_views::Registry::default()),
         },
         child_processes: ChildProcesses {
             pocket_tts: Arc::new(std::sync::Mutex::new(None)),

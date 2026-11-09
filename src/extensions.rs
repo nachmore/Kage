@@ -436,7 +436,6 @@ impl ExtensionManifest {
     }
 
     /// The valid `contributes.views` entries (see [`views::normalize_views`]).
-    #[allow(dead_code)] // `ext_view_open` will read it; the app doesn't yet.
     pub fn views(&self) -> Vec<views::ViewDecl> {
         views::normalize_views(
             self.contributes.as_ref().and_then(|c| c.views.as_ref()),

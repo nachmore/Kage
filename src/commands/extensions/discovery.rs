@@ -95,6 +95,11 @@ pub async fn set_extension_enabled<R: tauri::Runtime>(
         .map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Extension '{}' enabled={}", id, enabled);
     drop(config);
+    // A turned-off extension's view windows go at once (§7.3 of
+    // docs/design/EXTENSION_VIEWS.md).
+    if !enabled {
+        crate::ext_views::close_for_extension(&app, &id);
+    }
     crate::telemetry::track(
         &app,
         "extension_enabled_toggled",
