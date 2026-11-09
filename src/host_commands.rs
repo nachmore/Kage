@@ -187,6 +187,22 @@ impl HostCommands {
         }
         self.approvals.shutdown_all();
     }
+
+    /// Listen again after [`Self::stop`], for a shutdown that didn't
+    /// happen (an update that failed to install after `graceful_shutdown`
+    /// tore things down): without it, agents would hear that Kage isn't
+    /// running until the user restarted it. Binds on its own thread.
+    pub fn resume<R: tauri::Runtime>(self: &std::sync::Arc<Self>, app: &tauri::AppHandle<R>) {
+        self.stopped
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        let (this, app) = (self.clone(), app.clone());
+        let spawned = std::thread::Builder::new()
+            .name("host-bridge-start".into())
+            .spawn(move || this.start(app));
+        if let Err(e) = spawned {
+            log::warn!("Host bridge: couldn't restart: {e}");
+        }
+    }
 }
 
 #[cfg(test)]

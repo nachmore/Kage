@@ -438,3 +438,35 @@ fn the_endpoint_is_gone_once_the_bridge_stops() {
         "{err:?}"
     );
 }
+
+#[test]
+fn the_bridge_listens_again_after_an_aborted_shutdown() {
+    let _serial = serial();
+    let bridge = Bridge::start(vec![rule("echo")], Duration::from_secs(60));
+    // What `graceful_shutdown` does before an update installs.
+    bridge.host_commands().stop();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while transport::connect(&bridge.endpoint).is_ok() {
+        assert!(Instant::now() < deadline, "still listening after stop");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // A start after stop stays off (a shutdown is under way) …
+    bridge.host_commands().start(bridge.app.handle().clone());
+    assert!(transport::connect(&bridge.endpoint).is_err());
+
+    // … until the install fails and the app stays up.
+    bridge.host_commands().resume(bridge.app.handle());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while transport::connect(&bridge.endpoint).is_err() {
+        assert!(Instant::now() < deadline, "the bridge didn't come back");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let (_dir, cwd) = temp_cwd();
+    let command = "echo kage-bridge-resumed";
+    agent_tool_call("hb-session-resume", "hb-call-resume", command, &cwd);
+    let response = send(&bridge.endpoint, &request(command, &cwd));
+    assert_eq!(response.status, ResponseStatus::Ran, "{response:?}");
+    assert!(response
+        .run
+        .is_some_and(|r| r.output.contains("kage-bridge-resumed")));
+}
