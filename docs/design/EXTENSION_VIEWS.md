@@ -1,6 +1,8 @@
 # Extension views: full windows that an extension draws
 
-Status: design, ready to build. Nothing here is implemented yet.
+Status: built. WP-V1 to WP-V7 are in Kage; Mind Map's explorer (WP-V8,
+§24) is Kage-Extensions work. The guide for extension authors is
+[`docs/EXTENSIONS.md`](../EXTENSIONS.md) § Views.
 
 This document specifies a new extension surface, the **view**. A view is
 an on-demand Kage window whose content is drawn by an extension: for
@@ -561,6 +563,7 @@ surface:
 | `referrerpolicy` | not set | `no-referrer` |
 | srcdoc head | charset | charset, CSP `<meta>` (§8.4), `<html lang dir>`, theme `<style>` |
 | Providers loaded | everything the manifest contributes | only the view module and what it imports |
+| `sandboxVendor` libraries | given to `runSandboxed` | not loaded (only built-in extensions may declare them, and none has a view) |
 
 The view's CSS files reach the runtime in the `init` message. The runtime
 adds them as `<style>` elements, after the theme `<style>` and before the
@@ -2100,6 +2103,18 @@ package codes against this document.
   windows on macOS, never overlays).
 - **Done when:** the docs match what V2–V6 shipped (reviewed against the
   code), and links resolve.
+- Decisions made while building it:
+  - `context.storage.onChanged` works on every surface, so EXTENSIONS.md
+    documents it under "Your extension runs as MULTIPLE instances"
+    (§ Change events). The Views section links there.
+  - SECURITY_MODEL.md also gains an "Extension views" section (the
+    §17.2 mitigations), the view's clipboard write in the capability
+    notes, the view's CSP in the CSP section, and the hidden-sandbox
+    CSP in "Known gaps".
+  - PRIVACY.md has no list of events (it points at `KNOWN_EVENTS`), so
+    the event is described in a sentence under "Events".
+  - The view page passes no `sandboxVendor` libraries to the view
+    sandbox (§8.3). EXTENSIONS.md says so.
 
 ### WP-V8 Mind Map explorer (Kage-Extensions)
 
