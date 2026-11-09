@@ -19,7 +19,7 @@ use std::io;
 #[cfg(unix)]
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Where the bridge listens.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,10 +79,28 @@ impl BridgeStream {
         self.0.peer_closed()
     }
 
-    /// Bound how long a read may block (`None`: forever). A no-op on
-    /// Windows, whose pipe handles have no read timeout.
+    /// Bound how long each read may block (`None`: forever).
     pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
         self.0.set_read_timeout(timeout)
+    }
+
+    /// Read one line of at most `max` bytes ([`read_line_bounded`]),
+    /// giving up with [`io::ErrorKind::TimedOut`] once `within` has passed
+    /// in all — however slowly the bytes trickle in, so a client that
+    /// never finishes its line can't hold the connection open. Leaves the
+    /// read timeout set; reset it before reading on.
+    ///
+    /// [`read_line_bounded`]: crate::host_bridge::read_line_bounded
+    pub fn read_line_within(
+        &mut self,
+        max: usize,
+        within: Duration,
+    ) -> io::Result<crate::host_bridge::LineRead> {
+        let reader = DeadlineReader {
+            stream: self,
+            deadline: Instant::now() + within,
+        };
+        crate::host_bridge::read_line_bounded(reader, max)
     }
 
     /// The peer's process id, when the OS says.
@@ -103,6 +121,39 @@ impl io::Write for BridgeStream {
     }
     fn flush(&mut self) -> io::Result<()> {
         self.0.flush()
+    }
+}
+
+/// Reads from a stream until a deadline: each read may block only for
+/// the time left.
+struct DeadlineReader<'a> {
+    stream: &'a mut BridgeStream,
+    deadline: Instant,
+}
+
+impl io::Read for DeadlineReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let left = self.deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "the request took too long to arrive",
+            ));
+        }
+        if let Err(e) = self.stream.set_read_timeout(Some(left)) {
+            // macOS refuses SO_RCVTIMEO once the peer has closed; what it
+            // sent is still there, and reading it can't block.
+            if !self.stream.peer_closed() {
+                return Err(e);
+            }
+        }
+        match io::Read::read(self.stream, buf) {
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "the request took too long to arrive",
+            )),
+            other => other,
+        }
     }
 }
 

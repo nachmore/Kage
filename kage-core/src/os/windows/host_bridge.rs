@@ -6,9 +6,9 @@
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use windows::core::{HSTRING, PWSTR};
 use windows::Win32::Foundation::{
@@ -40,6 +40,8 @@ use crate::os::host_bridge::Endpoint;
 const PIPE_BUFFER: u32 = 64 * 1024;
 const CONNECT_ATTEMPTS: u32 = 5;
 const BUSY_WAIT_MS: u32 = 2000;
+/// How often a read with a timeout looks for data.
+const READ_POLL: Duration = Duration::from_millis(20);
 
 fn win_err(e: windows::core::Error) -> io::Error {
     let hr = e.code().0 as u32;
@@ -201,10 +203,22 @@ fn create_instance(
 pub struct Stream {
     file: File,
     peer: u32,
+    /// The read timeout in milliseconds, plus one; 0 for none. A pipe
+    /// handle has no timeout of its own, so `read` waits for data itself.
+    read_timeout_ms: AtomicU64,
 }
 
 impl Stream {
-    pub fn peer_closed(&self) -> bool {
+    fn new(file: File, peer: u32) -> Self {
+        Self {
+            file,
+            peer,
+            read_timeout_ms: AtomicU64::new(0),
+        }
+    }
+
+    /// Bytes waiting to be read; an error once the other end has gone.
+    fn bytes_available(&self) -> io::Result<u32> {
         let mut avail = 0u32;
         // SAFETY: a live pipe handle; only the byte count is requested.
         unsafe {
@@ -216,11 +230,23 @@ impl Stream {
                 Some(&mut avail as *mut u32),
                 None,
             )
-            .is_err()
         }
+        .map_err(win_err)?;
+        Ok(avail)
     }
 
-    pub fn set_read_timeout(&self, _timeout: Option<Duration>) -> io::Result<()> {
+    pub fn peer_closed(&self) -> bool {
+        self.bytes_available().is_err()
+    }
+
+    pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        let stored = timeout.map_or(0, |t| {
+            u64::try_from(t.as_millis())
+                .unwrap_or(u64::MAX)
+                .min(u64::MAX - 1)
+                + 1
+        });
+        self.read_timeout_ms.store(stored, Ordering::SeqCst);
         Ok(())
     }
 
@@ -229,6 +255,18 @@ impl Stream {
     }
 
     pub fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let stored = self.read_timeout_ms.load(Ordering::SeqCst);
+        if stored != 0 {
+            // A read blocks until data arrives: wait for some (or for the
+            // client to go, which the read then reports) first.
+            let deadline = Instant::now().checked_add(Duration::from_millis(stored - 1));
+            while matches!(self.bytes_available(), Ok(0)) {
+                if deadline.is_some_and(|d| Instant::now() >= d) {
+                    return Err(io::Error::new(io::ErrorKind::TimedOut, "read timed out"));
+                }
+                std::thread::sleep(READ_POLL);
+            }
+        }
         self.file.read(buf)
     }
 
@@ -303,10 +341,7 @@ impl Listener {
             let known = unsafe { GetNamedPipeClientProcessId(raw(&pipe), &mut pid) }.is_ok();
             let same = known && process_user(pid).is_ok_and(|u| u.same_user(&self.user));
             if same {
-                return Ok(Some(Stream {
-                    file: File::from(pipe),
-                    peer: pid,
-                }));
+                return Ok(Some(Stream::new(File::from(pipe), pid)));
             }
             log::warn!("Host bridge: dropped a pipe client that isn't this user (pid {pid})");
         }
@@ -374,8 +409,5 @@ pub fn connect(endpoint: &Endpoint) -> io::Result<Stream> {
             "the bridge pipe is served by another user",
         ));
     }
-    Ok(Stream {
-        file: File::from(pipe),
-        peer: pid,
-    })
+    Ok(Stream::new(File::from(pipe), pid))
 }

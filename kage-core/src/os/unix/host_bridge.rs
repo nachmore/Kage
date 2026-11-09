@@ -57,13 +57,17 @@ pub fn check_private_dir(dir: &Path, uid: u32) -> io::Result<()> {
     Ok(())
 }
 
-/// The directory that holds `dir` must not let others swap it out: not
-/// writable by group or others unless sticky (like `/tmp`).
-fn check_parent(dir: &Path) -> io::Result<()> {
+/// The directory that holds `dir` must not let anyone else swap it out:
+/// owned by `uid` or root, and not writable by group or others unless
+/// sticky (like `/tmp`). Its owner can always rename what's in it.
+fn check_parent(dir: &Path, uid: u32) -> io::Result<()> {
     let Some(parent) = dir.parent() else {
         return Ok(());
     };
     let meta = fs::metadata(parent)?;
+    if meta.uid() != uid && meta.uid() != 0 {
+        return Err(refuse(parent, format!("is owned by uid {}", meta.uid())));
+    }
     let mode = meta.mode();
     if mode & 0o022 != 0 && mode & 0o1000 == 0 {
         return Err(refuse(
@@ -82,7 +86,7 @@ pub fn ensure_private_dir(dir: &Path, uid: u32) -> io::Result<()> {
     if let Some(parent) = dir.parent() {
         fs::create_dir_all(parent)?;
     }
-    check_parent(dir)?;
+    check_parent(dir, uid)?;
     match fs::DirBuilder::new().mode(0o700).create(dir) {
         Ok(()) => {}
         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
@@ -517,6 +521,22 @@ mod tests {
     }
 
     #[test]
+    fn a_parent_owned_by_someone_else_is_refused() {
+        if euid() == 0 {
+            return; // root's parent dirs are allowed by design
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let ep = endpoint_in(tmp.path());
+        let dir = dir_of(&ep);
+        // Pretend Kage runs as another (non-root) user: the parent, ours,
+        // is then someone else's, who could rename the bridge dir away.
+        let other = euid().wrapping_add(1).max(1);
+        let err = ensure_private_dir(dir, other).unwrap_err();
+        assert!(err.to_string().contains("owned by uid"), "{err}");
+        assert!(ensure_private_dir(dir, euid()).is_ok());
+    }
+
+    #[test]
     fn a_request_goes_through_to_a_peer_of_the_same_user() {
         let tmp = tempfile::tempdir().unwrap();
         let ep = endpoint_in(tmp.path());
@@ -577,6 +597,69 @@ mod tests {
         let _listener = Listener::bind(&ep).unwrap();
         let err = connect_for(&ep, euid().wrapping_add(1)).err().unwrap();
         assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn a_request_that_trickles_in_is_cut_off_at_its_deadline() {
+        use crate::os::host_bridge::BridgeStream;
+        let tmp = tempfile::tempdir().unwrap();
+        let ep = endpoint_in(tmp.path());
+        let listener = Listener::bind(&ep).unwrap();
+        let stop = AtomicBool::new(false);
+        let client_ep = ep.clone();
+        // A byte every 50 ms, never a newline: each read finishes well
+        // within any per-read timeout, so only a deadline for the whole
+        // line ends it.
+        let client = std::thread::spawn(move || {
+            let mut s = connect(&client_ep).unwrap();
+            for _ in 0..200 {
+                if s.inner.write_all(b"x").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+        let mut conn = BridgeStream(listener.accept(&stop).unwrap().expect("a connection"));
+        let started = std::time::Instant::now();
+        let err = conn
+            .read_line_within(64 * 1024, Duration::from_millis(400))
+            .expect_err("cut off");
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut, "{err}");
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "took {:?}",
+            started.elapsed()
+        );
+        drop(conn);
+        client.join().unwrap();
+    }
+
+    #[test]
+    fn a_line_within_its_deadline_is_read() {
+        use crate::os::host_bridge::BridgeStream;
+        let tmp = tempfile::tempdir().unwrap();
+        let ep = endpoint_in(tmp.path());
+        let listener = Listener::bind(&ep).unwrap();
+        let stop = AtomicBool::new(false);
+        let mut client = connect(&ep).unwrap();
+        client.inner.write_all(b"hello\n").unwrap();
+        let mut conn = BridgeStream(listener.accept(&stop).unwrap().unwrap());
+        assert_eq!(
+            conn.read_line_within(64, Duration::from_secs(5)).unwrap(),
+            LineRead::Line(b"hello".to_vec())
+        );
+
+        // Also when the client has already gone (macOS then refuses to set
+        // a read timeout at all).
+        let mut client = connect(&ep).unwrap();
+        client.inner.write_all(b"bye\n").unwrap();
+        drop(client);
+        let mut conn = BridgeStream(listener.accept(&stop).unwrap().unwrap());
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(
+            conn.read_line_within(64, Duration::from_secs(5)).unwrap(),
+            LineRead::Line(b"bye".to_vec())
+        );
     }
 
     #[test]
