@@ -181,6 +181,20 @@ pub(crate) fn preserve_backend_owned_fields(incoming: &mut Config, authoritative
         );
         incoming.extension_grants = authoritative.extension_grants.clone();
     }
+    // Background AI (switch, consent, allowance) changes only through
+    // `set_extension_agent_access`, uninstall and grant removal. A window
+    // that fetched its snapshot before the user switched it off must not
+    // switch it back on with an unrelated save (EXTENSION_AGENT_CALLS
+    // §5.13).
+    if incoming.extension_agent_access != authoritative.extension_agent_access {
+        log::warn!(
+            "save_config: ignoring an extension_agent_access change in the incoming snapshot \
+             ({} entries, backend has {}; backend-owned; use set_extension_agent_access)",
+            incoming.extension_agent_access.len(),
+            authoritative.extension_agent_access.len()
+        );
+        incoming.extension_agent_access = authoritative.extension_agent_access.clone();
+    }
     // Category-wide tool trust ("trust all CLI commands") is changed only
     // through the audited `set_tool_kind_trusted`; a stale or buggy window
     // snapshot must not grant or revoke it.
@@ -1201,6 +1215,91 @@ mod tests {
 
         preserve_backend_owned_fields(&mut incoming, &authoritative);
         assert_eq!(incoming.extension_grants, authoritative.extension_grants);
+    }
+
+    fn agent_access(enabled: bool, consent: bool) -> crate::config::ExtensionAgentAccess {
+        crate::config::ExtensionAgentAccess {
+            enabled,
+            consent: consent.then(|| crate::config::AgentConsent {
+                agent_fingerprint: "ab12".into(),
+                agent_label: "Work agent".into(),
+                granted_at: "2026-11-09T10:00:00+00:00".into(),
+            }),
+            allowance: crate::config::AgentAllowance::Normal,
+        }
+    }
+
+    #[test]
+    fn stale_snapshot_cannot_switch_background_ai_back_on() {
+        // A Settings window fetched its config while background AI was on,
+        // then the user switched it off (which also clears the consent).
+        // The window's next unrelated save must not switch it back on.
+        let mut authoritative = Config::default();
+        authoritative
+            .extension_agent_access
+            .insert("mindmap".into(), agent_access(false, false));
+        let mut stale = Config::default();
+        stale
+            .extension_agent_access
+            .insert("mindmap".into(), agent_access(true, true));
+        stale.ui.theme = "dark".into();
+
+        preserve_backend_owned_fields(&mut stale, &authoritative);
+        assert_eq!(
+            stale.extension_agent_access,
+            authoritative.extension_agent_access
+        );
+        assert!(!stale.extension_agent_access["mindmap"].enabled);
+        assert!(stale.extension_agent_access["mindmap"].consent.is_none());
+        assert_eq!(stale.ui.theme, "dark", "the unrelated change still saves");
+
+        // Turning off can also remove the entry: a stale "on" entry stays gone.
+        let authoritative = Config::default();
+        let mut stale = Config::default();
+        stale
+            .extension_agent_access
+            .insert("mindmap".into(), agent_access(true, true));
+        preserve_backend_owned_fields(&mut stale, &authoritative);
+        assert!(stale.extension_agent_access.is_empty());
+    }
+
+    #[test]
+    fn snapshot_cannot_turn_background_ai_on_or_off_either_way() {
+        // JS can't grant itself access or a bigger allowance…
+        let mut authoritative = Config::default();
+        authoritative
+            .extension_agent_access
+            .insert("mindmap".into(), agent_access(true, true));
+        let mut incoming = authoritative.clone();
+        incoming
+            .extension_agent_access
+            .get_mut("mindmap")
+            .unwrap()
+            .allowance = crate::config::AgentAllowance::High;
+        incoming
+            .extension_agent_access
+            .insert("other".into(), agent_access(true, true));
+        preserve_backend_owned_fields(&mut incoming, &authoritative);
+        assert_eq!(
+            incoming.extension_agent_access,
+            authoritative.extension_agent_access
+        );
+
+        // …nor drop what the user turned on after the snapshot was taken.
+        let mut stale = Config::default();
+        preserve_backend_owned_fields(&mut stale, &authoritative);
+        assert_eq!(
+            stale.extension_agent_access,
+            authoritative.extension_agent_access
+        );
+
+        // A matching snapshot passes through untouched.
+        let mut same = authoritative.clone();
+        preserve_backend_owned_fields(&mut same, &authoritative);
+        assert_eq!(
+            same.extension_agent_access,
+            authoritative.extension_agent_access
+        );
     }
 
     #[test]

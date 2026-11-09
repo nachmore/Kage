@@ -15,6 +15,13 @@
 //! already covers every capability its installed manifest requests; one
 //! that isn't installed (no manifest to check) stays as this machine has
 //! it. A theme runs no code, so its switch is the backup's.
+//!
+//! Background AI (`extension_agent_access`: the host switch, the consent
+//! and the allowance) is this machine's, whole, for the same reason: the
+//! consent named an agent on one machine (EXTENSION_AGENT_CALLS §9). A
+//! backup never turns it on, adds an entry, fills in a consent or changes
+//! an allowance, and never turns off or removes one this machine has.
+//! Nothing the user chose changes, so the summary doesn't mention it.
 
 use crate::config::Config;
 use crate::extensions::InstalledItem;
@@ -48,10 +55,10 @@ pub fn grant_claims(bundle: &Value) -> BTreeMap<String, Vec<String>> {
 }
 
 /// Make `merged` (an import's result) keep this machine's consent: grants
-/// exactly `local`'s, and no extension switched on that its grant here
-/// doesn't cover. `claims` is what the backup said was granted
-/// ([`grant_claims`]). Returns the installed extensions (ids, sorted) left
-/// off until the user approves them.
+/// and background AI access exactly `local`'s, and no extension switched on
+/// that its grant here doesn't cover. `claims` is what the backup said was
+/// granted ([`grant_claims`]). Returns the installed extensions (ids,
+/// sorted) left off until the user approves them.
 pub fn keep_local(
     merged: &mut Config,
     local: &Config,
@@ -59,6 +66,7 @@ pub fn keep_local(
     installed: &[InstalledItem],
 ) -> Vec<String> {
     merged.extension_grants = local.extension_grants.clone();
+    merged.extension_agent_access = local.extension_agent_access.clone();
 
     // Every id the backup could switch on (this machine has it off) or
     // claims a grant for.
@@ -248,6 +256,43 @@ mod tests {
         merged.extension_states.insert("ungranted".into(), false);
         assert!(keep_local(&mut merged, &local, &BTreeMap::new(), &installed).is_empty());
         assert_eq!(merged.extension_states.get("ungranted"), Some(&false));
+    }
+
+    fn access(enabled: bool, agent: Option<&str>) -> crate::config::ExtensionAgentAccess {
+        crate::config::ExtensionAgentAccess {
+            enabled,
+            consent: agent.map(|a| crate::config::AgentConsent {
+                agent_fingerprint: format!("fp-{a}"),
+                agent_label: a.into(),
+                granted_at: "2026-01-01T00:00:00Z".into(),
+            }),
+            allowance: crate::config::AgentAllowance::Normal,
+        }
+    }
+
+    #[test]
+    fn background_ai_access_is_this_machines_whole() {
+        let installed = [item("extension", "mindmap", &["agent_background"])];
+        let mut here = Config::default();
+        here.extension_agent_access
+            .insert("mindmap".into(), access(false, None));
+        here.extension_agent_access
+            .insert("notes".into(), access(true, Some("Local model")));
+        // The backup turns this machine's off entry on with its own
+        // consent, adds one, raises an allowance, and drops one.
+        let mut backup_access = access(true, Some("Cloud agent"));
+        backup_access.allowance = crate::config::AgentAllowance::High;
+        for local in [Config::default(), here] {
+            let mut merged = local.clone();
+            merged.extension_agent_access = [
+                ("mindmap".to_string(), backup_access.clone()),
+                ("todos".to_string(), access(true, Some("Cloud agent"))),
+            ]
+            .into();
+            let needs = keep_local(&mut merged, &local, &BTreeMap::new(), &installed);
+            assert_eq!(merged.extension_agent_access, local.extension_agent_access);
+            assert!(needs.is_empty(), "nothing to approve: {needs:?}");
+        }
     }
 
     #[test]
