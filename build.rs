@@ -32,6 +32,10 @@ fn main() {
     println!("cargo:rerun-if-changed=computer_control_mcp/Cargo.toml");
     println!("cargo:rerun-if-changed=kage-calendar-helper/src");
     println!("cargo:rerun-if-changed=kage-calendar-helper/Cargo.toml");
+    // Not the whole kage-file-text/ folder: its fuzz/ workspace keeps a
+    // target dir and corpora that change all the time.
+    println!("cargo:rerun-if-changed=kage-file-text/src");
+    println!("cargo:rerun-if-changed=kage-file-text/Cargo.toml");
     println!("cargo:rerun-if-changed=kage-core/src");
     println!("cargo:rerun-if-changed=kage-core/Cargo.toml");
     println!("cargo:rerun-if-changed=Cargo.lock");
@@ -217,10 +221,13 @@ fn main() {
     // Build + stage the sidecars. Never placeholders: every build path
     // (bare `cargo build`, `cargo tauri dev`, CI, run_bundled_dev.sh)
     // self-provisions genuine binaries, so nothing fake can be bundled
-    // or clobber a real sidecar. The MCP sidecar ships on every platform
-    // (tauri.conf.json externalBin); the calendar helper is macOS-only
-    // (tauri.macos.conf.json overlay), so other targets skip it entirely.
+    // or clobber a real sidecar. The MCP sidecar and the file text worker
+    // ship on every platform (tauri.conf.json externalBin, repeated in the
+    // macOS overlay, which replaces the list); the calendar helper is
+    // macOS-only (tauri.macos.conf.json overlay), so other targets skip it
+    // entirely.
     provision_sidecar("kage-computer-control-mcp");
+    provision_sidecar("kage-file-text");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         provision_sidecar("kage-calendar-helper");
     }

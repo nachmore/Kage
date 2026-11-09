@@ -106,7 +106,8 @@
       "frameworks": []
     },
     "externalBin": [
-      "src-tauri/binaries/kage-computer-control-mcp"
+      "src-tauri/binaries/kage-computer-control-mcp",
+      "src-tauri/binaries/kage-file-text"
     ],
     "windows": {
       "nsis": {

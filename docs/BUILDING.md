@@ -78,6 +78,7 @@ cargo build --release             # Release-optimised binaries
 Debug output:
 - `target/debug/kage` (Windows: `kage.exe`)
 - `target/debug/kage-computer-control-mcp` (Windows: `.exe`)
+- `target/debug/kage-file-text` (Windows: `.exe`)
 - `target/debug/kage-calendar-helper` (macOS only)
 
 The sidecars are separate workspace packages, but every build of the main
