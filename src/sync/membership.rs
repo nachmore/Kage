@@ -152,6 +152,7 @@ impl SyncEngine {
                 started_ms: now,
                 auto: true,
             });
+            self.rt.adopt_own = true;
         } else if join_pending {
             self.rt.join = Some(JoinPending {
                 started_ms: now,

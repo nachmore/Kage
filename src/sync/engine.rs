@@ -242,6 +242,9 @@ pub(crate) struct Runtime {
     pub cache: super::status::StatusCache,
     /// The state the user must act on, and since when.
     pub state_since: Option<(SyncState, i64)>,
+    /// The replica was rebuilt: this computer's own newer heads are its own
+    /// state to fold back in, not a clone's (§15).
+    pub adopt_own: bool,
 }
 
 /// The engine. Owns the replica; lives on the `kage-sync` thread.
@@ -1287,8 +1290,11 @@ impl SyncEngine {
                         eff_source(&rec, &name, os)
                     };
                     tx.set_projected(&key, Some((hash(&rbv), stamp, scope)))?;
-                    if !pinned && !same(&rbv, &tv) && rb.is_some() {
-                        // The value didn't survive: this build can't hold it.
+                    // A value that was written but didn't survive the round
+                    // trip: this build can't hold it. A field written as
+                    // absent may read back as its type's default; that's
+                    // no loss.
+                    if !pinned && t_split.contains_key(&name) && !same(&rbv, &tv) && rb.is_some() {
                         tx.set_pin(&key, Some((rbv.clone(), PinReason::Lossy)))?;
                     }
                     if let (Some(s), Some(me)) = (stamp, me) {
@@ -1356,6 +1362,7 @@ impl SyncEngine {
                 self.save_prefs().map_err(internal)?;
                 if on {
                     self.rt.first_tick_done = false;
+                    self.read_heads_again().map_err(internal)?;
                 }
                 Ok(EngineReply::Done)
             }
@@ -1366,6 +1373,10 @@ impl SyncEngine {
                     self.prefs.ext_data_off.push(ext);
                 }
                 self.save_prefs().map_err(internal)?;
+                if on {
+                    self.rt.first_tick_done = false;
+                    self.read_heads_again().map_err(internal)?;
+                }
                 Ok(EngineReply::Done)
             }
             R::GetScopes(paths) => self.get_scopes(paths).map(EngineReply::Scopes),
@@ -1439,6 +1450,22 @@ impl SyncEngine {
             }
             R::Ext(e) => self.ext_request(e).map(EngineReply::Ext),
         }
+    }
+
+    /// Read every computer's newest head again on the next ingest: a
+    /// namespace switched on here was skipped when those heads were read.
+    /// Shards already merged are skipped by name.
+    fn read_heads_again(&mut self) -> anyhow::Result<()> {
+        let Some(core) = self.core.as_mut() else {
+            return Ok(());
+        };
+        core.replica.tx(|tx| {
+            for mut d in tx.devices()? {
+                d.ingested_seq = 0;
+                tx.put_device(&d)?;
+            }
+            Ok(())
+        })
     }
 
     /// `sync_unavailable` unless sync is on here.

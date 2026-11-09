@@ -187,7 +187,10 @@ impl SyncEngine {
                         continue;
                     }
                     if acked_by_all(tx, &ns, &r.id, &d, &active)? {
+                        // Its shard is written again without it.
+                        let b = tx.bucket_of(&ns, &r.id)?.unwrap_or(0);
                         tx.delete_record(&ns, &r.id)?;
+                        tx.mark_dirty(&ns, b, false)?;
                         tx.delete_meta(&super::ingest::tseq_key(&ns, &r.id))?;
                         if floor.is_none_or(|f| d.stamp > f) {
                             floor = Some(d.stamp);
@@ -276,7 +279,8 @@ impl SyncEngine {
         let devices = core.replica.tx(|tx| tx.devices())?;
         let active: Vec<&DeviceRow> = devices.iter().filter(|d| is_active(d, now)).collect();
         if active.is_empty() {
-            self.rt.came_back = false;
+            // Nothing recent read yet (the folder may still be catching
+            // up): try again next tick.
             return Ok(changed);
         }
         let Some(floor) = active.iter().filter_map(|d| d.gc_floor).max() else {

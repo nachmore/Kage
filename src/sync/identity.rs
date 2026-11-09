@@ -216,9 +216,10 @@ impl SyncEngine {
             match self.read_open(&path, FileKind::Head, me, None, now) {
                 Ok(plain) => {
                     let head: HeadFile = serde_json::from_slice(&plain)?;
-                    if !instances.contains(&head.instance) {
+                    if !instances.contains(&head.instance) && !self.rt.adopt_own {
                         return self.collision();
                     }
+                    self.rt.adopt_own = false;
                     // Restored from a backup of this computer: take its
                     // newer state back in and continue after it.
                     log::info!("sync: this computer's folder has a newer head of its own; folding it back in");

@@ -581,7 +581,9 @@ impl SyncEngine {
                         r.del = None;
                     }
                     if r.cells.is_empty() && r.del.is_none() {
+                        let b = tx.bucket_of(&ns, &r.id)?.unwrap_or(0);
                         tx.delete_record(&ns, &r.id)?;
+                        tx.mark_dirty(&ns, b, false)?;
                     } else if r.cells.len() != before {
                         let b = tx.bucket_of(&ns, &r.id)?.unwrap_or(0);
                         tx.put_record(&r, b)?;
