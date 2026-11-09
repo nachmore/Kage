@@ -2482,6 +2482,204 @@ fn a_backup_switches_an_extension_on_only_within_this_machines_grant() {
     }
 }
 
+// --- Background AI access (EXTENSION_AGENT_CALLS §9) ---------------------------------
+
+fn agent_access(
+    enabled: bool,
+    agent: Option<&str>,
+    allowance: crate::config::AgentAllowance,
+) -> crate::config::ExtensionAgentAccess {
+    crate::config::ExtensionAgentAccess {
+        enabled,
+        consent: agent.map(|a| crate::config::AgentConsent {
+            agent_fingerprint: format!("fingerprint-of-{a}"),
+            agent_label: a.into(),
+            granted_at: "2026-11-09T10:00:00+00:00".into(),
+        }),
+        allowance,
+    }
+}
+
+/// What this machine may have: nothing, an entry the user switched off,
+/// or one switched on for its own agent next to one switched off.
+fn local_agent_access() -> Vec<HashMap<String, crate::config::ExtensionAgentAccess>> {
+    use crate::config::AgentAllowance::{Low, Normal};
+    vec![
+        HashMap::new(),
+        [("mindmap".to_string(), agent_access(false, None, Normal))].into(),
+        [
+            (
+                "mindmap".to_string(),
+                agent_access(true, Some("Local model"), Low),
+            ),
+            ("notes".to_string(), agent_access(false, None, Normal)),
+        ]
+        .into(),
+    ]
+}
+
+/// `config.json` bodies a backup could carry for `extension_agent_access`:
+/// another machine's consent for another agent, a bare "on" (which a merge
+/// filling gaps from this machine would complete with this machine's
+/// consent), an empty map, an unknown allowance, and no field at all.
+fn backup_agent_access() -> Vec<Value> {
+    let consent = json!({
+        "agent_fingerprint": "fingerprint-of-Cloud agent",
+        "agent_label": "Cloud agent", "granted_at": "2026-01-01T00:00:00Z"
+    });
+    vec![
+        json!({ "version": 1, "extension_agent_access": {
+            "mindmap": { "enabled": true, "consent": consent.clone(), "allowance": "high" },
+            "todos": { "enabled": true, "consent": consent.clone() }
+        } }),
+        json!({ "version": 1, "extension_agent_access": { "mindmap": { "enabled": true } } }),
+        json!({ "version": 1, "extension_agent_access": {} }),
+        json!({ "version": 1, "extension_agent_access": {
+            "mindmap": { "enabled": true, "consent": consent, "allowance": "unlimited" }
+        } }),
+        json!({ "version": 1 }),
+    ]
+}
+
+/// `config` in every kind and version of bundle an import reads:
+/// settings-only (v3), v1 and v2 (full, and an earlier build's "leave
+/// out") plain, and, with `encrypted`, v1, v2 and v3 full encrypted too.
+/// (Argon2 is slow in a debug build, so callers encrypt only the cases
+/// that matter.)
+fn every_kind_and_version(
+    config: &Value,
+    encrypted: bool,
+) -> Vec<(&'static str, Vec<u8>, Option<&'static str>)> {
+    let manifest = |version: u32, contents: Option<&str>| {
+        let mut m = json!({
+            "format": "kage-backup", "version": version,
+            "exported_at": "2026-01-01T00:00:00Z", "kage_version": "0.9.0"
+        });
+        if let Some(c) = contents {
+            m["contents"] = json!(c);
+        }
+        serde_json::to_vec(&m).unwrap()
+    };
+    let body = serde_json::to_vec(config).unwrap();
+    let bundle = |m: Vec<u8>| {
+        zip_of(&[
+            ("manifest.json", m.as_slice()),
+            ("config.json", body.as_slice()),
+        ])
+    };
+    let v1 = bundle(manifest(1, None));
+    let v2_full = bundle(manifest(2, Some("full")));
+    let mut all = vec![
+        (
+            "settings-only v3",
+            settings_only_bundle(config.clone()),
+            None,
+        ),
+        ("v1 plain", v1.clone(), None),
+        ("v2 full plain", v2_full.clone(), None),
+        ("v2 leave-out plain", bundle(manifest(2, None)), None),
+    ];
+    if encrypted {
+        let v3_full = bundle(manifest(3, Some("full")));
+        all.extend([
+            ("v1 encrypted", encrypt(&v1, "pw").unwrap(), Some("pw")),
+            (
+                "v2 full encrypted",
+                encrypt(&v2_full, "pw").unwrap(),
+                Some("pw"),
+            ),
+            (
+                "v3 full encrypted",
+                encrypt(&v3_full, "pw").unwrap(),
+                Some("pw"),
+            ),
+        ]);
+    }
+    all
+}
+
+#[test]
+fn a_settings_only_export_never_carries_background_ai_access() {
+    let _disk = disk();
+    no_auto_steering();
+    let mut a = Machine::new();
+    a.config.extension_agent_access = local_agent_access().pop().unwrap();
+    let bytes = a.export(ExportMode::SettingsOnly, None).unwrap();
+    let files = entries(&bytes);
+    let config: Value = serde_json::from_slice(&files["config.json"]).unwrap();
+    assert!(config.get("extension_agent_access").is_none(), "{}", config);
+    let text = String::from_utf8_lossy(&files["config.json"]);
+    for marker in ["fingerprint-of-", "Local model", "agent_fingerprint"] {
+        assert!(!text.contains(marker), "carries {:?}: {}", marker, text);
+    }
+
+    // An encrypted backup carries config.json whole, this field too: only
+    // the import keeps this machine's (below).
+    let bytes = a.export(ExportMode::Encrypted, Some("pw")).unwrap();
+    let plain = decrypt(bytes, "pw").unwrap();
+    let config: Value = serde_json::from_slice(&entries(&plain)["config.json"]).unwrap();
+    assert_eq!(
+        config["extension_agent_access"],
+        serde_json::to_value(&a.config.extension_agent_access).unwrap()
+    );
+}
+
+#[test]
+fn every_import_keeps_this_machines_background_ai_access_whole() {
+    let _disk = disk();
+    no_auto_steering();
+    let b = Machine::new();
+    let items = installed();
+    // The first two bodies are the attacks (another machine's consent; a
+    // bare "on" to be completed with this machine's): every encrypted
+    // kind too.
+    for (i, config) in backup_agent_access().iter().enumerate() {
+        let bundles = every_kind_and_version(config, i < 2);
+        for here in local_agent_access() {
+            let mut local = b.config.clone();
+            local.extension_agent_access = here;
+            for (kind, bytes, pw) in &bundles {
+                let (merged, summary) = import_into(&b, &local, &items, bytes, *pw);
+                assert_eq!(
+                    merged.extension_agent_access, local.extension_agent_access,
+                    "{kind} with {config}"
+                );
+                // Nothing the user chose changed, so nothing is listed.
+                assert!(summary.needs_approval.is_empty(), "{kind}");
+                assert!(summary.kept_local.is_empty(), "{kind}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_real_encrypted_backup_never_moves_background_ai_access() {
+    let _disk = disk();
+    no_auto_steering();
+    // Machine A allowed Mind Map to use its cloud agent.
+    let mut a = Machine::new();
+    a.config.extension_agent_access = [(
+        "mindmap".to_string(),
+        agent_access(
+            true,
+            Some("Cloud agent"),
+            crate::config::AgentAllowance::High,
+        ),
+    )]
+    .into();
+    a.config.ui.theme = "dark".into();
+    let bytes = a.export(ExportMode::Encrypted, Some("pw")).unwrap();
+    // Onto a new machine, one where the user switched it off (A itself,
+    // after making the backup), and one on for its own agent.
+    for here in local_agent_access() {
+        let mut b = Machine::new();
+        b.config.extension_agent_access = here.clone();
+        b.import(&bytes, Some("pw"));
+        assert_eq!(b.config.extension_agent_access, here);
+        assert_eq!(b.config.ui.theme, "dark", "the rest of the backup applies");
+    }
+}
+
 // --- Review round: numbers and hotkeys ------------------------------------------
 
 /// A v1 plain bundle whose `config.json` is `config`, as written.
