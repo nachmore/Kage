@@ -187,6 +187,14 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     run_user_shell_command: null,
     cancel_user_shell_command: null,
     run_command_in_terminal: null,
+    // Commands an agent asks Kage to run outside its sandbox
+    // (host-command-view.js, Settings → Tool permissions): approving one,
+    // the rules that skip the prompt, and the allow-all switch. Never
+    // reachable from an extension.
+    answer_host_command: null,
+    pending_host_commands: null,
+    remove_host_command_rule: null,
+    set_host_commands_allow_all: null,
     install_extension_from_path: null,
     uninstall_extension: null,
     welcome_provision_extensions: null,

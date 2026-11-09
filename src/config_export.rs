@@ -606,7 +606,9 @@ fn preview_from(
     let trust = tp.trust_all
         || tp.terminator_mode
         || !tp.trusted_kinds.is_empty()
-        || !tp.trusted_mcp_servers.is_empty();
+        || !tp.trusted_mcp_servers.is_empty()
+        || !tp.host_command_rules.is_empty()
+        || tp.host_commands_allow_all;
     let stores = usize::from(
         config
             .store_url

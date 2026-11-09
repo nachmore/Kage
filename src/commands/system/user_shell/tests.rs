@@ -399,6 +399,30 @@ fn a_closed_or_reloaded_window_stops_only_its_own_run() {
 }
 
 #[test]
+fn agent_runs_are_bounded_and_stopped_by_the_window_showing_them() {
+    let runs = Arc::new(UserShellRuns::new());
+    // An agent's run doesn't take the window's own slot.
+    let user = runs.begin("main", "u1").unwrap();
+    let a1 = runs.begin_agent("main", "a1", 2).expect("free");
+    let a2 = runs.begin_agent("floating", "a2", 2).expect("free");
+    assert!(runs.begin_agent("main", "a3", 2).is_none(), "at the limit");
+    assert!(runs.begin_agent("main", "a1", 3).is_none(), "same id twice");
+
+    assert!(!runs.cancel("floating", "a1"), "another window's run");
+    assert!(runs.cancel("main", "a1"));
+    assert!(a1.cancel_flag().load(Ordering::SeqCst));
+    assert!(!user.cancel_flag().load(Ordering::SeqCst));
+
+    // A closed window stops everything it shows.
+    assert!(runs.cancel_window("floating"));
+    assert!(a2.cancel_flag().load(Ordering::SeqCst));
+    drop(a1);
+    drop(a2);
+    assert!(runs.begin_agent("main", "a4", 2).is_some());
+    assert!(runs.is_running("main"), "the user's run is still going");
+}
+
+#[test]
 fn shutdown_stops_every_run_and_waits_for_them() {
     let runs = Arc::new(UserShellRuns::new());
     // Nothing running: returns at once.

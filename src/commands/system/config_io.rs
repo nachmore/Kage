@@ -204,6 +204,24 @@ pub(crate) fn preserve_backend_owned_fields(incoming: &mut Config, authoritative
         incoming.tool_permissions.trusted_mcp_servers =
             authoritative.tool_permissions.trusted_mcp_servers.clone();
     }
+    // Rules for commands an agent runs outside its sandbox, and the
+    // allow-all switch: only the prompt's "Always allow" and the audited
+    // Settings commands change them.
+    if incoming.tool_permissions.host_command_rules
+        != authoritative.tool_permissions.host_command_rules
+        || incoming.tool_permissions.host_commands_allow_all
+            != authoritative.tool_permissions.host_commands_allow_all
+    {
+        log::warn!(
+            "save_config: ignoring a change to the outside-the-sandbox command rules in the \
+             incoming snapshot (backend-owned; use remove_host_command_rule / \
+             set_host_commands_allow_all)"
+        );
+        incoming.tool_permissions.host_command_rules =
+            authoritative.tool_permissions.host_command_rules.clone();
+        incoming.tool_permissions.host_commands_allow_all =
+            authoritative.tool_permissions.host_commands_allow_all;
+    }
 }
 
 /// Keep this machine's category-wide tool trust ("trust all commands",
@@ -215,6 +233,12 @@ pub(crate) fn keep_local_tool_trust(imported: &mut Config, local: &Config) {
     imported.tool_permissions.trusted_kinds = local.tool_permissions.trusted_kinds.clone();
     imported.tool_permissions.trusted_mcp_servers =
         local.tool_permissions.trusted_mcp_servers.clone();
+    // Same for commands an agent runs outside its sandbox: a backup can't
+    // add a rule or switch allow-all on here, nor take this machine's away.
+    imported.tool_permissions.host_command_rules =
+        local.tool_permissions.host_command_rules.clone();
+    imported.tool_permissions.host_commands_allow_all =
+        local.tool_permissions.host_commands_allow_all;
 }
 
 #[tauri::command]
@@ -1216,6 +1240,36 @@ mod tests {
             stale.tool_permissions.trusted_mcp_servers,
             vec!["builder-mcp".to_string()]
         );
+    }
+
+    #[test]
+    fn snapshot_and_import_cannot_change_host_command_rules() {
+        let rule = crate::config::HostCommandRule {
+            prefix: "brew install".into(),
+            created_at: String::new(),
+        };
+        let authoritative = Config::default();
+        let mut incoming = Config::default();
+        incoming.tool_permissions.host_command_rules = vec![rule.clone()];
+        incoming.tool_permissions.host_commands_allow_all = true;
+        preserve_backend_owned_fields(&mut incoming, &authoritative);
+        assert!(incoming.tool_permissions.host_command_rules.is_empty());
+        assert!(!incoming.tool_permissions.host_commands_allow_all);
+
+        let mut local = Config::default();
+        local.tool_permissions.host_command_rules = vec![rule.clone()];
+        let mut stale = Config::default();
+        preserve_backend_owned_fields(&mut stale, &local);
+        assert_eq!(
+            stale.tool_permissions.host_command_rules,
+            vec![rule.clone()]
+        );
+
+        let mut imported = Config::default();
+        imported.tool_permissions.host_commands_allow_all = true;
+        keep_local_tool_trust(&mut imported, &local);
+        assert!(!imported.tool_permissions.host_commands_allow_all);
+        assert_eq!(imported.tool_permissions.host_command_rules, vec![rule]);
     }
 
     #[test]

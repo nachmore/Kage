@@ -65,6 +65,47 @@ pub enum AuditEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         session_id: Option<String>,
     },
+    /// One step of a command an agent asked Kage to run outside its
+    /// sandbox (`run_outside_sandbox`, `host_commands`), or a change to the
+    /// rules that let such commands run without asking.
+    HostCommand {
+        /// `requested`, `guard` (the credential guard flagged it),
+        /// `auto_approved`, `approved`, `denied`, `expired` (nobody
+        /// answered), `withdrawn` (the agent went away), `refused`,
+        /// `finished`, `rule_added`, `rule_removed`, `allow_all_on`,
+        /// `allow_all_off`.
+        action: String,
+        /// The request's id, tying a request's entries together.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+        /// The command, clipped to [`USER_RAN_COMMAND_PREVIEW`] bytes.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cwd: Option<String>,
+        /// Which agent asked, as far as Kage can tell.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session_id: Option<String>,
+        /// `auto_approved`: `rule` or `allow_all`; `approved`: `once` or
+        /// `always`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        by: Option<String>,
+        /// The rule's prefix (`auto_approved` by a rule, `approved`
+        /// always, `rule_added`, `rule_removed`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rule: Option<String>,
+        /// `guard`: what the credential guard found (`aws`, `ssh`, …).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        guard: Option<Vec<String>>,
+        /// `finished`: `exited`, `cancelled`, `timed_out` or
+        /// `failed_to_start`; `refused`: why, in English.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        outcome: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+    },
 }
 
 /// Longest command an audit entry keeps, in bytes — the same 2 KB the
@@ -115,6 +156,9 @@ impl AuditEvent {
             }
             AuditEvent::UserRanCommand { via, outcome, .. } => {
                 format!("User ran a command ({}, {})", via, outcome)
+            }
+            AuditEvent::HostCommand { action, .. } => {
+                format!("Command outside the agent's sandbox: {}", action)
             }
         }
     }

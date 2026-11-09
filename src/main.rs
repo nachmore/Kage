@@ -35,6 +35,7 @@ mod ext_views;
 #[allow(dead_code)] // Nothing records folder sync's changes until sync lands.
 mod extension_data_events;
 mod extensions;
+mod host_commands;
 mod hotkey_norm;
 mod i18n;
 mod internal_sites;
@@ -271,7 +272,10 @@ async fn run() {
         let tts = child_processes.pocket_tts.clone();
         let install = child_processes.pocket_tts_install.clone();
         let user_runs = child_processes.user_shell_runs.clone();
+        let host_commands = child_processes.host_commands.clone();
         process_manager::register_child_killer(move || {
+            // The host-command bridge's socket goes with us.
+            host_commands.stop();
             // Commands the user runs from a sandbox notice lead their own
             // process groups: stop them (SIGTERM, then SIGKILL) first.
             user_runs.cancel_all_and_wait(std::time::Duration::from_millis(1500));

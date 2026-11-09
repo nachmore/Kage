@@ -283,6 +283,22 @@ pub fn setup_notification_handler(
                                 }
                             }
                         }
+                        // Kage's own `run_outside_sandbox` calls: remember
+                        // their commands, so a request arriving over the host
+                        // bridge can be matched to this session.
+                        {
+                            let first_title = update
+                                .get("toolCallId")
+                                .and_then(|v| v.as_str())
+                                .and_then(|id| {
+                                    tool_names.lock().ok().and_then(|n| n.get(id).map(|e| e.0.clone()))
+                                });
+                            crate::host_commands::observe_tool_call(
+                                update_session_id.as_deref(),
+                                update,
+                                first_title.as_deref(),
+                            );
+                        }
                         // Forward to streaming-aware windows; frontend
                         // filters by sessionId in the payload. Skipped for
                         // background prompts so their tool use stays invisible.
@@ -659,6 +675,19 @@ fn classify_mcp_server(
     Some(server.to_string())
 }
 
+/// Whether a permission request is for Kage's own `run_outside_sandbox`
+/// tool: an MCP call (kind absent or `other`) of the server Kage registers
+/// (`mcp_registration::MCP_SERVER_KEY`), and every title we have names
+/// exactly that tool.
+fn is_host_command_call(tool_title: &str, request_title: Option<&str>, kind: Option<&str>) -> bool {
+    classify_mcp_server(tool_title, request_title, kind).as_deref()
+        == Some(crate::mcp_registration::MCP_SERVER_KEY)
+        && crate::host_commands::is_host_command_title(tool_title)
+        && request_title
+            .filter(|t| !t.is_empty() && *t != tool_title)
+            .is_none_or(crate::host_commands::is_host_command_title)
+}
+
 /// The audit log's `args_preview` for an auto-approved request: the command
 /// line of a shell run, the arguments of an MCP tool call (at most 2048
 /// characters), nothing for other tools.
@@ -805,6 +834,31 @@ fn handle_permission_notification(
         .and_then(|tc| tc.get("title"))
         .and_then(|t| t.as_str());
     let mcp_server = classify_mcp_server(&tool_title, request_title, tool_kind.as_deref());
+
+    // Kage's own `run_outside_sandbox` — exactly that server and tool — is
+    // allowed here without a prompt: the real gate is at execution, where
+    // Kage asks the user (or applies their rules) once the command reaches
+    // it over the host bridge. Asking twice would only teach clicking
+    // through. An explicit per-tool Deny the user set still wins.
+    if is_host_command_call(&tool_title, request_title, tool_kind.as_deref()) {
+        let denied = config
+            .lock_or_recover()
+            .tool_permissions
+            .tools
+            .iter()
+            .any(|t| {
+                t.title == tool_title && t.effective_policy() == crate::config::PolicyKind::Deny
+            });
+        if !denied {
+            info!("Allowed {tool_title}: Kage asks the user when the command reaches it");
+            if let Some(request_id) = notification.get("id") {
+                if let Err(e) = client.send_permission_response(request_id, "allow_once") {
+                    warn!("Failed to send auto permission response: {}", e);
+                }
+            }
+            return;
+        }
+    }
 
     let timestamp = chrono::Utc::now().to_rfc3339();
 
@@ -1213,6 +1267,51 @@ mod permission_payload_tests {
             auto_allow_args_preview(Some(&long), &shell).map(|s| s.chars().count()),
             Some(2048)
         );
+    }
+}
+
+#[cfg(test)]
+mod host_command_permission_tests {
+    use super::is_host_command_call;
+
+    #[test]
+    fn kages_own_tool_is_allowed_through_by_exact_server_and_tool() {
+        for t in [
+            "Running: @kage-computer-control/run_outside_sandbox",
+            "mcp__kage-computer-control__run_outside_sandbox",
+        ] {
+            assert!(is_host_command_call(t, Some(t), None), "{t}");
+            assert!(is_host_command_call(t, None, Some("other")), "{t}");
+        }
+    }
+
+    #[test]
+    fn nothing_else_is() {
+        let ours = "Running: @kage-computer-control/run_outside_sandbox";
+        // A shell command spelled like it.
+        assert!(!is_host_command_call(ours, Some(ours), Some("execute")));
+        // Another tool of the same server, or the same tool elsewhere.
+        assert!(!is_host_command_call(
+            "Running: @kage-computer-control/run_script",
+            None,
+            None
+        ));
+        assert!(!is_host_command_call(
+            "Running: @other-server/run_outside_sandbox",
+            None,
+            None
+        ));
+        assert!(!is_host_command_call(
+            "mcp__ka-computer-control__run_outside_sandbox",
+            None,
+            None
+        ));
+        // Titles that disagree.
+        assert!(!is_host_command_call(
+            ours,
+            Some("Running: @kage-computer-control/run_script"),
+            None
+        ));
     }
 }
 

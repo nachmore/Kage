@@ -6,8 +6,11 @@
 use log::{info, warn};
 use std::path::PathBuf;
 
-/// Key used in mcp.json for our managed MCP server.
-const MCP_SERVER_KEY: &str = "kage-computer-control";
+/// Key used in mcp.json for our managed MCP server. The agent names its
+/// tools after it (`Running: @kage-computer-control/<tool>`,
+/// `mcp__kage-computer-control__<tool>`), which is how `host_commands`
+/// recognises its own `run_outside_sandbox` calls.
+pub const MCP_SERVER_KEY: &str = "kage-computer-control";
 
 /// Outcome of `upsert_server_entry` — lets the caller skip a write when nothing changed.
 #[derive(Debug, PartialEq, Eq)]

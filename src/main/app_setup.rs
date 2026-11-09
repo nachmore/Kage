@@ -83,6 +83,17 @@ pub fn configure(
         slash_commands,
         pending_permissions,
     );
+    // The host-command bridge: agents' `run_outside_sandbox` calls reach
+    // Kage through it (`host_commands`). State is managed on the Builder;
+    // binding happens on its own thread so startup never waits for it.
+    {
+        use tauri::Manager as _;
+        if let Some(procs) = app.try_state::<crate::state::ChildProcesses>() {
+            let host_commands = procs.host_commands.clone();
+            let handle = app.handle().clone();
+            std::thread::spawn(move || host_commands.start(handle));
+        }
+    }
     setup::configure_transparent_windows(app);
     crate::overlay_windows::configure_all(app);
     crate::commands::window::preload_context_menu(app.handle());

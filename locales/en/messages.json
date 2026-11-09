@@ -8268,5 +8268,53 @@
   "errors.user_shell.terminal_failed": {
     "message": "Terminal didn't run it: {error}",
     "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {error} is the error macOS reported."
+  },
+  "errors.host_command.not_pending": {
+    "message": "That request isn't waiting for an answer any more.",
+    "description": "Error when the user answers a prompt for a command an AI agent asked to run outside its sandbox, but the request already ended (answered, timed out or withdrawn)."
+  },
+  "errors.host_command.wrong_window": {
+    "message": "That request is shown in another window. Answer it there.",
+    "description": "Error when the user answers a prompt for a command an AI agent asked to run outside its sandbox from a different Kage window than the one showing it."
+  },
+  "errors.host_command.hidden_chars": {
+    "message": "This command contains hidden characters, so Kage won't run it. Copy it instead.",
+    "description": "Error: a command an AI agent asked to run outside its sandbox contains invisible characters (control, bidi or zero-width characters), so it can't be run from Kage."
+  },
+  "errors.host_command.cannot_always": {
+    "message": "Kage can't make a rule for this command. Run it once instead.",
+    "description": "Error: the user picked 'Always allow' for a command an AI agent asked to run outside its sandbox, but no rule can cover it (it may touch credentials, or isn't a simple command)."
+  },
+  "errors.host_command.bad_prefix": {
+    "message": "That can't be a rule: use plain words, without symbols like ; | & $ > or line breaks.",
+    "description": "Error: the words the user typed for an 'Always allow commands starting with …' rule aren't a simple command."
+  },
+  "errors.host_command.prefix_mismatch": {
+    "message": "This command doesn't start with those words.",
+    "description": "Error: the user edited the words of an 'Always allow commands starting with …' rule so that the command being approved no longer starts with them."
+  },
+  "errors.host_command.bad_decision": {
+    "message": "Kage didn't understand that answer.",
+    "description": "Internal error: the prompt for a command an AI agent asked to run outside its sandbox sent an unknown answer."
+  },
+  "errors.host_command.too_many_rules": {
+    "message": "There are too many rules already. Remove some in Settings → Tool permissions.",
+    "description": "Error: the user tried to add another 'Always allow commands starting with …' rule but the list is full. Keep the Settings path as the app names it."
+  },
+  "errors.host_command.allow_all_settings_only": {
+    "message": "That can only be turned on in Settings.",
+    "description": "Error: the switch that lets every command an AI agent asks for run without asking can only be turned on from the Settings window."
+  },
+  "host_commands.notify.title": {
+    "message": "{agent} wants to run a command outside its sandbox",
+    "description": "System notification title. {agent} is the name of the AI agent program (for example kiro-cli) that asked Kage to run a shell command outside the agent's own sandbox."
+  },
+  "host_commands.notify.title_unknown": {
+    "message": "An agent wants to run a command outside its sandbox",
+    "description": "System notification title when Kage doesn't know which AI agent asked it to run a shell command outside the agent's own sandbox."
+  },
+  "host_commands.notify.body": {
+    "message": "Open Kage to review it. Nothing runs unless you approve it.",
+    "description": "System notification body for a command an AI agent asked Kage to run outside its sandbox."
   }
 }
