@@ -268,6 +268,11 @@ Rust then repeats checks 2–4 against the installed manifest and
 - an opener that is itself a view window opens only views of its own
   extension.
 
+Rust checks the opener (its label, then the own-extension rule) before
+it looks anything up, so a view can't learn whether another extension is
+installed. Then: installed, enabled, granted, declared, params
+(`ext_views::validate_open_request`).
+
 ### 6.3 What happens
 
 New window:
@@ -363,6 +368,14 @@ invariants (never destroy) don't apply. Destroying them is safe.
   instead of hidden: hiding a full-screen window leaves an empty
   full-screen Space behind. The next open builds it again and restores
   the last windowed geometry (§7.4 saves nothing while full screen).
+
+  Opening a hidden window again shows it and emits `ext_view_visibility
+  { visible: true }` (the page calls `onShow`).
+- **Destroying.** A window being destroyed leaves the registry at once
+  and is marked "dying" until its `Destroyed` event arrives (at most
+  2 s), so a late event can't remove the record of a new window with the
+  same label. An open of that view waits up to 2 s for the old window to
+  go, then builds a new one.
 - **Destroyed immediately** when:
   - the extension is disabled (`set_extension_enabled(false)`) or
     uninstalled (`uninstall_extension`);
@@ -397,7 +410,9 @@ keep anything worth keeping in extension storage (§10).
   `crate::paths::data_local_dir()` (never `dirs::*`, so tests isolate).
 - Written with `crate::atomic_write`, owner-only. Debounced: on `Moved` /
   `Resized` (500 ms trailing) and on hide. Nothing is saved while
-  minimised or in native full screen.
+  minimised or in native full screen. While maximised, the entry keeps
+  the size and position from before maximising, with `maximized: true`,
+  so un-maximising a restored window gives a usable size.
 - Physical pixels plus the monitor it was on:
 
   ```json
@@ -441,7 +456,8 @@ pub fn place(
 1. **Saved and still valid.** A monitor with the same name and the same
    physical rect exists, and the saved rect overlaps its work area by at
    least half its own area: use the saved rect, shrunk to fit the work
-   area. Restore `maximized` after showing.
+   area. Restore `maximized` after showing (rule 2 restores it too: it
+   follows the saved entry).
 2. **Otherwise** pick the target monitor: the opener's monitor, else the
    cursor's, else the primary.
    - Size: the saved logical size if there is one (converted with the
@@ -452,7 +468,8 @@ pub fn place(
      it horizontally under the launcher, 16 px below. That keeps the
      launcher from covering it (§15). Otherwise centre it in the work
      area.
-3. **Wayland** (`can_position == false`): size only. The compositor places
+3. **Wayland** (`can_position == false`, from
+   `os::window_spaces::can_position_windows()`): size only. The compositor places
    the window.
 
 DPI:
@@ -1066,7 +1083,8 @@ Closing: `setup::handle_window_close` currently hides the window and then
 hides the whole app (`hide_macos_app`). For a view window, Rust hides the
 app only if no other real window is still visible, so closing a view
 leaves the user in their open chat or settings window. Other windows keep
-today's behaviour.
+today's behaviour. For this rule `chat-*` windows count as open windows
+too, though the activation policy doesn't count them (it never has).
 
 ### 15.2 The launcher stays when a view opens
 
@@ -1202,15 +1220,20 @@ Notes:
 - `ext_view_open` records telemetry `extension_view_opened
   { source, reused }` (strings and 0/1 only).
 - `ext_view_compose` accepts at most 2000 characters, plain text (same
-  character rules as copy). It shows the launcher (at its usual place) and
-  emits `floating_compose { text }` to it. The launcher replaces its input,
-  selects it and does **not** send.
+  character rules as copy), at most 2 per second. It shows the launcher
+  and emits `floating_compose { text }` to it. A hidden launcher is
+  centred on the active monitor, as other host-initiated shows (the
+  welcome and update banners) do, without selection capture. The launcher
+  replaces its input, selects it and does **not** send.
+- Lengths for compose and copy count UTF-16 units, as `copyTextError`
+  does in JS.
 - `ext_view_open`'s `source` is checked against the closed list in §9.1;
   anything else becomes `launcher`.
 
 ### 16.2 Rust state
 
-`UiState` gains `ext_views: ext_views::Registry` (a `Mutex` inside), so no
+`UiState` gains `ext_views: Arc<ext_views::Registry>` (a `Mutex` inside;
+the `Arc` lets timers and window-event tasks hold it), so no
 new managed type is needed (`tests/state_manage_parity_test.rs` stays as
 it is). The registry holds, per label:
 - `extension_id`, `view_id`;
@@ -1713,14 +1736,20 @@ package codes against this document.
   `src/ext_views/geometry.rs` (new), `src/ext_views/registry.rs` (new),
   `src/commands/extensions/views.rs` (bodies),
   `src/commands/extensions/install.rs` (close on uninstall, drop
-  geometry, close on a smaller grant),
+  geometry, close on a smaller or removed grant; `remove_extension_grant`
+  gains an injected `app`),
   `src/commands/extensions/discovery.rs` (close on disable),
   `src/setup.rs` (`is_real_window_label`, macOS close rule, visibility
-  event and teardown timer on close), `src/main.rs` (view `Moved` /
-  `Resized` / `Focused(false)` / `Destroyed` handling),
+  event and teardown timer on close), `src/main.rs` (routes a view's
+  `Moved` / `Resized` / `Focused` / `Destroyed` to
+  `ext_views::handle_window_event`),
   `src/state.rs` (`UiState.ext_views`), `src/updater/state.rs`,
   `src/webview_recovery.rs` and `src/webview_recovery/process_failures.rs`
-  (destroy view windows on a WebView2 process failure),
+  (destroy view windows on a WebView2 process failure, and forget a
+  destroyed label's listener so a rebuilt view gets one),
+  `src/os/window_spaces.rs` and its three platform files
+  (`can_position_windows`, false on Wayland: OS checks stay behind
+  `src/os`),
   `capabilities/extension-view.json` (new),
   `tests/extension_views_test.rs` (new).
 - **Done when:**
