@@ -403,6 +403,61 @@ pub struct ExtensionGrant {
     pub approved_at: String,
 }
 
+/// Background AI for one extension on this machine
+/// (`config.extension_agent_access[id]`): the host switch, the consent that
+/// goes with it, and the daily allowance. Gates 3 and 4 of
+/// docs/design/EXTENSION_AGENT_CALLS.md §2.
+///
+/// Backend-owned and machine-only: only the host commands, uninstall and
+/// grant removal may change it. A settings-only backup leaves it out; an
+/// import must keep this machine's, and sync must never write it.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ExtensionAgentAccess {
+    /// The host switch. Off until the user turns it on and confirms.
+    #[serde(default)]
+    pub enabled: bool,
+    /// What the user confirmed, and for which agent connection. `None`
+    /// until they confirm the dialog.
+    #[serde(default)]
+    pub consent: Option<AgentConsent>,
+    /// The daily allowance level.
+    #[serde(default)]
+    pub allowance: AgentAllowance,
+}
+
+/// The user's OK for one extension's background calls, bound to the agent
+/// connection that was active when they gave it.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct AgentConsent {
+    /// Hex SHA-256 of the active connection's identity (design §5.8). A
+    /// different fingerprint now means the consent is stale. Never shown
+    /// or sent to extensions.
+    #[serde(default)]
+    pub agent_fingerprint: String,
+    /// The connection's display name when the user confirmed.
+    #[serde(default)]
+    pub agent_label: String,
+    /// RFC 3339 time of the confirmation.
+    #[serde(default)]
+    pub granted_at: String,
+}
+
+/// Daily allowance level for an extension's background calls. The numbers
+/// for each level are host constants.
+///
+/// `#[serde(other)]` on `Normal` means an unknown wire value (a future
+/// level, a hand-edited config) falls back to the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAllowance {
+    Low,
+    High,
+    /// Default. Listed last so `#[serde(other)]` can land on it.
+    #[default]
+    #[serde(other)]
+    Normal,
+}
+
 impl ToolPolicy {
     /// Check if this tool's grant is still valid.
     /// Returns the effective policy considering expiry and staleness.

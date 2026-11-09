@@ -120,6 +120,15 @@ pub const AGENT_DISCONNECTED: &str = "agent_disconnected";
 /// (success, error, retry) target the same listener.
 pub const AUTOMATION_STEP_COMPLETE: &str = "automation_step_complete";
 
+// --- Background agent calls -----------------------------------------
+
+/// An extension's background agent call started or ended, or the number
+/// of waiting calls changed. Payload: `{ running: [{ extension_id, name,
+/// purpose, label?, started_at }], waiting }`. Sent to first-party
+/// windows only, never to extension sandboxes.
+#[allow(dead_code)] // The background agent-call service will emit it; the app doesn't yet.
+pub const AGENT_CALLS_ACTIVITY: &str = "agent_calls_activity";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,6 +159,7 @@ mod tests {
             HOTKEY_REGISTRATION_FAILED,
             AGENT_DISCONNECTED,
             AUTOMATION_STEP_COMPLETE,
+            AGENT_CALLS_ACTIVITY,
         ];
         for name in all {
             assert!(

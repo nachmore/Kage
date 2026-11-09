@@ -59,6 +59,13 @@ pub enum ErrorKind {
     SessionCorrupted,
     /// Rate limit exceeded
     RateLimited,
+    /// The caller may not do this: a missing grant or consent, or a
+    /// turned-off extension. Retrying won't help until the user changes
+    /// something.
+    NotPermitted,
+    /// The arguments were refused before anything ran: too long, wrong
+    /// shape, or not declared.
+    InvalidInput,
     /// Image/attachment not supported by current model
     ImageUnsupported,
     /// Lock acquisition failed (internal)
@@ -255,6 +262,18 @@ mod tests {
         );
         let s = format!("{}", e);
         assert_eq!(s, "Not connected");
+    }
+
+    #[test]
+    fn permission_and_input_kinds_have_stable_wire_names() {
+        crate::i18n::init(Some("en"));
+        for (kind, wire) in [
+            (ErrorKind::NotPermitted, "not_permitted"),
+            (ErrorKind::InvalidInput, "invalid_input"),
+        ] {
+            let json = serde_json::to_value(AppError::new(kind, "x")).unwrap();
+            assert_eq!(json["kind"], wire);
+        }
     }
 
     #[test]

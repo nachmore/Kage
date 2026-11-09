@@ -44,4 +44,7 @@ export const EVT = {
 
     // Automation
     AUTOMATION_STEP_COMPLETE: 'automation_step_complete',
+
+    // Background agent calls (first-party windows only)
+    AGENT_CALLS_ACTIVITY: 'agent_calls_activity',
 };

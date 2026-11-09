@@ -51,6 +51,11 @@ pub struct Config {
     /// See ui/js/shared/extension-permissions.js for the capability list.
     #[serde(default)]
     pub extension_grants: HashMap<String, ExtensionGrant>,
+    /// Background AI per extension on this machine: the host switch,
+    /// consent and allowance (docs/design/EXTENSION_AGENT_CALLS.md §5.13).
+    /// Missing entry means off. Backend-owned and machine-only.
+    #[serde(default)]
+    pub extension_agent_access: HashMap<String, ExtensionAgentAccess>,
     /// Pocket TTS configuration (local neural TTS via kyutai-labs/pocket-tts)
     #[serde(default)]
     pub pocket_tts: PocketTtsConfig,
@@ -159,6 +164,7 @@ impl Default for Config {
             extensions: HashMap::new(),
             extension_states: HashMap::new(),
             extension_grants: HashMap::new(),
+            extension_agent_access: HashMap::new(),
             pocket_tts: PocketTtsConfig::default(),
             clipboard_hotkey: None,
             inline_assist_hotkey: Some(HotkeyConfig {
@@ -591,6 +597,61 @@ mod enum_tests {
             let stripped = json.trim_matches('"');
             assert_eq!(stripped, c.as_str(), "{:?}", c);
         }
+    }
+
+    #[test]
+    fn agent_allowance_wire_values_and_unknown_fallback() {
+        for (a, wire) in [
+            (AgentAllowance::Low, "low"),
+            (AgentAllowance::Normal, "normal"),
+            (AgentAllowance::High, "high"),
+        ] {
+            assert_eq!(serde_json::to_string(&a).unwrap(), format!("\"{wire}\""));
+            let back: AgentAllowance = serde_json::from_str(&format!("\"{wire}\"")).unwrap();
+            assert_eq!(back, a);
+        }
+        let a: AgentAllowance = serde_json::from_str("\"unlimited\"").unwrap();
+        assert_eq!(a, AgentAllowance::Normal);
+        assert_eq!(AgentAllowance::default(), AgentAllowance::Normal);
+    }
+
+    #[test]
+    fn extension_agent_access_defaults_to_off_without_consent() {
+        let cfg: Config = serde_json::from_str(r#"{ "version": 1 }"#).unwrap();
+        assert!(cfg.extension_agent_access.is_empty());
+        assert!(Config::default().extension_agent_access.is_empty());
+
+        // An entry missing every field is off, with no consent.
+        let cfg: Config = serde_json::from_str(
+            r#"{ "version": 1, "extension_agent_access": { "mindmap": {} } }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            cfg.extension_agent_access["mindmap"],
+            ExtensionAgentAccess::default()
+        );
+        let access = &cfg.extension_agent_access["mindmap"];
+        assert!(!access.enabled);
+        assert!(access.consent.is_none());
+        assert_eq!(access.allowance, AgentAllowance::Normal);
+    }
+
+    #[test]
+    fn extension_agent_access_round_trips() {
+        let access = ExtensionAgentAccess {
+            enabled: true,
+            consent: Some(AgentConsent {
+                agent_fingerprint: "ab12".into(),
+                agent_label: "Work agent".into(),
+                granted_at: "2026-11-09T10:00:00+00:00".into(),
+            }),
+            allowance: AgentAllowance::High,
+        };
+        let json = serde_json::to_value(&access).unwrap();
+        assert_eq!(json["allowance"], "high");
+        assert_eq!(json["consent"]["agent_label"], "Work agent");
+        let back: ExtensionAgentAccess = serde_json::from_value(json).unwrap();
+        assert_eq!(back, access);
     }
 
     #[test]

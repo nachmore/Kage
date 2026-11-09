@@ -156,6 +156,136 @@ pub fn looks_like_secret(s: &str) -> bool {
     })
 }
 
+/// Longest value a label or key prefix is extended over, in characters.
+const MAX_SECRET_VALUE_CHARS: usize = 256;
+
+/// Most characters of spaces and markup (`**`, a quote) skipped between a
+/// label and its value.
+const MAX_LABEL_GAP_CHARS: usize = 8;
+
+/// The parts of `s` that look like a credential, for redaction: sorted,
+/// non-overlapping byte ranges on character boundaries.
+///
+/// Each [`SECRET_SHAPE`] match, widened so it covers the secret and not
+/// only its marker:
+/// - a label (`password:`, `api key =`, `?token=`) is extended over the
+///   value after it: past spaces and markup such as `**` or a quote, then
+///   to the next whitespace, at most 256 characters;
+/// - `AGE-SECRET-KEY-` is extended to the next whitespace, at most 256
+///   characters;
+/// - a key file (`-----BEGIN`, `PuTTY-User-Key-File`) is extended over the
+///   rest of its line and the key lines after it (base64, `Name: value`
+///   headers, one blank line after a header, and the closing
+///   `-----END …-----` line).
+///
+/// [`TOKEN_RUN`] is not used: it matches too many ordinary ids and URLs.
+/// Run this on plain text (each string value), not on serialized JSON:
+/// the key-file rule needs real line breaks.
+#[allow(dead_code)] // The background agent-call engine will call it; the app doesn't yet.
+pub fn secret_spans(s: &str) -> Vec<std::ops::Range<usize>> {
+    let mut spans: Vec<std::ops::Range<usize>> = SECRET_SHAPE
+        .find_iter(s)
+        .map(|m| {
+            let text = m.as_str();
+            let end = if text.starts_with("-----BEGIN") || text.starts_with("PuTTY-User-Key-File") {
+                key_block_end(s, m.end())
+            } else if text.starts_with("AGE-SECRET-KEY-") {
+                value_end(s, m.end())
+            } else if is_label(text) {
+                value_end(s, label_gap_end(s, m.end()))
+            } else {
+                m.end()
+            };
+            m.start()..end
+        })
+        .collect();
+    spans.sort_by_key(|r| r.start);
+    let mut merged: Vec<std::ops::Range<usize>> = Vec::with_capacity(spans.len());
+    for r in spans {
+        match merged.last_mut() {
+            Some(last) if r.start <= last.end => last.end = last.end.max(r.end),
+            _ => merged.push(r),
+        }
+    }
+    merged
+}
+
+/// Whether a [`SECRET_SHAPE`] match is a label whose value follows it
+/// (`password:`, `?token=`). A `Bearer` token can end in `=` padding, but
+/// already holds its value.
+fn is_label(text: &str) -> bool {
+    let scheme = |p: &str| {
+        text.get(..p.len())
+            .is_some_and(|h| h.eq_ignore_ascii_case(p))
+    };
+    (text.ends_with(':') || text.ends_with('=')) && !scheme("bearer") && !scheme("basic")
+}
+
+/// Past the spaces and markup between a label and its value (same line).
+fn label_gap_end(s: &str, from: usize) -> usize {
+    let mut end = from;
+    for (i, c) in s[from..].char_indices().take(MAX_LABEL_GAP_CHARS) {
+        if matches!(c, ' ' | '\t' | '*' | '_' | '"' | '\'' | '`') {
+            end = from + i + c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    end
+}
+
+/// The end of the value starting at `from`: the next whitespace, at most
+/// [`MAX_SECRET_VALUE_CHARS`] characters on.
+fn value_end(s: &str, from: usize) -> usize {
+    let mut end = from;
+    for (i, c) in s[from..].char_indices().take(MAX_SECRET_VALUE_CHARS) {
+        if c.is_whitespace() {
+            break;
+        }
+        end = from + i + c.len_utf8();
+    }
+    end
+}
+
+/// The end of a key file whose marker ends at `from`: the rest of the
+/// marker's line, then each following line that is base64, a `Name: value`
+/// header, or the closing `-----END …-----` line (which ends the block).
+/// One blank line after a header is skipped, as an encrypted PEM key has
+/// (`Proc-Type:`, `DEK-Info:`, a blank line, then the body). Stops before
+/// the first other line.
+fn key_block_end(s: &str, from: usize) -> usize {
+    let line_end = |at: usize| s[at..].find('\n').map_or(s.len(), |i| at + i);
+    let mut end = line_end(from);
+    let mut at = end;
+    let mut after_header = false;
+    while at < s.len() {
+        let start = at + 1;
+        let next = line_end(start);
+        at = next;
+        let line = s[start..next].trim();
+        if line.starts_with("-----END") {
+            return next;
+        }
+        if line.is_empty() && after_header {
+            after_header = false;
+            continue;
+        }
+        let base64 = !line.is_empty()
+            && line
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='));
+        let header = line.split_once(": ").is_some_and(|(name, _)| {
+            !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        });
+        if !(base64 || header) {
+            break;
+        }
+        after_header = header;
+        end = next;
+    }
+    end
+}
+
 // --- Manifest rules ------------------------------------------------------------
 
 /// What the installed manifests say about one extension id.
@@ -871,6 +1001,127 @@ mod tests {
             "Space",
         ] {
             assert!(!looks_like_secret(s), "{}", s);
+        }
+    }
+
+    /// `s` with every [`secret_spans`] range replaced by `[redacted]`.
+    fn redact(s: &str) -> String {
+        let mut out = String::new();
+        let mut at = 0;
+        for r in secret_spans(s) {
+            assert!(at <= r.start && r.start < r.end, "{:?} in {:?}", r, s);
+            out.push_str(&s[at..r.start]);
+            out.push_str("[redacted]");
+            at = r.end;
+        }
+        out.push_str(&s[at..]);
+        out
+    }
+
+    #[test]
+    fn secret_spans_cover_whole_tokens() {
+        for (s, want) in [
+            (
+                "use ghp_0123456789abcdefABCDEF0123 here",
+                "use [redacted] here",
+            ),
+            ("sk-ant-api03-abcdefghijklmnop", "[redacted]"),
+            ("id AKIAABCDEFGHIJKLMNOP.", "id [redacted]."),
+            (
+                "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abcdefghij ok",
+                "jwt [redacted] ok",
+            ),
+            (
+                "Authorization: Bearer Qz8vRt2LmNabcdef== next",
+                "Authorization: [redacted] next",
+            ),
+            (
+                "AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQ and more",
+                "[redacted] and more",
+            ),
+            (
+                "fetch https://me:hunter2@store.example.com/x.json",
+                "fetch https[redacted]store.example.com/x.json",
+            ),
+        ] {
+            assert_eq!(redact(s), want, "{}", s);
+        }
+    }
+
+    #[test]
+    fn secret_spans_extend_labels_over_their_value() {
+        for (s, want) in [
+            (
+                "wifi password: hunter2hunter2 thanks",
+                "wifi [redacted] thanks",
+            ),
+            ("**Password:** Qz8vRt2LmN done", "**[redacted] done"),
+            (
+                "{\"api_key\": \"abc123\", \"n\": 1}",
+                "{\"[redacted] \"n\": 1}",
+            ),
+            ("token=abc123", "[redacted]"),
+            (
+                "see https://example.com/x?access_token=abc123&page=2 now",
+                "see https://example.com/x[redacted] now",
+            ),
+            ("secret:\nnext line", "[redacted]\nnext line"),
+            ("token:", "[redacted]"),
+        ] {
+            assert_eq!(redact(s), want, "{}", s);
+        }
+        // The value ends at most 256 characters on.
+        let s = format!("token: {}", "a".repeat(300));
+        let spans = secret_spans(&s);
+        assert_eq!(spans, vec![0.."token: ".len() + 256]);
+    }
+
+    #[test]
+    fn secret_spans_cover_key_files() {
+        let pem = "my key:\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nQUJDRA==\n-----END OPENSSH PRIVATE KEY-----\nthanks";
+        assert_eq!(redact(pem), "my key:\n[redacted]\nthanks");
+
+        let crlf = "-----BEGIN RSA PRIVATE KEY-----\r\nMIIEowIBAAKCAQEA\r\n-----END RSA PRIVATE KEY-----\r\nbye";
+        assert_eq!(redact(crlf), "[redacted]\nbye");
+
+        let encrypted = "-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,0A1B2C3D\n\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----\n\nbye";
+        assert_eq!(redact(encrypted), "[redacted]\n\nbye");
+
+        // Without an END line the block stops at the first line that isn't
+        // part of a key.
+        let cut = "-----BEGIN PRIVATE KEY-----\nMIIEowIBAAKCAQEA\nsee you at ten\n";
+        assert_eq!(redact(cut), "[redacted]\nsee you at ten\n");
+
+        let putty = "PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\nComment: work\nPublic-Lines: 1\nAAAAC3NzaC1lZDI1NTE5\nPrivate-Lines: 1\nAAAAIBcdef\nPrivate-MAC: 0a1b2c\n\nMore text.";
+        assert_eq!(redact(putty), "[redacted]\n\nMore text.");
+    }
+
+    #[test]
+    fn secret_spans_merge_overlaps_and_keep_char_boundaries() {
+        // The label's value holds a token: one span, not two.
+        let s = "password: ghp_0123456789abcdefABCDEF0123 ok";
+        assert_eq!(secret_spans(s).len(), 1);
+        assert_eq!(redact(s), "[redacted] ok");
+        // Multi-byte text before, in and after the value.
+        assert_eq!(
+            redact("パスワード password: 秘密の値です 次へ"),
+            "パスワード [redacted] 次へ"
+        );
+        assert_eq!(redact("token: «ünïcødé»\tend"), "[redacted]\tend");
+    }
+
+    #[test]
+    fn secret_spans_leave_ordinary_text_alone() {
+        for s in [
+            "",
+            "Meeting with Dana about MTCS at 10:00 tomorrow",
+            "See https://example.com/docs?page=2&id=12345 for details",
+            "id 550e8400-e29b-41d4-a716-446655440000",
+            "build abcdefghijklmnopqrstuvwxyz0123456789 passed",
+            "Author: Dana. Keyboard: US.",
+            "The passing score is 70.",
+        ] {
+            assert!(secret_spans(s).is_empty(), "{:?}: {:?}", s, secret_spans(s));
         }
     }
 

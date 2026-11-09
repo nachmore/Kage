@@ -385,6 +385,8 @@ Contents, top to bottom:
      after a hand-edited config).
    - Paused: your agent changed to {agent}. [Allow again]
    - Paused until {time} after {n} failed requests.
+   - Paused until {time}: your agent tried to use a tool twice today.
+   - Paused until {time} because you stopped it (**Stop now**).
 3. **Usage**: "{calls} of {limit} requests today · {chars} characters ·
    resets at {time}".
 4. **Daily allowance**: Low / Normal / High (§5.6). Default Normal.
@@ -475,12 +477,14 @@ All in `locales/en/messages.json`:
 - `settings.manager.cap.agent_background.label`, `.desc`
 - `settings.manager.ext.agent.section_title`, `.toggle.label`, `.toggle.desc`,
   `.status.off`, `.status.on`, `.status.needs_consent`, `.status.stale`,
-  `.status.paused_failures`, `.status.unavailable`, `.allow_again`,
+  `.status.paused_failures`, `.status.paused_tools`,
+  `.status.paused_stopped`, `.status.unavailable`, `.allow_again`,
   `.usage`, `.usage.resets`, `.allowance.label`, `.allowance.low`,
   `.allowance.normal`, `.allowance.high`, `.stop.btn`, `.stop.done`,
   `.log.title`, `.log.empty`, `.log.row`, `.log.view_sent`,
   `.log.sent_unavailable`, `.log.sent_title`, `.outcome.ok`,
-  `.outcome.invalid_response`, `.outcome.response_too_large`,
+  `.outcome.invalid_response`, `.outcome.not_json`,
+  `.outcome.response_too_large`,
   `.outcome.timeout`, `.outcome.cancelled`, `.outcome.tool_attempted`,
   `.outcome.agent_error`, `.outcome.connection_lost`
 - `settings.manager.ext.agent.consent.title`, `.where.cloud`,
@@ -792,8 +796,14 @@ Before framing, the host:
    using the backup classifier's shapes. A new `pub fn secret_spans(s) ->
    Vec<Range<usize>>` in `src/config_export/sensitive.rs` returns the
    `SECRET_SHAPE` matches. A label match such as `password:` is extended
-   over the value that follows (to the next whitespace, at most 256
-   chars). Each span becomes `[redacted]`. The result reports the count
+   over the value that follows (past spaces and markup such as `**` or a
+   quote, then to the next whitespace, at most 256 chars).
+   `AGE-SECRET-KEY-` is extended the same way. A key file marker
+   (`-----BEGIN`, `PuTTY-User-Key-File`) is extended over the rest of its
+   line and the key lines after it: base64, `Name: value` headers, one
+   blank line after a header, and the closing `-----END …-----` line.
+   Overlapping spans are merged. Each span becomes `[redacted]`. The
+   result reports the count
    (`redactions`). `TOKEN_RUN` alone is **not** used for redaction: it
    matches too many ordinary ids and URLs.
 

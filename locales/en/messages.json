@@ -325,6 +325,10 @@
     "message": "Quit",
     "description": "Tray menu — exit the application"
   },
+  "tray.agent_call_tooltip": {
+    "message": "Kage · {extension} is using your agent",
+    "description": "Tray icon tooltip while an extension's background AI request runs"
+  },
   "window.title.chat": {
     "message": "Kage Chat",
     "description": "Title bar for chat windows"
@@ -2245,6 +2249,10 @@
     "message": "Terminator mode",
     "description": "Filter — only terminator-mode toggle events"
   },
+  "settings.tool_permissions.audit.filter.background_ai": {
+    "message": "Background AI",
+    "description": "Filter — only background AI events"
+  },
   "settings.tool_permissions.audit.refresh": {
     "message": "Refresh",
     "description": "Button to reload the audit log"
@@ -2300,6 +2308,18 @@
   "settings.tool_permissions.audit.summary.unknown": {
     "message": "Unknown event: {kind}",
     "description": "Audit row summary — fallback for an unrecognised event kind"
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_call": {
+    "message": "<strong>{extension}</strong> sent {chars} characters to {agent} ({purpose}): {outcome}",
+    "description": "Audit row summary — one background AI request (HTML allowed). {chars} is a number; {purpose} is an id; {outcome} is an outcome string."
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_access_on": {
+    "message": "Background AI turned on for <strong>{extension}</strong> ({agent})",
+    "description": "Audit row summary — background AI switched on for an extension (HTML allowed)"
+  },
+  "settings.tool_permissions.audit.summary.extension_agent_access_off": {
+    "message": "Background AI turned off for <strong>{extension}</strong>",
+    "description": "Audit row summary — background AI switched off for an extension (HTML allowed)"
   },
   "settings.tool_permissions.audit.meta.session": {
     "message": "session {id}",
@@ -4369,6 +4389,14 @@
     "message": "This extension requested no capabilities",
     "description": "Tooltip for the no-capabilities row"
   },
+  "settings.manager.cap.agent_background.label": {
+    "message": "Background AI",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.agent_background.desc": {
+    "message": "Ask your AI agent for help in the background, without a chat. Nothing is sent until you turn it on for this extension and confirm which agent gets the text.",
+    "description": "Capability badge tooltip and install-prompt description"
+  },
   "settings.manager.error.failed_load": {
     "message": "Failed to load settings",
     "description": "errLabel passed when loading settings throws"
@@ -4420,6 +4448,202 @@
   "settings.manager.ext.enable": {
     "message": "Enable",
     "description": "Button in an extension's Settings page header that turns a disabled extension back on"
+  },
+  "settings.manager.ext.agent.section_title": {
+    "message": "Background AI",
+    "description": "Heading of the Background AI panel on an extension's settings page"
+  },
+  "settings.manager.ext.agent.toggle.label": {
+    "message": "Let {extension} use your agent in the background",
+    "description": "Switch in the Background AI panel. Off by default."
+  },
+  "settings.manager.ext.agent.toggle.desc": {
+    "message": "You confirm which agent gets the text before anything is sent. Turning this off stops running and waiting requests at once.",
+    "description": "Help text under the Background AI switch"
+  },
+  "settings.manager.ext.agent.status.off": {
+    "message": "Off",
+    "description": "Background AI panel status line: switched off"
+  },
+  "settings.manager.ext.agent.status.on": {
+    "message": "On · sends to {agent}",
+    "description": "Background AI panel status line: on. {agent} is the agent connection's name."
+  },
+  "settings.manager.ext.agent.status.needs_consent": {
+    "message": "Needs your OK",
+    "description": "Background AI panel status line: switched on, but no consent is recorded (for example after a hand-edited config)"
+  },
+  "settings.manager.ext.agent.status.stale": {
+    "message": "Paused: your agent changed to {agent}.",
+    "description": "Background AI panel status line: the active agent changed since the user agreed. Followed by an Allow again button. {agent} is the new agent's name."
+  },
+  "settings.manager.ext.agent.status.paused_failures": {
+    "message": "Paused until {time} after {n} failed requests.",
+    "description": "Background AI panel status line: paused after several failed requests in a row. {time} is a local time; {n} is a number (3 or more)."
+  },
+  "settings.manager.ext.agent.status.paused_tools": {
+    "message": "Paused until {time}: your agent tried to use a tool twice today.",
+    "description": "Background AI panel status line: paused until local midnight because the agent started tools in two background requests today. {time} is a local time."
+  },
+  "settings.manager.ext.agent.status.paused_stopped": {
+    "message": "Paused until {time} because you stopped it.",
+    "description": "Background AI panel status line: paused for an hour after the user pressed Stop now. {time} is a local time."
+  },
+  "settings.manager.ext.agent.status.unavailable": {
+    "message": "Not available: {extension}'s manifest doesn't declare background AI.",
+    "description": "Background AI panel status line: the extension holds the permission but its manifest has no valid agentBackground block"
+  },
+  "settings.manager.ext.agent.allow_again": {
+    "message": "Allow again",
+    "description": "Button in the Background AI panel that opens the consent dialog again after the agent changed"
+  },
+  "settings.manager.ext.agent.usage": {
+    "message": "{calls} of {limit} requests today on this computer · {chars} characters",
+    "description": "Background AI panel usage line. {calls}, {limit} and {chars} are numbers."
+  },
+  "settings.manager.ext.agent.usage.resets": {
+    "message": "Resets at {time}",
+    "description": "Background AI panel: when today's allowance resets. {time} is a local time."
+  },
+  "settings.manager.ext.agent.allowance.label": {
+    "message": "Daily allowance",
+    "description": "Label of the daily allowance choice in the Background AI panel"
+  },
+  "settings.manager.ext.agent.allowance.low": {
+    "message": "Low",
+    "description": "Daily allowance choice: fewest requests a day"
+  },
+  "settings.manager.ext.agent.allowance.normal": {
+    "message": "Normal",
+    "description": "Daily allowance choice: the default"
+  },
+  "settings.manager.ext.agent.allowance.high": {
+    "message": "High",
+    "description": "Daily allowance choice: most requests a day"
+  },
+  "settings.manager.ext.agent.stop.btn": {
+    "message": "Stop now",
+    "description": "Button that cancels the running and waiting background requests and pauses the extension for an hour"
+  },
+  "settings.manager.ext.agent.stop.done": {
+    "message": "Stopped. Background AI is paused for an hour.",
+    "description": "Shown after the user pressed Stop now"
+  },
+  "settings.manager.ext.agent.log.title": {
+    "message": "Recent requests",
+    "description": "Heading of the list of recent background requests"
+  },
+  "settings.manager.ext.agent.log.empty": {
+    "message": "No requests yet.",
+    "description": "Shown when the extension made no background requests"
+  },
+  "settings.manager.ext.agent.log.row": {
+    "message": "{time} · {purpose} · {outcome} · {chars} characters · {agent}",
+    "description": "One row of the recent requests list. {time} is a local time, {purpose} an id from the manifest, {outcome} one of the outcome strings, {chars} a number, {agent} the agent's name."
+  },
+  "settings.manager.ext.agent.log.view_sent": {
+    "message": "Show what was sent",
+    "description": "Button on a recent request row that opens the exact prompt and reply"
+  },
+  "settings.manager.ext.agent.log.sent_unavailable": {
+    "message": "Only requests from this session can be shown.",
+    "description": "Shown on recent request rows from before Kage last started"
+  },
+  "settings.manager.ext.agent.log.sent_title": {
+    "message": "What was sent, and the reply",
+    "description": "Title of the read-only view of one background request's prompt and reply"
+  },
+  "settings.manager.ext.agent.outcome.ok": {
+    "message": "Done",
+    "description": "Outcome of a background request: success"
+  },
+  "settings.manager.ext.agent.outcome.invalid_response": {
+    "message": "Reply didn't match the format",
+    "description": "Outcome of a background request: the reply didn't match the extension's schema"
+  },
+  "settings.manager.ext.agent.outcome.not_json": {
+    "message": "Reply wasn't JSON",
+    "description": "Outcome of a background request: the extension asked for JSON and the reply had none"
+  },
+  "settings.manager.ext.agent.outcome.response_too_large": {
+    "message": "Reply too long",
+    "description": "Outcome of a background request: the reply went over the size limit"
+  },
+  "settings.manager.ext.agent.outcome.timeout": {
+    "message": "Timed out",
+    "description": "Outcome of a background request: the agent didn't finish in time"
+  },
+  "settings.manager.ext.agent.outcome.cancelled": {
+    "message": "Cancelled",
+    "description": "Outcome of a background request: cancelled"
+  },
+  "settings.manager.ext.agent.outcome.tool_attempted": {
+    "message": "Stopped: the agent tried a tool",
+    "description": "Outcome of a background request: the agent started a tool, so Kage stopped it"
+  },
+  "settings.manager.ext.agent.outcome.agent_error": {
+    "message": "Agent error",
+    "description": "Outcome of a background request: the agent reported an error"
+  },
+  "settings.manager.ext.agent.outcome.connection_lost": {
+    "message": "Agent disconnected",
+    "description": "Outcome of a background request: the agent connection dropped"
+  },
+  "settings.manager.ext.agent.consent.title": {
+    "message": "Let {extension} use {agent} in the background?",
+    "description": "Title of the Background AI consent dialog. {agent} is the agent connection's name."
+  },
+  "settings.manager.ext.agent.consent.where.cloud": {
+    "message": "{agent} sends what it receives to its online service.",
+    "description": "Consent dialog: the agent is a known cloud service"
+  },
+  "settings.manager.ext.agent.consent.where.local": {
+    "message": "{agent} runs on this computer.",
+    "description": "Consent dialog: the agent is a local model on this computer"
+  },
+  "settings.manager.ext.agent.consent.where.remote": {
+    "message": "{agent} runs on another computer ({host}).",
+    "description": "Consent dialog: the agent runs on another computer. {host} is its host name or address."
+  },
+  "settings.manager.ext.agent.consent.where.unknown": {
+    "message": "Kage can't tell where {agent} sends what it receives. It may be an online service.",
+    "description": "Consent dialog: Kage doesn't know where the agent sends text"
+  },
+  "settings.manager.ext.agent.consent.reason": {
+    "message": "{extension} says: \"{reason}\"",
+    "description": "Consent dialog: the extension's own explanation, quoted. {reason} is the extension's text, shown as is."
+  },
+  "settings.manager.ext.agent.consent.what": {
+    "message": "{extension} chooses what to send. It can send text from its own data, up to {calls} requests a day.",
+    "description": "Consent dialog bullet. {calls} is a number."
+  },
+  "settings.manager.ext.agent.consent.reads": {
+    "message": "{extension} can also read: {capabilities}.",
+    "description": "Consent dialog bullet, shown only when the extension holds data permissions. {capabilities} is a list of permission names."
+  },
+  "settings.manager.ext.agent.consent.when": {
+    "message": "Requests run while you aren't using Kage. Starting a chat stops them.",
+    "description": "Consent dialog bullet"
+  },
+  "settings.manager.ext.agent.consent.tools": {
+    "message": "Kage asks the agent not to use tools and refuses every tool request. If your agent is set to run tools without asking, Kage stops the request as soon as it sees one start.",
+    "description": "Consent dialog bullet"
+  },
+  "settings.manager.ext.agent.consent.history": {
+    "message": "Requests don't appear in your chats. Your agent may keep its own records, as it does for every conversation.",
+    "description": "Consent dialog bullet"
+  },
+  "settings.manager.ext.agent.consent.log": {
+    "message": "Every request is listed on this page and in Settings → Tool permissions.",
+    "description": "Consent dialog bullet"
+  },
+  "settings.manager.ext.agent.consent.allow": {
+    "message": "Allow",
+    "description": "Consent dialog button that turns background AI on"
+  },
+  "settings.manager.ext.agent.consent.cancel": {
+    "message": "Not now",
+    "description": "Consent dialog button that leaves background AI off"
   },
   "settings.ext_settings.action.working": {
     "message": "Working…",
@@ -6069,6 +6293,22 @@
     "message": "{tool}: {title}",
     "description": "Body of the tool permission notification, with tool name and description"
   },
+  "floating.agent_call.chip": {
+    "message": "{extension} is using your agent",
+    "description": "Small chip in the launcher while an extension's background AI request runs. The moon icon is separate."
+  },
+  "floating.agent_call.waiting": {
+    "message": "+{n} waiting",
+    "description": "Added to the background AI chip when more requests wait. {n} is a number."
+  },
+  "floating.agent_call.stop": {
+    "message": "Stop",
+    "description": "Button on the background AI chip that stops the requests"
+  },
+  "floating.agent_call.settings": {
+    "message": "Settings",
+    "description": "Button on the background AI chip that opens the extension's settings"
+  },
   "chat.placeholder.type_message": {
     "message": "Type your message...",
     "description": "Placeholder shown in the chat input"
@@ -6840,5 +7080,133 @@
   "errors.config.import_config_too_large": {
     "message": "This backup's settings are too large to use (over {max_kb} KB). Nothing was changed.",
     "description": "Import refused: the merged settings would be larger than Kage reads back at startup"
+  },
+  "errors.agent_call.not_available": {
+    "message": "{extension} can't use background AI. It doesn't have the Background AI permission, or its manifest doesn't declare it.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension lacks the permission or its manifest has no valid agentBackground block. {extension} is the extension's name."
+  },
+  "errors.agent_call.access_off": {
+    "message": "Background AI is off for {extension}. Turn it on in Settings → Extensions → {extension}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user hasn't turned background AI on for this extension on this computer."
+  },
+  "errors.agent_call.consent_required": {
+    "message": "{extension} needs your OK before it sends text to your agent.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Background AI is switched on, but the user hasn't confirmed the consent dialog."
+  },
+  "errors.agent_call.consent_stale": {
+    "message": "Your agent changed. Allow {extension} again in its settings.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The active agent connection changed since the user gave consent, so the consent no longer applies."
+  },
+  "errors.agent_call.extension_disabled": {
+    "message": "{extension} is turned off.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension is disabled, so it can't make requests."
+  },
+  "errors.agent_call.agent_changed": {
+    "message": "Your agent changed while this was open. Check the agent's name and try again.",
+    "description": "Consent dialog: the active agent connection changed while the dialog was open, so the user must confirm again."
+  },
+  "errors.agent_call.purpose_not_declared": {
+    "message": "{extension} didn't declare the purpose \"{purpose}\".",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the request named a purpose the manifest's agentBackground.purposes doesn't list. {purpose} is the id."
+  },
+  "errors.agent_call.field_too_long": {
+    "message": "\"{field}\" is {size} characters. The limit is {limit}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: one field of the request is too long. {field} is the field name; {size} and {limit} are numbers."
+  },
+  "errors.agent_call.prompt_too_large": {
+    "message": "The request is {size} characters. The limit is {limit}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The whole prompt Kage would send is over the size limit. {size} and {limit} are numbers."
+  },
+  "errors.agent_call.schema_unsupported": {
+    "message": "The response schema uses something Kage doesn't support: {keyword}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the JSON schema uses a keyword outside the supported subset. {keyword} is the keyword."
+  },
+  "errors.agent_call.contains_credential": {
+    "message": "The request contains one of {extension}'s saved credentials, so Kage didn't send it.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The request text contains a password or key from the extension's own settings, so nothing was sent."
+  },
+  "errors.agent_call.duplicate": {
+    "message": "A background request with this key is already waiting.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Another request with the same de-duplication key is already queued."
+  },
+  "errors.agent_call.queue_full": {
+    "message": "{extension} already has {limit} background requests waiting.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension's queue of waiting requests is full. {limit} is a number."
+  },
+  "errors.agent_call.rate_limited": {
+    "message": "Too many background requests. Try again after {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Too many requests in a short time. {time} is a local time of day."
+  },
+  "errors.agent_call.budget_exhausted": {
+    "message": "{extension} has used today's background AI allowance. It resets at {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension used its daily allowance on this computer. {time} is a local time."
+  },
+  "errors.agent_call.paused": {
+    "message": "Background AI for {extension} is paused until {time}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Requests are paused (after failures, tool attempts, or the user pressing Stop). {time} is a local time."
+  },
+  "errors.agent_call.agent_unavailable": {
+    "message": "Your agent isn't connected.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). No agent is connected. Kage never starts the agent for a background request."
+  },
+  "errors.agent_call.agent_disconnected": {
+    "message": "The agent disconnected before it finished.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent connection dropped while a request was running."
+  },
+  "errors.agent_call.timeout": {
+    "message": "The agent didn't finish within {seconds} seconds.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The request ran out of time. {seconds} is a number."
+  },
+  "errors.agent_call.turn_expired": {
+    "message": "The request wasn't sent within {seconds} seconds of its turn, so the turn was given up.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the extension took too long to send its request after Kage gave it a turn. {seconds} is a number."
+  },
+  "errors.agent_call.cancelled_by_extension": {
+    "message": "The extension cancelled the request.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension itself cancelled its request."
+  },
+  "errors.agent_call.cancelled_by_user": {
+    "message": "You stopped the request.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user pressed Stop now."
+  },
+  "errors.agent_call.cancelled_user_activity": {
+    "message": "Stopped because you started using Kage.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user started a chat prompt, which stops background requests."
+  },
+  "errors.agent_call.cancelled_shutdown": {
+    "message": "Stopped because Kage is quitting.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Kage is shutting down."
+  },
+  "errors.agent_call.cancelled_access_off": {
+    "message": "Stopped because background AI was turned off for {extension}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The user turned background AI off, or disabled or removed the extension, while a request was waiting or running."
+  },
+  "errors.agent_call.tool_attempted": {
+    "message": "The agent tried to use a tool, so Kage stopped the request.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Background requests may not use tools; the agent started one, so Kage stopped the request."
+  },
+  "errors.agent_call.response_too_large": {
+    "message": "The agent's reply went over {limit} characters, so Kage stopped it.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent's reply was too long. {limit} is a number."
+  },
+  "errors.agent_call.not_json": {
+    "message": "The agent's reply wasn't JSON.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The extension asked for a JSON reply, and the reply had none."
+  },
+  "errors.agent_call.invalid_response": {
+    "message": "The agent's reply didn't match the expected format at {path}.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The JSON reply didn't match the extension's schema. {path} is a JSON path such as $.items[3].text; keep it verbatim."
+  },
+  "errors.agent_call.agent_error": {
+    "message": "The agent returned an error: {reason}",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). The agent reported an error. {reason} is the agent's own text, not translated."
+  },
+  "errors.agent_call.unknown_call": {
+    "message": "Unknown or finished background request.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the request id is unknown, belongs to another extension, or already finished."
+  },
+  "errors.agent_call.not_ready": {
+    "message": "This request hasn't been given its turn yet.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the extension tried to send before Kage gave the request its turn."
   }
 }

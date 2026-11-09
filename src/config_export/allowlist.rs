@@ -259,6 +259,9 @@ pub const FIELDS: &[(&str, Rule)] = &[
     ("extension_grants.*.granted", Include(Capabilities)),
     ("extension_grants.*.approved_version", Include(GrantVersion)),
     ("extension_grants.*.approved_at", Include(Timestamp)),
+    // Background AI switch, consent and allowance: consent named an agent
+    // on this machine.
+    ("extension_agent_access", Leave(Permissions)),
     // Local text-to-speech: the server is installed per machine; the voice
     // and how it speaks are preferences.
     ("pocket_tts.enabled", Leave(DeviceLocal)),
@@ -964,6 +967,18 @@ mod tests {
                 granted: vec!["storage".into()],
                 approved_version: "1.0.0".into(),
                 approved_at: "2026-01-01T00:00:00Z".into(),
+            },
+        );
+        c.extension_agent_access.insert(
+            "weather".into(),
+            crate::config::ExtensionAgentAccess {
+                enabled: true,
+                consent: Some(crate::config::AgentConsent {
+                    agent_fingerprint: "f".into(),
+                    agent_label: "a".into(),
+                    granted_at: "2026-01-01T00:00:00Z".into(),
+                }),
+                allowance: crate::config::AgentAllowance::High,
             },
         );
         c.pocket_tts.python_path = Some("p".into());
