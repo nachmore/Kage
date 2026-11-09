@@ -320,8 +320,9 @@ mitigations are in place:
   `<html>`) to prevent raw-HTML passthrough.
 - Tool permissions require explicit user approval before the
   agent executes any ACP tool call.
-- Tool permission events (grants, denials, revokes, expiries, and
-  terminator-mode toggles) are recorded to
+- Tool permission events (grants, denials, revokes, expiries,
+  terminator-mode toggles, and commands the user ran themselves from a
+  sandbox notice) are recorded to
   `<config_dir>/kage/permission-audit.jsonl`. The log is
   **deliberately not tamper-evident** — it lives under the user's
   config directory with normal write permissions. Use it to
@@ -334,6 +335,76 @@ mitigations are in place:
   review.
 - Mutex poisoning is recovered gracefully (`lock_or_recover`)
   so one thread's panic doesn't cascade.
+
+## Commands you run yourself
+
+Agents run shell commands inside a sandbox of their own (kiro-cli behind
+a managed wrapper, Codex, Claude Code's sandbox runtime). Some legitimate
+commands can't run there at all — `brew install` applies its own
+`sandbox-exec` profile, which macOS refuses to nest — and Kage's tool
+approvals can't lift that sandbox. When a shell block's output reads as
+the agent's sandbox refusing the command (`shellSandboxDenial` in
+`ui/js/shared/shell-commands.js`), the block gets a notice that offers
+to run it outside the sandbox (`shell-run-view.js`,
+`src/commands/system/user_shell.rs`).
+
+The trust boundary:
+
+- **The notice is a hint, not a verdict.** It is triggered by text in
+  the command's output, and any command can print that text itself. It
+  never vouches for the command; it shows the whole command, with every
+  hidden or control character marked, and asks the user to read it.
+- **The user reads and approves every run.** "Run it here" and "Run in
+  Terminal" only open a confirm inside the notice: the exact text that
+  will run (monospace, scrollable), the directory it runs in (the tool
+  call's `cwd` when the agent sent one, else the home folder — checked
+  to exist before the confirm offers to run), a warning that it runs
+  outside the agent's sandbox with the user's full permissions, and a
+  caution line per risky pattern (`sudo`, `rm -rf`, `curl … | sh`,
+  `chmod/chown -R` on `/`, a top-level folder or home, writes to shell
+  startup files). Only the confirm's Run button starts a run, once.
+  There is no "always allow" and nothing is remembered: the next run
+  needs its own confirm. A command with hidden characters gets no run
+  button at all (only Copy).
+- **Kage never runs agent commands on its own.** Nothing the agent sends
+  — output, tool calls, markdown — becomes a click: it's rendered as
+  text, and the run path starts only from the confirm's click handler.
+- **Only Kage's own windows can call it.** `run_user_shell_command`,
+  `cancel_user_shell_command`, `user_shell_run_context` and
+  `run_command_in_terminal` refuse any window but `main`, `chat-<uuid>`
+  and `floating`, and are mapped to `null` in `extension-permissions.js`,
+  so the sandbox host refuses them for every extension whatever it was
+  granted. (Extension iframes have no Tauri IPC of their own: no
+  `window.__TAURI__`, no invoke key.)
+- **How it runs.** The exact string, unchanged, through the user's login
+  shell — `$SHELL -l -c` when `$SHELL` is a POSIX shell, else `/bin/zsh`,
+  else `/bin/sh`; on Windows PowerShell (`-NoProfile -NonInteractive
+  -Command`), or `cmd /D /S /C` when the agent's tool was `cmd`
+  (kiro-cli's `execute_cmd`) — with the login-shell environment overlay,
+  stdin closed, in its own session and process group (no terminal, so
+  `sudo` fails at once instead of prompting where nobody sees it; the
+  confirm offers Terminal for those). It is stopped (the whole process
+  group) by Stop or after 10 minutes. One run per window at a time.
+- **What's kept.** The calling window receives the output as it streams
+  and the last 64 KiB with the exit status. If the user left "Tell the
+  agent the result" on, Kage sends the agent the command, exit status and
+  the last 8 KB of output as the user's next prompt, visible in the
+  chat — waiting for a turn in progress to end, and droppable until
+  then. A run the user stopped is not reported unless they ask.
+- **What's recorded.** An English line in the app log (window, program
+  name, length, exit status — never the command line), a `user_ran_command`
+  entry in the permission audit log (the command clipped to 2 KB, its
+  directory, outcome and exit code), and, with analytics on, a
+  `user_shell_run` event carrying only where it ran and an exit-code
+  bucket.
+- **Run in Terminal (macOS).** Hands the command to a new Terminal.app
+  window over Apple Events (`osascript` with a constant script; the
+  directory and command travel as arguments, never spliced into script
+  source), where it runs in the user's interactive shell with a real
+  TTY, so `sudo` can ask for a password. The first time, macOS asks
+  whether Kage may control Terminal. Elsewhere there's no safe
+  equivalent (Windows Terminal re-parses `;`; Linux terminals each quote
+  differently), so the notice only copies the command.
 
 ## Backups and sensitive data
 
@@ -532,6 +603,7 @@ encrypted backup is recognised by its first bytes, whatever it is called.
 | Link or redirect turns a Kage window into a remote page | ✅ Blocked | JS link handler in every window + Rust `on_navigation` guard. See "Links and navigation". |
 | Extension opens the browser without `urls` via an iframe redirect | ✅ Blocked | The guard never opens URLs it can't attribute to the main frame. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
+| Agent output or an extension runs a shell command outside the agent's sandbox | ✅ Blocked | Only the confirm's own click runs one, once; the commands are `null` for extensions and refuse non-Kage windows. See "Commands you run yourself". |
 | Unencrypted backup file leaks a token, key, script, prompt or steering doc | ✅ Blocked | The only unencrypted backup is settings-only: an allowlist of shaped values, no free-form text, no extension data. Backend-enforced. See "Backups and sensitive data". |
 | Restoring a backup wipes a sign-in this machine has   | ✅ Blocked | Missing, empty and placeholder values keep the local one, bound to the same item; an extension signed in here keeps its settings and data whole. |
 | An interrupted import leaves files and config out of step | ✅ Blocked | Durable journal with a commit marker; resolved before the next start reads config. |
