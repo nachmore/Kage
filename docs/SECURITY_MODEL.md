@@ -321,8 +321,9 @@ mitigations are in place:
 - Tool permissions require explicit user approval before the
   agent executes any ACP tool call.
 - Tool permission events (grants, denials, revokes, expiries,
-  terminator-mode toggles, and commands the user ran themselves from a
-  sandbox notice) are recorded to
+  terminator-mode toggles, commands the user ran themselves from a
+  sandbox notice, and every step of a command an agent asked Kage to run
+  outside its sandbox) are recorded to
   `<config_dir>/kage/permission-audit.jsonl`. The log is
   **deliberately not tamper-evident** — it lives under the user's
   config directory with normal write permissions. Use it to
@@ -415,6 +416,155 @@ The trust boundary:
   whether Kage may control Terminal. Elsewhere there's no safe
   equivalent (Windows Terminal re-parses `;`; Linux terminals each quote
   differently), so the notice only copies the command.
+
+## Commands an agent runs outside its sandbox
+
+The agent can also ask for this itself. Kage's own MCP sidecar (the
+`kage-computer-control` server Kage registers in the agent's
+`mcp.json`, opt-in like the rest of computer control) offers a
+`run_outside_sandbox` tool: the command, an optional working directory,
+the agent's reason (why its own shell can't run it) and an optional time
+limit (default 600 s, at most 1800 s). Its description tells the agent to
+use it only after its own shell failed because of its sandbox, never for
+credentials or secrets, and that the user approves every run unless they
+made a rule. Code: `computer_control_mcp/src/run_outside_sandbox.rs`,
+`kage-core/src/host_bridge.rs` (protocol), `kage-core/src/os/host_bridge.rs`
+(transport), `src/host_commands/` (decisions), and
+`ui/js/shared/host-command-view.js` (prompt).
+
+The trust boundary:
+
+- **The sidecar can't run anything itself.** It is a child of the
+  sandboxed agent, so it is sandboxed too; it only hands the request to
+  the Kage app, which isn't, over the host-command bridge and waits for
+  the reply. If the agent's sandbox blocks the bridge, the tool says it
+  couldn't reach Kage and nothing runs.
+- **The bridge is local and authenticated by the OS.** No TCP, no
+  listening network port, no token. On macOS and Linux it is an AF_UNIX
+  stream socket, `host.sock`, in `<local data dir>/kage/bridge/` (for
+  example `~/Library/Application Support/kage/bridge/`). Kage creates that
+  directory `0700` and refuses to listen when it — or the socket path —
+  is a symlink, isn't owned by the user, or allows group or others
+  anything, or when its parent is writable by others; a leftover socket
+  is removed only when it's the user's and nothing listens on it. Every
+  connection's peer uid (`getpeereid` on macOS, `SO_PEERCRED` on Linux)
+  must equal Kage's effective uid, else it is dropped unread; the
+  sidecar checks the server's uid the same way. On Windows it is a named
+  pipe, `\\.\pipe\kage-host-bridge-<user SID>`, created as the first
+  instance (`FILE_FLAG_FIRST_PIPE_INSTANCE`), refusing remote clients
+  (`PIPE_REJECT_REMOTE_CLIENTS`), with a DACL granting only the user and
+  SYSTEM; the client process's token user SID must equal Kage's, and the
+  sidecar checks the server's. Kage creates the next pipe instance before
+  handing a connected one out, so the name is never free to claim. Both
+  sides compute the endpoint the same way (`default_endpoint`), so
+  nothing is passed through the agent's `mcp.json`. "Same user" is the
+  boundary: any process of the user can reach the bridge — which can't
+  get it more than a prompt, below.
+- **The protocol is small and strict.** One request per connection: one
+  JSON line with a version field, exactly the documented fields (unknown,
+  duplicate or mistyped ones are refused), at most 64 KiB (command
+  32 KiB, reason 2 KiB, working directory 4 KiB). One reply line: the
+  outcome, exit code, duration and the output's last 32 KiB — or
+  "denied", "timed out waiting for approval", or an error. At most 16
+  connections are handled at once and 8 prompts wait at once.
+- **Kage matches the request to the session that asked.** The
+  notification handler remembers the agent's in-flight
+  `run_outside_sandbox` tool calls; a request is matched to the newest
+  open call with exactly its command (`rawInput.command`), which names the
+  ACP session and so the window to ask in. A request Kage can't match —
+  an agent outside Kage, or any other process of the user — is shown in
+  the floating window with a system notification naming the program that
+  asked, as the sidecar reports it.
+- **The agent's tool approval is the execution prompt.** When the agent
+  asks Kage to approve the MCP call itself (`Running:
+  @kage-computer-control/run_outside_sandbox`,
+  `mcp__kage-computer-control__run_outside_sandbox`, MCP kind, every title
+  naming exactly that server and tool), Kage allows it without a prompt:
+  the real decision happens when the command reaches Kage, so the user
+  isn't asked twice. A per-tool Deny the user set still wins.
+- **The user decides, in the window that owns the session.** The prompt
+  is inline (in the answer being written, or in the tray above the
+  input) and reuses the "Run it here" confirm: the whole command with
+  hidden characters marked, where it runs and in which shell, the agent's
+  reason (as text), the full-permissions warning, the risk lines, and
+  which agent asked. Its answers are Run once, Always allow commands
+  starting with [editable words, default the first two], and Deny. Each
+  prompt answers only its own request, only from the window it was shown
+  in (the backend checks), once. Nothing is focused when a prompt
+  appears, so keys typed elsewhere can't answer it; Run takes a single
+  click of its own; Enter in the words field approves nothing. With no
+  answer in five minutes the request is denied; if the agent goes away
+  first, the prompt is withdrawn. A command with hidden characters is
+  never run from Kage: its prompt offers Copy and Deny only.
+- **Rules are narrow.** "Always allow commands starting with …" saves a
+  rule (`config.tool_permissions.host_command_rules`) that covers only a
+  *simple* command — printable ASCII, no `; & |`, no redirection, no
+  `$`, backticks or `( )`, no escapes, globs, braces, `!` or `#`, no line
+  breaks, and no `NAME=value` before the program — whose first words are
+  exactly the rule's (`brew install` covers `brew install awscli`, not
+  `brew installer`, `sudo brew install` or `brew install x; rm …`). When in
+  doubt, Kage asks. "Run every command without asking"
+  (`host_commands_allow_all`, Settings only, behind a warning that
+  commands then run with full access to the computer, including AWS
+  credentials) skips the prompt for everything else. Neither is implied
+  by "Trust all", terminator mode, trusted kinds or trusted MCP servers;
+  both are backend-owned (a Settings snapshot, a backup or sync never
+  changes them) and machine-local. They apply only to a request matched
+  to a session the user sees: an unmatched request, or one from a
+  background session (inline assist, macros — text from other apps),
+  always asks.
+- **The credential guard always asks.** Whatever the rules or switch
+  say, a command that names an AWS, SSH or cloud credential store or the
+  keychain (`~/.aws`, `$HOME/.aws`, `AWS_SHARED_CREDENTIALS_FILE`,
+  `.sbox-session`, `~/.ssh`, `id_rsa` / `id_ed25519`, `.netrc`, `gh`'s
+  `hosts.yml`, gcloud credentials, Azure / Kubernetes / Docker credential
+  files, `~/Library/Keychains`), asks a CLI for credentials (`security
+  find-*-password`, `dump-keychain`, `aws configure export-credentials`,
+  `aws sts get-session-token`, `gh auth token`, `gcloud auth
+  print-access-token`, …), names a credential environment variable, dumps
+  the whole environment (`env`, `printenv`, `set`, `export -p`, …) or
+  globs into hidden folders, prompts with a line saying why
+  (`src/host_commands/guard.rs`). It is best-effort: it reads the
+  command's text, so a script, an alias, a program that reads those
+  files itself or an obfuscated path gets past it — which is why rules
+  cover only simple commands and the user still reads what runs. It
+  matches the purpose of the agent's credential sandbox: preventing
+  credentials from being used by accident, not stopping a determined
+  local program (which, running as the user, could read them anyway).
+- **How it runs.** Exactly as "Run it here" runs a command (the same
+  runner: login shell, login-shell environment, stdin closed, own
+  process group, output capped), with the request's time limit. The run
+  shows in the prompt's place with its live output, time and Stop; it is
+  stopped by Stop, at its time limit, when its window closes or reloads,
+  when the agent stops waiting, and when Kage quits. At most four agent
+  runs go at once. The result goes back to the agent as the tool's
+  result; no chat message is sent.
+- **What's recorded.** The permission audit log gets a `host_command`
+  entry per step — `requested`, `guard`, `auto_approved` (which rule, or
+  allow-all), `approved` (once / always), `denied`, `expired`,
+  `withdrawn`, `refused`, `finished` (outcome, exit code) — and for
+  `rule_added`, `rule_removed`, `allow_all_on` and `allow_all_off`, with
+  the command clipped to 2 KB. The app log gets English lines without
+  the command line. With analytics on, `host_command` and
+  `host_command_run` events carry counts and buckets only (which step,
+  whether the guard fired, whether the request was matched, an exit-code
+  bucket) — never the command or a path.
+
+### The agent can't press Kage's buttons
+
+The same sidecar's computer-control tools inject input into other apps.
+They could otherwise press Kage's own Run, Always allow or tool-approval
+buttons. Every input-injecting tool refuses, with an error telling the
+agent to bring the app it means to the front, when its target is a Kage
+window (the `kage` executable, or bundle id `com.kage.launcher`):
+keyboard tools when Kage is the active app or holds keyboard focus (a
+key panel included); mouse tools when their point — the cursor when none
+is given, both ends of a drag — lies on a Kage window; element tools
+when the element belongs to Kage (on Windows, WebView2 content reports
+`msedgewebview2.exe`, so the window under the element decides).
+Read-only tools still work. This is best-effort too: the agent's own
+shell could still script the UI (it runs inside its sandbox, behind the
+tool-permission prompt).
 
 ## Backups and sensitive data
 
@@ -660,6 +810,9 @@ not even encrypted (docs/design/SYNC.md §11.5).
 | Extension opens the browser without `urls` via an iframe redirect | ✅ Blocked | The guard never opens URLs it can't attribute to the main frame. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
 | Agent output or an extension runs a shell command outside the agent's sandbox | ✅ Blocked | Only the confirm's own click runs one, once; the commands are `null` for extensions and refuse non-Kage windows. See "Commands you run yourself". |
+| An agent runs a command outside its sandbox without the user | ✅ Blocked | Only the user's answer in Kage, or a rule they made for simple commands (never for credential-touching ones or ones with hidden characters), runs it. See "Commands an agent runs outside its sandbox". |
+| Another user's process reaches the host-command bridge | ✅ Blocked | 0700 socket directory and peer-uid check (macOS/Linux); per-user pipe DACL, remote clients refused and token-user check (Windows). |
+| The agent presses Kage's own approval buttons with computer-control tools | ⚠ Best-effort | Input tools refuse Kage's windows (by process); the agent's own shell could still script the UI. |
 | Unencrypted backup file leaks a token, key, script, prompt or steering doc | ✅ Blocked | The only unencrypted backup is settings-only: an allowlist of shaped values, no free-form text, no extension data. Backend-enforced. See "Backups and sensitive data". |
 | Restoring a backup wipes a sign-in this machine has   | ✅ Blocked | Missing, empty and placeholder values keep the local one, bound to the same item; an extension signed in here keeps its settings and data whole. |
 | An interrupted import leaves files and config out of step | ✅ Blocked | Durable journal with a commit marker; resolved before the next start reads config. |

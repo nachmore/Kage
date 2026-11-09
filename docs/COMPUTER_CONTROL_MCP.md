@@ -152,3 +152,11 @@ and the current computer-control split is the canonical example.
   `send_extension_tool_steering`) and
   `ui/js/shared/extension-tool-controller.js`
 - ACP transport: `src/acp_client/transport.rs`
+- `run_outside_sandbox` (commands the agent's sandbox refused, run by the
+  Kage app after the user approves): `computer_control_mcp/src/run_outside_sandbox.rs`,
+  the bridge in `kage-core/src/host_bridge.rs` + `kage-core/src/os/host_bridge.rs`,
+  and `src/host_commands/`. Its calls run on their own threads so the stdio
+  loop keeps answering while one waits for the user.
+- Input tools never act on Kage's own windows: `kage-core/src/os/kage_target.rs`
+  and `targets_kage` in `computer_control_mcp/src/input_tools.rs`. See
+  docs/SECURITY_MODEL.md § "Commands an agent runs outside its sandbox".
