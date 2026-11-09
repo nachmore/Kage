@@ -8,6 +8,8 @@ import {
     unifiedSearch,
 } from './dependencies.js';
 import { EVT } from '../../shared/events.js';
+import { installFileTextBroker } from '../../shared/extension-file-text.js';
+import { presentOverlayWindow } from '../../shared/overlay-window.js';
 
 /**
  * How long the launcher ignores blurs after it asked Rust to open a view
@@ -15,6 +17,12 @@ import { EVT } from '../../shared/events.js';
  * window can take a few hundred milliseconds.
  */
 export const VIEW_OPEN_BLUR_GRACE_MS = 1500;
+
+/**
+ * How long the launcher ignores blurs, and keeps its content on a show,
+ * after an extension's file dialog closed (EXTENSION_FILE_TEXT.md §5.3).
+ */
+export const FILE_DIALOG_BLUR_GRACE_MS = 1500;
 
 /**
  * A `floating_compose` within this long keeps the show-time reset
@@ -219,6 +227,10 @@ export const LifecycleVisibilityMethods = {
                                 if (this._composedRecently()) {
                                     this.elements.input.focus();
                                     this.elements.input.select();
+                                } else if (this._fileDialogClosedRecently()) {
+                                    // Back from an extension's file dialog:
+                                    // its answer is still coming.
+                                    this.elements.input.focus();
                                 } else {
                                     this.resetUI();
                                 }
@@ -369,6 +381,10 @@ export const LifecycleVisibilityMethods = {
         if (this._filePickerOpen) {
             return true;
         }
+        // Don't hide while an extension's file dialog hid the launcher (§5.3)
+        if (this._nativeDialogOpen) {
+            return true;
+        }
         // Don't hide while an extension tool is being processed
         if (this._extensionToolExecuting || this._extensionToolCallHandled) {
             return true;
@@ -440,6 +456,46 @@ export const LifecycleVisibilityMethods = {
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.focus();
         input.select();
+    },
+
+    /**
+     * The launcher's file broker (EXTENSION_FILE_TEXT.md §5.3): the ask bar
+     * and chip go at the top of the bubble, and the window hides while an
+     * extension's file dialog is open, so the dialog gets focus and isn't
+     * hidden under an always-on-top bar.
+     */
+    _installFileTextBroker() {
+        installFileTextBroker({
+            listen: this.listen,
+            isVisible: () => this._isWindowVisible(),
+            guard: { begin: () => this._beginFileDialog(), end: () => this._endFileDialog() },
+            mount: () => document.querySelector('.speech-bubble'),
+            onLayoutChange: () => this.windowManager?.resizeWindow(),
+        });
+    },
+
+    async _beginFileDialog() {
+        this._nativeDialogOpen = true;
+        await this.appWindow.hide();
+    },
+
+    /** Show the launcher again the usual way, ignoring blurs for a moment. */
+    async _endFileDialog() {
+        const now = Date.now();
+        this._suppressBlurHideUntil = Math.max(
+            this._suppressBlurHideUntil || 0,
+            now + FILE_DIALOG_BLUR_GRACE_MS
+        );
+        this._fileDialogClosedAt = now;
+        this._nativeDialogOpen = false;
+        await presentOverlayWindow(this.appWindow);
+    },
+
+    _fileDialogClosedRecently() {
+        return (
+            !!this._fileDialogClosedAt &&
+            Date.now() - this._fileDialogClosedAt < FILE_DIALOG_BLUR_GRACE_MS
+        );
     },
 
     /** Whether a view composed text into the input a moment ago. */

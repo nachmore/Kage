@@ -1,4 +1,5 @@
-import { HOST_FEATURE_VIEWS } from '../../shared/extension-sandbox-host.js';
+import { installFileTextBroker, isWindowShown } from '../../shared/extension-file-text.js';
+import { HOST_FEATURE_FILE_TEXT, HOST_FEATURE_VIEWS } from '../../shared/extension-sandbox-host.js';
 
 export function createLifecycleMixin(dependencies) {
     const {
@@ -46,9 +47,15 @@ export function createLifecycleMixin(dependencies) {
 
             // Initialize extension manager for search. Chat windows open
             // extension views too (docs/design/EXTENSION_VIEWS.md §9.4), and
-            // their sandboxes hear of storage changes made elsewhere.
+            // their sandboxes hear of storage changes made elsewhere. A file
+            // dialog an extension opens here is attached to this window
+            // (EXTENSION_FILE_TEXT §5.3); a hidden one refuses to ask.
+            installFileTextBroker({
+                listen: this.listen,
+                isVisible: () => isWindowShown(this.appWindow),
+            });
             this.extensionManager = new ExtensionManager(this.invoke, {
-                hostFeatures: [HOST_FEATURE_VIEWS],
+                hostFeatures: [HOST_FEATURE_VIEWS, HOST_FEATURE_FILE_TEXT],
                 resultSource: 'chat',
                 listen: this.listen,
                 windowLabel: this.windowLabel,

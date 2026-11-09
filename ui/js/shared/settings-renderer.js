@@ -712,10 +712,12 @@ export class RenderedSettings {
             // comfortably past the 300s OAuth loopback) rather than disabling
             // the timeout entirely, so a runaway action still can't wedge the
             // button disabled forever.
+            // A click on the action: it may open a file dialog
+            // (EXTENSION_FILE_TEXT §5.2).
             const result = await this.sandbox.call(
                 'runSettingsAction',
                 { action, values: this.currentValues() },
-                { timeoutMs: ACTION_RPC_TIMEOUT_MS }
+                { timeoutMs: ACTION_RPC_TIMEOUT_MS, userGesture: true }
             );
 
             if (result && typeof result === 'object') {

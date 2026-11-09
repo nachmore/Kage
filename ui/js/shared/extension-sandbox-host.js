@@ -34,6 +34,15 @@
  */
 
 import { getConfig, onConfigChange } from './config-cache.js';
+import {
+    abandonFileText,
+    ClickLease,
+    cleanDisplayIcon,
+    cleanDisplayName,
+    PICK_FILE_TEXT,
+    routeFileTextInvoke,
+    rpcTimer,
+} from './extension-file-text.js';
 import { decideInvoke } from './extension-permissions.js';
 import { validateExtensionInvokeArgs } from './extension-url-policy.js';
 import {
@@ -200,6 +209,7 @@ export const RUNTIME_SOURCE_PATHS = [
     'js/extension-sandbox/runtime/sandboxed-worker.js',
     'js/extension-sandbox/runtime/host-api.js',
     'js/extension-sandbox/runtime/view-api.js',
+    'js/extension-sandbox/runtime/files-api.js',
     'js/extension-sandbox/runtime.js',
 ];
 
@@ -251,6 +261,10 @@ const IDENTITY_SCOPED_COMMANDS = Object.freeze({
     delete_extension_data: 'extensionId',
     get_extension_config: 'id',
     save_extension_config: 'id',
+    // A file the user picks (docs/design/EXTENSION_FILE_TEXT.md §3.5):
+    // the dialog and the cancel belong to the calling extension.
+    pick_file_text: 'extensionId',
+    cancel_file_text: 'extensionId',
 });
 
 /**
@@ -276,6 +290,10 @@ const IDENTITY_SCOPED_COMMANDS = Object.freeze({
  *   detect (older hosts send nothing → `undefined`).
  * @property {'hidden'|'view'} [surface] - `'view'` for an extension view
  *   window's sandbox. Anything else is the hidden surface.
+ * @property {string} [displayName] - the manifest name, `__MSG_*__`
+ *   resolved: the file dialog's title and the ask bar name the extension
+ *   with it (EXTENSION_FILE_TEXT §3.5). Default: `extensionName`, else the id.
+ * @property {string} [displayIcon] - the manifest icon, for the ask bar
  *
  * View surface only (docs/design/EXTENSION_VIEWS.md §8):
  * @property {string} [viewId] - the view this window shows; the manifest
@@ -355,10 +373,18 @@ export const HOST_FEATURE_SYNC_RECORDS = 'sync.records';
  */
 export const HOST_FEATURE_VIEWS = 'views';
 
+/**
+ * Files the user picks (docs/design/EXTENSION_FILE_TEXT.md §3.3):
+ * `context.files.pickText()` works here. Needs `file_text`. Offered by the
+ * windows that can show the ask bar: floating, chat, settings and view.
+ */
+export const HOST_FEATURE_FILE_TEXT = 'files.pick_text';
+
 /** Capability each host feature requires. A feature with no entry needs none. */
 const HOST_FEATURE_CAPABILITY = Object.freeze({
     [HOST_FEATURE_DATE_PICKER]: 'calendar',
     [HOST_FEATURE_VIEWS]: 'views',
+    [HOST_FEATURE_FILE_TEXT]: 'file_text',
 });
 
 /**
@@ -429,6 +455,19 @@ export class ExtensionSandbox {
         /** `'hidden'` or `'view'` (see the file comment). */
         this.surface = spec.surface === SURFACE_VIEW ? SURFACE_VIEW : SURFACE_HIDDEN;
         if (this.surface === SURFACE_VIEW) this._initViewSpec(spec);
+        /** The host's name and icon for the extension (file dialog, ask bar). */
+        this.displayName = cleanDisplayName(
+            spec.displayName || spec.extensionName,
+            spec.extensionId || ''
+        );
+        this.displayIcon = cleanDisplayIcon(spec.displayIcon);
+        /**
+         * Set by RPCs the host sends because of a click (`userGesture`):
+         * one file dialog within 10 s (EXTENSION_FILE_TEXT §5.2).
+         */
+        this._clickLease = new ClickLease();
+        /** >0 while a file request runs: click RPC timers are paused. */
+        this._gesturePauses = 0;
         /** The activity we last forwarded and haven't cleared, else null. */
         this._mascotActivity = null;
         /**
@@ -594,30 +633,65 @@ export class ExtensionSandbox {
      * settings action that runs an OAuth flow (the user has to consent in a
      * browser tab, which routinely takes longer than 10s). Pass `0` to
      * disable the timeout entirely.
+     *
+     * `opts.userGesture: true` marks an RPC the host sends because the user
+     * clicked or pressed a key (EXTENSION_FILE_TEXT §5.2): it gives the
+     * sandbox a click lease, and its timer pauses while a file request runs.
      */
     async call(method, params, opts = {}) {
         if (this._destroyed) throw new Error(`sandbox '${this.extensionId}' is destroyed`);
         if (!this._ready) throw new Error(`sandbox '${this.extensionId}' not ready`);
         const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : RPC_TIMEOUT_MS;
+        const gesture = opts.userGesture === true;
+        if (gesture) this._clickLease.grant();
         const rpcId = this._nextRpcId++;
         return new Promise((resolve, reject) => {
             // timeoutMs <= 0 means "no timeout" — used for user-gated RPCs.
             const timer =
                 timeoutMs > 0
-                    ? setTimeout(() => {
-                          this._pendingRpcs.delete(rpcId);
-                          reject(new Error(`RPC '${method}' timed out after ${timeoutMs}ms`));
-                      }, timeoutMs)
+                    ? rpcTimer(
+                          timeoutMs,
+                          () => {
+                              this._pendingRpcs.delete(rpcId);
+                              reject(new Error(`RPC '${method}' timed out after ${timeoutMs}ms`));
+                          },
+                          { pausable: gesture, paused: this._gesturePauses > 0 }
+                      )
                     : null;
             this._pendingRpcs.set(rpcId, { resolve, reject, timer });
             try {
                 this._port.postMessage({ type: 'rpc', rpcId, method, params });
             } catch (e) {
-                if (timer) clearTimeout(timer);
+                timer?.clear();
                 this._pendingRpcs.delete(rpcId);
                 reject(e);
             }
         });
+    }
+
+    /** Use up the click lease: whether one was held (EXTENSION_FILE_TEXT §5.2). */
+    consumeClickLease() {
+        return this._clickLease.consume();
+    }
+
+    /** Whether the sandbox holds a click lease, without using it up. */
+    hasClickLease() {
+        return this._clickLease.has();
+    }
+
+    /**
+     * Pause the timers of this sandbox's click RPCs while a file request
+     * runs, so a launcher `execute()` waiting on the dialog doesn't time
+     * out. Nests; {@link resumeGestureTimers} gives them the time they had left.
+     */
+    pauseGestureTimers() {
+        if (this._gesturePauses++ > 0) return;
+        for (const entry of this._pendingRpcs.values()) entry.timer?.pause();
+    }
+
+    resumeGestureTimers() {
+        if (this._gesturePauses === 0 || --this._gesturePauses > 0) return;
+        for (const entry of this._pendingRpcs.values()) entry.timer?.resume();
     }
 
     /** Push a config update into the sandbox. Best-effort; errors are logged. */
@@ -738,6 +812,9 @@ export class ExtensionSandbox {
         for (const listenerId of this._oauthListeners) this._cancelOauthListener(listenerId);
         this._oauthListeners.clear();
 
+        // Its ask bar goes, and a file request in flight is cancelled.
+        abandonFileText(this);
+
         // Best-effort: ask the extension to clean up inside the sandbox
         // before we tear the iframe out from under it.
         try {
@@ -747,7 +824,7 @@ export class ExtensionSandbox {
         } catch {}
 
         for (const [, entry] of this._pendingRpcs) {
-            clearTimeout(entry.timer);
+            entry.timer?.clear();
             entry.reject(new Error('sandbox destroyed'));
         }
         this._pendingRpcs.clear();
@@ -1112,7 +1189,7 @@ export class ExtensionSandbox {
             case 'rpc-response': {
                 const entry = this._pendingRpcs.get(msg.rpcId);
                 if (!entry) return;
-                clearTimeout(entry.timer);
+                entry.timer?.clear();
                 this._pendingRpcs.delete(msg.rpcId);
                 if (msg.error) entry.reject(new Error(msg.error));
                 else entry.resolve(msg.result);
@@ -1244,9 +1321,15 @@ export class ExtensionSandbox {
         const forwardedArgs = idArgName
             ? { ...(args || {}), [idArgName]: this.extensionId }
             : args || {};
+        // The file dialog's title names the extension with the host's name
+        // for it, never one the sandbox sent.
+        if (command === PICK_FILE_TEXT) forwardedArgs.displayName = this.displayName;
 
         try {
-            const result = await this._rawInvoke(command, forwardedArgs);
+            // pick_file_text and cancel_file_text go through this window's
+            // file broker (the ask bar, the dialog guard, the progress chip).
+            const result = await (routeFileTextInvoke(this, command, forwardedArgs) ??
+                this._rawInvoke(command, forwardedArgs));
             this._trackOauthListener(command, forwardedArgs, { result });
             // Destroyed while the command ran: the port is gone.
             if (this._destroyed) return;

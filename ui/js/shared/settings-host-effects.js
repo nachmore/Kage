@@ -71,12 +71,17 @@ export async function runSettingsHostSideEffect(renderer, host, ctx, pickFileCon
             const content = await pickFileContents(accept);
             if (content === null) return; // user cancelled
             try {
-                const result = await renderer.sandbox.call('onFileSelected', {
-                    action: host.action || null,
-                    filename: content.filename,
-                    content: content.text,
-                    values: renderer.currentValues(),
-                });
+                // The user just picked a file: a click lease (EXTENSION_FILE_TEXT §5.2).
+                const result = await renderer.sandbox.call(
+                    'onFileSelected',
+                    {
+                        action: host.action || null,
+                        filename: content.filename,
+                        content: content.text,
+                        values: renderer.currentValues(),
+                    },
+                    { userGesture: true }
+                );
                 if (result && typeof result === 'object' && result.status) {
                     setStatus(String(result.status));
                 }

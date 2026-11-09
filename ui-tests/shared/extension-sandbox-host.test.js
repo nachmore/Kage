@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { installFileTextBroker } from '../../ui/js/shared/extension-file-text.js';
 import { ExtensionSandbox } from '../../ui/js/shared/extension-sandbox-host.js';
 
 function makeSandbox({ capabilities, rawInvoke }) {
@@ -322,6 +323,97 @@ describe('ExtensionSandbox._handleInvoke', () => {
 
         expect(rawInvoke).not.toHaveBeenCalled();
         expect(sent[0].error).toMatch(/no 'url' argument/);
+    });
+});
+
+describe('ExtensionSandbox pick_file_text at the bridge', () => {
+    // docs/design/EXTENSION_FILE_TEXT.md §3.5, §3.9. A broker that never
+    // shows its ask bar here: every request carries a click lease.
+    function pickSandbox({ capabilities = ['file_text'], spec = {} } = {}) {
+        installFileTextBroker({ isVisible: () => true, listen: async () => () => {} });
+        const rawInvoke = vi.fn().mockResolvedValue(null);
+        const sb = new ExtensionSandbox(
+            { extensionId: 'mindmap', capabilities, config: {}, sources: {}, ...spec },
+            rawInvoke,
+            document.body
+        );
+        const sent = [];
+        sb._port = { postMessage: (m) => sent.push(m), close: () => {} };
+        sb._ready = true;
+        const pick = async (args, id = 1) => {
+            sb.call('execute', {}, { userGesture: true, timeoutMs: 0 }).catch(() => {});
+            await sb._handleInvoke({ id, command: 'pick_file_text', args });
+        };
+        return { sb, sent, rawInvoke, pick };
+    }
+
+    it('overwrites the identity and the display name the sandbox sent', async () => {
+        const { rawInvoke, pick } = pickSandbox({ spec: { displayName: 'Mind Map' } });
+        await pick({ args: { max_chars: 5 }, extensionId: 'notes', displayName: 'Notes' });
+        expect(rawInvoke).toHaveBeenCalledWith('pick_file_text', {
+            args: { max_chars: 5 },
+            extensionId: 'mindmap',
+            displayName: 'Mind Map',
+        });
+    });
+
+    it('names the extension by its view name, else its id, and cleans the name', async () => {
+        const named = pickSandbox({ spec: { extensionName: 'Mind Map' } });
+        await named.pick({});
+        expect(named.rawInvoke.mock.calls[0][1].displayName).toBe('Mind Map');
+        const bare = pickSandbox();
+        await bare.pick({});
+        expect(bare.rawInvoke.mock.calls[0][1].displayName).toBe('mindmap');
+        const odd = pickSandbox({ spec: { displayName: '  Mind\u202e\n  Map\u0007 ' } });
+        await odd.pick({});
+        expect(odd.rawInvoke.mock.calls[0][1].displayName).toBe('Mind Map');
+    });
+
+    it('cancel_file_text is scoped to the calling extension', async () => {
+        const { sb, rawInvoke } = pickSandbox();
+        await sb._handleInvoke({
+            id: 2,
+            command: 'cancel_file_text',
+            args: { extensionId: 'notes' },
+        });
+        expect(rawInvoke).toHaveBeenCalledWith('cancel_file_text', { extensionId: 'mindmap' });
+    });
+
+    it('is blocked without the file_text grant', async () => {
+        const { rawInvoke, sent, pick } = pickSandbox({ capabilities: ['storage'] });
+        await pick({});
+        expect(rawInvoke).not.toHaveBeenCalled();
+        expect(sent.at(-1).error).toMatch(/missing capability 'file_text'/);
+    });
+
+    it('accepts no args, null fields, and known formats with a limit in range', async () => {
+        const { rawInvoke, pick } = pickSandbox();
+        await pick(undefined, 1);
+        await pick({ args: null }, 2);
+        await pick({ args: { formats: null, max_chars: null } }, 3);
+        await pick({ args: { formats: ['text', 'markdown', 'pdf', 'docx', 'html', 'pptx', 'rtf'] } }, 4);
+        await pick({ args: { formats: ['pdf'], max_chars: 1 } }, 5);
+        await pick({ args: { max_chars: 1_000_000 } }, 6);
+        expect(rawInvoke).toHaveBeenCalledTimes(6);
+    });
+
+    it.each([
+        ['unknown keys', { formats: ['pdf'], path: '/etc/passwd' }, /unknown argument 'path'/],
+        ['a non-object', ['pdf'], /'args' must be an object/],
+        ['an unknown format', { formats: ['exe'] }, /unknown format 'exe'/],
+        ['a format that is not a string', { formats: [{}] }, /unknown format object/],
+        ['a duplicate format', { formats: ['pdf', 'pdf'] }, /listed twice/],
+        ['no formats', { formats: [] }, /must list 1 to 7/],
+        ['formats that are not a list', { formats: 'pdf' }, /must list 1 to 7/],
+        ['max_chars 0', { max_chars: 0 }, /'max_chars' must be a whole number/],
+        ['max_chars over the limit', { max_chars: 1_000_001 }, /'max_chars' must be a whole number/],
+        ['a fractional max_chars', { max_chars: 1.5 }, /'max_chars' must be a whole number/],
+        ['a string max_chars', { max_chars: '100' }, /'max_chars' must be a whole number/],
+    ])('refuses %s before Rust sees it', async (_what, args, message) => {
+        const { rawInvoke, sent, pick } = pickSandbox();
+        await pick({ args });
+        expect(rawInvoke).not.toHaveBeenCalled();
+        expect(sent.at(-1).error).toMatch(message);
     });
 });
 

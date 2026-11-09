@@ -9,6 +9,11 @@
 
 import { getConfig, onConfigChange } from '../shared/config-cache.js';
 import { installExtensionDataEvents } from '../shared/extension-data-events.js';
+import {
+    installFileTextBroker,
+    isWindowShown,
+    strictUserActivation,
+} from '../shared/extension-file-text.js';
 import { ExtensionSandbox } from '../shared/extension-sandbox-host.js';
 import {
     isSafeTokenValue,
@@ -27,11 +32,19 @@ import { createViewPage } from './page.js';
  * feature to the other windows adds it here too (SYNC.md §23.2), except
  * `agent.background`: background agent work isn't a view's (§8.6).
  */
-const OFFERED_HOST_FEATURES = ['views', 'storage.change_events'];
+const OFFERED_HOST_FEATURES = ['views', 'storage.change_events', 'files.pick_text'];
 
 waitForTauri(({ invoke, appWindow, listen }) => {
     // Clicked links open in the system browser, never in this window.
     initLinkHandler(invoke);
+    // Files the view asks the user for (EXTENSION_FILE_TEXT.md §5.2, §5.3):
+    // the dialog is attached to this window, and opens at once only right
+    // after a click or key press in the view; else the ask bar shows.
+    installFileTextBroker({
+        listen,
+        isVisible: () => isWindowShown(appWindow),
+        activationLease: strictUserActivation,
+    });
 
     const page = createViewPage({
         invoke,

@@ -9,6 +9,7 @@ import {
     VIEW_SURFACE_DENIED_COMMANDS,
 } from '../../ui/js/shared/extension-permissions.js';
 import {
+    HOST_FEATURE_FILE_TEXT,
     HOST_FEATURE_SYNC_KEYS,
     HOST_FEATURE_SYNC_LISTS,
     HOST_FEATURE_SYNC_RECORDS,
@@ -286,5 +287,36 @@ describe('folder sync (contracts only)', () => {
         const offered = [HOST_FEATURE_SYNC_KEYS, HOST_FEATURE_SYNC_LISTS, HOST_FEATURE_SYNC_RECORDS];
         expect(offered).toEqual(['sync.keys', 'sync.lists', 'sync.records']);
         expect(hostFeaturesFor(offered, ['storage', 'sync'])).toEqual([]);
+    });
+});
+
+describe('files the user picks (EXTENSION_FILE_TEXT §3.1, §3.3)', () => {
+    const FILE_TEXT_COMMANDS = ['pick_file_text', 'cancel_file_text', 'file_text_support'];
+
+    it('gates its three commands on file_text, in every surface', () => {
+        for (const cmd of FILE_TEXT_COMMANDS) {
+            expect(COMMAND_CAPABILITIES[cmd], cmd).toBe('file_text');
+            expect(decideInvoke(cmd, new Set(['file_text'])).allow, cmd).toBe(true);
+            expect(decideInvoke(cmd, new Set(['file_text']), { surface: 'view' }).allow, cmd).toBe(
+                true
+            );
+            expect(decideInvoke(cmd, new Set(['filesystem', 'storage'])).reason, cmd).toMatch(
+                /missing capability 'file_text'/
+            );
+        }
+        expect(VIEW_SURFACE_DENIED_COMMANDS.some((c) => FILE_TEXT_COMMANDS.includes(c))).toBe(false);
+    });
+
+    it('labels the capability for the install prompt', () => {
+        expect(CAPABILITIES.file_text).toMatchObject({ icon: '📄', label: 'Files you choose' });
+    });
+
+    it('offers files.pick_text only to extensions holding file_text', () => {
+        expect(HOST_FEATURE_FILE_TEXT).toBe('files.pick_text');
+        const offered = ['views', HOST_FEATURE_FILE_TEXT];
+        expect(hostFeaturesFor(offered, ['file_text'])).toEqual([HOST_FEATURE_FILE_TEXT]);
+        expect(hostFeaturesFor(offered, ['views', 'file_text'])).toEqual(offered);
+        expect(hostFeaturesFor(offered, ['views', 'filesystem'])).toEqual(['views']);
+        expect(hostFeaturesFor([HOST_FEATURE_FILE_TEXT], [])).toEqual([]);
     });
 });

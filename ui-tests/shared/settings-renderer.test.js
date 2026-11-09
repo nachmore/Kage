@@ -233,6 +233,8 @@ describe('renderSchema', () => {
         // Well past the 300s OAuth loopback, but bounded (not 0/Infinity).
         expect(call.opts.timeoutMs).toBeGreaterThan(300_000);
         expect(Number.isFinite(call.opts.timeoutMs)).toBe(true);
+        // A click: the action may open a file dialog (EXTENSION_FILE_TEXT §5.2).
+        expect(call.opts.userGesture).toBe(true);
     });
 
     it('refresh host effect re-fetches getSettings and re-renders in place', async () => {

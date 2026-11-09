@@ -566,11 +566,11 @@ export function installExtensionUiMethods(ExtensionManager) {
             const ext = this.extensions.get(controller.extensionId);
             if (!ext?.sandbox) return;
             try {
-                const out = await ext.sandbox.call('onWidgetAction', {
-                    widgetId: controller.widgetId,
-                    actionId,
-                    context: {},
-                });
+                const out = await ext.sandbox.call(
+                    'onWidgetAction',
+                    { widgetId: controller.widgetId, actionId, context: {} },
+                    { userGesture: true }
+                );
                 // A host effect the click asked for. Only `open_view` so far
                 // (docs/design/EXTENSION_VIEWS.md §6.1).
                 if (out?.host) {
@@ -675,10 +675,11 @@ export function installExtensionUiMethods(ExtensionManager) {
                           }))
                         : [],
                 };
-                const out = await ext.sandbox.call('onToolbarClick', {
-                    buttonId,
-                    context: safeCtx,
-                });
+                const out = await ext.sandbox.call(
+                    'onToolbarClick',
+                    { buttonId, context: safeCtx },
+                    { userGesture: true }
+                );
                 if (!out || typeof out !== 'object') return null;
                 // The manager opens views itself: it knows which extension
                 // answered, and the window's toolbar applier
@@ -831,10 +832,11 @@ export function installExtensionUiMethods(ExtensionManager) {
                     // them through the search provider's execute() with a
                     // synthetic result carrying { action: actionId }.
                     ext.sandbox
-                        .call('onResultAction', {
-                            actionId,
-                            resultId: root.dataset?.extResultId || null,
-                        })
+                        .call(
+                            'onResultAction',
+                            { actionId, resultId: root.dataset?.extResultId || null },
+                            { userGesture: true }
+                        )
                         .then((out) =>
                             out?.host
                                 ? this._runActionHostEffect(
