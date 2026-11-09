@@ -19,6 +19,7 @@ src/os/
 ├── calendar.rs
 ├── clipboard.rs
 ├── clipboard_history.rs
+├── cloud_files.rs  ← folder sync: placeholders, download requests, pinning, sync app detection (see below)
 ├── cursor.rs
 ├── file_ops.rs     ← files on the clipboard, Trash / Recycle Bin, run-as-admin, Properties
 ├── file_search.rs
@@ -29,6 +30,7 @@ src/os/
 ├── permissions.rs  ← macOS TCC status + repair; "not applicable" elsewhere
 ├── power.rs
 ├── process.rs
+├── secret_store.rs ← folder sync's data key: Keychain / Credential Manager / Secret Service (see below)
 ├── shell.rs
 ├── startup.rs
 ├── user.rs
@@ -225,6 +227,65 @@ become a protected product tree (`product_install_dirs`). Anything else
 opens Settings and protects no tree. `WinFs::is_shared` (known shared) only
 discards matching evidence. Compare Windows paths for these decisions
 through `WinFs`, never as raw strings.
+
+## Cloud folders (`cloud_files`)
+
+Folder sync (docs/design/SYNC.md §3) works inside a folder a cloud app
+syncs. `cloud_files::system()` returns the OS's `CloudFiles`; the sync
+engine gets it through `EngineEnv`, and tests use
+`sync::testing::FakeCloudFiles` instead.
+
+| Call | macOS | Windows | Linux |
+|---|---|---|---|
+| `residency` | `lstat`: `SF_DATALESS` in `st_flags`, or a `.name.icloud` stub next to the name | `GetFileAttributesW`: `RECALL_ON_DATA_ACCESS`, `RECALL_ON_OPEN` or `OFFLINE` | always `Local` (or `Unknown` when missing) |
+| `request_download` | `NSFileManager startDownloadingUbiquitousItemAtURL:` | pin the one file | nothing |
+| `pin_folder` | nothing (Settings suggests "Keep Downloaded") | `CfSetPinState(PINNED, RECURSE)`, else the pinned attribute | nothing |
+| `detect_provider` | `~/Library/Mobile Documents`, `~/Library/CloudStorage/<App>-…`, network mounts (`statfs`), iCloud's own answer | OneDrive variables, the Cloud Files sync root's provider name, network paths and drives, Google Drive's drive label | the mount's filesystem type |
+
+Rules:
+
+- **`residency` never reads content.** Opening or reading a placeholder
+  starts a download and can block for minutes. The calls above only ask
+  for metadata.
+- **`request_download` returns at once.** It never waits for the file.
+- **Pinning is best effort.** A folder outside a Cloud Files sync root,
+  or a client without pin support, returns an error the caller logs and
+  ignores.
+- **Detection never scans the disk.** It reads known locations and the
+  apps' own info files: Dropbox's `info.json`, Syncthing's `config.xml`
+  and its `.stfolder` marker, the OneDrive client's config on Linux.
+  Paths come from `crate::paths`, never `dirs`.
+
+## The OS secret store (`secret_store`)
+
+`secret_store::{get, set, delete}` keep one small secret under a service
+and account: folder sync's data key (service `Kage Sync`, account the
+folder id). Callers go through `sync::keystore`, which also picks the
+backend (docs/design/SYNC.md §11.4).
+
+| OS | Backend | Never roams because |
+|---|---|---|
+| macOS | Login keychain generic password | `kSecAttrSynchronizable` is false, so iCloud Keychain never copies it |
+| Windows | Credential Manager generic credential, target `<service>/<account>` | `CRED_PERSIST_LOCAL_MACHINE`, never `CRED_PERSIST_ENTERPRISE` |
+| Linux | Secret Service item in the default collection, attributes `service` and `account` | it stays in the local keyring |
+
+Rules:
+
+- **Isolated runs never reach the OS.** While `paths::is_isolated()` (and
+  in every unit test of this crate) each call fails with
+  `SecretError::Isolated` before touching a keychain, and `os_calls()`
+  stays at 0. Tests use `sync::testing::MemoryKeyStore`.
+- **Errors say why.** A refused call carries `SecretError::Denied` or
+  `SecretError::Unavailable` inside its `anyhow::Error`
+  (`downcast_ref`), so the engine can offer the file key store.
+- **`keychain_is_reliable()`** decides between the OS store and the file:
+  macOS needs a team identifier in the build's own signing information
+  (an ad-hoc-signed build changes signature on every update, and macOS
+  would ask for the keychain again each time); Windows always; Linux needs
+  the Secret Service to answer within 2 seconds. It is false while
+  isolated. Call it off the launch path.
+- **No prompts on Linux.** A locked collection fails with `Unavailable`;
+  Kage dismisses any Secret Service prompt rather than show it.
 
 ## Things that aren't in `os/` and shouldn't be
 

@@ -1,0 +1,2 @@
+# Sealed sync files are bytes: never convert line endings in them.
+*.kage binary

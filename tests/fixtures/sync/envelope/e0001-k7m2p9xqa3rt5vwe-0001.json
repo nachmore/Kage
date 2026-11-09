@@ -1,0 +1,13 @@
+{
+  "epoch": 1,
+  "kdf": {
+    "alg": "argon2id",
+    "m_kib": 65536,
+    "t": 3,
+    "p": 1,
+    "salt": "AAECAwQFBgcICQoLDA0ODw=="
+  },
+  "wrapped": "CQkJCQkJCQkJCQkJnCgPuDURANnSH0UnbGRqHTANYIP+LPAMFJF9S4bfn6U03sBoW/OUgb0uGvA+fd29",
+  "aad": "kage-sync-dek|5qg2vbn8h1xk0d3m|1",
+  "written_at": "2026-11-09T10:00:00Z"
+}

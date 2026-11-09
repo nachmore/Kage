@@ -129,6 +129,13 @@ rand = "0.9"
 # Folder sync keeps its data key in buffers that are wiped on drop
 # (docs/design/SYNC.md §11.3). Already a transitive dep of aes-gcm and argon2.
 zeroize = "1"
+# Folder sync derives its subkeys with HKDF and names files by a keyed hash
+# of their content (`hmac`, below; docs/design/SYNC.md §5.4, §11.3). Same
+# RustCrypto generation as `sha2` and `aes-gcm`.
+hkdf = "0.12"
+# Folder sync compresses each file before sealing it (§5.4). Already in the
+# tree through `zip`, `png` and the updater.
+flate2 = "1.1"
 # Used for verifying the SHA-256 checksum of store-installed extension
 # zips against the value the catalog publishes. Both crates were already
 # transitive deps; making them direct surfaces them in `cargo tree` and
@@ -198,6 +205,11 @@ windows = { version = "0.62", features = [
     "Storage_Search",
     "Storage_FileProperties",
     "Storage_Streams",
+    # Folder sync: the data key in Credential Manager, and pinning the sync
+    # folder so OneDrive and Dropbox keep it downloaded (os/windows/
+    # secret_store.rs, os/windows/cloud_files.rs).
+    "Win32_Security_Credentials",
+    "Win32_Storage_CloudFilters",
 ] }
 
 [target.'cfg(unix)'.dependencies]
@@ -215,7 +227,11 @@ objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplicat
 # non-activating NSPanels so they can appear over other apps' full-screen
 # Spaces (a plain NSWindow can't — see src/overlay_windows.rs).
 tauri-nspanel = "2.1"
-objc2-foundation = { version = "0.3", features = ["NSString", "NSArray", "NSData", "NSDictionary", "NSGeometry", "NSObjCRuntime", "NSRange", "NSUserDefaults", "NSValue"] }
+objc2-foundation = { version = "0.3", features = ["NSString", "NSArray", "NSData", "NSDictionary", "NSGeometry", "NSObjCRuntime", "NSRange", "NSUserDefaults", "NSValue", "NSError", "NSFileManager", "NSURL"] }
+# Folder sync keeps its data key in the login keychain, and reads this
+# build's own signing information to decide whether the keychain is
+# reliable across updates (os/macos/secret_store.rs). Already in the tree.
+security-framework = "3"
 # Core Foundation + Core Graphics for CGWindowListCopyWindowInfo (per-window
 # title lookup). Title extraction requires the Screen Recording TCC permission
 # at runtime — without it we fall back to empty title (process-level tracking
@@ -227,6 +243,12 @@ core-graphics = { version = "0.25", features = ["highsierra", "elcapitan"] }
 # CFRetain/CFRelease and role mapping directly. Requires the Accessibility
 # TCC permission at runtime.
 accessibility-sys = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Folder sync keeps its data key in the Secret Service over D-Bus
+# (os/linux/secret_store.rs). Pure Rust, already in the tree through the
+# notification and single-instance plugins.
+zbus = "5"
 
 [dev-dependencies]
 tempfile = "3"

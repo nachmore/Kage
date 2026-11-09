@@ -2405,6 +2405,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hkdf"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5f8eb2ad728638ea2c7d47a21db23b7b58a72ed6a38256b8a1849f15fbbdf7"
+dependencies = [
+ "hmac",
+]
+
+[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3015,7 +3024,9 @@ dependencies = [
  "ctrlc",
  "dirs",
  "env_logger",
+ "flate2",
  "hex",
+ "hkdf",
  "hmac",
  "icu_normalizer",
  "kage-core",
@@ -3032,6 +3043,7 @@ dependencies = [
  "reqwest 0.13.2",
  "rfd 0.15.4",
  "rusqlite",
+ "security-framework",
  "semver",
  "serde",
  "serde_json",
@@ -3064,6 +3076,7 @@ dependencies = [
  "windows-future 0.3.2",
  "windows-icons",
  "winreg 0.56.0",
+ "zbus",
  "zeroize",
  "zip 8.2.0",
 ]
