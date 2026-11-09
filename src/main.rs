@@ -32,7 +32,7 @@ mod error;
 mod event_targets;
 mod events;
 mod ext_views;
-#[allow(dead_code)] // The storage change coalescer will use it; the app doesn't yet.
+#[allow(dead_code)] // Nothing records folder sync's changes until sync lands.
 mod extension_data_events;
 mod extensions;
 mod hotkey_norm;

@@ -758,6 +758,8 @@ struct ImportOutcome {
     new_acp_mode: crate::config::AcpMode,
     new_login_env: bool,
     auto_start: bool,
+    /// Extensions whose data the import wrote: their instances re-read.
+    data_extensions: Vec<String>,
 }
 
 /// Apply a backup bundle from disk. Returns the import summary (counts)
@@ -839,6 +841,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
                 new_acp_mode: new_config.acp.active_mode(),
                 new_login_env: new_config.acp.agent.import_login_shell_env,
                 auto_start: new_config.system.auto_start,
+                data_extensions: files.data_extensions().to_vec(),
             };
             *state_config = new_config;
             // Channel is a typed enum — unknown values from a hand-edited
@@ -882,6 +885,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
         new_acp_mode,
         new_login_env,
         auto_start,
+        data_extensions,
     } = outcome;
 
     apply_runtime_config(
@@ -913,6 +917,15 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
         crate::events::CONFIG_UPDATED,
         crate::commands::i18n::ConfigUpdatedI18n::current(),
     );
+    // The import is committed: the open instances of each extension whose
+    // data it wrote re-read everything (EXTENSION_VIEWS §20).
+    for id in &data_extensions {
+        crate::extension_data_events::record_bulk(
+            &app,
+            id,
+            crate::extension_data_events::ChangeSource::Import,
+        );
+    }
     Ok(summary)
 }
 

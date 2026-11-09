@@ -1404,6 +1404,7 @@ fn apply_import_at(
         .iter()
         .filter(|w| matches!(w, PlannedWrite::Data { .. }))
         .count();
+    let data_extensions = data_extension_ids(&planned);
     let files = if planned.is_empty() {
         drop(lock);
         CommittedFiles::none()
@@ -1421,7 +1422,10 @@ fn apply_import_at(
             }
         };
         txn.commit()?;
-        CommittedFiles { txn: Some(txn) }
+        CommittedFiles {
+            txn: Some(txn),
+            data_extensions,
+        }
     };
 
     // --- What couldn't be kept.
@@ -1521,6 +1525,21 @@ fn extension_of(rel: &Path) -> String {
         [first, _, ..] => sensitive::fold(&first.as_os_str().to_string_lossy()),
         _ => String::new(),
     }
+}
+
+/// The extension ids an import's data writes belong to: sorted, each once,
+/// and only names that are valid extension ids (by the name APFS / NTFS
+/// would match, as [`extension_of`] folds it).
+fn data_extension_ids(planned: &[PlannedWrite]) -> Vec<String> {
+    let ids: std::collections::BTreeSet<String> = planned
+        .iter()
+        .filter_map(|w| match w {
+            PlannedWrite::Data { rel, .. } => Some(extension_of(rel)),
+            PlannedWrite::Steering { .. } => None,
+        })
+        .filter(|id| crate::extensions::validate_extension_id(id).is_ok())
+        .collect();
+    ids.into_iter().collect()
 }
 
 /// Display names for extension ids, for the summary.
@@ -2279,11 +2298,23 @@ impl Staged {
 /// everything back.
 pub struct CommittedFiles {
     txn: Option<journal::Transaction>,
+    /// Extensions whose data these files are (see [`Self::data_extensions`]).
+    data_extensions: Vec<String>,
 }
 
 impl CommittedFiles {
     fn none() -> Self {
-        Self { txn: None }
+        Self {
+            txn: None,
+            data_extensions: Vec::new(),
+        }
+    }
+
+    /// The ids of the extensions whose data files this import writes,
+    /// sorted. Once it's finished, their instances are told to re-read
+    /// (`extension_data_changed`, source `import`).
+    pub fn data_extensions(&self) -> &[String] {
+        &self.data_extensions
     }
 
     /// Save `config`, the config that goes with these files, as

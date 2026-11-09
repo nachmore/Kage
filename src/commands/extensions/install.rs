@@ -107,7 +107,7 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
     // Stored data is keyed only by id, so leaving it would hand an old
     // extension's tokens to any later extension installed under the same id.
     // Safe now that a declined upgrade of an approved item returns above.
-    if let Err(e) = super::files::purge_extension_data(&id) {
+    if let Err(e) = super::files::purge_extension_data(&app, &id) {
         warn!("Failed to remove stored data for '{}': {}", id, e);
     }
     // Saved view window positions go with it (they're keyed by id too).

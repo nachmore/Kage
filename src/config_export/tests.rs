@@ -1540,6 +1540,44 @@ fn committed_files_roll_back_when_the_config_cant_be_saved() {
 }
 
 #[test]
+fn committed_files_name_the_extensions_whose_data_they_write() {
+    // So the import can tell those extensions' open instances to re-read
+    // (EXTENSION_VIEWS §20).
+    let _disk = disk();
+    no_auto_steering();
+    let b = Machine::new();
+    b.write("todos/list.json", r#"["mine"]"#);
+    let source = Machine::new();
+    std::fs::write(&source.steering, "BUNDLE USER").unwrap();
+    source.write("todos/list.json", r#"["BUNDLE"]"#);
+    source.write("todos/more/deep.json", "{}");
+    source.write("notes/a.json", "{}");
+    let apply = |bytes: Vec<u8>, pw: Option<&str>| {
+        apply_import_at(
+            prepare_import(bytes, pw).unwrap(),
+            &b.config,
+            &installed(),
+            Some(b.root.path().to_path_buf()),
+        )
+        .unwrap()
+        .into_parts()
+        .2
+    };
+    let files = apply(
+        source.export(ExportMode::Encrypted, Some("pw")).unwrap(),
+        Some("pw"),
+    );
+    assert_eq!(files.data_extensions(), ["notes", "todos"]);
+    files.finish().unwrap();
+
+    // A settings-only backup writes no data.
+    let files = apply(source.export(ExportMode::SettingsOnly, None).unwrap(), None);
+    assert!(files.data_extensions().is_empty());
+    files.finish().unwrap();
+    no_auto_steering();
+}
+
+#[test]
 fn an_interrupted_import_is_undone_and_its_rollback_copies_kept_until_then() {
     let _disk = disk();
     no_auto_steering();
