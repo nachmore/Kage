@@ -17,3 +17,6 @@ serde_json = "1.0"
 # Native folder-picker dialog for the `pick_folder` tool (handlers.rs).
 # Same version as the main crate so the dep graph stays unified.
 rfd = "0.15"
+
+[dev-dependencies]
+tempfile = "3"

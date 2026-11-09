@@ -188,6 +188,13 @@ fn build_tools() -> serde_json::Value {
             },
             "required": ["lang", "script"]
         })),
+        // Commands the agent's own sandbox refused: run by the Kage app,
+        // after the user approves (run_outside_sandbox.rs).
+        tool_def(
+            crate::run_outside_sandbox::TOOL_NAME,
+            crate::run_outside_sandbox::DESCRIPTION,
+            crate::run_outside_sandbox::input_schema(),
+        ),
         tool_def("execute_folder_plan", "Execute a folder organization plan: move, rename, or delete files. Deletes are safe — files go to a _kage_trash subfolder. Returns success/failure counts.", serde_json::json!({
             "type": "object",
             "properties": {
@@ -224,5 +231,25 @@ mod tests {
         let parsed_a: serde_json::Value = serde_json::from_str(&a).unwrap();
         assert_eq!(parsed["result"], parsed_a["result"]);
         assert!(parsed["result"]["tools"].as_array().unwrap().len() > 10);
+    }
+
+    #[test]
+    fn run_outside_sandbox_is_listed_with_its_schema() {
+        let parsed: serde_json::Value =
+            serde_json::from_str(&handle_tools_list(&serde_json::json!(1))).unwrap();
+        let tool = parsed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == "run_outside_sandbox")
+            .expect("run_outside_sandbox is listed");
+        assert_eq!(
+            tool["inputSchema"]["required"],
+            serde_json::json!(["command", "reason"])
+        );
+        assert!(tool["description"]
+            .as_str()
+            .unwrap()
+            .contains("OUTSIDE your sandbox"));
     }
 }

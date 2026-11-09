@@ -514,6 +514,9 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
                 RunOutcome::Unsupported(msg) => tool_result_text(id, &msg, true),
             }
         }
+        crate::run_outside_sandbox::TOOL_NAME => {
+            crate::run_outside_sandbox::handle(id, &args, &crate::run_outside_sandbox::OsBridge)
+        }
         "execute_folder_plan" => {
             let root_str = args.get("root").and_then(|v| v.as_str()).unwrap_or("");
             if root_str.is_empty() {
@@ -553,7 +556,13 @@ const MAX_LOGGED_ARGS_BYTES: usize = 200;
 
 /// Tools whose arguments carry text typed into other apps — possibly
 /// passwords — so only their size is logged, never the content.
-const TEXT_ENTRY_TOOLS: &[&str] = &["type_text", "set_value", "type_and_get_tree"];
+const TEXT_ENTRY_TOOLS: &[&str] = &[
+    "type_text",
+    "set_value",
+    "type_and_get_tree",
+    // A command line can carry tokens; Kage's audit log keeps it instead.
+    crate::run_outside_sandbox::TOOL_NAME,
+];
 
 fn args_for_log(tool_name: &str, args: &serde_json::Value) -> String {
     let s = args.to_string();

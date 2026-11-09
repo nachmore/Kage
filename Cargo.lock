@@ -3104,6 +3104,7 @@ dependencies = [
  "log",
  "rfd 0.15.4",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
