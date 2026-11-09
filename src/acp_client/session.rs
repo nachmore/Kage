@@ -295,6 +295,9 @@ impl AcpClient {
         self.wait_for_compaction();
         let slash_command = is_slash_command(content);
         let hidden = hidden.filter(|_| muted.is_none() && !slash_command);
+        // A background agent call sends exactly the prompt Kage framed:
+        // no time stamp, and it doesn't use up the next one's refresh.
+        let strict = crate::ephemeral_session::is_strict(session_id);
 
         let debug = *self.transport.debug_mode.lock_or_recover();
 
@@ -329,7 +332,7 @@ impl AcpClient {
             // Periodically inject current timestamp so the agent's sense of
             // time stays fresh. Not into a slash command, which must stay
             // a single block; the next prompt carries it.
-            if !slash_command {
+            if !slash_command && !strict {
                 let mut last = LAST_TIMESTAMP_INJECTION.lock_or_recover();
                 let elapsed = last.map(|t| t.elapsed().as_secs()).unwrap_or(u64::MAX);
                 if elapsed >= TIMESTAMP_REFRESH_SECS {

@@ -546,9 +546,13 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
             continue;
         }
 
-        // Throwaway sessions (script generation, internal-site drafting)
-        // are deleted as soon as their one prompt completes.
-        if crate::ephemeral_session::is_active(&session_id) {
+        // Throwaway sessions (script generation, internal-site drafting,
+        // background agent calls) are deleted as soon as their one prompt
+        // completes; a crash can leave their files, so recorded ones are
+        // skipped too.
+        if crate::ephemeral_session::is_active(&session_id)
+            || crate::ephemeral_session::is_hidden(&session_id)
+        {
             continue;
         }
 
