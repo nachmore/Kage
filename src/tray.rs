@@ -1,12 +1,86 @@
 use crate::events;
+use crate::lock_ext::LockExt;
+use crate::sync::status::{SyncState, SyncStatus};
 use crate::t;
 use crate::window_labels;
 use log::info;
+use std::sync::{Mutex, OnceLock};
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+
+/// The tray's sync lines: a disabled status line and **Sync now**, shown
+/// while sync is set up on this computer (docs/design/SYNC.md §13.8).
+struct SyncLines {
+    menu: Menu<tauri::Wry>,
+    separator: PredefinedMenuItem<tauri::Wry>,
+    status: MenuItem<tauri::Wry>,
+    now: MenuItem<tauri::Wry>,
+    shown: bool,
+}
+
+static SYNC_LINES: OnceLock<Mutex<SyncLines>> = OnceLock::new();
+
+/// Where the sync lines go: after Show, New Chat Window and Settings.
+const SYNC_LINES_AT: usize = 3;
+
+/// The tray's sync status line for `status`, or `None` when sync isn't set
+/// up here (then the tray has no sync lines).
+pub fn sync_line(status: &SyncStatus) -> Option<String> {
+    let key = match status.state {
+        SyncState::Off | SyncState::Unavailable => return None,
+        SyncState::UpToDate => "tray.sync_state.up_to_date",
+        SyncState::Syncing | SyncState::SettingUp => "tray.sync_state.syncing",
+        SyncState::Waiting | SyncState::Placeholders => "tray.sync_state.waiting",
+        SyncState::Paused => "tray.sync_state.paused",
+        _ => "tray.sync_state.attention",
+    };
+    Some(t!("tray.sync_status", "status" => &t!(key)))
+}
+
+/// Show the sync status in the tray menu, or take the sync lines out when
+/// sync is off. Posted to the main thread rather than waited for: the
+/// engine thread calls it, and shutdown may hold the main thread.
+pub fn set_sync_status<R: tauri::Runtime>(app: &tauri::AppHandle<R>, status: &SyncStatus) {
+    let line = sync_line(status);
+    let posted = app.run_on_main_thread(move || {
+        let Some(lines) = SYNC_LINES.get() else {
+            return;
+        };
+        let mut lines = lines.lock_or_recover();
+        let result = match line {
+            Some(text) => lines.status.set_text(text).and_then(|()| {
+                if lines.shown {
+                    return Ok(());
+                }
+                lines.shown = true;
+                lines.menu.insert_items(
+                    &[&lines.separator, &lines.status, &lines.now],
+                    SYNC_LINES_AT,
+                )
+            }),
+            None if lines.shown => {
+                lines.shown = false;
+                [
+                    &lines.separator as &dyn tauri::menu::IsMenuItem<_>,
+                    &lines.status,
+                    &lines.now,
+                ]
+                .into_iter()
+                .try_for_each(|item| lines.menu.remove(item))
+            }
+            None => Ok(()),
+        };
+        if let Err(e) = result {
+            log::debug!("Could not update the tray's sync lines: {e}");
+        }
+    });
+    if let Err(e) = posted {
+        log::debug!("Could not update the tray's sync lines: {e}");
+    }
+}
 
 /// Name the extension in the tray tooltip while its background AI request
 /// runs, and clear the tooltip when none runs
@@ -87,6 +161,18 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             .build()?
     };
 
+    // The sync lines go in once the engine reports that sync is set up.
+    let sync_lines = SyncLines {
+        menu: menu.clone(),
+        separator: PredefinedMenuItem::separator(app)?,
+        status: MenuItemBuilder::with_id("sync-status", "")
+            .enabled(false)
+            .build(app)?,
+        now: MenuItemBuilder::with_id("sync-now", t!("tray.sync_now")).build(app)?,
+        shown: false,
+    };
+    let _ = SYNC_LINES.set(Mutex::new(sync_lines));
+
     // Load tray icon — use 128px source so Windows can downscale crisply at any DPI.
     // If decoding fails for some reason (corrupted asset), fall back to the window
     // icon, or as a last-ditch skip setting an icon rather than panicking.
@@ -137,6 +223,14 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                             log::warn!("Tray: open_settings_window failed: {}", e);
                         }
                     });
+                }
+                "sync-now" => {
+                    // An immediate tick; a wake never blocks.
+                    if let Some(features) =
+                        app_handle_inner.try_state::<crate::state::FeatureServices>()
+                    {
+                        features.sync.wake(crate::sync::engine::Wake::Manual);
+                    }
                 }
                 "inspect" => {
                     info!("Opening chat inspector");
@@ -238,4 +332,35 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
         .build(app)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line(state: SyncState) -> Option<String> {
+        crate::i18n::init(Some("en"));
+        sync_line(&SyncStatus {
+            state,
+            ..SyncStatus::default()
+        })
+    }
+
+    #[test]
+    fn the_sync_line_shows_only_while_sync_is_set_up() {
+        assert_eq!(line(SyncState::Off), None);
+        assert_eq!(line(SyncState::Unavailable), None);
+        assert_eq!(
+            line(SyncState::UpToDate).as_deref(),
+            Some("Sync: Up to date")
+        );
+        assert_eq!(line(SyncState::Paused).as_deref(), Some("Sync: Paused"));
+        for state in [
+            SyncState::Locked,
+            SyncState::FolderMissing,
+            SyncState::Removed,
+        ] {
+            assert_eq!(line(state).as_deref(), Some("Sync: Needs your attention"));
+        }
+    }
 }

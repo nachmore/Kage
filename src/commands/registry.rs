@@ -289,6 +289,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::sync_undo_join,
         crate::commands::sync_purge_extension,
         crate::commands::sync_find_folder,
+        crate::commands::sync_apply_folder,
         crate::commands::get_config_snapshot,
         crate::commands::ext_sync_status,
         crate::commands::ext_sync_push,

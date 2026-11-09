@@ -111,6 +111,27 @@ export const KNOWN_EVENTS = Object.freeze([
     // source ('launcher'|'chat'|'formatter'|'widget'|'toolbar'|'settings'|
     // 'view') and reused (0|1) — no extension id, params or titles.
     'extension_view_opened',
+
+    // Folder sync — all fired from Rust (src/sync, through src/sync_app.rs,
+    // which sends only these props; docs/design/SYNC.md §16). Bucketed
+    // counts and fixed states, never folder, provider, computer or setting
+    // names, values or extension ids.
+    // role ('create'|'join'), categories ('0'…'4').
+    'sync_enabled',
+    // reason ('leave'|'removed'|'reset').
+    'sync_disabled',
+    // With app_daily_active while sync is on: computers ('1'|'2'|'3-5'|
+    // '6+'), categories ('0'…'4'), ext_data ('0'|'1-2'|'3-5'|'6+'),
+    // conflicts_open ('0'|'1-5'|'6+'), held ('0'|'1+'), problems
+    // ('0'|'1'|'2+').
+    'sync_daily',
+    // action ('restore'|'dismiss'|'dismiss_all'), category ('settings'|
+    // 'automations'|'extensions'|'chats').
+    'sync_conflict_action',
+    // First time per UTC day per kind: kind (a status state or problem).
+    'sync_problem',
+    // action (one of the where-it-applies actions, e.g. 'this_computer').
+    'sync_scope_changed',
 ]);
 
 /**

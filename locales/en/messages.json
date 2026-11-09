@@ -8209,6 +8209,26 @@
     "message": "Sync now",
     "description": "Tray menu item: sync with the other computers now."
   },
+  "tray.sync_state.up_to_date": {
+    "message": "Up to date",
+    "description": "{status} of the tray's sync line (tray.sync_status): this computer has sent and read everything."
+  },
+  "tray.sync_state.syncing": {
+    "message": "Syncing…",
+    "description": "{status} of the tray's sync line (tray.sync_status): sync is sending or reading changes."
+  },
+  "tray.sync_state.waiting": {
+    "message": "Waiting for files",
+    "description": "{status} of the tray's sync line (tray.sync_status): the sync app hasn't downloaded some files yet."
+  },
+  "tray.sync_state.paused": {
+    "message": "Paused",
+    "description": "{status} of the tray's sync line (tray.sync_status): the user paused sync."
+  },
+  "tray.sync_state.attention": {
+    "message": "Needs your attention",
+    "description": "{status} of the tray's sync line (tray.sync_status): sync stopped and Settings → Sync says why."
+  },
   "errors.user_shell.not_allowed": {
     "message": "Commands can only be run from Kage's chat and launcher windows.",
     "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. The request came from a window that isn't allowed to run commands."
@@ -8680,6 +8700,22 @@
   "sync.problem.config_reset": {
     "message": "Your settings on this computer couldn't be read, so Kage restored them from sync.",
     "description": "Sync: config.json was reset at load and the synced values were applied."
+  },
+  "errors.sync.bad_request": {
+    "message": "Sync couldn't use that. Try again.",
+    "description": "A sync command got a folder path that isn't absolute, or a pause time that isn't a time."
+  },
+  "sync.notify.title": {
+    "message": "Kage sync",
+    "description": "Title of an OS notification about folder sync, shown only for problems the user must fix."
+  },
+  "sync.notify.removed": {
+    "message": "This computer was removed from sync. Open Settings → Sync to join again.",
+    "description": "OS notification: another computer removed this one from sync."
+  },
+  "sync.notify.reset": {
+    "message": "Sync was started over on another computer. Open Settings → Sync to join again.",
+    "description": "OS notification: another computer started sync over, so this one must join again."
   },
   "sync.review.consent": {
     "message": "{extension} needs your approval on this computer",

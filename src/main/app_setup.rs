@@ -122,6 +122,8 @@ pub fn configure(
     setup::start_updater(app);
     setup::maybe_show_welcome_window(app.handle(), config.first_run_completed);
     setup::maybe_show_floating_after_interactive_install(app);
+    // Last: one thread spawn now, the engine's first work 10 s later.
+    setup::start_sync(app);
     Ok(())
 }
 

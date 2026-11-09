@@ -40,6 +40,11 @@ When analytics are enabled, each event includes:
 
 The complete list of features we track is visible in [`ui/js/shared/telemetry.js`](../ui/js/shared/telemetry.js) if you'd like to review it yourself.
 
+### Sync
+- Sync data never touches Kage servers. Kage syncs through a folder you already sync (Dropbox, iCloud Drive, OneDrive, …), and everything it puts there is encrypted on your computer.
+- Kage only counts that sync is used, how many computers, and which kinds of problems happen. These counts are in coarse buckets (for example "3–5 computers").
+- Sync events never include the folder, which sync app you use, computer names, setting names or values, extension ids, or anything that was synced.
+
 ### Crash signal
 - If Kage panics (an unrecoverable internal error), we send a single `panic` event so we know a buggy build is in the wild.
 - The event carries only a coarse category from a fixed list (e.g. `unwrap_none`, `index_oob`, `other`) and the source location it occurred at — e.g. `src/foo.rs:42`. These are paths *inside our own source code*, not paths to your files.

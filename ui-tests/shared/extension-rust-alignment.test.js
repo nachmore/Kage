@@ -247,7 +247,7 @@ describe('folder sync commands — Rust ↔ JS alignment', () => {
 
     it('every command in src/commands/sync.rs is host-only (null)', () => {
         const cmds = syncRs();
-        expect(cmds.size, 'commands in src/commands/sync.rs').toBe(34);
+        expect(cmds.size, 'commands in src/commands/sync.rs').toBe(35);
         for (const name of cmds.keys()) {
             expect(Object.hasOwn(COMMAND_CAPABILITIES, name), `${name} has no entry`).toBe(true);
             expect(COMMAND_CAPABILITIES[name], `${name} must be null`).toBeNull();
@@ -271,6 +271,7 @@ describe('folder sync commands — Rust ↔ JS alignment', () => {
         expect(cmds.get('sync_leave')).toEqual(['confirm']);
         expect(cmds.get('sync_undo_join')).toEqual(['confirm']);
         expect(cmds.get('sync_purge_extension')).toEqual(['extension_id', 'confirm']);
+        expect(cmds.get('sync_apply_folder')).toEqual(['path']);
         expect(cmds.get('get_config_snapshot')).toEqual([]);
     });
 

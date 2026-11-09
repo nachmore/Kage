@@ -476,6 +476,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     sync_undo_join: null,
     sync_purge_extension: null,
     sync_find_folder: null,
+    sync_apply_folder: null,
     // The config with its revision, for field-level saves (§9.5). Same
     // reasoning as `get_config` above.
     get_config_snapshot: null,

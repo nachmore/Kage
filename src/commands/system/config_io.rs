@@ -21,13 +21,25 @@ pub async fn get_config(features: State<'_, FeatureServices>) -> Result<Config, 
     Ok(config.clone())
 }
 
+/// `save_config`'s answer: the revision the saved config is at, the base
+/// of the caller's next save.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SavedConfig {
+    pub revision: u64,
+}
+
+/// Save a whole config from a window. With `base_revision` (the revision
+/// `get_config_snapshot` gave the window), whatever the window didn't
+/// change since keeps its current value: a stale window can't revert a
+/// field another window or folder sync changed (docs/design/SYNC.md §9.5).
+/// Without it, the config is saved as sent, as before.
 #[tauri::command]
 pub async fn save_config<R: tauri::Runtime>(
     config: Config,
+    base_revision: Option<u64>,
     features: State<'_, FeatureServices>,
-    acp: State<'_, AcpHandles>,
     app: tauri::AppHandle<R>,
-) -> Result<(), AppError> {
+) -> Result<SavedConfig, AppError> {
     info!("Saving configuration");
 
     // Swap the in-memory state and persist under the same lock. Pre-fix the
@@ -36,18 +48,14 @@ pub async fn save_config<R: tauri::Runtime>(
     // disk write could capture a stale view, get clobbered by an in-flight
     // permission save, then the in-memory swap would proceed against an
     // even staler picture. Lock-mutate-save-drop is the only correct order.
-    let new_terminator = config.tool_permissions.terminator_mode;
-    let new_log_buffer_size = config.system.log_buffer_size;
-    let new_language = config.ui.language.clone();
-    let new_acp_mode = config.acp.active_mode();
-    let new_login_env = config.acp.agent.import_login_shell_env;
-    let (prior_terminator, prior_acp_mode, sites_changed) = {
+    let revisions = &features.config_revisions;
+    let (change, revision) = {
         let mut state_config = features.config.lock_or_recover();
-        let prior = state_config.tool_permissions.terminator_mode;
-        let prior_acp = state_config.acp.active_mode();
-        let sites_changed = state_config.internal_sites != config.internal_sites;
-        let mut config = config;
+        let current = revisions.observe(&state_config);
+        let mut config = merge_with_base(config, base_revision, current, &state_config, revisions);
         preserve_backend_owned_fields(&mut config, &state_config);
+        config.ensure_item_ids();
+        let change = ConfigChange::between(&state_config, &config);
         *state_config = config;
         // The update channel is a typed enum with `#[serde(other)]` →
         // Stable, so an unknown wire value (stale config, hand-edit,
@@ -57,13 +65,97 @@ pub async fn save_config<R: tauri::Runtime>(
             error!("Failed to save config: {}", e);
             format!("Failed to save configuration: {}", e)
         })?;
-        (prior, prior_acp, sites_changed)
+        (change, revisions.observe(&state_config))
     };
+    // The save hook wakes sync for single settings; lists live in the same
+    // file.
+    crate::sync::notify("lists", crate::sync::types::Origin::User);
 
+    commit_config_change(&app, change);
+    info!("Configuration saved successfully");
+    Ok(SavedConfig { revision })
+}
+
+/// The config a window's save leads to: `incoming` merged three ways
+/// against the config at `base` (`sync_app::merge`), or `incoming` as it
+/// is when there is no base, the base is the current revision, or it is
+/// no longer kept.
+fn merge_with_base(
+    incoming: Config,
+    base: Option<u64>,
+    current_revision: u64,
+    current: &Config,
+    revisions: &crate::sync_app::ConfigRevisions,
+) -> Config {
+    let Some(base) = base else {
+        log::warn!("save_config: no baseRevision; saving the whole config as sent");
+        return incoming;
+    };
+    if base == current_revision {
+        return incoming;
+    }
+    let Some(base_tree) = revisions.at(base) else {
+        log::warn!(
+            "save_config: revision {base} is no longer kept; saving the whole config as sent"
+        );
+        return incoming;
+    };
+    let tree = |c: &Config| serde_json::to_value(c).unwrap_or(serde_json::Value::Null);
+    let merged = crate::sync_app::merge::merge(&base_tree, &tree(&incoming), &tree(current));
+    match serde_json::from_value::<Config>(merged) {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!(
+                "save_config: the merged config doesn't read back ({e}); saving the whole \
+                 config as sent"
+            );
+            incoming
+        }
+    }
+}
+
+/// What a config swap changes outside the `Config` struct, for
+/// [`commit_config_change`].
+pub(crate) struct ConfigChange {
+    prior_terminator: bool,
+    new_terminator: bool,
+    prior_acp_mode: crate::config::AcpMode,
+    new_acp_mode: crate::config::AcpMode,
+    sites_changed: bool,
+    new_language: Option<String>,
+    new_login_env: bool,
+    new_log_buffer_size: usize,
+}
+
+impl ConfigChange {
+    pub(crate) fn between(old: &Config, new: &Config) -> Self {
+        Self {
+            prior_terminator: old.tool_permissions.terminator_mode,
+            new_terminator: new.tool_permissions.terminator_mode,
+            prior_acp_mode: old.acp.active_mode(),
+            new_acp_mode: new.acp.active_mode(),
+            sites_changed: old.internal_sites != new.internal_sites,
+            new_language: new.ui.language.clone(),
+            new_login_env: new.acp.agent.import_login_shell_env,
+            new_log_buffer_size: new.system.log_buffer_size,
+        }
+    }
+}
+
+/// The work after a saved config swap, shared by `save_config` and folder
+/// sync's commits: drop link previews resolved under old internal-site
+/// rules, apply what lives outside the struct (agent connection, language,
+/// login-shell switch, log size), audit Terminator mode, and tell every
+/// window (`config_updated`).
+pub(crate) fn commit_config_change<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    change: ConfigChange,
+) {
+    use tauri::Manager;
     // Cached previews were resolved under the old internal-site profiles
     // (e.g. a login page cached as a successful preview); drop them so
     // the new rules apply to links already on screen.
-    if sites_changed {
+    if change.sites_changed {
         tauri::async_runtime::spawn_blocking(|| {
             if let Err(e) = crate::link_metadata_cache::clear() {
                 log::warn!("Failed to clear link metadata cache: {}", e);
@@ -71,27 +163,27 @@ pub async fn save_config<R: tauri::Runtime>(
         });
     }
 
-    apply_runtime_config(
-        &app,
-        &acp,
-        &prior_acp_mode,
-        &new_acp_mode,
-        new_language,
-        new_login_env,
-    );
+    if let Some(acp) = app.try_state::<AcpHandles>() {
+        apply_runtime_config(
+            app,
+            &acp,
+            &change.prior_acp_mode,
+            &change.new_acp_mode,
+            change.new_language,
+            change.new_login_env,
+        );
+    }
 
     // Update app log buffer size if changed
-    crate::app_log::set_max_size(new_log_buffer_size);
+    crate::app_log::set_max_size(change.new_log_buffer_size);
 
-    if prior_terminator != new_terminator {
+    if change.prior_terminator != change.new_terminator {
         crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
             crate::permission_audit::AuditEvent::TerminatorModeChanged {
-                enabled: new_terminator,
+                enabled: change.new_terminator,
             },
         ));
     }
-
-    info!("Configuration saved successfully");
 
     if let Err(e) = app.emit(
         crate::events::CONFIG_UPDATED,
@@ -99,8 +191,6 @@ pub async fn save_config<R: tauri::Runtime>(
     ) {
         error!("Failed to emit config_updated event: {}", e);
     }
-
-    Ok(())
 }
 
 /// Apply the parts of a config swap that live outside the `Config` struct.
@@ -963,6 +1053,11 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
             id,
             crate::extension_data_events::ChangeSource::Import,
         );
+    }
+    // A restore is a deliberate change that reaches the other computers;
+    // the synced values it replaced go to the conflicts list (SYNC.md §8.10).
+    for source in ["config", "lists", "steering"] {
+        crate::sync::notify(source, crate::sync::types::Origin::Import);
     }
     Ok(summary)
 }
