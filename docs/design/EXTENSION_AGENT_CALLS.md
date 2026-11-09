@@ -175,8 +175,8 @@ const result = await context.agent.complete(build, {
   instructions: '…',            // ≤4,000 chars, what to do
   input: { … } | '…',           // the data; string or JSON; ≤24,000 chars serialized
   schema: { … },                // optional JSON schema subset (§5.3), ≤8 KB
-  maxResponseChars: 8000,       // optional, ≤32,000
-  timeoutMs: 60000,             // optional, 5,000–180,000
+  maxResponseChars: 8000,       // optional, ≤32,000 (clamped to 1–32,000)
+  timeoutMs: 60000,             // optional, 5,000–180,000 (clamped)
 }
 
 const status = await context.agent.status();   // AgentCallStatus (§3.5)
@@ -247,7 +247,7 @@ pub struct AgentCallStatus {
     running: bool,
     usage: Usage,                     // { calls_today, calls_limit, chars_today, chars_limit, resets_at }
     next_start_at: Option<String>,    // RFC 3339, when rate limits or a pause end
-    paused_until: Option<String>,     // set while the failure breaker is open
+    paused_until: Option<String>,     // set while a breaker or Stop now pause holds
     machine_tag: String,              // opaque, stable per machine and extension (§10)
 }
 ```
@@ -272,7 +272,7 @@ only.
 | Command | Purpose |
 |---|---|
 | `get_extension_agent_access(extension_id)` | Panel state: gates, agent label and location, consent token, allowance level, usage, breaker, last 20 log entries for this extension. |
-| `set_extension_agent_access(extension_id, enabled, consent_token?, allowance?)` | Turn on (needs the token from `get`), turn off, or change the allowance. Writes config, broadcasts `config_updated`, writes an audit entry. |
+| `set_extension_agent_access(extension_id, enabled, consent_token?, allowance?)` | Turn on (needs the token from `get`), turn off, or change the allowance. Writes config, broadcasts `config_updated`, writes an audit entry. Turning off also clears the consent, so turning on again always asks. `enabled: true` without a token is accepted only while the consent is current (an allowance change). |
 | `stop_extension_agent_calls(extension_id?)` | "Stop now": cancel the running call and every waiting one, pause that extension (or all) for one hour. |
 | `get_extension_agent_request_detail(extension_id, call_id)` | The full prompt and reply of one of the last 5 calls of this session. Memory only, never on disk. |
 
@@ -298,6 +298,7 @@ existing kinds. All keys live under `errors.agent_call.` in
 | `agent_changed` | not_permitted | Your agent changed while this was open. Check the agent's name and try again. |
 | `purpose_not_declared` | invalid_input | {extension} didn't declare the purpose "{purpose}". |
 | `field_too_long` | invalid_input | "{field}" is {size} characters. The limit is {limit}. |
+| `field_invalid` | invalid_input | "{field}" isn't valid. (A `dedupe_key` with characters outside `[A-Za-z0-9_.:-]`.) |
 | `prompt_too_large` | invalid_input | The request is {size} characters. The limit is {limit}. |
 | `schema_unsupported` | invalid_input | The response schema uses something Kage doesn't support: {keyword}. |
 | `contains_credential` | invalid_input | The request contains one of {extension}'s saved credentials, so Kage didn't send it. |
@@ -442,6 +443,7 @@ Copy (all `settings.manager.ext.agent.consent.*`):
 | Kiro, Claude Code or Codex preset, local | "{agent} sends what it receives to its online service." |
 | Ollama preset with a loopback base URL | "{agent} runs on this computer." |
 | Remote TCP, or Ollama on a non-loopback URL | "{agent} runs on another computer ({host})." |
+| Remote TCP on a loopback host (`127.0.0.1`, `localhost`, `::1`) | The "anything else" text: the agent is on this computer, but Kage can't tell where it sends text. |
 | Anything else | "Kage can't tell where {agent} sends what it receives. It may be an online service." |
 
 `{agent}` is the connection's display name, and the preset's display name
@@ -507,12 +509,17 @@ other designs; SYNC §23).
 
 ### 5.1 Life of a call
 
-1. **Reserve.** Check gates 1–4, the purpose, the queue cap, the dedupe
-   key and the breaker. Add the reservation to the extension's queue.
-   Return `call_id`.
+1. **Reserve.** Check gates 1–4, the purpose, the dedupe key's format,
+   the pauses (breakers, **Stop now**), the allowance, the global and
+   hourly caps (`paused`, `budget_exhausted`, `rate_limited`), that the
+   agent is connected (`agent_unavailable`), the dedupe key and the queue
+   cap. Add the reservation to the extension's queue. Return `call_id`.
 2. **Wait for a turn.** The scheduler (§5.7) gives one reservation a turn
    when every condition holds. `agent_call_ready` resolves with `send_by`
-   (now + 10 s).
+   (now + 10 s). If the head's gates now fail, it ends with
+   `cancelled_access_off` (or `consent_stale`). If a pause or an empty
+   allowance now blocks it, that extension's waiting reservations end with
+   that error rather than wait for hours.
 3. **Send.** Within 10 s the extension calls `agent_call_send`. Otherwise
    the turn is given up (`turn_expired`) and the next one starts.
    - Re-check gates 1–4.
@@ -520,7 +527,11 @@ other designs; SYNC §23).
    - Check for the extension's own credentials and redact secret-shaped
      strings (§5.9).
    - Build the framed prompt (§5.2) and check the total size.
-   - Check the allowance (calls and characters).
+   - Check the allowance (calls, and characters including this prompt).
+   - For `when: 'idle'`: if the user became active or started a prompt
+     since the turn began, refuse with `cancelled_user_activity` (the
+     runtime's one retry applies).
+   - Any refusal here ends the turn and costs nothing.
 4. **Run** on a strict ephemeral session (§5.4, §5.5), in
    `spawn_blocking`. A watchdog task enforces the timeout and the reply
    cap, and listens for cancellation.
@@ -533,6 +544,15 @@ other designs; SYNC §23).
    - Keep the prompt and reply in the in-memory ring.
    - Emit `agent_calls_activity`.
    - Resolve or reject `agent_call_send`.
+
+   A call that is stopped (timeout, reply cap, tool attempt, a
+   cancellation in §5.7) is answered as soon as the stop is decided, and
+   from then on no longer holds its dedupe key, so the runtime can retry.
+   It keeps the agent (one call in total) until its session ends;
+   `session/cancel` is sent again every 2 s until then. It is charged for
+   the prompt and what came back. A call that was never written to the
+   agent (refused, or stopped before its prompt went out) gets no audit
+   entry and costs nothing.
 
 ### 5.2 Prompt framing
 
@@ -583,7 +603,9 @@ the framing, then validate.
 **Extraction** (`src/agent_calls/schema.rs`):
 1. Trim. Remove one surrounding code fence (` ``` ` or ` ```json `).
 2. If the whole text parses as JSON, use it.
-3. Otherwise find the first `{` or `[` and read one value with
+3. Otherwise take the first `{` or `[` where one value parses (up to 32
+   are tried, so a bracket in the prose before the JSON doesn't hide it),
+   reading the value with
    `serde_json::Deserializer::from_str(..).into_iter()`. Text around it is
    ignored.
 4. Nothing parses → `not_json`.
@@ -1541,12 +1563,33 @@ and the later package rebases and owns only its own lines.
   queries, and the hooks `note_user_activity`, `on_user_prompt_started`,
   `on_disconnect`, `on_agent_changed`, `on_extension_changed`,
   `note_tool_attempt`, `shutdown`.
-- `exec.rs` calls `ephemeral_session::run_with` (signature from AC2: code
-  against it, stub it in tests).
-- Daily telemetry is emitted through a callback the service is given, so
-  this package has no `AppHandle` dependency.
+- `exec.rs` defines `AgentBackend` (the turn conditions, one blocking run,
+  the reply size, `session/cancel`) and `AcpBackend`, the real one. AC1
+  and AC2 are built in parallel, so `AcpBackend` doesn't name
+  `run_with`: it is given a `SessionOpener`, a closure with `run_with`'s
+  shape (`SessionSpec { strict, require_connected, cwd }` and the work on
+  the session id). AC3 passes one that calls
+  `ephemeral_session::run_with`. Tests use a fake backend. The scratch
+  folder is created by `exec::scratch_dir()`; checking and emptying it
+  after a call stays in `run_with` (AC2).
+- Everything that needs an `AppHandle` goes out through the
+  `AgentCallHooks` trait the service is given in `start(hooks)`: the audit
+  entries (`CallRecord`, `AccessRecord`, which AC3 maps to the two
+  `AuditEvent` variants; `AgentCallOutcome` and `CancelReason` live in
+  `agent_calls`), telemetry, the `agent_calls_activity` payload and the
+  panel's log rows. So this package has no `AppHandle` dependency.
+- `AgentCallService::new(config, backend)` does no I/O (it is built in
+  `build_managed_state`). The usage file and machine id are read on first
+  use. `start(hooks)` fills the `OnceLock`-style handle behind the free
+  functions and starts the scheduler task.
+- `AgentBackgroundDecl::from_manifest` holds the §3.2 normaliser rules, so
+  AC3's `ExtensionManifest::agent_background_decl` is one call. Until that
+  field exists, `InstalledExtensions` reads `agentBackground` from the
+  manifest file itself.
 - Accept: every unit test in §12 for the engine; no content in any log
   line (a test greps the log capture); `cargo clippy` clean.
+- AC3 also adds `mod agent_calls;` to `src/main.rs`: the binary declares
+  its modules itself, and AC1 owns only the `src/lib.rs` line.
 
 **WP-AC2 Strict ephemeral sessions** (`src/ephemeral_session.rs`,
 `src/acp_client/mod.rs`, `src/commands/messaging/notifications.rs`,
