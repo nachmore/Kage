@@ -1,6 +1,11 @@
 // Windows side of `os::kage_target`.
 
-use windows::Win32::Foundation::{HWND, POINT};
+use std::collections::HashMap;
+
+use windows::Win32::Foundation::{CloseHandle, HWND, POINT};
+use windows::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetAncestor, GetForegroundWindow, GetWindowThreadProcessId, WindowFromPoint, GA_ROOT,
 };
@@ -12,6 +17,63 @@ pub(crate) const WEBVIEW2_PROCESS: &str = "msedgewebview2.exe";
 pub fn is_kage_process_impl(pid: u32) -> bool {
     super::process::get_process_name_impl(pid)
         .is_some_and(|name| crate::os::kage_target::is_kage_executable(&name))
+}
+
+fn is_webview2(pid: u32) -> bool {
+    super::process::get_process_name_impl(pid).as_deref() == Some(WEBVIEW2_PROCESS)
+}
+
+/// Every process's parent, from one snapshot.
+fn parent_pids() -> HashMap<u32, u32> {
+    let mut parents = HashMap::new();
+    // SAFETY: a snapshot handle closed below; `entry` is a local whose
+    // dwSize says how big it is.
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+            return parents;
+        };
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
+        while more {
+            parents.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+            more = Process32NextW(snapshot, &mut entry).is_ok();
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    parents
+}
+
+/// Whether `pid` is a WebView2 process of Kage's: msedgewebview2.exe
+/// started by Kage (its browser process) or by such a process (a
+/// renderer). UI Automation reports a web view's content under that
+/// process wherever its window is — in front, behind another window, or
+/// off screen — so this, unlike the window under a point, still holds
+/// when Kage's window is covered.
+pub fn is_kage_webview_impl(pid: u32) -> bool {
+    if !is_webview2(pid) {
+        return false;
+    }
+    let parents = parent_pids();
+    let mut current = pid;
+    for _ in 0..3 {
+        let Some(&parent) = parents.get(&current) else {
+            return false;
+        };
+        if parent == 0 || parent == current {
+            return false;
+        }
+        if is_kage_process_impl(parent) {
+            return true;
+        }
+        if !is_webview2(parent) {
+            return false;
+        }
+        current = parent;
+    }
+    false
 }
 
 fn window_pid(hwnd: HWND) -> Option<u32> {

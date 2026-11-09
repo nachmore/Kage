@@ -39,17 +39,23 @@ pub(super) fn resolve(element_id: &str) -> Result<UiaElement, String> {
 /// toggles …): refused when the element belongs to Kage itself, whose
 /// approval buttons only the user may press (`os::kage_target`). WebView2
 /// content reports msedgewebview2.exe as its process, so for such an
-/// element the window under its centre (and that window's root) decides.
+/// element the process that started that WebView2 decides (UI Automation
+/// can invoke a button in a window another one covers), and failing that
+/// the window under its centre (and that window's root).
 pub(super) fn resolve_for_input(element_id: &str) -> Result<UiaElement, String> {
+    use crate::os::platform::kage_target;
     let elem = resolve(element_id)?;
     let pid = super::element::process_id(&elem);
     let mut kage = crate::os::kage_target::is_kage_process(pid);
     if !kage
         && crate::os::process::get_process_name(pid).as_deref()
-            == Some(crate::os::platform::kage_target::WEBVIEW2_PROCESS)
+            == Some(kage_target::WEBVIEW2_PROCESS)
     {
-        if let Some((x, y, w, h)) = super::element::bounds(&elem) {
-            kage = crate::os::kage_target::point_is_on_kage(x + w / 2, y + h / 2);
+        kage = kage_target::is_kage_webview_impl(pid);
+        if !kage {
+            if let Some((x, y, w, h)) = super::element::bounds(&elem) {
+                kage = crate::os::kage_target::point_is_on_kage(x + w / 2, y + h / 2);
+            }
         }
     }
     if kage {
