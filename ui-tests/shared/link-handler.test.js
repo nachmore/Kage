@@ -10,7 +10,7 @@
  * - script-built blob: download links are let through.
  */
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -537,7 +537,11 @@ describe('every Kage window installs the link handler', () => {
         store: 'ui/js/store.js',
         welcome: 'ui/welcome.html',
         'context-menu': 'ui/context-menu.html',
+        // Extension view windows (EXTENSION_VIEWS.md §8.1): one page for every
+        // `ext-view:<extension>:<view>` label, with its own capability file.
+        'ext-view:*': 'ui/js/extension-view/main.js',
     };
+    const VIEW_PATTERN = 'ext-view:*';
 
     for (const [label, file] of Object.entries(ENTRY_POINTS)) {
         it(`${label} (${file})`, () => {
@@ -549,11 +553,21 @@ describe('every Kage window installs the link handler', () => {
         });
     }
 
-    it('covers every window in the capability file', () => {
+    it('covers every window in the capability files', () => {
         // New window → add its entry point above (and call initLinkHandler).
-        const caps = JSON.parse(
-            readFileSync(path.join(repoRoot, 'capabilities/default.json'), 'utf8')
+        const dir = path.join(repoRoot, 'capabilities');
+        const windows = (file) =>
+            JSON.parse(readFileSync(path.join(dir, file), 'utf8')).windows || [];
+        // The view page has a capability file of its own, not default.json.
+        expect([...windows('default.json')].sort()).toEqual(
+            Object.keys(ENTRY_POINTS)
+                .filter((label) => label !== VIEW_PATTERN)
+                .sort()
         );
-        expect([...caps.windows].sort()).toEqual(Object.keys(ENTRY_POINTS).sort());
+        for (const file of readdirSync(dir).filter((f) => f.endsWith('.json'))) {
+            for (const label of windows(file)) {
+                expect(Object.keys(ENTRY_POINTS), `${file}: ${label}`).toContain(label);
+            }
+        }
     });
 });

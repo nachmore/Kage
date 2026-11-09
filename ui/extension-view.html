@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- No page zoom: a pinch over the host bar must not zoom the window.
+         Views handle pinch and ctrl + wheel themselves (EXTENSION_VIEWS.md §13.1). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- No CSP here on purpose: the view's srcdoc iframe would inherit it and
+         lose its own policy (§8.4). The window's identity comes from its label. -->
+    <title>Kage</title>
+    <link rel="stylesheet" href="css/shared-kage-tokens.css">
+    <link rel="stylesheet" href="css/shared-components.css">
+    <link rel="stylesheet" href="css/shared-rtl.css">
+    <link rel="stylesheet" href="css/extension-view.css">
+</head>
+<body class="kv-body">
+    <header class="kv-bar">
+        <div class="kv-bar-identity">
+            <span class="kv-bar-icon" aria-hidden="true"></span>
+            <span class="kv-bar-ext" dir="auto"></span>
+            <span class="kv-bar-sep" aria-hidden="true">·</span>
+            <span class="kv-bar-view" dir="auto"></span>
+            <span class="kv-bar-sub" dir="auto" hidden></span>
+        </div>
+        <span class="kv-bar-notice" role="status" aria-live="polite" hidden></span>
+        <div class="kv-bar-actions">
+            <span class="kv-badge" data-i18n="ext_view.badge">Extension</span>
+            <button type="button" class="kv-icon-btn" data-kv-action="reload"
+                data-i18n-title="ext_view.bar.reload" data-i18n-aria-label="ext_view.bar.reload"
+                title="Reload" aria-label="Reload"><span aria-hidden="true">⟳</span></button>
+            <button type="button" class="kv-icon-btn" data-kv-action="settings"
+                data-i18n-title="ext_view.bar.settings" data-i18n-aria-label="ext_view.bar.settings"
+                title="Extension settings" aria-label="Extension settings"><span aria-hidden="true">⚙</span></button>
+            <button type="button" class="kv-icon-btn" data-kv-action="close"
+                data-i18n-title="ext_view.bar.close" data-i18n-aria-label="ext_view.bar.close"
+                title="Close" aria-label="Close"><span aria-hidden="true">✕</span></button>
+        </div>
+    </header>
+    <div class="kv-banner" role="alert" hidden>
+        <span class="kv-banner-text" dir="auto"></span>
+        <span class="kv-banner-actions"></span>
+    </div>
+    <main class="kv-stage">
+        <!-- The view sandbox's iframe goes here (ExtensionSandbox, surface 'view'). -->
+        <div class="kv-frame"></div>
+        <div class="kv-panel kv-loading" role="status" aria-live="polite">
+            <div class="kv-spinner" aria-hidden="true"></div>
+            <p class="kv-loading-text" dir="auto"></p>
+        </div>
+        <div class="kv-panel kv-state" role="alert" hidden>
+            <p class="kv-state-text" dir="auto"></p>
+            <div class="kv-state-actions"></div>
+        </div>
+    </main>
+
+    <script type="module" src="js/extension-view/main.js"></script>
+</body>
+</html>
