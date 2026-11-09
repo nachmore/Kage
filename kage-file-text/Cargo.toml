@@ -1,0 +1,68 @@
+# The file text worker (docs/design/EXTENSION_FILE_TEXT.md §5.5).
+#
+# A short-lived process, one per file. The app sends it the bytes of a
+# file the user picked and gets text back. It never gets a path, opens no
+# files and needs no network. Parsing untrusted documents here instead of
+# in the app means a parser bug costs an error message, not the app.
+#
+# Also a library, so the parsers can be tested and fuzzed without a
+# process (`fuzz/` is its own workspace). The app does not link this
+# crate: it only talks to the binary through `kage_core::file_text_wire`.
+#
+# Only permissive licences in this tree (§6): MIT, Apache-2.0,
+# BSD-3-Clause, Zlib, Unicode-3.0.
+[package]
+name = "kage-file-text"
+version.workspace = true
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "kage-file-text"
+path = "src/main.rs"
+
+[dependencies]
+# Wire types, the format table and the limits, shared with the app.
+# Without default features: the worker needs none of kage-core's OS code.
+kage-core = { path = "../kage-core", default-features = false }
+serde_json = "1.0"
+# Plain text: BOMs, UTF-16 and WHATWG legacy encodings, and Firefox's
+# detector to guess the legacy one.
+encoding_rs = "0.8"
+chardetng = "0.1"
+memchr = "2"
+# NFC (§5.10). Same version and features as the app.
+icu_normalizer = { version = "2.1", default-features = false, features = ["compiled_data"] }
+# DOCX and PPTX (WP-FT2): the same zip as the app, inflate only through
+# capped readers; quick-xml streams and never loads a DTD.
+zip = { version = "8.1", default-features = false, features = ["deflate"] }
+quick-xml = "0.39"
+# PDF (WP-FT3, §6.2). pdf-extract is pinned: the worker uses its public
+# per-page API. It brings lopdf 0.42; lopdf 0.47 is only the repair step
+# for files 0.42 can't load. flate2 counts a stream's inflated size.
+pdf-extract = "=0.12.1"
+lopdf = { version = "0.47", default-features = false }
+flate2 = "1"
+unicode-bidi = "0.3"
+# HTML (WP-FT4): the tokenizer only, no tree builder.
+html5ever = "0.38"
+
+[target.'cfg(unix)'.dependencies]
+# setrlimit, prctl.
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+# The worker's own Job Object (memory and process limits) and error mode.
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+zip = { version = "8.1", default-features = false, features = ["deflate"] }

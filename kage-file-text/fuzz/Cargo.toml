@@ -1,0 +1,70 @@
+# Fuzz targets for the file text worker's parsers
+# (docs/design/EXTENSION_FILE_TEXT.md §12).
+#
+#   cargo install cargo-fuzz
+#   cd kage-file-text/fuzz
+#   cp ../../Cargo.lock .                  # optional: the app's exact versions
+#   cargo fuzz run text -s none -- -max_total_time=600   # or ooxml, pdf, html, rtf
+#   cargo fuzz build -s none               # build every target
+#
+# `-s none` works on stable Rust; drop it on nightly to add AddressSanitizer.
+#
+# Each target feeds the bytes to `kage_file_text::extract_as` as one
+# format and checks the invariants in `src/lib.rs`: no panic escapes,
+# the text is normalised and within its cap. A target whose reader isn't
+# built yet only exercises detection.
+#
+# Its own workspace, so the app's `cargo build --workspace` and
+# `cargo clippy --workspace` never build libFuzzer. Its lock file, corpora
+# and crash artefacts stay local (`.gitignore`).
+[package]
+name = "kage-file-text-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+kage-file-text = { path = ".." }
+kage-core = { path = "../../kage-core", default-features = false }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "text"
+path = "fuzz_targets/text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ooxml"
+path = "fuzz_targets/ooxml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pdf"
+path = "fuzz_targets/pdf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "html"
+path = "fuzz_targets/html.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rtf"
+path = "fuzz_targets/rtf.rs"
+test = false
+doc = false
+bench = false
