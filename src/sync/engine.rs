@@ -704,22 +704,34 @@ impl SyncEngine {
             .map(|(_, s)| s.clone())
             .collect();
         let mut total = 0;
+        let mut prefs_changed = false;
         let mut remapped = BTreeSet::new();
+        let installed = installed_ids(&*self.env.config);
+        let active_conn = specs
+            .iter()
+            .any(|s| s.ns == "list.connections")
+            .then(|| local_active_connection(&*self.env.config))
+            .flatten();
+        let mut by_ns: BTreeMap<&str, BTreeMap<String, Option<&LocalRecord>>> = BTreeMap::new();
+        for ((ns, id), r) in &state.records {
+            by_ns
+                .entry(ns.as_str())
+                .or_default()
+                .insert(id.clone(), r.as_ref());
+        }
         for spec in specs {
             if !self.ns_capturable(&spec.ns) {
                 continue;
             }
-            let recs: BTreeMap<String, Option<&LocalRecord>> = state
-                .records
-                .iter()
-                .filter(|((ns, _), _)| *ns == spec.ns)
-                .map(|((_, id), r)| (id.clone(), r.as_ref()))
-                .collect();
-            let out = self.capture_ns(&spec, &recs, origin)?;
+            let recs = by_ns.remove(spec.ns.as_str()).unwrap_or_default();
+            let out = self.capture_ns(&spec, &recs, origin, &installed, active_conn.as_deref())?;
             total += out.written;
             remapped.extend(out.remapped);
             for (key, h) in out.approvals {
-                self.prefs.approved_runnables.insert(key, h);
+                if self.prefs.approved_runnables.get(&key) != Some(&h) {
+                    self.prefs.approved_runnables.insert(key, h);
+                    prefs_changed = true;
+                }
             }
             if out.written > 0 {
                 let now = self.now();
@@ -727,7 +739,7 @@ impl SyncEngine {
                 self.rt.last_own_ms = Some(now);
             }
         }
-        if total > 0 {
+        if prefs_changed {
             self.save_prefs()?;
         }
         Ok((total, remapped))
@@ -739,10 +751,11 @@ impl SyncEngine {
         spec: &NsSpec,
         local: &BTreeMap<String, Option<&LocalRecord>>,
         origin: Origin,
+        installed: &BTreeSet<String>,
+        active_conn: Option<&str>,
     ) -> anyhow::Result<CaptureOut> {
         let now = self.now();
         let os = self.env.os;
-        let installed = installed_ids(&*self.env.config);
         let ns = spec.ns.clone();
         let mut skip: BTreeSet<String> = BTreeSet::new();
         for id in local.keys() {
@@ -761,7 +774,6 @@ impl SyncEngine {
         let frozen = self.rt.frozen.clone();
         let keep_order = self.rt.keep_synced_order;
         let approved = self.prefs.approved_runnables.clone();
-        let active_conn = local_active_connection(&*self.env.config);
         let ro_check = self.specs.get(&ns).map_or(u32::MAX, |(_, s)| s.schema);
         let Some(core) = self.core.as_mut() else {
             return Ok(CaptureOut::default());
@@ -845,7 +857,7 @@ impl SyncEngine {
                         &ns,
                         target_id,
                         l,
-                        active_conn.as_deref(),
+                        active_conn,
                         &approved,
                         &*cx.tx,
                     )? {
