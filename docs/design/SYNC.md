@@ -582,7 +582,8 @@ tag     16 bytes
   shard names, so a reader skips a shard it already applied, whichever
   directory it is in.
 - Canonical JSON: sorted object keys, no whitespace, records sorted by
-  id (RFC 8785 style).
+  id (RFC 8785 style). Numbers print as ECMAScript prints them, so `1.0`
+  and `1` are the same value (`canonical::same`).
 - Compress, then encrypt. No credential is ever in the stream, so
   compression can't leak one through file sizes.
 - A file that fails to open is **not ready**, never "corrupt" at first
@@ -763,7 +764,13 @@ CREATE TABLE ext_view  (win TEXT, ext TEXT, key TEXT, ids BLOB, PRIMARY KEY (win
   `origin_mismatch`.
 - A corrupt `replica.db` is moved aside. The engine rebuilds it from the
   folder and then joins with "use the other computers' values"; local
-  differences go to the conflicts list (§15).
+  differences go to the conflicts list (§15). A replica whose
+  `user_version` is newer than this build's (the user went back to an
+  older Kage) is moved aside the same way.
+- `records.bucket` holds the record's 16-bit bucket hash,
+  `Keys::bucket(ns, id, 1 << 16)`. The bucket for any power-of-two count
+  up to 65,536 is that hash modulo the count, so a change of count needs
+  no rewrite of the table.
 
 ---
 
@@ -808,10 +815,16 @@ Field names inside a record:
 | Field key | Meaning |
 |---|---|
 | `f@s` | Whole field `f` at scope `s` |
-| `f[]<element>@all` | One element of a set field. `<element>` is the element's canonical JSON (≤ 128 characters). Value `true` = present, `false` = removed. |
-| `f{}<key>@all` | One entry of a map field. Value `null` = removed. |
+| `f[]<element>@all` | One element of a set field. `<element>` is the element's canonical JSON (≤ 128 characters). Value `true` = present, `false` = removed. A longer element is named `#<32 hex of its SHA-256>`, and its value is the element itself while present. |
+| `f{}<key>@all` | One entry of a map field. Value `null` = removed. A key over 128 characters, or one starting with `#`, is named `#<32 hex>` the same way, with the value `[key, value]`. |
 | `+<first>@all` | A group of fields that must change together (`+status` holds `{status, doneAt, suggested, confidence}`) |
+| `v@all` | The whole record, for a `whole` structure |
 | `avail@all`, `order@all` | List items: where the item exists; its position |
+
+Field names hold no `@`, `[]` or `{}` and don't start with `+`
+(`split::valid_field_name`); the scope is after the last `@`. A set
+comes back from `join` sorted by canonical JSON, and `null` reads as
+"absent" (`src/sync/split.rs`).
 
 Because sets, maps and groups are encoded as separate cells, **every cell
 merges the same way: the higher stamp wins.** No merge rule is evaluated
@@ -1046,17 +1059,26 @@ Tombstones:
 - `del` merges by the higher stamp.
 - A tombstone newer than every cell hides the record. A cell newer than
   the tombstone shows it again.
-- **Delete beats an edit it hadn't seen.** For each cell `c` older than
-  `del` but newer than every stamp in `del.anc` (so the deleter hadn't
-  seen it): conflict `edit_vs_delete` ("Edited on Home Mac, deleted on
-  Work PC"). Restore brings the record back. A concurrent edit this
+- **Delete beats an edit it hadn't seen.** While the record is hidden,
+  for each cell `c` older than `del` but newer than every stamp in
+  `del.anc`, and from another computer than the deleter (so the deleter
+  hadn't seen it): conflict `edit_vs_delete` ("Edited on Home Mac,
+  deleted on Work PC"), one per field. Set elements and map entries don't
+  count. Restore brings the record back. A concurrent edit this
   approximation misses is still in "Recently deleted" with the whole
   record for 30 days.
-- **An edit beats a delete it hadn't seen.** For a winning cell `c` with
-  `c.stamp > del.stamp` and `del.stamp ∉ c.anc`: info conflict
-  `delete_vs_edit` ("Deleted on Work PC, but changed later on Home Mac.
-  [Delete anyway]"). Restoring a deleted item puts `del.stamp` into the
-  new cells' `anc`, so a deliberate restore isn't reported.
+- **An edit beats a delete it hadn't seen.** When cells newer than `del`
+  show the record again and none of them names `del.stamp` in its `anc`:
+  one info conflict `delete_vs_edit` per record (no field; the winner is
+  the newest such cell): "Deleted on Work PC, but changed later on Home
+  Mac. [Delete anyway]". Restoring a deleted item puts `del.stamp` into
+  the new cells' `anc`, so a deliberate restore isn't reported, even
+  together with another computer's edit.
+- A merge reports a cell-and-tombstone pair only when one of the two
+  arrived in that merge; a pair it held already was reported when it
+  first met. `delete_vs_edit` is reported only when the tombstone is new
+  here or the record was hidden before the merge; a further edit of a
+  record that is already back isn't reported again.
 
 Properties (tested, §18.1):
 - **No silent loss.** A value stops being current only because a cell
@@ -1556,16 +1578,28 @@ the same list, and a restore or dismiss on one applies everywhere.
       "kind": "concurrent_edit",
       "loser":  { "stamp": "000193080b0e0001a9x3h6t1qq8m0ve2", "wall": 1762640000000,
                   "deleted": false, "value": "Summarize: {text}" },
-      "winner": { "stamp": "0001930b6f1c0004k7m2p9xqa3rt5vwe", "wall": 1762686000000 } }
+      "winner": { "stamp": "0001930b6f1c0004k7m2p9xqa3rt5vwe", "wall": 1762686000000,
+                  "deleted": false } }
     ```
+
+    `field` is `null` for a record-level entry (`delete_vs_edit`,
+    `deleted_while_away`). A side's `value` is left out when it has none
+    (a delete, or a winner, whose value the record holds); `winner` is
+    `null` for entries made by an action.
 
   - `state@all`: `"open"`, `"dismissed"` or `"restored"`.
 - **Deterministic stamps.** A conflict found by merging is written with
-  the *winner's* stamp and wall time. Every computer that finds the same
-  conflict writes identical cells, so there are no duplicates and no
-  conflict about a conflict. A later dismiss or restore gets a fresh
-  stamp, which is always newer (the user saw the conflict), so a slow
-  computer that finds it later can't reopen it.
+  the *loser's* stamp and wall time. The id names the loser, so that is
+  the one thing every computer that finds the entry agrees on. Computers
+  that find the same pair write identical cells, so there are no
+  duplicates and no conflict about a conflict. A computer that was
+  offline may find the same loser against a newer winner (someone edited
+  the field again): it writes another body under the same id and stamp,
+  and the merge's tie-break keeps one body everywhere. A later dismiss or
+  restore gets a fresh stamp, which is always newer than the loser's, so
+  a slow computer that finds the conflict later, even against a winner
+  written after the dismiss, can't reopen it. (Stamping with the winner's
+  stamp would let that newer winner reopen it.)
 - Conflicts made by one computer's action (join, restore, backup import,
   deleted while away) are stamped normally.
 - **No label and no detection time are stored.** They would differ
@@ -1611,7 +1645,7 @@ the same list, and a restore or dismiss on one applies everywhere.
 
 | Action | Effect |
 |---|---|
-| **Restore this version** | Write the loser's value as a new cell: fresh stamp, `anc = [current winner]`. It becomes the newest everywhere and is not a conflict. A `replaced_by_restore` entry keeps the value it replaced, so a restore can be undone. `state = restored`. A loser that was a delete writes a tombstone. |
+| **Restore this version** | Write the loser's value as a new cell: fresh stamp, `anc = [current winner]` (and the tombstone, if the record was deleted; a deleted record comes back with all its cells). It becomes the newest everywhere and is not a conflict. A `replaced_by_restore` entry keeps the value it replaced, so a restore can be undone. That entry starts out `dismissed`: the user just chose, so it isn't an open conflict, and it waits under Resolved for 30 days. `state = restored`. A loser that was a delete writes a tombstone. A loser without a field (`deleted_while_away`) holds the whole record in its shard form (§5.6), and every cell of it is restored. |
 | **Keep current** (Dismiss) | `state = dismissed` |
 | **Keep all** / **Dismiss all** | Dismiss each entry in the group |
 | **Delete anyway** (`delete_vs_edit`) | A tombstone whose `anc` covers the current cells; `state = dismissed` |
@@ -2699,7 +2733,7 @@ Harness `tests/sync_support/`:
 | I12 | Partial file from A. | Nothing applied from it; applied once complete; `waiting` then `up_to_date`. |
 | I13 | Placeholder on B. | The tick doesn't block (under 50 ms per placeholder); applied after "download"; `placeholders` after 3 ticks. |
 | I14 | Provider duplicate in A's directory; a duplicate head with different content. | Exact duplicate ignored; different content → clone handling on A. |
-| I15 | B's clock is +1 day. | Same winners everywhere. `clock_warning` on A. HLCs never move more than 1 hour past wall. |
+| I15 | B's clock is +1 day. | Same winners everywhere. `clock_warning` on A. Reading B's files never moves an HLC more than 1 hour past wall (`observe`); only an edit of a value B stamped follows it (§7.3 `floor`). |
 | I16 | B offline 40 simulated days with edits; A keeps editing. | Newer wins; losers listed. Tombstones aren't cleaned before B returns. |
 | I17 | B away 120 days; A deleted items meanwhile and cleaned the tombstones. | B's copies go to `deleted_while_away` (with the mass-change question when over the threshold); B's own new items are published. |
 | I18 | An "older build" (catalog without path X, struct without field Y, `READER_VERSION` 1 against 2). | X and Y survive the older computer's edits; `min_reader` gating; `RENAMED` dual write. |
@@ -2919,6 +2953,33 @@ pub fn conflict_id(name_key: &[u8; 32], body: &ConflictBody) -> String;
 pub fn conflict_record(id: &str, body: &ConflictBody, state: &str, stamp: Stamp, wall_ms: i64) -> Record;
 pub fn retention_pass(tx: &mut Tx<'_>, now_ms: i64, me: DeviceId, hlc: &mut Hlc) -> anyhow::Result<usize>;
 ```
+
+Secondary helpers WP-S1 added in its own files, for the engine:
+- `types.rs`: the text forms (`Display`/`FromStr` and serde) of
+  `DeviceId`, `Stamp`, `Scope` and `FieldKey`; the shard forms of `Cell`,
+  `Tomb` and `Record` (`Record::to_json`, `Record::from_json`); the JSON
+  of `ConflictBody` and `Side` (§10.1); `DeviceId::random`,
+  `OsKind::{ALL, as_str, from_name}`, `PinReason::{as_str, from_name}`,
+  `Record::{new, cell, max_stamp, newest_cell_stamps}`.
+- `hlc.rs`: `physical(wall_ms)`, `wall_ms_of(hlc)`, `MAX_AHEAD_MS`.
+- `merge.rs`: `cmp_cells`, `cmp_tombs`, `MAX_ANCESTORS`.
+- `split.rs`: `parse_name`, `is_union`, `absent_value` (the value capture
+  writes for a cell name `split` no longer produces), `valid_field_name`,
+  `element_cell`, `entry_cell`, and the names `WHOLE`, `AVAIL`, `ORDER`.
+- `canonical.rs`: `same(a, b)`, equality of canonical forms.
+- `replica.rs`, on `Tx`: `records(ns)`, `namespaces`, `count_records`,
+  `bucket_of`, `delete_record`, `merge(incoming, bucket)` (merge, store,
+  mark dirty as an echo), `write(record, bucket)` (store, mark dirty as
+  an own edit), `mark_published`, `is_published`, `projected_in`,
+  `pins(ns)`, `remove_applied`, `acks`, `clear_acks`, `delete_meta`,
+  `remove_device`, `feed_clear`, `feed_seq`.
+- `conflicts.rs`: `detected` (a merge's conflict as its record, at the
+  loser's stamp, §10.1), `record_detected` (merge those into the replica in the
+  caller's transaction), `record_action` (an entry from this computer's
+  own action, freshly stamped), `resolve` (the §10.4 actions),
+  `restore_record` (Recently deleted → Restore), `body_of`, `state_of`.
+  A new record's bucket comes from a `BucketFn` the engine passes,
+  `|ns, id| keys.bucket(ns, id, 1 << 16)`.
 
 ### 19.3 Folder, crypto and OS (WP-S2)
 
