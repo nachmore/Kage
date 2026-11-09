@@ -9366,10 +9366,10 @@
     "_source_hash": "56759a9610c65640"
   },
   "shared.shell.sandbox.body": {
-    "message": "エージェントは独自のサンドボックス内でコマンドを実行しており、このコマンドはそのサンドボックスによって停止されました。Kage で承認しても、この制限は解除できません。まずコマンド全体を確認し、すべての内容を信頼できる場合のみ、ご自身でターミナルから実行してください。",
-    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app. The notice can't vouch for the command (a command can print a sandbox error itself), so the user is asked to read all of it first; the full command is shown right below this text.",
+    "message": "エージェントはコマンドを独自のサンドボックス内で実行しており、このコマンドはそのサンドボックスによって停止されました。Kage で承認してもこれは変わりませんが、サンドボックスの外でご自身で実行することはできます。まずコマンド全体を読み、すべてを信頼できる場合にのみ実行してください。",
+    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user may run the command themselves (Kage can run it for them, outside the sandbox, after a confirm; or they copy it into a terminal). The notice can't vouch for the command (a command can print a sandbox error itself), so the user is asked to read all of it first; the full command is shown right below this text.",
     "_machine_translated": true,
-    "_source_hash": "f52af77b9d81a196"
+    "_source_hash": "3243588a6cf053ac"
   },
   "shared.shell.sandbox.open_terminal": {
     "message": "コピーしてターミナルを開く",
@@ -11896,5 +11896,419 @@
     "description": "Tray menu item: sync with the other computers now.",
     "_machine_translated": true,
     "_source_hash": "a715fd867f40c578"
+  },
+  "settings.tool_permissions.audit.filter.user_ran": {
+    "message": "自分で実行したコマンド",
+    "description": "Filter option in the tool-permission audit log: entries for commands the user ran themselves, outside the AI agent's sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "2ed7a12f7f1a2ba2"
+  },
+  "settings.tool_permissions.audit.summary.user_ran": {
+    "message": "エージェントのサンドボックス外でコマンドを実行しました",
+    "description": "Audit log entry: the user ran a command themselves from Kage (one the AI agent's sandbox had refused). The command follows below it.",
+    "_machine_translated": true,
+    "_source_hash": "73721e3258cf6663"
+  },
+  "settings.tool_permissions.audit.summary.user_ran_terminal": {
+    "message": "ターミナルでコマンドを実行しました",
+    "description": "Audit log entry: the user had Kage open the command in the macOS Terminal app. The command follows below it.",
+    "_machine_translated": true,
+    "_source_hash": "571d0b31000d0273"
+  },
+  "settings.tool_permissions.audit.meta.exit_code": {
+    "message": "終了コード {code}",
+    "description": "Detail of an audit log entry for a command the user ran: its numeric exit code.",
+    "_machine_translated": true,
+    "_source_hash": "6704e82b5d07011f"
+  },
+  "settings.tool_permissions.audit.meta.stopped": {
+    "message": "停止しました",
+    "description": "Detail of an audit log entry for a command the user ran: they stopped it.",
+    "_machine_translated": true,
+    "_source_hash": "721f3bbcb68a928d"
+  },
+  "settings.tool_permissions.audit.meta.timed_out": {
+    "message": "タイムアウトしました",
+    "description": "Detail of an audit log entry for a command the user ran: Kage ended it at the time limit.",
+    "_machine_translated": true,
+    "_source_hash": "2ac546470eaf5f22"
+  },
+  "settings.tool_permissions.audit.meta.not_started": {
+    "message": "開始できませんでした",
+    "description": "Detail of an audit log entry for a command the user ran: it couldn't be started.",
+    "_machine_translated": true,
+    "_source_hash": "ac5c1b543dbf1c09"
+  },
+  "shared.shell.sandbox.run_here": {
+    "message": "ここで実行",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. Primary button: opens a confirm, and on approval Kage runs the command itself, outside the agent's sandbox, and shows the output.",
+    "_machine_translated": true,
+    "_source_hash": "828e000d41ec6a26"
+  },
+  "shared.shell.sandbox.run_again": {
+    "message": "もう一度実行",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. The same button after the command already ran once from here. Opens the confirm again.",
+    "_machine_translated": true,
+    "_source_hash": "fc12c02ecda880a3"
+  },
+  "shared.shell.sandbox.run_terminal": {
+    "message": "ターミナルで実行",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. macOS only: opens a new window of the Terminal app and runs the command there (after a confirm). 'Terminal' is the macOS app's name.",
+    "_machine_translated": true,
+    "_source_hash": "ee4a4fb290b49b61"
+  },
+  "shared.shell.sandbox.run_terminal_title": {
+    "message": "新しいターミナルウインドウを開き、そこでコマンドを実行します。実行中に入力を求められる場合があります。初回は、Kage にターミナルの制御を許可するかどうか macOS から確認されます。",
+    "description": "Tooltip of the Run in Terminal button (macOS). Kage sends Terminal an Apple Event, which makes macOS show a one-time permission prompt (Privacy & Security → Automation).",
+    "_machine_translated": true,
+    "_source_hash": "ec23f68733397582"
+  },
+  "shared.shell.sandbox.confirm.title": {
+    "message": "このコマンドをエージェントのサンドボックス外で実行しますか？",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Its heading. The full command is shown right below it.",
+    "_machine_translated": true,
+    "_source_hash": "09486d0ac27a97d9"
+  },
+  "shared.shell.sandbox.confirm.title_terminal": {
+    "message": "このコマンドをターミナルで実行しますか？",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Its heading when the command will run in the macOS Terminal app instead of inside Kage.",
+    "_machine_translated": true,
+    "_source_hash": "3f8efd805d09b441"
+  },
+  "shared.shell.sandbox.confirm.cwd_label": {
+    "message": "作業ディレクトリ：",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Label before the folder the command starts in (shown as a path).",
+    "_machine_translated": true,
+    "_source_hash": "6290686d508e9b56"
+  },
+  "shared.shell.sandbox.confirm.shell": {
+    "message": "（{shell} で実行）",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. After the working directory: which shell program runs it. {shell} is a program name such as zsh, bash or PowerShell.",
+    "_machine_translated": true,
+    "_source_hash": "0ae54933e296d5d5"
+  },
+  "shared.shell.sandbox.confirm.warning": {
+    "message": "Kage がエージェントのサンドボックス外で、あなたの全権限を使ってこのコマンドを実行します。あなたのユーザーアカウントがアクセスできるものはすべて読み取り、変更、削除される可能性があります。すべてを信頼できる場合にのみ実行してください。",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. The main warning.",
+    "_machine_translated": true,
+    "_source_hash": "06bc856528367ebd"
+  },
+  "shared.shell.sandbox.confirm.warning_terminal": {
+    "message": "このコマンドはターミナルで、エージェントのサンドボックス外で、あなたの全権限を使って実行されます。あなたのユーザーアカウントがアクセスできるものはすべて読み取り、変更、削除される可能性があります。すべてを信頼できる場合にのみ実行してください。",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. The main warning when it will run in the macOS Terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "55776d814d3abb01"
+  },
+  "shared.shell.sandbox.confirm.tell_agent": {
+    "message": "結果をエージェントに伝える",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Checkbox, on by default: after the run, send the exit code and output to the AI agent as the user's next message so it can continue.",
+    "_machine_translated": true,
+    "_source_hash": "0e877793e75b6540"
+  },
+  "shared.shell.sandbox.confirm.cwd_error": {
+    "message": "実行できません：{error}",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Shown instead of the working directory when that folder can't be used. {error} says why (e.g. the folder doesn't exist).",
+    "_machine_translated": true,
+    "_source_hash": "95f28cb12dd58edb"
+  },
+  "shared.shell.sandbox.confirm.busy": {
+    "message": "このウインドウで別のコマンドが実行中です。終了するまで待つか、先に停止してください。",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Shown when another command the user started from Kage is still running; only one runs at a time per window.",
+    "_machine_translated": true,
+    "_source_hash": "fcb56edfa6a972c1"
+  },
+  "shared.shell.sandbox.confirm.long": {
+    "message": "長いコマンドです（{lines, plural, other {# 行}}）。実行する前に最後までスクロールして確認してください。",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Shown under the command box when the command is too long to fit in it, so the user scrolls to read the rest. {lines} is the number of lines in the command.",
+    "_machine_translated": true,
+    "_source_hash": "dfee1373a2ca8462"
+  },
+  "shared.shell.sandbox.confirm.cancel": {
+    "message": "キャンセル",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Button that closes the confirm without running anything.",
+    "_machine_translated": true,
+    "_source_hash": "e3c2a09e84211a7a"
+  },
+  "shared.shell.sandbox.confirm.run": {
+    "message": "実行",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Button that runs the command, outside the agent's sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "5c8941e9035edd62"
+  },
+  "shared.shell.sandbox.risk.sudo": {
+    "message": "sudo を使用しています。ターミナルでパスワードの入力を求められ、コマンドは管理者として実行されます。",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command using sudo (run as administrator), when it will run in the Terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "0613a03d6139cb00"
+  },
+  "shared.shell.sandbox.risk.sudo_here": {
+    "message": "このコマンドは sudo を使用するためパスワードが必要ですが、ここには入力できるターミナルがありません。代わりにターミナルで実行してください。",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command using sudo when the user chose to run it inside Kage, which can't ask for a password; the confirm offers Run in Terminal instead of Run.",
+    "_machine_translated": true,
+    "_source_hash": "8c241da623642cbb"
+  },
+  "shared.shell.sandbox.risk.sudo_here_copy": {
+    "message": "このコマンドは sudo を使用するためパスワードが必要ですが、ここには入力できるターミナルがありません。代わりにターミナルにコピーして実行してください。",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. Same as the sudo warning, on systems where Kage can't run it in a terminal app; the confirm offers Copy & open Terminal instead of Run.",
+    "_machine_translated": true,
+    "_source_hash": "e4c7880a6f370db1"
+  },
+  "shared.shell.sandbox.risk.rm_rf": {
+    "message": "このコマンドは確認なしでファイルやフォルダを再帰的に削除します（rm -rf）。含まれるすべてのパスを確認してください。",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command that deletes recursively and forcibly. 'rm -rf' is the literal command; don't translate it.",
+    "_machine_translated": true,
+    "_source_hash": "f4d1830ab2f44f5d"
+  },
+  "shared.shell.sandbox.risk.pipe_to_shell": {
+    "message": "このコマンドはスクリプトをダウンロードしてすぐに実行します。入手元が信頼できる場合のみ実行してください。",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command like 'curl … | sh' that downloads code from the internet and executes it immediately.",
+    "_machine_translated": true,
+    "_source_hash": "2226b6fdd3dc4f77"
+  },
+  "shared.shell.sandbox.risk.recursive_root": {
+    "message": "このコマンドは最上位フォルダまたはホームフォルダ以下のすべての権限や所有者を変更します（chmod/chown -R）。システムが壊れたり、ファイルにアクセスできなくなったりするおそれがあります。",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For chmod/chown -R on / , a top-level folder or the home folder. 'chmod/chown -R' is literal; don't translate it.",
+    "_machine_translated": true,
+    "_source_hash": "420a81b028d09bbc"
+  },
+  "shared.shell.sandbox.risk.shell_rc": {
+    "message": "このコマンドはシェルの起動ファイル（~/.zshrc など）を変更します。今後開くすべてのターミナルに影響します。",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command that writes to a shell configuration file. '~/.zshrc' is a file name; don't translate it.",
+    "_machine_translated": true,
+    "_source_hash": "9e60e785985926ea"
+  },
+  "shared.shell.sandbox.terminal.opening": {
+    "message": "ターミナルを開いています…",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. Status while Kage hands the command to the macOS Terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "2597be9954ebdb02"
+  },
+  "shared.shell.sandbox.terminal.sent": {
+    "message": "ターミナルで実行中です。",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. Status once the macOS Terminal app took the command. Kage doesn't see its output.",
+    "_machine_translated": true,
+    "_source_hash": "5ee3063569df9424"
+  },
+  "shared.shell.sandbox.terminal.failed": {
+    "message": "ターミナルで実行できませんでした：{error}",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. Status when handing the command to the Terminal app failed. {error} says why.",
+    "_machine_translated": true,
+    "_source_hash": "6407586d82dc9da7"
+  },
+  "shared.shell.sandbox.run.running": {
+    "message": "サンドボックス外で実行中…",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). While it runs.",
+    "_machine_translated": true,
+    "_source_hash": "3df0b51f8e5e89ac"
+  },
+  "shared.shell.sandbox.run.stopping": {
+    "message": "停止しています…",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). After the user pressed Stop, until it has ended.",
+    "_machine_translated": true,
+    "_source_hash": "316f6a11f8f9c329"
+  },
+  "shared.shell.sandbox.run.stop": {
+    "message": "停止",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). Button that ends the running command.",
+    "_machine_translated": true,
+    "_source_hash": "4393caec2d64e2ac"
+  },
+  "shared.shell.sandbox.run.succeeded": {
+    "message": "完了（終了コード 0）",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It finished successfully. 'exit code 0' is the program's result code.",
+    "_machine_translated": true,
+    "_source_hash": "b204165ff827cc7e"
+  },
+  "shared.shell.sandbox.run.exit_code": {
+    "message": "失敗（終了コード {code}）",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It finished with an error. {code} is the program's numeric exit code.",
+    "_machine_translated": true,
+    "_source_hash": "283b8ff51ad67488"
+  },
+  "shared.shell.sandbox.run.signal": {
+    "message": "シグナル {signal} により終了",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). The program was killed by an operating-system signal. {signal} is its number.",
+    "_machine_translated": true,
+    "_source_hash": "d12ec4fce8bf561c"
+  },
+  "shared.shell.sandbox.run.unknown": {
+    "message": "完了（終了ステータス不明）",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It finished but its result code isn't known.",
+    "_machine_translated": true,
+    "_source_hash": "58ed95ced5e75a79"
+  },
+  "shared.shell.sandbox.run.cancelled": {
+    "message": "停止しました",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). The user pressed Stop and it was ended.",
+    "_machine_translated": true,
+    "_source_hash": "8fe1b62fbd74ef77"
+  },
+  "shared.shell.sandbox.run.timed_out": {
+    "message": "{minutes} 分経過したため停止しました（制限時間）",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It ran too long and Kage ended it. {minutes} is the limit in minutes.",
+    "_machine_translated": true,
+    "_source_hash": "e9480581f425dd94"
+  },
+  "shared.shell.sandbox.run.failed": {
+    "message": "実行できませんでした：{error}",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It didn't start. {error} says why.",
+    "_machine_translated": true,
+    "_source_hash": "d72a96ba3e0bde7f"
+  },
+  "shared.shell.sandbox.run.earlier_output": {
+    "message": "… これより前の出力は表示されていません …",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). Marker at the top of the output view when only its end is shown.",
+    "_machine_translated": true,
+    "_source_hash": "aef234f6e989e894"
+  },
+  "shared.shell.sandbox.run.no_output_yet": {
+    "message": "まだ出力はありません",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). Placeholder in the output view while the command runs and hasn't printed anything.",
+    "_machine_translated": true,
+    "_source_hash": "8f58ec703a66ee31"
+  },
+  "shared.shell.sandbox.run.no_output": {
+    "message": "出力はありませんでした",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). Placeholder in the output view when the finished command printed no output.",
+    "_machine_translated": true,
+    "_source_hash": "77f17b2b19766182"
+  },
+  "shared.shell.sandbox.agent.sending": {
+    "message": "エージェントに伝えています…",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Shown while that message is being sent.",
+    "_machine_translated": true,
+    "_source_hash": "8e1de5ff021adaca"
+  },
+  "shared.shell.sandbox.agent.queued": {
+    "message": "エージェントは応答中です。応答が終わったら、Kage が結果を伝えます。",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Shown while the agent is still answering, so the message waits.",
+    "_machine_translated": true,
+    "_source_hash": "396d951cb1b41b99"
+  },
+  "shared.shell.sandbox.agent.dont_tell": {
+    "message": "伝えない",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Button that drops the waiting message, so the agent isn't told.",
+    "_machine_translated": true,
+    "_source_hash": "94c473d670ac9d9a"
+  },
+  "shared.shell.sandbox.agent.sent": {
+    "message": "エージェントに結果を伝えました。",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. The message was sent.",
+    "_machine_translated": true,
+    "_source_hash": "7e3030c566339d5c"
+  },
+  "shared.shell.sandbox.agent.failed": {
+    "message": "エージェントに伝えられませんでした: {error}",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Sending the message failed. {error} says why.",
+    "_machine_translated": true,
+    "_source_hash": "960687391733f5ed"
+  },
+  "shared.shell.sandbox.agent.not_told": {
+    "message": "エージェントには伝えていません。",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. The user chose not to send it (or dropped it).",
+    "_machine_translated": true,
+    "_source_hash": "179d1afee99ce287"
+  },
+  "shared.shell.sandbox.agent.stopped_not_told": {
+    "message": "停止したため、エージェントには伝えていません。",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. After the user pressed Stop, Kage doesn't send the result on its own.",
+    "_machine_translated": true,
+    "_source_hash": "bc14ed66de0f3b8c"
+  },
+  "shared.shell.sandbox.agent.tell": {
+    "message": "エージェントに伝える",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Button that sends the result to the agent now.",
+    "_machine_translated": true,
+    "_source_hash": "2e9e6db43e86f0f8"
+  },
+  "errors.user_shell.not_allowed": {
+    "message": "コマンドは Kage のチャットウインドウとランチャーウインドウからのみ実行できます。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. The request came from a window that isn't allowed to run commands.",
+    "_machine_translated": true,
+    "_source_hash": "eb4e9018f8c9a4d6"
+  },
+  "errors.user_shell.empty_command": {
+    "message": "実行するコマンドがありません。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. ",
+    "_machine_translated": true,
+    "_source_hash": "745b7c091315bf0b"
+  },
+  "errors.user_shell.command_too_long": {
+    "message": "コマンドが長すぎるため、ここでは実行できません（{max_kib} KB 超）。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {max_kib} is the size limit in kilobytes.",
+    "_machine_translated": true,
+    "_source_hash": "fc861312fc0374ca"
+  },
+  "errors.user_shell.invalid_command": {
+    "message": "コマンドに NUL 文字が含まれているため、実行できません。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. NUL is the zero character, which no command line can contain.",
+    "_machine_translated": true,
+    "_source_hash": "e173ed00f9417bab"
+  },
+  "errors.user_shell.invalid_run_id": {
+    "message": "その実行を識別できません。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Internal: the window sent a malformed id for the run.",
+    "_machine_translated": true,
+    "_source_hash": "06c87e28e0d73dcf"
+  },
+  "errors.user_shell.no_home": {
+    "message": "ホームフォルダが見つかりませんでした。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. ",
+    "_machine_translated": true,
+    "_source_hash": "063d600df298995c"
+  },
+  "errors.user_shell.cwd_not_absolute": {
+    "message": "作業ディレクトリがフルパスではありません: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the folder the agent's command ran in.",
+    "_machine_translated": true,
+    "_source_hash": "5b3351d46007c775"
+  },
+  "errors.user_shell.cwd_missing": {
+    "message": "作業ディレクトリが存在しません: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the folder the agent's command ran in.",
+    "_machine_translated": true,
+    "_source_hash": "3f755f1ac826cc60"
+  },
+  "errors.user_shell.cwd_not_directory": {
+    "message": "作業ディレクトリがフォルダではありません: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the path the agent's command ran in.",
+    "_machine_translated": true,
+    "_source_hash": "525c29491e843d50"
+  },
+  "errors.user_shell.busy": {
+    "message": "このウインドウでは別のコマンドがすでに実行中です。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Only one runs at a time per window.",
+    "_machine_translated": true,
+    "_source_hash": "0728a7e1c0a5e7a5"
+  },
+  "errors.user_shell.spawn_failed": {
+    "message": "コマンドを開始できませんでした: {error}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {error} is the operating system's error message.",
+    "_machine_translated": true,
+    "_source_hash": "031383c9a5de02e7"
+  },
+  "errors.user_shell.terminal_unsupported": {
+    "message": "このシステムではターミナルでのコマンド実行に対応していません。代わりにコピーしてください。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Run in Terminal is macOS only.",
+    "_machine_translated": true,
+    "_source_hash": "aa82170a30e416ab"
+  },
+  "errors.user_shell.terminal_control_chars": {
+    "message": "このコマンドにはタブなどの制御文字が含まれており、ターミナルがキー入力として解釈してしまいます。代わりにコピーしてください。",
+    "description": "Error from Run in Terminal, for a command the user chose to run themselves outside the AI agent's sandbox. Terminal types the command into the shell as if it were typed on the keyboard, so a tab would trigger completion; such a command is only copied.",
+    "_machine_translated": true,
+    "_source_hash": "b904ea8a42598d36"
+  },
+  "errors.user_shell.terminal_not_authorized": {
+    "message": "macOS により、Kage によるターミナルの操作が許可されませんでした。「システム設定」→「プライバシーとセキュリティ」→「オートメーション」で許可するか、代わりにコマンドをコピーしてください。",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. macOS refused Kage's request to control the Terminal app. Keep the System Settings path as macOS names it.",
+    "_machine_translated": true,
+    "_source_hash": "04237e8d348d88b0"
+  },
+  "errors.user_shell.terminal_failed": {
+    "message": "ターミナルで実行されませんでした: {error}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {error} is the error macOS reported.",
+    "_machine_translated": true,
+    "_source_hash": "811883ae543c2cf7"
   }
 }

@@ -9366,10 +9366,10 @@
     "_source_hash": "56759a9610c65640"
   },
   "shared.shell.sandbox.body": {
-    "message": "Tác nhân chạy lệnh bên trong sandbox riêng của nó, và sandbox đó đã chặn lệnh này. Việc phê duyệt trong Kage không thể thay đổi điều đó. Hãy đọc toàn bộ lệnh trước, và chỉ tự chạy nó trong terminal nếu bạn tin tưởng toàn bộ nội dung.",
-    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user has to run the command in their own terminal app. The notice can't vouch for the command (a command can print a sandbox error itself), so the user is asked to read all of it first; the full command is shown right below this text.",
+    "message": "Tác tử chạy lệnh bên trong hộp cát riêng của nó, và hộp cát đó đã chặn lệnh này. Phê duyệt trong Kage không thể thay đổi điều đó, nhưng bạn có thể tự chạy lệnh bên ngoài hộp cát. Hãy đọc toàn bộ lệnh trước và chỉ chạy nếu bạn tin tưởng tất cả nội dung của nó.",
+    "description": "Explanation in the notice under a shell command that the AI agent's own security sandbox blocked. Kage's tool approvals only decide whether Kage asks before the agent runs something; they can't lift the agent's sandbox, so the user may run the command themselves (Kage can run it for them, outside the sandbox, after a confirm; or they copy it into a terminal). The notice can't vouch for the command (a command can print a sandbox error itself), so the user is asked to read all of it first; the full command is shown right below this text.",
     "_machine_translated": true,
-    "_source_hash": "f52af77b9d81a196"
+    "_source_hash": "3243588a6cf053ac"
   },
   "shared.shell.sandbox.open_terminal": {
     "message": "Sao chép và mở Terminal",
@@ -11896,5 +11896,419 @@
     "description": "Tray menu item: sync with the other computers now.",
     "_machine_translated": true,
     "_source_hash": "a715fd867f40c578"
+  },
+  "settings.tool_permissions.audit.filter.user_ran": {
+    "message": "Lệnh bạn đã chạy",
+    "description": "Filter option in the tool-permission audit log: entries for commands the user ran themselves, outside the AI agent's sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "2ed7a12f7f1a2ba2"
+  },
+  "settings.tool_permissions.audit.summary.user_ran": {
+    "message": "Bạn đã chạy một lệnh bên ngoài hộp cát của tác tử",
+    "description": "Audit log entry: the user ran a command themselves from Kage (one the AI agent's sandbox had refused). The command follows below it.",
+    "_machine_translated": true,
+    "_source_hash": "73721e3258cf6663"
+  },
+  "settings.tool_permissions.audit.summary.user_ran_terminal": {
+    "message": "Bạn đã chạy một lệnh trong Terminal",
+    "description": "Audit log entry: the user had Kage open the command in the macOS Terminal app. The command follows below it.",
+    "_machine_translated": true,
+    "_source_hash": "571d0b31000d0273"
+  },
+  "settings.tool_permissions.audit.meta.exit_code": {
+    "message": "mã thoát {code}",
+    "description": "Detail of an audit log entry for a command the user ran: its numeric exit code.",
+    "_machine_translated": true,
+    "_source_hash": "6704e82b5d07011f"
+  },
+  "settings.tool_permissions.audit.meta.stopped": {
+    "message": "đã dừng",
+    "description": "Detail of an audit log entry for a command the user ran: they stopped it.",
+    "_machine_translated": true,
+    "_source_hash": "721f3bbcb68a928d"
+  },
+  "settings.tool_permissions.audit.meta.timed_out": {
+    "message": "hết thời gian chờ",
+    "description": "Detail of an audit log entry for a command the user ran: Kage ended it at the time limit.",
+    "_machine_translated": true,
+    "_source_hash": "2ac546470eaf5f22"
+  },
+  "settings.tool_permissions.audit.meta.not_started": {
+    "message": "không khởi chạy được",
+    "description": "Detail of an audit log entry for a command the user ran: it couldn't be started.",
+    "_machine_translated": true,
+    "_source_hash": "ac5c1b543dbf1c09"
+  },
+  "shared.shell.sandbox.run_here": {
+    "message": "Chạy tại đây",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. Primary button: opens a confirm, and on approval Kage runs the command itself, outside the agent's sandbox, and shows the output.",
+    "_machine_translated": true,
+    "_source_hash": "828e000d41ec6a26"
+  },
+  "shared.shell.sandbox.run_again": {
+    "message": "Chạy lại",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. The same button after the command already ran once from here. Opens the confirm again.",
+    "_machine_translated": true,
+    "_source_hash": "fc12c02ecda880a3"
+  },
+  "shared.shell.sandbox.run_terminal": {
+    "message": "Chạy trong Terminal",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. macOS only: opens a new window of the Terminal app and runs the command there (after a confirm). 'Terminal' is the macOS app's name.",
+    "_machine_translated": true,
+    "_source_hash": "ee4a4fb290b49b61"
+  },
+  "shared.shell.sandbox.run_terminal_title": {
+    "message": "Mở một cửa sổ Terminal mới và chạy lệnh ở đó, nơi lệnh có thể yêu cầu bạn nhập dữ liệu. Lần đầu tiên, macOS sẽ hỏi liệu Kage có được phép điều khiển Terminal hay không.",
+    "description": "Tooltip of the Run in Terminal button (macOS). Kage sends Terminal an Apple Event, which makes macOS show a one-time permission prompt (Privacy & Security → Automation).",
+    "_machine_translated": true,
+    "_source_hash": "ec23f68733397582"
+  },
+  "shared.shell.sandbox.confirm.title": {
+    "message": "Chạy lệnh này bên ngoài hộp cát của tác tử?",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Its heading. The full command is shown right below it.",
+    "_machine_translated": true,
+    "_source_hash": "09486d0ac27a97d9"
+  },
+  "shared.shell.sandbox.confirm.title_terminal": {
+    "message": "Chạy lệnh này trong Terminal?",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Its heading when the command will run in the macOS Terminal app instead of inside Kage.",
+    "_machine_translated": true,
+    "_source_hash": "3f8efd805d09b441"
+  },
+  "shared.shell.sandbox.confirm.cwd_label": {
+    "message": "Thư mục làm việc:",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Label before the folder the command starts in (shown as a path).",
+    "_machine_translated": true,
+    "_source_hash": "6290686d508e9b56"
+  },
+  "shared.shell.sandbox.confirm.shell": {
+    "message": "(chạy trong {shell})",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. After the working directory: which shell program runs it. {shell} is a program name such as zsh, bash or PowerShell.",
+    "_machine_translated": true,
+    "_source_hash": "0ae54933e296d5d5"
+  },
+  "shared.shell.sandbox.confirm.warning": {
+    "message": "Kage sẽ chạy lệnh thay bạn, bên ngoài hộp cát của tác tử, với toàn quyền của bạn: lệnh có thể đọc, thay đổi hoặc xóa bất cứ thứ gì mà tài khoản người dùng của bạn có quyền. Chỉ chạy nếu bạn tin tưởng tất cả nội dung của nó.",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. The main warning.",
+    "_machine_translated": true,
+    "_source_hash": "06bc856528367ebd"
+  },
+  "shared.shell.sandbox.confirm.warning_terminal": {
+    "message": "Lệnh sẽ chạy trong Terminal, bên ngoài hộp cát của tác tử, với toàn quyền của bạn: lệnh có thể đọc, thay đổi hoặc xóa bất cứ thứ gì mà tài khoản người dùng của bạn có quyền. Chỉ chạy nếu bạn tin tưởng tất cả nội dung của nó.",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. The main warning when it will run in the macOS Terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "55776d814d3abb01"
+  },
+  "shared.shell.sandbox.confirm.tell_agent": {
+    "message": "Gửi kết quả cho tác tử",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Checkbox, on by default: after the run, send the exit code and output to the AI agent as the user's next message so it can continue.",
+    "_machine_translated": true,
+    "_source_hash": "0e877793e75b6540"
+  },
+  "shared.shell.sandbox.confirm.cwd_error": {
+    "message": "Không thể chạy: {error}",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Shown instead of the working directory when that folder can't be used. {error} says why (e.g. the folder doesn't exist).",
+    "_machine_translated": true,
+    "_source_hash": "95f28cb12dd58edb"
+  },
+  "shared.shell.sandbox.confirm.busy": {
+    "message": "Một lệnh khác đang chạy trong cửa sổ này. Hãy đợi lệnh đó hoàn tất hoặc dừng nó trước.",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Shown when another command the user started from Kage is still running; only one runs at a time per window.",
+    "_machine_translated": true,
+    "_source_hash": "fcb56edfa6a972c1"
+  },
+  "shared.shell.sandbox.confirm.long": {
+    "message": "Đây là một lệnh dài ({lines, plural, other {# dòng}}). Hãy cuộn xem toàn bộ trước khi chạy.",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Shown under the command box when the command is too long to fit in it, so the user scrolls to read the rest. {lines} is the number of lines in the command.",
+    "_machine_translated": true,
+    "_source_hash": "dfee1373a2ca8462"
+  },
+  "shared.shell.sandbox.confirm.cancel": {
+    "message": "Hủy",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Button that closes the confirm without running anything.",
+    "_machine_translated": true,
+    "_source_hash": "e3c2a09e84211a7a"
+  },
+  "shared.shell.sandbox.confirm.run": {
+    "message": "Chạy",
+    "description": "In the confirm that opens inside that notice before Kage runs the blocked command for the user, outside the agent's sandbox. Button that runs the command, outside the agent's sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "5c8941e9035edd62"
+  },
+  "shared.shell.sandbox.risk.sudo": {
+    "message": "Lệnh này dùng sudo: Terminal sẽ yêu cầu mật khẩu của bạn và lệnh sẽ chạy với quyền quản trị viên.",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command using sudo (run as administrator), when it will run in the Terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "0613a03d6139cb00"
+  },
+  "shared.shell.sandbox.risk.sudo_here": {
+    "message": "Lệnh này dùng sudo, cần mật khẩu của bạn, nhưng ở đây không có terminal để nhập. Hãy chạy lệnh trong Terminal.",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command using sudo when the user chose to run it inside Kage, which can't ask for a password; the confirm offers Run in Terminal instead of Run.",
+    "_machine_translated": true,
+    "_source_hash": "8c241da623642cbb"
+  },
+  "shared.shell.sandbox.risk.sudo_here_copy": {
+    "message": "Lệnh này dùng sudo, cần mật khẩu của bạn, nhưng ở đây không có terminal để nhập. Hãy sao chép lệnh vào một terminal.",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. Same as the sudo warning, on systems where Kage can't run it in a terminal app; the confirm offers Copy & open Terminal instead of Run.",
+    "_machine_translated": true,
+    "_source_hash": "e4c7880a6f370db1"
+  },
+  "shared.shell.sandbox.risk.rm_rf": {
+    "message": "Lệnh này xóa tệp và thư mục theo cách đệ quy mà không hỏi lại (rm -rf). Hãy kiểm tra kỹ mọi đường dẫn trong đó.",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command that deletes recursively and forcibly. 'rm -rf' is the literal command; don't translate it.",
+    "_machine_translated": true,
+    "_source_hash": "f4d1830ab2f44f5d"
+  },
+  "shared.shell.sandbox.risk.pipe_to_shell": {
+    "message": "Lệnh này tải một tập lệnh về và chạy ngay lập tức. Chỉ chạy nếu bạn tin tưởng nguồn gốc của nó.",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command like 'curl … | sh' that downloads code from the internet and executes it immediately.",
+    "_machine_translated": true,
+    "_source_hash": "2226b6fdd3dc4f77"
+  },
+  "shared.shell.sandbox.risk.recursive_root": {
+    "message": "Lệnh này thay đổi quyền hoặc quyền sở hữu của mọi thứ trong một thư mục cấp cao nhất hoặc thư mục chính (chmod/chown -R). Điều này có thể làm hỏng hệ thống hoặc khiến bạn không truy cập được tệp của mình.",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For chmod/chown -R on / , a top-level folder or the home folder. 'chmod/chown -R' is literal; don't translate it.",
+    "_machine_translated": true,
+    "_source_hash": "420a81b028d09bbc"
+  },
+  "shared.shell.sandbox.risk.shell_rc": {
+    "message": "Lệnh này thay đổi tệp khởi động shell (như ~/.zshrc), ảnh hưởng đến mọi terminal bạn mở từ giờ trở đi.",
+    "description": "Caution line in the run confirm, shown because the command matches a risky pattern. 'It' is the command. For a command that writes to a shell configuration file. '~/.zshrc' is a file name; don't translate it.",
+    "_machine_translated": true,
+    "_source_hash": "9e60e785985926ea"
+  },
+  "shared.shell.sandbox.terminal.opening": {
+    "message": "Đang mở Terminal…",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. Status while Kage hands the command to the macOS Terminal app.",
+    "_machine_translated": true,
+    "_source_hash": "2597be9954ebdb02"
+  },
+  "shared.shell.sandbox.terminal.sent": {
+    "message": "Lệnh đang chạy trong Terminal.",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. Status once the macOS Terminal app took the command. Kage doesn't see its output.",
+    "_machine_translated": true,
+    "_source_hash": "5ee3063569df9424"
+  },
+  "shared.shell.sandbox.terminal.failed": {
+    "message": "Không thể chạy lệnh trong Terminal: {error}",
+    "description": "Part of the notice under a shell command the AI agent's own security sandbox refused. Status when handing the command to the Terminal app failed. {error} says why.",
+    "_machine_translated": true,
+    "_source_hash": "6407586d82dc9da7"
+  },
+  "shared.shell.sandbox.run.running": {
+    "message": "Đang chạy bên ngoài sandbox…",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). While it runs.",
+    "_machine_translated": true,
+    "_source_hash": "3df0b51f8e5e89ac"
+  },
+  "shared.shell.sandbox.run.stopping": {
+    "message": "Đang dừng…",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). After the user pressed Stop, until it has ended.",
+    "_machine_translated": true,
+    "_source_hash": "316f6a11f8f9c329"
+  },
+  "shared.shell.sandbox.run.stop": {
+    "message": "Dừng",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). Button that ends the running command.",
+    "_machine_translated": true,
+    "_source_hash": "4393caec2d64e2ac"
+  },
+  "shared.shell.sandbox.run.succeeded": {
+    "message": "Đã hoàn tất (mã thoát 0)",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It finished successfully. 'exit code 0' is the program's result code.",
+    "_machine_translated": true,
+    "_source_hash": "b204165ff827cc7e"
+  },
+  "shared.shell.sandbox.run.exit_code": {
+    "message": "Thất bại (mã thoát {code})",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It finished with an error. {code} is the program's numeric exit code.",
+    "_machine_translated": true,
+    "_source_hash": "283b8ff51ad67488"
+  },
+  "shared.shell.sandbox.run.signal": {
+    "message": "Bị kết thúc bởi tín hiệu {signal}",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). The program was killed by an operating-system signal. {signal} is its number.",
+    "_machine_translated": true,
+    "_source_hash": "d12ec4fce8bf561c"
+  },
+  "shared.shell.sandbox.run.unknown": {
+    "message": "Đã hoàn tất (không rõ trạng thái thoát)",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It finished but its result code isn't known.",
+    "_machine_translated": true,
+    "_source_hash": "58ed95ced5e75a79"
+  },
+  "shared.shell.sandbox.run.cancelled": {
+    "message": "Đã dừng",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). The user pressed Stop and it was ended.",
+    "_machine_translated": true,
+    "_source_hash": "8fe1b62fbd74ef77"
+  },
+  "shared.shell.sandbox.run.timed_out": {
+    "message": "Đã dừng sau {minutes} phút (giới hạn thời gian)",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It ran too long and Kage ended it. {minutes} is the limit in minutes.",
+    "_machine_translated": true,
+    "_source_hash": "e9480581f425dd94"
+  },
+  "shared.shell.sandbox.run.failed": {
+    "message": "Không thể chạy lệnh: {error}",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). It didn't start. {error} says why.",
+    "_machine_translated": true,
+    "_source_hash": "d72a96ba3e0bde7f"
+  },
+  "shared.shell.sandbox.run.earlier_output": {
+    "message": "… kết quả trước đó không được hiển thị …",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). Marker at the top of the output view when only its end is shown.",
+    "_machine_translated": true,
+    "_source_hash": "aef234f6e989e894"
+  },
+  "shared.shell.sandbox.run.no_output_yet": {
+    "message": "Chưa có kết quả",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). Placeholder in the output view while the command runs and hasn't printed anything.",
+    "_machine_translated": true,
+    "_source_hash": "8f58ec703a66ee31"
+  },
+  "shared.shell.sandbox.run.no_output": {
+    "message": "Lệnh không in ra gì",
+    "description": "Status of a command the user chose to run themselves from that notice (Kage runs it outside the agent's sandbox and shows its output). Placeholder in the output view when the finished command printed no output.",
+    "_machine_translated": true,
+    "_source_hash": "77f17b2b19766182"
+  },
+  "shared.shell.sandbox.agent.sending": {
+    "message": "Đang báo cho agent…",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Shown while that message is being sent.",
+    "_machine_translated": true,
+    "_source_hash": "8e1de5ff021adaca"
+  },
+  "shared.shell.sandbox.agent.queued": {
+    "message": "Agent đang bận. Kage sẽ báo kết quả khi agent trả lời xong.",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Shown while the agent is still answering, so the message waits.",
+    "_machine_translated": true,
+    "_source_hash": "396d951cb1b41b99"
+  },
+  "shared.shell.sandbox.agent.dont_tell": {
+    "message": "Không báo cho agent",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Button that drops the waiting message, so the agent isn't told.",
+    "_machine_translated": true,
+    "_source_hash": "94c473d670ac9d9a"
+  },
+  "shared.shell.sandbox.agent.sent": {
+    "message": "Đã báo kết quả cho tác tử.",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. The message was sent.",
+    "_machine_translated": true,
+    "_source_hash": "7e3030c566339d5c"
+  },
+  "shared.shell.sandbox.agent.failed": {
+    "message": "Không thể báo cho tác tử: {error}",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Sending the message failed. {error} says why.",
+    "_machine_translated": true,
+    "_source_hash": "960687391733f5ed"
+  },
+  "shared.shell.sandbox.agent.not_told": {
+    "message": "Tác tử chưa được báo.",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. The user chose not to send it (or dropped it).",
+    "_machine_translated": true,
+    "_source_hash": "179d1afee99ce287"
+  },
+  "shared.shell.sandbox.agent.stopped_not_told": {
+    "message": "Bạn đã dừng nên tác tử chưa được báo.",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. After the user pressed Stop, Kage doesn't send the result on its own.",
+    "_machine_translated": true,
+    "_source_hash": "bc14ed66de0f3b8c"
+  },
+  "shared.shell.sandbox.agent.tell": {
+    "message": "Báo cho tác tử",
+    "description": "After the user ran a blocked command themselves, Kage can send the result to the AI agent as the user's next message. Button that sends the result to the agent now.",
+    "_machine_translated": true,
+    "_source_hash": "2e9e6db43e86f0f8"
+  },
+  "errors.user_shell.not_allowed": {
+    "message": "Chỉ có thể chạy lệnh từ cửa sổ trò chuyện và cửa sổ trình khởi chạy của Kage.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. The request came from a window that isn't allowed to run commands.",
+    "_machine_translated": true,
+    "_source_hash": "eb4e9018f8c9a4d6"
+  },
+  "errors.user_shell.empty_command": {
+    "message": "Không có lệnh nào để chạy.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. ",
+    "_machine_translated": true,
+    "_source_hash": "745b7c091315bf0b"
+  },
+  "errors.user_shell.command_too_long": {
+    "message": "Lệnh quá dài để chạy ở đây (trên {max_kib} KB).",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {max_kib} is the size limit in kilobytes.",
+    "_machine_translated": true,
+    "_source_hash": "fc861312fc0374ca"
+  },
+  "errors.user_shell.invalid_command": {
+    "message": "Lệnh chứa ký tự NUL nên không thể chạy.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. NUL is the zero character, which no command line can contain.",
+    "_machine_translated": true,
+    "_source_hash": "e173ed00f9417bab"
+  },
+  "errors.user_shell.invalid_run_id": {
+    "message": "Không thể xác định lần chạy này.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Internal: the window sent a malformed id for the run.",
+    "_machine_translated": true,
+    "_source_hash": "06c87e28e0d73dcf"
+  },
+  "errors.user_shell.no_home": {
+    "message": "Không tìm thấy thư mục chính của bạn.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. ",
+    "_machine_translated": true,
+    "_source_hash": "063d600df298995c"
+  },
+  "errors.user_shell.cwd_not_absolute": {
+    "message": "Thư mục làm việc không phải là đường dẫn đầy đủ: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the folder the agent's command ran in.",
+    "_machine_translated": true,
+    "_source_hash": "5b3351d46007c775"
+  },
+  "errors.user_shell.cwd_missing": {
+    "message": "Thư mục làm việc không tồn tại: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the folder the agent's command ran in.",
+    "_machine_translated": true,
+    "_source_hash": "3f755f1ac826cc60"
+  },
+  "errors.user_shell.cwd_not_directory": {
+    "message": "Thư mục làm việc không phải là thư mục: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the path the agent's command ran in.",
+    "_machine_translated": true,
+    "_source_hash": "525c29491e843d50"
+  },
+  "errors.user_shell.busy": {
+    "message": "Một lệnh khác đang chạy trong cửa sổ này.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Only one runs at a time per window.",
+    "_machine_translated": true,
+    "_source_hash": "0728a7e1c0a5e7a5"
+  },
+  "errors.user_shell.spawn_failed": {
+    "message": "Không thể khởi động lệnh: {error}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {error} is the operating system's error message.",
+    "_machine_translated": true,
+    "_source_hash": "031383c9a5de02e7"
+  },
+  "errors.user_shell.terminal_unsupported": {
+    "message": "Hệ thống này không hỗ trợ chạy lệnh trong Terminal. Hãy sao chép lệnh.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Run in Terminal is macOS only.",
+    "_machine_translated": true,
+    "_source_hash": "aa82170a30e416ab"
+  },
+  "errors.user_shell.terminal_control_chars": {
+    "message": "Lệnh này chứa ký tự tab hoặc ký tự điều khiển khác mà Terminal sẽ hiểu là một lần nhấn phím. Hãy sao chép lệnh.",
+    "description": "Error from Run in Terminal, for a command the user chose to run themselves outside the AI agent's sandbox. Terminal types the command into the shell as if it were typed on the keyboard, so a tab would trigger completion; such a command is only copied.",
+    "_machine_translated": true,
+    "_source_hash": "b904ea8a42598d36"
+  },
+  "errors.user_shell.terminal_not_authorized": {
+    "message": "macOS không cho phép Kage điều khiển Terminal. Hãy cho phép trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Tự động hóa, hoặc sao chép lệnh.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. macOS refused Kage's request to control the Terminal app. Keep the System Settings path as macOS names it.",
+    "_machine_translated": true,
+    "_source_hash": "04237e8d348d88b0"
+  },
+  "errors.user_shell.terminal_failed": {
+    "message": "Terminal không chạy được lệnh: {error}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {error} is the error macOS reported.",
+    "_machine_translated": true,
+    "_source_hash": "811883ae543c2cf7"
   }
 }
