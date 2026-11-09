@@ -1578,16 +1578,28 @@ the same list, and a restore or dismiss on one applies everywhere.
       "kind": "concurrent_edit",
       "loser":  { "stamp": "000193080b0e0001a9x3h6t1qq8m0ve2", "wall": 1762640000000,
                   "deleted": false, "value": "Summarize: {text}" },
-      "winner": { "stamp": "0001930b6f1c0004k7m2p9xqa3rt5vwe", "wall": 1762686000000 } }
+      "winner": { "stamp": "0001930b6f1c0004k7m2p9xqa3rt5vwe", "wall": 1762686000000,
+                  "deleted": false } }
     ```
+
+    `field` is `null` for a record-level entry (`delete_vs_edit`,
+    `deleted_while_away`). A side's `value` is left out when it has none
+    (a delete, or a winner, whose value the record holds); `winner` is
+    `null` for entries made by an action.
 
   - `state@all`: `"open"`, `"dismissed"` or `"restored"`.
 - **Deterministic stamps.** A conflict found by merging is written with
-  the *winner's* stamp and wall time. Every computer that finds the same
-  conflict writes identical cells, so there are no duplicates and no
-  conflict about a conflict. A later dismiss or restore gets a fresh
-  stamp, which is always newer (the user saw the conflict), so a slow
-  computer that finds it later can't reopen it.
+  the *loser's* stamp and wall time. The id names the loser, so that is
+  the one thing every computer that finds the entry agrees on. Computers
+  that find the same pair write identical cells, so there are no
+  duplicates and no conflict about a conflict. A computer that was
+  offline may find the same loser against a newer winner (someone edited
+  the field again): it writes another body under the same id and stamp,
+  and the merge's tie-break keeps one body everywhere. A later dismiss or
+  restore gets a fresh stamp, which is always newer than the loser's, so
+  a slow computer that finds the conflict later, even against a winner
+  written after the dismiss, can't reopen it. (Stamping with the winner's
+  stamp would let that newer winner reopen it.)
 - Conflicts made by one computer's action (join, restore, backup import,
   deleted while away) are stamped normally.
 - **No label and no detection time are stored.** They would differ
@@ -1633,7 +1645,7 @@ the same list, and a restore or dismiss on one applies everywhere.
 
 | Action | Effect |
 |---|---|
-| **Restore this version** | Write the loser's value as a new cell: fresh stamp, `anc = [current winner]`. It becomes the newest everywhere and is not a conflict. A `replaced_by_restore` entry keeps the value it replaced, so a restore can be undone. `state = restored`. A loser that was a delete writes a tombstone. |
+| **Restore this version** | Write the loser's value as a new cell: fresh stamp, `anc = [current winner]` (and the tombstone, if the record was deleted; a deleted record comes back with all its cells). It becomes the newest everywhere and is not a conflict. A `replaced_by_restore` entry keeps the value it replaced, so a restore can be undone. That entry starts out `dismissed`: the user just chose, so it isn't an open conflict, and it waits under Resolved for 30 days. `state = restored`. A loser that was a delete writes a tombstone. A loser without a field (`deleted_while_away`) holds the whole record in its shard form (§5.6), and every cell of it is restored. |
 | **Keep current** (Dismiss) | `state = dismissed` |
 | **Keep all** / **Dismiss all** | Dismiss each entry in the group |
 | **Delete anyway** (`delete_vs_edit`) | A tombstone whose `anc` covers the current cells; `state = dismissed` |
@@ -2941,6 +2953,33 @@ pub fn conflict_id(name_key: &[u8; 32], body: &ConflictBody) -> String;
 pub fn conflict_record(id: &str, body: &ConflictBody, state: &str, stamp: Stamp, wall_ms: i64) -> Record;
 pub fn retention_pass(tx: &mut Tx<'_>, now_ms: i64, me: DeviceId, hlc: &mut Hlc) -> anyhow::Result<usize>;
 ```
+
+Secondary helpers WP-S1 added in its own files, for the engine:
+- `types.rs`: the text forms (`Display`/`FromStr` and serde) of
+  `DeviceId`, `Stamp`, `Scope` and `FieldKey`; the shard forms of `Cell`,
+  `Tomb` and `Record` (`Record::to_json`, `Record::from_json`); the JSON
+  of `ConflictBody` and `Side` (§10.1); `DeviceId::random`,
+  `OsKind::{ALL, as_str, from_name}`, `PinReason::{as_str, from_name}`,
+  `Record::{new, cell, max_stamp, newest_cell_stamps}`.
+- `hlc.rs`: `physical(wall_ms)`, `wall_ms_of(hlc)`, `MAX_AHEAD_MS`.
+- `merge.rs`: `cmp_cells`, `cmp_tombs`, `MAX_ANCESTORS`.
+- `split.rs`: `parse_name`, `is_union`, `absent_value` (the value capture
+  writes for a cell name `split` no longer produces), `valid_field_name`,
+  `element_cell`, `entry_cell`, and the names `WHOLE`, `AVAIL`, `ORDER`.
+- `canonical.rs`: `same(a, b)`, equality of canonical forms.
+- `replica.rs`, on `Tx`: `records(ns)`, `namespaces`, `count_records`,
+  `bucket_of`, `delete_record`, `merge(incoming, bucket)` (merge, store,
+  mark dirty as an echo), `write(record, bucket)` (store, mark dirty as
+  an own edit), `mark_published`, `is_published`, `projected_in`,
+  `pins(ns)`, `remove_applied`, `acks`, `clear_acks`, `delete_meta`,
+  `remove_device`, `feed_clear`, `feed_seq`.
+- `conflicts.rs`: `detected` (a merge's conflict as its record, at the
+  loser's stamp, §10.1), `record_detected` (merge those into the replica in the
+  caller's transaction), `record_action` (an entry from this computer's
+  own action, freshly stamped), `resolve` (the §10.4 actions),
+  `restore_record` (Recently deleted → Restore), `body_of`, `state_of`.
+  A new record's bucket comes from a `BucketFn` the engine passes,
+  `|ns, id| keys.bucket(ns, id, 1 << 16)`.
 
 ### 19.3 Folder, crypto and OS (WP-S2)
 
