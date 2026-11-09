@@ -206,7 +206,8 @@ pub const HOST_COMMAND_PROMPT: &str = "host_command_prompt";
 /// What became of such a request, sent to the same window: `{ requestId,
 /// phase }` with `phase` `started` (it runs: `runId`, `approvedBy`, …),
 /// `finished` (`result`), `failed` (`error`) or `closed` (`reason`:
-/// `expired`, `withdrawn`, `busy`, `shutdown`). Output streams as
+/// `expired`, `withdrawn` — the agent went away, its turn was stopped or
+/// its tool call ended —, `busy`, `shutdown`). Output streams as
 /// `USER_SHELL_OUTPUT` with the run's id.
 pub const HOST_COMMAND_UPDATE: &str = "host_command_update";
 

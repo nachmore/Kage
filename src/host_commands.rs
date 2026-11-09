@@ -56,15 +56,17 @@ fn is_mcp_kind(kind: Option<&str>) -> bool {
 
 /// Feed one `tool_call` / `tool_call_update` to the [`tracker`].
 /// `first_title` / `first_kind` are what the call was first seen with.
+/// Returns the call's id when this update ended one of our calls
+/// (`completed`, `failed`, `cancelled`): a request still waiting for the
+/// user on it has nobody left to read its result
+/// ([`approvals::Approvals::cancel_tool_call`]).
 pub fn observe_tool_call(
     session_id: Option<&str>,
     update: &serde_json::Value,
     first_title: Option<&str>,
     first_kind: Option<&str>,
-) {
-    let Some(call_id) = update.get("toolCallId").and_then(|v| v.as_str()) else {
-        return;
-    };
+) -> Option<String> {
+    let call_id = update.get("toolCallId").and_then(|v| v.as_str())?;
     let tracker = tracker::tracker();
     let kind = update
         .get("kind")
@@ -74,7 +76,7 @@ pub fn observe_tool_call(
     if !is_mcp_kind(kind) {
         // Not an MCP call after all (a shell command titled like ours).
         tracker.forget(call_id);
-        return;
+        return None;
     }
     let ours = first_title.is_some_and(is_host_command_title)
         || update
@@ -82,7 +84,7 @@ pub fn observe_tool_call(
             .and_then(|t| t.as_str())
             .is_some_and(is_host_command_title);
     if !ours && !tracker.knows(call_id) {
-        return;
+        return None;
     }
     // Command and working directory from the same `rawInput`, so the
     // match is against what this call asked for as a whole.
@@ -93,6 +95,33 @@ pub fn observe_tool_call(
     });
     let status = update.get("status").and_then(|s| s.as_str());
     tracker.observe(session_id, call_id, input, status);
+    tracker::is_terminal(status).then(|| call_id.to_string())
+}
+
+/// Runs one command string (what [`HostCommandOptions::shell`] holds).
+pub type ShellFor = fn(&str) -> crate::commands::system::user_shell::runner::ShellInvocation;
+
+/// How the bridge treats requests. Production uses the defaults; the
+/// end-to-end tests shorten the wait and keep the user's login profile
+/// out of their runs. Never read from config or reachable from a window.
+#[derive(Clone, Copy)]
+pub struct HostCommandOptions {
+    /// How long a prompt waits for the user before the request is denied
+    /// (at most [`kage_core::host_bridge::APPROVAL_TIMEOUT`], which the
+    /// sidecar's own wait is sized for).
+    pub approval_timeout: std::time::Duration,
+    /// What runs an approved command: `None` for the user's login shell
+    /// (`runner::user_shell_invocation`).
+    pub shell: Option<ShellFor>,
+}
+
+impl Default for HostCommandOptions {
+    fn default() -> Self {
+        Self {
+            approval_timeout: kage_core::host_bridge::APPROVAL_TIMEOUT,
+            shell: None,
+        }
+    }
 }
 
 /// The bridge and its waiting prompts. Lives in
@@ -103,6 +132,7 @@ pub struct HostCommands {
     bridge: Mutex<Option<server::BridgeHandle>>,
     /// Set by [`Self::stop`]: a start still in flight doesn't listen.
     stopped: std::sync::atomic::AtomicBool,
+    options: HostCommandOptions,
 }
 
 impl HostCommands {
@@ -110,10 +140,35 @@ impl HostCommands {
         Self::default()
     }
 
+    /// [`Self::new`] with other [`HostCommandOptions`] (tests).
+    #[allow(dead_code)] // The end-to-end tests reach it through the library.
+    pub fn with_options(mut options: HostCommandOptions) -> Self {
+        options.approval_timeout = options
+            .approval_timeout
+            .min(kage_core::host_bridge::APPROVAL_TIMEOUT);
+        Self {
+            options,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn options(&self) -> HostCommandOptions {
+        self.options
+    }
+
+    /// The user stopped `session_id`'s turn: its prompts are withdrawn
+    /// (the agent won't read their results).
+    pub fn cancel_session(&self, session_id: &str) {
+        let n = self.approvals.cancel_session(session_id);
+        if n > 0 {
+            log::info!("Host bridge: withdrew {n} prompt(s) of a stopped turn");
+        }
+    }
+
     /// Bind the bridge and accept on its own thread. Call off the main
     /// thread (setup spawns it). A bridge that can't start is logged and
     /// stays off; agents' calls then report that Kage isn't reachable.
-    pub fn start(&self, app: tauri::AppHandle) {
+    pub fn start<R: tauri::Runtime>(&self, app: tauri::AppHandle<R>) {
         let mut slot = self.bridge.lock_or_recover();
         if slot.is_some() || self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
             return;

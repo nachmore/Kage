@@ -16,7 +16,7 @@ use crate::state::{AcpHandles, ChildProcesses, FeatureServices, UiState};
 use crate::window_labels;
 use kage_core::host_bridge::{
     self, ApprovedBy, HostCommandRequest, HostCommandResponse, LineRead, RunSummary,
-    APPROVAL_TIMEOUT, OUTPUT_TAIL_BYTES,
+    OUTPUT_TAIL_BYTES,
 };
 use kage_core::os::host_bridge::{default_endpoint, BridgeListener, BridgeStream};
 use log::{info, warn};
@@ -64,7 +64,7 @@ impl BridgeHandle {
 
 /// Bind the bridge and accept on a background thread. `None` (logged) when
 /// it can't start: agents then get "Kage isn't running" from the tool.
-pub fn start(app: tauri::AppHandle) -> Option<BridgeHandle> {
+pub fn start<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Option<BridgeHandle> {
     let Some(endpoint) = default_endpoint() else {
         warn!("Host bridge: no endpoint for this user; agents can't run commands outside their sandbox");
         return None;
@@ -90,7 +90,11 @@ pub fn start(app: tauri::AppHandle) -> Option<BridgeHandle> {
     Some(BridgeHandle { listener, stop })
 }
 
-fn accept_loop(app: tauri::AppHandle, listener: Arc<BridgeListener>, stop: Arc<AtomicBool>) {
+fn accept_loop<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    listener: Arc<BridgeListener>,
+    stop: Arc<AtomicBool>,
+) {
     let active = Arc::new(AtomicUsize::new(0));
     loop {
         match listener.accept(&stop) {
@@ -158,7 +162,7 @@ fn read_request(stream: &mut BridgeStream) -> Incoming {
     }
 }
 
-fn handle_connection(app: &tauri::AppHandle, mut stream: BridgeStream) {
+fn handle_connection<R: tauri::Runtime>(app: &tauri::AppHandle<R>, mut stream: BridgeStream) {
     let response = match read_request(&mut stream) {
         Incoming::Request(request) => {
             let _ = stream.set_read_timeout(None);
@@ -215,7 +219,7 @@ impl Request<'_> {
         }
     }
 
-    fn track(&self, app: &tauri::AppHandle, step: &str) {
+    fn track<R: tauri::Runtime>(&self, app: &tauri::AppHandle<R>, step: &str) {
         crate::telemetry::track(
             app,
             "host_command",
@@ -227,7 +231,7 @@ impl Request<'_> {
         );
     }
 
-    fn close(&self, app: &tauri::AppHandle, reason: &str) {
+    fn close<R: tauri::Runtime>(&self, app: &tauri::AppHandle<R>, reason: &str) {
         emit_to(
             app,
             &self.window,
@@ -271,7 +275,12 @@ impl AuditStep {
     }
 }
 
-fn emit_to<S: Serialize + Clone>(app: &tauri::AppHandle, label: &str, event: &str, payload: &S) {
+fn emit_to<R: tauri::Runtime, S: Serialize + Clone>(
+    app: &tauri::AppHandle<R>,
+    label: &str,
+    event: &str,
+    payload: &S,
+) {
     if let Err(e) = app.emit_to(
         tauri::EventTarget::webview_window(label),
         event,
@@ -289,7 +298,7 @@ fn new_id(prefix: &str) -> String {
         .collect()
 }
 
-fn is_background(app: &tauri::AppHandle, session_id: &str) -> bool {
+fn is_background<R: tauri::Runtime>(app: &tauri::AppHandle<R>, session_id: &str) -> bool {
     app.try_state::<AcpHandles>()
         .is_some_and(|acp| acp.client.is_background_prompt_session(session_id))
         || crate::ephemeral_session::is_active(session_id)
@@ -297,7 +306,7 @@ fn is_background(app: &tauri::AppHandle, session_id: &str) -> bool {
 
 /// The window that owns `session_id`: the one whose prompt is running it,
 /// else one showing it; the floating window when neither is open.
-fn window_for_session(app: &tauri::AppHandle, session_id: &str) -> String {
+fn window_for_session<R: tauri::Runtime>(app: &tauri::AppHandle<R>, session_id: &str) -> String {
     let Some(ui) = app.try_state::<UiState>() else {
         return window_labels::FLOATING.to_string();
     };
@@ -337,7 +346,11 @@ fn clean_label(s: &str, max: usize) -> Option<String> {
 /// Which agent asked: the connected agent's name for a request from one of
 /// Kage's sessions; otherwise what the sidecar reports (the program that
 /// started it), which is all Kage knows.
-fn agent_label(app: &tauri::AppHandle, req: &HostCommandRequest, visible: bool) -> Option<String> {
+fn agent_label<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    req: &HostCommandRequest,
+    visible: bool,
+) -> Option<String> {
     let reported = req.agent.as_deref().and_then(|a| clean_label(a, 64));
     if !visible {
         return reported;
@@ -351,6 +364,21 @@ fn agent_label(app: &tauri::AppHandle, req: &HostCommandRequest, visible: bool) 
                 .and_then(|c| clean_label(&c.name, 64))
         })
         .or(reported)
+}
+
+/// How `command` runs: the user's login shell, unless the bridge was set
+/// up with another ([`super::HostCommandOptions::shell`], tests).
+fn shell_for<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    command: &str,
+) -> runner::ShellInvocation {
+    let custom = app
+        .try_state::<ChildProcesses>()
+        .and_then(|p| p.host_commands.options().shell);
+    match custom {
+        Some(shell) => shell(command),
+        None => runner::user_shell_invocation(command, None),
+    }
 }
 
 fn cwd_error(e: &runner::InvalidRun) -> String {
@@ -367,8 +395,8 @@ fn cwd_error(e: &runner::InvalidRun) -> String {
     }
 }
 
-fn process(
-    app: &tauri::AppHandle,
+fn process<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     req: &HostCommandRequest,
     stream: &BridgeStream,
 ) -> HostCommandResponse {
@@ -449,7 +477,7 @@ fn process(
         background,
         agent,
         cwd,
-        shell: runner::user_shell_invocation("", None).label,
+        shell: shell_for(app, "").label,
         hits,
     };
     info!(
@@ -569,6 +597,18 @@ fn process(
                     "The window showing the request was closed, so the command did not run.",
                 );
             }
+            Asked::Cancelled => {
+                info!("Host command {}: the agent stopped waiting", r.id);
+                AuditStep {
+                    outcome: Some("the agent's turn or tool call ended".into()),
+                    ..r.audit("withdrawn")
+                }
+                .write();
+                r.track(app, "withdrawn");
+                return HostCommandResponse::error(
+                    "The agent stopped waiting before the user answered, so the command did not run.",
+                );
+            }
             Asked::Shutdown => {
                 r.close(app, "shutdown");
                 return HostCommandResponse::error("Kage is quitting; the command did not run.");
@@ -587,14 +627,21 @@ enum Asked {
     Busy,
     /// The window showing the prompt closed.
     WindowClosed,
+    /// The agent stopped waiting: its turn was stopped, or its tool call
+    /// ended.
+    Cancelled,
     Shutdown,
 }
 
-/// The prompt a window shows for `r`.
-fn prompt_payload(r: &Request<'_>, reason: AskReason, can_always: bool) -> serde_json::Value {
+/// The prompt a window shows for `r`, answered within `timeout`.
+fn prompt_payload(
+    r: &Request<'_>,
+    reason: AskReason,
+    can_always: bool,
+    timeout: Duration,
+) -> serde_json::Value {
     let expires_at = chrono::Utc::now()
-        + chrono::Duration::from_std(APPROVAL_TIMEOUT)
-            .unwrap_or_else(|_| chrono::Duration::minutes(5));
+        + chrono::Duration::from_std(timeout).unwrap_or_else(|_| chrono::Duration::minutes(5));
     serde_json::json!({
         "requestId": &r.id,
         // Tauri hands a targeted event to every window listening globally
@@ -618,7 +665,7 @@ fn prompt_payload(r: &Request<'_>, reason: AskReason, can_always: bool) -> serde
     })
 }
 
-fn notify(app: &tauri::AppHandle, agent: Option<&str>) {
+fn notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>, agent: Option<&str>) {
     use tauri_plugin_notification::NotificationExt;
     let title = match agent {
         Some(a) => crate::t!("host_commands.notify.title", "agent" => a),
@@ -635,21 +682,29 @@ fn notify(app: &tauri::AppHandle, agent: Option<&str>) {
     }
 }
 
-fn ask(app: &tauri::AppHandle, r: &Request<'_>, reason: AskReason, stream: &BridgeStream) -> Asked {
+fn ask<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    r: &Request<'_>,
+    reason: AskReason,
+    stream: &BridgeStream,
+) -> Asked {
     let Some(host) = app.try_state::<ChildProcesses>() else {
         return Asked::Busy;
     };
     let approvals = &host.host_commands.approvals;
+    let timeout = host.host_commands.options().approval_timeout;
     let plain = !matches!(reason, AskReason::HiddenCharacters);
     let can_always = plain
         && r.hits.is_empty()
         && r.visible_origin
         && rules::suggested_prefix(&r.req.command).is_some();
-    let payload = prompt_payload(r, reason, can_always);
+    let payload = prompt_payload(r, reason, can_always, timeout);
     let info = PendingInfo {
         command: r.req.command.clone(),
         can_always,
         plain,
+        session_id: r.session_id.clone(),
+        tool_call_id: r.tool_call_id.clone(),
     };
     let Some(rx) = approvals.register(&r.id, &r.window, info, payload.clone()) else {
         return Asked::Busy;
@@ -669,13 +724,19 @@ fn ask(app: &tauri::AppHandle, r: &Request<'_>, reason: AskReason, stream: &Brid
     if !r.visible_origin || !in_front {
         notify(app, r.agent.as_deref());
     }
-    let deadline = Instant::now() + APPROVAL_TIMEOUT;
+    let deadline = Instant::now() + timeout;
     loop {
         match rx.recv_timeout(POLL) {
             Ok(Answer::RunOnce) => return Asked::Approved(None),
             Ok(Answer::Always(prefix)) => return Asked::Approved(Some(prefix)),
             Ok(Answer::Deny) => return Asked::Denied,
             Ok(Answer::WindowClosed) => return Asked::WindowClosed,
+            Ok(Answer::Cancelled) => {
+                // The window says so the way it does for an agent that
+                // went away.
+                r.close(app, "withdrawn");
+                return Asked::Cancelled;
+            }
             Ok(Answer::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                 return Asked::Shutdown
             }
@@ -696,8 +757,8 @@ fn ask(app: &tauri::AppHandle, r: &Request<'_>, reason: AskReason, stream: &Brid
     }
 }
 
-fn run(
-    app: &tauri::AppHandle,
+fn run<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     r: &Request<'_>,
     approved_by: ApprovedBy,
     rule: Option<String>,
@@ -748,7 +809,7 @@ fn run(
         }),
     );
 
-    let inv = runner::user_shell_invocation(&r.req.command, None);
+    let inv = shell_for(app, &r.req.command);
     let (tx, rx) = mpsc::channel();
     let (thread_app, window, thread_run_id, cwd) =
         (app.clone(), r.window.clone(), run_id.clone(), r.cwd.clone());

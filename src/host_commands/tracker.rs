@@ -55,6 +55,11 @@ pub fn normalize_cwd(cwd: Option<&str>) -> Option<&str> {
     cwd.filter(|c| !c.trim().is_empty())
 }
 
+/// Whether an ACP tool call `status` ends the call.
+pub fn is_terminal(status: Option<&str>) -> bool {
+    matches!(status, Some("completed" | "failed" | "cancelled"))
+}
+
 /// The tool call a request was matched to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchedCall {
@@ -84,7 +89,7 @@ impl ToolCallTracker {
         status: Option<&str>,
     ) {
         let mut calls = self.calls.lock_or_recover();
-        let terminal = matches!(status, Some("completed" | "failed" | "cancelled"));
+        let terminal = is_terminal(status);
         if let Some(pos) = calls.iter().position(|c| c.tool_call_id == tool_call_id) {
             if terminal {
                 calls.remove(pos);

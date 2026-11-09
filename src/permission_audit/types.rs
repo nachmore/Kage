@@ -71,7 +71,7 @@ pub enum AuditEvent {
     HostCommand {
         /// `requested`, `guard` (the credential guard flagged it),
         /// `auto_approved`, `approved`, `denied`, `expired` (nobody
-        /// answered), `withdrawn` (the agent went away), `refused`,
+        /// answered), `withdrawn` (the agent stopped waiting), `refused`,
         /// `finished`, `rule_added`, `rule_removed`, `allow_all_on`,
         /// `allow_all_off`.
         action: String,

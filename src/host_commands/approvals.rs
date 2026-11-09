@@ -18,6 +18,9 @@ pub enum Answer {
     Deny,
     /// The window showing it closed: nobody can answer it any more.
     WindowClosed,
+    /// The agent stopped waiting for it: the user stopped its turn, or its
+    /// tool call ended (failed, timed out on the agent's side).
+    Cancelled,
     /// Kage is quitting.
     Shutdown,
 }
@@ -30,6 +33,10 @@ pub struct PendingInfo {
     pub can_always: bool,
     /// It has no hidden characters, so it may run from Kage at all.
     pub plain: bool,
+    /// The session and tool call it was matched to, if any: when that turn
+    /// is stopped or that call ends, nobody is left to read the result.
+    pub session_id: Option<String>,
+    pub tool_call_id: Option<String>,
 }
 
 struct Pending {
@@ -142,6 +149,35 @@ impl Approvals {
         }
     }
 
+    /// The user stopped `session_id`'s turn: its waiting requests get
+    /// [`Answer::Cancelled`]. Returns how many there were.
+    pub fn cancel_session(&self, session_id: &str) -> usize {
+        self.cancel_where(|info| info.session_id.as_deref() == Some(session_id))
+    }
+
+    /// Tool call `tool_call_id` ended without its request being answered
+    /// (the agent gave up on it): that request gets [`Answer::Cancelled`].
+    pub fn cancel_tool_call(&self, tool_call_id: &str) -> bool {
+        self.cancel_where(|info| info.tool_call_id.as_deref() == Some(tool_call_id)) > 0
+    }
+
+    fn cancel_where(&self, matches: impl Fn(&PendingInfo) -> bool) -> usize {
+        let cancelled: Vec<Pending> = {
+            let mut pending = self.pending.lock_or_recover();
+            let ids: Vec<String> = pending
+                .iter()
+                .filter(|(_, p)| matches(&p.info))
+                .map(|(id, _)| id.clone())
+                .collect();
+            ids.iter().filter_map(|id| pending.remove(id)).collect()
+        };
+        let n = cancelled.len();
+        for p in cancelled {
+            let _ = p.tx.send(Answer::Cancelled);
+        }
+        n
+    }
+
     /// Kage is quitting: every waiting request gets [`Answer::Shutdown`].
     pub fn shutdown_all(&self) {
         let drained: Vec<Pending> = self
@@ -170,6 +206,16 @@ mod tests {
             command: cmd.into(),
             can_always: true,
             plain: true,
+            session_id: None,
+            tool_call_id: None,
+        }
+    }
+
+    fn info_from(cmd: &str, session: &str, call: &str) -> PendingInfo {
+        PendingInfo {
+            session_id: Some(session.into()),
+            tool_call_id: Some(call.into()),
+            ..info(cmd)
         }
     }
 
@@ -254,6 +300,53 @@ mod tests {
         assert_eq!(rx_chat.try_recv(), Ok(Answer::WindowClosed));
         assert!(rx_float.try_recv().is_err());
         assert_eq!(a.payloads_for("floating").len(), 1);
+    }
+
+    #[test]
+    fn a_stopped_turn_or_ended_call_ends_only_its_own_prompts() {
+        let a = Approvals::new();
+        let rx1 = a
+            .register(
+                "r1",
+                "main",
+                info_from("x", "s1", "c1"),
+                serde_json::json!({}),
+            )
+            .unwrap();
+        let rx2 = a
+            .register(
+                "r2",
+                "main",
+                info_from("y", "s1", "c2"),
+                serde_json::json!({}),
+            )
+            .unwrap();
+        let rx3 = a
+            .register(
+                "r3",
+                "main",
+                info_from("z", "s2", "c3"),
+                serde_json::json!({}),
+            )
+            .unwrap();
+        let rx4 = a
+            .register("r4", "floating", info("w"), serde_json::json!({}))
+            .unwrap();
+
+        assert!(a.cancel_tool_call("c2"));
+        assert!(!a.cancel_tool_call("c2"), "already ended");
+        assert_eq!(rx2.try_recv(), Ok(Answer::Cancelled));
+        assert!(rx1.try_recv().is_err());
+
+        assert_eq!(a.cancel_session("s1"), 1);
+        assert_eq!(rx1.try_recv(), Ok(Answer::Cancelled));
+        assert!(rx3.try_recv().is_err(), "another session's prompt waits on");
+        assert!(rx4.try_recv().is_err(), "an unmatched prompt waits on");
+        assert_eq!(a.cancel_session("s1"), 0);
+        assert_eq!(
+            a.answer("r1", "main", Answer::RunOnce),
+            Err(AnswerError::NotPending)
+        );
     }
 
     #[test]

@@ -209,7 +209,10 @@ pub fn setup_notification_handler(
                         // Kage's own `run_outside_sandbox` calls: remember
                         // their commands, so a request arriving over the host
                         // bridge can be matched to this session (a strict
-                        // session's too, so the bridge can refuse it).
+                        // session's too, so the bridge can refuse it). One
+                        // that ended (the agent gave up on it, or its turn
+                        // was stopped) withdraws a prompt still waiting on
+                        // it: nobody would read the result.
                         {
                             let first = update
                                 .get("toolCallId")
@@ -217,12 +220,18 @@ pub fn setup_notification_handler(
                                 .and_then(|id| {
                                     tool_names.lock().ok().and_then(|n| n.get(id).cloned())
                                 });
-                            crate::host_commands::observe_tool_call(
+                            let ended = crate::host_commands::observe_tool_call(
                                 update_session_id.as_deref(),
                                 update,
                                 first.as_ref().map(|(title, _)| title.as_str()),
                                 first.as_ref().and_then(|(_, kind)| kind.as_deref()),
                             );
+                            if let (Some(call_id), Some(procs)) = (
+                                ended,
+                                app_handle.try_state::<crate::state::ChildProcesses>(),
+                            ) {
+                                procs.host_commands.approvals.cancel_tool_call(&call_id);
+                            }
                         }
                         // No tool may run on a strict session (a background
                         // agent call). An agent set to run tools without
