@@ -112,22 +112,33 @@ impl Guard {
 
     /// What a page draws: the lexer's counts, and at least once every
     /// XObject its resources name.
+    ///
+    /// The names the page draws come first, sorted, and then the other
+    /// names in the resources. The order decides where a loop between
+    /// forms is cut: walking from a form the page draws empties a form
+    /// further in, so the page keeps the text of the form it draws. A
+    /// hash map's order would make that a coin toss.
     fn page_calls(&mut self, doc: &Document, page: ObjectId, resources: Resources) -> Calls {
-        let mut calls: HashMap<Vec<u8>, u64> = HashMap::new();
+        let mut counts: HashMap<Vec<u8>, u64> = HashMap::new();
         for id in doc.get_page_contents(page) {
             for (name, n) in &self.content(doc, id).scan.calls {
-                *calls.entry(name.clone()).or_default() += n;
+                *counts.entry(name.clone()).or_default() += n;
             }
         }
+        let mut calls: Calls = counts.into_iter().collect();
+        calls.sort();
         if let Some(xobjects) = resource_dict(doc, resources)
             .and_then(|d| d.get(b"XObject").ok())
             .and_then(|x| deref_dict(doc, x))
         {
+            let drawn: HashSet<Vec<u8>> = calls.iter().map(|(name, _)| name.clone()).collect();
             for (name, _) in xobjects.iter() {
-                calls.entry(name.clone()).or_insert(1);
+                if !drawn.contains(name) {
+                    calls.push((name.clone(), 1));
+                }
             }
         }
-        calls.into_iter().collect()
+        calls
     }
 
     /// What drawing a form costs. Empties it if it can't be drawn safely.
@@ -254,7 +265,10 @@ impl Guard {
                 }
             }
         }
-        let calls: Calls = counts.into_iter().collect();
+        // Sorted, so a loop below this form is cut in the same place on
+        // every run (see `page_calls`).
+        let mut calls: Calls = counts.into_iter().collect();
+        calls.sort();
         self.content(doc, form).drawn = Some(calls.clone());
         calls
     }
