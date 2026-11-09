@@ -231,7 +231,8 @@ fn run(
                 next = next.min(t);
             }
             if let Some(d) = engine.next_deadline() {
-                let wait = Duration::from_millis((d - now_ms).max(0) as u64);
+                // Never spin: a deadline that passed waits half a second.
+                let wait = Duration::from_millis((d - now_ms).max(500) as u64);
                 next = next.min(Instant::now() + wait);
             }
             let wait = next.saturating_duration_since(Instant::now());
@@ -411,5 +412,96 @@ mod tests {
         assert!(h
             .request(EngineRequest::Status, Duration::from_millis(1))
             .is_err());
+    }
+
+    struct Port;
+
+    impl super::super::engine::ConfigPort for Port {
+        fn snapshot(&self) -> (u64, crate::config::Config) {
+            (1, crate::config::Config::default())
+        }
+        fn commit(
+            &self,
+            _: u64,
+            _: crate::config::Config,
+            _: Origin,
+        ) -> Result<u64, super::super::engine::CommitError> {
+            Ok(2)
+        }
+        fn load_was_reset(&self) -> super::super::engine::LoadReset {
+            super::super::engine::LoadReset::None
+        }
+        fn saves_suspended(&self) -> bool {
+            false
+        }
+        fn installed(&self) -> Vec<crate::extensions::InstalledItem> {
+            Vec::new()
+        }
+    }
+
+    struct Events;
+
+    impl super::super::engine::HostEvents for Events {
+        fn status_changed(&self, _: &super::super::status::SyncStatus) {}
+        fn conflicts_changed(&self, _: usize) {}
+        fn applied(&self, _: &[String]) {}
+        fn extension_data_changed(&self, _: &str, _: &[String]) {}
+        fn extension_sync_changes(&self, _: &str, _: &[String], _: &str) {}
+        fn notify_user(&self, _: &str) {}
+        fn track(&self, _: &'static str, _: Vec<(&'static str, String)>) {}
+    }
+
+    /// The thread starts after its delay (or at the first request),
+    /// answers requests, takes wakes without blocking and flushes at exit.
+    #[test]
+    fn the_engine_thread_answers_requests() {
+        use super::super::testing::{FakeClock, FakeCloudFiles, FaultyFs, MemoryKeyStore};
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().to_path_buf();
+        let h = SyncHandle::pending();
+        h.start(
+            move || {
+                Ok((
+                    EngineEnv {
+                        local_dir: local,
+                        os: super::super::types::OsKind::Linux,
+                        kage_version: "test".into(),
+                        fingerprint: "fp".into(),
+                        fs: Arc::new(FaultyFs::new()),
+                        cloud: Arc::new(FakeCloudFiles::new()),
+                        keys: Arc::new(MemoryKeyStore::new()),
+                        clock: Arc::new(FakeClock::new(1_762_682_400_000)),
+                        events: Arc::new(Events),
+                        config: Arc::new(Port),
+                    },
+                    Vec::new(),
+                ))
+            },
+            Duration::from_secs(30),
+        );
+        assert!(h.started());
+        let t = Instant::now();
+        h.wake(Wake::Local {
+            source: "config",
+            origin: Origin::User,
+        });
+        assert!(
+            t.elapsed() < Duration::from_millis(50),
+            "a wake never blocks"
+        );
+        // A request ends the start delay.
+        match h.request(EngineRequest::Status, Duration::from_secs(10)) {
+            Ok(EngineReply::Status(s)) => {
+                assert_eq!(s.state, super::super::status::SyncState::Off)
+            }
+            Ok(_) => panic!("not a status"),
+            Err(e) => panic!("{e}"),
+        }
+        assert!(h
+            .request(EngineRequest::ListDevices, Duration::from_secs(10))
+            .is_err());
+        h.flush_for_exit(Duration::from_millis(200));
+        // A second start is a no-op.
+        h.start(|| anyhow::bail!("not called"), Duration::ZERO);
     }
 }

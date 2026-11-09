@@ -245,6 +245,9 @@ pub(crate) struct Runtime {
     /// The replica was rebuilt: this computer's own newer heads are its own
     /// state to fold back in, not a clone's (§15).
     pub adopt_own: bool,
+    /// What this computer's last head said, so an unchanged state isn't
+    /// written again.
+    pub last_head_sig: Option<String>,
 }
 
 /// The engine. Owns the replica; lives on the `kage-sync` thread.
@@ -430,9 +433,14 @@ impl SyncEngine {
             self.rt.first_tick_done = !locked;
             return Ok(());
         }
+        let recheck_due = self.rt.descriptor_recheck_at.is_some_and(|t| t <= now);
         if !self.check_root(now)? {
             self.rt.first_tick_done = true;
             return Ok(());
+        }
+        if recheck_due {
+            // The descriptor was read again 10 s after creating it (§5.3).
+            self.rt.descriptor_recheck_at = None;
         }
         self.check_own_dir(now)?;
         let mut changed = BTreeSet::new();
@@ -497,7 +505,17 @@ impl SyncEngine {
     pub fn next_deadline(&self) -> Option<i64> {
         let mut out: Option<i64> = None;
         let mut at = |t: i64| out = Some(out.map_or(t, |o: i64| o.min(t)));
-        if let (Some(first), Some(last)) = (self.rt.first_own_ms, self.rt.last_own_ms) {
+        let now = self.now();
+        // A publish that can't happen now (paused, locked, the folder
+        // unusable) waits for the poll or a wake, not a deadline.
+        let can_publish = self.prefs.enabled
+            && !self.core_locked()
+            && self.rt.blocked.is_none()
+            && !self.prefs.paused_at(now)
+            && self.rt.publish_paused_until.is_none_or(|t| t <= now);
+        if let (true, Some(first), Some(last)) =
+            (can_publish, self.rt.first_own_ms, self.rt.last_own_ms)
+        {
             at((last + PUBLISH_QUIET_MS).min(first + PUBLISH_MAX_WAIT_MS));
         }
         if let Some((t, _)) = self.rt.write_backoff {

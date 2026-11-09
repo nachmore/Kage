@@ -425,8 +425,20 @@ impl SyncEngine {
             super::engine::kill::point("after_shard_write");
         }
         super::engine::kill::point("before_head_write");
-        // The head.
+        // The head. One that would say nothing new isn't written.
         let (head, seq) = self.build_head(now, &states, false)?;
+        let sig = head_signature(&head);
+        let first_of_run = self.rt.last_head_sig.is_none();
+        if records_by_ns.is_empty()
+            && !first_of_run
+            && self.rt.last_head_sig.as_deref() == Some(sig.as_str())
+            && self.core.as_ref().is_some_and(|c| c.my_seq > 0)
+        {
+            self.rt.last_publish_ms = Some(now);
+            self.rt.first_own_ms = None;
+            self.rt.last_own_ms = None;
+            return Ok(false);
+        }
         let plain = canonical(&serde_json::to_value(&head)?);
         let core = self.core.as_ref().expect("on");
         let mut seq = seq;
@@ -487,8 +499,8 @@ impl SyncEngine {
             Ok(())
         })?;
         core.my_seq = seq;
-        // Blobs a chat mirror only references aren't ours to keep.
         let _ = dirty;
+        self.rt.last_head_sig = Some(sig);
         self.rt.last_publish_ms = Some(now);
         self.rt.first_own_ms = None;
         self.rt.last_own_ms = None;
@@ -576,6 +588,22 @@ impl SyncEngine {
         }
         Ok(false)
     }
+}
+
+/// What a head says, apart from its number, time, clock and instance: two
+/// heads with the same signature carry the same state.
+fn head_signature(h: &HeadFile) -> String {
+    let v = serde_json::json!({
+        "seen": h.seen,
+        "namespaces": h.namespaces,
+        "gc_floor": h.gc_floor,
+        "name": h.name,
+        "os": h.os,
+        "kage_version": h.kage_version,
+        "catalog": h.catalog,
+        "retired": h.retired,
+    });
+    String::from_utf8(canonical(&v)).unwrap_or_default()
 }
 
 /// The namespaces held back by an outgoing mass-change question.
