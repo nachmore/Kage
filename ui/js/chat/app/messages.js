@@ -249,6 +249,28 @@ export function createMessagesMixin(dependencies) {
             return slot;
         }
 
+        /**
+         * Put a host-command card (an agent's command outside its sandbox,
+         * shared/host-command-view.js) in the answer being written for
+         * the session in view, right under its text. Returns false — the
+         * card goes to the tray — for any other session.
+         */
+        placeHostCommandCard(card, prompt) {
+            if (!prompt?.sessionId || prompt.sessionId !== this.activeSessionId) return false;
+            const contentDiv = this.currentStreamingMessage?.querySelector('.message-content');
+            if (!contentDiv) return false;
+            let slot = contentDiv.parentElement.querySelector(':scope > .host-cmd-slot');
+            if (!slot) {
+                slot = document.createElement('div');
+                slot.className = 'host-cmd-slot';
+                slot.dir = 'auto';
+                contentDiv.after(slot);
+            }
+            slot.append(card);
+            this.scrollToBottom();
+            return true;
+        }
+
         _showShellCommand(record) {
             const slot = this._shellActivitySlot(true);
             if (!slot) return;

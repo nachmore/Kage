@@ -19,6 +19,7 @@ pub mod computer_control;
 pub mod file_text_wire;
 #[cfg(feature = "os")]
 pub mod folder_tools;
+pub mod host_bridge;
 pub mod lock_ext;
 pub mod mcp_json_rpc;
 #[cfg(feature = "os")]

@@ -3104,6 +3104,7 @@ dependencies = [
  "log",
  "rfd 0.15.4",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -3117,6 +3118,7 @@ dependencies = [
  "core-foundation 0.10.1",
  "core-graphics",
  "dirs",
+ "libc",
  "log",
  "objc2",
  "objc2-app-kit",

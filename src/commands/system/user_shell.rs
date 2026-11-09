@@ -107,21 +107,29 @@ fn join_error(e: impl std::fmt::Display) -> AppError {
 
 struct ActiveRun {
     run_id: String,
+    /// The window showing the run (and its Stop button).
+    window: String,
     cancel: Arc<AtomicBool>,
 }
 
-/// The runs in progress, one per window at most. Lives in
+/// Slot keys of runs an agent asked for (`host_commands`) start with this;
+/// a window label never does.
+const AGENT_RUN_KEY: &str = "agent:";
+
+/// The runs in progress: the user's own, one per window at most (keyed by
+/// the window's label), and those an agent asked for through
+/// `run_outside_sandbox` (keyed by run id, shown in a window too). Lives in
 /// [`ChildProcesses`] so shutdown can stop them.
 #[derive(Default)]
 pub struct UserShellRuns {
     active: Mutex<HashMap<String, ActiveRun>>,
 }
 
-/// A window's claim on its run. Dropping it — when the run ends, however
-/// it ends — frees the window for its next run.
+/// A claim on a run slot. Dropping it — when the run ends, however it
+/// ends — frees the slot.
 pub struct RunSlot {
     runs: Arc<UserShellRuns>,
-    label: String,
+    key: String,
     run_id: String,
     cancel: Arc<AtomicBool>,
 }
@@ -136,10 +144,10 @@ impl Drop for RunSlot {
     fn drop(&mut self) {
         let mut active = self.runs.active.lock_or_recover();
         if active
-            .get(&self.label)
+            .get(&self.key)
             .is_some_and(|run| run.run_id == self.run_id)
         {
-            active.remove(&self.label);
+            active.remove(&self.key);
         }
     }
 }
@@ -149,53 +157,85 @@ impl UserShellRuns {
         Self::default()
     }
 
-    /// Claim `label`'s slot for `run_id`; `None` while it has a run going.
+    /// Insert the run under `key` in `active` — the caller holds the lock
+    /// it checked the slot under, so two runs can't both take it (the
+    /// second would replace the first, which then nothing could stop).
+    fn claim(
+        self: &Arc<Self>,
+        active: &mut HashMap<String, ActiveRun>,
+        key: String,
+        label: &str,
+        run_id: &str,
+    ) -> RunSlot {
+        let cancel = Arc::new(AtomicBool::new(false));
+        active.insert(
+            key.clone(),
+            ActiveRun {
+                run_id: run_id.to_string(),
+                window: label.to_string(),
+                cancel: cancel.clone(),
+            },
+        );
+        RunSlot {
+            runs: self.clone(),
+            key,
+            run_id: run_id.to_string(),
+            cancel,
+        }
+    }
+
+    /// Claim `label`'s slot for the user's run `run_id`; `None` while it
+    /// has one going.
     pub fn begin(self: &Arc<Self>, label: &str, run_id: &str) -> Option<RunSlot> {
         let mut active = self.active.lock_or_recover();
         if active.contains_key(label) {
             return None;
         }
-        let cancel = Arc::new(AtomicBool::new(false));
-        active.insert(
-            label.to_string(),
-            ActiveRun {
-                run_id: run_id.to_string(),
-                cancel: cancel.clone(),
-            },
-        );
-        Some(RunSlot {
-            runs: self.clone(),
-            label: label.to_string(),
-            run_id: run_id.to_string(),
-            cancel,
-        })
+        Some(self.claim(&mut active, label.to_string(), label, run_id))
     }
 
-    /// Ask `label`'s run `run_id` to stop. A window can only stop its own
-    /// run; returns whether that run was going.
+    /// Claim a slot for a run an agent asked for, shown in window `label`;
+    /// `None` when `max` such runs are already going (or `run_id` is).
+    pub fn begin_agent(self: &Arc<Self>, label: &str, run_id: &str, max: usize) -> Option<RunSlot> {
+        let key = format!("{AGENT_RUN_KEY}{run_id}");
+        let mut active = self.active.lock_or_recover();
+        let agent_runs = active
+            .keys()
+            .filter(|k| k.starts_with(AGENT_RUN_KEY))
+            .count();
+        if agent_runs >= max || active.contains_key(&key) {
+            return None;
+        }
+        Some(self.claim(&mut active, key, label, run_id))
+    }
+
+    /// Ask the run `run_id` shown in window `label` to stop. A window can
+    /// only stop the runs it shows; returns whether that run was going.
     pub fn cancel(&self, label: &str, run_id: &str) -> bool {
         let active = self.active.lock_or_recover();
-        match active.get(label) {
-            Some(run) if run.run_id == run_id => {
-                run.cancel.store(true, Ordering::SeqCst);
-                true
-            }
-            _ => false,
-        }
-    }
-
-    /// Stop `label`'s run, whichever it is: its window closed or its page
-    /// reloaded, so nothing is left to show the run or its Stop button.
-    /// Returns whether one was going.
-    pub fn cancel_window(&self, label: &str) -> bool {
-        let active = self.active.lock_or_recover();
-        match active.get(label) {
+        match active
+            .values()
+            .find(|run| run.run_id == run_id && run.window == label)
+        {
             Some(run) => {
                 run.cancel.store(true, Ordering::SeqCst);
                 true
             }
             None => false,
         }
+    }
+
+    /// Stop every run `label` shows: its window closed or its page
+    /// reloaded, so nothing is left to show them or their Stop buttons.
+    /// Returns whether one was going.
+    pub fn cancel_window(&self, label: &str) -> bool {
+        let active = self.active.lock_or_recover();
+        let mut any = false;
+        for run in active.values().filter(|run| run.window == label) {
+            run.cancel.store(true, Ordering::SeqCst);
+            any = true;
+        }
+        any
     }
 
     /// Whether `label` has a run going.

@@ -195,6 +195,22 @@ pub const EXTENSION_SYNC_CHANGES: &str = "extension_sync_changes";
 /// since the previous event that didn't fit in this one.
 pub const USER_SHELL_OUTPUT: &str = "user_shell_output";
 
+// --- Commands an agent runs outside its sandbox ----------------------
+
+/// An agent asked Kage to run a command outside its sandbox
+/// (`run_outside_sandbox`) and the user must decide: sent to the window
+/// that owns the asking session (else the floating window). Payload: the
+/// prompt (`host_commands::server::prompt_payload`).
+pub const HOST_COMMAND_PROMPT: &str = "host_command_prompt";
+
+/// What became of such a request, sent to the same window: `{ requestId,
+/// phase }` with `phase` `started` (it runs: `runId`, `approvedBy`, …),
+/// `finished` (`result`), `failed` (`error`) or `closed` (`reason`:
+/// `expired`, `withdrawn` — the agent went away, its turn was stopped or
+/// its tool call ended —, `busy`, `shutdown`). Output streams as
+/// `USER_SHELL_OUTPUT` with the run's id.
+pub const HOST_COMMAND_UPDATE: &str = "host_command_update";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,6 +253,8 @@ mod tests {
             SYNC_APPLIED,
             EXTENSION_SYNC_CHANGES,
             USER_SHELL_OUTPUT,
+            HOST_COMMAND_PROMPT,
+            HOST_COMMAND_UPDATE,
         ];
         for name in all {
             assert!(

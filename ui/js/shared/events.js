@@ -69,4 +69,8 @@ export const EVT = {
     EXTENSION_SYNC_CHANGES: 'extension_sync_changes',
     // Commands the user runs themselves (shell-run-view.js)
     USER_SHELL_OUTPUT: 'user_shell_output',
+    // Commands an agent asks Kage to run outside its sandbox
+    // (host-command-view.js)
+    HOST_COMMAND_PROMPT: 'host_command_prompt',
+    HOST_COMMAND_UPDATE: 'host_command_update',
 };

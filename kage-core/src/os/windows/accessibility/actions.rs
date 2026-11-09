@@ -7,7 +7,7 @@ use super::element;
 use super::native_registry;
 
 pub(crate) fn click_element_inner(element_id: &str) -> Result<String, String> {
-    let elem = native_registry::resolve(element_id)?;
+    let elem = native_registry::resolve_for_input(element_id)?;
     let (role, name) = (element::role(&elem), element::name(&elem));
     if let Ok(pattern) = elem.get_pattern::<UIInvokePattern>() {
         if pattern.invoke().is_ok() {
@@ -54,7 +54,7 @@ pub(crate) fn click_element_inner(element_id: &str) -> Result<String, String> {
 }
 
 pub(crate) fn focus_element_inner(element_id: &str) -> Result<String, String> {
-    let elem = native_registry::resolve(element_id)?;
+    let elem = native_registry::resolve_for_input(element_id)?;
     let (role, name) = (element::role(&elem), element::name(&elem));
     if elem.set_focus().is_ok() {
         Ok(format!("Focused [{}] '{}'", role, name))
@@ -64,7 +64,7 @@ pub(crate) fn focus_element_inner(element_id: &str) -> Result<String, String> {
 }
 
 pub(crate) fn set_element_value_inner(element_id: &str, value: &str) -> Result<String, String> {
-    let elem = native_registry::resolve(element_id)?;
+    let elem = native_registry::resolve_for_input(element_id)?;
     let (role, name) = (element::role(&elem), element::name(&elem));
     if let Ok(pattern) = elem.get_pattern::<UIValuePattern>() {
         if pattern.set_value(value).is_ok() {
@@ -83,7 +83,7 @@ pub(crate) fn set_element_value_inner(element_id: &str, value: &str) -> Result<S
 }
 
 pub(crate) fn toggle_element_inner(element_id: &str) -> Result<String, String> {
-    let elem = native_registry::resolve(element_id)?;
+    let elem = native_registry::resolve_for_input(element_id)?;
     let (role, name) = (element::role(&elem), element::name(&elem));
     if let Ok(pattern) = elem.get_pattern::<UITogglePattern>() {
         if pattern.toggle().is_ok() {
@@ -98,7 +98,7 @@ pub(crate) fn toggle_element_inner(element_id: &str) -> Result<String, String> {
 }
 
 pub(crate) fn select_element_inner(element_id: &str) -> Result<String, String> {
-    let elem = native_registry::resolve(element_id)?;
+    let elem = native_registry::resolve_for_input(element_id)?;
     let (role, name) = (element::role(&elem), element::name(&elem));
     if let Ok(pattern) = elem.get_pattern::<UISelectionItemPattern>() {
         if pattern.select().is_ok() {
@@ -114,7 +114,7 @@ pub(crate) fn select_element_inner(element_id: &str) -> Result<String, String> {
 }
 
 pub(crate) fn expand_element_inner(element_id: &str) -> Result<String, String> {
-    let elem = native_registry::resolve(element_id)?;
+    let elem = native_registry::resolve_for_input(element_id)?;
     let (role, name) = (element::role(&elem), element::name(&elem));
     if let Ok(pattern) = elem.get_pattern::<UIExpandCollapsePattern>() {
         if pattern.expand().is_ok() {
@@ -125,7 +125,7 @@ pub(crate) fn expand_element_inner(element_id: &str) -> Result<String, String> {
 }
 
 pub(crate) fn collapse_element_inner(element_id: &str) -> Result<String, String> {
-    let elem = native_registry::resolve(element_id)?;
+    let elem = native_registry::resolve_for_input(element_id)?;
     let (role, name) = (element::role(&elem), element::name(&elem));
     if let Ok(pattern) = elem.get_pattern::<UIExpandCollapsePattern>() {
         if pattern.collapse().is_ok() {
@@ -140,7 +140,7 @@ pub(crate) fn scroll_element_inner(
     direction: &str,
     _amount: f64,
 ) -> Result<String, String> {
-    let elem = native_registry::resolve(element_id)?;
+    let elem = native_registry::resolve_for_input(element_id)?;
     let (role, name) = (element::role(&elem), element::name(&elem));
     if let Ok(pattern) = elem.get_pattern::<UIScrollPattern>() {
         let result = match direction {

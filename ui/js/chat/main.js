@@ -13,6 +13,8 @@ import { getConfig, onConfigChange } from '../shared/config-cache.js';
 import { trackEventOnce } from '../shared/telemetry.js';
 import { EVT } from '../shared/events.js';
 import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
+import { installHostCommandUi } from '../shared/host-command-view.js';
+import { setRunChipTray } from '../shared/shell-run-view.js';
 
 let app = null;
 
@@ -151,6 +153,15 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
     app = new ChatApp(invoke, appWindow, listen);
     window._chatApp = app; // Expose for permission modal flush
+    // Commands the agent asks Kage to run outside its sandbox: inline in
+    // the answer being written for the session in view, else in the tray
+    // above the composer, where runs whose block left the page stay too.
+    setRunChipTray(document.getElementById('shellRunChips'));
+    installHostCommandUi({
+        tray: document.getElementById('hostCommandTray'),
+        place: (card, prompt) => app.placeHostCommandCard(card, prompt),
+        windowLabel: app.windowLabel,
+    }).catch((e) => console.warn('[chat] host command prompts unavailable:', e));
     // Surface init failures to the backend log — without this catch a
     // throw inside any of the awaits below would silently leave the
     // chat window in a half-initialized state with no signal anywhere.

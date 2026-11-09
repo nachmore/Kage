@@ -23,6 +23,11 @@ pub fn run(
             // session leader, so kill it (and pocket-tts) explicitly.
             // Both are take-then-kill, so paths that already cleaned up
             // are no-ops.
+            // The host-command bridge's socket goes on every exit path
+            // (idempotent: graceful_shutdown may have stopped it already).
+            if let Some(procs) = handler.try_state::<crate::state::ChildProcesses>() {
+                procs.host_commands.stop();
+            }
             if let Some(acp) = handler.try_state::<crate::state::AcpHandles>() {
                 acp.client.disconnect();
             }

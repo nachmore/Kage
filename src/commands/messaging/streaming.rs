@@ -295,11 +295,15 @@ pub async fn cancel_generation(
     session_id: String,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
+    procs: State<'_, crate::state::ChildProcesses>,
 ) -> Result<(), AppError> {
     // Signal automation plan loop to stop
     features
         .automation_plan_cancelled
         .store(true, std::sync::atomic::Ordering::Relaxed);
+    // A command this turn asked to run outside its sandbox that is still
+    // waiting for the user: the agent won't read its result now.
+    procs.host_commands.cancel_session(&session_id);
 
     acp.client.cancel_session(&session_id).map_err(|e| {
         AppError::keyed(

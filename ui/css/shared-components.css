@@ -3111,6 +3111,138 @@ body.light-theme .conn-edit-actions {
     gap: 6px;
 }
 
+/* Commands an agent asks Kage to run outside its sandbox
+   (shared/host-command-view.js): the prompt, then the run, built from the
+   confirm and run view above. The tray holds cards that aren't shown in
+   the answer, and chips for runs whose block left the page
+   (shell-run-view.js setRunChipTray). */
+.host-cmd-tray {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 45vh;
+    overflow-y: auto;
+    color: var(--kage-term-text);
+    font-family: var(--kage-font);
+    font-size: 12px;
+    line-height: 1.45;
+}
+.host-cmd-tray:not(:has(> :not([hidden]))) {
+    display: none;
+}
+.chat-host-cmd-tray {
+    padding: 0 16px 8px;
+}
+.host-cmd-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+.host-cmd-slot:empty {
+    display: none;
+}
+.host-cmd-card {
+    color: var(--kage-term-text);
+    font-family: var(--kage-font);
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: start;
+}
+.host-cmd-head {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.host-cmd-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--kage-term-mark);
+}
+.host-cmd-origin,
+.host-cmd-reason,
+.host-cmd-guard,
+.host-cmd-expiry,
+.host-cmd-status {
+    margin: 0;
+}
+.host-cmd-origin,
+.host-cmd-expiry,
+.host-cmd-reason-label,
+.host-cmd-status[data-kind="info"] {
+    color: var(--kage-term-muted);
+}
+.host-cmd-reason-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.host-cmd-guard {
+    color: var(--kage-term-error);
+    font-weight: 600;
+}
+.host-cmd-expiry[hidden],
+.host-cmd-status[hidden] {
+    display: none;
+}
+.host-cmd-always {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+.host-cmd-prefix {
+    width: 12em;
+    min-width: 6em;
+    max-width: 100%;
+    padding: 3px 6px;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg-strong);
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    font-size: 12px;
+}
+.host-cmd-prefix:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: -1px;
+}
+.host-cmd-actions button:disabled,
+.host-cmd-prefix:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+.shell-run-chips {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.shell-run-chips[hidden] {
+    display: none;
+}
+.shell-run-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg);
+}
+.shell-run-chip-state {
+    flex-shrink: 0;
+    color: var(--kage-term-muted);
+}
+.shell-run-chip-command {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--kage-term-text);
+    font-family: var(--kage-font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* "shell ×N" chip: a toggle for the response's command list. */
 .tool-sources-static {
     display: contents;

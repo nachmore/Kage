@@ -24,7 +24,38 @@ pub struct ToolPermissionsConfig {
     /// [`mcp_server_from_title`].
     #[serde(default)]
     pub trusted_mcp_servers: Vec<String>,
+    /// Commands an agent asks Kage to run outside its sandbox
+    /// (`run_outside_sandbox`) that run without asking: "Always allow
+    /// commands starting with …" (`host_commands::rules`). Backend-owned
+    /// and machine-local: only the prompt's "Always allow" adds one and
+    /// Settings removes one, each through its own audited command; a
+    /// Settings snapshot, a backup or sync never changes them. Never
+    /// implied by `trust_all`, `terminator_mode`, `trusted_kinds` or
+    /// `trusted_mcp_servers`.
+    #[serde(default)]
+    pub host_command_rules: Vec<HostCommandRule>,
+    /// Run every such command without asking — except those the credential
+    /// guard flags or that hold hidden characters, which always ask.
+    /// Backend-owned like `host_command_rules`; off by default.
+    #[serde(default)]
+    pub host_commands_allow_all: bool,
 }
+
+/// "Always allow commands starting with `prefix`" for commands an agent
+/// runs outside its sandbox.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct HostCommandRule {
+    /// Whole words a command must start with (see
+    /// `host_commands::rules::rule_matches`), single-spaced.
+    #[serde(default)]
+    pub prefix: String,
+    /// RFC 3339 time the user made it.
+    #[serde(default)]
+    pub created_at: String,
+}
+
+/// Most rules Kage keeps; more is a sign of something adding them in bulk.
+pub const MAX_HOST_COMMAND_RULES: usize = 200;
 
 /// ACP `ToolKind` for running shell / CLI commands.
 pub const TOOL_KIND_EXECUTE: &str = "execute";
@@ -84,11 +115,17 @@ fn is_mcp_identifier(s: &str, max_len: usize) -> bool {
 /// so a command spelled `@foo/bar` produces the same title — see
 /// `classify_mcp_server` in the permission handler.
 pub fn mcp_server_from_title(title: &str) -> Option<&str> {
+    mcp_tool_from_title(title).map(|(server, _)| server)
+}
+
+/// The `(server, tool)` an MCP tool call title names, under the same rules
+/// as [`mcp_server_from_title`].
+pub fn mcp_tool_from_title(title: &str) -> Option<(&str, &str)> {
     if let Some(rest) = title.strip_prefix(KIRO_MCP_TITLE_PREFIX) {
         let (server, tool) = rest.split_once('/')?;
         return (is_valid_mcp_server_name(server)
             && is_mcp_identifier(tool, MAX_MCP_TOOL_NAME_LEN))
-        .then_some(server);
+        .then_some((server, tool));
     }
     if let Some(rest) = title.strip_prefix(CLAUDE_MCP_NAME_PREFIX) {
         if rest.matches("__").count() != 1 || rest.contains("___") {
@@ -100,7 +137,7 @@ pub fn mcp_server_from_title(title: &str) -> Option<&str> {
         }
         return (is_valid_mcp_server_name(server)
             && is_mcp_identifier(tool, MAX_MCP_TOOL_NAME_LEN))
-        .then_some(server);
+        .then_some((server, tool));
     }
     None
 }

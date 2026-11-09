@@ -29,6 +29,7 @@ pub mod ephemeral_session;
 pub mod error;
 pub mod events;
 pub mod extensions;
+pub mod host_commands;
 pub mod hotkey_norm;
 pub mod i18n;
 pub mod internal_sites;

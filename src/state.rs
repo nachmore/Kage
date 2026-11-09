@@ -309,6 +309,9 @@ pub struct ChildProcesses {
     /// Commands the user is running from a sandbox notice, one per window
     /// at most (`commands::system::user_shell`).
     pub user_shell_runs: Arc<crate::commands::system::user_shell::UserShellRuns>,
+    /// Commands agents ask Kage to run outside their sandbox: the bridge
+    /// and the prompts waiting for the user (`host_commands`).
+    pub host_commands: Arc<crate::host_commands::HostCommands>,
 }
 
 /// Long-lived feature singletons and caches — services that exist for the
@@ -385,6 +388,7 @@ pub fn build_managed_state(
             pocket_tts: Arc::new(std::sync::Mutex::new(None)),
             pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
             user_shell_runs: Arc::new(crate::commands::system::user_shell::UserShellRuns::new()),
+            host_commands: Arc::new(crate::host_commands::HostCommands::new()),
         },
         feature_services: FeatureServices {
             config,

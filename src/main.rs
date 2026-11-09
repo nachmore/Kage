@@ -35,6 +35,7 @@ mod ext_views;
 #[allow(dead_code)] // Nothing records folder sync's changes until sync lands.
 mod extension_data_events;
 mod extensions;
+mod host_commands;
 mod hotkey_norm;
 mod i18n;
 mod internal_sites;
@@ -271,7 +272,10 @@ async fn run() {
         let tts = child_processes.pocket_tts.clone();
         let install = child_processes.pocket_tts_install.clone();
         let user_runs = child_processes.user_shell_runs.clone();
+        let host_commands = child_processes.host_commands.clone();
         process_manager::register_child_killer(move || {
+            // The host-command bridge's socket goes with us.
+            host_commands.stop();
             // Commands the user runs from a sandbox notice lead their own
             // process groups: stop them (SIGTERM, then SIGKILL) first.
             user_runs.cancel_all_and_wait(std::time::Duration::from_millis(1500));
@@ -482,6 +486,11 @@ async fn run() {
                 // A command the user was running from one of its sandbox
                 // notices has nothing left to show it or its Stop button.
                 stop_user_shell_run(window.app_handle(), window.label(), "its window closed");
+                // Prompts for an agent's commands shown there can't be
+                // answered any more.
+                if let Some(procs) = window.try_state::<state::ChildProcesses>() {
+                    procs.host_commands.approvals.close_window(window.label());
+                }
             }
         })
         .on_page_load(|webview, payload| {

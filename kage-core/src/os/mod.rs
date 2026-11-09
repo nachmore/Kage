@@ -15,6 +15,10 @@ pub mod macos;
 #[cfg(target_os = "linux")]
 pub mod linux;
 
+// Shared by the macOS and Linux implementations; reached through them.
+#[cfg(unix)]
+pub mod unix;
+
 #[cfg(target_os = "windows")]
 pub use windows as platform;
 
@@ -25,7 +29,9 @@ pub use macos as platform;
 pub use linux as platform;
 
 pub mod accessibility;
+pub mod host_bridge;
 pub mod input;
+pub mod kage_target;
 pub mod launcher;
 pub mod process;
 

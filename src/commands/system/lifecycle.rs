@@ -50,8 +50,13 @@ pub fn graceful_shutdown<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         }
         drop(install_proc);
         drop(tts_proc);
-        // A command the user is running from a sandbox notice leads its
-        // own process group, which nothing else stops on macOS/Linux.
+        // No more agent requests to run commands outside their sandbox:
+        // the bridge stops and its socket goes; waiting prompts are told
+        // Kage is quitting.
+        procs.host_commands.stop();
+        // A command the user (or an agent, through the bridge) is running
+        // leads its own process group, which nothing else stops on
+        // macOS/Linux.
         procs
             .user_shell_runs
             .cancel_all_and_wait(std::time::Duration::from_millis(1500));

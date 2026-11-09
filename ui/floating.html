@@ -69,6 +69,13 @@
             <!-- Extension widget slots: managed by ExtensionManager. -->
             <div id="extWidgetSlotBottom" class="ext-widget-slot ext-widget-slot-bottom"></div>
             <div id="extWidgetSlotStatus" class="ext-widget-slot ext-widget-slot-status"></div>
+            <!-- Commands the agent asks Kage to run outside its sandbox, and
+                 runs still going whose block a new prompt or reset removed
+                 (shared/host-command-view.js, shared/shell-run-view.js).
+                 Outside the content area, so a reset never clears it. -->
+            <div class="host-cmd-tray" id="hostCommandTray">
+                <div class="shell-run-chips" id="shellRunChips" hidden></div>
+            </div>
             <div class="input-container">
                 <div class="attachment-preview-strip" id="attachmentPreviews"></div>
                 <div class="app-mode-chip" id="appModeChip" style="display:none" data-i18n-title="floating.app_mode_chip_title" title="Click to disable for this message">
