@@ -2,7 +2,7 @@
 //!
 //! Seeds: `KAGE_FILE_TEXT_SEEDS=fuzz/corpus/pdf cargo test -p
 //! kage-file-text --test pdf_seeds`, run in `kage-file-text/`. PDF
-//! keywords for the mutator: `cargo fuzz run pdf -s none -- -dict=dicts/pdf.dict`.
+//! keywords for the mutator: `cargo fuzz run pdf -s none -- -dict=dict/pdf.dict`.
 //!
 //! `pdf-extract` panics on many broken pages, and the reader catches that
 //! for each page (EXTENSION_FILE_TEXT §6.2 step 2). The panic hook

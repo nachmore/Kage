@@ -326,11 +326,21 @@ normalisation in §5.10.
   one entry per slide read. Title: `dc:title`, else the first visible
   slide's title.
 - **HTML**: visible text. Skipped: `script`, `style`, `noscript`,
-  `template`, `svg`, `head` (except `title`), elements with the `hidden`
-  attribute or an inline `display:none`. `h1`–`h3` become headings, `li`
-  becomes `- `. Nothing is fetched. Title: `<title>`.
-- **RTF**: body text. Skipped: font, colour and style tables, pictures,
-  objects, headers, footers, field instructions (field results kept).
+  `template`, `svg`, `iframe`, `datalist`, `head` (except `title`),
+  comments, elements with the `hidden` attribute or an inline
+  `display:none` (`hidden_text_skipped`). `h1`–`h3` become headings, `li`
+  becomes `- `. Block elements end lines or paragraphs, table cells are
+  separated by a tab and rows by a line break, and whitespace collapses
+  as in a browser except in `pre` and `textarea`. Nothing is fetched.
+  Title: the first `<title>`.
+- **RTF**: body text. `\par` ends a paragraph, `\line` a line, `\cell` a
+  table cell (tab) and `\row` a row. Heading styles 1–3 (by
+  `\outlinelevel` or the style's name, and `Title`) become `#`–`###`;
+  list paragraphs start with `- `, one line each. Footnotes and endnotes
+  at the end under `Notes`, as for DOCX. Skipped: font, colour, style and
+  list tables, pictures, objects, headers, footers, field instructions
+  (field results kept), comments, bookmarks, index entries, unknown `\*`
+  destinations, deleted revisions, hidden text (`hidden_text_skipped`).
   Title: `\title` in `\info`.
 
 ### 3.8 Errors and i18n keys
@@ -918,20 +928,46 @@ Three details:
 - Info `/Title` → `title`.
 
 **HTML** (P1, `kage-file-text/src/html/`)
-- Encoding: BOM, then a `<meta charset>` prescan of the first 1,024 bytes,
-  then UTF-8, then Windows-1252 (the HTML standard's fallback).
-- `html5ever`'s tokenizer with a small sink, no tree builder: linear time,
-  no DOM in memory. A stack of open "skipped" elements handles
-  `script`/`style`/`hidden`; mis-nested markup can only make it skip too
-  little or too much text, never loop.
+- Encoding: BOM, then a `<meta charset>` prescan of the first 1,024 bytes
+  (the WHATWG algorithm), then the plain text order of this section:
+  UTF-8, UTF-8 with a few bad bytes, then a `chardetng` guess
+  (`legacy_encoding`). For Western text the guess is Windows-1252, the
+  HTML standard's fallback; for other unlabelled pages it does better.
+  More than 1% control characters → `not_text`, as for plain text.
+- `html5ever`'s tokenizer with a small sink, no tree builder: no DOM in
+  memory, and linear time but for one thing: html5ever's
+  duplicate-attribute check costs n² for a tag with n attributes. Real
+  tags have a few dozen; a crafted tag with 100,000 runs into the
+  worker's deadline (`timeout`), which bounds it.
+- The sink switches the tokenizer to raw text for `script`, `style`,
+  `title`, `textarea` and the like, as the tree builder would, also inside
+  skipped elements. It skips one element at a time (the outermost), which
+  ends at its own end tag (same-name elements inside are counted), at an
+  implied end (`<p hidden>` ends at the next block, `<li hidden>` at the
+  next item, cells and rows likewise), or at `</body>`. Mis-nested markup
+  can only make it skip too little or too much text, never loop. A
+  self-closing tag (`<div hidden/>`) is an empty element, as in XHTML.
+  `head` needs no state of its own: what may be in it is void, raw text
+  or the title, and stray text in it shows, as browsers show it.
+- Tried on about 1,700 HTML files from macOS and its apps: all read, the
+  largest (15 MB) in 0.2 s; 30 MB of generated markup takes 0.5 s.
 
 **RTF** (P1, `kage-file-text/src/rtf/`)
-- An in-house tokenizer of about 300 lines: groups, control words with
-  numeric parameters, `\'hh` bytes decoded with the `\ansicpg` code page
-  (via `encoding_rs`), `\uN` with `\ucN` fallback skipping, `\bin N`
-  skipped (capped by the input length). Group depth over 256 →
-  `too_complex`. WP-FT4 may use the `rtf-parser` crate instead if it passes
-  the same tests and fuzzing.
+- An in-house tokenizer and reader (decided in WP-FT4; `rtf-parser` was
+  not needed): groups, control words with numeric parameters, `\'hh`
+  bytes and 8-bit text decoded with the font's `\fcharset` (ANSI is
+  Windows-1252, as LibreOffice reads it) or `\cpg`, else the `\ansicpg`
+  code page (via `encoding_rs`; double-byte code pages work across
+  escapes; bytes that aren't UTF-8 under `\ansicpg65001` are
+  Windows-1252, as older Cocoa writers meant them), `\uN` with surrogate
+  pairs and `\ucN` fallback skipping (a byte, an escape or a control
+  word each count as one), `\upr` read through its `\ud` part, `\bin N`
+  skipped in the lexer (capped by the input length). Group depth over
+  256 → `too_complex`. Text after the document's group closes is
+  ignored; a file that ends early is read as far as it goes.
+- Tried on about 1,100 RTF files from macOS and its apps (mostly Cocoa,
+  in many languages): all read, none with replaced characters, the
+  largest (1.4 MB) in 13 ms.
 
 ### 5.10 Text normalisation and truncation
 
@@ -1072,7 +1108,7 @@ planned tree with `cargo deny check licenses` (§6.1).
 | Encoding detection | `chardetng` (new) | Apache-2.0 or MIT | Firefox's detector. |
 | NFC | `icu_normalizer` (already used for backup names) | Unicode-3.0 | |
 | HMAC | `hmac` (new, app crate) | MIT or Apache-2.0 | Matches `sha2` 0.10. |
-| RTF | in-house (default), or `rtf-parser` | — / MIT | Decided in FT4. |
+| RTF | in-house | — | Decided in FT4: a small reader of our own, no new dependency (§5.9). |
 
 Rejected:
 - `lopdf` alone (0.42 or 0.47) as the PDF extractor: in WP-FT0 it read no
@@ -1373,7 +1409,7 @@ unchanged. The new surface is three commands under one new capability.
 | Dialog spam, or a dialog opened by the agent through a tool | Dialogs open only after a host-seen click (one per click) or a click on the host's ask bar. One request app-wide; 3 s between dialogs; 30 s after **Not now**. | An extension can open the dialog after any of its own buttons is clicked. The title names it. |
 | Phishing text in the dialog | The title is a fixed string with the manifest name. No extension text. | A misleading extension name, the same as in the install prompt. |
 | Hidden window pops up a dialog | `no_window` in hidden windows. The launcher is never opened for this. | — |
-| A crafted file exploits a parser | Pure-Rust parsers (no C), in a separate process with a 768 MiB allocator cap, OS memory and CPU limits, a 30 s deadline, no file access and no network need, a fixed `--v1` protocol, capped output. A crash is an error message. | A logic bug can still return wrong or partial text. Fuzzing (§12) lowers the odds. |
+| A crafted file exploits a parser | Pure-Rust parsers (no C), in a separate process with a 768 MiB allocator cap, OS memory and CPU limits, a 30 s deadline, no file access and no network need, a fixed `--v1` protocol, capped output. A crash is an error message. | A logic bug can still return wrong or partial text. Fuzzing (§12) lowers the odds. An HTML tag with some 100,000 attributes hits html5ever's quadratic duplicate check and runs into the deadline (§5.9). |
 | ZIP bombs, overlapping entries | Only named parts are inflated; per-part and total caps counted while inflating; entry count cap. | — |
 | XML attacks (XXE, entity expansion, deep nesting) | `quick-xml` doesn't resolve DTDs or external entities; depth cap. | — |
 | PDF bombs (huge streams, object loops, deep nesting) | Page cap, a 32 MiB stream cap set while loading, a `/Parent` cycle check (§6.2), allocator cap, big worker stack plus depth limits, deadline. | Lost work on hostile files only. |
@@ -1780,7 +1816,9 @@ Item {
   none` works on stable Rust. A mutated ZIP rarely passes its CRC
   checks, so the `ooxml` target also takes raw XML (a document, its
   side parts, or a slide) and packs it into a valid package itself;
-  `tests/ooxml_seeds.rs` writes its seeds from the test fixtures.
+  `tests/ooxml_seeds.rs` writes its seeds from the test fixtures. HTML
+  and RTF also have hand-written seeds in `fuzz/seeds/`. libFuzzer
+  dictionaries for PDF, HTML and RTF live in `fuzz/dict/`.
 
 **App crate**
 - Unit (`src/file_text/*`): args validation; grant and enabled checks;
@@ -1977,6 +2015,12 @@ with EXTENSION_AGENT_CALLS's `AC-X1` and `AC-MM1`…`AC-MM3`.
 **WP-FT4 HTML and RTF** (P1: `kage-file-text/src/html/**`,
 `kage-file-text/src/rtf/**`, their tests and fuzz targets)
 - Accept: §3.7 conventions; §12 cases; fuzz targets run 10 minutes clean.
+- Done: both readers, with unit tests next to them
+  (`src/{html,rtf}/tests.rs`), seeds and dictionaries for their fuzz
+  targets. RTF is in-house (§6). The decisions are in §3.7 and §5.9.
+  Each target ran 10 minutes clean on Apple silicon (`-s none`, a
+  16 KiB input cap): HTML 3.3 million inputs, RTF 5.8 million, the
+  slowest under a second.
 
 **WP-FT5 Host commands** (`src/file_text/{mod,dialog,read,worker,file_ref,post}.rs`,
 `src/commands/extensions/file_text.rs`, `src/commands/extensions/mod.rs`,
