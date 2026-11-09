@@ -1532,6 +1532,15 @@ Measured against [`docs/SECURITY_MODEL.md`](../SECURITY_MODEL.md).
   shared by the four designs: capability badges, the sync chip (SYNC
   §12.3), the Background AI panel (EXTENSION_AGENT_CALLS §4.2), this
   Windows block, then the extension's own settings.
+- The block is shown only when the extension holds `views` and declares
+  a valid view. It is the first thing inside the extension's content
+  (`#ext-content-<id>`), so turning the extension off in the header dims
+  it with the rest. View titles resolve `__MSG_*__` with the extension's
+  catalog, then fall back to its name. **Open** calls `ext_view_open`
+  with `source: 'settings'` and no params; **Reset** calls
+  `ext_view_reset_geometry` for every view of the extension. Results and
+  errors show in the block's status line. Like the extension's own page,
+  only extensions with a `settingsProvider` get a Settings page today.
 - No global setting. The grant is the switch: an extension without
   `views` has no windows.
 
@@ -2010,6 +2019,26 @@ package codes against this document.
   `ui-tests/shared/extension-host-effects.test.js` (new),
   `ui-tests/floating/blur-view-companion.test.js` (new),
   `ui-tests/settings/extension-views-block.test.js` (new).
+  Decisions made while building it (the sections above say the same):
+  - The toolbar `open_view` is opened in `ExtensionManager.runToolbarClick`
+    (`extension-manager/ui.js`), which knows the extension; the windows'
+    toolbar appliers (`floating/app/ui-state.js`, `chat/app/models-toolbar.js`)
+    stay untouched and `toolbar-host-effects.js` ignores the type (§6.1).
+  - The extension manager gains the options `resultSource`,
+    `onBeforeOpenView`, `listen` and `windowLabel`, and the methods
+    `openView`, `extensionViewDenial` and `hasViewCapableExtensions`.
+    The floating window offers `views` with `resultSource: 'launcher'`
+    and Rule A as `onBeforeOpenView`; chat windows with
+    `resultSource: 'chat'`.
+  - The §6.2 grant check reads the window's offered features before the
+    grant cuts them, so `not_granted` is reachable (§6.2).
+  - Rule B asks Rust only when a view-capable extension is loaded, and
+    hides as before when the launcher is already hidden (§15.2).
+  - `manager.js` changes in two more small places:
+    `buildSandboxedSettingsModule` takes a `hostFeatures` argument (the
+    settings sandboxes' `views` feature, passed in by `settings/main.js`),
+    and the Windows block call sits inside `#ext-content-<id>` (§18.4).
+  - A host-side refusal is shown like a Rust one (§6.3).
 - **Done when:**
   - The listed vitest files pass, plus the existing floating, chat and
     settings suites.
