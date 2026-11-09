@@ -10201,9 +10201,9 @@
   },
   "context_menu.learn_spelling": {
     "message": "Memorizza ortografia",
-    "description": "Right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged",
+    "description": "macOS right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged. Use the exact wording macOS uses in this language (Edit → Spelling and Grammar context menu).",
     "_machine_translated": true,
-    "_source_hash": "6803872d0761ede6"
+    "_source_hash": "dc11150064463210"
   },
   "command.update.description": {
     "message": "Cerca un aggiornamento e installalo subito",
@@ -10252,5 +10252,11 @@
     "description": "Returned when an update install is started (Install now / >update / Settings) while another one is still running",
     "_machine_translated": true,
     "_source_hash": "84cc11e42e58b662"
+  },
+  "context_menu.add_to_dictionary": {
+    "message": "Aggiungi al dizionario",
+    "description": "Windows/Linux right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged. Use the exact wording Windows and Chrome use in this language.",
+    "_machine_translated": true,
+    "_source_hash": "684ea001b4dcd10f"
   }
 }

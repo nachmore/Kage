@@ -144,10 +144,12 @@ export function cleanSuggestions(suggestions) {
 
 /**
  * Menu items for a misspelled word: its suggestions (or a disabled "No
- * guesses found"), Learn spelling, then the usual text menu. Suggestions
- * are the user's language, so they're plain labels, never i18n keys.
+ * guesses found"), the OS's own name for adding the word to the dictionary
+ * (macOS: Learn Spelling; Windows and Linux: Add to dictionary), then the
+ * usual text menu. Suggestions are the user's language, so they're plain
+ * labels, never i18n keys.
  */
-export function spellMenuItems(suggestions, { devMode = false } = {}) {
+export function spellMenuItems(suggestions, { devMode = false, mac = false } = {}) {
     const guesses = cleanSuggestions(suggestions);
     const head = guesses.length
         ? guesses.map((label, i) => ({ id: `spell:${i}`, label }))
@@ -155,7 +157,10 @@ export function spellMenuItems(suggestions, { devMode = false } = {}) {
     return [
         ...head,
         SEPARATOR,
-        { id: SPELL_LEARN_ID, labelKey: 'context_menu.learn_spelling' },
+        {
+            id: SPELL_LEARN_ID,
+            labelKey: mac ? 'context_menu.learn_spelling' : 'context_menu.add_to_dictionary',
+        },
         SEPARATOR,
         ...defaultTextMenuItems({ devMode }),
     ];

@@ -3338,8 +3338,12 @@
     "description": "Right-click menu on a misspelled word — shown (disabled) when the spell checker has no replacement to suggest"
   },
   "context_menu.learn_spelling": {
-    "message": "Learn spelling",
-    "description": "Right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged"
+    "message": "Learn Spelling",
+    "description": "macOS right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged. Use the exact wording macOS uses in this language (Edit → Spelling and Grammar context menu)."
+  },
+  "context_menu.add_to_dictionary": {
+    "message": "Add to dictionary",
+    "description": "Windows/Linux right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged. Use the exact wording Windows and Chrome use in this language."
   },
   "result_menu.open": {
     "message": "Open",

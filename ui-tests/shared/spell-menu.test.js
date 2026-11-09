@@ -230,8 +230,8 @@ describe('cleanSuggestions', () => {
 describe('spellMenuItems', () => {
     const textMenu = defaultTextMenuItems();
 
-    it('lists suggestions as plain labels, then Learn, then the text menu', () => {
-        const items = spellMenuItems(['hello', 'hellos']);
+    it('lists suggestions as plain labels, then Learn Spelling, then the text menu', () => {
+        const items = spellMenuItems(['hello', 'hellos'], { mac: true });
         expect(items).toEqual([
             { id: 'spell:0', label: 'hello' },
             { id: 'spell:1', label: 'hellos' },
@@ -240,6 +240,11 @@ describe('spellMenuItems', () => {
             { separator: true },
             ...textMenu,
         ]);
+    });
+
+    it('says Add to dictionary off macOS, as Windows and Chromium do', () => {
+        const learn = spellMenuItems(['hello']).find((i) => i.id === SPELL_LEARN_ID);
+        expect(learn).toEqual({ id: SPELL_LEARN_ID, labelKey: 'context_menu.add_to_dictionary' });
     });
 
     it('shows a disabled "No guesses found" when there are none', () => {

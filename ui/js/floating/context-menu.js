@@ -145,7 +145,7 @@ function initContextMenu(invoke, appWindow, listen) {
         if (!suggestions) return false;
         hold();
         try {
-            const items = spellMenuItems(suggestions, { devMode });
+            const items = spellMenuItems(suggestions, { devMode, mac });
             const choice = await menu.open({ ...point, items });
             window._contextMenuOpen = false;
             const pick = spellChoice(choice.action, suggestions);
