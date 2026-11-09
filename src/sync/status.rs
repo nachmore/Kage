@@ -1234,18 +1234,32 @@ impl SyncEngine {
                 let mut seen = BTreeSet::new();
                 for (k, _, reason) in tx.pins(None)? {
                     match reason {
-                        PinReason::NeedsApproval if k.ns != CFG_NS => {
-                            let key = super::guards::guard_key(&k.ns, &k.id);
+                        PinReason::NeedsApproval => {
+                            // A held item, or the active connection waiting
+                            // for the connection it points to.
+                            let (ns, id) = if k.ns != CFG_NS {
+                                (k.ns.clone(), k.id.clone())
+                            } else if k.id == "acp.active_connection_id" {
+                                let target = tx.record(CFG_NS, &k.id)?.and_then(|r| {
+                                    eff_cell(&r, FIELD, os)
+                                        .and_then(|c| c.value.as_str().map(str::to_string))
+                                });
+                                let Some(target) = target else { continue };
+                                ("list.connections".to_string(), target)
+                            } else {
+                                continue;
+                            };
+                            let key = super::guards::guard_key(&ns, &id);
                             if !seen.insert(key.clone())
                                 || tx.meta(&format!("held.{key}"))?.is_none()
                             {
                                 continue;
                             }
-                            let Some(rec) = tx.record(&k.ns, &k.id)? else {
+                            let Some(rec) = tx.record(&ns, &id)? else {
                                 continue;
                             };
                             let Some(spec) =
-                                catalog::list_spec(&k.ns).map(super::sources::lists::spec_of)
+                                catalog::list_spec(&ns).map(super::sources::lists::spec_of)
                             else {
                                 continue;
                             };
@@ -1256,10 +1270,10 @@ impl SyncEngine {
                                 &BTreeMap::new(),
                                 os,
                             );
-                            let detail = super::guards::runnable_of(&k.ns, &eff.fields)
-                                .map(|v| runnable_text(&k.ns, &v));
+                            let detail = super::guards::runnable_of(&ns, &eff.fields)
+                                .map(|v| runnable_text(&ns, &v));
                             let (label_key, label_params) =
-                                record_label(&k.ns, &k.id, Some(&rec), None, os);
+                                record_label(&ns, &id, Some(&rec), None, os);
                             let by = rec.cells.values().map(|c| c.stamp).max();
                             out.runnables.push(ReviewItem {
                                 kind: "runnable".into(),

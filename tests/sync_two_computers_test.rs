@@ -493,6 +493,92 @@ fn i23_runnables_wait_for_approval() {
     assert_eq!(reviews(&mut b).runnables.len(), 1);
     // The hold never travels: A keeps it on.
     assert!(a.config().macros[0].enabled);
+    // Keep off: it stays off and stops asking, also after a rename.
+    let key = reviews(&mut b).runnables[0].id.clone();
+    b.ask(EngineRequest::KeepOff(key));
+    a.edit(|c| c.macros[0].name = "Nightly job".into());
+    cloud.settle(&mut [&mut a, &mut b], 3);
+    assert_eq!(b.config().macros[0].name, "Nightly job");
+    assert!(!b.config().macros[0].enabled);
+    assert!(reviews(&mut b).runnables.is_empty());
+}
+
+/// The active connection follows another computer only once the command
+/// of the connection it points to is approved here. "Keep off" stops the
+/// asking until that command changes; pointing back needs no review.
+#[test]
+fn the_active_connection_waits_for_approval() {
+    let clock = clock();
+    let mut a = SimComputer::new("Home Mac", OsKind::Macos, clock.clone());
+    let mut c = SimComputer::new("Laptop", OsKind::Macos, clock.clone());
+    let mut cloud = SimCloud::new();
+    a.create();
+    cloud.step(&mut [&mut a, &mut c]);
+    c.join(JoinChoice::Theirs);
+    cloud.settle(&mut [&mut a, &mut c], 3);
+    let local = |cmd: &str| -> kage::config::AgentConnection {
+        serde_json::from_value(json!({
+            "id": "agent2",
+            "name": "My agent",
+            "mode": { "type": "local", "spawn_command": cmd },
+        }))
+        .unwrap()
+    };
+    let first = local("my-agent --acp");
+    a.edit(move |cfg| {
+        cfg.acp.connections.push(first);
+        cfg.acp.active_connection_id = "agent2".into();
+    });
+    cloud.settle(&mut [&mut a, &mut c], 3);
+    assert_eq!(c.config().acp.connections.len(), 2);
+    assert_eq!(c.config().acp.active_connection_id, "default", "waits");
+    let r = reviews(&mut c);
+    assert_eq!(r.runnables.len(), 1, "{r:?}");
+    assert_eq!(r.runnables[0].id, "list.connections/agent2");
+    assert!(r.runnables[0]
+        .detail
+        .as_deref()
+        .unwrap_or("")
+        .contains("my-agent"));
+
+    // Keep off: no more asking, the pointer stays.
+    c.ask(EngineRequest::KeepOff("list.connections/agent2".into()));
+    c.tick();
+    assert!(reviews(&mut c).runnables.is_empty());
+    assert_eq!(c.config().acp.active_connection_id, "default");
+
+    // A waiting pointer follows a move to a connection that runs nothing.
+    a.edit(|cfg| {
+        let mut remote = cfg.acp.connections[0].clone();
+        remote.id = "agent3".into();
+        remote.name = "Remote".into();
+        cfg.acp.connections.push(remote);
+        cfg.acp.active_connection_id = "agent3".into();
+    });
+    cloud.settle(&mut [&mut a, &mut c], 3);
+    assert_eq!(c.config().acp.active_connection_id, "agent3");
+
+    // A new command asks again; approving it moves the pointer.
+    a.edit(|cfg| {
+        cfg.acp.connections[1] = local("my-agent --acp --fast");
+        cfg.acp.active_connection_id = "agent2".into();
+    });
+    cloud.settle(&mut [&mut a, &mut c], 3);
+    assert_eq!(c.config().acp.active_connection_id, "agent3");
+    assert_eq!(reviews(&mut c).runnables.len(), 1);
+    c.ask(EngineRequest::ApproveRunnable(
+        "list.connections/agent2".into(),
+    ));
+    c.tick();
+    assert_eq!(c.config().acp.active_connection_id, "agent2");
+    assert!(reviews(&mut c).runnables.is_empty());
+
+    // Pointing back to a connection that runs nothing needs no review.
+    a.edit(|cfg| cfg.acp.active_connection_id = "default".into());
+    cloud.settle(&mut [&mut a, &mut c], 3);
+    assert_eq!(c.config().acp.active_connection_id, "default");
+    assert!(c.conflicts().is_empty());
+    assert_eq!(a.config().acp.active_connection_id, "default");
 }
 
 /// I24: an extension switched on elsewhere stays off where its grant

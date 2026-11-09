@@ -1286,6 +1286,11 @@ their runnable part changed:
   Settings page counts as approval.
 - Held state is a `needs_approval` pin, so the hold never travels back to
   the folder as a change.
+- [Keep off] leaves the item held and stops asking until its runnable
+  part changes again. A held active pointer is listed under the
+  connection it points to. It follows the synced value again once that
+  value names an approved connection, one that runs nothing, or the one
+  already active here.
 - Shortcuts are not held. They run only when the user triggers them.
 
 **Consent.** Synced `extension_states.<id> = true` switches an extension

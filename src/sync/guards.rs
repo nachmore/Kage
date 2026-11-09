@@ -11,7 +11,9 @@
 //! | Automation with a schedule or signal trigger | `trigger` (without `last_run`) and `steps` | the automation is off here |
 //!
 //! A held value is a `needs_approval` pin, so the hold never travels to the
-//! folder. Approval stores `SHA-256(runnable part)` in
+//! folder. `held.<ns>/<id>` meta lists it for review; "Keep off" moves the
+//! hash to `kept_off.<ns>/<id>` so the same version doesn't ask again.
+//! Approval stores `SHA-256(runnable part)` in
 //! `device.json.approved_runnables`; whatever this computer itself runs
 //! (captured from its own files while switched on) counts as approved.
 
@@ -203,7 +205,7 @@ pub(crate) fn apply(
     id: &str,
     target: &mut LocalRecord,
     local: Option<&LocalRecord>,
-    _rec: &Record,
+    rec: &Record,
     local_cfg: &Config,
     _installed: &BTreeSet<String>,
     approved: &BTreeMap<String, String>,
@@ -235,29 +237,26 @@ pub(crate) fn apply(
                 target.fields.insert(FIELD.to_string(), Value::Bool(false));
             }
         }
-        if id == "acp.active_connection_id" && pinned.is_none() {
+        let waiting = matches!(pinned, Some((_, PinReason::NeedsApproval)));
+        if id == "acp.active_connection_id" && (pinned.is_none() || waiting) {
             // The previous active connection stays while the new one's
-            // command isn't approved here.
-            if let Some(target_id) = v.as_str() {
-                if Some(target_id) != local_v.as_str() {
-                    if let Some(conn) = tx.record("list.connections", target_id)? {
-                        let pins = super::engine::pins_of(tx, "list.connections", target_id)?;
-                        let spec = super::sources::lists::spec_of(
-                            catalog::list_spec("list.connections").expect("a list"),
-                        );
-                        let eff = super::engine::effective_record(&spec, &conn, None, &pins, os);
-                        if let Some(r) = runnable_of("list.connections", &eff.fields) {
-                            let h = runnable_hash(&r);
-                            if approved.get(&guard_key("list.connections", target_id)) != Some(&h) {
-                                tx.set_pin(
-                                    &key,
-                                    Some((local_v.clone(), PinReason::NeedsApproval)),
-                                )?;
-                                target.fields.insert(FIELD.to_string(), local_v);
-                            }
-                        }
-                    }
+            // command isn't approved here. A pointer that waits follows
+            // the synced value again once that is approved or points back.
+            let synced = super::engine::eff_cell(rec, FIELD, os)
+                .map(|c| c.value.clone())
+                .unwrap_or_else(|| v.clone());
+            match pointer_hold(tx, &synced, &local_v, approved, os)? {
+                Some((gk, h)) => {
+                    tx.set_pin(&key, Some((local_v.clone(), PinReason::NeedsApproval)))?;
+                    target.fields.insert(FIELD.to_string(), local_v);
+                    // Listed for review under the connection.
+                    ask_review(tx, &gk, &h)?;
                 }
+                None if waiting => {
+                    tx.set_pin(&key, None)?;
+                    target.fields.insert(FIELD.to_string(), synced);
+                }
+                None => {}
             }
         }
         return Ok(());
@@ -280,22 +279,74 @@ pub(crate) fn apply(
     match ns {
         "list.macros" | "list.internal_sites" => {
             let k = LocalKey::new(ns, id, "enabled");
-            tx.set_pin(&k, Some((Value::Bool(false), PinReason::NeedsApproval)))?;
+            hold_for_review(tx, &k, Value::Bool(false), &key, &h)?;
             target.fields.insert("enabled".into(), Value::Bool(false));
-            tx.set_meta(&format!("held.{key}"), &h)?;
         }
         // Only the active connection runs by itself.
         "list.connections" if local_cfg.acp.active_connection_id == id => {
             if let Some(prev) = local.and_then(|l| l.fields.get("mode")).cloned() {
                 if !same(&prev, &r) {
                     let k = LocalKey::new(ns, id, "mode");
-                    tx.set_pin(&k, Some((prev.clone(), PinReason::NeedsApproval)))?;
+                    hold_for_review(tx, &k, prev.clone(), &key, &h)?;
                     target.fields.insert("mode".into(), prev);
-                    tx.set_meta(&format!("held.{key}"), &h)?;
                 }
             }
         }
         _ => {}
+    }
+    Ok(())
+}
+
+/// Whether the active pointer moving from `local` to `synced` waits for a
+/// review: the connection it points to runs a command that isn't approved
+/// here. Gives the guard key and the command's hash.
+fn pointer_hold(
+    tx: &mut Tx<'_>,
+    synced: &Value,
+    local: &Value,
+    approved: &BTreeMap<String, String>,
+    os: OsKind,
+) -> anyhow::Result<Option<(String, String)>> {
+    let Some(target_id) = synced.as_str() else {
+        return Ok(None);
+    };
+    if Some(target_id) == local.as_str() {
+        return Ok(None);
+    }
+    let Some(conn) = tx.record("list.connections", target_id)? else {
+        return Ok(None);
+    };
+    let pins = super::engine::pins_of(tx, "list.connections", target_id)?;
+    let spec =
+        super::sources::lists::spec_of(catalog::list_spec("list.connections").expect("a list"));
+    let eff = super::engine::effective_record(&spec, &conn, None, &pins, os);
+    let Some(r) = runnable_of("list.connections", &eff.fields) else {
+        return Ok(None);
+    };
+    let h = runnable_hash(&r);
+    let gk = guard_key("list.connections", target_id);
+    Ok((approved.get(&gk) != Some(&h)).then_some((gk, h)))
+}
+
+/// Hold a field with `value` (a `needs_approval` pin) and list the item
+/// for review.
+fn hold_for_review(
+    tx: &mut Tx<'_>,
+    k: &LocalKey,
+    value: Value,
+    guard: &str,
+    hash: &str,
+) -> anyhow::Result<()> {
+    tx.set_pin(k, Some((value, PinReason::NeedsApproval)))?;
+    ask_review(tx, guard, hash)
+}
+
+/// List `guard` for review, unless the user already chose to keep this
+/// very version off here.
+fn ask_review(tx: &mut Tx<'_>, guard: &str, hash: &str) -> anyhow::Result<()> {
+    let kept_off = tx.meta(&format!("kept_off.{guard}"))?;
+    if kept_off.as_deref() != Some(hash) {
+        tx.set_meta(&format!("held.{guard}"), hash)?;
     }
     Ok(())
 }
@@ -524,6 +575,7 @@ impl SyncEngine {
         CONSENT_INSTALLED.with(|c| *c.borrow_mut() = installed_items.clone());
         let (_, cfg) = self.env.config.snapshot();
         let approved = self.prefs.approved_runnables.clone();
+        let os = self.env.os;
         let Some(core) = self.core.as_mut() else {
             return Ok(BTreeSet::new());
         };
@@ -550,7 +602,7 @@ impl SyncEngine {
                                     &r,
                                     None,
                                     &BTreeMap::new(),
-                                    OsKind::Linux,
+                                    os,
                                 );
                                 runnable_of(&k.ns, &eff.fields)
                                     .map(|v| runnable_hash(&v))

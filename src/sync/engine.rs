@@ -469,7 +469,11 @@ impl SyncEngine {
     /// Capture and publish own edits only, within `budget`. No ingest.
     pub fn flush_for_exit(&mut self, budget: Duration) {
         let start = std::time::Instant::now();
-        if !self.prefs.enabled || self.core.is_none() || self.core_locked() {
+        if !self.prefs.enabled
+            || self.core.is_none()
+            || self.core_locked()
+            || self.rt.join.is_some()
+        {
             return;
         }
         if let Err(e) = self.capture_dirty(true) {
@@ -820,6 +824,7 @@ impl SyncEngine {
                 keys: &keys,
                 origin,
                 spec,
+                initial: false,
             };
             let mut projected: BTreeMap<String, BTreeMap<String, Projected>> = BTreeMap::new();
             for (k, p) in cx.tx.projected_in(&ns)? {
@@ -1050,7 +1055,7 @@ impl SyncEngine {
         let mut by_ext: BTreeMap<&str, Vec<String>> = BTreeMap::new();
         for w in writes {
             if let Some(ext) = ext_of_ns(&w.ns) {
-                if w.ns.contains(".k") || w.ns.contains(".l.") {
+                if w.ns.ends_with(".k") || w.ns.contains(".l.") {
                     by_ext.entry(ext).or_default().push(w.id.clone());
                 }
             }
@@ -1872,6 +1877,9 @@ pub(crate) struct Cx<'a, 'b> {
     pub keys: &'a Keys,
     pub origin: Origin,
     pub spec: &'a NsSpec,
+    /// An initial push (§8.2): stamped from the record's own time with no
+    /// floor, and merged, so a newer synced value still wins.
+    pub initial: bool,
 }
 
 impl Cx<'_, '_> {
@@ -2078,13 +2086,16 @@ fn capture_record(
             cx.tx.set_projected(&key, Some((h, None, None)))?;
             continue;
         }
-        let floor = base
-            .as_ref()
-            .map(|c| c.stamp)
-            .into_iter()
-            .chain(cur.as_ref().map(|c| c.stamp))
-            .max()
-            .map_or(0, |s| s.hlc);
+        let floor = if cx.initial {
+            0
+        } else {
+            base.as_ref()
+                .map(|c| c.stamp)
+                .into_iter()
+                .chain(cur.as_ref().map(|c| c.stamp))
+                .max()
+                .map_or(0, |s| s.hlc)
+        };
         let stamp = cx.stamp(floor);
         let anc = ancestors(base.as_ref(), cx.me);
         let new = Cell {
@@ -2093,6 +2104,29 @@ fn capture_record(
             wall_ms: cx.now,
             anc: anc.clone(),
         };
+        if cx.initial {
+            // Merged like a remote cell: the newer of the two wins, and a
+            // replaced value is kept as a conflict when they were
+            // concurrent.
+            let mut inc = Record::new(ns.clone(), id.to_string());
+            inc.cells.insert(FieldKey::new(name.clone(), target), new);
+            let merged = super::merge::merge_record(r, &inc);
+            found.extend(merged.conflicts);
+            let won = r
+                .cells
+                .get(&FieldKey::new(name.clone(), target))
+                .is_some_and(|c| c.stamp == stamp);
+            let (ps, pv) = if won {
+                (stamp, h)
+            } else {
+                let c = &r.cells[&FieldKey::new(name.clone(), target)];
+                (c.stamp, hash(&c.value))
+            };
+            cx.tx
+                .set_projected(&key, Some((pv, Some(ps), Some(target))))?;
+            wrote |= merged.changed;
+            continue;
+        }
         if let Some(c) = &cur {
             let unseen = base.as_ref().map(|b| b.stamp) != Some(c.stamp)
                 && c.stamp.dev != cx.me
@@ -2506,6 +2540,7 @@ impl super::sources::CaptureCtx for ExtCtx<'_, '_> {
             keys: self.keys,
             origin,
             spec: &spec,
+            initial: initial_stamp_ms.is_some(),
         };
         let mut out = CaptureOut::default();
         let mut churn = Vec::new();
@@ -2674,6 +2709,7 @@ mod tests {
                     keys: &keys,
                     origin: Origin::User,
                     spec: &spec,
+                    initial: false,
                 };
                 let written: BTreeSet<String> = ["ui.new_name".to_string()].into();
                 let table = [("ui.old_name", "ui.new_name")];
