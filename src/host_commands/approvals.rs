@@ -16,6 +16,8 @@ pub enum Answer {
     /// (already validated and saved).
     Always(String),
     Deny,
+    /// The window showing it closed: nobody can answer it any more.
+    WindowClosed,
     /// Kage is quitting.
     Shutdown,
 }
@@ -124,6 +126,22 @@ impl Approvals {
         items.into_iter().map(|(_, p)| p.payload.clone()).collect()
     }
 
+    /// `window` closed: its waiting requests get [`Answer::WindowClosed`].
+    pub fn close_window(&self, window: &str) {
+        let closed: Vec<Pending> = {
+            let mut pending = self.pending.lock_or_recover();
+            let ids: Vec<String> = pending
+                .iter()
+                .filter(|(_, p)| p.window == window)
+                .map(|(id, _)| id.clone())
+                .collect();
+            ids.iter().filter_map(|id| pending.remove(id)).collect()
+        };
+        for p in closed {
+            let _ = p.tx.send(Answer::WindowClosed);
+        }
+    }
+
     /// Kage is quitting: every waiting request gets [`Answer::Shutdown`].
     pub fn shutdown_all(&self) {
         let drained: Vec<Pending> = self
@@ -221,6 +239,21 @@ mod tests {
             .is_none());
         assert_eq!(a.payloads_for("main").len(), MAX_PENDING);
         assert!(a.payloads_for("floating").is_empty());
+    }
+
+    #[test]
+    fn a_closed_window_ends_only_its_own_prompts() {
+        let a = Approvals::new();
+        let rx_chat = a
+            .register("r1", "chat-1", info("x"), serde_json::json!({}))
+            .unwrap();
+        let rx_float = a
+            .register("r2", "floating", info("y"), serde_json::json!({}))
+            .unwrap();
+        a.close_window("chat-1");
+        assert_eq!(rx_chat.try_recv(), Ok(Answer::WindowClosed));
+        assert!(rx_float.try_recv().is_err());
+        assert_eq!(a.payloads_for("floating").len(), 1);
     }
 
     #[test]

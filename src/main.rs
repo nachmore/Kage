@@ -486,6 +486,11 @@ async fn run() {
                 // A command the user was running from one of its sandbox
                 // notices has nothing left to show it or its Stop button.
                 stop_user_shell_run(window.app_handle(), window.label(), "its window closed");
+                // Prompts for an agent's commands shown there can't be
+                // answered any more.
+                if let Some(procs) = window.try_state::<state::ChildProcesses>() {
+                    procs.host_commands.approvals.close_window(window.label());
+                }
             }
         })
         .on_page_load(|webview, payload| {

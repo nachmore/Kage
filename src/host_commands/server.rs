@@ -521,6 +521,18 @@ fn process(
                     "Too many commands are waiting for the user's answer; try again later.",
                 );
             }
+            Asked::WindowClosed => {
+                info!("Host command {}: its window closed", r.id);
+                AuditStep {
+                    outcome: Some("window closed".into()),
+                    ..r.audit("withdrawn")
+                }
+                .write();
+                r.track(app, "withdrawn");
+                return HostCommandResponse::error(
+                    "The window showing the request was closed, so the command did not run.",
+                );
+            }
             Asked::Shutdown => {
                 r.close(app, "shutdown");
                 return HostCommandResponse::error("Kage is quitting; the command did not run.");
@@ -537,6 +549,8 @@ enum Asked {
     Expired,
     Withdrawn,
     Busy,
+    /// The window showing the prompt closed.
+    WindowClosed,
     Shutdown,
 }
 
@@ -610,7 +624,13 @@ fn ask(app: &tauri::AppHandle, r: &Request<'_>, reason: AskReason, stream: &Brid
             let _ = crate::overlay_windows::present(&floating);
         }
     }
-    if !r.visible_origin {
+    // A request from outside Kage's chats, or a chat window that isn't in
+    // front: say so where the user will see it.
+    let in_front = r.window == window_labels::FLOATING
+        || app
+            .get_webview_window(&r.window)
+            .is_some_and(|w| w.is_focused().unwrap_or(false));
+    if !r.visible_origin || !in_front {
         notify(app, r.agent.as_deref());
     }
     let deadline = Instant::now() + APPROVAL_TIMEOUT;
@@ -619,6 +639,7 @@ fn ask(app: &tauri::AppHandle, r: &Request<'_>, reason: AskReason, stream: &Brid
             Ok(Answer::RunOnce) => return Asked::Approved(None),
             Ok(Answer::Always(prefix)) => return Asked::Approved(Some(prefix)),
             Ok(Answer::Deny) => return Asked::Denied,
+            Ok(Answer::WindowClosed) => return Asked::WindowClosed,
             Ok(Answer::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                 return Asked::Shutdown
             }
