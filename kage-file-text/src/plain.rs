@@ -81,9 +81,9 @@ fn utf16_by_nul_pattern(bytes: &[u8]) -> Option<&'static Encoding> {
         return None;
     }
     let (mut even, mut odd) = (0usize, 0usize);
-    for pair in sample.chunks_exact(2) {
-        even += usize::from(pair[0] == 0);
-        odd += usize::from(pair[1] == 0);
+    for [first, second] in sample.as_chunks::<2>().0 {
+        even += usize::from(*first == 0);
+        odd += usize::from(*second == 0);
     }
     // Text in the ASCII range has a zero high byte in every unit: at odd
     // offsets in little endian, at even ones in big endian.
