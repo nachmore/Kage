@@ -251,3 +251,226 @@ describe('executeResult — prompt actions', () => {
         }
     });
 });
+
+/**
+ * `open_view` (docs/design/EXTENSION_VIEWS.md §6): a result row opens one of
+ * the extension's own views. The host checks run first (the window offers
+ * `views`, the extension holds it, the manifest declares the view, the
+ * params are valid); then `ext_view_open` with the row's source.
+ */
+describe('executeResult — open_view action', () => {
+    const MANIFEST = {
+        id: 'mindmap',
+        name: 'Mind Map',
+        permissions: ['storage', 'views'],
+        contributes: {
+            views: [{ id: 'explorer', title: 'Explorer', module: './explorer.js' }],
+        },
+    };
+    const OPENED = { label: 'ext-view:mindmap:explorer', reused: false };
+
+    function viewManager({
+        action,
+        capabilities = ['storage', 'views'],
+        enabled = true,
+        hostFeatures = ['views'],
+        resultSource,
+        manifest = MANIFEST,
+        onBeforeOpenView,
+    }) {
+        const mgr = new ExtensionManager(vi.fn(async () => null), {
+            hostFeatures,
+            resultSource,
+            onBeforeOpenView,
+        });
+        mgr._configCache = { extension_states: { mindmap: enabled } };
+        mgr.extensions.set('mindmap', {
+            manifest,
+            capabilities,
+            sandbox: {
+                hasSearch: true,
+                call: vi.fn(async (method) => (method === 'execute' ? action : null)),
+            },
+        });
+        return mgr;
+    }
+
+    async function openRun(action, opts = {}, { invokeImpl, row } = {}) {
+        const invoke = vi.fn(
+            invokeImpl || (async (cmd) => (cmd === 'ext_view_open' ? OPENED : undefined))
+        );
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const onDisplay = vi.fn();
+        const extensionManager = viewManager({ action, ...opts });
+        const result = row || { id: 'mm:open', _extensionId: 'mindmap', data: { node: 'n1' } };
+        const out = await executeResult(result, 'mm explore', {
+            invoke,
+            extensionManager,
+            onDisplay,
+        });
+        return { out, invoke, warn, onDisplay };
+    }
+
+    const viewCalls = (invoke) => invoke.mock.calls.filter(([cmd]) => cmd === 'ext_view_open');
+
+    it('opens the view from the launcher, and the launcher stays', async () => {
+        const { out, invoke, onDisplay } = await openRun({
+            type: 'open_view',
+            view: 'explorer',
+            params: { focus: 'n1' },
+        });
+        expect(viewCalls(invoke)).toEqual([
+            [
+                'ext_view_open',
+                {
+                    extensionId: 'mindmap',
+                    viewId: 'explorer',
+                    params: { focus: 'n1' },
+                    source: 'launcher',
+                },
+            ],
+        ]);
+        // No 'hide': the launcher keeps its response area and clears its input.
+        expect(out).toEqual({ handled: true });
+        expect(onDisplay).not.toHaveBeenCalled();
+    });
+
+    it("opens from a chat window with source 'chat' and null params", async () => {
+        const { invoke } = await openRun(
+            { type: 'open_view', view: 'explorer' },
+            { resultSource: 'chat' }
+        );
+        expect(viewCalls(invoke)[0][1]).toEqual({
+            extensionId: 'mindmap',
+            viewId: 'explorer',
+            params: null,
+            source: 'chat',
+        });
+    });
+
+    it('refuses without the views capability and says why', async () => {
+        const { out, invoke, warn, onDisplay } = await openRun(
+            { type: 'open_view', view: 'explorer' },
+            { capabilities: ['storage'] }
+        );
+        expect(viewCalls(invoke)).toEqual([]);
+        expect(out).toEqual({ handled: true });
+        expect(warn.mock.calls.flat().join(' ')).toMatch(
+            /\[ext mindmap\] open_view refused: .*'views' capability/
+        );
+        expect(onDisplay).toHaveBeenCalledWith('errors.ext_view.not_granted');
+    });
+
+    it('refuses a view the manifest does not declare', async () => {
+        for (const view of ['atlas', '', 'Explorer', 42, null, '../explorer']) {
+            const { invoke, onDisplay } = await openRun({ type: 'open_view', view });
+            expect(viewCalls(invoke), String(view)).toEqual([]);
+            expect(onDisplay).toHaveBeenCalledWith('errors.ext_view.unknown_view');
+        }
+    });
+
+    it("refuses in a window that doesn't offer views", async () => {
+        const { invoke, onDisplay } = await openRun(
+            { type: 'open_view', view: 'explorer' },
+            { hostFeatures: ['date-picker'] }
+        );
+        expect(viewCalls(invoke)).toEqual([]);
+        expect(onDisplay).toHaveBeenCalledWith('errors.ext_view.opener_refused');
+    });
+
+    it('refuses params that are not small, plain JSON', async () => {
+        const bad = [
+            [1, 2],
+            'focus',
+            { a: { b: { c: { d: { e: 1 } } } } },
+            { big: 'x'.repeat(5000) },
+            { n: Number.NaN },
+            { when: new Date(0) },
+        ];
+        for (const params of bad) {
+            const { invoke, onDisplay } = await openRun({
+                type: 'open_view',
+                view: 'explorer',
+                params,
+            });
+            expect(viewCalls(invoke)).toEqual([]);
+            expect(onDisplay.mock.calls[0][0]).toMatch(
+                /^errors\.ext_view\.params_(invalid|too_large)$/
+            );
+        }
+    });
+
+    it('refuses for a disabled extension', async () => {
+        const { invoke, onDisplay } = await openRun(
+            { type: 'open_view', view: 'explorer' },
+            { enabled: false }
+        );
+        expect(viewCalls(invoke)).toEqual([]);
+        expect(onDisplay).toHaveBeenCalledWith('errors.ext_view.disabled');
+    });
+
+    it("names the extension from the row's host stamp, never from the effect", async () => {
+        const { invoke } = await openRun({
+            type: 'open_view',
+            view: 'explorer',
+            extensionId: 'other',
+            extension_id: 'other',
+            source: 'settings',
+        });
+        expect(viewCalls(invoke)[0][1]).toMatchObject({
+            extensionId: 'mindmap',
+            source: 'launcher',
+        });
+    });
+
+    it("shows the AppError's message when Rust refuses, and never rejects", async () => {
+        const { out, onDisplay, warn } = await openRun(
+            { type: 'open_view', view: 'explorer' },
+            {},
+            {
+                invokeImpl: async (cmd) => {
+                    if (cmd !== 'ext_view_open') return undefined;
+                    throw {
+                        kind: 'rate_limited',
+                        key: 'errors.ext_view.too_many_open',
+                        message: 'Too many extension windows are open (limit 4).',
+                    };
+                },
+            }
+        );
+        expect(out).toEqual({ handled: true });
+        expect(onDisplay).toHaveBeenCalledWith('Too many extension windows are open (limit 4).');
+        expect(warn.mock.calls.flat().join(' ')).toMatch(/\[ext mindmap\] open_view failed/);
+    });
+
+    it('runs the window hook only once the checks pass, before the open', async () => {
+        const order = [];
+        const onBeforeOpenView = vi.fn(() => order.push('before'));
+        const invokeImpl = async (cmd) => {
+            if (cmd === 'ext_view_open') order.push('open');
+            return OPENED;
+        };
+        await openRun({ type: 'open_view', view: 'explorer' }, { onBeforeOpenView }, { invokeImpl });
+        expect(order).toEqual(['before', 'open']);
+
+        const refused = vi.fn();
+        await openRun(
+            { type: 'open_view', view: 'nope' },
+            { onBeforeOpenView: refused },
+            { invokeImpl }
+        );
+        expect(refused).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the manager cannot open views', async () => {
+        const invoke = vi.fn(async () => {});
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const out = await executeResult({ id: 'x', _extensionId: 'x' }, 'x', {
+            invoke,
+            extensionManager: makeExtensionManager({ type: 'open_view', view: 'explorer' }),
+        });
+        expect(invoke).not.toHaveBeenCalled();
+        expect(out).toEqual({ handled: true });
+        expect(warn.mock.calls.flat().join(' ')).toMatch(/open_view refused/);
+    });
+});

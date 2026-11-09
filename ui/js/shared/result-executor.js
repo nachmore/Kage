@@ -71,6 +71,25 @@ async function openForExtension(result, action, ctx) {
 }
 
 /**
+ * Run an extension's `open_view` result action (docs/design/EXTENSION_VIEWS.md
+ * §6): open one of its views from this window. The extension manager
+ * applies the host-side checks (the window offers `views`, the extension
+ * holds it, the manifest declares the view, the params are valid) and
+ * names the extension from the row's host stamp. A refusal or failure is
+ * logged and shown as a reply when the window can show one. Never throws.
+ */
+async function openViewForResult(result, action, ctx) {
+    const id = result._extensionId;
+    const mgr = ctx.extensionManager;
+    if (typeof mgr.openView !== 'function') {
+        console.warn(`[ext ${id}] open_view refused: this window cannot open extension views`);
+        return;
+    }
+    const out = await mgr.openView(id, action, { invoke: ctx.invoke });
+    if (!out?.ok && out?.message && ctx.onDisplay) ctx.onDisplay(out.message);
+}
+
+/**
  * Execute a unified search result.
  * @param {Object} result - The search result to execute
  * @param {string} query - The original query text
@@ -81,6 +100,7 @@ async function openForExtension(result, action, ctx) {
  *   - selectionText: selected text for shortcut substitution (optional)
  *   - onPrompt: async (text) => {} — called when result wants to send a prompt
  *   - onDisplay: (text) => {} — called when result wants to display text
+ *     (also shows why an `open_view` action couldn't open)
  *   - onCopy: async (text) => {} — called when result wants to copy text
  *   - onTimerStart: (durationMs) => {} — called for timer commands (optional)
  *   - onStopwatch: () => {} — called for stopwatch commands (optional)
@@ -126,6 +146,10 @@ export async function executeResult(result, query, ctx) {
                 if (await openForExtension(result, action, ctx)) {
                     return { handled: true, action: 'hide' };
                 }
+            } else if (action.type === 'open_view') {
+                // The window stays: the launcher keeps its response area
+                // and clears its input, as after any result.
+                await openViewForResult(result, action, ctx);
             } else if (action.type === 'display' && ctx.onDisplay) {
                 ctx.onDisplay(action.value);
             } else if (action.type === 'replace_input' && ctx.onReplaceInput) {

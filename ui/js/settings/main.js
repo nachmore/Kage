@@ -29,6 +29,8 @@ import { isMacOS } from '../shared/mac-permissions.js';
 import { EVT } from '../shared/events.js';
 import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
 import { initLinkHandler } from '../shared/link-handler.js';
+import { deliverToSandbox, installExtensionDataEvents } from '../shared/extension-data-events.js';
+import { HOST_FEATURE_VIEWS } from '../shared/extension-sandbox-host.js';
 
 // First-party settings modules (registration order matches the sidebar
 // in settings.html — see the comments in that file for the contract).
@@ -230,6 +232,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     // are tied to the document they mount into.
     const sandboxPool = createSandboxPool(invoke);
 
+    // Host features the settings sandboxes are offered (each gets the ones
+    // its grant allows): settings actions may open the extension's views
+    // (docs/design/EXTENSION_VIEWS.md §9.4).
+    const SETTINGS_HOST_FEATURES = [HOST_FEATURE_VIEWS];
+
+    // Storage changes made in other windows reach the matching settings
+    // sandbox, when it holds `storage` (EXTENSION_VIEWS.md §10.1).
+    installExtensionDataEvents({
+        listen: window.__TAURI__.event.listen,
+        myLabel: window.__TAURI__.webviewWindow.getCurrentWebviewWindow().label,
+        deliver: deliverToSandbox((id) => sandboxPool.get(id)),
+    }).catch((e) => console.warn('[settings] storage change events unavailable:', e));
+
     // Preload current config so we can hand each sandbox the right initial values.
     let currentConfig = {};
     try {
@@ -266,6 +281,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             capabilities,
             settingsProviderSource: sourceCode,
             currentConfig,
+            hostFeatures: SETTINGS_HOST_FEATURES,
         });
         settingsManager.registerModule(mod);
         // Use the module's already-localized title (set on the adapter
@@ -404,6 +420,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                         capabilities,
                         settingsProviderSource: sourceCode,
                         currentConfig,
+                        hostFeatures: SETTINGS_HOST_FEATURES,
                     });
                     const insertIdx = Math.max(0, settingsManager.modules.length - 2);
                     settingsManager.modules.splice(insertIdx, 0, mod);

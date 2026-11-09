@@ -1,3 +1,5 @@
+import { HOST_FEATURE_VIEWS } from '../../shared/extension-sandbox-host.js';
+
 export function createLifecycleMixin(dependencies) {
     const {
         initMarkdown,
@@ -42,8 +44,15 @@ export function createLifecycleMixin(dependencies) {
             await loadSlashCommands(this.invoke);
             await this.loadShortcuts();
 
-            // Initialize extension manager for search
-            this.extensionManager = new ExtensionManager(this.invoke);
+            // Initialize extension manager for search. Chat windows open
+            // extension views too (docs/design/EXTENSION_VIEWS.md §9.4), and
+            // their sandboxes hear of storage changes made elsewhere.
+            this.extensionManager = new ExtensionManager(this.invoke, {
+                hostFeatures: [HOST_FEATURE_VIEWS],
+                resultSource: 'chat',
+                listen: this.listen,
+                windowLabel: this.windowLabel,
+            });
             await this.extensionManager.initialize();
             setExtensionManager(this.extensionManager);
             await loadFrecency(this.invoke);

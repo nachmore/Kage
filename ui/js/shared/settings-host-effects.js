@@ -1,4 +1,44 @@
 import { formatBytes } from './tool-utils.js';
+import { openViewDenial, runOpenViewEffect } from './extension-host-effects.js';
+import { applyManifestI18n } from './extension-manager/i18n.js';
+
+/**
+ * `open_view` from a settings action (docs/design/EXTENSION_VIEWS.md §6.1):
+ * open one of the extension's views from the Settings window. The checks
+ * use the settings sandbox's grant and host features; the extension is the
+ * one the renderer was built for. A refusal or failure shows on the
+ * action row.
+ */
+async function openViewFromSettingsAction(renderer, host, setStatus) {
+    const sandbox = renderer.sandbox;
+    const manifest = renderer.manifest || {};
+    const extensionId = renderer.extensionId;
+    const name =
+        applyManifestI18n(manifest, sandbox?.i18nCatalog, sandbox?.i18nFallback).name ||
+        extensionId;
+    const capabilities = new Set(sandbox?.capabilities || []);
+    // The sandbox's host features are already cut down to its grant, so a
+    // missing grant would read as "this window can't open views". Count the
+    // window as offering views unless the grant is there and the feature
+    // isn't; the grant check then says what's missing.
+    const windowOffersViews =
+        (Array.isArray(sandbox?.hostFeatures) && sandbox.hostFeatures.includes('views')) ||
+        !capabilities.has('views');
+    const result = await runOpenViewEffect(host, {
+        extensionId,
+        source: 'settings',
+        invoke: window?.__TAURI__?.core?.invoke,
+        check: (effect) =>
+            openViewDenial(effect, {
+                hostFeatures: windowOffersViews ? ['views'] : [],
+                capabilities,
+                views: manifest.contributes?.views,
+                extensionId,
+                extensionName: /^__MSG_.+__$/.test(name) ? extensionId : name,
+            }),
+    });
+    if (!result.ok) setStatus(`❌ ${result.message}`);
+}
 
 export async function runSettingsHostSideEffect(renderer, host, ctx, pickFileContents) {
     if (!host || typeof host !== 'object') return;
@@ -99,6 +139,10 @@ export async function runSettingsHostSideEffect(renderer, host, ctx, pickFileCon
             } catch (e) {
                 renderer.log.warn?.('play_timer_sound failed:', e);
             }
+            break;
+        }
+        case 'open_view': {
+            await openViewFromSettingsAction(renderer, host, setStatus);
             break;
         }
         default:

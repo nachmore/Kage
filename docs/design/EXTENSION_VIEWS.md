@@ -223,14 +223,25 @@ UI, §17), so the user should see it at install time.
 | Launcher or chat result row (Enter or click) | `execute()` → `{ type: 'open_view', view, params? }` | `ui/js/shared/result-executor.js` |
 | `data-ext-action` button in a formatter card or custom result row | `onResultAction()` → `{ host: { type: 'open_view', view, params? } }` | `ui/js/shared/extension-manager/ui.js` |
 | Widget button | `onAction()` → `{ host: { type: 'open_view', ... }, rerender? }` | `ui/js/shared/extension-manager/ui.js` |
-| Chat toolbar button | `onClick()` → `{ host: { type: 'open_view', ... } }` | `ui/js/shared/toolbar-host-effects.js` |
+| Chat toolbar button | `onClick()` → `{ host: { type: 'open_view', ... } }` | `ExtensionManager.runToolbarClick` (`ui/js/shared/extension-manager/ui.js`); `toolbar-host-effects.js` ignores the type |
 | Extension settings action | `runAction()` → `{ host: { type: 'open_view', ... } }` | `ui/js/shared/settings-host-effects.js` |
-| Host "Open" button in Settings → the extension's page | none (host-rendered) | `ui/js/settings/manager.js` |
+| Host "Open" button in Settings → the extension's page | none (host-rendered) | `ui/js/settings/extension-views-block.js` (one call from `manager.js`) |
 | Inside a view | `context.view.open(viewId, params?)` (another view of the same extension) | view page |
 
 Today `onResultAction`'s return value is ignored. It becomes honoured for
 `host.type === 'open_view'` only. Widget actions keep `rerender` and gain
-`host`.
+`host`. Other `host` types from these two are logged and dropped.
+
+Every opener but the view page goes through `runOpenViewEffect`
+(`ui/js/shared/extension-host-effects.js`). The extension manager wraps
+it as `openView(extensionId, effect, { source })`, with
+`extensionViewDenial` as the §6.2 check. The `source` is the entry
+point's: `formatter` for a formatter card's button, `widget`, `toolbar`,
+`settings`, and for a result row or a custom result row's button the
+window's (`launcher` in the floating window, `chat` in chat windows,
+the manager's `resultSource` option). The toolbar case lives in the
+manager because it knows which extension answered; the windows' toolbar
+appliers don't.
 
 All of these run inside the handling of a user's click or key press, so
 "views only open from a user action" holds without a separate gesture
@@ -258,6 +269,12 @@ logged as `[ext <id>] open_view refused: <reason>` and nothing opens.
 2. The extension holds `views` in this window's grant.
 3. The manifest declares `view`.
 4. `params` passes the shape and size rules.
+
+Check 1 reads what the window offers before the grant cuts it down (a
+sandbox's own `hostFeatures` list is already cut, §9.4), so a missing
+grant is refused as `not_granted`, not `opener_refused`. The extension
+manager first refuses an extension it hasn't loaded
+(`unknown_extension`) or one that is turned off (`disabled`).
 
 Rust then repeats checks 2–4 against the installed manifest and
 `config.extension_grants` (authoritative), and also checks:
@@ -300,7 +317,9 @@ Window already exists (visible or cached hidden):
 
 Failure: `ext_view_open` rejects with an `AppError` (§16). The launcher
 shows its localised message as a reply; other openers log it, and settings
-shows it on the action row.
+shows it on the action row. A host-side refusal (§6.2) is shown the same
+way, from its `key`: a result row in the launcher or chat shows it as a
+reply, a settings action on its row.
 
 ## 7. Window lifecycle
 
@@ -889,6 +908,13 @@ direct message bus between instances (§26).
     `sandboxFor(extensionId)` and, when the sandbox holds `storage`
     (`holdsStorage`), its `notifyStorageChanged(changes)` (§8.6, V4).
     Callers use it rather than repeat the `storage` check.
+  - The extension manager installs it once, in `initialize()`, from its
+    `listen` and `windowLabel` options (the floating and chat windows
+    pass theirs; the defaults are the window's Tauri globals, and no
+    Tauri means no listener). It stays for the manager's life, because
+    `destroy()` empties the pool and a later `reload()` fills it again.
+    The settings window installs it in `settings/main.js` for its
+    settings sandboxes.
 - Events carry key names only, never data. An instance re-reads what it
   needs.
 
@@ -1175,32 +1201,48 @@ and response. Two rules prevent that:
 
 **Rule A, the moment of opening.** When the launcher opens a view, it sets
 `this._suppressBlurHideUntil = Date.now() + 1500` (the result menu uses
-the same mechanism) and `this._viewCompanion = true` before calling
-`ext_view_open`. Building a new WebView window can take a few hundred
-milliseconds; the suppression covers it. The launcher clears its input as
-after any executed result, but keeps its response area.
+the same mechanism; a longer suppression already armed is kept) and
+`this._viewCompanion = true` before calling `ext_view_open`. Building a
+new WebView window can take a few hundred milliseconds; the suppression
+covers it. The launcher clears its input as after any executed result,
+but keeps its response area. The floating window passes this as the
+extension manager's `onBeforeOpenView` (`_armViewCompanion`), so it
+covers every opener in the launcher: result rows, formatter cards,
+widgets and toolbar buttons. It runs only once the §6.2 checks pass.
 
 **Rule B, moving focus between the launcher and views.** In the blur
-handler, after the existing guards and before hiding:
+handler, after the existing guards and before hiding
+(`_staysForView(sequence)` in `lifecycle-visibility.js`):
 
 ```js
+if (!this.extensionManager?.hasViewCapableExtensions?.()) return false;   // no view can exist: hide
 const { view_focused } = await invoke('ext_view_focus_state').catch(() => ({ view_focused: false }));
-if (view_focused) { this._viewCompanion = true; return; }   // focus went to a view: stay
+if (sequence !== this._visibilitySequence) return true;   // the launcher got focus back meanwhile
+if (!view_focused || !(await this._isWindowVisible())) return false;   // already hidden (Esc): hide path
+this._viewCompanion = true; return true;   // focus went to a view: stay
 ```
 
 `ext_view_focus_state` answers at once with `false` when no view window is
-visible, so the common blur isn't slowed down. When one is visible it
-waits up to 120 ms for a view to report focus (the order of the two focus
-events isn't guaranteed).
+visible. The launcher asks it only when one of its enabled extensions
+holds `views` and declares a view (`ExtensionManager.hasViewCapableExtensions`),
+because Rust closes a view window when its extension is turned off or
+loses the grant, so the common blur costs no IPC at all. When a view is
+visible it waits up to 120 ms for a view to report focus (the order of
+the two focus events isn't guaranteed). A launcher that is already
+hidden (Esc, a hide action) runs its hide path as before.
 
 The launcher then still has to hide when the user leaves Kage from the
 view. Rust handles a view's `Focused(false)`: after 150 ms, if neither the
 launcher nor any view window is focused, it emits `ext_view_focus_lost` to
-the launcher. The launcher runs its normal hide path if
-`_viewCompanion` is set and it isn't focused. `_viewCompanion` is cleared
-whenever the launcher hides or shows.
+the launcher. The launcher runs its normal hide path (the same guards,
+not the suppression timers) if `_viewCompanion` is set and it isn't
+focused. `_viewCompanion` is cleared whenever the launcher hides or shows.
+The launcher listens for `ext_view_focus_lost` and `floating_compose` on
+its own window (`appWindow.listen`).
 
-The decision is a pure function, unit-tested in Rust and JS:
+The decision is a pure function in Rust, unit-tested there. The launcher
+doesn't compute it (it can't see other windows' focus); its tests cover
+how it reacts to `ext_view_focus_lost`:
 
 ```
 should_release_launcher(focused_labels) = !focused_labels.any(l => l == "floating" || is_ext_view_label(l))
@@ -1305,7 +1347,11 @@ Notes:
   and emits `floating_compose { text }` to it. A hidden launcher is
   centred on the active monitor, as other host-initiated shows (the
   welcome and update banners) do, without selection capture. The launcher
-  replaces its input, selects it and does **not** send.
+  replaces its input, selects it and does **not** send. It fires the
+  input's `input` event, so autogrow and suggestions follow, as for
+  typing. With `ui.preserve_last_response` off, the show-time reset skips
+  a launcher that was composed into in the last second, so the text
+  isn't wiped.
 - Lengths for compose and copy count UTF-16 units, as `copyTextError`
   does in JS.
 - `ext_view_open`'s `source` is checked against the closed list in §9.1;
@@ -1486,6 +1532,15 @@ Measured against [`docs/SECURITY_MODEL.md`](../SECURITY_MODEL.md).
   shared by the four designs: capability badges, the sync chip (SYNC
   §12.3), the Background AI panel (EXTENSION_AGENT_CALLS §4.2), this
   Windows block, then the extension's own settings.
+- The block is shown only when the extension holds `views` and declares
+  a valid view. It is the first thing inside the extension's content
+  (`#ext-content-<id>`), so turning the extension off in the header dims
+  it with the rest. View titles resolve `__MSG_*__` with the extension's
+  catalog, then fall back to its name. **Open** calls `ext_view_open`
+  with `source: 'settings'` and no params; **Reset** calls
+  `ext_view_reset_geometry` for every view of the extension. Results and
+  errors show in the block's status line. Like the extension's own page,
+  only extensions with a `settingsProvider` get a Settings page today.
 - No global setting. The grant is the switch: an extension without
   `views` has no windows.
 
@@ -1964,6 +2019,26 @@ package codes against this document.
   `ui-tests/shared/extension-host-effects.test.js` (new),
   `ui-tests/floating/blur-view-companion.test.js` (new),
   `ui-tests/settings/extension-views-block.test.js` (new).
+  Decisions made while building it (the sections above say the same):
+  - The toolbar `open_view` is opened in `ExtensionManager.runToolbarClick`
+    (`extension-manager/ui.js`), which knows the extension; the windows'
+    toolbar appliers (`floating/app/ui-state.js`, `chat/app/models-toolbar.js`)
+    stay untouched and `toolbar-host-effects.js` ignores the type (§6.1).
+  - The extension manager gains the options `resultSource`,
+    `onBeforeOpenView`, `listen` and `windowLabel`, and the methods
+    `openView`, `extensionViewDenial` and `hasViewCapableExtensions`.
+    The floating window offers `views` with `resultSource: 'launcher'`
+    and Rule A as `onBeforeOpenView`; chat windows with
+    `resultSource: 'chat'`.
+  - The §6.2 grant check reads the window's offered features before the
+    grant cuts them, so `not_granted` is reachable (§6.2).
+  - Rule B asks Rust only when a view-capable extension is loaded, and
+    hides as before when the launcher is already hidden (§15.2).
+  - `manager.js` changes in two more small places:
+    `buildSandboxedSettingsModule` takes a `hostFeatures` argument (the
+    settings sandboxes' `views` feature, passed in by `settings/main.js`),
+    and the Windows block call sits inside `#ext-content-<id>` (§18.4).
+  - A host-side refusal is shown like a Rust one (§6.3).
 - **Done when:**
   - The listed vitest files pass, plus the existing floating, chat and
     settings suites.

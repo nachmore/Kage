@@ -19,6 +19,7 @@ import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 import { SettingsModule } from './base.js';
 import { DIRTY_EVENT_TYPES, DirtyTracker, dirtySectionForEvent } from './dirty-tracker.js';
 import { renderCapabilityBadges } from './extension-capabilities.js';
+import { renderExtensionViewsBlock } from './extension-views-block.js';
 import { registerSettingsActions, setSettingsManager } from './module-registry.js';
 
 // --- Sandboxed extension settings ------------------------------------------
@@ -130,6 +131,7 @@ export async function buildSandboxedSettingsModule({
     capabilities,
     settingsProviderSource,
     currentConfig,
+    hostFeatures,
 }) {
     // Collect sources: only the settings provider is needed for the
     // settings window. Search/tool/trigger providers are already loaded
@@ -175,6 +177,8 @@ export async function buildSandboxedSettingsModule({
         i18nFallback: i18n.fallback,
         i18nLanguage: i18n.language,
         i18nRtl: i18n.rtl,
+        // What this window offers (filtered by the grant in the sandbox).
+        hostFeatures,
     });
 
     if (!sandbox.hasSettings) {
@@ -358,6 +362,7 @@ export class SettingsManager {
                 // Capability badges — visible surface of the extension permission system
                 html += renderCapabilityBadges(module._capabilities, module._legacyPermissions);
                 html += `<div id="ext-content-${extId}">`;
+                html += renderExtensionViewsBlock(module);
                 html += module.renderContent ? module.renderContent() : module.render();
                 html += `</div>`;
             } else {

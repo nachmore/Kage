@@ -7,6 +7,20 @@ import {
     signalMascotUpdated,
     unifiedSearch,
 } from './dependencies.js';
+import { EVT } from '../../shared/events.js';
+
+/**
+ * How long the launcher ignores blurs after it asked Rust to open a view
+ * (docs/design/EXTENSION_VIEWS.md §15.2, Rule A): building a WebView
+ * window can take a few hundred milliseconds.
+ */
+export const VIEW_OPEN_BLUR_GRACE_MS = 1500;
+
+/**
+ * A `floating_compose` within this long keeps the show-time reset
+ * (`preserve_last_response: false`) from wiping the composed text.
+ */
+const COMPOSE_KEEP_MS = 1000;
 
 export const LifecycleVisibilityMethods = {
     /** Is the floating window actually on screen? Errors count as visible. */
@@ -75,6 +89,8 @@ export const LifecycleVisibilityMethods = {
             // An uninstall confirmation doesn't survive the launcher being
             // hidden (e.g. by its hotkey): coming back starts fresh.
             if (wasHidden) this._cancelResultConfirm?.();
+            // A show starts without a view companion (§15.2).
+            if (wasHidden) this._viewCompanion = false;
             document.documentElement.classList.remove('animations-paused');
             // Resume before signaling: reopen resets the previous party hat,
             // summon pops in, and the banner check may then celebrate the update.
@@ -197,7 +213,16 @@ export const LifecycleVisibilityMethods = {
                     try {
                         const config = await getConfig(this.invoke);
                         if (config.ui?.preserve_last_response === false) {
-                            setTimeout(() => this.resetUI(), 50);
+                            // Text a view just composed is what this show
+                            // is for: keep it (and select it) instead.
+                            setTimeout(() => {
+                                if (this._composedRecently()) {
+                                    this.elements.input.focus();
+                                    this.elements.input.select();
+                                } else {
+                                    this.resetUI();
+                                }
+                            }, 50);
                         } else {
                             setTimeout(() => {
                                 this.elements.input.focus();
@@ -217,14 +242,15 @@ export const LifecycleVisibilityMethods = {
         });
 
         this.appWindow.listen('tauri://blur', async () => {
-            ++this._visibilitySequence;
+            const sequence = ++this._visibilitySequence;
             this._windowFocused = false;
             // Suppress blur-hide briefly after a post-update show. We
             // honour two signals:
             //
             //   `this._suppressBlurHideUntil` — set by checkForUpdateBanner
             //     once the banner is rendered. Catches blurs that happen
-            //     after focus stabilises.
+            //     after focus stabilises. Opening an extension view arms
+            //     it too (`_armViewCompanion`).
             //
             //   `window._kagePostUpdateSuppressUntil` — pre-armed by the
             //     Rust setup code (`maybe_show_floating_after_interactive_install`)
@@ -242,110 +268,22 @@ export const LifecycleVisibilityMethods = {
             if (this._suppressBlurHideUntil && Date.now() < this._suppressBlurHideUntil) {
                 return;
             }
-            // Don't hide if permission modal is open
-            const permissionModal = document.getElementById('permissionModal');
-            if (permissionModal && permissionModal.style.display !== 'none') {
-                return;
-            }
-            // Don't hide if dragging the window
-            if (this.windowManager.isDragging) {
-                return;
-            }
-            // Don't hide if context menu is open
-            const contextMenu = document.querySelector('.context-menu');
-            if (contextMenu && contextMenu.style.display !== 'none') {
-                return;
-            }
-            // Don't hide if context menu popup window is open
-            if (window._contextMenuOpen) {
-                return;
-            }
-            // Don't hide while an uninstall confirmation, or the result
-            // action it started, is pending (app/result-menu.js)
-            if (this._resultConfirm || this._resultActionBusy) {
-                return;
-            }
-            // Don't hide if we just stopped generating (prevents accidental hide on Esc)
-            if (this._justStoppedGenerating) {
-                return;
-            }
-            // Don't hide if computer control is active — user needs to track progress
-            if (this.computerControlActive) {
-                return;
-            }
-            // Don't hide if a focus-stealing MCP tool is running (e.g. folder picker dialog)
-            if (this._noBlurTools.size > 0) {
-                return;
-            }
-            // Don't hide if an automation plan is running
-            if (this._automationPlanStarted) {
-                return;
-            }
-            // Don't hide if file picker is open
-            if (this._filePickerOpen) {
-                return;
-            }
-            // Don't hide while an extension tool is being processed
-            if (this._extensionToolExecuting || this._extensionToolCallHandled) {
-                return;
-            }
-            await this.appWindow.hide();
-            this.banner.dismiss();
-            // Forget a manual resize made on the empty launcher. Resizing with
-            // no response stretches the input panel; that's fine while open,
-            // but it shouldn't survive a hide/show — the launcher should come
-            // back at its natural (input + bars) height. When a response IS
-            // showing, the manual size is intentional (e.g. dragged bigger to
-            // read a long answer) and is preserved. resizeWindow() snaps the
-            // now-hidden window back so the next show paints at natural height.
-            if (!this.windowManager._hasResponseContent()) {
-                this.windowManager.userSetHeight = null;
-                this.windowManager.resizeWindow();
-            }
-            // Pause work that doesn't need to run while hidden.
-            // - Mascot animation: ticks every ~120-150ms; over a long
-            //   idle session that's real CPU we can give back to the
-            //   foreground app the user is actually using.
-            // - Hidden flag: read by ExtensionManager._renderWidget so
-            //   long-cadence widgets (calendar, todos) skip ticks
-            //   that would otherwise repaint into an invisible host.
-            // Listeners and observers stay attached — reattaching on
-            // every show would directly inflate time-to-paint, which
-            // is the headline metric for this window.
-            window._kageFloatingHidden = true;
-            this.extensionManager?.setWidgetVisibility(false);
-            // A calendar popup left open would greet the next show.
-            this.calendarPicker?.close({ restoreFocus: false, immediate: true });
-            if (window._kageMascot) {
-                try {
-                    window._kageMascot.pause();
-                } catch (e) {
-                    console.warn('mascot.pause failed:', e);
-                }
-            }
-            // Shut down mic and voice mode on hide
-            if (this.speech) {
-                this.speech.stopVoiceMode();
-                this.speech.cancelSpeech();
-            }
-            // Clean up clipboard mode state on hide
-            if (this._clipboardMode) {
-                this._restoreOverlaysAfterClipboard();
-                this._clipboardMode = false;
-                this._clipboardEntries = null;
-            }
-            // Clear >cb prefix if it's still in the input
-            if (this.elements.input.value.startsWith('>cb')) {
-                this.elements.input.value = '';
-                this.clearSuggestions();
-            }
-            // Hide response quick actions — if user didn't use them, they're stale
-            const responseActions = document.getElementById('responseActionsContainer');
-            if (responseActions) responseActions.style.display = 'none';
-
-            // Pause animations to stop GPU compositing while hidden
-            document.documentElement.classList.add('animations-paused');
+            if (this._keepOpenOnBlur()) return;
+            // Rule B (docs/design/EXTENSION_VIEWS.md §15.2): focus went to an
+            // extension view, so stay beside it. Asks Rust only when a view
+            // can exist at all.
+            if (await this._staysForView(sequence)) return;
+            await this._hideOnBlur();
         });
+
+        // Rule B's other half: the user left Kage from a view. Rust sends
+        // this when neither the launcher nor a view has focus a moment
+        // after a view lost it.
+        this.appWindow.listen(EVT.EXT_VIEW_FOCUS_LOST, () => this._onViewFocusLost());
+
+        // A view's `context.view.compose(text)`: Rust has shown the
+        // launcher; put the text in the input. Never sent.
+        this.appWindow.listen(EVT.FLOATING_COMPOSE, (event) => this._applyCompose(event?.payload));
 
         // Close-time cleanup. The floating window is normally hidden,
         // not closed — this listener is defensive insurance for two
@@ -379,5 +317,194 @@ export const LifecycleVisibilityMethods = {
                 console.warn('floating close-requested cleanup failed:', e);
             }
         });
+    },
+
+    /**
+     * Whether the launcher must stay open when it loses focus: a
+     * permission prompt, a drag, a menu, a pending confirmation, running
+     * tools or plans, a file picker. Shared by the blur handler and
+     * `ext_view_focus_lost`.
+     */
+    _keepOpenOnBlur() {
+        // Don't hide if permission modal is open
+        const permissionModal = document.getElementById('permissionModal');
+        if (permissionModal && permissionModal.style.display !== 'none') {
+            return true;
+        }
+        // Don't hide if dragging the window
+        if (this.windowManager.isDragging) {
+            return true;
+        }
+        // Don't hide if context menu is open
+        const contextMenu = document.querySelector('.context-menu');
+        if (contextMenu && contextMenu.style.display !== 'none') {
+            return true;
+        }
+        // Don't hide if context menu popup window is open
+        if (window._contextMenuOpen) {
+            return true;
+        }
+        // Don't hide while an uninstall confirmation, or the result
+        // action it started, is pending (app/result-menu.js)
+        if (this._resultConfirm || this._resultActionBusy) {
+            return true;
+        }
+        // Don't hide if we just stopped generating (prevents accidental hide on Esc)
+        if (this._justStoppedGenerating) {
+            return true;
+        }
+        // Don't hide if computer control is active — user needs to track progress
+        if (this.computerControlActive) {
+            return true;
+        }
+        // Don't hide if a focus-stealing MCP tool is running (e.g. folder picker dialog)
+        if (this._noBlurTools.size > 0) {
+            return true;
+        }
+        // Don't hide if an automation plan is running
+        if (this._automationPlanStarted) {
+            return true;
+        }
+        // Don't hide if file picker is open
+        if (this._filePickerOpen) {
+            return true;
+        }
+        // Don't hide while an extension tool is being processed
+        if (this._extensionToolExecuting || this._extensionToolCallHandled) {
+            return true;
+        }
+        return false;
+    },
+
+    /**
+     * Rule A (docs/design/EXTENSION_VIEWS.md §15.2): the launcher is about
+     * to open an extension view, which takes focus. Ignore blurs while the
+     * window is built, and stay as the view's companion afterwards.
+     */
+    _armViewCompanion() {
+        this._suppressBlurHideUntil = Math.max(
+            this._suppressBlurHideUntil || 0,
+            Date.now() + VIEW_OPEN_BLUR_GRACE_MS
+        );
+        this._viewCompanion = true;
+    },
+
+    /**
+     * Rule B: whether this blur moved focus to an extension view window,
+     * so the launcher stays (and becomes the view's companion). Also true
+     * when the launcher got focus back while Rust was asked. Asks only
+     * when an extension here can have a view, so the common blur costs no
+     * IPC.
+     *
+     * @param {number} sequence - the blur's `_visibilitySequence`
+     */
+    async _staysForView(sequence) {
+        if (!this.extensionManager?.hasViewCapableExtensions?.()) return false;
+        let viewFocused = false;
+        try {
+            const state = await this.invoke('ext_view_focus_state');
+            viewFocused = state?.view_focused === true;
+        } catch {}
+        if (sequence !== this._visibilitySequence) return true;
+        if (!viewFocused) return false;
+        // Already hidden (Esc, a hide action): nothing to keep beside the view.
+        if (!(await this._isWindowVisible())) return false;
+        if (sequence !== this._visibilitySequence) return true;
+        this._viewCompanion = true;
+        return true;
+    },
+
+    /**
+     * `ext_view_focus_lost`: the user left Kage from a view. Hide the way
+     * a blur does, if the launcher stayed as the view's companion and
+     * doesn't have focus itself.
+     */
+    async _onViewFocusLost() {
+        if (!this._viewCompanion || this._windowFocused) return;
+        if (this._keepOpenOnBlur()) return;
+        await this._hideOnBlur();
+    },
+
+    /**
+     * `floating_compose { text }`: a view put text in the launcher's input
+     * (§16.1). Replace the input and select it. Nothing is sent: the user
+     * decides.
+     */
+    _applyCompose(payload) {
+        const text = payload && typeof payload.text === 'string' ? payload.text : null;
+        const input = this.elements?.input;
+        if (text === null || !input) return;
+        this._composedAt = Date.now();
+        input.value = text;
+        // Autogrow and suggestions follow the new text, as for typing.
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+        input.select();
+    },
+
+    /** Whether a view composed text into the input a moment ago. */
+    _composedRecently() {
+        return !!this._composedAt && Date.now() - this._composedAt < COMPOSE_KEEP_MS;
+    },
+
+    /** Hide after a blur, and pause what doesn't need to run while hidden. */
+    async _hideOnBlur() {
+        this._viewCompanion = false;
+        await this.appWindow.hide();
+        this.banner.dismiss();
+        // Forget a manual resize made on the empty launcher. Resizing with
+        // no response stretches the input panel; that's fine while open,
+        // but it shouldn't survive a hide/show — the launcher should come
+        // back at its natural (input + bars) height. When a response IS
+        // showing, the manual size is intentional (e.g. dragged bigger to
+        // read a long answer) and is preserved. resizeWindow() snaps the
+        // now-hidden window back so the next show paints at natural height.
+        if (!this.windowManager._hasResponseContent()) {
+            this.windowManager.userSetHeight = null;
+            this.windowManager.resizeWindow();
+        }
+        // Pause work that doesn't need to run while hidden.
+        // - Mascot animation: ticks every ~120-150ms; over a long
+        //   idle session that's real CPU we can give back to the
+        //   foreground app the user is actually using.
+        // - Hidden flag: read by ExtensionManager._renderWidget so
+        //   long-cadence widgets (calendar, todos) skip ticks
+        //   that would otherwise repaint into an invisible host.
+        // Listeners and observers stay attached — reattaching on
+        // every show would directly inflate time-to-paint, which
+        // is the headline metric for this window.
+        window._kageFloatingHidden = true;
+        this.extensionManager?.setWidgetVisibility(false);
+        // A calendar popup left open would greet the next show.
+        this.calendarPicker?.close({ restoreFocus: false, immediate: true });
+        if (window._kageMascot) {
+            try {
+                window._kageMascot.pause();
+            } catch (e) {
+                console.warn('mascot.pause failed:', e);
+            }
+        }
+        // Shut down mic and voice mode on hide
+        if (this.speech) {
+            this.speech.stopVoiceMode();
+            this.speech.cancelSpeech();
+        }
+        // Clean up clipboard mode state on hide
+        if (this._clipboardMode) {
+            this._restoreOverlaysAfterClipboard();
+            this._clipboardMode = false;
+            this._clipboardEntries = null;
+        }
+        // Clear >cb prefix if it's still in the input
+        if (this.elements.input.value.startsWith('>cb')) {
+            this.elements.input.value = '';
+            this.clearSuggestions();
+        }
+        // Hide response quick actions — if user didn't use them, they're stale
+        const responseActions = document.getElementById('responseActionsContainer');
+        if (responseActions) responseActions.style.display = 'none';
+
+        // Pause animations to stop GPU compositing while hidden
+        document.documentElement.classList.add('animations-paused');
     },
 };
