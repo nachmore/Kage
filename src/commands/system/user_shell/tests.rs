@@ -423,6 +423,30 @@ fn agent_runs_are_bounded_and_stopped_by_the_window_showing_them() {
 }
 
 #[test]
+fn concurrent_claims_never_share_a_slot() {
+    // Many threads race for one window's slot and for the agent limit:
+    // exactly one user run and exactly `max` agent runs get one. (A check
+    // and an insert under separate locks let a second run replace the
+    // first, which then neither Stop nor shutdown could find.)
+    let runs = Arc::new(UserShellRuns::new());
+    let barrier = Arc::new(std::sync::Barrier::new(16));
+    let handles: Vec<_> = (0..16)
+        .map(|i| {
+            let (runs, barrier) = (runs.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                let user = runs.begin("main", &format!("u{i}"));
+                let agent = runs.begin_agent("main", &format!("a{i}"), 3);
+                (user, agent)
+            })
+        })
+        .collect();
+    let slots: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    assert_eq!(slots.iter().filter(|(u, _)| u.is_some()).count(), 1);
+    assert_eq!(slots.iter().filter(|(_, a)| a.is_some()).count(), 3);
+}
+
+#[test]
 fn shutdown_stops_every_run_and_waits_for_them() {
     let runs = Arc::new(UserShellRuns::new());
     // Nothing running: returns at once.

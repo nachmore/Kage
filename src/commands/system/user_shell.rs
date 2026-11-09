@@ -157,9 +157,18 @@ impl UserShellRuns {
         Self::default()
     }
 
-    fn claim(self: &Arc<Self>, key: String, label: &str, run_id: &str) -> RunSlot {
+    /// Insert the run under `key` in `active` — the caller holds the lock
+    /// it checked the slot under, so two runs can't both take it (the
+    /// second would replace the first, which then nothing could stop).
+    fn claim(
+        self: &Arc<Self>,
+        active: &mut HashMap<String, ActiveRun>,
+        key: String,
+        label: &str,
+        run_id: &str,
+    ) -> RunSlot {
         let cancel = Arc::new(AtomicBool::new(false));
-        self.active.lock_or_recover().insert(
+        active.insert(
             key.clone(),
             ActiveRun {
                 run_id: run_id.to_string(),
@@ -178,27 +187,26 @@ impl UserShellRuns {
     /// Claim `label`'s slot for the user's run `run_id`; `None` while it
     /// has one going.
     pub fn begin(self: &Arc<Self>, label: &str, run_id: &str) -> Option<RunSlot> {
-        if self.active.lock_or_recover().contains_key(label) {
+        let mut active = self.active.lock_or_recover();
+        if active.contains_key(label) {
             return None;
         }
-        Some(self.claim(label.to_string(), label, run_id))
+        Some(self.claim(&mut active, label.to_string(), label, run_id))
     }
 
     /// Claim a slot for a run an agent asked for, shown in window `label`;
     /// `None` when `max` such runs are already going (or `run_id` is).
     pub fn begin_agent(self: &Arc<Self>, label: &str, run_id: &str, max: usize) -> Option<RunSlot> {
         let key = format!("{AGENT_RUN_KEY}{run_id}");
-        {
-            let active = self.active.lock_or_recover();
-            let agent_runs = active
-                .keys()
-                .filter(|k| k.starts_with(AGENT_RUN_KEY))
-                .count();
-            if agent_runs >= max || active.contains_key(&key) {
-                return None;
-            }
+        let mut active = self.active.lock_or_recover();
+        let agent_runs = active
+            .keys()
+            .filter(|k| k.starts_with(AGENT_RUN_KEY))
+            .count();
+        if agent_runs >= max || active.contains_key(&key) {
+            return None;
         }
-        Some(self.claim(key, label, run_id))
+        Some(self.claim(&mut active, key, label, run_id))
     }
 
     /// Ask the run `run_id` shown in window `label` to stop. A window can
