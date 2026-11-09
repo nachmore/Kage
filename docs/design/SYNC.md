@@ -582,7 +582,8 @@ tag     16 bytes
   shard names, so a reader skips a shard it already applied, whichever
   directory it is in.
 - Canonical JSON: sorted object keys, no whitespace, records sorted by
-  id (RFC 8785 style).
+  id (RFC 8785 style). Numbers print as ECMAScript prints them, so `1.0`
+  and `1` are the same value (`canonical::same`).
 - Compress, then encrypt. No credential is ever in the stream, so
   compression can't leak one through file sizes.
 - A file that fails to open is **not ready**, never "corrupt" at first
@@ -2699,7 +2700,7 @@ Harness `tests/sync_support/`:
 | I12 | Partial file from A. | Nothing applied from it; applied once complete; `waiting` then `up_to_date`. |
 | I13 | Placeholder on B. | The tick doesn't block (under 50 ms per placeholder); applied after "download"; `placeholders` after 3 ticks. |
 | I14 | Provider duplicate in A's directory; a duplicate head with different content. | Exact duplicate ignored; different content → clone handling on A. |
-| I15 | B's clock is +1 day. | Same winners everywhere. `clock_warning` on A. HLCs never move more than 1 hour past wall. |
+| I15 | B's clock is +1 day. | Same winners everywhere. `clock_warning` on A. Reading B's files never moves an HLC more than 1 hour past wall (`observe`); only an edit of a value B stamped follows it (§7.3 `floor`). |
 | I16 | B offline 40 simulated days with edits; A keeps editing. | Newer wins; losers listed. Tombstones aren't cleaned before B returns. |
 | I17 | B away 120 days; A deleted items meanwhile and cleaned the tombstones. | B's copies go to `deleted_while_away` (with the mass-change question when over the threshold); B's own new items are published. |
 | I18 | An "older build" (catalog without path X, struct without field Y, `READER_VERSION` 1 against 2). | X and Y survive the older computer's edits; `min_reader` gating; `RENAMED` dual write. |
