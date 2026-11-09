@@ -542,22 +542,27 @@ In the window's JS host (`FileTextBroker`, one per window):
 
 In Rust (`pick_file_text`), in this order:
 
-1. Validate `extension_id` (`extensions::validate_extension_id`). Clean
+1. Validate `extension_id` (`extensions::validate_extension_id`; a bad
+   one is `errors.extension.invalid_id`, kind `invalid_input`). Clean
    `display_name` (§5.10, at most 64 chars; empty → the id).
 2. Check the grant: `config.extension_grants[id].granted` contains
    `file_text`, and the extension is enabled. Else `not_granted` or
    `extension_disabled`. This is defence in depth: the JS host already
    refused.
 3. Validate `args`. Default formats: every format this build reads.
-   Default `max_chars`: 100,000.
+   Default `max_chars`: 100,000. Requested formats this build doesn't
+   read yet (P1 formats before FT8) are dropped, so an extension written
+   for a newer Kage still works; if none is left → `invalid_formats`.
 4. Find the worker next to the current executable (§5.5). Missing →
    `unavailable`, before the user picks anything.
 5. Take the single slot: one request at a time in the whole app (`busy`),
    and at least 3 seconds since this extension's last dialog closed
    (`too_soon`).
-6. Open the dialog (§5.3). Emit `dialog_closed`. No file, or the request
-   was cancelled while the dialog was open → release the slot, return
-   `Ok(None)`.
+6. Open the dialog (§5.3). Emit `dialog_closed` (`picked` says whether a
+   file will be read). No file, the request was cancelled while the
+   dialog was open, or the extension lost `file_text` or was turned off
+   meanwhile (the grant is checked again here) → release the slot,
+   return `Ok(None)`.
 7. Check the pick (§5.4): a regular file, an extension in the requested
    formats, at most 32 MB. No read happens before these pass.
 8. Emit `reading` (or `downloading`, §8). Read the bytes with a 60-second
@@ -701,18 +706,22 @@ not get the user's files.
 
 - `Command::new(path).arg("--v1")`, `env_clear()` (keeping only
   `SystemRoot` on Windows), current directory set to the temp dir, all
-  three stdio piped, `CREATE_NO_WINDOW` on Windows.
+  three stdio piped, `CREATE_NO_WINDOW` on Windows (through
+  `os::configure_process_spawn`, which on Unix also gives the worker its
+  own session).
 - Not `login_env::apply`: this is Kage's own binary.
 - One thread writes the request (§5.6) and closes stdin. One reads stdout
   through `take(max_chars * 4 + 1 MiB)`. One drains stderr through
-  `take(16 KiB)` (debug log, English, never shown).
+  `take(16 KiB)` (debug log, English, never shown) and throws the rest
+  away, so a chatty worker can't block on a full pipe.
 - The parent polls `try_wait()` every 25 ms until the worker exits, the
-  30-second deadline passes, or the cancel flag is set. The last two kill
-  it.
+  30-second deadline passes, the cancel flag is set, or stdout goes over
+  its cap. The last three kill it.
 - Exit status 0 with a valid response → result. A killed worker →
   `timeout` or `cancelled`. Any other exit (abort, signal, stack
   overflow, out of memory) → `too_complex`. Output over the cap →
-  `worker_failed`.
+  `worker_failed`, even if the worker exited on its own once its pipe
+  closed.
 
 **Inside the worker** (`kage-file-text/src/main.rs`), before reading
 stdin:
@@ -797,8 +806,10 @@ pub enum WorkerErrorCode {  // maps 1:1 to errors.file_text.* keys
 ```
 
 A `v` the worker doesn't know → `Err { code: Malformed }` and the parent
-reports `worker_failed`. The worker and app always ship together, so this
-only guards against a broken install.
+reports `worker_failed`. The parent tells it from a damaged file by the
+worker's fixed `detail` for it (`wire version …`, and `bad request
+frame` for a frame it couldn't read). The worker and app always ship
+together, so this only guards against a broken install.
 
 ### 5.7 Limits
 
@@ -1008,7 +1019,9 @@ units and can be larger for emoji and rare scripts. Extensions should use
   HMAC-SHA256(key, `"v1\0" + extension_id + "\0" + canonical path in
   NFC`). The key is 32 random bytes in
   `<data_local_dir>/kage/file-ref.key` (owner-only, created on first use,
-  replaced if malformed), resolved through `crate::paths`.
+  replaced if malformed), resolved through `crate::paths`. If the key
+  can't be written, a random key for this run of Kage is used, so refs
+  still match within the session.
 - Properties: stable for the same file at the same place on this machine;
   different for each extension, so two extensions can't link their
   records; meaningless on another machine; not reversible to the path.
@@ -1020,8 +1033,8 @@ units and can be larger for emoji and rare scripts. Extensions should use
 ### 5.12 Secret-shaped text
 
 After extraction, the parent runs the backup classifier's `SECRET_SHAPE`
-over the text: `!sensitive::secret_spans(&text).is_empty()` → add
-`possible_secret`. `secret_spans` is the function the agent calls design's WP-AC0
+over the text and the title: `!sensitive::secret_spans(&text).is_empty()`
+→ add `possible_secret`. `secret_spans` is the function the agent calls design's WP-AC0
 adds to `src/config_export/sensitive.rs`, before this design's contracts
 land (SYNC §23). `TOKEN_RUN` is not used: in documents it matches too many
 ordinary ids and hashes. Nothing is removed. The extension decides what to
@@ -1038,8 +1051,8 @@ user cancels the dialog.
 ExtensionFileRead {
     extension_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    file_name: Option<String>,    // cleaned name; None if it looks like a secret
-    format: Option<String>,       // detected format, when known
+    file_name: Option<String>,    // cleaned name; None if SECRET_SHAPE matches it
+    format: Option<String>,       // detected format; the extension's before detection
     bytes: u64,
     chars: u32,                   // 0 on failure
     truncated: bool,
@@ -1060,7 +1073,7 @@ and to `KNOWN_EVENTS` (advisory).
 
 | Event | Props | When |
 |---|---|---|
-| `extension_file_text` | `extension_id`, `format`, `outcome` (`ok`, `cancelled`, or the error key's last segment), `size_bucket` (`<100KB`, `<1MB`, `<10MB`, `≤32MB`), `chars_bucket` (`<10k`, `<100k`, `<1M`, `1M`), `ms_bucket` (`<500`, `<2000`, `<10000`, `10000+`) | A picked file was handled |
+| `extension_file_text` | `extension_id`, `format`, `outcome` (`ok`, `cancelled`, or the error key's last segment), `size_bucket` (`<100KB`, `<1MB`, `<10MB`, `≤32MB`, and `>32MB` for files refused as `too_large`), `chars_bucket` (`<10k`, `<100k`, `<1M`, `1M`), `ms_bucket` (`<500`, `<2000`, `<10000`, `10000+`) | A picked file was handled |
 
 Through `telemetry::track`, a no-op without consent.
 
@@ -2023,12 +2036,21 @@ with EXTENSION_AGENT_CALLS's `AC-X1` and `AC-MM1`…`AC-MM3`.
   slowest under a second.
 
 **WP-FT5 Host commands** (`src/file_text/{mod,dialog,read,worker,file_ref,post}.rs`,
+`src/file_text/{request,slot}.rs` (the steps after the slot; the slot) and
+`src/file_text/tests*.rs`, to keep each file under 500 lines,
 `src/commands/extensions/file_text.rs`, `src/commands/extensions/mod.rs`,
 `src/commands/registry.rs`, `src/main.rs` and `src/lib.rs` (mod lines),
 `src/extensions.rs` (`VALID_CAPABILITIES`),
 `src/os/file_probe.rs`, `src/os/{windows,macos,linux}/file_probe.rs`,
-`src/os/mod.rs` (mod line), `src/permission_audit/types.rs`,
+`src/os/mod.rs` and `src/os/{windows,macos,linux}/mod.rs` (mod lines),
+`src/events.rs` (drops the stale `dead_code` allow on
+`FILE_TEXT_PROGRESS`), `src/permission_audit/types.rs`,
 `src/permission_audit/tests.rs`, `tests/file_text_test.rs`)
+- Also `ui/js/shared/extension-permissions.js`: the three command rows
+  and the `file_text` capability entry, the same lines FT6 lists. The
+  command parity test needs the rows once the commands are registered,
+  and the alignment test needs the capability once `VALID_CAPABILITIES`
+  has it, so FT5 builds green on its own.
 - §3.5, §5.1, §5.3–5.5, §5.11–5.15.
 - Accept: every app-crate test in §12; the existing gates pass; no file
   name in any log line; `cargo clippy` clean.

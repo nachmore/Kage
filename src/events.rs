@@ -136,7 +136,6 @@ pub const AGENT_CALLS_ACTIVITY: &str = "agent_calls_activity";
 /// `picked: bool`), `reading`, `downloading`, `extracting` or `done`, and
 /// `file` is the cleaned file name. Sent only to the window that called
 /// the command, never to extension sandboxes.
-#[allow(dead_code)] // The file text commands will emit it; the app doesn't yet.
 pub const FILE_TEXT_PROGRESS: &str = "file_text_progress";
 
 // --- Extension views ------------------------------------------------

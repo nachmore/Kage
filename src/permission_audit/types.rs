@@ -106,6 +106,29 @@ pub enum AuditEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         exit_code: Option<i32>,
     },
+    /// An extension asked for a file the user picked, and Kage handled it,
+    /// whatever the outcome (docs/design/EXTENSION_FILE_TEXT.md §5.13).
+    /// Not written when the user closed the dialog without a file.
+    ExtensionFileRead {
+        extension_id: String,
+        /// The cleaned file name; `None` if it looks like a secret.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_name: Option<String>,
+        /// The detected format (`pdf`, …), when known.
+        #[serde(default)]
+        format: Option<String>,
+        #[serde(default)]
+        bytes: u64,
+        /// 0 on failure.
+        #[serde(default)]
+        chars: u32,
+        #[serde(default)]
+        truncated: bool,
+        /// `ok`, or the error key's last segment (`too_large`, …).
+        outcome: String,
+        #[serde(default)]
+        duration_ms: u64,
+    },
 }
 
 /// Longest command an audit entry keeps, in bytes — the same 2 KB the
@@ -159,6 +182,28 @@ impl AuditEvent {
             }
             AuditEvent::HostCommand { action, .. } => {
                 format!("Command outside the agent's sandbox: {}", action)
+            }
+            // Never the file name: summaries end up in logs.
+            AuditEvent::ExtensionFileRead {
+                extension_id,
+                format,
+                chars,
+                outcome,
+                ..
+            } => {
+                if outcome == "ok" {
+                    format!(
+                        "Extension '{}' read a file ({}, {} characters)",
+                        extension_id,
+                        format.as_deref().unwrap_or("unknown"),
+                        chars
+                    )
+                } else {
+                    format!(
+                        "Extension '{}' couldn't read a file ({})",
+                        extension_id, outcome
+                    )
+                }
             }
         }
     }
