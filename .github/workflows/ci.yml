@@ -266,6 +266,13 @@ jobs:
             echo "(no bundle_dmg.sh staged — failure happened before bundling)"
           fi
 
+      # Compile the test binaries in their own step. The tauri build
+      # above doesn't build them (test profile, dev-dependencies, the
+      # sidecar crates' tests), and that compile alone can pass the
+      # 5-minute hung-test backstop below.
+      - name: cargo test (build)
+        run: cargo test --workspace --no-run
+
       - name: cargo test
         # --workspace runs every member's tests (the sidecar is a
         # non-default member, so bare `cargo test` would skip it).
@@ -273,8 +280,8 @@ jobs:
         # exhaustion on Windows; CI inherits that.
         #
         # timeout-minutes: measured green runs take 2m17s (Windows) /
-        # 1m03s (macOS) — compilation happens in the build step above,
-        # so this is pure test execution. 5 min is >2x the slowest
+        # 1m03s (macOS) — the test binaries are built in the step
+        # above, so this is pure test execution. 5 min is >2x the slowest
         # observed pass. A hung test (a command blocking on an OS
         # service that never answers headless) previously wedged the
         # job 40+ min until force-cancel — which destroys the logs; a
