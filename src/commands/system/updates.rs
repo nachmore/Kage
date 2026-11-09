@@ -85,6 +85,18 @@ pub async fn download_and_install_update<R: tauri::Runtime>(
     ui: State<'_, UiState>,
     _acp: State<'_, AcpHandles>,
 ) -> Result<(), AppError> {
+    // One install at a time across every trigger (`>update` in any window,
+    // the floating banner, Settings, the idle loop). A second caller would
+    // otherwise find the cached Update gone, re-check, and download in
+    // parallel; the loser's install could race the winner's relaunch.
+    let Some(claim) = features.updater.try_claim_install() else {
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.update.install_in_progress",
+            &[],
+        ));
+    };
+
     // Prefer the Update cached from a previous check_for_update call —
     // it might carry channel-specific metadata the plugin would need to
     // re-fetch otherwise. Fall back to a fresh check if nothing cached.
@@ -147,6 +159,7 @@ pub async fn download_and_install_update<R: tauri::Runtime>(
     // download_and_install and we never reached this line. On macOS
     // it returned cleanly after swapping the .app on disk; relaunch
     // into the new binary seamlessly.
+    claim.hold_until_exit();
     crate::updater::relaunch_and_exit(&app, true);
     Ok(())
 }

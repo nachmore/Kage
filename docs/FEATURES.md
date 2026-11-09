@@ -80,6 +80,7 @@ You can also set a global hotkey for voice input and, on Windows, one for clipbo
 | `>prompts` | Browse your saved prompts |
 | `>logs` | Open the logs |
 | `>version` | Show the version and check for updates |
+| `>update` | Check for an update and install it now (Kage restarts when it's done) |
 | `>session-title <name>` | Rename the current session |
 | `>session-id` | Show the current session's ID |
 | `>session-folder` | Show the current session's file on disk |
@@ -224,7 +225,7 @@ Settings → Updates has two switches:
 - **Automatically Check for Updates** checks once a day.
 - **Silent Updates** installs a found update quietly once the launcher has been idle for 5 minutes. With it off, an **Install now** banner appears in the launcher instead.
 
-The setup wizard's automatic-updates box turns on both; leave it unticked and both stay off, so Kage only checks when you ask (`>version`, or Settings → Updates). Every download is checked against a signing key built into the app before it's installed. Afterwards you get a changelog, and Kage takes you back to the session you were in.
+The setup wizard's automatic-updates box turns on both; leave it unticked and both stay off, so Kage only checks when you ask (`>version`, `>update`, or Settings → Updates). `>update` also installs what it finds straight away. Every download is checked against a signing key built into the app before it's installed. Afterwards you get a changelog, and Kage takes you back to the session you were in.
 
 **Channels:** **Stable** and **Preview** (coming later) and **Nightly**. Only Nightly builds are published today, so stay on Nightly for now. An install from a Nightly build follows Nightly automatically.
 

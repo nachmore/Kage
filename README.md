@@ -102,7 +102,7 @@ After an update, System Settings can still show Kage as allowed while macOS igno
 
 ### Updates
 
-In Settings → Updates, **Automatically Check for Updates** checks once a day and **Silent Updates** installs quietly once the launcher has been idle for 5 minutes; without it you get an **Install now** banner. Unticking automatic updates during setup leaves both off, and `>version` checks by hand. Every download is verified against a signing key built into the app.
+In Settings → Updates, **Automatically Check for Updates** checks once a day and **Silent Updates** installs quietly once the launcher has been idle for 5 minutes; without it you get an **Install now** banner. Unticking automatic updates during setup leaves both off. `>version` checks by hand, and `>update` checks and installs straight away. Every download is verified against a signing key built into the app.
 
 Channels: **Stable** and **Preview** (coming later) and **Nightly**. Only Nightly builds are published today, so stay on Nightly for now.
 

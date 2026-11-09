@@ -7,7 +7,7 @@ import {
     setAppIconInvoke,
     _resetDiagramFailures,
 } from '../../shared/markdown.js';
-import { loadSlashCommands } from '../../shared/commands.js';
+import { isUpdateCommandRunning, loadSlashCommands } from '../../shared/commands.js';
 import { submitSelection } from '../../shared/slash-selection.js';
 import {
     AttachmentManager,
@@ -138,6 +138,7 @@ export {
     hideExtensionBar,
     initMascotPointerSignals,
     isClipboardTrigger,
+    isUpdateCommandRunning,
     loadFrecency,
     loadSlashCommands,
     markOnline,

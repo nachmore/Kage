@@ -8,6 +8,30 @@ pub struct UpdaterState {
     pub update_ready: AtomicBool,
     pub pending_update: std::sync::Mutex<Option<Update>>,
     pub available_version: std::sync::Mutex<Option<String>>,
+    /// Set while one download → install → relaunch runs. Every install
+    /// entry point (`>update`, the floating banner's Install now, Settings →
+    /// Install Now, the silent idle install) claims it first, so a second
+    /// trigger from another window can't start a parallel download.
+    install_in_flight: AtomicBool,
+}
+
+/// Claim on [`UpdaterState`]'s single install slot, released on drop so
+/// every failed or abandoned install frees it for a retry.
+#[must_use = "the install slot is released as soon as the claim is dropped"]
+pub struct InstallClaim<'a>(&'a AtomicBool);
+
+impl InstallClaim<'_> {
+    /// Keep the slot taken for the rest of the process: the install
+    /// succeeded and we're relaunching, so nothing may start another.
+    pub fn hold_until_exit(self) {
+        std::mem::forget(self);
+    }
+}
+
+impl Drop for InstallClaim<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
 }
 
 impl Default for UpdaterState {
@@ -23,7 +47,17 @@ impl UpdaterState {
             update_ready: AtomicBool::new(false),
             pending_update: std::sync::Mutex::new(None),
             available_version: std::sync::Mutex::new(None),
+            install_in_flight: AtomicBool::new(false),
         }
+    }
+
+    /// Take the install slot, or `None` if another install is already
+    /// downloading or installing.
+    pub fn try_claim_install(&self) -> Option<InstallClaim<'_>> {
+        self.install_in_flight
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .ok()
+            .map(|_| InstallClaim(&self.install_in_flight))
     }
 
     pub fn touch_activity(&self) {
@@ -95,8 +129,33 @@ pub(super) fn has_active_agent_jobs() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{has_active_agent_jobs, is_user_facing_label, AgentJobGuard};
+    use super::{has_active_agent_jobs, is_user_facing_label, AgentJobGuard, UpdaterState};
     use crate::window_labels;
+
+    #[test]
+    fn install_claim_is_exclusive_until_dropped() {
+        let state = UpdaterState::new();
+        let claim = state.try_claim_install().expect("slot starts free");
+        assert!(
+            state.try_claim_install().is_none(),
+            "a second install must not start while one is in flight"
+        );
+        drop(claim);
+        assert!(
+            state.try_claim_install().is_some(),
+            "a failed install frees the slot for a retry"
+        );
+    }
+
+    #[test]
+    fn install_claim_held_until_exit_stays_taken() {
+        let state = UpdaterState::new();
+        state
+            .try_claim_install()
+            .expect("slot starts free")
+            .hold_until_exit();
+        assert!(state.try_claim_install().is_none());
+    }
 
     #[test]
     fn agent_job_guard_marks_busy_while_held() {

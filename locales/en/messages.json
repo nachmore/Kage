@@ -4001,6 +4001,34 @@
     "message": "✕ Update check failed: {message}",
     "description": "Status shown by >version when the update check throws"
   },
+  "command.update.description": {
+    "message": "Check for an update and install it now",
+    "description": ">update command description"
+  },
+  "command.update.checking": {
+    "message": "_Checking for updates…_",
+    "description": "Status line shown while >update polls for updates (italic markdown)"
+  },
+  "command.update.up_to_date": {
+    "message": "✓ You're up to date (v{version}).",
+    "description": "Status shown by >update when on the latest version ({version} = e.g. 0.9.0)"
+  },
+  "command.update.installing": {
+    "message": "⬆ Updating to v{version} — Kage will restart when it's installed.",
+    "description": "Status shown by >update while it downloads and installs an update ({version} = the new version)"
+  },
+  "command.update.already_running": {
+    "message": "⏳ Already checking for or installing an update — hang on.",
+    "description": "Response when >update is run again while an earlier >update is still checking or installing"
+  },
+  "command.update.check_failed": {
+    "message": "✕ Couldn't check for updates",
+    "description": "Error label when >update's update check fails; the error message follows after a colon"
+  },
+  "command.update.install_failed": {
+    "message": "✕ Couldn't install the update",
+    "description": "Error label when >update's download or install fails; the error message follows after a colon"
+  },
   "command.suggestions.send_hint": {
     "message": "{key} to send to agent",
     "description": "Hint shown at the bottom of command suggestions ({key} = e.g. Ctrl+Enter)"
@@ -4144,6 +4172,10 @@
   "errors.update.no_update_available": {
     "message": "No update available",
     "description": "Returned when install_update is called but there's no pending update"
+  },
+  "errors.update.install_in_progress": {
+    "message": "An update is already downloading and installing. Kage will restart when it's done.",
+    "description": "Returned when an update install is started (Install now / >update / Settings) while another one is still running"
   },
   "errors.extensions.no_store_url": {
     "message": "No store URL configured",

@@ -178,6 +178,15 @@ export class BannerController {
         }
     }
 
+    /**
+     * Hide the banner only if it's the "update available → Install now"
+     * offer. Used while `>update` is already installing, so other banners
+     * (crash, post-update) are left alone.
+     */
+    dismissUpdateOffer() {
+        if (this.visible && this._action?.type === 'update_install') this.dismiss();
+    }
+
     dismiss() {
         if (!this.visible) return;
         this.visible = false;

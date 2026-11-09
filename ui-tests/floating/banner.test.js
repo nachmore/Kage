@@ -132,6 +132,19 @@ describe('BannerController.show / dismiss', () => {
         expect(() => c.dismiss()).not.toThrow();
         expect(c.visible).toBe(false);
     });
+
+    it('dismissUpdateOffer hides only the Install-now update banner', () => {
+        const c = makeController();
+        c.showText('⬆️', 'v2 is available', 'Install now', 'update_install', '');
+        c.dismissUpdateOffer();
+        expect(c.visible).toBe(false);
+        expect(document.getElementById('floatingBanner').style.display).toBe('none');
+
+        c.showText('💥', 'crashed', 'View log', 'crash_log', '/p');
+        c.dismissUpdateOffer();
+        expect(c.visible).toBe(true);
+        expect(document.getElementById('floatingBanner').style.display).toBe('flex');
+    });
 });
 
 describe('BannerController.handleClick', () => {

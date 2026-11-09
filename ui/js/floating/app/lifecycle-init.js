@@ -2,6 +2,7 @@ import {
     createToolActivityTracker,
     EVT,
     initMascotPointerSignals,
+    isUpdateCommandRunning,
     loadFrecency,
     loadSlashCommands,
     onConfigChange,
@@ -162,6 +163,13 @@ export const LifecycleInitMethods = {
         });
 
         this.listen(EVT.UPDATE_AVAILABLE, (event) => {
+            // `>update` raised this with its own check and is already
+            // installing; an "Install now" banner (or a stale one from an
+            // earlier check) could only fail with "already installing".
+            if (isUpdateCommandRunning()) {
+                this.banner.dismissUpdateOffer();
+                return;
+            }
             const version = event.payload;
             // Plain text: the version comes from the update manifest.
             this.banner.showText(

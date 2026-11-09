@@ -9,6 +9,20 @@ import { errLabel } from './error-message.js';
 import { t } from './i18n.js';
 import { loadSelection } from './slash-selection.js';
 
+// True while `>update` is checking or installing. A second `>update` in that
+// window just says it's already updating, and the floating window's
+// `update_available` listener holds back its "Install now" banner (it would
+// only fail with "already installing"). Module state, so it's per webview:
+// floating and chat each have their own copy. Across windows the backend's
+// single install slot (`UpdaterState::try_claim_install`) is what stops a
+// second, parallel download.
+let updateCommandRunning = false;
+
+/** Whether `>update` is checking for or installing an update in this window. */
+export function isUpdateCommandRunning() {
+    return updateCommandRunning;
+}
+
 // Each entry's `description` is a getter so it resolves through the active
 // i18n catalog at the moment the launcher renders, not at module-import time
 // (which would freeze the EN strings into the binary).
@@ -306,6 +320,77 @@ const LOCAL_COMMANDS = [
             } catch (e) {
                 const msg = e && typeof e === 'object' ? e.message || JSON.stringify(e) : String(e);
                 show(header + t('command.version.check_failed', { message: msg }));
+            }
+        },
+    },
+    {
+        name: 'update',
+        get description() {
+            return t('command.update.description');
+        },
+        icon: '⬆️',
+        // Like >version, but installs a found update straight away instead
+        // of leaving it to the banner / Settings → Updates.
+        execute: async (invoke) => {
+            const show = (text) =>
+                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
+            if (updateCommandRunning) {
+                show(t('command.update.already_running'));
+                return;
+            }
+            updateCommandRunning = true;
+            let installStarted = false;
+            try {
+                show(t('command.update.checking'));
+                let result;
+                try {
+                    result = await invoke('check_for_update');
+                } catch (e) {
+                    show(errLabel(t('command.update.check_failed'), e));
+                    return;
+                }
+                if (!result?.available_version) {
+                    show(
+                        t('command.update.up_to_date', {
+                            version: result?.current_version || '?',
+                        })
+                    );
+                    return;
+                }
+                show(t('command.update.installing', { version: result.available_version }));
+                // Consumes the Update that check_for_update just cached,
+                // writes the resume marker and the Interactive install
+                // source, then downloads, verifies, installs and relaunches.
+                // On success the process exits before this settles. The
+                // plugin reports no download progress, so the line above
+                // stays up until then.
+                //
+                // Not awaited: the launcher clears its input once a command
+                // returns, and a download can take minutes. Awaiting it kept
+                // `>update` sitting in the input the whole time and then
+                // wiped whatever the user had typed meanwhile when a failed
+                // install finally returned. The guard stays held until the
+                // install settles.
+                const install = Promise.resolve(invoke('download_and_install_update'));
+                installStarted = true;
+                install
+                    .catch((e) => {
+                        // Another install (the banner, Settings, `>update`
+                        // in another window) already holds the backend's
+                        // single install slot. Nothing failed.
+                        if (e?.key === 'errors.update.install_in_progress') {
+                            show(t('command.update.already_running'));
+                            return;
+                        }
+                        // Backend already returns a classified, readable
+                        // reason (network / signature / disk full / …).
+                        show(errLabel(t('command.update.install_failed'), e));
+                    })
+                    .finally(() => {
+                        updateCommandRunning = false;
+                    });
+            } finally {
+                if (!installStarted) updateCommandRunning = false;
             }
         },
     },

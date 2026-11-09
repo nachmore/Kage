@@ -116,6 +116,11 @@ fn spawn_idle_loop(
             {
                 continue;
             }
+            // A user-started install (`>update`, the banner, Settings) is
+            // already running and owns the cached Update; leave it be.
+            let Some(claim) = updater.try_claim_install() else {
+                continue;
+            };
             let Some(update) = updater.pending_update.lock_or_recover().take() else {
                 clear_ready(&updater);
                 continue;
@@ -138,6 +143,7 @@ fn spawn_idle_loop(
             match plugin_download_and_install(&app, update).await {
                 Ok(()) => {
                     info!("Update installed; relaunching");
+                    claim.hold_until_exit();
                     relaunch_and_exit(&app, false);
                 }
                 Err(error) => {
