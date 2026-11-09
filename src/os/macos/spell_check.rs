@@ -73,13 +73,16 @@ mod tests {
         assert!(defaults.boolForKey(&key));
     }
 
+    // A common misspelling, not a made-up one: macOS stops flagging a word
+    // the user keeps typing (it learns it from usage), so a test word like
+    // "helloo" fails on a machine where someone tried the spelling menu.
     #[test]
     fn flags_a_misspelling_with_suggestions() {
-        let guesses = crate::os::spell_check::check_word("helloo")
-            .expect("\"helloo\" should be flagged as misspelled");
+        let guesses = crate::os::spell_check::check_word("recieve")
+            .expect("\"recieve\" should be flagged as misspelled");
         assert!(
-            guesses.iter().any(|g| g == "hello"),
-            "expected \"hello\" among {guesses:?}"
+            guesses.iter().any(|g| g == "receive"),
+            "expected \"receive\" among {guesses:?}"
         );
         assert!(guesses.len() <= crate::os::spell_check::MAX_SUGGESTIONS);
     }

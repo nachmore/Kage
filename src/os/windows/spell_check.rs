@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn flags_a_misspelling_with_suggestions() {
-        let Some(guesses) = crate::os::spell_check::check_word("helloo") else {
+        let Some(guesses) = crate::os::spell_check::check_word("recieve") else {
             // No dictionary for any display language or en-US on this box.
             return;
         };
