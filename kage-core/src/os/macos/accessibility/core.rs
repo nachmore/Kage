@@ -98,6 +98,18 @@ pub(super) fn resolve_native(eid: &str) -> Result<AxElem, String> {
     })
 }
 
+/// [`resolve_native`] for a tool that acts on the element (clicks, types,
+/// toggles …): refused when the element belongs to Kage itself, whose
+/// approval buttons only the user may press (`os::kage_target`).
+pub(super) fn resolve_native_for_input(eid: &str) -> Result<AxElem, String> {
+    let elem = resolve_native(eid)?;
+    if crate::os::kage_target::is_kage_process(safe_pid(elem.as_ref())) {
+        log::warn!("Refused an input action on Kage's own window ({eid})");
+        return Err(crate::os::kage_target::REFUSAL.to_string());
+    }
+    Ok(elem)
+}
+
 pub(super) fn clear_native() {
     // `AxElem` Drop releases each retained handle.
     NATIVE_REGISTRY.with(|r| r.borrow_mut().clear());

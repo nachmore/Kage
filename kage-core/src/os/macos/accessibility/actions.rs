@@ -58,13 +58,13 @@ fn set_attribute(elem: ax::AXUIElementRef, attr: &str, value: CFTypeRef) -> Resu
 
 pub(crate) fn click_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
-    let elem = resolve_native(element_id)?;
+    let elem = resolve_native_for_input(element_id)?;
     perform_action(elem.as_ref(), ax::kAXPressAction)
 }
 
 pub(crate) fn focus_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
-    let elem = resolve_native(element_id)?;
+    let elem = resolve_native_for_input(element_id)?;
     let value = CFBoolean::true_value();
     set_attribute(
         elem.as_ref(),
@@ -75,7 +75,7 @@ pub(crate) fn focus_element_inner(element_id: &str) -> Result<String, String> {
 
 pub(crate) fn set_element_value_inner(element_id: &str, val: &str) -> Result<String, String> {
     ensure_trusted()?;
-    let elem = resolve_native(element_id)?;
+    let elem = resolve_native_for_input(element_id)?;
     let cf_val = CFString::new(val);
     set_attribute(
         elem.as_ref(),
@@ -86,7 +86,7 @@ pub(crate) fn set_element_value_inner(element_id: &str, val: &str) -> Result<Str
 
 pub(crate) fn toggle_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
-    let elem = resolve_native(element_id)?;
+    let elem = resolve_native_for_input(element_id)?;
     // AX checkboxes expose `AXPress` — a press toggles. For non-checkbox
     // widgets that expose a writable boolean value, flip the value.
     let role = copy_string_attr(elem.as_ref(), ax::kAXRoleAttribute);
@@ -115,7 +115,7 @@ pub(crate) fn toggle_element_inner(element_id: &str) -> Result<String, String> {
 
 pub(crate) fn select_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
-    let elem = resolve_native(element_id)?;
+    let elem = resolve_native_for_input(element_id)?;
     let role = copy_string_attr(elem.as_ref(), ax::kAXRoleAttribute);
     // For menu items, table rows, and outline rows, AXPress performs the
     // selection. For popup/combobox items, flip kAXSelectedAttribute.
@@ -132,7 +132,7 @@ pub(crate) fn select_element_inner(element_id: &str) -> Result<String, String> {
 
 pub(crate) fn expand_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
-    let elem = resolve_native(element_id)?;
+    let elem = resolve_native_for_input(element_id)?;
     let value = CFBoolean::true_value();
     // kAXDisclosingAttribute for outlines/rows, kAXExpandedAttribute for
     // disclosure triangles. Try Disclosing first, fall back to Expanded.
@@ -152,7 +152,7 @@ pub(crate) fn expand_element_inner(element_id: &str) -> Result<String, String> {
 
 pub(crate) fn collapse_element_inner(element_id: &str) -> Result<String, String> {
     ensure_trusted()?;
-    let elem = resolve_native(element_id)?;
+    let elem = resolve_native_for_input(element_id)?;
     let value = CFBoolean::false_value();
     match set_attribute(
         elem.as_ref(),
@@ -174,7 +174,7 @@ pub(crate) fn scroll_element_inner(
     _amount: f64,
 ) -> Result<String, String> {
     ensure_trusted()?;
-    let elem = resolve_native(element_id)?;
+    let elem = resolve_native_for_input(element_id)?;
     // `into_view` / empty direction → scroll-to-visible. Directional
     // scrolls (up/down/left/right) would need synthesised CGEvent scrolls
     // or AXIncrement/AXDecrement actions — the Windows impl supports both
