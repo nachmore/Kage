@@ -7421,6 +7421,10 @@
     "message": "Too many requests. Try again in a moment.",
     "description": "An extension window copied or sent text too often in a short time."
   },
+  "errors.ext_view.needs_user_action": {
+    "message": "Click or press a key in the window first.",
+    "description": "An extension window tried to open a window, copy text or send text to the launcher without a recent click or key press from the user."
+  },
   "errors.ext_view.clipboard_failed": {
     "message": "Couldn't copy to the clipboard.",
     "description": "Copying text from an extension window to the system clipboard failed."
@@ -7516,6 +7520,10 @@
   "ext_view.state.updated": {
     "message": "Updated to {version}.",
     "description": "Shown briefly in an extension's own window after the extension updated. {version} is a version number such as 1.2.0."
+  },
+  "ext_view.state.approve": {
+    "message": "Approve",
+    "description": "Button in an extension's own window when the extension needs the user's approval to open it. Opens the Store, where the user reviews and approves what the extension asks to do."
   },
   "errors.sync.unavailable": {
     "message": "Sync isn't available right now.",

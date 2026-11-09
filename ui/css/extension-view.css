@@ -1,0 +1,288 @@
+/* The extension view page (docs/design/EXTENSION_VIEWS.md §8.2, §18.2).
+   A host bar Kage draws, an optional banner, and the stage the view's
+   iframe fills. Logical properties throughout, so the page mirrors in RTL
+   without extra rules. Colours come from the Kage tokens, which follow the
+   theme (body.light-theme overrides them). */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+
+.kv-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: var(--kage-font);
+    font-size: 13px;
+    background: var(--kage-bg);
+    color: var(--kage-text);
+    overscroll-behavior: none;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+/* ===== Host bar ========================================================= */
+
+.kv-bar {
+    flex: 0 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding-inline: 10px 6px;
+    background: var(--kage-bg-elevated);
+    border-block-end: 1px solid var(--kage-border);
+    user-select: none;
+    -webkit-user-select: none;
+    /* A pinch over the bar must not zoom the page (§13.1). */
+    touch-action: none;
+}
+
+.kv-bar-identity {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.kv-bar-icon {
+    flex: 0 0 auto;
+    align-self: center;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.kv-bar-ext {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+    color: var(--kage-text-bright);
+}
+
+.kv-bar-sep {
+    flex: 0 0 auto;
+    color: var(--kage-text-muted);
+}
+
+.kv-bar-view {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kv-bar-sub {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-inline-start: 4px;
+    color: var(--kage-text-muted);
+}
+
+.kv-bar-notice {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: var(--kage-success);
+}
+
+.kv-bar-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.kv-badge {
+    margin-inline-end: 6px;
+    padding: 1px 6px;
+    border: 1px solid var(--kage-border);
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--kage-text-muted);
+    cursor: default;
+}
+
+.kv-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--kage-text-muted);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.kv-icon-btn:hover {
+    background: var(--kage-bg-input);
+    color: var(--kage-text-bright);
+}
+
+.kv-icon-btn:focus-visible,
+.kv-btn:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 1px;
+}
+
+/* ===== Banner =========================================================== */
+
+.kv-banner {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    background: var(--kage-bg-elevated);
+    border-block-end: 1px solid var(--kage-warning);
+    color: var(--kage-text);
+}
+
+.kv-banner::before {
+    content: "";
+    flex: 0 0 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--kage-warning);
+}
+
+.kv-banner-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.kv-banner-actions,
+.kv-state-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.kv-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--kage-border);
+    border-radius: 6px;
+    background: var(--kage-bg-input);
+    color: var(--kage-text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.kv-btn:hover {
+    border-color: var(--kage-accent);
+    color: var(--kage-text-bright);
+}
+
+.kv-btn-primary {
+    border-color: var(--kage-accent);
+    background: var(--kage-accent);
+    color: #fff;
+}
+
+.kv-btn-primary:hover {
+    background: var(--kage-accent-hover);
+    color: #fff;
+}
+
+/* ===== Stage ============================================================ */
+
+.kv-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* The view's iframe fills the stage, below the bar, so nothing it draws
+   can cover the bar (§8.2). */
+.kv-frame {
+    position: absolute;
+    inset: 0;
+}
+
+.kv-frame iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: var(--kage-bg);
+}
+
+/* Loading and "can't open" panels sit over the iframe. */
+.kv-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    background: var(--kage-bg);
+    text-align: center;
+}
+
+.kv-loading-text,
+.kv-state-text {
+    margin: 0;
+    max-width: 520px;
+    line-height: 1.5;
+}
+
+.kv-loading-text {
+    color: var(--kage-text-muted);
+}
+
+.kv-state-text {
+    color: var(--kage-text-bright);
+    font-size: 14px;
+}
+
+.kv-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--kage-border);
+    border-block-start-color: var(--kage-accent);
+    border-radius: 50%;
+    animation: kv-spin 0.7s linear infinite;
+}
+
+@keyframes kv-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kv-spinner {
+        animation-duration: 2.4s;
+    }
+}
