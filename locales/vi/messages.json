@@ -12400,5 +12400,503 @@
     "description": "Sync setup, choosing a folder: the folder has computers' data but no kage-sync.json. “Kage Sync” is the folder name and stays untranslated.",
     "_machine_translated": true,
     "_source_hash": "4965303c733b933b"
+  },
+  "errors.host_command.not_pending": {
+    "message": "Yêu cầu đó không còn chờ câu trả lời nữa.",
+    "description": "Error when the user answers a prompt for a command an AI agent asked to run outside its sandbox, but the request already ended (answered, timed out or withdrawn).",
+    "_machine_translated": true,
+    "_source_hash": "fd6f7762c2412e37"
+  },
+  "errors.host_command.wrong_window": {
+    "message": "Yêu cầu đó đang hiển thị ở một cửa sổ khác. Hãy trả lời ở đó.",
+    "description": "Error when the user answers a prompt for a command an AI agent asked to run outside its sandbox from a different Kage window than the one showing it.",
+    "_machine_translated": true,
+    "_source_hash": "d4d2972d30a81d91"
+  },
+  "errors.host_command.hidden_chars": {
+    "message": "Lệnh này chứa ký tự ẩn nên Kage sẽ không chạy. Hãy sao chép lệnh thay vào đó.",
+    "description": "Error: a command an AI agent asked to run outside its sandbox contains invisible characters (control, bidi or zero-width characters), so it can't be run from Kage.",
+    "_machine_translated": true,
+    "_source_hash": "25a2f12b4b1d3cc6"
+  },
+  "errors.host_command.cannot_always": {
+    "message": "Kage không thể tạo quy tắc cho lệnh này. Hãy chạy một lần thay vào đó.",
+    "description": "Error: the user picked 'Always allow' for a command an AI agent asked to run outside its sandbox, but no rule can cover it (it may touch credentials, or isn't a simple command).",
+    "_machine_translated": true,
+    "_source_hash": "a6037fcf72d66653"
+  },
+  "errors.host_command.bad_prefix": {
+    "message": "Không thể dùng làm quy tắc: hãy dùng từ thông thường, không có ký hiệu như ; | & $ > hoặc dấu xuống dòng.",
+    "description": "Error: the words the user typed for an 'Always allow commands starting with …' rule aren't a simple command.",
+    "_machine_translated": true,
+    "_source_hash": "e75c9b2450fb513c"
+  },
+  "errors.host_command.prefix_mismatch": {
+    "message": "Lệnh này không bắt đầu bằng những từ đó.",
+    "description": "Error: the user edited the words of an 'Always allow commands starting with …' rule so that the command being approved no longer starts with them.",
+    "_machine_translated": true,
+    "_source_hash": "5169680f6341045e"
+  },
+  "errors.host_command.bad_decision": {
+    "message": "Kage không hiểu câu trả lời đó.",
+    "description": "Internal error: the prompt for a command an AI agent asked to run outside its sandbox sent an unknown answer.",
+    "_machine_translated": true,
+    "_source_hash": "6f1756c089076f16"
+  },
+  "errors.host_command.too_many_rules": {
+    "message": "Đã có quá nhiều quy tắc. Hãy xóa bớt trong Cài đặt → Quyền công cụ.",
+    "description": "Error: the user tried to add another 'Always allow commands starting with …' rule but the list is full. Keep the Settings path as the app names it.",
+    "_machine_translated": true,
+    "_source_hash": "8f2ef7953ffcd3e4"
+  },
+  "errors.host_command.allow_all_settings_only": {
+    "message": "Chỉ có thể bật tùy chọn này trong Cài đặt.",
+    "description": "Error: the switch that lets every command an AI agent asks for run without asking can only be turned on from the Settings window.",
+    "_machine_translated": true,
+    "_source_hash": "25372fcee051d4d0"
+  },
+  "host_commands.notify.title": {
+    "message": "{agent} muốn chạy một lệnh bên ngoài sandbox của mình",
+    "description": "System notification title. {agent} is the name of the AI agent program (for example kiro-cli) that asked Kage to run a shell command outside the agent's own sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "b917e1fc96c5c4db"
+  },
+  "host_commands.notify.title_unknown": {
+    "message": "Một agent muốn chạy một lệnh bên ngoài sandbox của mình",
+    "description": "System notification title when Kage doesn't know which AI agent asked it to run a shell command outside the agent's own sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "9714a94d4fa351fc"
+  },
+  "host_commands.notify.body": {
+    "message": "Mở Kage để xem xét. Không có gì được chạy nếu bạn không phê duyệt.",
+    "description": "System notification body for a command an AI agent asked Kage to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "b19bb0d2e57309ca"
+  },
+  "shared.host_command.title": {
+    "message": "{agent} muốn chạy một lệnh bên ngoài sandbox của mình",
+    "description": "Heading of the prompt shown when an AI agent asks Kage to run a shell command outside the agent's own sandbox (its sandbox refused the command). {agent} is the agent's name, for example Kiro.",
+    "_machine_translated": true,
+    "_source_hash": "82fe1746a44a04dd"
+  },
+  "shared.host_command.title_unknown": {
+    "message": "Một agent muốn chạy một lệnh bên ngoài sandbox của mình",
+    "description": "Heading of the prompt shown when an AI agent asks Kage to run a shell command outside the agent's own sandbox, when Kage doesn't know which agent asked.",
+    "_machine_translated": true,
+    "_source_hash": "515b695a2e71a741"
+  },
+  "shared.host_command.auto_title": {
+    "message": "{agent} đang chạy một lệnh bên ngoài sandbox của mình",
+    "description": "Heading shown when Kage runs a command an AI agent asked for, outside the agent's sandbox, without asking (a rule the user made covers it). {agent} is the agent's name.",
+    "_machine_translated": true,
+    "_source_hash": "ed6daaad740d70b1"
+  },
+  "shared.host_command.auto_title_unknown": {
+    "message": "Một agent đang chạy một lệnh bên ngoài sandbox của mình",
+    "description": "Heading shown when Kage runs a command an AI agent asked for, outside the agent's sandbox, without asking, when Kage doesn't know which agent asked.",
+    "_machine_translated": true,
+    "_source_hash": "48e9eb98145f0086"
+  },
+  "shared.host_command.unmatched": {
+    "message": "Yêu cầu này không đến từ cuộc trò chuyện nào của Kage nên không có quy tắc nào áp dụng.",
+    "description": "Note in the prompt for a command an AI agent asked Kage to run outside its sandbox: Kage couldn't tie the request to one of its own conversations (for example an agent running in a terminal).",
+    "_machine_translated": true,
+    "_source_hash": "5a80214736c4d916"
+  },
+  "shared.host_command.background": {
+    "message": "Yêu cầu này đến từ một tác vụ nền đang xử lý văn bản từ ứng dụng khác nên không có quy tắc nào áp dụng.",
+    "description": "Note in the prompt for a command an AI agent asked Kage to run outside its sandbox: the request came from a hidden background task (inline assist, a macro…) that works on text from other apps.",
+    "_machine_translated": true,
+    "_source_hash": "64e771cc2971c899"
+  },
+  "shared.host_command.reason_label": {
+    "message": "Lý do của agent:",
+    "description": "Label in the prompt for a command an AI agent asked Kage to run outside its sandbox, before the agent's own explanation of why its sandbox can't run it. The explanation follows in the agent's words.",
+    "_machine_translated": true,
+    "_source_hash": "6d4d451c9a3d82c5"
+  },
+  "shared.host_command.run_once": {
+    "message": "Chạy một lần",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: run it this one time.",
+    "_machine_translated": true,
+    "_source_hash": "b6d1eab035a4d710"
+  },
+  "shared.host_command.always": {
+    "message": "Luôn cho phép các lệnh bắt đầu bằng",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: run it, and from now on run commands that start with the words in the text field next to it without asking. The field follows the button.",
+    "_machine_translated": true,
+    "_source_hash": "cb41f355f61dfdf0"
+  },
+  "shared.host_command.prefix_label": {
+    "message": "Những từ mà lệnh phải bắt đầu bằng",
+    "description": "Accessible label of the editable text field next to the 'Always allow commands starting with' button: the first words of a command, for example 'brew install'.",
+    "_machine_translated": true,
+    "_source_hash": "2152545526d64154"
+  },
+  "shared.host_command.deny": {
+    "message": "Từ chối",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: don't run it.",
+    "_machine_translated": true,
+    "_source_hash": "6e1d7ef0200fbedd"
+  },
+  "shared.host_command.expires": {
+    "message": "Nếu bạn không trả lời trong vòng {minutes, plural, other {# phút}}, Kage sẽ từ chối.",
+    "description": "Line in the prompt for a command an AI agent asked Kage to run outside its sandbox. {minutes} is the time left before Kage denies the request on its own.",
+    "_machine_translated": true,
+    "_source_hash": "d032a28dbf050bf5"
+  },
+  "shared.host_command.guard": {
+    "message": "Lệnh này có thể động đến thông tin xác thực ({kinds}). Kage luôn hỏi trước khi chạy lệnh như thế này, bất kể quy tắc của bạn là gì.",
+    "description": "Warning in the prompt for a command an AI agent asked Kage to run outside its sandbox. {kinds} is a comma-separated list such as 'AWS credentials, SSH keys'.",
+    "_machine_translated": true,
+    "_source_hash": "8a01638fbdd0d7cc"
+  },
+  "shared.host_command.guard_kind.aws": {
+    "message": "thông tin xác thực AWS",
+    "description": "Item in the list of what a command may touch, in the credential warning.",
+    "_machine_translated": true,
+    "_source_hash": "546d0a830df6cfe4"
+  },
+  "shared.host_command.guard_kind.sandbox_session": {
+    "message": "phiên của sandbox thông tin xác thực",
+    "description": "Item in the list of what a command may touch, in the credential warning: the session file of the sandbox that holds the agent's credentials.",
+    "_machine_translated": true,
+    "_source_hash": "32bec4e4fac9c8ca"
+  },
+  "shared.host_command.guard_kind.ssh": {
+    "message": "khóa SSH",
+    "description": "Item in the list of what a command may touch, in the credential warning.",
+    "_machine_translated": true,
+    "_source_hash": "03554eb67f9331b4"
+  },
+  "shared.host_command.guard_kind.netrc": {
+    "message": "thông tin đăng nhập đã lưu (.netrc)",
+    "description": "Item in the list of what a command may touch, in the credential warning. Keep '.netrc' as is (a file name).",
+    "_machine_translated": true,
+    "_source_hash": "518e12a14172c0df"
+  },
+  "shared.host_command.guard_kind.git": {
+    "message": "thông tin xác thực GitHub hoặc Git",
+    "description": "Item in the list of what a command may touch, in the credential warning.",
+    "_machine_translated": true,
+    "_source_hash": "1090eda0a0f34066"
+  },
+  "shared.host_command.guard_kind.gcloud": {
+    "message": "thông tin xác thực Google Cloud",
+    "description": "Item in the list of what a command may touch, in the credential warning.",
+    "_machine_translated": true,
+    "_source_hash": "37907c051c8ee7a5"
+  },
+  "shared.host_command.guard_kind.cloud": {
+    "message": "thông tin xác thực đám mây",
+    "description": "Item in the list of what a command may touch, in the credential warning: Azure, Kubernetes or Docker credential files.",
+    "_machine_translated": true,
+    "_source_hash": "e9399514ab021d8a"
+  },
+  "shared.host_command.guard_kind.keychain": {
+    "message": "chuỗi khóa",
+    "description": "Item in the list of what a command may touch, in the credential warning: the macOS keychain, where passwords are stored.",
+    "_machine_translated": true,
+    "_source_hash": "250143cb896b3fe4"
+  },
+  "shared.host_command.guard_kind.env_dump": {
+    "message": "tất cả biến môi trường",
+    "description": "Item in the list of what a command may touch, in the credential warning: the command prints every environment variable, which can include secrets.",
+    "_machine_translated": true,
+    "_source_hash": "abff95c400e7c2e4"
+  },
+  "shared.host_command.guard_kind.credential_env": {
+    "message": "biến môi trường chứa thông tin xác thực",
+    "description": "Item in the list of what a command may touch, in the credential warning: environment variables that hold secrets, such as AWS_SECRET_ACCESS_KEY.",
+    "_machine_translated": true,
+    "_source_hash": "92268a41a824cfac"
+  },
+  "shared.host_command.guard_kind.hidden_glob": {
+    "message": "thư mục ẩn",
+    "description": "Item in the list of what a command may touch, in the credential warning: a wildcard into hidden folders, where credentials are often kept.",
+    "_machine_translated": true,
+    "_source_hash": "85a57e3ed862cbcd"
+  },
+  "shared.host_command.by_rule": {
+    "message": "Được cho phép theo quy tắc của bạn: các lệnh bắt đầu bằng “{rule}”.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, run without asking because of a rule the user made. {rule} is the rule's words, for example 'brew install'.",
+    "_machine_translated": true,
+    "_source_hash": "74c9eec322d89b7e"
+  },
+  "shared.host_command.by_allow_all": {
+    "message": "Được cho phép vì bạn đã cho mọi lệnh chạy mà không cần hỏi.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, run without asking because the user turned on 'Run every command without asking' in Settings.",
+    "_machine_translated": true,
+    "_source_hash": "bd7ad4044d24a942"
+  },
+  "shared.host_command.starting": {
+    "message": "Đang bắt đầu…",
+    "description": "Status after the user approved a command an AI agent asked Kage to run outside its sandbox, until it starts.",
+    "_machine_translated": true,
+    "_source_hash": "10c87f56f75205b6"
+  },
+  "shared.host_command.rule_added": {
+    "message": "Từ giờ, các lệnh bắt đầu bằng “{rule}” sẽ chạy mà không cần hỏi.",
+    "description": "Status after the user chose 'Always allow commands starting with …'. {rule} is the words they allowed, for example 'brew install'.",
+    "_machine_translated": true,
+    "_source_hash": "cc65fe9aa2342e65"
+  },
+  "shared.host_command.denied": {
+    "message": "Đã từ chối. Agent đã được thông báo.",
+    "description": "Status after the user denied a command an AI agent asked Kage to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "f8e68bd246347cb8"
+  },
+  "shared.host_command.closed": {
+    "message": "Yêu cầu này không còn chờ phản hồi nữa.",
+    "description": "Status when the user answers a prompt for a command an AI agent asked Kage to run outside its sandbox, but the request already ended.",
+    "_machine_translated": true,
+    "_source_hash": "b152747baa1be389"
+  },
+  "shared.host_command.expired": {
+    "message": "Không ai trả lời kịp thời, nên Kage đã từ chối.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the prompt went unanswered for five minutes and Kage denied it.",
+    "_machine_translated": true,
+    "_source_hash": "e9088cb7b90e9061"
+  },
+  "shared.host_command.withdrawn": {
+    "message": "Agent đã ngừng chờ câu trả lời.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the agent gave up (its turn was stopped) before the user answered.",
+    "_machine_translated": true,
+    "_source_hash": "46d61a943afce57e"
+  },
+  "shared.host_command.busy": {
+    "message": "Đã có quá nhiều lệnh đang chạy, nên Kage đã từ chối.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, refused because several were already running.",
+    "_machine_translated": true,
+    "_source_hash": "c878b011e64877b5"
+  },
+  "shared.host_command.shutdown": {
+    "message": "Kage đang thoát, nên lệnh đã không chạy.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, when Kage quits before it runs.",
+    "_machine_translated": true,
+    "_source_hash": "652cbec104fcb0ba"
+  },
+  "shared.host_command.answer_failed": {
+    "message": "Không thể gửi câu trả lời của bạn: {error}",
+    "description": "Error under the prompt for a command an AI agent asked Kage to run outside its sandbox. {error} is the reason.",
+    "_machine_translated": true,
+    "_source_hash": "9e8fab23ed1dd9e1"
+  },
+  "shared.host_command.result_returned": {
+    "message": "Kết quả đã được gửi lại cho agent.",
+    "description": "Line under a command an AI agent asked Kage to run outside its sandbox, once it ended: its exit code and output were returned to the agent.",
+    "_machine_translated": true,
+    "_source_hash": "49bbecb5050f0d67"
+  },
+  "shared.shell.run_chip.label": {
+    "message": "Một lệnh vẫn đang chạy bên ngoài sandbox của agent",
+    "description": "Accessible label of the compact chip that keeps a running command (with its Stop button) visible after the window cleared the answer it belonged to.",
+    "_machine_translated": true,
+    "_source_hash": "7ac3598c478b56f8"
+  },
+  "settings.tool_permissions.host.section": {
+    "message": "Lệnh bên ngoài sandbox của agent",
+    "description": "Settings → Tool permissions: heading of the section about commands an AI agent asks Kage to run outside the agent's own sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "cab8722ba1424f55"
+  },
+  "settings.tool_permissions.host.rules_label": {
+    "message": "Chạy mà không cần hỏi",
+    "description": "Settings → Tool permissions: label above the list of rules ('commands starting with …') that run without asking.",
+    "_machine_translated": true,
+    "_source_hash": "6672c74f09ce2253"
+  },
+  "settings.tool_permissions.host.description": {
+    "message": "Khi sandbox của agent từ chối một lệnh (ví dụ: cài đặt bằng Homebrew), agent có thể nhờ Kage chạy lệnh đó giúp bạn. Bạn sẽ phê duyệt từng lệnh, trừ khi có quy tắc bên dưới áp dụng cho lệnh đó. Các lệnh có thể truy cập thông tin xác thực luôn cần hỏi.",
+    "description": "Settings → Tool permissions: explanation of commands an AI agent asks Kage to run outside its sandbox, and of the rules listed below it.",
+    "_machine_translated": true,
+    "_source_hash": "a68d70c07079f3b4"
+  },
+  "settings.tool_permissions.host.rules_empty": {
+    "message": "Chưa có quy tắc nào. Để tạo quy tắc, hãy chọn “Luôn cho phép các lệnh bắt đầu bằng …” khi agent hỏi.",
+    "description": "Settings → Tool permissions: shown when there are no rules for commands outside the agent's sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "1e64f61e3730f0c6"
+  },
+  "settings.tool_permissions.host.rule": {
+    "message": "Các lệnh bắt đầu bằng {prefix}",
+    "description": "Settings → Tool permissions: one rule in the list. {prefix} is the words a command must start with, for example 'brew install'.",
+    "_machine_translated": true,
+    "_source_hash": "51c540a784da6e50"
+  },
+  "settings.tool_permissions.host.rule_added_at": {
+    "message": "đã thêm {date}",
+    "description": "Settings → Tool permissions: when a rule was made. {date} is a date.",
+    "_machine_translated": true,
+    "_source_hash": "7ed26227f2a7c1ef"
+  },
+  "settings.tool_permissions.host.remove": {
+    "message": "Xóa",
+    "description": "Settings → Tool permissions: button that deletes a rule for commands outside the agent's sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "c5ad8a5fe82b9aec"
+  },
+  "settings.tool_permissions.host.remove_title": {
+    "message": "Hỏi lại trước khi chạy các lệnh bắt đầu bằng “{prefix}”",
+    "description": "Tooltip of the button that deletes a rule. {prefix} is the rule's words.",
+    "_machine_translated": true,
+    "_source_hash": "77012096686dfdf0"
+  },
+  "settings.tool_permissions.host.remove_failed": {
+    "message": "Không thể xóa quy tắc: {error}",
+    "description": "Settings → Tool permissions: error when deleting a rule fails. {error} is the reason.",
+    "_machine_translated": true,
+    "_source_hash": "bf3a95bc6858e6aa"
+  },
+  "settings.tool_permissions.host.allow_all.label": {
+    "message": "Chạy mọi lệnh mà không cần hỏi",
+    "description": "Settings → Tool permissions: switch that lets every command an AI agent asks Kage to run outside its sandbox run without asking.",
+    "_machine_translated": true,
+    "_source_hash": "ac9bf87d7b69d30b"
+  },
+  "settings.tool_permissions.host.allow_all.description": {
+    "message": "Khi đó, các lệnh agent yêu cầu sẽ chạy với toàn quyền truy cập vào máy tính của bạn — các tệp của bạn, thông tin xác thực AWS và các thông tin xác thực khác — mà không hỏi bạn trước. Các lệnh có thể truy cập thông tin xác thực và các lệnh chứa ký tự ẩn vẫn sẽ hỏi.",
+    "description": "Settings → Tool permissions: plain warning under the 'Run every command without asking' switch.",
+    "_machine_translated": true,
+    "_source_hash": "c868962bba26588c"
+  },
+  "settings.tool_permissions.host.allow_all.confirm": {
+    "message": "Chạy mọi lệnh agent yêu cầu bên ngoài sandbox của nó mà không cần hỏi? Các lệnh này sẽ chạy với toàn quyền truy cập vào máy tính của bạn, bao gồm cả thông tin xác thực AWS. Các lệnh có thể truy cập thông tin xác thực vẫn sẽ hỏi.",
+    "description": "Confirmation dialog before turning on 'Run every command without asking'.",
+    "_machine_translated": true,
+    "_source_hash": "efc7a6e13ca3d0dd"
+  },
+  "settings.tool_permissions.host.allow_all.dialog_title": {
+    "message": "Chạy mọi lệnh mà không cần hỏi?",
+    "description": "Title of the confirmation dialog before turning on 'Run every command without asking'.",
+    "_machine_translated": true,
+    "_source_hash": "9ffa7516a37d2c81"
+  },
+  "settings.tool_permissions.host.audit_link": {
+    "message": "Xem những gì đã chạy trong nhật ký kiểm tra",
+    "description": "Settings → Tool permissions: link that shows the audit log filtered to commands the agent asked Kage to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "197269fdec33fc37"
+  },
+  "settings.tool_permissions.audit.filter.host_command": {
+    "message": "Lệnh cho agent",
+    "description": "Filter option in the tool-permission audit log: entries for commands an AI agent asked Kage to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "426efea43137d9be"
+  },
+  "settings.tool_permissions.audit.summary.host.requested": {
+    "message": "Agent đã yêu cầu chạy một lệnh bên ngoài sandbox của nó",
+    "description": "Audit log entry: an AI agent asked Kage to run a shell command outside the agent's sandbox. The command follows below it.",
+    "_machine_translated": true,
+    "_source_hash": "b4ec22f074fafad1"
+  },
+  "settings.tool_permissions.audit.summary.host.guard": {
+    "message": "Bộ bảo vệ thông tin xác thực đã gắn cờ một lệnh",
+    "description": "Audit log entry: the command may touch credentials, so Kage asks the user whatever their rules say. What it found follows.",
+    "_machine_translated": true,
+    "_source_hash": "f443d11a0289ef43"
+  },
+  "settings.tool_permissions.audit.summary.host.auto_approved": {
+    "message": "Một lệnh đã chạy mà không cần hỏi",
+    "description": "Audit log entry: a command an AI agent asked for ran without a prompt (a rule or the allow-all switch). Which one follows.",
+    "_machine_translated": true,
+    "_source_hash": "329d8267efd1802c"
+  },
+  "settings.tool_permissions.audit.summary.host.approved": {
+    "message": "Bạn đã phê duyệt một lệnh",
+    "description": "Audit log entry: the user approved a command an AI agent asked to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "d659578ffd56e45b"
+  },
+  "settings.tool_permissions.audit.summary.host.denied": {
+    "message": "Bạn đã từ chối một lệnh",
+    "description": "Audit log entry: the user denied a command an AI agent asked to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "588baf1a32d92110"
+  },
+  "settings.tool_permissions.audit.summary.host.expired": {
+    "message": "Không có phản hồi nên một lệnh đã bị từ chối",
+    "description": "Audit log entry: a prompt for a command an AI agent asked for went unanswered for five minutes.",
+    "_machine_translated": true,
+    "_source_hash": "dca2d344ec90efef"
+  },
+  "settings.tool_permissions.audit.summary.host.withdrawn": {
+    "message": "Agent đã ngừng chờ",
+    "description": "Audit log entry: the agent gave up on a command before the user answered.",
+    "_machine_translated": true,
+    "_source_hash": "3a6846f175f559a2"
+  },
+  "settings.tool_permissions.audit.summary.host.refused": {
+    "message": "Kage đã từ chối một lệnh",
+    "description": "Audit log entry: Kage refused a command an AI agent asked for before asking (bad working directory, too many waiting…). Why follows.",
+    "_machine_translated": true,
+    "_source_hash": "27ff7e316490ccdc"
+  },
+  "settings.tool_permissions.audit.summary.host.finished": {
+    "message": "Một lệnh đã hoàn tất",
+    "description": "Audit log entry: a command an AI agent asked Kage to run outside its sandbox ended. Its exit code follows.",
+    "_machine_translated": true,
+    "_source_hash": "e70ea484f4bfec28"
+  },
+  "settings.tool_permissions.audit.summary.host.rule_added": {
+    "message": "Đã thêm quy tắc: các lệnh bắt đầu bằng <strong>{rule}</strong> chạy mà không cần hỏi",
+    "description": "Audit log entry (HTML allowed): the user made a rule. {rule} is its words.",
+    "_machine_translated": true,
+    "_source_hash": "b7dcf361d186c81e"
+  },
+  "settings.tool_permissions.audit.summary.host.rule_removed": {
+    "message": "Đã xóa quy tắc: các lệnh bắt đầu bằng <strong>{rule}</strong>",
+    "description": "Audit log entry (HTML allowed): the user deleted a rule. {rule} is its words.",
+    "_machine_translated": true,
+    "_source_hash": "a0260ea31ef58e6f"
+  },
+  "settings.tool_permissions.audit.summary.host.allow_all_on": {
+    "message": "<strong>Giờ đây mọi lệnh mà tác tử yêu cầu đều chạy mà không cần hỏi</strong>",
+    "description": "Audit log entry (HTML allowed): the user turned on 'Run every command without asking'.",
+    "_machine_translated": true,
+    "_source_hash": "9369a2b0f55e9d16"
+  },
+  "settings.tool_permissions.audit.summary.host.allow_all_off": {
+    "message": "Các lệnh mà tác tử yêu cầu sẽ lại được hỏi trước khi chạy",
+    "description": "Audit log entry: the user turned off 'Run every command without asking'.",
+    "_machine_translated": true,
+    "_source_hash": "ea33dd8a84a997c4"
+  },
+  "settings.tool_permissions.audit.summary.host.unknown": {
+    "message": "Lệnh nằm ngoài sandbox của tác tử",
+    "description": "Audit log entry about a command an AI agent asked Kage to run, of a kind this version doesn't know.",
+    "_machine_translated": true,
+    "_source_hash": "12f6026ed8800ffb"
+  },
+  "settings.tool_permissions.audit.meta.host_by.rule": {
+    "message": "theo một quy tắc",
+    "description": "Detail of an audit log entry: a rule let the command run without asking.",
+    "_machine_translated": true,
+    "_source_hash": "5504c199547497ba"
+  },
+  "settings.tool_permissions.audit.meta.host_by.allow_all": {
+    "message": "theo “Chạy mọi lệnh mà không cần hỏi”",
+    "description": "Detail of an audit log entry: the allow-all switch let the command run without asking.",
+    "_machine_translated": true,
+    "_source_hash": "dd92c6a0743e89b1"
+  },
+  "settings.tool_permissions.audit.meta.host_by.once": {
+    "message": "một lần",
+    "description": "Detail of an audit log entry: the user chose 'Run once'.",
+    "_machine_translated": true,
+    "_source_hash": "0d16632e15c4d8a0"
+  },
+  "settings.tool_permissions.audit.meta.host_by.always": {
+    "message": "và đã tạo một quy tắc",
+    "description": "Detail of an audit log entry: the user chose 'Always allow commands starting with …'.",
+    "_machine_translated": true,
+    "_source_hash": "563cb675d69ab11d"
+  },
+  "settings.tool_permissions.audit.meta.host_by.other": {
+    "message": "đã được chấp thuận",
+    "description": "Detail of an audit log entry: the command was let run in a way this version does not know.",
+    "_machine_translated": true,
+    "_source_hash": "46704bb2d9efd20b"
   }
 }

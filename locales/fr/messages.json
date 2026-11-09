@@ -12400,5 +12400,503 @@
     "description": "Sync setup, choosing a folder: the folder has computers' data but no kage-sync.json. “Kage Sync” is the folder name and stays untranslated.",
     "_machine_translated": true,
     "_source_hash": "4965303c733b933b"
+  },
+  "errors.host_command.not_pending": {
+    "message": "Cette demande n'attend plus de réponse.",
+    "description": "Error when the user answers a prompt for a command an AI agent asked to run outside its sandbox, but the request already ended (answered, timed out or withdrawn).",
+    "_machine_translated": true,
+    "_source_hash": "fd6f7762c2412e37"
+  },
+  "errors.host_command.wrong_window": {
+    "message": "Cette demande est affichée dans une autre fenêtre. Répondez-y là-bas.",
+    "description": "Error when the user answers a prompt for a command an AI agent asked to run outside its sandbox from a different Kage window than the one showing it.",
+    "_machine_translated": true,
+    "_source_hash": "d4d2972d30a81d91"
+  },
+  "errors.host_command.hidden_chars": {
+    "message": "Cette commande contient des caractères cachés, Kage ne l'exécutera donc pas. Copiez-la plutôt.",
+    "description": "Error: a command an AI agent asked to run outside its sandbox contains invisible characters (control, bidi or zero-width characters), so it can't be run from Kage.",
+    "_machine_translated": true,
+    "_source_hash": "25a2f12b4b1d3cc6"
+  },
+  "errors.host_command.cannot_always": {
+    "message": "Kage ne peut pas créer de règle pour cette commande. Exécutez-la une seule fois à la place.",
+    "description": "Error: the user picked 'Always allow' for a command an AI agent asked to run outside its sandbox, but no rule can cover it (it may touch credentials, or isn't a simple command).",
+    "_machine_translated": true,
+    "_source_hash": "a6037fcf72d66653"
+  },
+  "errors.host_command.bad_prefix": {
+    "message": "Impossible d'en faire une règle : utilisez des mots simples, sans symboles comme ; | & $ > ni sauts de ligne.",
+    "description": "Error: the words the user typed for an 'Always allow commands starting with …' rule aren't a simple command.",
+    "_machine_translated": true,
+    "_source_hash": "e75c9b2450fb513c"
+  },
+  "errors.host_command.prefix_mismatch": {
+    "message": "Cette commande ne commence pas par ces mots.",
+    "description": "Error: the user edited the words of an 'Always allow commands starting with …' rule so that the command being approved no longer starts with them.",
+    "_machine_translated": true,
+    "_source_hash": "5169680f6341045e"
+  },
+  "errors.host_command.bad_decision": {
+    "message": "Kage n'a pas compris cette réponse.",
+    "description": "Internal error: the prompt for a command an AI agent asked to run outside its sandbox sent an unknown answer.",
+    "_machine_translated": true,
+    "_source_hash": "6f1756c089076f16"
+  },
+  "errors.host_command.too_many_rules": {
+    "message": "Il y a déjà trop de règles. Supprimez-en dans Paramètres → Autorisations des outils.",
+    "description": "Error: the user tried to add another 'Always allow commands starting with …' rule but the list is full. Keep the Settings path as the app names it.",
+    "_machine_translated": true,
+    "_source_hash": "8f2ef7953ffcd3e4"
+  },
+  "errors.host_command.allow_all_settings_only": {
+    "message": "Cette option ne peut être activée que dans les Paramètres.",
+    "description": "Error: the switch that lets every command an AI agent asks for run without asking can only be turned on from the Settings window.",
+    "_machine_translated": true,
+    "_source_hash": "25372fcee051d4d0"
+  },
+  "host_commands.notify.title": {
+    "message": "{agent} veut exécuter une commande hors de son bac à sable",
+    "description": "System notification title. {agent} is the name of the AI agent program (for example kiro-cli) that asked Kage to run a shell command outside the agent's own sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "b917e1fc96c5c4db"
+  },
+  "host_commands.notify.title_unknown": {
+    "message": "Un agent veut exécuter une commande hors de son bac à sable",
+    "description": "System notification title when Kage doesn't know which AI agent asked it to run a shell command outside the agent's own sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "9714a94d4fa351fc"
+  },
+  "host_commands.notify.body": {
+    "message": "Ouvrez Kage pour l'examiner. Rien ne s'exécute sans votre approbation.",
+    "description": "System notification body for a command an AI agent asked Kage to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "b19bb0d2e57309ca"
+  },
+  "shared.host_command.title": {
+    "message": "{agent} veut exécuter une commande hors de son bac à sable",
+    "description": "Heading of the prompt shown when an AI agent asks Kage to run a shell command outside the agent's own sandbox (its sandbox refused the command). {agent} is the agent's name, for example Kiro.",
+    "_machine_translated": true,
+    "_source_hash": "82fe1746a44a04dd"
+  },
+  "shared.host_command.title_unknown": {
+    "message": "Un agent veut exécuter une commande hors de son bac à sable",
+    "description": "Heading of the prompt shown when an AI agent asks Kage to run a shell command outside the agent's own sandbox, when Kage doesn't know which agent asked.",
+    "_machine_translated": true,
+    "_source_hash": "515b695a2e71a741"
+  },
+  "shared.host_command.auto_title": {
+    "message": "{agent} exécute une commande hors de son bac à sable",
+    "description": "Heading shown when Kage runs a command an AI agent asked for, outside the agent's sandbox, without asking (a rule the user made covers it). {agent} is the agent's name.",
+    "_machine_translated": true,
+    "_source_hash": "ed6daaad740d70b1"
+  },
+  "shared.host_command.auto_title_unknown": {
+    "message": "Un agent exécute une commande hors de son bac à sable",
+    "description": "Heading shown when Kage runs a command an AI agent asked for, outside the agent's sandbox, without asking, when Kage doesn't know which agent asked.",
+    "_machine_translated": true,
+    "_source_hash": "48e9eb98145f0086"
+  },
+  "shared.host_command.unmatched": {
+    "message": "Cette demande ne provient pas d'une conversation Kage, aucune règle ne s'y applique donc.",
+    "description": "Note in the prompt for a command an AI agent asked Kage to run outside its sandbox: Kage couldn't tie the request to one of its own conversations (for example an agent running in a terminal).",
+    "_machine_translated": true,
+    "_source_hash": "5a80214736c4d916"
+  },
+  "shared.host_command.background": {
+    "message": "Elle provient d'une tâche en arrière-plan qui traite du texte d'une autre application, aucune règle ne s'y applique donc.",
+    "description": "Note in the prompt for a command an AI agent asked Kage to run outside its sandbox: the request came from a hidden background task (inline assist, a macro…) that works on text from other apps.",
+    "_machine_translated": true,
+    "_source_hash": "64e771cc2971c899"
+  },
+  "shared.host_command.reason_label": {
+    "message": "Raison donnée par l'agent :",
+    "description": "Label in the prompt for a command an AI agent asked Kage to run outside its sandbox, before the agent's own explanation of why its sandbox can't run it. The explanation follows in the agent's words.",
+    "_machine_translated": true,
+    "_source_hash": "6d4d451c9a3d82c5"
+  },
+  "shared.host_command.run_once": {
+    "message": "Exécuter une fois",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: run it this one time.",
+    "_machine_translated": true,
+    "_source_hash": "b6d1eab035a4d710"
+  },
+  "shared.host_command.always": {
+    "message": "Toujours autoriser les commandes commençant par",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: run it, and from now on run commands that start with the words in the text field next to it without asking. The field follows the button.",
+    "_machine_translated": true,
+    "_source_hash": "cb41f355f61dfdf0"
+  },
+  "shared.host_command.prefix_label": {
+    "message": "Mots par lesquels les commandes doivent commencer",
+    "description": "Accessible label of the editable text field next to the 'Always allow commands starting with' button: the first words of a command, for example 'brew install'.",
+    "_machine_translated": true,
+    "_source_hash": "2152545526d64154"
+  },
+  "shared.host_command.deny": {
+    "message": "Refuser",
+    "description": "Button in the prompt for a command an AI agent asked Kage to run outside its sandbox: don't run it.",
+    "_machine_translated": true,
+    "_source_hash": "6e1d7ef0200fbedd"
+  },
+  "shared.host_command.expires": {
+    "message": "Si vous ne répondez pas d'ici {minutes, plural, one {# minute} many {# minutes} other {# minutes}}, Kage refusera.",
+    "description": "Line in the prompt for a command an AI agent asked Kage to run outside its sandbox. {minutes} is the time left before Kage denies the request on its own.",
+    "_machine_translated": true,
+    "_source_hash": "d032a28dbf050bf5"
+  },
+  "shared.host_command.guard": {
+    "message": "Cette commande peut accéder à des identifiants ({kinds}). Kage demande toujours avant d'exécuter une commande de ce type, quelles que soient vos règles.",
+    "description": "Warning in the prompt for a command an AI agent asked Kage to run outside its sandbox. {kinds} is a comma-separated list such as 'AWS credentials, SSH keys'.",
+    "_machine_translated": true,
+    "_source_hash": "8a01638fbdd0d7cc"
+  },
+  "shared.host_command.guard_kind.aws": {
+    "message": "les identifiants AWS",
+    "description": "Item in the list of what a command may touch, in the credential warning.",
+    "_machine_translated": true,
+    "_source_hash": "546d0a830df6cfe4"
+  },
+  "shared.host_command.guard_kind.sandbox_session": {
+    "message": "la session du bac à sable des identifiants",
+    "description": "Item in the list of what a command may touch, in the credential warning: the session file of the sandbox that holds the agent's credentials.",
+    "_machine_translated": true,
+    "_source_hash": "32bec4e4fac9c8ca"
+  },
+  "shared.host_command.guard_kind.ssh": {
+    "message": "les clés SSH",
+    "description": "Item in the list of what a command may touch, in the credential warning.",
+    "_machine_translated": true,
+    "_source_hash": "03554eb67f9331b4"
+  },
+  "shared.host_command.guard_kind.netrc": {
+    "message": "les identifiants enregistrés (.netrc)",
+    "description": "Item in the list of what a command may touch, in the credential warning. Keep '.netrc' as is (a file name).",
+    "_machine_translated": true,
+    "_source_hash": "518e12a14172c0df"
+  },
+  "shared.host_command.guard_kind.git": {
+    "message": "les identifiants GitHub ou Git",
+    "description": "Item in the list of what a command may touch, in the credential warning.",
+    "_machine_translated": true,
+    "_source_hash": "1090eda0a0f34066"
+  },
+  "shared.host_command.guard_kind.gcloud": {
+    "message": "les identifiants Google Cloud",
+    "description": "Item in the list of what a command may touch, in the credential warning.",
+    "_machine_translated": true,
+    "_source_hash": "37907c051c8ee7a5"
+  },
+  "shared.host_command.guard_kind.cloud": {
+    "message": "les identifiants cloud",
+    "description": "Item in the list of what a command may touch, in the credential warning: Azure, Kubernetes or Docker credential files.",
+    "_machine_translated": true,
+    "_source_hash": "e9399514ab021d8a"
+  },
+  "shared.host_command.guard_kind.keychain": {
+    "message": "le trousseau",
+    "description": "Item in the list of what a command may touch, in the credential warning: the macOS keychain, where passwords are stored.",
+    "_machine_translated": true,
+    "_source_hash": "250143cb896b3fe4"
+  },
+  "shared.host_command.guard_kind.env_dump": {
+    "message": "toutes les variables d’environnement",
+    "description": "Item in the list of what a command may touch, in the credential warning: the command prints every environment variable, which can include secrets.",
+    "_machine_translated": true,
+    "_source_hash": "abff95c400e7c2e4"
+  },
+  "shared.host_command.guard_kind.credential_env": {
+    "message": "les variables d’environnement contenant des identifiants",
+    "description": "Item in the list of what a command may touch, in the credential warning: environment variables that hold secrets, such as AWS_SECRET_ACCESS_KEY.",
+    "_machine_translated": true,
+    "_source_hash": "92268a41a824cfac"
+  },
+  "shared.host_command.guard_kind.hidden_glob": {
+    "message": "les dossiers masqués",
+    "description": "Item in the list of what a command may touch, in the credential warning: a wildcard into hidden folders, where credentials are often kept.",
+    "_machine_translated": true,
+    "_source_hash": "85a57e3ed862cbcd"
+  },
+  "shared.host_command.by_rule": {
+    "message": "Autorisée par votre règle : commandes commençant par « {rule} ».",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, run without asking because of a rule the user made. {rule} is the rule's words, for example 'brew install'.",
+    "_machine_translated": true,
+    "_source_hash": "74c9eec322d89b7e"
+  },
+  "shared.host_command.by_allow_all": {
+    "message": "Autorisée, car vous laissez toutes les commandes s’exécuter sans confirmation.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, run without asking because the user turned on 'Run every command without asking' in Settings.",
+    "_machine_translated": true,
+    "_source_hash": "bd7ad4044d24a942"
+  },
+  "shared.host_command.starting": {
+    "message": "Démarrage…",
+    "description": "Status after the user approved a command an AI agent asked Kage to run outside its sandbox, until it starts.",
+    "_machine_translated": true,
+    "_source_hash": "10c87f56f75205b6"
+  },
+  "shared.host_command.rule_added": {
+    "message": "Désormais, les commandes commençant par « {rule} » s’exécutent sans confirmation.",
+    "description": "Status after the user chose 'Always allow commands starting with …'. {rule} is the words they allowed, for example 'brew install'.",
+    "_machine_translated": true,
+    "_source_hash": "cc65fe9aa2342e65"
+  },
+  "shared.host_command.denied": {
+    "message": "Refusée. L’agent a été informé.",
+    "description": "Status after the user denied a command an AI agent asked Kage to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "f8e68bd246347cb8"
+  },
+  "shared.host_command.closed": {
+    "message": "Cette demande n’est plus en attente.",
+    "description": "Status when the user answers a prompt for a command an AI agent asked Kage to run outside its sandbox, but the request already ended.",
+    "_machine_translated": true,
+    "_source_hash": "b152747baa1be389"
+  },
+  "shared.host_command.expired": {
+    "message": "Personne n’a répondu à temps, Kage a donc refusé.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the prompt went unanswered for five minutes and Kage denied it.",
+    "_machine_translated": true,
+    "_source_hash": "e9088cb7b90e9061"
+  },
+  "shared.host_command.withdrawn": {
+    "message": "L’agent a cessé d’attendre une réponse.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the agent gave up (its turn was stopped) before the user answered.",
+    "_machine_translated": true,
+    "_source_hash": "46d61a943afce57e"
+  },
+  "shared.host_command.busy": {
+    "message": "Trop de commandes étaient déjà en cours, Kage a donc refusé.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, refused because several were already running.",
+    "_machine_translated": true,
+    "_source_hash": "c878b011e64877b5"
+  },
+  "shared.host_command.shutdown": {
+    "message": "Kage est en train de quitter, la commande n’a donc pas été exécutée.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox, when Kage quits before it runs.",
+    "_machine_translated": true,
+    "_source_hash": "652cbec104fcb0ba"
+  },
+  "shared.host_command.answer_failed": {
+    "message": "Impossible d’envoyer votre réponse : {error}",
+    "description": "Error under the prompt for a command an AI agent asked Kage to run outside its sandbox. {error} is the reason.",
+    "_machine_translated": true,
+    "_source_hash": "9e8fab23ed1dd9e1"
+  },
+  "shared.host_command.result_returned": {
+    "message": "Le résultat a été renvoyé à l’agent.",
+    "description": "Line under a command an AI agent asked Kage to run outside its sandbox, once it ended: its exit code and output were returned to the agent.",
+    "_machine_translated": true,
+    "_source_hash": "49bbecb5050f0d67"
+  },
+  "shared.shell.run_chip.label": {
+    "message": "Une commande toujours en cours hors du bac à sable de l’agent",
+    "description": "Accessible label of the compact chip that keeps a running command (with its Stop button) visible after the window cleared the answer it belonged to.",
+    "_machine_translated": true,
+    "_source_hash": "7ac3598c478b56f8"
+  },
+  "settings.tool_permissions.host.section": {
+    "message": "Commandes hors du bac à sable de l’agent",
+    "description": "Settings → Tool permissions: heading of the section about commands an AI agent asks Kage to run outside the agent's own sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "cab8722ba1424f55"
+  },
+  "settings.tool_permissions.host.rules_label": {
+    "message": "Exécuter sans demander",
+    "description": "Settings → Tool permissions: label above the list of rules ('commands starting with …') that run without asking.",
+    "_machine_translated": true,
+    "_source_hash": "6672c74f09ce2253"
+  },
+  "settings.tool_permissions.host.description": {
+    "message": "Lorsque le bac à sable de l'agent refuse une commande (une installation avec Homebrew, par exemple), l'agent peut demander à Kage de l'exécuter pour vous. Vous approuvez chacune d'elles, sauf si une règle ci-dessous s'applique. Les commandes susceptibles d'accéder à des identifiants demandent toujours confirmation.",
+    "description": "Settings → Tool permissions: explanation of commands an AI agent asks Kage to run outside its sandbox, and of the rules listed below it.",
+    "_machine_translated": true,
+    "_source_hash": "a68d70c07079f3b4"
+  },
+  "settings.tool_permissions.host.rules_empty": {
+    "message": "Aucune règle pour l'instant. Pour en créer une, choisissez « Toujours autoriser les commandes commençant par … » lorsque l'agent demande.",
+    "description": "Settings → Tool permissions: shown when there are no rules for commands outside the agent's sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "1e64f61e3730f0c6"
+  },
+  "settings.tool_permissions.host.rule": {
+    "message": "Commandes commençant par {prefix}",
+    "description": "Settings → Tool permissions: one rule in the list. {prefix} is the words a command must start with, for example 'brew install'.",
+    "_machine_translated": true,
+    "_source_hash": "51c540a784da6e50"
+  },
+  "settings.tool_permissions.host.rule_added_at": {
+    "message": "ajoutée le {date}",
+    "description": "Settings → Tool permissions: when a rule was made. {date} is a date.",
+    "_machine_translated": true,
+    "_source_hash": "7ed26227f2a7c1ef"
+  },
+  "settings.tool_permissions.host.remove": {
+    "message": "Supprimer",
+    "description": "Settings → Tool permissions: button that deletes a rule for commands outside the agent's sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "c5ad8a5fe82b9aec"
+  },
+  "settings.tool_permissions.host.remove_title": {
+    "message": "Demander à nouveau avant d'exécuter les commandes commençant par « {prefix} »",
+    "description": "Tooltip of the button that deletes a rule. {prefix} is the rule's words.",
+    "_machine_translated": true,
+    "_source_hash": "77012096686dfdf0"
+  },
+  "settings.tool_permissions.host.remove_failed": {
+    "message": "Impossible de supprimer la règle : {error}",
+    "description": "Settings → Tool permissions: error when deleting a rule fails. {error} is the reason.",
+    "_machine_translated": true,
+    "_source_hash": "bf3a95bc6858e6aa"
+  },
+  "settings.tool_permissions.host.allow_all.label": {
+    "message": "Exécuter toutes les commandes sans demander",
+    "description": "Settings → Tool permissions: switch that lets every command an AI agent asks Kage to run outside its sandbox run without asking.",
+    "_machine_translated": true,
+    "_source_hash": "ac9bf87d7b69d30b"
+  },
+  "settings.tool_permissions.host.allow_all.description": {
+    "message": "Les commandes demandées par l'agent s'exécutent alors avec un accès complet à votre ordinateur — vos fichiers, vos identifiants AWS et autres — sans vous demander au préalable. Les commandes susceptibles d'accéder à des identifiants, ainsi que celles contenant des caractères masqués, demandent toujours confirmation.",
+    "description": "Settings → Tool permissions: plain warning under the 'Run every command without asking' switch.",
+    "_machine_translated": true,
+    "_source_hash": "c868962bba26588c"
+  },
+  "settings.tool_permissions.host.allow_all.confirm": {
+    "message": "Exécuter sans demander toutes les commandes que l'agent demande hors de son bac à sable ? Elles s'exécutent avec un accès complet à votre ordinateur, y compris à vos identifiants AWS. Les commandes susceptibles d'accéder à des identifiants demandent toujours confirmation.",
+    "description": "Confirmation dialog before turning on 'Run every command without asking'.",
+    "_machine_translated": true,
+    "_source_hash": "efc7a6e13ca3d0dd"
+  },
+  "settings.tool_permissions.host.allow_all.dialog_title": {
+    "message": "Exécuter toutes les commandes sans demander ?",
+    "description": "Title of the confirmation dialog before turning on 'Run every command without asking'.",
+    "_machine_translated": true,
+    "_source_hash": "9ffa7516a37d2c81"
+  },
+  "settings.tool_permissions.host.audit_link": {
+    "message": "Voir ce qui a été exécuté dans le journal d'audit",
+    "description": "Settings → Tool permissions: link that shows the audit log filtered to commands the agent asked Kage to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "197269fdec33fc37"
+  },
+  "settings.tool_permissions.audit.filter.host_command": {
+    "message": "Commandes pour l'agent",
+    "description": "Filter option in the tool-permission audit log: entries for commands an AI agent asked Kage to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "426efea43137d9be"
+  },
+  "settings.tool_permissions.audit.summary.host.requested": {
+    "message": "L'agent a demandé à exécuter une commande hors de son bac à sable",
+    "description": "Audit log entry: an AI agent asked Kage to run a shell command outside the agent's sandbox. The command follows below it.",
+    "_machine_translated": true,
+    "_source_hash": "b4ec22f074fafad1"
+  },
+  "settings.tool_permissions.audit.summary.host.guard": {
+    "message": "La protection des identifiants a signalé une commande",
+    "description": "Audit log entry: the command may touch credentials, so Kage asks the user whatever their rules say. What it found follows.",
+    "_machine_translated": true,
+    "_source_hash": "f443d11a0289ef43"
+  },
+  "settings.tool_permissions.audit.summary.host.auto_approved": {
+    "message": "Une commande a été exécutée sans demander",
+    "description": "Audit log entry: a command an AI agent asked for ran without a prompt (a rule or the allow-all switch). Which one follows.",
+    "_machine_translated": true,
+    "_source_hash": "329d8267efd1802c"
+  },
+  "settings.tool_permissions.audit.summary.host.approved": {
+    "message": "Vous avez approuvé une commande",
+    "description": "Audit log entry: the user approved a command an AI agent asked to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "d659578ffd56e45b"
+  },
+  "settings.tool_permissions.audit.summary.host.denied": {
+    "message": "Vous avez refusé une commande",
+    "description": "Audit log entry: the user denied a command an AI agent asked to run outside its sandbox.",
+    "_machine_translated": true,
+    "_source_hash": "588baf1a32d92110"
+  },
+  "settings.tool_permissions.audit.summary.host.expired": {
+    "message": "Personne n'a répondu, une commande a donc été refusée",
+    "description": "Audit log entry: a prompt for a command an AI agent asked for went unanswered for five minutes.",
+    "_machine_translated": true,
+    "_source_hash": "dca2d344ec90efef"
+  },
+  "settings.tool_permissions.audit.summary.host.withdrawn": {
+    "message": "L'agent a cessé d'attendre",
+    "description": "Audit log entry: the agent gave up on a command before the user answered.",
+    "_machine_translated": true,
+    "_source_hash": "3a6846f175f559a2"
+  },
+  "settings.tool_permissions.audit.summary.host.refused": {
+    "message": "Kage a refusé une commande",
+    "description": "Audit log entry: Kage refused a command an AI agent asked for before asking (bad working directory, too many waiting…). Why follows.",
+    "_machine_translated": true,
+    "_source_hash": "27ff7e316490ccdc"
+  },
+  "settings.tool_permissions.audit.summary.host.finished": {
+    "message": "Une commande s'est terminée",
+    "description": "Audit log entry: a command an AI agent asked Kage to run outside its sandbox ended. Its exit code follows.",
+    "_machine_translated": true,
+    "_source_hash": "e70ea484f4bfec28"
+  },
+  "settings.tool_permissions.audit.summary.host.rule_added": {
+    "message": "Règle ajoutée : les commandes commençant par <strong>{rule}</strong> s'exécutent sans demander",
+    "description": "Audit log entry (HTML allowed): the user made a rule. {rule} is its words.",
+    "_machine_translated": true,
+    "_source_hash": "b7dcf361d186c81e"
+  },
+  "settings.tool_permissions.audit.summary.host.rule_removed": {
+    "message": "Règle supprimée : commandes commençant par <strong>{rule}</strong>",
+    "description": "Audit log entry (HTML allowed): the user deleted a rule. {rule} is its words.",
+    "_machine_translated": true,
+    "_source_hash": "a0260ea31ef58e6f"
+  },
+  "settings.tool_permissions.audit.summary.host.allow_all_on": {
+    "message": "<strong>Toutes les commandes demandées par l'agent s'exécutent désormais sans confirmation</strong>",
+    "description": "Audit log entry (HTML allowed): the user turned on 'Run every command without asking'.",
+    "_machine_translated": true,
+    "_source_hash": "9369a2b0f55e9d16"
+  },
+  "settings.tool_permissions.audit.summary.host.allow_all_off": {
+    "message": "Les commandes demandées par l'agent nécessitent à nouveau une confirmation",
+    "description": "Audit log entry: the user turned off 'Run every command without asking'.",
+    "_machine_translated": true,
+    "_source_hash": "ea33dd8a84a997c4"
+  },
+  "settings.tool_permissions.audit.summary.host.unknown": {
+    "message": "Commande hors du sandbox de l'agent",
+    "description": "Audit log entry about a command an AI agent asked Kage to run, of a kind this version doesn't know.",
+    "_machine_translated": true,
+    "_source_hash": "12f6026ed8800ffb"
+  },
+  "settings.tool_permissions.audit.meta.host_by.rule": {
+    "message": "par une règle",
+    "description": "Detail of an audit log entry: a rule let the command run without asking.",
+    "_machine_translated": true,
+    "_source_hash": "5504c199547497ba"
+  },
+  "settings.tool_permissions.audit.meta.host_by.allow_all": {
+    "message": "par « Exécuter toutes les commandes sans confirmation »",
+    "description": "Detail of an audit log entry: the allow-all switch let the command run without asking.",
+    "_machine_translated": true,
+    "_source_hash": "dd92c6a0743e89b1"
+  },
+  "settings.tool_permissions.audit.meta.host_by.once": {
+    "message": "une fois",
+    "description": "Detail of an audit log entry: the user chose 'Run once'.",
+    "_machine_translated": true,
+    "_source_hash": "0d16632e15c4d8a0"
+  },
+  "settings.tool_permissions.audit.meta.host_by.always": {
+    "message": "et règle créée",
+    "description": "Detail of an audit log entry: the user chose 'Always allow commands starting with …'.",
+    "_machine_translated": true,
+    "_source_hash": "563cb675d69ab11d"
+  },
+  "settings.tool_permissions.audit.meta.host_by.other": {
+    "message": "approuvée",
+    "description": "Detail of an audit log entry: the command was let run in a way this version does not know.",
+    "_machine_translated": true,
+    "_source_hash": "46704bb2d9efd20b"
   }
 }
