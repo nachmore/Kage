@@ -255,7 +255,11 @@ async fn run() {
     {
         let tts = child_processes.pocket_tts.clone();
         let install = child_processes.pocket_tts_install.clone();
+        let user_runs = child_processes.user_shell_runs.clone();
         process_manager::register_child_killer(move || {
+            // Commands the user runs from a sandbox notice lead their own
+            // process groups: stop them (SIGTERM, then SIGKILL) first.
+            user_runs.cancel_all_and_wait(std::time::Duration::from_millis(1500));
             if let Ok(mut slot) = tts.lock() {
                 if let Some(mut child) = slot.take() {
                     let _ = child.kill();

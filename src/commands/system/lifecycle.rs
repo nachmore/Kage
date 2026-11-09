@@ -48,6 +48,13 @@ pub fn graceful_shutdown<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
             let _ = child.kill();
             let _ = child.wait();
         }
+        drop(install_proc);
+        drop(tts_proc);
+        // A command the user is running from a sandbox notice leads its
+        // own process group, which nothing else stops on macOS/Linux.
+        procs
+            .user_shell_runs
+            .cancel_all_and_wait(std::time::Duration::from_millis(1500));
     }
 
     // Hand any system shortcut Kage took over (⌘Space → Spotlight) back to

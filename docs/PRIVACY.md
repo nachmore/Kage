@@ -50,6 +50,7 @@ The complete list of features we track is visible in [`ui/js/shared/telemetry.js
 ## What is never collected
 
 - The content of any message, prompt, or AI response
+- Any command you run from Kage, or its output (a run is counted with a coarse exit-code bucket only)
 - File names, file paths, folder contents
 - Clipboard data
 - Search queries typed into Kage

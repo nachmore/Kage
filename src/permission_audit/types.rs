@@ -46,6 +46,42 @@ pub enum AuditEvent {
     /// during terminator mode every request is auto-approved and
     /// doesn't get its own `Granted` entry.
     TerminatorModeChanged { enabled: bool },
+    /// The user ran a command themselves, outside the agent's sandbox,
+    /// from a shell block's sandbox notice ("Run it here" / "Run in
+    /// Terminal"): their own click in a confirm, not an agent grant.
+    UserRanCommand {
+        /// The command, clipped to [`USER_RAN_COMMAND_PREVIEW`] bytes.
+        command: String,
+        /// The working directory it ran in.
+        cwd: String,
+        /// `kage` (run by Kage, output captured) or `terminal` (handed
+        /// to the terminal app).
+        via: String,
+        /// `exited`, `cancelled`, `timed_out`, `failed_to_start`, or
+        /// `opened` (terminal: handed over, outcome unknown to Kage).
+        outcome: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session_id: Option<String>,
+    },
+}
+
+/// Longest command an audit entry keeps, in bytes — the same 2 KB the
+/// `Granted` entries' `args_preview` keeps.
+pub const USER_RAN_COMMAND_PREVIEW: usize = 2048;
+
+/// `command` clipped to [`USER_RAN_COMMAND_PREVIEW`] bytes on a character
+/// boundary, with `…` when cut.
+pub fn command_preview(command: &str) -> String {
+    if command.len() <= USER_RAN_COMMAND_PREVIEW {
+        return command.to_string();
+    }
+    let mut cut = USER_RAN_COMMAND_PREVIEW;
+    while !command.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    format!("{}…", &command[..cut])
 }
 
 impl AuditEvent {
@@ -76,6 +112,9 @@ impl AuditEvent {
                 } else {
                     "Terminator mode disabled".to_string()
                 }
+            }
+            AuditEvent::UserRanCommand { via, outcome, .. } => {
+                format!("User ran a command ({}, {})", via, outcome)
             }
         }
     }

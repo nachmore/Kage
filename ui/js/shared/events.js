@@ -44,4 +44,7 @@ export const EVT = {
 
     // Automation
     AUTOMATION_STEP_COMPLETE: 'automation_step_complete',
+
+    // Commands the user runs themselves (shell-run-view.js)
+    USER_SHELL_OUTPUT: 'user_shell_output',
 };

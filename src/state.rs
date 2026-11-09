@@ -302,6 +302,9 @@ pub struct ChildProcesses {
     pub pocket_tts: Arc<std::sync::Mutex<Option<std::process::Child>>>,
     /// Pocket TTS pip install child process (for cancellation)
     pub pocket_tts_install: Arc<std::sync::Mutex<Option<std::process::Child>>>,
+    /// Commands the user is running from a sandbox notice, one per window
+    /// at most (`commands::system::user_shell`).
+    pub user_shell_runs: Arc<crate::commands::system::user_shell::UserShellRuns>,
 }
 
 /// Long-lived feature singletons and caches — services that exist for the
@@ -376,6 +379,7 @@ pub fn build_managed_state(
         child_processes: ChildProcesses {
             pocket_tts: Arc::new(std::sync::Mutex::new(None)),
             pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
+            user_shell_runs: Arc::new(crate::commands::system::user_shell::UserShellRuns::new()),
         },
         feature_services: FeatureServices {
             config,

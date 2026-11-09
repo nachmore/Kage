@@ -16,7 +16,7 @@ mod types;
 mod writer;
 
 pub use reader::read_recent_default;
-pub use types::{default_log_path, AuditEntry, AuditEvent};
+pub use types::{command_preview, default_log_path, AuditEntry, AuditEvent};
 pub use writer::{append, clear_default};
 
 #[cfg(test)]

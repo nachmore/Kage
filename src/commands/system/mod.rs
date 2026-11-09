@@ -14,6 +14,9 @@ pub mod lifecycle;
 pub mod privacy_permissions;
 pub mod steering;
 pub mod updates;
+/// Commands the user runs themselves from a sandbox notice. Not glob
+/// re-exported: the registry names them by full path.
+pub mod user_shell;
 
 pub use agents::*;
 pub use config_io::*;

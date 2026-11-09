@@ -6840,5 +6840,61 @@
   "errors.config.import_config_too_large": {
     "message": "This backup's settings are too large to use (over {max_kb} KB). Nothing was changed.",
     "description": "Import refused: the merged settings would be larger than Kage reads back at startup"
+  },
+  "errors.user_shell.not_allowed": {
+    "message": "Commands can only be run from Kage's chat and launcher windows.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. The request came from a window that isn't allowed to run commands."
+  },
+  "errors.user_shell.empty_command": {
+    "message": "There's no command to run.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. "
+  },
+  "errors.user_shell.command_too_long": {
+    "message": "The command is too long to run here (over {max_kib} KB).",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {max_kib} is the size limit in kilobytes."
+  },
+  "errors.user_shell.invalid_command": {
+    "message": "The command contains a NUL character, so it can't be run.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. NUL is the zero character, which no command line can contain."
+  },
+  "errors.user_shell.invalid_run_id": {
+    "message": "That run can't be identified.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Internal: the window sent a malformed id for the run."
+  },
+  "errors.user_shell.no_home": {
+    "message": "Couldn't find your home folder.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. "
+  },
+  "errors.user_shell.cwd_not_absolute": {
+    "message": "The working directory isn't a full path: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the folder the agent's command ran in."
+  },
+  "errors.user_shell.cwd_missing": {
+    "message": "The working directory doesn't exist: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the folder the agent's command ran in."
+  },
+  "errors.user_shell.cwd_not_directory": {
+    "message": "The working directory isn't a folder: {path}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {path} is the path the agent's command ran in."
+  },
+  "errors.user_shell.busy": {
+    "message": "Another command is already running in this window.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Only one runs at a time per window."
+  },
+  "errors.user_shell.spawn_failed": {
+    "message": "Couldn't start the command: {error}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {error} is the operating system's error message."
+  },
+  "errors.user_shell.terminal_unsupported": {
+    "message": "Running a command in the terminal isn't supported on this system. Copy it instead.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. Run in Terminal is macOS only."
+  },
+  "errors.user_shell.terminal_not_authorized": {
+    "message": "macOS didn't let Kage control Terminal. Allow it in System Settings → Privacy & Security → Automation, or copy the command instead.",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. macOS refused Kage's request to control the Terminal app. Keep the System Settings path as macOS names it."
+  },
+  "errors.user_shell.terminal_failed": {
+    "message": "Terminal didn't run it: {error}",
+    "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {error} is the error macOS reported."
   }
 }

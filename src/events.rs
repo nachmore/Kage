@@ -120,6 +120,14 @@ pub const AGENT_DISCONNECTED: &str = "agent_disconnected";
 /// (success, error, retry) target the same listener.
 pub const AUTOMATION_STEP_COMPLETE: &str = "automation_step_complete";
 
+// --- Commands the user runs themselves -------------------------------
+
+/// Output of a command the user ran from a shell block's sandbox notice
+/// (`run_user_shell_command`), sent only to the window that started it.
+/// Payload: `{ runId, text, skipped }` — `skipped` counts bytes printed
+/// since the previous event that didn't fit in this one.
+pub const USER_SHELL_OUTPUT: &str = "user_shell_output";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,6 +158,7 @@ mod tests {
             HOTKEY_REGISTRATION_FAILED,
             AGENT_DISCONNECTED,
             AUTOMATION_STEP_COMPLETE,
+            USER_SHELL_OUTPUT,
         ];
         for name in all {
             assert!(

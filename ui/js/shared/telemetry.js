@@ -83,6 +83,12 @@ export const KNOWN_EVENTS = Object.freeze([
     'clipboard_history_used',
     'shortcut_triggered',
     'macro_executed',
+    // Fired from Rust (src/commands/system/user_shell.rs) when the user runs
+    // a command the agent's sandbox refused, from its notice. Payload:
+    // where ('kage'|'terminal') and result (an exit-code bucket: '0', '1',
+    // '2-125', '126', '127', 'other', 'signal', 'timeout', 'cancelled',
+    // 'spawn_error', or 'opened' for Terminal) — never the command or output.
+    'user_shell_run',
 
     // Sessions
     'session_created',
