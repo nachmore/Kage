@@ -644,21 +644,34 @@ servers and built-in tools. So "no tool use" is enforced in three layers:
    next to `ACTIVE`, with `is_strict(id)`). In
    `handle_permission_notification`, before `observe_request`, a request
    whose session is strict:
-   - is answered `reject_once`;
+   - is answered with the request's own `reject_once` option (the
+     `optionId` the agent gave that kind; `"reject_once"` when it gave
+     none; never an allow option);
    - is recorded as a `Denied` audit entry with that session id;
    - adds no row to `tool_permissions` (no `observe_request`, no config
      save);
-   - calls `agent_calls::note_tool_attempt(session_id)`.
+   - calls `ephemeral_session::note_tool_attempt(client, session_id)`.
 
    This runs before every policy, so explicit Allow rules, trusted
    categories and terminator mode never approve a tool in a background
-   call.
+   call. A strict id stays strict for a while after its session ends (the
+   last 256), so a late request is still refused instead of reaching the
+   user's policy.
 3. **Stop.** Some agents can be set to run tools without asking the
-   client. When the notification handler sees a `tool_call` update for a
-   strict session, it calls `note_tool_attempt`. That sends
-   `session/cancel`, marks the call `tool_attempted`, and discards the
-   reply. Two tool attempts by one extension's calls in a local day open
-   that extension's breaker until the next day (§5.6), and the panel says
+   client. When the notification handler sees a `tool_call` or
+   `tool_call_update` for a strict session, it calls `note_tool_attempt`
+   too, and forwards nothing to any window.
+
+   `ephemeral_session::note_tool_attempt` counts one attempt per session
+   (a `tool_call` and the permission request after it are one attempt).
+   On that first attempt it sends `session/cancel` itself, then calls the
+   `tool_attempt` hook, which the service installs when it starts
+   (`ephemeral_session::set_strict_hooks`, §13 WP-AC1). The hook is
+   `agent_calls::note_tool_attempt(session_id)`: it marks the call
+   `tool_attempted` and discards the reply. `ephemeral_session::
+   tool_attempted(id)` answers the same question for the work closure.
+   Two tool attempts by one extension's calls in a local day open that
+   extension's breaker until the next day (§5.6), and the panel says
    why.
 
 Extension tools (`extension_tool_call` fences) can't run either: their
@@ -676,8 +689,24 @@ extends today's `run`:
 | `require_connected: bool` | `true`: never spawn or reconnect the agent; fail `agent_unavailable` | `false` (unchanged: connect if needed) |
 | `cwd: Option<PathBuf>` | An empty Kage-owned folder, `<data_local_dir>/kage/agent-scratch/` (owner-only on Unix). The agent loads no project files or project instructions from the user's working folder. | the configured working directory (unchanged) |
 
-After a strict call the host checks the scratch folder. If anything is in
-it, the host logs a warning (a sign a tool ran) and empties it.
+`EphemeralOptions::background()` gives the background row, creating the
+scratch folder (owner-only on Unix; a file or link at that path is
+replaced by a real folder). With `require_connected`, a client that isn't
+healthy fails with an `AppError` (`connection_lost`,
+`errors.agent_call.agent_unavailable`) inside the `anyhow::Error`, before
+anything is spawned or dialled; the engine downcasts it. `run(..)` is
+`run_with(.., EphemeralOptions::default(), ..)`.
+
+Around a strict call run in the scratch folder, the host empties the
+folder before the session starts and checks it when the session ends. If
+anything is in it, the host logs a warning (a sign a tool ran, counts
+only, no file names) and empties it. Only Kage's own scratch folder is
+ever emptied: a strict session given any other `cwd` leaves it alone.
+
+A strict session's prompt goes out exactly as framed: `send_chat_prompt`
+adds no `[Current time: …]` block to it (and doesn't use up the next
+user prompt's time stamp). Its reply chunks and tool updates are never
+forwarded to a window, even after the mute ends.
 
 **History.** The session is muted (`send_chat_streaming_background`), is
 never pinned to a window, is skipped by the session scanner while it
@@ -686,8 +715,12 @@ own history outside Kage's sessions folder (a database or per-project
 transcript files). Kage can't delete those. So `ephemeral_session` also
 records each throwaway session id in
 `<data_local_dir>/kage/ephemeral-sessions.json` (at most 1,000 ids, kept
-30 days, atomic write). The `agent_sessions` providers skip those ids, so
-no Kage session list ever shows them. Existing ephemeral callers (script
+30 days, atomic write, owner-only), as soon as the session exists, so a
+crash during the call still leaves it hidden. The `agent_sessions`
+providers skip those ids (the registry wraps every provider, and asks a
+provider for more when hidden ids took places on the page), and so does
+`list_sessions`' scanner (`ephemeral_session::is_hidden`), so no Kage
+session list ever shows them. Existing ephemeral callers (script
 generation, internal-site drafting) get this for free.
 
 **Reply cap while streaming.** A new `AcpClient::accumulator_len(id) ->
@@ -1565,13 +1598,24 @@ and the later package rebases and owns only its own lines.
   `note_tool_attempt`, `shutdown`.
 - `exec.rs` defines `AgentBackend` (the turn conditions, one blocking run,
   the reply size, `session/cancel`) and `AcpBackend`, the real one. AC1
-  and AC2 are built in parallel, so `AcpBackend` doesn't name
+  and AC2 were built in parallel, so `AcpBackend` doesn't name
   `run_with`: it is given a `SessionOpener`, a closure with `run_with`'s
   shape (`SessionSpec { strict, require_connected, cwd }` and the work on
   the session id). AC3 passes one that calls
-  `ephemeral_session::run_with`. Tests use a fake backend. The scratch
-  folder is created by `exec::scratch_dir()`; checking and emptying it
-  after a call stays in `run_with` (AC2).
+  `ephemeral_session::run_with` with the matching `EphemeralOptions`
+  (`strict`, `require_connected` and `cwd` copied over). Tests use a fake
+  backend. The scratch folder is created by `exec::scratch_dir()`, the
+  same path as `ephemeral_session::prepare_scratch_dir()`; checking and
+  emptying it after a call stays in `run_with` (AC2).
+- The strict-session hooks: AC3 installs the engine's two free functions
+  when the service starts, and removes them on shutdown:
+  `ephemeral_session::set_strict_hooks(Some(StrictHooks { tool_attempt:
+  agent_calls::note_tool_attempt, disconnected: agent_calls::on_disconnect
+  }))`. Both are `fn` pointers (`fn(&str)` and `fn()`) that reach the
+  service through the handle `start(hooks)` fills (no-ops before). They
+  run on the ACP reader thread and only send a `session/cancel`
+  notification, never wait for a reply. The session cancel on a tool
+  attempt is already sent by AC2.
 - Everything that needs an `AppHandle` goes out through the
   `AgentCallHooks` trait the service is given in `start(hooks)`: the audit
   entries (`CallRecord`, `AccessRecord`, which AC3 maps to the two
@@ -1591,16 +1635,23 @@ and the later package rebases and owns only its own lines.
 - AC3 also adds `mod agent_calls;` to `src/main.rs`: the binary declares
   its modules itself, and AC1 owns only the `src/lib.rs` line.
 
-**WP-AC2 Strict ephemeral sessions** (`src/ephemeral_session.rs`,
+**WP-AC2 Strict ephemeral sessions** (`src/ephemeral_session.rs` and
+`src/ephemeral_session/{strict,scratch,hidden}.rs`,
 `src/acp_client/mod.rs`, `src/commands/messaging/notifications.rs`,
-`src/agent_sessions/*`)
-- `EphemeralOptions`, `run_with`, `is_strict`, the scratch-folder check,
-  the hidden-ids file, `AcpClient::accumulator_len`.
+`src/agent_sessions/*`; one line each in `src/acp_client/session.rs`
+(no time stamp on a strict prompt) and `src/commands/sessions/crud.rs`
+(the scanner skips hidden ids))
+- `EphemeralOptions` (with `background()`), `run_with`, `is_strict`,
+  `tool_attempted`, the scratch-folder check, the hidden-ids file
+  (`is_hidden`, `hidden_ids`), `AcpClient::accumulator_len`.
 - The strict permission branch before `observe_request`; the `tool_call`
-  hook; the disconnect hook. Both call AC1's free functions
-  `agent_calls::note_tool_attempt(session_id)` and
-  `agent_calls::on_disconnect()`, which reach the service through a
-  `OnceLock` it fills when it starts (no-ops before).
+  hook; the disconnect hook. AC2 can't call AC1's free functions
+  directly, because AC1 lands in parallel, and the ACP layer shouldn't
+  depend on the engine. So both go through
+  `ephemeral_session::note_tool_attempt(client, id)` (one attempt per
+  session: it sends `session/cancel`, then calls the hook) and
+  `ephemeral_session::notify_disconnected()`, which call the
+  `StrictHooks` AC1 installs with `set_strict_hooks` (no-ops before).
 - Session providers skip hidden ids.
 - Accept:
   - existing ephemeral callers behave exactly as before (their options

@@ -91,6 +91,8 @@ pub fn setup_notification_handler(
         // immediately rather than looking healthy until the next send fails.
         if method == "_kage/agent_disconnected" {
             let _ = app_handle.emit(events::AGENT_DISCONNECTED, ());
+            // A background agent call in flight ends `agent_disconnected`.
+            crate::ephemeral_session::notify_disconnected();
             return;
         }
 
@@ -141,7 +143,10 @@ pub fn setup_notification_handler(
 
                             // Background prompts (auto-steering, titler) are
                             // read back from the accumulator, never shown.
-                            let background = client_for_handler.is_background_prompt_session(&sid);
+                            // Neither is a strict session's reply, even a
+                            // late chunk after its prompt returned.
+                            let background = client_for_handler.is_background_prompt_session(&sid)
+                                || crate::ephemeral_session::is_strict(&sid);
                             if let Some(emitted) = emitted_owned {
                                 if !emitted.is_empty() && !background {
                                     // Append to the per-session pending
@@ -201,6 +206,17 @@ pub fn setup_notification_handler(
                         return;
                     }
                     if kind == "tool_call" || kind == "tool_call_update" {
+                        // No tool may run on a strict session (a background
+                        // agent call). An agent set to run tools without
+                        // asking only shows it here: stop the turn, tell the
+                        // call's owner, and show nothing.
+                        if let Some(sid) = update_session_id
+                            .as_deref()
+                            .filter(|sid| crate::ephemeral_session::is_strict(sid))
+                        {
+                            crate::ephemeral_session::note_tool_attempt(&client_for_handler, sid);
+                            return;
+                        }
                         // A kind can arrive on an update that carries no
                         // title; attach it to the call's existing entry.
                         if let (Some(call_id), None, Some(k)) = (
@@ -687,6 +703,57 @@ fn permission_prompt_payload(
     })
 }
 
+/// How a permission request is decided.
+#[derive(Debug, PartialEq, Eq)]
+enum PermissionRoute {
+    /// A strict session (a background agent call): refuse with this
+    /// option, before any policy.
+    Strict { option_id: String },
+    /// Everything else: the user's tool policy decides.
+    Policy(crate::config::RequestDecision),
+}
+
+/// Decide a permission request. A strict session is refused before the
+/// policy is consulted, so explicit Allow rules, trusted categories and
+/// terminator mode never approve a tool there, and the request adds no
+/// `tool_permissions` row. Anything else goes to `observe_request`.
+fn route_permission(
+    perms: &mut crate::config::ToolPermissionsConfig,
+    notification: &serde_json::Value,
+    request: &crate::config::ToolRequest,
+    strict: bool,
+    timestamp: &str,
+) -> PermissionRoute {
+    if strict {
+        return PermissionRoute::Strict {
+            option_id: reject_once_option(notification),
+        };
+    }
+    // An explicit per-tool Deny wins even under trust_all /
+    // terminator_mode / a trusted category — see resolve_policy_for.
+    PermissionRoute::Policy(perms.observe_request(request, timestamp))
+}
+
+/// The id of the request's `reject_once` option, as the agent named it
+/// (ACP lets the agent choose option ids). `"reject_once"` when it offers
+/// none. Never an allow option.
+fn reject_once_option(notification: &serde_json::Value) -> String {
+    notification
+        .get("params")
+        .and_then(|p| p.get("options"))
+        .and_then(|o| o.as_array())
+        .and_then(|options| {
+            options.iter().find_map(|o| {
+                (o.get("kind").and_then(|k| k.as_str()) == Some("reject_once"))
+                    .then(|| o.get("optionId").and_then(|id| id.as_str()))
+                    .flatten()
+                    .filter(|id| !id.is_empty())
+            })
+        })
+        .unwrap_or("reject_once")
+        .to_string()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_permission_notification(
     notification: &serde_json::Value,
@@ -760,6 +827,7 @@ fn handle_permission_notification(
         mcp_server: mcp_server.clone(),
         hidden_session,
     };
+    let strict = request_session.is_some_and(crate::ephemeral_session::is_strict);
 
     // Hold the lock just long enough to mutate the in-memory config and
     // decide whether a disk save is due. The actual save is dispatched
@@ -767,14 +835,20 @@ fn handle_permission_notification(
     // this notification handler is never blocked on disk I/O — pre-fix
     // a slow disk could stall ACP message parsing for tens of ms,
     // long enough for in-flight prompts to time out.
-    let (decision, save_snapshot) = {
+    let (route, save_snapshot) = {
         let mut config_guard = config.lock_or_recover();
-        // An explicit per-tool Deny wins even under trust_all /
-        // terminator_mode / a trusted category — see resolve_policy_for.
-        let decision = config_guard
-            .tool_permissions
-            .observe_request(&request, &timestamp);
-        let needs_save = match decision.row {
+        let route = route_permission(
+            &mut config_guard.tool_permissions,
+            notification,
+            &request,
+            strict,
+            &timestamp,
+        );
+        let row = match &route {
+            PermissionRoute::Strict { .. } => crate::config::PolicyRowChange::Skipped,
+            PermissionRoute::Policy(decision) => decision.row,
+        };
+        let needs_save = match row {
             crate::config::PolicyRowChange::Touched => {
                 // last_seen changed in memory — throttle disk writes to at
                 // most once per 60s.
@@ -797,7 +871,7 @@ fn handle_permission_notification(
         // consistent — but the Mutex is released as the guard drops
         // at end-of-block, BEFORE the save runs.
         let snap = needs_save.then(|| config_guard.clone());
-        (decision, snap)
+        (route, snap)
     };
 
     // Disk save on a worker thread — never blocks the ACP reader.
@@ -833,6 +907,25 @@ fn handle_permission_notification(
         .and_then(|p| p.get("sessionId"))
         .and_then(|s| s.as_str())
         .map(|s| s.to_string());
+    let decision = match route {
+        PermissionRoute::Strict { option_id } => {
+            // A background agent call: refused before any policy, no
+            // config row, no prompt. The call stops at its first tool.
+            crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
+                crate::permission_audit::AuditEvent::Denied {
+                    tool: tool_title.to_string(),
+                    session_id: audit_session_id.clone(),
+                },
+            ));
+            send_response(&option_id);
+            if let Some(sid) = request_session {
+                info!("Refused a tool request on strict session {}", sid);
+                crate::ephemeral_session::note_tool_attempt(client, sid);
+            }
+            return;
+        }
+        PermissionRoute::Policy(decision) => decision,
+    };
     // Auto-approved commands and MCP tools: record what actually ran (the
     // command line / the tool's arguments). Also kept with a prompted
     // request, for when trusting a category approves it from the queue.
@@ -925,6 +1018,128 @@ fn handle_permission_notification(
                     let _ = crate::overlay_windows::present(&floating);
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod strict_permission_tests {
+    use super::{reject_once_option, route_permission, PermissionRoute};
+    use crate::config::{
+        GrantType, PolicyKind, PolicyRowChange, ToolPermissionsConfig, ToolPolicy, ToolRequest,
+    };
+    use serde_json::json;
+
+    const TS: &str = "2026-11-09T10:00:00Z";
+
+    /// Every way the user's policy could approve a tool on its own: an
+    /// explicit Allow row, trust-all, terminator mode, trusted shell
+    /// commands and a trusted MCP server.
+    fn approve_everything() -> ToolPermissionsConfig {
+        ToolPermissionsConfig {
+            trust_all: true,
+            terminator_mode: true,
+            trusted_kinds: vec!["execute".into()],
+            trusted_mcp_servers: vec!["notes-mcp".into()],
+            tools: vec![ToolPolicy {
+                title: "Running: rm -rf ~".into(),
+                policy: PolicyKind::Allow,
+                last_seen: "2026-11-01T00:00:00Z".into(),
+                granted_at: "2026-11-01T00:00:00Z".into(),
+                grant_type: GrantType::Always,
+            }],
+        }
+    }
+
+    fn requests() -> Vec<ToolRequest> {
+        vec![
+            ToolRequest {
+                title: "Running: rm -rf ~".into(),
+                kind: Some("execute".into()),
+                hidden_session: true,
+                ..Default::default()
+            },
+            ToolRequest {
+                title: "Running: @notes-mcp/search".into(),
+                mcp_server: Some("notes-mcp".into()),
+                hidden_session: true,
+                ..Default::default()
+            },
+            ToolRequest {
+                title: "a tool never seen before".into(),
+                hidden_session: true,
+                ..Default::default()
+            },
+        ]
+    }
+
+    #[test]
+    fn a_strict_session_is_refused_before_any_policy() {
+        let n = json!({ "id": 3, "params": { "sessionId": "strict-1" } });
+        for request in requests() {
+            let mut perms = approve_everything();
+            let before = format!("{:?}", perms);
+            let route = route_permission(&mut perms, &n, &request, true, TS);
+            assert_eq!(
+                route,
+                PermissionRoute::Strict {
+                    option_id: "reject_once".into()
+                },
+                "{}",
+                request.title
+            );
+            assert_eq!(
+                format!("{:?}", perms),
+                before,
+                "no row added or touched for {}",
+                request.title
+            );
+        }
+    }
+
+    #[test]
+    fn the_same_requests_outside_a_strict_session_follow_the_policy() {
+        let n = json!({ "id": 3, "params": { "sessionId": "user-chat" } });
+        let mut perms = approve_everything();
+        match route_permission(&mut perms, &n, &requests()[0], false, TS) {
+            PermissionRoute::Policy(d) => {
+                assert_eq!(d.policy, PolicyKind::Allow);
+                assert_eq!(d.row, PolicyRowChange::Touched);
+            }
+            other => panic!("expected the policy, got {other:?}"),
+        }
+        match route_permission(&mut perms, &n, &requests()[2], false, TS) {
+            PermissionRoute::Policy(d) => {
+                assert_eq!(d.policy, PolicyKind::Allow, "terminator mode");
+                assert_eq!(d.row, PolicyRowChange::Added);
+            }
+            other => panic!("expected the policy, got {other:?}"),
+        }
+        assert_eq!(perms.tools.len(), 2);
+    }
+
+    #[test]
+    fn the_refusal_uses_the_agents_own_reject_once_option() {
+        let n = json!({ "params": { "options": [
+            { "kind": "allow_always", "optionId": "allow_always" },
+            { "kind": "allow_once", "optionId": "allow" },
+            { "kind": "reject_once", "optionId": "reject" },
+        ] } });
+        assert_eq!(reject_once_option(&n), "reject");
+    }
+
+    #[test]
+    fn the_refusal_never_picks_an_allow_option() {
+        for n in [
+            json!({ "params": {} }),
+            json!({ "params": { "options": "nonsense" } }),
+            json!({ "params": { "options": [
+                { "kind": "allow_once", "optionId": "reject_once_please" },
+                { "kind": "reject_once" },
+                { "kind": "reject_once", "optionId": "" },
+            ] } }),
+        ] {
+            assert_eq!(reject_once_option(&n), "reject_once", "{n}");
         }
     }
 }

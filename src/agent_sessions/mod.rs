@@ -116,9 +116,9 @@ impl AgentSessionRegistry {
     pub fn new() -> Self {
         Self {
             providers: vec![
-                Arc::new(kiro_cli::KiroCliProvider::new()),
-                Arc::new(kiro_desktop::KiroDesktopProvider::new()),
-                Arc::new(claude_code::ClaudeCodeProvider::new()),
+                hide_throwaway(kiro_cli::KiroCliProvider::new()),
+                hide_throwaway(kiro_desktop::KiroDesktopProvider::new()),
+                hide_throwaway(claude_code::ClaudeCodeProvider::new()),
             ],
         }
     }
@@ -145,6 +145,84 @@ impl AgentSessionRegistry {
 impl Default for AgentSessionRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Register `provider` so its listing never shows one of Kage's throwaway
+/// sessions. The agent may keep their history in its own store, which
+/// Kage can't delete; see `ephemeral_session::is_hidden`.
+fn hide_throwaway(provider: impl AgentSessionProvider + 'static) -> Arc<dyn AgentSessionProvider> {
+    Arc::new(HideThrowaway(Box::new(provider)))
+}
+
+/// A provider whose `list_sessions` skips Kage's throwaway sessions.
+struct HideThrowaway(Box<dyn AgentSessionProvider>);
+
+impl AgentSessionProvider for HideThrowaway {
+    fn id(&self) -> &'static str {
+        self.0.id()
+    }
+
+    fn label(&self) -> &'static str {
+        self.0.label()
+    }
+
+    fn is_available(&self) -> bool {
+        self.0.is_available()
+    }
+
+    fn list_sessions(&self, limit: usize) -> Result<Vec<AgentSession>, AppError> {
+        list_visible(&*self.0, limit, &crate::ephemeral_session::hidden_ids())
+    }
+
+    fn load_session(&self, locator: &SessionLocator) -> Result<Vec<AgentMessage>, AppError> {
+        self.0.load_session(locator)
+    }
+
+    fn check_session_updated(
+        &self,
+        locator: &SessionLocator,
+        since_ms: i64,
+    ) -> Result<Option<i64>, AppError> {
+        self.0.check_session_updated(locator, since_ms)
+    }
+}
+
+/// The newest `limit` sessions of `provider` whose id isn't in `hidden`.
+///
+/// Asks for `limit` first. When hidden sessions took some of those places
+/// and the provider had more, asks again for more (at least twice as many,
+/// at most `limit + hidden.len()`). Usually no hidden session is among the
+/// newest, so one call is enough.
+fn list_visible(
+    provider: &dyn AgentSessionProvider,
+    limit: usize,
+    hidden: &std::collections::HashSet<String>,
+) -> Result<Vec<AgentSession>, AppError> {
+    if hidden.is_empty() {
+        return provider.list_sessions(limit);
+    }
+    let most = limit.saturating_add(hidden.len());
+    let mut ask = limit;
+    loop {
+        let listed = provider.list_sessions(ask)?;
+        let got = listed.len();
+        let mut visible: Vec<AgentSession> = listed
+            .into_iter()
+            .filter(|s| !hidden.contains(&s.session_id))
+            .collect();
+        let skipped = got - visible.len();
+        // At least double, so even a page of hidden sessions takes only a
+        // few calls.
+        let next = limit
+            .saturating_add(skipped)
+            .max(ask.saturating_mul(2))
+            .min(most);
+        if visible.len() >= limit || got < ask || next <= ask {
+            visible.truncate(limit);
+            return Ok(visible);
+        }
+        ask = next;
     }
 }
 
@@ -238,6 +316,111 @@ mod tests {
         let reg = AgentSessionRegistry::new();
         assert!(reg.get("nope").is_none());
         assert!(reg.get("kiro-cli").is_some());
+    }
+
+    /// A provider listing `ids` newest first, recording each `limit` asked.
+    struct FakeProvider {
+        ids: Vec<&'static str>,
+        asked: std::sync::Mutex<Vec<usize>>,
+    }
+
+    impl FakeProvider {
+        fn new(ids: &[&'static str]) -> Self {
+            Self {
+                ids: ids.to_vec(),
+                asked: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+
+        fn asked(&self) -> Vec<usize> {
+            self.asked.lock().unwrap().clone()
+        }
+    }
+
+    impl AgentSessionProvider for FakeProvider {
+        fn id(&self) -> &'static str {
+            "fake"
+        }
+        fn label(&self) -> &'static str {
+            "Fake"
+        }
+        fn is_available(&self) -> bool {
+            true
+        }
+        fn list_sessions(&self, limit: usize) -> Result<Vec<AgentSession>, AppError> {
+            self.asked.lock().unwrap().push(limit);
+            Ok(self
+                .ids
+                .iter()
+                .take(limit)
+                .map(|id| AgentSession {
+                    provider_id: "fake".into(),
+                    session_id: id.to_string(),
+                    title: String::new(),
+                    updated_at: String::new(),
+                    message_count: 0,
+                    container: None,
+                    locator: serde_json::Value::Null,
+                    extras: serde_json::Value::Null,
+                })
+                .collect())
+        }
+        fn load_session(&self, _: &SessionLocator) -> Result<Vec<AgentMessage>, AppError> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn ids(sessions: &[AgentSession]) -> Vec<&str> {
+        sessions.iter().map(|s| s.session_id.as_str()).collect()
+    }
+
+    fn hidden(ids: &[&str]) -> std::collections::HashSet<String> {
+        ids.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn listing_skips_hidden_sessions_and_still_fills_the_page() {
+        let p = FakeProvider::new(&["a", "h1", "b", "h2", "c", "d", "e"]);
+        let got = list_visible(&p, 3, &hidden(&["h1", "h2", "elsewhere"])).unwrap();
+        assert_eq!(ids(&got), ["a", "b", "c"]);
+        assert_eq!(p.asked(), [3, 6], "asked again, for twice as many");
+    }
+
+    #[test]
+    fn listing_asks_once_when_no_hidden_session_is_among_the_newest() {
+        let p = FakeProvider::new(&["a", "b", "c", "h1"]);
+        let got = list_visible(&p, 3, &hidden(&["h1"])).unwrap();
+        assert_eq!(ids(&got), ["a", "b", "c"]);
+        assert_eq!(p.asked(), [3]);
+
+        let p = FakeProvider::new(&["a", "b"]);
+        assert_eq!(ids(&list_visible(&p, 3, &hidden(&[])).unwrap()), ["a", "b"]);
+        assert_eq!(p.asked(), [3]);
+    }
+
+    #[test]
+    fn listing_stops_when_the_provider_runs_out() {
+        let p = FakeProvider::new(&["h1", "a", "h2"]);
+        let got = list_visible(&p, 5, &hidden(&["h1", "h2"])).unwrap();
+        assert_eq!(ids(&got), ["a"]);
+        assert_eq!(p.asked(), [5]);
+    }
+
+    #[test]
+    fn listing_never_asks_for_more_than_the_hidden_ids_could_take() {
+        let p = FakeProvider::new(&["h1", "h2", "h3", "a", "b", "c"]);
+        let got = list_visible(&p, 1, &hidden(&["h1", "h2", "h3"])).unwrap();
+        assert_eq!(ids(&got), ["a"]);
+        assert!(p.asked().iter().all(|&n| n <= 4), "{:?}", p.asked());
+    }
+
+    #[test]
+    fn registered_providers_hide_throwaway_sessions() {
+        // Every registered provider goes through the filter, which reads
+        // `ephemeral_session::hidden_ids`.
+        let wrapped = hide_throwaway(FakeProvider::new(&["a"]));
+        assert_eq!(wrapped.id(), "fake");
+        assert_eq!(ids(&wrapped.list_sessions(5).unwrap()), ["a"]);
     }
 
     #[test]
