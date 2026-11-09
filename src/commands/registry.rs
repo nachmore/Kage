@@ -36,6 +36,8 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::input::internal_sites::internal_sites_test,
         crate::commands::input::internal_sites::internal_sites_draft_rules,
         crate::commands::input::internal_sites::internal_sites_draft_script,
+        crate::commands::input::spell_check::spell_suggestions,
+        crate::commands::input::spell_check::learn_spelling,
         crate::commands::open_path,
         crate::commands::execute_shortcut,
         crate::commands::test_floating_window,

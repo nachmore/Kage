@@ -331,6 +331,10 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // files. Destructive and filesystem-wide — never for extensions.
     launcher_result_actions: null,
     launcher_result_action: null,
+    // Spelling items in the launcher input's right-click menu. Learning
+    // writes to the user's OS-wide dictionary — host chrome only.
+    spell_suggestions: null,
+    learn_spelling: null,
     test_floating_window: null,
     handle_floating_input: null,
     set_window_session: null,

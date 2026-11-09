@@ -253,6 +253,10 @@
     "message": "Couldn't do that: {reason}",
     "description": "Launcher result menu: an OS operation failed; reason is the OS error text"
   },
+  "errors.spell_check.invalid_word": {
+    "message": "Only a single word can be added to the spelling dictionary.",
+    "description": "Learn spelling (right-click menu) was asked to learn empty text, several words, or an overly long word"
+  },
   "errors.fs.read_failed": {
     "message": "Could not read file: {reason}",
     "description": "Filesystem read operation failed"
