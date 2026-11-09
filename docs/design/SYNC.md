@@ -333,7 +333,7 @@ Rules:
 | `extensions.<id>.<field>` | Per field (§12.1) | Extensions | Credentials never sync |
 | `extension_states.<id>` | Shared | Extensions | Guard: switched on here only if this computer's grant covers the manifest |
 | `extension_grants` (including the new `origin`, §4.5) | This computer | | Consent is given per computer |
-| `extension_agent_access` (EXTENSION_AGENT_CALLS) | This computer | | Consent and allowance, per computer (EXTENSION_AGENT_CALLS §10). It lands before this design (§23), so WP-S3 adds the row. |
+| `extension_agent_access` (EXTENSION_AGENT_CALLS) | This computer | | Consent and allowance, per computer (EXTENSION_AGENT_CALLS §10). It lands before this design (§23), so C0 adds the row. |
 | `pocket_tts.voice`, `temp`, `eos_threshold` | Shared | Settings | Preferences |
 | `pocket_tts.enabled`, `port`, `python_path`, `installed`, `auto_start` | This computer | | A local server install; `python_path` is a program Kage starts |
 | `store_url` | Shared; held back when it looks like it holds a token | Extensions | `config_export::sensitive::looks_like_secret` |
@@ -470,7 +470,13 @@ install seeds don't appear twice.
 ### 4.7 Keeping the tables true
 
 - `src/sync/catalog.rs` holds §4.3 and §4.4 as code (`SYNC_FIELDS`, in
-  the style of `config_export::allowlist::FIELDS`).
+  the style of `config_export::allowlist::FIELDS`). A row is
+  `Row { path, rule, category, guard, held_back }`. `Rule` is `Shared`,
+  `PerOs`, `ThisComputer(Why)`, `Never`, `List(ns)` or
+  `ExtensionSettings`; `Why::reason_key()` names the
+  `settings.sync_scope.reason.*` string. A `Shared` or `PerOs` path is
+  the `cfg` record id. `SYNC_LISTS` holds §4.4 as `ListSpec`s. C0 lands
+  both tables; WP-S3 adds the label keys and `RENAMED`.
 - `every_config_field_has_a_sync_decision` walks a maximal `Config` the
   way `allowlist::every_config_field_has_a_decision` does. It fails when
   a field has no row.
@@ -480,8 +486,8 @@ install seeds don't appear twice.
 - `CLAUDE.md` gains one line: "A new `Config` field needs a row in
   `sync::catalog` as well as `config_export::allowlist`."
 - A `Config` field that lands before C0 (EXTENSION_AGENT_CALLS'
-  `extension_agent_access`) gets its row from WP-S3. One that lands after
-  C0 adds its row in the same commit (§23). This design's own new field,
+  `extension_agent_access`) gets its row in C0. One that lands after C0
+  adds its row in the same commit (§23). This design's own new field,
   `extension_grants.<id>.origin` (§4.5), is covered by the
   `extension_grants` row; WP-S3 adds it to `ExtensionGrant` with its
   `config_export::allowlist` row (`Leave(DeviceLocal)`), and WP-S5 writes
@@ -2361,7 +2367,7 @@ One line, one state, plain words. The state comes from
 | `disk_full` | Your disk is full. Sync continues when there is space. | |
 | `write_failed` | Kage can't write to your sync folder | [Learn more] |
 | `folder_reverting` | Your sync app keeps undoing Kage's files | [Learn more] |
-| `clock_warning` | {computer}'s clock is about {duration} off. Changes from it may win over newer ones. | [Learn more] |
+| `clock_warning` | {computer}'s clock is about {minutes} minutes off. Changes from it may win over newer ones. | [Learn more] |
 | `unreadable` | {count} files from {computer} can't be read. Kage uses its other data. | [Learn more] |
 | `other_engine` | Another copy of Kage is syncing this profile | |
 
@@ -2583,7 +2589,17 @@ of problems happen."
 - `scripts/check_i18n.py` covers the new keys; `scripts/translate.py`
   fills the other 30 languages.
 
-Main EN strings (the full set lands in C0, §19.1):
+C0 adds the keys below, plus one key per value of the contract enums:
+`sync.status.<state>` for every `SyncState` except `unavailable` (and
+`sync.status.paused_forever`), `sync.problem.clock_warning` and
+`.unreadable`, `sync.conflicts.kind.<kind>` with the list's lines, tabs
+and buttons, `settings.sync_scope.action.<action>`,
+`settings.sync_scope.reason.<why>` (the catalog's reasons and the held
+reasons), `settings.sync.category.<category>`, `sync.os.<os>`,
+`sync.this_computer.<os>`, `tray.sync_status`, `tray.sync_now` and the
+three `errors.sync.*`. Later strings go through fragments (§19.1).
+
+Main EN strings:
 
 | Key | EN |
 |---|---|
@@ -2792,17 +2808,31 @@ here changes without updating this section.
 WP-S1 lands **C0** before anyone else branches. It:
 - creates every Rust file named in §19.2–§19.5 with these signatures and
   bodies that return `sync_unavailable` errors or empty values (never
-  `todo!()`), declares `pub mod sync;` in `src/lib.rs`, and the new
-  `ErrorKind`s;
+  `todo!()`), declares `sync` in `src/lib.rs` and `src/main.rs`, and the
+  new `ErrorKind`s. For §19.3's OS files that is the cross-platform
+  `src/os/cloud_files.rs` and `src/os/secret_store.rs`; WP-S2 adds the
+  per-OS files behind them. `crypto::new_dek` already draws from the OS
+  random generator, so no stub can hand out a zero key. `Cargo.toml`
+  gains `zeroize` for the key types;
 - registers every command of §19.5 in `src/commands/registry.rs`, with
-  `null` or `sync` entries in `ui/js/shared/extension-permissions.js`, so
+  `null` entries in `ui/js/shared/extension-permissions.js`, so
   `command_error_type_parity_test` and `command_permissions_parity_test`
-  pass from day one;
+  pass from day one. The four `ext_sync_*` commands are `null` too:
+  WP-S5 adds the `sync` capability (`VALID_CAPABILITIES`, `CAPABILITIES`,
+  the icon), maps them to it and adds them to `IDENTITY_SCOPED_COMMANDS`,
+  as agent calls and file text do for theirs. `get_config_snapshot` is a
+  stub in `src/commands/sync.rs` that returns the config with revision 0;
+  the `baseRevision` change to `save_config` stays with WP-S4;
 - adds the §19.6 event names to `src/events.rs` and
   `ui/js/shared/events.js`;
-- creates the JS files of §19.7 with their exports (inert);
-- adds every EN key of §17 to `locales/en/messages.json` and runs
-  `scripts/translate.py`.
+- creates the new JS files of §19.7 with their exports (inert), and the
+  three `HOST_FEATURE_SYNC_*` names, which aren't in
+  `HOST_FEATURE_CAPABILITY`, so no window offers them. The `{ syncPath }`
+  option of `base.js` and the two `config-cache.js` exports come with
+  WP-S6;
+- adds the EN keys of §17 to `locales/en/messages.json`. The other
+  catalogs need a `scripts/translate.py` run, as after the three
+  contracts commits before it.
 
 After C0, each file belongs to the package that owns it in §20. Later
 EN strings go through fragments `docs/design/sync-i18n/<wp>.en.json`,
@@ -2878,7 +2908,10 @@ impl Tx<'_> {
     pub fn ack(&mut self, ns: &str, id: &str, dev: DeviceId) -> anyhow::Result<()>;
     pub fn meta(&self, k: &str) -> anyhow::Result<Option<String>>;
     pub fn set_meta(&mut self, k: &str, v: &str) -> anyhow::Result<()>;
-    // devices: same pattern (get / put by key). Tx also implements ExtStore (§19.4).
+    pub fn device(&self, dev: DeviceId) -> anyhow::Result<Option<DeviceRow>>;   // the §6.2 columns
+    pub fn put_device(&mut self, row: &DeviceRow) -> anyhow::Result<()>;
+    pub fn devices(&self) -> anyhow::Result<Vec<DeviceRow>>;
+    // Tx also implements ExtStore (§19.4). `Projected` names the tuple of `projected`.
 }
 
 // conflicts.rs
@@ -2921,6 +2954,8 @@ impl Keys {
     pub fn ext_device_tag(&self, ext: &str, dev: DeviceId) -> String;
 }
 pub struct KeyFile { pub epoch: u32, pub kdf: Kdf, pub wrapped: String, pub aad: String, pub written_at: String }
+pub struct Kdf { pub alg: String, pub m_kib: u32, pub t: u32, pub p: u32, pub salt: String }
+pub enum CryptoError { WrongPassphrase, UnsupportedKdf, Malformed }
 pub fn new_dek() -> Zeroizing<[u8; 32]>;
 pub fn wrap_dek(passphrase: &str, dek: &[u8; 32], folder_id: &str, epoch: u32) -> anyhow::Result<KeyFile>;
 pub fn unwrap_dek(passphrase: &str, kf: &KeyFile, folder_id: &str) -> Result<Zeroizing<[u8; 32]>, CryptoError>;
@@ -2948,6 +2983,9 @@ pub fn read_descriptor(fs: &dyn SyncFs, l: &Layout) -> anyhow::Result<Option<Des
 pub fn create_folder(fs: &dyn SyncFs, l: &Layout, d: &Descriptor, readme: &str, key: &KeyFile, me: DeviceId) -> anyhow::Result<()>;
 pub fn list_key_files(fs: &dyn SyncFs, l: &Layout) -> anyhow::Result<Vec<(FileClass, KeyFile)>>;
 pub fn inspect(fs: &dyn SyncFs, cloud: &dyn CloudFiles, chosen: &Path) -> FolderInfo;
+pub enum FolderKind { New, Existing, UnknownSync, NotUsable, NewerFormat }
+pub struct FolderInfo { pub kind: FolderKind, pub provider: Provider, pub computer_count: u32,
+                        pub reason: Option<String> }   // `sync_inspect_folder`'s answer
 
 // src/os/cloud_files.rs (+ macos/windows/linux)
 pub enum Residency { Local, Placeholder, Unknown }
@@ -2962,8 +3000,11 @@ pub trait CloudFiles: Send + Sync {
 }
 pub fn system() -> Arc<dyn CloudFiles>;
 
-// src/os/secret_store.rs (+ macos/windows/linux): get / set / delete (service, account),
-// plus `fn keychain_is_reliable() -> bool` (macOS: stable Developer ID signature).
+// src/os/secret_store.rs (+ macos/windows/linux)
+pub fn get(service: &str, account: &str) -> anyhow::Result<Option<Zeroizing<Vec<u8>>>>;
+pub fn set(service: &str, account: &str, secret: &[u8]) -> anyhow::Result<()>;
+pub fn delete(service: &str, account: &str) -> anyhow::Result<()>;
+pub fn keychain_is_reliable() -> bool;   // macOS: stable Developer ID signature
 ```
 
 ### 19.4 Engine (WP-S3): `src/sync/mod.rs`, `engine.rs`, `ingest.rs`, `publish.rs`, `gc.rs`, `identity.rs`, `membership.rs`, `guards.rs`, `scheduler.rs`, `status.rs`, `prefs.rs`, `catalog.rs`, `sources.rs`, `sources/{config,lists,steering,chats}.rs`
@@ -3034,6 +3075,8 @@ pub struct EngineEnv {
     pub clock: Arc<dyn Clock>, pub events: Arc<dyn HostEvents>, pub config: Arc<dyn ConfigPort>,
 }
 pub enum Wake { Startup, Local { source: &'static str, origin: Origin }, Folder, Poll, Focus, Resume, Manual, Exit }
+pub struct TickReport { pub captured: usize, pub ingested_shards: usize, pub projected: usize,
+                        pub published: bool, pub new_conflicts: usize }
 pub struct SyncEngine { /* … */ }
 impl SyncEngine {
     pub fn open(env: EngineEnv, sources: Vec<Box<dyn Source>>) -> anyhow::Result<Self>;
@@ -3077,7 +3120,23 @@ pub enum ExtRequest {
     Pull { ext: String, max: usize },
     Ack { ext: String, cursor: String },
 }
+pub enum EngineReply { Done, Status(SyncStatus), Folders(Vec<SuggestedFolder>), Folder(FolderInfo),
+    Passphrase(String), JoinPreview(JoinPreview), Scopes(HashMap<String, ScopeView>), Scope(ScopeView),
+    Conflicts(Vec<ConflictSummary>), ConflictDetail(ConflictDetail), Reviews(Reviews),
+    Devices(Vec<DeviceView>), FoundFolder(Option<PathBuf>), Ext(ExtReply) }
+pub enum ExtReply { Status(ExtSyncStatus), Push(PushResult), Pull(PullResult), Ack }
+// Also in mod.rs: CreateReq / JoinReq { path, passphrase, device_name, categories }, JoinChoice,
+// ConflictTab, ConflictAction, DestructiveAction (the §19.5 argument values), ExtSyncStatus,
+// PushResult, RejectCode, PullResult (§12.6, camelCase where JavaScript reads them), and the
+// error helpers unavailable(), needs_confirmation(), quota_exceeded().
 ```
+
+The command answers live in `src/sync/status.rs`: `SyncStatus` (with
+`SyncState`), `DeviceView`, `Problem`, `ScopeView`, `ConflictSummary`,
+`ConflictDetail` (the summary's fields plus `fields: [{ field, now,
+replaced }]` for Compare), `Reviews` (five lists of `ReviewItem { kind,
+id, label_key, label_params, computer, detail, count }`, where `id` is
+what the matching command takes) and `JoinPreview`.
 
 `SyncStatus` (serialised for the frontend):
 
@@ -3220,10 +3279,16 @@ everyone branches from it.
 ### WP-S1 Contracts and merge core
 
 - **Files (owned):**
-  - C0 (§19.1), touching once: `src/lib.rs`, `src/error.rs`,
-    `src/events.rs`, `ui/js/shared/events.js`, `src/commands/registry.rs`,
-    `ui/js/shared/extension-permissions.js`, `locales/*/messages.json`,
-    and the skeleton of every file in §19.2–§19.7;
+  - C0 (§19.1), touching once: `src/lib.rs`, `src/main.rs`,
+    `src/error.rs`, `src/events.rs`, `ui/js/shared/events.js`,
+    `src/commands/registry.rs`, `src/commands/mod.rs`,
+    `src/commands/extensions/mod.rs`, `src/os/mod.rs`, `Cargo.toml`,
+    `ui/js/shared/extension-permissions.js`,
+    `ui/js/shared/extension-sandbox-host.js` (the three host feature
+    names), `locales/en/messages.json`,
+    `ui-tests/shared/extension-permissions.test.js`,
+    `ui-tests/shared/extension-rust-alignment.test.js`, and the skeleton
+    of every file in §19.2–§19.7;
   - afterwards: `src/lib.rs` (the `sync` module line), `src/sync/types.rs`,
     `src/sync/hlc.rs`, `src/sync/merge.rs`, `src/sync/scope.rs`,
     `src/sync/split.rs`, `src/sync/canonical.rs`, `src/sync/replica.rs`,
@@ -3495,7 +3560,7 @@ named in the last column.
 |---|---|---|
 | EXTENSION_AGENT_CALLS | §10, the row "The extension's own switch (Mind Map `background_organize`)" | **"This computer"** (`"sync": "machine"`), not shared. Each computer sends notes to its own agent, and consent is per computer; a shared switch would ask for consent on a computer where the user didn't turn anything on. The `machine_tag` work split (§11.3) is unchanged. |
 | EXTENSION_AGENT_CALLS | §10, `machine_tag` | Keeps its own `machine-id` file. Sync's device id exists only while sync is on, and changes on a clone or rejoin, so it can't replace it. |
-| EXTENSION_AGENT_CALLS | §5.13, `extension_agent_access` | Backend-owned (`preserve_backend_owned_fields`), so a stale window can't switch access back on. That design lands first (§23), so WP-S3 adds its `sync::catalog` row: This computer. |
+| EXTENSION_AGENT_CALLS | §5.13, `extension_agent_access` | Backend-owned (`preserve_backend_owned_fields`), so a stale window can't switch access back on. That design lands first (§23), so C0 adds its `sync::catalog` row: This computer. |
 | EXTENSION_AGENT_CALLS | §10 | A synced edit of the active agent connection makes consent stale on every computer. |
 | EXTENSION_FILE_TEXT | §10, §11.1, §11.4, §11.8 | Sync encrypts extension data, so Mind Map bodies sync and `sync_document_text` is dropped. `possible_secret` documents (item and body) stay on their computer (§11.5 here). `file_ref`s move to a local `fileRefs` field. Bodies are a `large` collection, up to 4 MiB per record, which covers `doc_max_chars` = 1,000,000. The per-extension quota (128 MiB) covers the 64 MB body budget. `file-ref.key` is listed as never synced (§4.2). |
 | EXTENSION_FILE_TEXT, EXTENSION_VIEWS | §5.2 / §13.4 | A click inside an extension view counts as the host-seen click a file dialog needs, through user activation in the view page. |
@@ -3589,12 +3654,12 @@ Files listed by more than one design:
 | `src/events.rs`, `ui/js/shared/events.js` | AC0, FT-C, V1, C0, S4 |
 | `locales/*/messages.json` | AC0, FT-C, V1, C0, then later strings of every package (S6 merges sync's fragments) |
 | `src/lib.rs` | V1, FT5, AC1, C0 |
-| `src/main.rs` | V1, V2, FT5, S4 |
+| `src/main.rs` | V1, V2, FT5, C0, S4 |
 | `src/state.rs` | V2, AC3, S4 |
 | `src/setup.rs` | V2, S4 |
 | `src/commands/registry.rs` | V1, FT5, AC3, C0, S4 |
-| `src/commands/mod.rs` | AC3, S4 |
-| `src/commands/extensions/mod.rs` | V1, FT5, S5 |
+| `src/commands/mod.rs` | AC3, C0, S4 |
+| `src/commands/extensions/mod.rs` | V1, FT5, C0, S5 |
 | `src/commands/extensions/files.rs` | V3, S5 |
 | `src/commands/extensions/install.rs`, `discovery.rs` | V2, AC3, S5 |
 | `src/commands/system/config_io.rs` | V3, AC4, S4 |
@@ -3604,10 +3669,10 @@ Files listed by more than one design:
 | `src/config/permissions.rs` | AC0, S3 |
 | `src/permission_audit/types.rs`, `tests.rs` | FT5, AC3 |
 | `src/agent_sessions/*` | AC2, S3 |
-| `Cargo.toml` | FT1, S2 (both need `hmac`: one 0.12 line, matching `sha2`) |
+| `Cargo.toml` | FT1, C0 (`zeroize`), S2 (FT1 and S2 both need `hmac`: one 0.12 line, matching `sha2`) |
 | `CLAUDE.md` | V7, FT1, S3 |
 | `ui/js/shared/extension-permissions.js` | V1, FT6, AC3, C0, S5 |
-| `ui/js/shared/extension-sandbox-host.js` | V4, FT6, AC5, S5 |
+| `ui/js/shared/extension-sandbox-host.js` | V4, FT6, AC5, C0, S5 |
 | `ui/js/shared/extension-manager.js` | V5, FT6, AC5, S5 |
 | `ui/js/extension-sandbox/runtime.js`, `runtime/host-api.js` | V4, AC5, S5 |
 | `ui/js/shared/settings-host-effects.js` | V5, FT6, AC6 |
@@ -3619,7 +3684,7 @@ Files listed by more than one design:
 | `ui/js/extension-view/main.js` | V6, then FT6 and S5 (their host features, §9.4 there) |
 | `ui/js/shared/telemetry.js` | V5, FT6, AC7, S4 |
 | `docs/EXTENSIONS.md`, `docs/SECURITY_MODEL.md`, `docs/PRIVACY.md` | V7, FT8, AC7, S2, S4, S5 |
-| `ui-tests/shared/extension-permissions.test.js`, `extension-rust-alignment.test.js`, `extension-sandbox-host*.test.js` | V1, V4, FT6, AC5, S5 |
+| `ui-tests/shared/extension-permissions.test.js`, `extension-rust-alignment.test.js`, `extension-sandbox-host*.test.js` | V1, V4, FT6, AC5, C0 (the first two), S5 |
 | Mind Map `manifest.json`, `mind.js`, `settings.js`, `view.js`, `_locales/en/messages.json`, `README.md`, `docs/mindmap/*` | V8, FT-MM3, AC-MM3, S7 |
 | Mind Map `lib/model.js` | FT-MM2, AC-MM2, S7 |
 | Mind Map `defaults.js` | FT-MM3, AC-MM3, S7 |

@@ -4425,6 +4425,14 @@
     "message": "Show windows the extension draws itself, such as a map or a board. What you type in those windows goes to the extension. Kage labels them with the extension's name.",
     "description": "Capability badge tooltip and install-prompt description"
   },
+  "settings.manager.cap.sync.label": {
+    "message": "Sync between your computers",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.sync.desc": {
+    "message": "Copies this extension's data, encrypted, to your sync folder so your other computers get it. Only when Kage sync is on.",
+    "description": "Capability badge tooltip and install-prompt description"
+  },
   "settings.manager.error.failed_load": {
     "message": "Failed to load settings",
     "description": "errLabel passed when loading settings throws"
@@ -4688,6 +4696,18 @@
   "settings.manager.ext.views.reset_done": {
     "message": "Window size and position reset.",
     "description": "Confirmation after resetting the extension windows' size and position"
+  },
+  "settings.manager.ext.sync.settings_and_data": {
+    "message": "Syncs settings and data",
+    "description": "Chip in an extension's settings header: its settings and its data sync between the user's computers."
+  },
+  "settings.manager.ext.sync.settings_only": {
+    "message": "Syncs settings",
+    "description": "Chip in an extension's settings header: only its settings sync between the user's computers."
+  },
+  "settings.manager.ext.sync.sign_in_local": {
+    "message": "Sign-in stays on this computer",
+    "description": "Chip in an extension's settings header: its sign-in or API key never syncs."
   },
   "settings.ext_settings.action.working": {
     "message": "Working…",
@@ -7496,5 +7516,421 @@
   "ext_view.state.updated": {
     "message": "Updated to {version}.",
     "description": "Shown briefly in an extension's own window after the extension updated. {version} is a version number such as 1.2.0."
+  },
+  "errors.sync.unavailable": {
+    "message": "Sync isn't available right now.",
+    "description": "A sync action was refused because sync is off, locked or paused on this computer, or not in this version."
+  },
+  "errors.sync.needs_confirmation": {
+    "message": "Confirm this first, then try again.",
+    "description": "A destructive sync action (turn off, start over, remove a computer) came without a fresh confirmation."
+  },
+  "errors.sync.quota_exceeded": {
+    "message": "This extension's synced data is over its limit.",
+    "description": "An extension tried to sync more data than its limit allows."
+  },
+  "settings.sync.title": {
+    "message": "Sync",
+    "description": "Settings sidebar item and page title for syncing between the user's computers."
+  },
+  "settings.sync.intro": {
+    "message": "Keep your settings, shortcuts and extensions the same on all your computers.",
+    "description": "First line of Settings → Sync."
+  },
+  "settings.sync.no_server": {
+    "message": "Kage uses a folder you already sync, like Dropbox, iCloud Drive or OneDrive. Nothing goes to a Kage server, and everything Kage puts there is encrypted.",
+    "description": "Settings → Sync while sync is off: how sync works. Dropbox, iCloud Drive and OneDrive are product names."
+  },
+  "settings.sync.setup": {
+    "message": "Set up sync…",
+    "description": "Button that starts sync setup."
+  },
+  "settings.sync.passphrase.lost": {
+    "message": "Kage can't recover this passphrase. If you lose it, you can change it from any computer that still syncs.",
+    "description": "Setup: warning under the new sync passphrase."
+  },
+  "settings.sync.passphrase.wrong": {
+    "message": "That passphrase doesn't unlock this folder.",
+    "description": "The sync passphrase the user typed doesn't unlock the sync folder."
+  },
+  "settings.sync.categories.per_computer": {
+    "message": "These choices are for this computer. Each computer chooses for itself.",
+    "description": "Under the list of what syncs: the choice is made on each computer."
+  },
+  "settings.sync.category.settings": {
+    "message": "Settings",
+    "description": "Sync category: preferences, agents, app modes."
+  },
+  "settings.sync.category.automations": {
+    "message": "Shortcuts & automations",
+    "description": "Sync category: shortcuts, automations and custom actions."
+  },
+  "settings.sync.category.extensions": {
+    "message": "Extensions and their data",
+    "description": "Sync category: which extensions are installed, their settings and their data."
+  },
+  "settings.sync.category.chats": {
+    "message": "Chat history",
+    "description": "Sync category: copies of chats, off by default."
+  },
+  "settings.sync.join.theirs": {
+    "message": "Use the settings from my other computers",
+    "description": "Joining sync: the other computers' values win where they differ."
+  },
+  "settings.sync.join.mine": {
+    "message": "Use this computer's settings on all computers",
+    "description": "Joining sync: this computer's values win where they differ."
+  },
+  "settings.sync.join.safe": {
+    "message": "Nothing is lost. Replaced values go to Conflicts, where you can restore them. You can undo joining for 30 days.",
+    "description": "Joining sync: under the two choices."
+  },
+  "settings.sync.stays_local": {
+    "message": "Stays on each computer: sign-ins and API keys, permissions, window positions, logs.",
+    "description": "What never syncs."
+  },
+  "settings.sync.ext.origin_mismatch": {
+    "message": "A different extension with this id is installed here, so its data doesn't sync.",
+    "description": "Settings → Sync → Extensions: an extension with the same id came from somewhere else on this computer."
+  },
+  "settings.sync.ext.sideload_hint": {
+    "message": "Only turn this on if it's the same extension on all your computers.",
+    "description": "Settings → Sync → Extensions: next to the data switch of an extension installed from a file."
+  },
+  "settings.sync.uninstall_note": {
+    "message": "Its data stays in your sync folder and on your other computers. To delete it everywhere, use Settings → Sync → Extensions → Remove its data from the sync folder.",
+    "description": "Added to the uninstall confirmation of an extension whose data syncs."
+  },
+  "settings.sync_scope.all": {
+    "message": "All computers",
+    "description": "Where a setting applies: every computer."
+  },
+  "settings.sync_scope.os_only": {
+    "message": "{os, select, macos {Macs only} windows {Windows PCs only} other {Linux PCs only}}",
+    "description": "Where a setting applies: only computers with this OS. {os} is macos, windows or linux."
+  },
+  "settings.sync_scope.this_computer": {
+    "message": "This computer",
+    "description": "Where a setting applies: only this computer."
+  },
+  "settings.sync_scope.per_os": {
+    "message": "Each kind of computer has its own",
+    "description": "Where a setting applies: Macs, Windows PCs and Linux PCs each have their own value (hotkeys, paths)."
+  },
+  "settings.sync_scope.not_synced": {
+    "message": "Not synced. {reason}",
+    "description": "Tooltip of a setting that never syncs. {reason} is one of the settings.sync_scope.reason.* sentences."
+  },
+  "settings.sync_scope.changed_everywhere": {
+    "message": "Changed on all your computers.",
+    "description": "Toast after the user changed a setting that is shared by all their computers."
+  },
+  "settings.sync_scope.action.all": {
+    "message": "Same on all computers",
+    "description": "Menu item: use this value on every computer."
+  },
+  "settings.sync_scope.action.os": {
+    "message": "{os, select, macos {Only on Macs} windows {Only on Windows PCs} other {Only on Linux PCs}}",
+    "description": "Menu item: use this value only on computers with this OS. {os} is macos, windows or linux."
+  },
+  "settings.sync_scope.action.use_shared": {
+    "message": "Use the value for all computers ({value})",
+    "description": "Menu item: drop this OS's own value. {value} is the shared value, as text."
+  },
+  "settings.sync_scope.action.this_computer": {
+    "message": "Only on this computer",
+    "description": "Menu item: keep this value on this computer only."
+  },
+  "settings.sync_scope.action.stop_this_computer": {
+    "message": "Stop keeping a value only here",
+    "description": "Menu item: follow the synced value again."
+  },
+  "settings.sync_scope.action.avail_all": {
+    "message": "Available on all computers",
+    "description": "Menu item for a list item: it exists on every computer."
+  },
+  "settings.sync_scope.action.avail_os": {
+    "message": "{os, select, macos {Only on Macs} windows {Only on Windows PCs} other {Only on Linux PCs}}",
+    "description": "Menu item for a list item: it exists only on computers with this OS. {os} is macos, windows or linux."
+  },
+  "settings.sync_scope.action.avail_this_computer": {
+    "message": "Only on this computer",
+    "description": "Menu item for a list item: it exists only on this computer."
+  },
+  "settings.sync_scope.reason.writes_file": {
+    "message": "It names a file Kage writes on this computer.",
+    "description": "Why a setting doesn't sync: it is a path Kage writes to."
+  },
+  "settings.sync_scope.reason.shell_files": {
+    "message": "It decides whether this computer's shell start-up files run.",
+    "description": "Why the login shell setting doesn't sync."
+  },
+  "settings.sync_scope.reason.login_item": {
+    "message": "Start at login is set for each computer.",
+    "description": "Why Start at login doesn't sync."
+  },
+  "settings.sync_scope.reason.mac_workaround": {
+    "message": "It works around a problem with this Mac's version of macOS.",
+    "description": "Why a macOS workaround setting doesn't sync."
+  },
+  "settings.sync_scope.reason.diagnostics": {
+    "message": "Troubleshooting settings are set for each computer.",
+    "description": "Why logging and debug settings don't sync."
+  },
+  "settings.sync_scope.reason.permissions": {
+    "message": "Permissions are given on each computer.",
+    "description": "Why tool permissions and extension grants don't sync."
+  },
+  "settings.sync_scope.reason.consent": {
+    "message": "Each computer asks for its own consent.",
+    "description": "Why consent choices (analytics, background AI) don't sync."
+  },
+  "settings.sync_scope.reason.first_run": {
+    "message": "Each computer runs its own welcome.",
+    "description": "Why the welcome-done flag doesn't sync."
+  },
+  "settings.sync_scope.reason.local_voice": {
+    "message": "The local voice is installed on each computer.",
+    "description": "Why the local text-to-speech server settings don't sync."
+  },
+  "settings.sync_scope.reason.looks_like_key": {
+    "message": "It looks like it contains a key.",
+    "description": "Why a value stays on this computer: it may hold a password or API key."
+  },
+  "settings.sync_scope.reason.not_this_version": {
+    "message": "It doesn't work on this version of Kage.",
+    "description": "Why a synced value isn't used here: it came from a newer Kage."
+  },
+  "settings.sync_scope.reason.needs_approval": {
+    "message": "It needs approval on this computer.",
+    "description": "Why a synced value isn't used here yet: it can start programs, or turn an extension on."
+  },
+  "settings.sync_scope.reason.not_installed": {
+    "message": "It isn't installed on this computer.",
+    "description": "Why a synced extension setting isn't used here."
+  },
+  "settings.sync_scope.reason.custom_path": {
+    "message": "It's kept at a path you chose.",
+    "description": "Why the user's steering file doesn't sync when it is at a custom path."
+  },
+  "settings.sync_scope.reason.sign_in": {
+    "message": "Sign-ins don't sync.",
+    "description": "Why an extension's sign-in or API key field doesn't sync."
+  },
+  "sync.status.off": {
+    "message": "Off",
+    "description": "Sync status: not set up on this computer."
+  },
+  "sync.status.setting_up": {
+    "message": "Setting up…",
+    "description": "Sync status: setup is in progress."
+  },
+  "sync.status.up_to_date": {
+    "message": "Up to date · Last synced {time}",
+    "description": "Sync status. {time} is a relative time such as '2 minutes ago'."
+  },
+  "sync.status.syncing": {
+    "message": "Syncing…",
+    "description": "Sync status."
+  },
+  "sync.status.waiting": {
+    "message": "Waiting for {count, plural, one {# file} other {# files}} from {computer} to download",
+    "description": "Sync status: the sync app hasn't downloaded files yet. {computer} is a computer's name."
+  },
+  "sync.status.placeholders": {
+    "message": "Your sync folder hasn't downloaded some files yet",
+    "description": "Sync status: some files in the sync folder are online-only."
+  },
+  "sync.status.paused": {
+    "message": "Paused until {time}",
+    "description": "Sync status. {time} is a date and time."
+  },
+  "sync.status.paused_forever": {
+    "message": "Paused",
+    "description": "Sync status: paused until the user resumes."
+  },
+  "sync.status.locked": {
+    "message": "Enter your sync passphrase to keep syncing",
+    "description": "Sync status: the key isn't available on this computer."
+  },
+  "sync.status.folder_missing": {
+    "message": "Can't find your sync folder",
+    "description": "Sync status."
+  },
+  "sync.status.folder_denied": {
+    "message": "Kage isn't allowed to open your sync folder",
+    "description": "Sync status: the OS denied access."
+  },
+  "sync.status.folder_empty": {
+    "message": "Your sync folder no longer has Kage data",
+    "description": "Sync status: the Kage Sync folder was emptied."
+  },
+  "sync.status.reset": {
+    "message": "Sync was started over on {computer}",
+    "description": "Sync status. {computer} is a computer's name."
+  },
+  "sync.status.removed": {
+    "message": "This computer was removed from sync on {computer}",
+    "description": "Sync status. {computer} is a computer's name."
+  },
+  "sync.status.update_required": {
+    "message": "Update Kage on this computer to keep syncing",
+    "description": "Sync status: another computer uses a newer sync format."
+  },
+  "sync.status.disk_full": {
+    "message": "Your disk is full. Sync continues when there is space.",
+    "description": "Sync status."
+  },
+  "sync.status.write_failed": {
+    "message": "Kage can't write to your sync folder",
+    "description": "Sync status."
+  },
+  "sync.status.folder_reverting": {
+    "message": "Your sync app keeps undoing Kage's files",
+    "description": "Sync status: the cloud app keeps rolling the folder back."
+  },
+  "sync.status.other_engine": {
+    "message": "Another copy of Kage is syncing this profile",
+    "description": "Sync status: a second Kage on this computer uses the same profile."
+  },
+  "sync.problem.clock_warning": {
+    "message": "{computer}'s clock is about {minutes, plural, one {# minute} other {# minutes}} off. Changes from it may win over newer ones.",
+    "description": "Sync problem. {computer} is a computer's name."
+  },
+  "sync.problem.unreadable": {
+    "message": "{count, plural, one {# file} other {# files}} from {computer} can't be read. Kage uses its other data.",
+    "description": "Sync problem. {computer} is a computer's name."
+  },
+  "sync.conflicts.title": {
+    "message": "Conflicts",
+    "description": "Title of the sync conflicts list."
+  },
+  "sync.conflicts.intro": {
+    "message": "When two computers changed the same thing, Kage kept the newest change. The other one is saved here for 90 days.",
+    "description": "Top of the sync conflicts list."
+  },
+  "sync.conflicts.tab.replaced": {
+    "message": "Replaced",
+    "description": "Conflicts tab: values replaced by a newer change."
+  },
+  "sync.conflicts.tab.deleted": {
+    "message": "Recently deleted",
+    "description": "Conflicts tab: items deleted in the last 30 days."
+  },
+  "sync.conflicts.tab.resolved": {
+    "message": "Resolved",
+    "description": "Conflicts tab: entries restored or dismissed."
+  },
+  "sync.conflicts.generated": {
+    "message": "Generated by Kage",
+    "description": "Conflicts group for documents Kage writes itself, such as what it learned about the user."
+  },
+  "sync.conflicts.private_item": {
+    "message": "Private item",
+    "description": "Label of a private extension item in the conflicts list."
+  },
+  "sync.conflicts.now": {
+    "message": "Now: {value} ({computer}, {time})",
+    "description": "Conflict entry: the current value. {computer} is a computer's name."
+  },
+  "sync.conflicts.replaced": {
+    "message": "Replaced: {value} ({computer}, {time})",
+    "description": "Conflict entry: the value that was replaced. {computer} is a computer's name."
+  },
+  "sync.conflicts.now_changed": {
+    "message": "Now: changed on {computer}, {time}",
+    "description": "Conflict entry for an item: the current version."
+  },
+  "sync.conflicts.replaced_changed": {
+    "message": "Replaced: changed on {computer}, {time}",
+    "description": "Conflict entry for an item: the replaced version."
+  },
+  "sync.conflicts.kind.concurrent_edit": {
+    "message": "{item} · {scope}",
+    "description": "Conflict entry title: one setting or item changed on two computers. {scope} is where it applies, such as 'All computers'."
+  },
+  "sync.conflicts.kind.edit_vs_delete": {
+    "message": "{item} was deleted on {deleter}. It had been changed on {editor}.",
+    "description": "Conflict entry. {deleter} and {editor} are computer names."
+  },
+  "sync.conflicts.kind.delete_vs_edit": {
+    "message": "You deleted {item} on {deleter}. It was changed later on {editor}, so it's back.",
+    "description": "Conflict entry. {deleter} and {editor} are computer names."
+  },
+  "sync.conflicts.kind.replaced_on_join": {
+    "message": "Joined {computer}: {count, plural, one {1 setting differed} other {# settings differed}}.",
+    "description": "Grouped conflict entry after joining sync. {computer} is a computer's name."
+  },
+  "sync.conflicts.kind.restore_backup": {
+    "message": "Restored a backup on {computer}: {count, plural, one {1 setting replaced} other {# settings replaced}}.",
+    "description": "Grouped conflict entry after a backup import. {computer} is a computer's name."
+  },
+  "sync.conflicts.kind.replaced_by_restore": {
+    "message": "Restored an older value of {item}. Replaced: {value}.",
+    "description": "Conflict entry after the user restored an older value."
+  },
+  "sync.conflicts.kind.deleted_while_away": {
+    "message": "{computer} hadn't synced since {date}. {count, plural, one {1 item deleted elsewhere was removed from it} other {# items deleted elsewhere were removed from it}}.",
+    "description": "Grouped conflict entry for a computer that came back after a long time. {computer} is a computer's name."
+  },
+  "sync.conflicts.restore": {
+    "message": "Restore",
+    "description": "Conflict entry button: bring the replaced version back."
+  },
+  "sync.conflicts.dismiss": {
+    "message": "Dismiss",
+    "description": "Conflict entry button: keep the current version."
+  },
+  "sync.conflicts.dismiss_all": {
+    "message": "Dismiss all",
+    "description": "Conflicts list button."
+  },
+  "sync.conflicts.delete_anyway": {
+    "message": "Delete anyway",
+    "description": "Conflict entry button: delete an item that came back because another computer changed it."
+  },
+  "sync.conflicts.compare": {
+    "message": "Compare",
+    "description": "Conflict entry button: show both versions side by side."
+  },
+  "sync.review.runnable_title": {
+    "message": "{count, plural, one {1 synced item can run programs on this computer} other {# synced items can run programs on this computer}}",
+    "description": "Needs your attention: synced agents, scripts or automations wait for approval here."
+  },
+  "sync.review.mass_delete": {
+    "message": "{computer} deleted {count, plural, one {1 item} other {# items}} from {what}.",
+    "description": "Needs your attention: a bulk delete from another computer waits for an answer. {computer} is a computer's name; {what} is a list name."
+  },
+  "sync.os.macos": {
+    "message": "macOS",
+    "description": "OS name."
+  },
+  "sync.os.windows": {
+    "message": "Windows",
+    "description": "OS name."
+  },
+  "sync.os.linux": {
+    "message": "Linux",
+    "description": "OS name."
+  },
+  "sync.this_computer.macos": {
+    "message": "This Mac",
+    "description": "This computer, on a Mac."
+  },
+  "sync.this_computer.windows": {
+    "message": "This PC",
+    "description": "This computer, on Windows."
+  },
+  "sync.this_computer.linux": {
+    "message": "This computer",
+    "description": "This computer, on Linux."
+  },
+  "tray.sync_status": {
+    "message": "Sync: {status}",
+    "description": "Disabled tray menu line. {status} is a short sync status, such as 'Up to date'."
+  },
+  "tray.sync_now": {
+    "message": "Sync now",
+    "description": "Tray menu item: sync with the other computers now."
   }
 }

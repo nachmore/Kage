@@ -8,6 +8,12 @@ import {
     decideInvoke,
     VIEW_SURFACE_DENIED_COMMANDS,
 } from '../../ui/js/shared/extension-permissions.js';
+import {
+    HOST_FEATURE_SYNC_KEYS,
+    HOST_FEATURE_SYNC_LISTS,
+    HOST_FEATURE_SYNC_RECORDS,
+    hostFeaturesFor,
+} from '../../ui/js/shared/extension-sandbox-host.js';
 
 const EXT_VIEW_COMMANDS = [
     'ext_view_open',
@@ -249,5 +255,27 @@ describe('decideInvoke view-surface denylist', () => {
         expect(decideInvoke('quit_app', all, view).reason).toMatch(/never callable/);
         expect(decideInvoke('no_such_command', all, view).reason).toMatch(/not available/);
         expect(decideInvoke(42, all, view).allow).toBe(false);
+    });
+});
+
+describe('folder sync (contracts only)', () => {
+    const all = new Set(KNOWN_CAPABILITIES);
+    const syncCommands = Object.keys(COMMAND_CAPABILITIES).filter(
+        (c) => c.startsWith('sync_') || c.startsWith('ext_sync_') || c === 'get_config_snapshot'
+    );
+
+    it('registers every sync command as host-only until the sync capability lands', () => {
+        expect(syncCommands.length).toBe(38);
+        for (const cmd of syncCommands) {
+            expect(COMMAND_CAPABILITIES[cmd], cmd).toBeNull();
+            expect(decideInvoke(cmd, all).allow, cmd).toBe(false);
+        }
+        expect(KNOWN_CAPABILITIES).not.toContain('sync');
+    });
+
+    it('names the sync host features but never offers them yet', () => {
+        const offered = [HOST_FEATURE_SYNC_KEYS, HOST_FEATURE_SYNC_LISTS, HOST_FEATURE_SYNC_RECORDS];
+        expect(offered).toEqual(['sync.keys', 'sync.lists', 'sync.records']);
+        expect(hostFeaturesFor(offered, ['storage', 'sync'])).toEqual([]);
     });
 });

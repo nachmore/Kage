@@ -398,6 +398,54 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     ext_view_focus_state: null,
     ext_view_list: null,
     ext_view_reset_geometry: null,
+
+    // --- folder sync (host code only) --------------------------------------
+    // Settings → Sync, the tray and the scope controls call these
+    // (docs/design/SYNC.md §19.5). They set up sync, change what syncs and
+    // resolve conflicts on every computer: never for extensions.
+    sync_get_status: null,
+    sync_suggest_folders: null,
+    sync_inspect_folder: null,
+    sync_generate_passphrase: null,
+    sync_create: null,
+    sync_join: null,
+    sync_confirm_join: null,
+    sync_unlock: null,
+    sync_set_paused: null,
+    sync_now: null,
+    sync_set_category: null,
+    sync_set_extension_data: null,
+    sync_get_scopes: null,
+    sync_set_scope: null,
+    sync_list_conflicts: null,
+    sync_conflict_detail: null,
+    sync_resolve_conflict: null,
+    sync_dismiss_all: null,
+    sync_list_reviews: null,
+    sync_approve_runnable: null,
+    sync_keep_off: null,
+    sync_dismiss_suggestion: null,
+    sync_answer_mass_change: null,
+    sync_list_devices: null,
+    sync_rename_device: null,
+    sync_prepare_destructive: null,
+    sync_remove_device: null,
+    sync_change_passphrase: null,
+    sync_leave: null,
+    sync_start_over: null,
+    sync_undo_join: null,
+    sync_purge_extension: null,
+    sync_find_folder: null,
+    // The config with its revision, for field-level saves (§9.5). Same
+    // reasoning as `get_config` above.
+    get_config_snapshot: null,
+    // `context.sync` (§12.6). Null until WP-S5 adds the `sync` capability,
+    // maps these four to it and has the sandbox host force-inject
+    // `extensionId`.
+    ext_sync_status: null,
+    ext_sync_push: null,
+    ext_sync_pull: null,
+    ext_sync_ack: null,
 });
 
 /**

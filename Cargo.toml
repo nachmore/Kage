@@ -126,6 +126,9 @@ tauri-plugin-aptabase = "1.0"
 aes-gcm = "0.10"
 argon2 = "0.5"
 rand = "0.9"
+# Folder sync keeps its data key in buffers that are wiped on drop
+# (docs/design/SYNC.md §11.3). Already a transitive dep of aes-gcm and argon2.
+zeroize = "1"
 # Used for verifying the SHA-256 checksum of store-installed extension
 # zips against the value the catalog publishes. Both crates were already
 # transitive deps; making them direct surfaces them in `cargo tree` and

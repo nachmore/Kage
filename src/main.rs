@@ -59,6 +59,8 @@ mod slash_format;
 mod startup;
 mod state;
 mod steering_io;
+#[allow(dead_code)] // Only the sync commands' types are used until the engine lands.
+mod sync;
 mod system_shortcut_takeover;
 mod telemetry;
 mod tray;

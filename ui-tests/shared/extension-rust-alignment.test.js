@@ -240,6 +240,64 @@ describe('extension view commands — Rust ↔ JS alignment', () => {
     });
 });
 
+describe('folder sync commands — Rust ↔ JS alignment', () => {
+    const syncRs = () => parseTauriCommands(path.join(repoRoot, 'src/commands/sync.rs'));
+    const extSyncRs = () =>
+        parseTauriCommands(path.join(repoRoot, 'src/commands/extensions/sync.rs'));
+
+    it('every command in src/commands/sync.rs is host-only (null)', () => {
+        const cmds = syncRs();
+        expect(cmds.size, 'commands in src/commands/sync.rs').toBe(34);
+        for (const name of cmds.keys()) {
+            expect(Object.hasOwn(COMMAND_CAPABILITIES, name), `${name} has no entry`).toBe(true);
+            expect(COMMAND_CAPABILITIES[name], `${name} must be null`).toBeNull();
+        }
+    });
+
+    it('sync commands take the arg names Settings sends', () => {
+        const cmds = syncRs();
+        const setup = ['path', 'passphrase', 'device_name', 'categories'];
+        expect(cmds.get('sync_create')).toEqual(setup);
+        expect(cmds.get('sync_join')).toEqual(setup);
+        expect(cmds.get('sync_set_scope')).toEqual(['path', 'action']);
+        expect(cmds.get('sync_set_extension_data')).toEqual(['extension_id', 'on']);
+        expect(cmds.get('sync_remove_device')).toEqual([
+            'device_id',
+            'lost',
+            'new_passphrase',
+            'confirm',
+        ]);
+        expect(cmds.get('sync_start_over')).toEqual(['passphrase', 'confirm']);
+        expect(cmds.get('sync_leave')).toEqual(['confirm']);
+        expect(cmds.get('sync_undo_join')).toEqual(['confirm']);
+        expect(cmds.get('sync_purge_extension')).toEqual(['extension_id', 'confirm']);
+        expect(cmds.get('get_config_snapshot')).toEqual([]);
+    });
+
+    it('context.sync commands take extensionId and are null until WP-S5', () => {
+        const cmds = extSyncRs();
+        expect([...cmds.keys()].sort()).toEqual([
+            'ext_sync_ack',
+            'ext_sync_pull',
+            'ext_sync_push',
+            'ext_sync_status',
+        ]);
+        expect(cmds.get('ext_sync_status')).toEqual(['extension_id']);
+        expect(cmds.get('ext_sync_push')).toEqual([
+            'extension_id',
+            'collection',
+            'records',
+            'deleted',
+            'initial',
+        ]);
+        expect(cmds.get('ext_sync_pull')).toEqual(['extension_id', 'max']);
+        expect(cmds.get('ext_sync_ack')).toEqual(['extension_id', 'cursor']);
+        for (const name of cmds.keys()) {
+            expect(COMMAND_CAPABILITIES[name], `${name} must be null`).toBeNull();
+        }
+    });
+});
+
 describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
     // The host's IDENTITY_SCOPED_COMMANDS map lives in the sandbox-host
     // module. We re-derive it here (rather than importing the private

@@ -246,6 +246,16 @@ const IDENTITY_SCOPED_COMMANDS = Object.freeze({
  */
 export const HOST_FEATURE_DATE_PICKER = 'date-picker';
 
+/**
+ * Folder sync for extension data (docs/design/SYNC.md §12.4–§12.6): whole
+ * keys, lists inside a key, and record collections (`context.sync`). Each
+ * will require the `sync` capability. Not offered yet: WP-S5 adds them to
+ * the map below, so until then {@link hostFeaturesFor} drops them.
+ */
+export const HOST_FEATURE_SYNC_KEYS = 'sync.keys';
+export const HOST_FEATURE_SYNC_LISTS = 'sync.lists';
+export const HOST_FEATURE_SYNC_RECORDS = 'sync.records';
+
 /** Capability each host feature requires. A feature with no entry needs none. */
 const HOST_FEATURE_CAPABILITY = Object.freeze({
     [HOST_FEATURE_DATE_PICKER]: 'calendar',

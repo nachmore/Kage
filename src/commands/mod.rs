@@ -10,6 +10,7 @@ pub mod oauth;
 pub mod pocket_tts;
 pub mod registry;
 pub mod sessions;
+pub mod sync;
 pub mod system;
 pub mod window;
 
@@ -24,5 +25,6 @@ pub use messaging::*;
 pub use oauth::*;
 pub use pocket_tts::*;
 pub use sessions::*;
+pub use sync::*;
 pub use system::*;
 pub use window::*;

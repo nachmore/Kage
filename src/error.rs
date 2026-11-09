@@ -66,6 +66,13 @@ pub enum ErrorKind {
     /// The arguments were refused before anything ran: too long, wrong
     /// shape, or not declared.
     InvalidInput,
+    /// Folder sync can't do this now: it is off, locked or paused on this
+    /// computer, or not in this build.
+    SyncUnavailable,
+    /// An extension's synced data is over its limit.
+    QuotaExceeded,
+    /// A destructive command came without a valid confirmation token.
+    NeedsConfirmation,
     /// Image/attachment not supported by current model
     ImageUnsupported,
     /// Lock acquisition failed (internal)
@@ -270,6 +277,19 @@ mod tests {
         for (kind, wire) in [
             (ErrorKind::NotPermitted, "not_permitted"),
             (ErrorKind::InvalidInput, "invalid_input"),
+        ] {
+            let json = serde_json::to_value(AppError::new(kind, "x")).unwrap();
+            assert_eq!(json["kind"], wire);
+        }
+    }
+
+    #[test]
+    fn sync_kinds_have_stable_wire_names() {
+        crate::i18n::init(Some("en"));
+        for (kind, wire) in [
+            (ErrorKind::SyncUnavailable, "sync_unavailable"),
+            (ErrorKind::QuotaExceeded, "quota_exceeded"),
+            (ErrorKind::NeedsConfirmation, "needs_confirmation"),
         ] {
             let json = serde_json::to_value(AppError::new(kind, "x")).unwrap();
             assert_eq!(json["kind"], wire);

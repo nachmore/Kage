@@ -7,6 +7,8 @@
 //!   - `store` — store window plus the catalog/detail/install HTTP surface.
 //!   - `welcome` — first-run batch provisioning from the welcome screen.
 //!   - `views` — extension view windows (open, boot, compose, copy, list).
+//!   - `sync` — `context.sync`: push, pull, ack and status of an
+//!     extension's synced records.
 //!
 //! Submodules pull this module's shared imports via `use super::*`, and the
 //! flat re-exports below preserve the original `commands::extensions::*`
@@ -27,6 +29,7 @@ mod discovery;
 mod files;
 mod install;
 mod store;
+mod sync;
 mod views;
 mod welcome;
 
@@ -35,6 +38,7 @@ pub use discovery::*;
 pub use files::*;
 pub use install::*;
 pub use store::*;
+pub use sync::*;
 pub use views::*;
 pub use welcome::*;
 

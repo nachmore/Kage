@@ -2866,6 +2866,7 @@ dependencies = [
  "windows-future 0.3.2",
  "windows-icons",
  "winreg 0.56.0",
+ "zeroize",
  "zip 8.2.0",
 ]
 

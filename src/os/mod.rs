@@ -37,6 +37,8 @@ pub mod app_uninstall;
 pub mod calendar;
 pub mod clipboard;
 pub mod clipboard_history;
+#[allow(dead_code)] // Folder sync will use it; the app doesn't yet.
+pub mod cloud_files;
 pub mod cursor;
 pub mod diagnostics;
 pub mod file_ops;
@@ -49,6 +51,8 @@ pub mod notification;
 pub mod permissions;
 pub mod power;
 pub mod process;
+#[allow(dead_code)] // Folder sync will use it; the app doesn't yet.
+pub mod secret_store;
 pub mod shell;
 pub mod spell_check;
 pub mod startup;

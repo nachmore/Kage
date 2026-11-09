@@ -59,4 +59,12 @@ export const EVT = {
     EXT_VIEW_FOCUS_LOST: 'ext_view_focus_lost',
     FLOATING_COMPOSE: 'floating_compose',
     EXTENSION_DATA_CHANGED: 'extension_data_changed',
+
+    // Folder sync: STATUS_CHANGED and CONFLICTS_CHANGED go to first-party
+    // windows, APPLIED comes before config_updated, EXTENSION_SYNC_CHANGES
+    // goes to the hosts of that extension.
+    SYNC_STATUS_CHANGED: 'sync_status_changed',
+    SYNC_CONFLICTS_CHANGED: 'sync_conflicts_changed',
+    SYNC_APPLIED: 'sync_applied',
+    EXTENSION_SYNC_CHANGES: 'extension_sync_changes',
 };
