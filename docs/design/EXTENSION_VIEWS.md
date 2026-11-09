@@ -670,8 +670,8 @@ with `view-response { id, result }`, or `{ id, error, errorKind?,
 errorKey? }`. `error` is the localised message. Host-side refusals use the
 §16.1 kinds and keys: `rate_limited` / `errors.ext_view.too_fast`,
 `invalid_input` / `errors.ext_view.text_invalid`, `not_permitted` /
-`errors.ext_view.not_focused` (no focus or no recent activation), and the
-§6.2 keys for `open-view`. Errors from the commands pass through with their
+`errors.ext_view.needs_user_action` (no focus or no recent activation), and
+the §6.2 keys for `open-view`. Errors from the commands pass through with their
 own kind and key. That is how `context.view` methods reject (§9.2).
 `open-view` resolves with `{ reused }`, `set-title` with the subtitle it
 set, the rest with `null`.
@@ -1061,13 +1061,13 @@ the check through `ExtensionSandbox.hasUserActivation()`: the view page's
 The rule is `recentUserActivation(focused, navigator.userActivation)` in
 `ui/js/extension-view/page.js`, for FT6's file broker to reuse.
 
-When the rule doesn't hold, the page refuses with `not_permitted`
+When the rule doesn't hold, the sandbox host refuses with `not_permitted`
 `errors.ext_view.needs_user_action` ("Click or press a key in the window
-first."). For `open-view` the page also checks the rate (1 a second,
-`rate_limited` `errors.ext_view.too_fast`), that the manifest declares the
-view (`errors.ext_view.unknown_view`) and that `params` is an object or
-null (`errors.ext_view.params_invalid`). The size and depth of `params`
-are left to `ext_view_open`, which checks them anyway.
+first."). It also applies the §8.6 rates (`rate_limited`
+`errors.ext_view.too_fast`), and for `open-view` the §6.2 checks
+(`validateOpenViewEffect`). Rust checks the params' size and depth again in
+`ext_view_open`. The view page's hooks then act on the request, and refuse
+one from a sandbox the page has replaced (`errors.ext_view.not_a_view_window`).
 
 The same rule stands in for the host-seen click that
 EXTENSION_FILE_TEXT §5.2 needs before it opens a file dialog. A view
@@ -1359,7 +1359,7 @@ Backend errors:
 | `errors.ext_view.not_focused` | The extension window isn't in front. |
 | `errors.ext_view.text_invalid` | The text can't be used: {reason} |
 | `errors.ext_view.too_fast` | Too many requests. Try again in a moment. |
-| `errors.ext_view.needs_user_action` | Click or press a key in the window first. (Raised by the view page, §13.4.) |
+| `errors.ext_view.needs_user_action` | Click or press a key in the window first. (Raised by the sandbox host in a view window, §13.4.) |
 | `errors.ext_view.clipboard_failed` | Couldn't copy to the clipboard. |
 | `errors.ext_view.geometry_write_failed` | Couldn't save window positions: {reason} |
 
@@ -1979,21 +1979,22 @@ package codes against this document.
   `ui-tests/shared/link-handler.test.js` (add the page), and two keys in
   `locales/en/messages.json` (`errors.ext_view.needs_user_action`,
   `ext_view.state.approve`).
-- **Interfaces the view page uses** from V3 and V4. V6 was built in
-  parallel with them, so these are its assumptions. `main.js` wires them
-  and `ui-tests/extension-view/main-wiring.test.js` checks them once both
-  modules exist.
+- **Interfaces the view page uses** from V3 and V4. `main.js` wires
+  them and `ui-tests/extension-view/main-wiring.test.js` checks them.
   - `new ExtensionSandbox(spec, invoke, container)` (V4), where `spec` has
-    the usual fields plus `surface: 'view'`, `viewId`, `viewCss` (the CSS
-    texts, already size-checked), `theme` (the §11 snapshot) and
-    `iframeTitle`. `sources` is `{ view, sourcePaths: { view } }`.
-    `container` is the stage (`.kv-frame`).
-  - Two hooks, set on the instance before `start()` (like
-    `onReformatRequest`): `onViewRequest(request)`, called with a
-    type-checked `view-request` (`{ kind, ...fields }`); it resolves with
-    the answer or rejects with an `Error` (or Rust `AppError`) carrying
-    `kind` and `key`. And `onNavigated()`, called after the navigation
-    detector tore the frame down.
+    the usual fields plus `surface: 'view'`, `viewId`, `views` (the
+    manifest's `contributes.views`), `viewTitle`, `extensionName`,
+    `viewTheme` (the §11 snapshot), `viewCss` (the CSS texts, already
+    size-checked) and `viewHooks`. `sources` is
+    `{ view, sourcePaths: { view } }`. `container` is the stage
+    (`.kv-frame`).
+  - `viewHooks`: the host type-checks each `view-request`, applies the
+    rates, the user activation rule and the §6.2 checks, then calls
+    `setTitle(subtitle)`, `close()`, `openView(viewId, params)`,
+    `compose(text)`, `copyText(text)` or `openSettings()`. The page's
+    hooks refuse a request from a sandbox it has replaced. Also
+    `onNavigated()`, called after the navigation detector tore the frame
+    down, and `hasUserActivation()`, which is `recentUserActivation`.
   - The §8.6 RPCs through `call(method, params, opts)`: `viewMount` (with
     `{ timeoutMs: 10000 }`), `viewReopen`, `viewVisibility`, `viewTheme`,
     and `viewPing` (with `{ timeoutMs: 0 }`, the watchdog counts the wait).

@@ -290,7 +290,7 @@ describe('view-request', () => {
         await request(sb, 'open-view', { view: 'board', params: [1] }, 2);
         expect(sent.at(-1)).toMatchObject({ errorKey: 'errors.ext_view.params_invalid' });
         await request(sb, 'open-view', { view: 'board' }, 3);
-        expect(sent.at(-1)).toMatchObject({ errorKind: 'not_permitted', errorKey: 'errors.ext_view.not_focused' });
+        expect(sent.at(-1)).toMatchObject({ errorKind: 'not_permitted', errorKey: 'errors.ext_view.needs_user_action' });
         expect(rawInvoke).not.toHaveBeenCalled();
         active = true;
         await request(sb, 'open-view', { view: 'board' }, 4);

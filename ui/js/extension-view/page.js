@@ -43,9 +43,6 @@ export const SUBTITLE_MAX_CHARS = 80;
 /** One view CSS file, and all of a view's CSS together (§4). */
 export const CSS_FILE_MAX_BYTES = 256 * 1024;
 export const CSS_TOTAL_MAX_BYTES = 1024 * 1024;
-/** Rate limits the page applies to `view-request`s (§8.6). */
-export const SET_TITLE_PER_SECOND = 10;
-export const OPEN_VIEW_PER_SECOND = 1;
 
 /** What opened a view (§9.1); the same closed list as `ext_views::VIEW_SOURCES`. */
 export const VIEW_SOURCES = Object.freeze([
@@ -94,20 +91,6 @@ export function recentUserActivation(focused, activation) {
     return true;
 }
 
-/** A sliding one-second window that allows `max` events. */
-function createRateLimiter(max, now) {
-    const times = [];
-    return {
-        allow() {
-            const t = now();
-            while (times.length && times[0] <= t - 1_000) times.shift();
-            if (times.length >= max) return false;
-            times.push(t);
-            return true;
-        },
-    };
-}
-
 function stripDotSlash(path) {
     return String(path).replace(/^\.\//, '');
 }
@@ -137,7 +120,6 @@ function utf8Length(text) {
  * @property {string[]} hostFeatures - offered to the view (filtered by its grant)
  * @property {() => ({ isActive: boolean } | undefined)} [userActivation]
  * @property {() => boolean} [hasFocus]
- * @property {() => number} [now]
  * @property {Document} [doc]
  * @property {Window} [win]
  */
@@ -155,7 +137,6 @@ class ViewPage {
         this._win = deps.win || window;
         // Named `t` so scripts/check_i18n.py sees the keys `this.t(...)` uses.
         this.t = deps.t;
-        this._now = deps.now || (() => Date.now());
         this._label = deps.appWindow?.label || '';
         /** `{ extensionId, viewId }` from the label, or null. */
         this._ids = parseExtViewLabel(this._label);
@@ -182,8 +163,6 @@ class ViewPage {
         /** The theme the running sandbox has. */
         this._sentTheme = null;
         this._themeQueued = false;
-        this._setTitleLimit = createRateLimiter(SET_TITLE_PER_SECOND, this._now);
-        this._openViewLimit = createRateLimiter(OPEN_VIEW_PER_SECOND, this._now);
         this._watchdog = createWatchdog({
             ping: () =>
                 this._sandbox ? this._sandbox.call('viewPing', {}, { timeoutMs: 0 }) : undefined,
@@ -389,6 +368,8 @@ class ViewPage {
             view: viewTitle,
             extension: extensionName,
         });
+        // The hooks check that the sandbox asking is still this page's.
+        const ref = { sb: null };
         let sb;
         try {
             sb = this._d.createSandbox(
@@ -405,9 +386,12 @@ class ViewPage {
                     hostFeatures: hostFeaturesFor(this._d.hostFeatures, capabilities),
                     surface: 'view',
                     viewId,
+                    views: manifest?.contributes?.views,
+                    viewTitle,
+                    extensionName,
+                    viewTheme: this._sentTheme,
                     viewCss,
-                    theme: this._sentTheme,
-                    iframeTitle,
+                    viewHooks: this._viewHooks(ref),
                 },
                 this._chrome.stage
             );
@@ -416,12 +400,8 @@ class ViewPage {
             this._fail();
             return;
         }
+        ref.sb = sb;
         this._sandbox = sb;
-        // Hooks, set before start() like `onReformatRequest`: the sandbox
-        // host type-checks a `view-request` and hands it here; its
-        // navigation detector reports a frame that left its document.
-        sb.onViewRequest = (request) => this._onViewRequest(sb, request);
-        sb.onNavigated = () => this._onNavigated(sb);
         try {
             await sb.start();
         } catch (e) {
@@ -935,107 +915,55 @@ class ViewPage {
         return recentUserActivation(focused, this._d.userActivation?.());
     }
 
-    async _onViewRequest(sb, request) {
-        if (sb !== this._sandbox || !this._sandboxStarted || !this._current) {
-            throw this._refuse('not_permitted', 'errors.ext_view.not_a_view_window');
-        }
-        const kind = request?.kind;
-        switch (kind) {
-            case 'set-title':
-                return this._requestSetTitle(request);
-            case 'close':
-                return this._close();
-            case 'open-view':
-                return this._requestOpenView(request);
-            case 'compose':
-                return this._requestText('ext_view_compose', request);
-            case 'copy-text':
-                return this._requestText('ext_view_copy_text', request);
-            case 'open-settings':
-                return this._openSettings();
-            default:
-                console.warn(
-                    `[ext ${this._current.extensionId}] unknown view request '${String(kind)}' — ignored`
-                );
-                return null;
-        }
-    }
-
-    _requestSetTitle({ text }) {
-        if (text !== null && text !== undefined && typeof text !== 'string') {
-            throw this._refuse('invalid_input', 'errors.ext_view.text_invalid', {
-                reason: 'text must be a string or null',
-            });
-        }
-        if (!this._setTitleLimit.allow()) {
-            throw this._refuse('rate_limited', 'errors.ext_view.too_fast');
-        }
-        this._subtitle = this._clean(text ?? '', SUBTITLE_MAX_CHARS) || null;
-        this._chrome.setSubtitle(this._subtitle);
-        this._applyWindowTitle();
-        return null;
-    }
-
-    async _requestOpenView({ view, params }) {
-        const cur = this._current;
-        const refuse = (reason, kind, key, vars) => {
-            console.warn(`[ext ${cur.extensionId}] open_view refused: ${reason}`);
-            return this._refuse(kind, key, vars);
+    /**
+     * What the sandbox host calls for a view's requests (§8.6). The host
+     * type-checks each request and applies the rate limits and the user
+     * activation rule (`hasUserActivation`) first; these act on it. A
+     * request from a sandbox this page has replaced is refused.
+     */
+    _viewHooks(ref) {
+        const live = () => {
+            if (!ref.sb || ref.sb !== this._sandbox || !this._sandboxStarted || !this._current) {
+                throw this._refuse('not_permitted', 'errors.ext_view.not_a_view_window');
+            }
+            return this._current;
         };
-        if (!this._hasRecentActivation()) {
-            throw refuse(
-                'no recent click or key press',
-                'not_permitted',
-                'errors.ext_view.needs_user_action'
-            );
-        }
-        if (!this._openViewLimit.allow()) {
-            throw refuse('more than one a second', 'rate_limited', 'errors.ext_view.too_fast');
-        }
-        if (!cur.capabilities.includes('views')) {
-            throw refuse('views not granted', 'not_permitted', 'errors.ext_view.not_granted', {
-                extension: cur.extensionName,
-            });
-        }
-        if (typeof view !== 'string' || !this._findDecl(cur.manifest, view)) {
-            throw refuse('view not declared', 'invalid_input', 'errors.ext_view.unknown_view', {
-                extension: cur.extensionName,
-                view: String(view),
-            });
-        }
-        const value = params ?? null;
-        if (value !== null && (typeof value !== 'object' || Array.isArray(value))) {
-            throw refuse(
-                'params not an object',
-                'invalid_input',
-                'errors.ext_view.params_invalid',
-                {
-                    reason: 'must be a JSON object',
-                }
-            );
-        }
-        // Rust repeats every check against the installed manifest and grant,
-        // and checks the params' size and depth.
-        return this._d.invoke('ext_view_open', {
-            extensionId: cur.extensionId,
-            viewId: view,
-            params: value,
-            source: 'view',
-        });
-    }
-
-    /** `compose` and `copy-text`: Rust checks focus, the text and the rate. */
-    async _requestText(command, { text }) {
-        if (!this._hasRecentActivation()) {
-            throw this._refuse('not_permitted', 'errors.ext_view.needs_user_action');
-        }
-        if (typeof text !== 'string') {
-            throw this._refuse('invalid_input', 'errors.ext_view.text_invalid', {
-                reason: 'text must be a string',
-            });
-        }
-        await this._d.invoke(command, { text });
-        return null;
+        return {
+            setTitle: (subtitle) => {
+                live();
+                this._subtitle = this._clean(subtitle ?? '', SUBTITLE_MAX_CHARS) || null;
+                this._chrome.setSubtitle(this._subtitle);
+                this._applyWindowTitle();
+            },
+            close: () => {
+                live();
+                this._close();
+            },
+            // Rust repeats every check against the installed manifest and
+            // grant, and checks the params' size and depth.
+            openView: (viewId, params) =>
+                this._d.invoke('ext_view_open', {
+                    extensionId: live().extensionId,
+                    viewId,
+                    params: params ?? null,
+                    source: 'view',
+                }),
+            // Rust checks focus, the text and the rate again.
+            compose: (text) => {
+                live();
+                return this._d.invoke('ext_view_compose', { text });
+            },
+            copyText: (text) => {
+                live();
+                return this._d.invoke('ext_view_copy_text', { text });
+            },
+            openSettings: () => {
+                live();
+                return this._openSettings();
+            },
+            onNavigated: () => this._onNavigated(ref.sb),
+            hasUserActivation: () => this._hasRecentActivation(),
+        };
     }
 
     // --- Focus, theme, guards ------------------------------------------------

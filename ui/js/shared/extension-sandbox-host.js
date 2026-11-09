@@ -945,7 +945,7 @@ export class ExtensionSandbox {
         const notActive = () =>
             refuse(
                 'not_permitted',
-                'errors.ext_view.not_focused',
+                'errors.ext_view.needs_user_action',
                 {},
                 'needs the window in front and a recent click or key press'
             );

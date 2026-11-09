@@ -6,16 +6,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hostFeaturesFor } from '../../ui/js/shared/extension-sandbox-host.js';
+import { ExtensionSandbox, hostFeaturesFor } from '../../ui/js/shared/extension-sandbox-host.js';
 import {
     CSS_FILE_MAX_BYTES,
     createViewPage,
     grantedCapabilities,
     MOUNT_TIMEOUT_MS,
     normalizeViewSource,
-    OPEN_VIEW_PER_SECOND,
     recentUserActivation,
-    SET_TITLE_PER_SECOND,
 } from '../../ui/js/extension-view/page.js';
 import { fakeT, mountViewHtml } from './fixture.js';
 
@@ -60,8 +58,10 @@ class FakeSandbox {
         this.configs = [];
         this.destroyed = false;
         this.started = false;
-        this.onViewRequest = null;
-        this.onNavigated = null;
+    }
+
+    get hooks() {
+        return this.spec.viewHooks;
     }
 
     async start() {
@@ -99,9 +99,34 @@ class FakeSandbox {
         this.iframe?.remove();
     }
 
-    /** What the sandbox host does with a type-checked `view-request`. */
-    request(req) {
-        return this.onViewRequest(req);
+    /**
+     * What the sandbox host does with a `view-request` once its own checks
+     * (types, rates, activation, §6.2) passed: call the page's hook.
+     */
+    async request(req) {
+        const hooks = this.hooks;
+        switch (req.kind) {
+            case 'set-title':
+                return hooks.setTitle(req.text);
+            case 'close':
+                return hooks.close();
+            case 'open-view':
+                return hooks.openView(req.view, req.params ?? null);
+            case 'compose':
+                return hooks.compose(req.text);
+            case 'copy-text':
+                return hooks.copyText(req.text);
+            case 'open-settings':
+                return hooks.openSettings();
+            default:
+                throw new Error(`unknown kind ${req.kind}`);
+        }
+    }
+
+    /** The host's navigation detector: it destroys itself, then tells the page. */
+    navigated() {
+        this.destroy();
+        this.hooks.onNavigated();
     }
 }
 
@@ -337,25 +362,37 @@ describe('boot (§8.5)', () => {
                 view: 'export default class Explorer {}',
                 sourcePaths: { view: './explorer.js' },
             },
+            views: MANIFEST.contributes.views,
+            viewTitle: 'Explorer',
+            extensionName: 'Mind Map',
             viewCss: ['.ex { color: red }'],
             i18nLanguage: 'en',
             i18nRtl: false,
-            iframeTitle: 'ext_view.iframe_label {"view":"Explorer","extension":"Mind Map"}',
         });
         expect(spec.config).toEqual({ scrollZooms: false, enabled: true });
         expect(spec.hostFeatures).toEqual(
             hostFeaturesFor(['views', 'storage.change_events'], ['storage', 'views'])
         );
-        expect(spec.theme).toEqual({
+        expect(spec.viewTheme).toEqual({
             scheme: 'dark',
             fontSize: 14,
             reducedMotion: false,
             tokens: { 'kage-bg': '#1e1e1e', 'kage-text': '#e2e8f0' },
         });
-        expect(h.sandbox.iframe.getAttribute('title')).toBe(spec.iframeTitle);
-        // Hooks are on the instance before start().
-        expect(typeof h.sandbox.onViewRequest).toBe('function');
-        expect(typeof h.sandbox.onNavigated).toBe('function');
+        expect(h.sandbox.iframe.getAttribute('title')).toBe(
+            'ext_view.iframe_label {"view":"Explorer","extension":"Mind Map"}'
+        );
+        // The hooks the sandbox host calls go in with the spec.
+        expect(Object.keys(spec.viewHooks).sort()).toEqual([
+            'close',
+            'compose',
+            'copyText',
+            'hasUserActivation',
+            'onNavigated',
+            'openSettings',
+            'openView',
+            'setTitle',
+        ]);
         expect(h.deps.policy.normalizeViews).toHaveBeenCalledWith(
             MANIFEST.contributes.views,
             'Mind Map',
@@ -894,25 +931,23 @@ describe('requests from the view (§8.6, §13.4)', () => {
         );
     });
 
-    it('set-title: at most 10 a second, strings only', async () => {
-        expect(SET_TITLE_PER_SECOND).toBe(10);
+    it('the real sandbox host accepts the spec the page builds', async () => {
         const h = await mounted();
-        for (let i = 0; i < 10; i++) await h.sandbox.request({ kind: 'set-title', text: `t${i}` });
-        await expect(
-            h.sandbox.request({ kind: 'set-title', text: 'eleven' })
-        ).rejects.toMatchObject({ kind: 'rate_limited', key: 'errors.ext_view.too_fast' });
-        await vi.advanceTimersByTimeAsync(1_000);
-        await h.sandbox.request({ kind: 'set-title', text: 'later' });
-        expect(text('.kv-bar-sub')).toBe('later');
-        await expect(h.sandbox.request({ kind: 'set-title', text: 42 })).rejects.toMatchObject({
-            kind: 'invalid_input',
-            key: 'errors.ext_view.text_invalid',
-        });
+        const [[spec]] = h.deps.createSandbox.mock.calls;
+        const sb = new ExtensionSandbox(spec, vi.fn(), document.createElement('div'));
+        expect(sb.surface).toBe('view');
+        expect(sb.viewId).toBe('explorer');
+        expect(sb.viewTitle).toBe('Explorer');
+        expect(sb.extensionName).toBe('Mind Map');
+        expect(sb.viewTheme.tokens['kage-bg']).toBe('#1e1e1e');
+        expect(sb.hasUserActivation()).toBe(true);
+        h.state.activation = { isActive: false };
+        expect(sb.hasUserActivation()).toBe(false);
     });
 
     it('close hides the window through CloseRequested', async () => {
         const h = await mounted();
-        await expect(h.sandbox.request({ kind: 'close' })).resolves.toBeNull();
+        await h.sandbox.request({ kind: 'close' });
         expect(h.appWindow.close).toHaveBeenCalledTimes(1);
     });
 
@@ -932,68 +967,27 @@ describe('requests from the view (§8.6, §13.4)', () => {
         });
     });
 
-    it('open-view: needs focus and a recent click or key press', async () => {
+    it('the activation hook is focus plus a recent click or key press', async () => {
         const h = await mounted();
+        expect(h.sandbox.hooks.hasUserActivation()).toBe(true);
         h.state.activation = { isActive: false };
-        await expect(h.sandbox.request({ kind: 'open-view', view: 'board' })).rejects.toMatchObject(
-            { kind: 'not_permitted', key: 'errors.ext_view.needs_user_action' }
-        );
+        expect(h.sandbox.hooks.hasUserActivation()).toBe(false);
         h.state.activation = { isActive: true };
         h.state.focused = false;
-        await expect(h.sandbox.request({ kind: 'open-view', view: 'board' })).rejects.toMatchObject(
-            { key: 'errors.ext_view.needs_user_action' }
-        );
-        expect(h.invoke).not.toHaveBeenCalledWith('ext_view_open', expect.anything());
-        expect(console.warn).toHaveBeenCalledWith(
-            expect.stringContaining('[ext mindmap] open_view refused:')
-        );
+        expect(h.sandbox.hooks.hasUserActivation()).toBe(false);
     });
 
-    it('open-view: without navigator.userActivation, focus is the rule', async () => {
+    it('the activation hook: without navigator.userActivation, focus is the rule', async () => {
         const h = await mounted({ activation: undefined });
-        await h.sandbox.request({ kind: 'open-view', view: 'board' });
-        expect(h.invoke).toHaveBeenCalledWith('ext_view_open', expect.anything());
+        expect(h.sandbox.hooks.hasUserActivation()).toBe(true);
     });
 
-    it('open-view: at most one a second', async () => {
-        expect(OPEN_VIEW_PER_SECOND).toBe(1);
-        const h = await mounted();
-        await h.sandbox.request({ kind: 'open-view', view: 'board' });
-        await expect(h.sandbox.request({ kind: 'open-view', view: 'board' })).rejects.toMatchObject(
-            { kind: 'rate_limited', key: 'errors.ext_view.too_fast' }
-        );
-        await vi.advanceTimersByTimeAsync(1_000);
-        await h.sandbox.request({ kind: 'open-view', view: 'board' });
-        expect(h.invoke.mock.calls.filter(([c]) => c === 'ext_view_open')).toHaveLength(2);
-    });
-
-    it('open-view: an undeclared view or non-object params are refused here', async () => {
-        const h = await mounted();
-        await expect(
-            h.sandbox.request({ kind: 'open-view', view: 'settings' })
-        ).rejects.toMatchObject({ kind: 'invalid_input', key: 'errors.ext_view.unknown_view' });
-        await vi.advanceTimersByTimeAsync(1_000);
-        await expect(
-            h.sandbox.request({ kind: 'open-view', view: 'board', params: [1, 2] })
-        ).rejects.toMatchObject({ kind: 'invalid_input', key: 'errors.ext_view.params_invalid' });
-        expect(h.invoke).not.toHaveBeenCalledWith('ext_view_open', expect.anything());
-    });
-
-    it('compose and copy-text go to Rust with the text; activation first', async () => {
+    it('compose and copy-text go to Rust with the text', async () => {
         const h = await mounted();
         await h.sandbox.request({ kind: 'compose', text: 'mm? about Bingo' });
         await h.sandbox.request({ kind: 'copy-text', text: '/tmp/notes.md' });
         expect(h.invoke).toHaveBeenCalledWith('ext_view_compose', { text: 'mm? about Bingo' });
         expect(h.invoke).toHaveBeenCalledWith('ext_view_copy_text', { text: '/tmp/notes.md' });
-
-        h.state.activation = { isActive: false };
-        await expect(h.sandbox.request({ kind: 'copy-text', text: 'x' })).rejects.toMatchObject({
-            key: 'errors.ext_view.needs_user_action',
-        });
-        h.state.activation = { isActive: true };
-        await expect(h.sandbox.request({ kind: 'compose', text: 5 })).rejects.toMatchObject({
-            key: 'errors.ext_view.text_invalid',
-        });
     });
 
     it("a Rust refusal reaches the view as Rust's AppError", async () => {
@@ -1011,21 +1005,25 @@ describe('requests from the view (§8.6, §13.4)', () => {
         expect(h.invoke).toHaveBeenCalledWith('open_settings_window', { section: 'ext-mindmap' });
     });
 
-    it('unknown kinds are ignored with a warning', async () => {
-        const h = await mounted();
-        await expect(h.sandbox.request({ kind: 'resize', width: 10 })).resolves.toBeNull();
-        expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("'resize'"));
-    });
-
     it('a request from a replaced sandbox is refused', async () => {
         const h = await mounted();
         const old = h.sandbox;
         document.querySelector('.kv-bar [data-kv-action="reload"]').click();
         await settle();
-        await expect(old.request({ kind: 'close' })).rejects.toMatchObject({
-            key: 'errors.ext_view.not_a_view_window',
-        });
+        for (const req of [
+            { kind: 'close' },
+            { kind: 'set-title', text: 'x' },
+            { kind: 'open-view', view: 'board' },
+            { kind: 'compose', text: 'x' },
+            { kind: 'copy-text', text: 'x' },
+            { kind: 'open-settings' },
+        ]) {
+            await expect(old.request(req)).rejects.toMatchObject({
+                key: 'errors.ext_view.not_a_view_window',
+            });
+        }
         expect(h.appWindow.close).not.toHaveBeenCalled();
+        expect(h.invoke).not.toHaveBeenCalledWith('ext_view_open', expect.anything());
     });
 
     it('the bar settings button opens the same page', async () => {
@@ -1040,7 +1038,7 @@ describe('navigation (§8.8)', () => {
     it('a frame that navigated is stopped and the page says so', async () => {
         const h = harness();
         await h.page.start();
-        h.sandbox.onNavigated();
+        h.sandbox.navigated();
         expect(h.sandbox.destroyed).toBe(true);
         expect(text('.kv-state-text')).toBe('ext_view.state.navigated {"view":"Explorer"}');
         expect(stateActions()).toEqual(['reload']);
@@ -1057,7 +1055,7 @@ describe('navigation (§8.8)', () => {
         const old = h.sandbox;
         document.querySelector('.kv-bar [data-kv-action="reload"]').click();
         await settle();
-        old.onNavigated();
+        old.navigated();
         expect(visible('.kv-state')).toBe(false);
         expect(h.sandbox.destroyed).toBe(false);
     });
@@ -1164,7 +1162,7 @@ describe('theme (§11)', () => {
         const h = harness();
         h.state.tokens['--kage-link'] = 'url(https://example.com/beacon)';
         await h.page.start();
-        expect(h.sandbox.spec.theme.tokens).not.toHaveProperty('kage-link');
+        expect(h.sandbox.spec.viewTheme.tokens).not.toHaveProperty('kage-link');
     });
 });
 
