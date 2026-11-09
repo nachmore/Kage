@@ -53,12 +53,15 @@ fn create_private(dir: &Path) -> io::Result<()> {
     if let Some(parent) = dir.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
-    {
+    let builder = {
         use std::os::unix::fs::DirBuilderExt;
+        let mut builder = std::fs::DirBuilder::new();
         builder.mode(0o700);
-    }
+        builder
+    };
+    #[cfg(not(unix))]
+    let builder = std::fs::DirBuilder::new();
     match builder.create(dir) {
         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
         other => other,
