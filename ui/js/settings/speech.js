@@ -3,6 +3,7 @@ import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 import { renderSpeechSettings } from './speech-view.js';
 import { errMessage } from '../shared/error-message.js';
+import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
 /**
  * Unified Speech Settings Module
  * Combines voice input (STT), read-back (TTS), and Pocket TTS configuration.
@@ -368,11 +369,11 @@ async function pocketTtsInstall() {
                 if (status) status.textContent = t('settings.speech.pocket.install.installed');
                 if (log) log.textContent += '\n✅ ' + data.message + '\n';
                 try {
-                    const config = await invoke('get_config');
+                    const { revision, config } = await getConfigSnapshot(invoke);
                     config.pocket_tts = config.pocket_tts || {};
                     config.pocket_tts.installed = true;
                     if (data.python_path) config.pocket_tts.python_path = data.python_path;
-                    await invoke('save_config', { config });
+                    await saveConfig(config, { baseRevision: revision, invoke });
                 } catch (e) {
                     console.warn('[Speech] Config update failed:', e);
                 }

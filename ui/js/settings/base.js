@@ -1,6 +1,18 @@
 import { SETTINGS_DIRTY_EVENT } from './dirty-tracker.js';
 
 /**
+ * ` data-sync-path="…"` for a row that shows a config path, so the
+ * where-it-applies control can find it (docs/design/SYNC.md §9.4). Paths
+ * are catalog paths: `ui.theme`, `shortcuts/<sync_id>`,
+ * `shortcuts/<sync_id>/shortcut`.
+ */
+export function syncPathAttr(syncPath) {
+    if (typeof syncPath !== 'string' || !syncPath) return '';
+    const safe = syncPath.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    return ` data-sync-path="${safe}"`;
+}
+
+/**
  * Base class for settings modules
  * Each settings module should extend this class
  */
@@ -36,12 +48,13 @@ export class SettingsModule {
     }
 
     /**
-     * Create a checkbox setting row (title, then checkbox + description inline)
+     * Create a checkbox setting row (title, then checkbox + description inline).
+     * `syncPath` names the config path it shows (docs/design/SYNC.md §9.4).
      */
-    createCheckboxRow(label, description, checkboxId, checked) {
+    createCheckboxRow(label, description, checkboxId, checked, { syncPath } = {}) {
         const checkedAttr = checked ? ' checked' : '';
         return `
-            <div class="setting-row">
+            <div class="setting-row"${syncPathAttr(syncPath)}>
                 <div class="setting-label">${label}</div>
                 <div class="setting-checkbox-row">
                     <label class="kage-checkbox">
@@ -54,11 +67,12 @@ export class SettingsModule {
     }
 
     /**
-     * Create a control setting row (title, description, then control below)
+     * Create a control setting row (title, description, then control below).
+     * `syncPath` names the config path it shows (docs/design/SYNC.md §9.4).
      */
-    createControlRow(label, description, controlHtml) {
+    createControlRow(label, description, controlHtml, { syncPath } = {}) {
         return `
-            <div class="setting-row">
+            <div class="setting-row"${syncPathAttr(syncPath)}>
                 <div class="setting-label">${label}</div>
                 ${description ? `<div class="setting-description">${description}</div>` : ''}
                 <div class="setting-control">
@@ -71,9 +85,9 @@ export class SettingsModule {
     /**
      * Create a control row with an action button beside the input
      */
-    createControlWithActionRow(label, description, controlHtml, actionHtml) {
+    createControlWithActionRow(label, description, controlHtml, actionHtml, { syncPath } = {}) {
         return `
-            <div class="setting-row">
+            <div class="setting-row"${syncPathAttr(syncPath)}>
                 <div class="setting-label">${label}</div>
                 ${description ? `<div class="setting-description">${description}</div>` : ''}
                 <div class="setting-control-with-action">

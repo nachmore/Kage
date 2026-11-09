@@ -8,6 +8,7 @@ import {
 import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
 import { errLabel } from '../shared/error-message.js';
+import { markSyncItem } from '../shared/sync-scope-chip.js';
 /**
  * Commands & Prompts settings module.
  *
@@ -114,6 +115,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
         this._resetTestSection();
         this._wirePlaceholderPreview();
         this._renderPlaceholderChips();
+        markSyncItem(document.getElementById('shortcutDialog'), null);
         document.getElementById('shortcutDialog').style.display = 'flex';
     }
 
@@ -146,6 +148,12 @@ export class ShortcutsSettingsModule extends SettingsModule {
         this._resetTestSection();
         this._wirePlaceholderPreview();
         this._renderPlaceholderChips();
+        // Where it exists and its per-OS fields, when sync is on.
+        markSyncItem(
+            document.getElementById('shortcutDialog'),
+            s.sync_id ? `shortcuts/${s.sync_id}` : null,
+            s.name
+        );
         document.getElementById('shortcutDialog').style.display = 'flex';
         if ((s.action_type || 'run_program') === 'script') this.updateHighlight();
     }
@@ -554,6 +562,10 @@ export class ShortcutsSettingsModule extends SettingsModule {
         }
 
         if (this.editingIndex >= 0) {
+            // Keep the item's id, so folder sync sees an edit of the same
+            // shortcut, not a delete and a new one (docs/design/SYNC.md §4.4).
+            const prev = this.shortcuts[this.editingIndex];
+            if (prev?.sync_id) shortcut.sync_id = prev.sync_id;
             this.shortcuts[this.editingIndex] = shortcut;
         } else {
             this.shortcuts.push(shortcut);

@@ -49,6 +49,7 @@ import { ShortcutsSettingsModule } from './shortcuts.js';
 import { AutomationsSettingsModule } from './automations.js';
 import { SpeechSettingsModule } from './speech.js';
 import { StoreSettingsModule } from './store.js';
+import { SyncSettingsModule } from './sync.js';
 import { PrivacySettingsModule } from './privacy.js';
 import { UpdatesSettingsModule } from './updates.js';
 import { AboutSettingsModule } from './about.js';
@@ -319,6 +320,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // are inserted relative to these, and switchSection() relies on
     // the one-to-one mapping between sidebar data-section IDs and the
     // module IDs registered here.
+    // Sync is the first item of this group (docs/design/SYNC.md §13); its
+    // sidebar item stays hidden while sync isn't offered.
+    settingsManager.registerModule(new SyncSettingsModule());
     settingsManager.registerModule(new PrivacySettingsModule());
     settingsManager.registerModule(new UpdatesSettingsModule());
     settingsManager.registerModule(new AboutSettingsModule());

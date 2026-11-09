@@ -1,7 +1,9 @@
 # Kage folder sync
 
-Status: being built. WP-S1, WP-S2 and WP-S3 (the engine and host
-sources) are in; the app wiring (WP-S4) and the rest follow §20.
+Status: being built. WP-S1, WP-S2, WP-S3 (the engine and host
+sources) and WP-S6 (Settings → Sync, scope controls and safe saves,
+hidden until the backend reports sync) are in; the app wiring (WP-S4)
+and the rest follow §20.
 
 Kage syncs through a folder the user already syncs: Dropbox, iCloud Drive,
 OneDrive, Google Drive, Syncthing, a network share, or any folder. There is
@@ -3445,7 +3447,7 @@ Owned by WP-S4 (`src/commands/sync.rs`):
 | `sync_start_over` | `passphrase, confirm` | `SyncStatus` |
 | `sync_undo_join` | `confirm` | `()` |
 | `sync_purge_extension` | `extensionId, confirm` | `()` |
-| `sync_find_folder` | | `Option<String>` path |
+| `sync_find_folder` | | `Option<String>` path. When it finds the folder it also uses it (`EngineRequest::FindFolder`, then `ApplyFolder`), so **Find folder** needs no second command |
 | `get_config_snapshot` | | `{ revision: u64, config: Config }` |
 | `save_config` (changed) | `config, baseRevision?: u64` | `{ revision: u64 }` (callers that ignore it keep working) |
 
@@ -3486,11 +3488,12 @@ Owned by WP-S5 (`src/commands/extensions/sync.rs`), capability `sync`,
 
 | Module | Owner | Exports |
 |---|---|---|
-| `ui/js/shared/config-cache.js` | S6 | `getConfigSnapshot(): Promise<{ revision, config }>`; `saveConfig(config, { baseRevision }): Promise<void>` |
-| `ui/js/shared/sync-scope-chip.js` | S6 | `attachScopeChips(root, { invoke, listen, t, os })`; `chipState(scopeView, os)` and `menuItems(scopeView, os)` (pure) |
+| `ui/js/shared/config-cache.js` | S6 | `getConfigSnapshot(invoke?): Promise<{ revision, config }>`; `saveConfig(config, { baseRevision, invoke }): Promise<{ revision }>` (`revision` is null until the backend reports one) |
+| `ui/js/shared/sync-scope-chip.js` | S6 | `attachScopeChips(root, { invoke, listen, t, os })`; `chipState(scopeView, os, { item, t })` and `menuItems(scopeView, os, { item, t })` (pure; `item` for a list item as a whole); `markSyncItem(editor, itemPath, name)`; `syncIsOn(status)`, `pathsOverlap(a, b)`, `extensionDataSyncs(status, grant, id)`, `showChangedEverywhereToast(…)` |
 | `ui/js/settings/base.js` | S6 | `createCheckboxRow(label, description, checkboxId, checked, { syncPath } = {})`; `createControlRow(label, description, controlHtml, { syncPath } = {})` |
-| `ui/js/settings/sync.js` | S6 | `class SyncSettingsModule extends SettingsModule` (`id = 'sync'`) |
-| `ui/js/settings/sync-ext-chip.js` | S6 | `renderSyncChip(extensionId, { invoke, t })` → HTML string for the extension page header (§12.3, §23.3) |
+| `ui/js/settings/field-save.js` (new) | S6 | `diffPaths(before, edited)`, `applyPaths(fresh, edited, changes)` (§9.5, pure) |
+| `ui/js/settings/sync.js` | S6 | `class SyncSettingsModule extends SettingsModule` (`id = 'sync'`); `statusView(status, now)` (pure); `wireSyncSidebar({ invoke, listen, onStatus })` |
+| `ui/js/settings/sync-ext-chip.js` | S6 | `renderSyncChip(extensionId, { invoke, t, manifest, capabilities })` → a placeholder for the extension page header, filled once the status is known (§12.3, §23.3); `syncChipKinds(…)` (pure) |
 | `ui/js/shared/extension-sandbox-host.js` | S5 | `HOST_FEATURE_SYNC_KEYS = 'sync.keys'`, `HOST_FEATURE_SYNC_LISTS = 'sync.lists'`, `HOST_FEATURE_SYNC_RECORDS = 'sync.records'` (each requiring `sync`) |
 | `ui/js/extension-sandbox/runtime/sync-api.js` (new, self-contained) | S5 | `createSyncApi({ invoke, onPortMessage })` → the `context.sync` object of §12.6 |
 | `ui/js/shared/extension-permissions.js` | S5 | `CAPABILITIES.sync`; `COMMAND_CAPABILITIES` entries |
@@ -3738,6 +3741,47 @@ everyone branches from it.
   - Keyboard-only use of setup, conflicts and reviews; RTL checked in
     `ar`; no hard-coded strings; `python scripts/check_i18n.py` passes.
   - With sync off, nothing changes visually on any page.
+
+What WP-S6 built, and the decisions it made where the design was open
+or didn't fit the code:
+- **Files beyond the list.** Two helpers in its own area:
+  `ui/js/settings/field-save.js` (`diffPaths`, `applyPaths`) and
+  `ui/js/settings/sync-format.js` (times, isolated user text, labels).
+  The module is registered in `ui/js/settings/main.js`, where every
+  module is registered (one import, one line). `ui/welcome.html` saves
+  through `saveConfig` like every other caller, and `ui/js/settings/about.js`
+  marks its three diagnostics rows; no package owned either.
+- **Field-level save.** List items match by `sync_id`, else `id`. An item
+  the user edited that another computer deleted comes back whole (the
+  edit wins, as for any field). After a save the manager reloads the
+  saved sections from a new snapshot, so new items carry their ids.
+- **Marks.** Rows carry `data-sync-path`; item editors carry
+  `data-sync-field` and `data-sync-item-avail`, which `markSyncItem` points
+  at the item being edited. Everything the control adds carries
+  `data-sync-ui`, which the dirty tracker ignores: a scope change is never
+  an unsaved edit. The menu is drawn in the page (a native
+  `shared/popup-menu.js` menu has no checked state or value column).
+- **Not built from the backend we have.** The OS computer name (no
+  command reports it): setup suggests "My Mac", "My PC" or "My Linux
+  computer". The chat-history size estimate and per-extension sizes (no
+  command). **Show folder** (the status never carries a path). The
+  computer name in `waiting`, `reset`, `removed` and the "changed on Work
+  PC" note (the status and `sync_applied` don't carry it): those lines say
+  "another computer" (`sync.status.*_elsewhere`, `waiting_any`).
+- **"Changed on all your computers"** shows at most three times per
+  Settings window, not three times ever: there is no per-computer UI
+  state store, and `localStorage` is off limits. **Only on this computer**
+  puts the shared value back, pins the setting, then saves the new value
+  into the pin.
+- **Chat history.** Mirrored chats are listed by the existing Other
+  Agents viewer (`ui/js/chat/agent-sessions.js`) under "On your other
+  computers", named by computer through `sync_list_devices`. **Continue
+  here** starts a new chat with the mirror's `.jsonl` attached as a file.
+  `session-history.js` needed no change.
+- **Strings.** There were no `docs/design/sync-i18n/` fragments to merge.
+  WP-S6's EN strings went straight into `locales/en/messages.json`; the
+  other catalogs need a `scripts/translate.py` run, so `check_i18n.py`
+  reports them missing until then.
 
 ### WP-S7 Mind Map sync participation (Kage-Extensions)
 

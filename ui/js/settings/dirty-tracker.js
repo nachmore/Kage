@@ -50,6 +50,10 @@ export function dirtySectionForEvent(event) {
     let isEdit = event.type !== 'click';
     for (const node of path) {
         if (!node || node.nodeType !== 1) continue;
+        // Sync's own controls (where a value applies, the "changed on
+        // another computer" note) act at once through sync commands: they
+        // are never an unsaved edit.
+        if (node.hasAttribute?.('data-sync-ui')) return null;
         if (!isEdit && typeof node.matches === 'function' && node.matches(EDIT_CLICK_SELECTOR)) {
             isEdit = true;
         }
@@ -88,6 +92,11 @@ export class DirtyTracker {
         for (const [id, version] of snap) {
             if (this._versions.get(id) === version) this._versions.delete(id);
         }
+    }
+
+    /** Drop one id's edits (the user chose to see newer values instead). */
+    clear(id) {
+        this._versions.delete(id);
     }
 
     clearAll() {

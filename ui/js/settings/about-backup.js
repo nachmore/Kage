@@ -33,6 +33,11 @@ export function renderBackupSection() {
                         <div class="setting-description" style="margin-bottom:12px;">
                             ${t('settings.about.backup.description')}
                         </div>
+                        <!-- Shown once the build offers sync (settings/sync.js). -->
+                        <p class="setting-description" id="backupSyncPointer" data-sync-available-only hidden>
+                            ${t('settings.about.backup.sync_pointer')}
+                            <button type="button" class="setting-button" data-action="switchSection" data-arg="sync">${t('settings.about.backup.sync_pointer_btn')}</button>
+                        </p>
 
                         <div class="setting-row">
                             <div class="setting-label">${t('settings.about.backup.export.label')}</div>

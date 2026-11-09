@@ -26,7 +26,7 @@ class ConnectionListMethods {
 
         root.innerHTML = `
             <div class="setting-section-label">${t('settings.connection.session.section')}</div>
-            <div class="setting-row">
+            <div class="setting-row" data-sync-path="acp.agent.start_session_on_launch">
                 <div class="setting-label">${t('settings.connection.session.start_on_launch.label')}</div>
                 <div class="setting-checkbox-row">
                     <label class="kage-checkbox">
@@ -46,10 +46,11 @@ class ConnectionListMethods {
                           t('settings.connection.session.login_shell_env.label'),
                           t('settings.connection.session.login_shell_env.description'),
                           'importLoginShellEnv',
-                          this._importLoginShellEnv !== false
+                          this._importLoginShellEnv !== false,
+                          { syncPath: 'acp.agent.import_login_shell_env' }
                       )
             }
-            <div class="setting-row">
+            <div class="setting-row" data-sync-path="acp.agent.working_directory">
                 <div class="setting-label">${t('settings.connection.workspace.label')}</div>
                 <div class="setting-description">
                     ${t('settings.connection.workspace.description')}
@@ -62,9 +63,9 @@ class ConnectionListMethods {
             </div>
 
             <div class="setting-section-label">${t('settings.connection.list.section')}</div>
-            <div class="setting-row">
+            <div class="setting-row" data-sync-path="acp.active_connection_id">
                 <div class="setting-description">
-                    ${t('settings.connection.list.description')}
+                    ${t('settings.connection.list.description')}<span class="sync-chip-slot" data-sync-chip-slot></span>
                 </div>
                 <div id="connUnifiedList" class="conn-saved-list">
                     ${active ? this._renderConnectionRow(active, { active: true }) : ''}
@@ -112,9 +113,9 @@ class ConnectionListMethods {
             : '';
         const canDelete = !active && this._connections.length > 1;
         return `
-            <div class="conn-row${active ? ' conn-row-active' : ''}" data-id="${escape(c.id)}">
+            <div class="conn-row${active ? ' conn-row-active' : ''}" data-id="${escape(c.id)}"${c.id ? ` data-sync-path="acp.connections/${escape(c.id)}" data-sync-name="${escape(c.name || '')}"` : ''}>
                 <div class="conn-row-main">
-                    <div class="conn-row-name">
+                    <div class="conn-row-name" data-sync-chip-slot>
                         ${active ? `<span class="conn-active-dot" title="${t('settings.connection.row.active.title')}"></span>` : ''}
                         <span class="conn-row-title">${escape(c.name)}</span>
                         ${presetBadge}

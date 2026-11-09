@@ -1,6 +1,7 @@
 import { SettingsModule } from './base.js';
 import { t } from '../shared/i18n.js';
 import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
+import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
 /**
  * MCP Settings Module
  */
@@ -31,7 +32,7 @@ export class McpSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
-                <div class="setting-row">
+                <div class="setting-row" data-sync-path="mcp_config_path">
                     <div class="setting-label">${t('settings.mcp.config_file.label')}</div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div class="setting-description" id="mcpPathDisplay" style="font-family: monospace; font-size: 12px; word-break: break-all; flex: 1;"></div>
@@ -100,9 +101,9 @@ export class McpSettingsModule extends SettingsModule {
                     this._customPath = selected;
                     document.getElementById('mcpPathDisplay').textContent = selected;
                     // Save the custom path to config
-                    const config = await invoke('get_config');
+                    const { revision, config } = await getConfigSnapshot(invoke);
                     config.mcp_config_path = selected;
-                    await invoke('save_config', { config });
+                    await saveConfig(config, { baseRevision: revision, invoke });
                     // Reload with the new path
                     this._mcpConfig = await invoke('get_mcp_config', { path: selected });
                     this._renderServerList();

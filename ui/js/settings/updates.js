@@ -4,6 +4,7 @@ import { errMessage } from '../shared/error-message.js';
 import { classifyLinkHref, neutralizeLinks } from '../shared/link-handler.js';
 import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
+import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
 
 /**
  * Coerce whatever Tauri threw into a readable string.
@@ -78,21 +79,24 @@ export class UpdatesSettingsModule extends SettingsModule {
                         <option value="stable">${t('settings.updates.channel.option.stable')}</option>
                         <option value="beta">${t('settings.updates.channel.option.beta')}</option>
                         <option value="dev">${t('settings.updates.channel.option.dev')}</option>
-                    </select>`
+                    </select>`,
+                    { syncPath: 'updates.channel' }
                 )}
 
                 ${this.createCheckboxRow(
                     t('settings.updates.auto_check.label'),
                     t('settings.updates.auto_check.description'),
                     'updateAutoCheck',
-                    false
+                    false,
+                    { syncPath: 'updates.auto_check' }
                 )}
 
                 ${this.createCheckboxRow(
                     t('settings.updates.silent.label'),
                     t('settings.updates.silent.description'),
                     'updateSilentUpdate',
-                    false
+                    false,
+                    { syncPath: 'updates.silent_update' }
                 )}
 
                 <div class="setting-section-label">${t('settings.updates.changelog.label')}</div>
@@ -159,10 +163,15 @@ export class UpdatesSettingsModule extends SettingsModule {
                 // Persist the new channel immediately so the next
                 // check_for_update reads the correct endpoint.
                 try {
-                    const config = await window.__TAURI__.core.invoke('get_config');
+                    const { revision, config } = await getConfigSnapshot(
+                        window.__TAURI__.core.invoke
+                    );
                     if (!config.updates) config.updates = {};
                     config.updates.channel = channelEl.value || 'stable';
-                    await window.__TAURI__.core.invoke('save_config', { config });
+                    await saveConfig(config, {
+                        baseRevision: revision,
+                        invoke: window.__TAURI__.core.invoke,
+                    });
                 } catch (e) {
                     console.warn('[Updates] Failed to persist channel change:', e);
                 }

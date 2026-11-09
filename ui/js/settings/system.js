@@ -25,7 +25,8 @@ export class SystemSettingsModule extends SettingsModule {
                     t('settings.system.auto_start.label'),
                     t('settings.system.auto_start.description'),
                     'autoStart',
-                    false
+                    false,
+                    { syncPath: 'system.auto_start' }
                 )}
             </div>
         `;

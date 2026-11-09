@@ -27,7 +27,8 @@ export class StoreSettingsModule extends SettingsModule {
                     t('settings.store.auto_update.label'),
                     t('settings.store.auto_update.description'),
                     'autoUpdateExtensions',
-                    false
+                    false,
+                    { syncPath: 'auto_update_extensions' }
                 )}
 
                 <div class="setting-row" style="margin-top: 4px;">
@@ -40,7 +41,8 @@ export class StoreSettingsModule extends SettingsModule {
                 ${this.createControlRow(
                     t('settings.store.url.label'),
                     t('settings.store.url.description'),
-                    '<input type="text" class="setting-input" id="storeUrl" placeholder="https://your-store.example.com" spellcheck="false">'
+                    '<input type="text" class="setting-input" id="storeUrl" placeholder="https://your-store.example.com" spellcheck="false">',
+                    { syncPath: 'store_url' }
                 )}
 
                 <div class="setting-section-label">${t('settings.store.sources.section')}</div>
@@ -69,14 +71,17 @@ export class StoreSettingsModule extends SettingsModule {
         const url = document.getElementById('storeUrl')?.value?.trim() || '';
         config.store_url = url || null;
 
-        // Collect sources from DOM
+        // Collect sources from DOM. Each row keeps the fields it loaded with
+        // (its `sync_id` above all), so folder sync sees an edit of the same
+        // item, not a delete and a new one (docs/design/SYNC.md §4.4).
         config.store_sources = [];
         document.querySelectorAll('.store-source-row').forEach((row) => {
             const name = row.querySelector('.source-name')?.value?.trim();
             const url = row.querySelector('.source-url')?.value?.trim();
             const enabled = row.querySelector('.source-enabled')?.checked ?? true;
+            const loaded = this._sources?.[Number(row.dataset.index)] || {};
             if (name && url) {
-                config.store_sources.push({ name, url, enabled });
+                config.store_sources.push({ ...loaded, name, url, enabled });
             }
         });
     }
@@ -137,8 +142,8 @@ export class StoreSettingsModule extends SettingsModule {
         const namePlaceholder = t('settings.store.sources.row.name_placeholder');
         container.innerHTML = this._sources
             .map(
-                (s, _i) => `
-            <div class="store-source-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+                (s, i) => `
+            <div class="store-source-row" data-index="${i}"${s.sync_id ? ` data-sync-path="store_sources/${this._esc(s.sync_id)}" data-sync-name="${this._esc(s.name)}"` : ''} style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
                 <input type="checkbox" class="source-enabled" ${s.enabled ? 'checked' : ''} title="${enabledTitle}">
                 <input type="text" class="setting-input source-name" value="${this._esc(s.name)}" placeholder="${namePlaceholder}" style="width:120px;">
                 <input type="text" class="setting-input source-url" value="${this._esc(s.url)}" placeholder="https://store.example.com" spellcheck="false" style="flex:1;">

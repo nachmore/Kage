@@ -49,14 +49,14 @@ export class AboutSettingsModule extends SettingsModule {
                         <span>${t('settings.about.logging.title')}</span>
                     </div>
                     <div class="about-logging-body" id="loggingBody" style="display:none;">
-                        <div class="setting-row">
+                        <div class="setting-row" data-sync-path="system.log_buffer_size">
                             <div class="setting-label">${t('settings.about.logging.buffer_size.label')}</div>
                             <div class="setting-description">${t('settings.about.logging.buffer_size.description')}</div>
                             <div class="setting-control">
                                 <input type="number" id="logBufferSize" class="setting-input" min="100" max="50000" step="100" style="width:120px;">
                             </div>
                         </div>
-                        <div class="setting-row">
+                        <div class="setting-row" data-sync-path="system.verbose_frontend_logging">
                             <div class="setting-label">${t('settings.about.logging.verbose.label')}</div>
                             <div class="setting-checkbox-row">
                                 <label class="kage-checkbox">
@@ -65,7 +65,7 @@ export class AboutSettingsModule extends SettingsModule {
                                 <div class="setting-description">${t('settings.about.logging.verbose.description')}</div>
                             </div>
                         </div>
-                        <div class="setting-row">
+                        <div class="setting-row" data-sync-path="system.log_message_content">
                             <div class="setting-label">${t('settings.about.logging.message_content.label')}</div>
                             <div class="setting-checkbox-row">
                                 <label class="kage-checkbox">

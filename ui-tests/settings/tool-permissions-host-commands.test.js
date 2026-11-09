@@ -54,6 +54,7 @@ function mockBackend(rules, allowAll = false) {
     const backend = configWith([...rules], allowAll);
     const mock = setupTauriMock({
         get_config: async () => structuredClone(backend),
+        get_config_snapshot: async () => ({ revision: 0, config: structuredClone(backend) }),
         save_config: async () => undefined,
         set_tool_kind_trusted: async () => undefined,
         set_mcp_server_trusted: async () => undefined,

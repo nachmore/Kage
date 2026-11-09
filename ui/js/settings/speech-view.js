@@ -12,14 +12,16 @@ export function renderSpeechSettings(module) {
                     t('settings.speech.show_button.label'),
                     t('settings.speech.show_button.description'),
                     'showSpeechButton',
-                    false
+                    false,
+                    { syncPath: 'ui.show_speech_button' }
                 )}
 
                 <div id="speechSilenceRow">
                 ${module.createControlRow(
                     t('settings.speech.silence.label'),
                     t('settings.speech.silence.description'),
-                    '<div class="range-container"><input type="range" class="range-slider" id="speechSilenceTimeout" min="0" max="5" step="0.5" value="2"><span class="range-value" id="speechSilenceValue">2.0s</span></div>'
+                    '<div class="range-container"><input type="range" class="range-slider" id="speechSilenceTimeout" min="0" max="5" step="0.5" value="2"><span class="range-value" id="speechSilenceValue">2.0s</span></div>',
+                    { syncPath: 'ui.speech_silence_timeout' }
                 )}
                 </div>
 
@@ -31,7 +33,8 @@ export function renderSpeechSettings(module) {
                     t('settings.speech.read_back.label'),
                     t('settings.speech.read_back.description'),
                     'speechReadBack',
-                    false
+                    false,
+                    { syncPath: 'ui.speech_read_back' }
                 )}
                 </div>
 
@@ -40,7 +43,8 @@ export function renderSpeechSettings(module) {
                 ${module.createControlRow(
                     t('settings.speech.tts_engine.label'),
                     t('settings.speech.tts_engine.description'),
-                    `<select class="setting-select" id="ttsEngine"><option value="system">${t('settings.speech.tts_engine.system')}</option><option value="pocket-tts">${t('settings.speech.tts_engine.pocket')}</option></select>`
+                    `<select class="setting-select" id="ttsEngine"><option value="system">${t('settings.speech.tts_engine.system')}</option><option value="pocket-tts">${t('settings.speech.tts_engine.pocket')}</option></select>`,
+                    { syncPath: 'pocket_tts.enabled' }
                 )}
                 </div>
 
@@ -49,7 +53,8 @@ export function renderSpeechSettings(module) {
                 ${module.createControlRow(
                     t('settings.speech.system_voice.label'),
                     t('settings.speech.system_voice.description'),
-                    `<select class="setting-select" id="speechVoice"><option value="">${t('settings.speech.system_voice.default')}</option></select>`
+                    `<select class="setting-select" id="speechVoice"><option value="">${t('settings.speech.system_voice.default')}</option></select>`,
+                    { syncPath: 'ui.speech_voice' }
                 )}
                 </div>
 
@@ -96,7 +101,8 @@ export function renderSpeechSettings(module) {
                             t('settings.speech.pocket.auto_start.label'),
                             t('settings.speech.pocket.auto_start.description'),
                             'pocketTtsAutoStart',
-                            false
+                            false,
+                            { syncPath: 'pocket_tts.auto_start' }
                         )}
 
                         <!-- Voice & Generation -->
@@ -105,19 +111,22 @@ export function renderSpeechSettings(module) {
                         ${module.createControlRow(
                             t('settings.speech.pocket.voice.label'),
                             t('settings.speech.pocket.voice.description'),
-                            '<select class="setting-select" id="pocketTtsVoice"></select>'
+                            '<select class="setting-select" id="pocketTtsVoice"></select>',
+                            { syncPath: 'pocket_tts.voice' }
                         )}
 
                         ${module.createControlRow(
                             t('settings.speech.pocket.temp.label'),
                             t('settings.speech.pocket.temp.description'),
-                            '<div class="range-container"><input type="range" class="range-slider" id="pocketTtsTemp" min="0.3" max="1.0" step="0.1" value="0.7"><span class="range-value" id="pocketTtsTempValue">0.7</span></div>'
+                            '<div class="range-container"><input type="range" class="range-slider" id="pocketTtsTemp" min="0.3" max="1.0" step="0.1" value="0.7"><span class="range-value" id="pocketTtsTempValue">0.7</span></div>',
+                            { syncPath: 'pocket_tts.temp' }
                         )}
 
                         ${module.createControlRow(
                             t('settings.speech.pocket.eos.label'),
                             t('settings.speech.pocket.eos.description'),
-                            '<div class="range-container"><input type="range" class="range-slider" id="pocketTtsEos" min="-8.0" max="-1.0" step="0.5" value="-4.0"><span class="range-value" id="pocketTtsEosValue">-4.0</span></div>'
+                            '<div class="range-container"><input type="range" class="range-slider" id="pocketTtsEos" min="-8.0" max="-1.0" step="0.5" value="-4.0"><span class="range-value" id="pocketTtsEosValue">-4.0</span></div>',
+                            { syncPath: 'pocket_tts.eos_threshold' }
                         )}
 
                         <!-- Test -->
@@ -157,7 +166,8 @@ export function renderSpeechSettings(module) {
                         ${module.createControlRow(
                             t('settings.speech.pocket.port.label'),
                             t('settings.speech.pocket.port.description'),
-                            '<input type="number" class="setting-input" id="pocketTtsPort" min="1024" max="65535" value="9877" style="width:100px;">'
+                            '<input type="number" class="setting-input" id="pocketTtsPort" min="1024" max="65535" value="9877" style="width:100px;">',
+                            { syncPath: 'pocket_tts.port' }
                         )}
                     </div>
                 </div>

@@ -15,7 +15,7 @@ export class AppearanceSettingsModule extends SettingsModule {
                     <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
                     <!-- Language -->
-                    <div class="setting-row" id="languageSection">
+                    <div class="setting-row" id="languageSection" data-sync-path="ui.language">
                         <div class="setting-label">${t('settings.appearance.language.label')}</div>
                         <div class="setting-description">${t('settings.appearance.language.description')}</div>
                         <select class="setting-select" id="language">
@@ -27,7 +27,7 @@ export class AppearanceSettingsModule extends SettingsModule {
                     </div>
 
                     <!-- Theme -->
-                    <div class="setting-row" id="themeSection">
+                    <div class="setting-row" id="themeSection" data-sync-path="ui.theme">
                         <div class="setting-label">${t('settings.appearance.theme.label')}</div>
                         <div class="setting-description">${t('settings.appearance.theme.description')}</div>
                         <input type="hidden" id="theme" value="system">
@@ -43,7 +43,8 @@ export class AppearanceSettingsModule extends SettingsModule {
                         '<div class="range-container">' +
                             '<input type="range" class="range-slider" id="fontSize" min="11" max="20" step="1" value="14">' +
                             '<span class="range-value" id="fontSizeValue">14px</span>' +
-                            '</div>'
+                            '</div>',
+                        { syncPath: 'ui.font_size' }
                     )}
 
                     <!-- Launcher -->
@@ -55,7 +56,8 @@ export class AppearanceSettingsModule extends SettingsModule {
                         '<div class="range-container">' +
                             '<input type="range" class="range-slider" id="opacity" min="0.3" max="1" step="0.05" value="1">' +
                             '<span class="range-value" id="opacityValue">1.0</span>' +
-                            '</div>'
+                            '</div>',
+                        { syncPath: 'ui.floating_window_opacity' }
                     )}
 
                     ${this.createControlRow(
@@ -65,28 +67,32 @@ export class AppearanceSettingsModule extends SettingsModule {
                             `<option value="center">${t('settings.appearance.start_position.center')}</option>` +
                             `<option value="mouse">${t('settings.appearance.start_position.mouse')}</option>` +
                             `<option value="remember">${t('settings.appearance.start_position.remember')}</option>` +
-                            '</select>'
+                            '</select>',
+                        { syncPath: 'ui.window_start_position' }
                     )}
 
                     ${this.createCheckboxRow(
                         t('settings.appearance.remember_size.label'),
                         t('settings.appearance.remember_size.description'),
                         'rememberLauncherSize',
-                        false
+                        false,
+                        { syncPath: 'ui.remember_launcher_size' }
                     )}
 
                     ${this.createCheckboxRow(
                         t('settings.appearance.preserve_last_response.label'),
                         t('settings.appearance.preserve_last_response.description'),
                         'preserveLastResponse',
-                        true
+                        true,
+                        { syncPath: 'ui.preserve_last_response' }
                     )}
 
                     ${this.createCheckboxRow(
                         t('settings.appearance.show_toolbar.label'),
                         t('settings.appearance.show_toolbar.description'),
                         'showFloatingToolbar',
-                        false
+                        false,
+                        { syncPath: 'ui.show_floating_toolbar' }
                     )}
 
                     <!-- Mascot
@@ -99,21 +105,24 @@ export class AppearanceSettingsModule extends SettingsModule {
                         'Animate Kage',
                         'Breathing, blinks, idle moods and reactions to prompts and tools. Off = still cat. Reduced-motion is always respected.',
                         'mascotAnimations',
-                        true
+                        true,
+                        { syncPath: 'ui.mascot_animations' }
                     )}
 
                     ${this.createCheckboxRow(
                         'Let extensions animate Kage',
                         'Extensions can hint at the mascot (e.g. a music extension can make Kage bop). Independent of the master switch.',
                         'mascotExtensionHints',
-                        true
+                        true,
+                        { syncPath: 'ui.mascot_extension_hints' }
                     )}
 
                     ${this.createCheckboxRow(
                         t('settings.appearance.show_time.label'),
                         t('settings.appearance.show_time.description'),
                         'showTime',
-                        false
+                        false,
+                        { syncPath: 'ui.show_time' }
                     )}
 
                     <div id="timeFormatRow" style="display:none; padding-left: 28px;">
@@ -125,7 +134,8 @@ export class AppearanceSettingsModule extends SettingsModule {
                                 '<option value="HH:mm:ss">14:30:45 (24h + sec)</option>' +
                                 '<option value="h:mm A">2:30 PM (12h)</option>' +
                                 '<option value="h:mm:ss A">2:30:45 PM (12h + sec)</option>' +
-                                '</select>'
+                                '</select>',
+                            { syncPath: 'ui.time_format' }
                         )}
                     </div>
 
@@ -133,7 +143,8 @@ export class AppearanceSettingsModule extends SettingsModule {
                         t('settings.appearance.show_date.label'),
                         t('settings.appearance.show_date.description'),
                         'showDate',
-                        false
+                        false,
+                        { syncPath: 'ui.show_date' }
                     )}
 
                     <div id="dateFormatRow" style="display:none; padding-left: 28px;">
@@ -148,7 +159,8 @@ export class AppearanceSettingsModule extends SettingsModule {
                                 '<option value="YYYY-MM-DD">2026-01-05</option>' +
                                 '<option value="MM/DD/YYYY">01/05/2026</option>' +
                                 '<option value="DD/MM/YYYY">05/01/2026</option>' +
-                                '</select>'
+                                '</select>',
+                            { syncPath: 'ui.date_format' }
                         )}
                     </div>
 

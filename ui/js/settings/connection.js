@@ -345,6 +345,12 @@ export class ConnectionSettingsModule extends SettingsModule {
                 <button type="button" class="setting-btn-secondary conn-back-btn" id="connBackBtn">${t('settings.connection.edit.back_btn')}</button>
                 <div class="conn-edit-subtitle">${escape(subtitle)}</div>
             </div>
+            ${
+                // Where this agent exists, when sync is on (docs/design/SYNC.md §9.4).
+                !this._editingIsNew && this._editing.id
+                    ? `<div data-sync-avail="acp.connections/${escape(this._editing.id)}" data-sync-name="${escape(this._editing.name || '')}" hidden></div>`
+                    : ''
+            }
             ${presetBlock}
             <div id="connEditFormContainer">
                 ${api.renderEditForm(this._editing, { idPrefix: 'connEdit', style: 'settings' })}

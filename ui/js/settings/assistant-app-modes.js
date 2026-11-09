@@ -1,4 +1,5 @@
 import { t } from '../shared/i18n.js';
+import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
 
 export function installAssistantAppModeMethods(AssistantSettingsModule) {
     Object.assign(AssistantSettingsModule.prototype, {
@@ -77,12 +78,16 @@ export function installAssistantAppModeMethods(AssistantSettingsModule) {
                 // Drop completely empty rows silently — they're abandoned
                 // additions, not data the user wants saved.
                 if (!friendly && !exe && !steering) continue;
-                rules.push({
+                const rule = {
                     friendly_name: friendly,
                     executable: exe,
                     steering,
                     enabled,
-                });
+                };
+                // Keep the rule's id: folder sync matches it by id
+                // (docs/design/SYNC.md §4.4).
+                if (row.dataset.syncId) rule.sync_id = row.dataset.syncId;
+                rules.push(rule);
             }
             return rules;
         },
@@ -130,10 +135,17 @@ export function installAssistantAppModeMethods(AssistantSettingsModule) {
             // owns context_rules.
             try {
                 const invoke = window.__TAURI__.core.invoke;
-                const config = await invoke('get_config');
+                const { revision, config } = await getConfigSnapshot(invoke);
                 config.context_rules = rules;
-                await invoke('save_config', { config });
-                this._appModesSnapshot = rules.slice();
+                await saveConfig(config, { baseRevision: revision, invoke });
+                // Read back what was saved, so new rules carry the ids the
+                // backend gave them and a second save doesn't add them again.
+                try {
+                    const saved = await getConfigSnapshot(invoke);
+                    this._appModesSnapshot = (saved.config.context_rules || rules).slice();
+                } catch {
+                    this._appModesSnapshot = rules.slice();
+                }
                 this._renderAppModesSummary();
                 this._setAppModesStatus(t('settings.assistant.app_modes.save.saved'), 'success');
                 // Brief delay so the user sees the success toast, then

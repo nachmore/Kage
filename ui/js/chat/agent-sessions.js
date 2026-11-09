@@ -105,6 +105,7 @@ export class AgentSessionViewer {
         }
         const anyAvailable = this.providers.some((p) => p.available);
         if (!anyAvailable) return false;
+        await this._loadComputerNames();
 
         const toggle = document.getElementById('sessionSourceToggle');
         if (toggle) {
@@ -116,6 +117,36 @@ export class AgentSessionViewer {
             }
         }
         return true;
+    }
+
+    /**
+     * Names of the user's other computers, for chats that folder sync
+     * mirrored here (docs/design/SYNC.md §4.6). Only when that provider is
+     * available; with sync off the call fails and ids stay unnamed.
+     */
+    async _loadComputerNames() {
+        this._computerNames = new Map();
+        if (!this.providers.some((p) => p.id === SYNCED_PROVIDER && p.available)) return;
+        try {
+            const devices = await this.invoke('sync_list_devices');
+            for (const d of Array.isArray(devices) ? devices : []) {
+                if (d?.id) this._computerNames.set(d.id, d.name || '');
+            }
+        } catch {
+            // Sync off or locked: the chats still list, without names.
+        }
+    }
+
+    /** The other computer a mirrored chat came from, or ''. */
+    computerOf(session) {
+        const id = session?.extras?.device;
+        return (id && this._computerNames?.get(id)) || '';
+    }
+
+    _providerLabel(providerId) {
+        if (providerId === SYNCED_PROVIDER) return t('chat.session_list.synced_group');
+        const provider = this.providers.find((p) => p.id === providerId);
+        return provider?.label || providerId;
     }
 
     async loadSessions() {
@@ -169,13 +200,26 @@ export class AgentSessionViewer {
             return;
         }
 
+        // Chats from the user's other computers come last, under their own
+        // heading (docs/design/SYNC.md §4.6).
+        const ordered = [
+            ...filtered.filter((s) => s.provider_id !== SYNCED_PROVIDER),
+            ...filtered.filter((s) => s.provider_id === SYNCED_PROVIDER),
+        ];
         let html = '';
-        for (const s of filtered) {
+        let syncedHeading = false;
+        for (const s of ordered) {
+            if (s.provider_id === SYNCED_PROVIDER && !syncedHeading) {
+                syncedHeading = true;
+                html += `<div class="session-list-heading kd-synced-heading" role="heading" aria-level="3">${esc(t('chat.session_list.synced_group'))}</div>`;
+            }
             const isActive = s.session_id === this.activeSessionId;
             const date = new Date(s.updated_at);
             const dateStr = formatRelativeDate(date);
-            const provider = this.providers.find((p) => p.id === s.provider_id);
-            const providerLabel = provider?.label || s.provider_id;
+            const computer = s.provider_id === SYNCED_PROVIDER ? this.computerOf(s) : '';
+            const providerLabel = computer
+                ? `\u2068${computer}\u2069`
+                : this._providerLabel(s.provider_id);
             const sourceIcon = providerIcon(s.provider_id);
             const filePath = s.extras?.file_path || '';
             const locatorJson = JSON.stringify(s.locator);
@@ -297,6 +341,13 @@ export class AgentSessionViewer {
     renderMessages(container, messages, session) {
         container.innerHTML = '';
 
+        if (session?.provider_id === SYNCED_PROVIDER) {
+            container.appendChild(this._syncedBanner(session));
+            this._renderTranscript(container, messages);
+            container.scrollTop = 0;
+            return;
+        }
+
         const provider = this.providers.find((p) => p.id === session?.provider_id);
         const sourceLabel = provider?.label || session?.provider_id || 'Agent';
         const bannerIcon = providerIcon(session?.provider_id);
@@ -315,7 +366,51 @@ export class AgentSessionViewer {
             </div>
         </details>`;
         container.appendChild(banner);
+        this._renderTranscript(container, messages);
+        container.scrollTop = 0;
+    }
 
+    /**
+     * The banner of a chat from another computer: read-only, which
+     * computer, and Continue here. This computer's agent never had the
+     * session, so it can't resume it; Continue here starts a new chat with
+     * the transcript attached (docs/design/SYNC.md §4.6).
+     */
+    _syncedBanner(session) {
+        const banner = document.createElement('div');
+        banner.className = 'kd-readonly-banner kd-synced-banner';
+        const text = document.createElement('span');
+        const computer = this.computerOf(session);
+        text.textContent = computer
+            ? t('chat.session.synced_banner', { computer: `\u2068${computer}\u2069` })
+            : t('chat.session.synced_banner_unnamed');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'kd-action-btn kd-continue-btn';
+        btn.textContent = t('chat.session.continue_here');
+        btn.title = t('chat.session.continue_here_title');
+        btn.addEventListener('click', () => {
+            this.continueHere(session).catch((e) =>
+                console.warn('[AgentSessions] Continue here failed:', e)
+            );
+        });
+        banner.append(text, btn);
+        return banner;
+    }
+
+    /** Start a new chat here with a mirrored chat's transcript attached. */
+    async continueHere(session) {
+        const path = session?.locator?.path;
+        if (typeof path !== 'string' || !path) return;
+        // Back to this computer's chats, then a new one.
+        document.querySelector('#sessionSourceToggle [data-source="kage"]')?.click();
+        this.restoreInputArea();
+        await this.chatApp.createNewSession?.();
+        const name = `${(session.title || 'chat').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'chat'}.jsonl`;
+        this.chatApp.attachmentManager?.addFile(path, name, 'text/plain');
+    }
+
+    _renderTranscript(container, messages) {
         for (const msg of messages) {
             if (msg.role === 'user') {
                 const text = this.extractUserText(msg);
@@ -368,8 +463,6 @@ export class AgentSessionViewer {
                 container.appendChild(el);
             }
         }
-
-        container.scrollTop = 0;
     }
 
     /**
@@ -392,11 +485,17 @@ export class AgentSessionViewer {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** The provider id of chats folder sync mirrored from other computers. */
+const SYNCED_PROVIDER = 'synced';
+
 const PROVIDER_ICONS = {
     'kiro-cli':
         '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>',
     'claude-code':
         '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+    // Another computer: a monitor.
+    [SYNCED_PROVIDER]:
+        '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
 };
 
 function providerIcon(providerId) {

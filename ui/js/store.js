@@ -20,6 +20,7 @@ import { grantCovers } from './shared/extension-permissions.js';
 import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { initLinkHandler } from './shared/link-handler.js';
 import { runStagedExtensionInstall } from './shared/staged-extension-install.js';
+import { extensionDataSyncs } from './shared/sync-scope-chip.js';
 import { cmdOrCtrlPressed } from './shared/shortcuts.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
 
@@ -638,6 +639,29 @@ async function reinstallItem(id, source) {
     }
 }
 
+/**
+ * The uninstall confirm text. When the extension's data goes to the sync
+ * folder, uninstalling here leaves it there and on the other computers,
+ * so the confirm says so and where to delete it everywhere
+ * (docs/design/SYNC.md §12.8).
+ */
+export async function uninstallMessage(id) {
+    const message = t('store.uninstall.confirm.message');
+    try {
+        const invoke = window.__TAURI__.core.invoke;
+        const [status, config] = await Promise.all([
+            invoke('sync_get_status'),
+            invoke('get_config'),
+        ]);
+        if (extensionDataSyncs(status, config?.extension_grants?.[id], id)) {
+            return `${message}\n\n${t('settings.sync.uninstall_note')}`;
+        }
+    } catch {
+        // Sync off or not built: the plain confirm.
+    }
+    return message;
+}
+
 async function uninstallItem(id, kind) {
     // Use the in-app modal rather than `window.confirm`. The browser
     // primitive misbehaves under WebView2 in Tauri 2 — the dialog
@@ -652,7 +676,7 @@ async function uninstallItem(id, kind) {
     const ok = await confirmDialog({
         icon: '🗑️',
         title: t('store.uninstall.confirm.title', { name: displayName }),
-        message: t('store.uninstall.confirm.message'),
+        message: await uninstallMessage(id),
         confirmLabel: t('store.uninstall.confirm.btn'),
         cancelLabel: t('store.uninstall.cancel.btn'),
         destructive: true,

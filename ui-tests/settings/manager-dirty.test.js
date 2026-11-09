@@ -18,6 +18,7 @@ let backend;
 let saved;
 let tauri;
 let saveGate;
+let saveError;
 
 function makeModule(id, opts = {}) {
     class FieldModule extends SettingsModule {
@@ -66,9 +67,12 @@ beforeEach(async () => {
     backend = { a: 'a0', b: 'b0', c: 'c0' };
     saved = [];
     saveGate = null;
+    saveError = null;
     tauri = setupTauriMock({
         get_config: async () => structuredClone(backend),
+        get_config_snapshot: async () => ({ revision: 0, config: structuredClone(backend) }),
         save_config: async ({ config }) => {
+            if (saveError) throw saveError;
             if (saveGate) await saveGate;
             saved.push(structuredClone(config));
             backend = structuredClone(config);
@@ -227,10 +231,7 @@ describe('save', () => {
         const a = makeModule('a');
         const mgr = await setup([a]);
         type('a', 'edited');
-        tauri.invoke.mockImplementationOnce(async () => structuredClone(backend));
-        tauri.invoke.mockImplementationOnce(async () => {
-            throw new Error('disk full');
-        });
+        saveError = new Error('disk full');
         const ok = await mgr.save();
         expect(ok).toBe(false);
         expect(mgr.isDirty('a')).toBe(true);
