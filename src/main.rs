@@ -7,6 +7,10 @@ use kage_core::lock_ext;
 
 mod acp_client;
 mod activity_tracker;
+// The binary reaches the engine through its commands; the rest of its public
+// API (re-exports, helpers) serves the library and its tests.
+#[allow(dead_code, unused_imports)]
+mod agent_calls;
 mod agent_commands;
 mod agent_presets;
 mod agent_sessions;
@@ -473,6 +477,13 @@ async fn run() {
             // cleanup when one is destroyed.
             if window_labels::is_ext_view_label(window.label()) {
                 ext_views::handle_window_event(window, event);
+            }
+            // A Kage window gaining focus is user activity: background agent
+            // calls wait until the user is away.
+            if let tauri::WindowEvent::Focused(true) = event {
+                if let Some(features) = window.try_state::<state::FeatureServices>() {
+                    features.agent_calls.note_user_activity();
+                }
             }
             if let tauri::WindowEvent::Destroyed = event {
                 // The window's extension tool steering goes with it. Tauri

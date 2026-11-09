@@ -337,6 +337,10 @@ pub struct FeatureServices {
     pub automation_signal_tx: Arc<
         std::sync::Mutex<Option<tokio::sync::mpsc::Sender<crate::automation::AutomationSignal>>>,
     >,
+    /// Extensions' background agent calls
+    /// (docs/design/EXTENSION_AGENT_CALLS.md). Built here, started from
+    /// `setup()` (`commands::agent_calls::start_service`).
+    pub agent_calls: Arc<crate::agent_calls::AgentCallService>,
 }
 
 /// The full set of Tauri-managed state, built in one place so
@@ -364,6 +368,8 @@ pub fn build_managed_state(
     acp_client: Arc<AcpClient>,
     dev_mode: bool,
 ) -> ManagedState {
+    let agent_calls =
+        crate::commands::agent_calls::build_service(config.clone(), acp_client.clone());
     ManagedState {
         acp_handles: AcpHandles {
             client: acp_client,
@@ -391,6 +397,7 @@ pub fn build_managed_state(
             host_commands: Arc::new(crate::host_commands::HostCommands::new()),
         },
         feature_services: FeatureServices {
+            agent_calls,
             config,
             app_launcher: Arc::new(Mutex::new(AppLauncher::new())),
             updater: Arc::new(crate::updater::UpdaterState::new()),

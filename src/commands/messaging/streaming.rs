@@ -33,6 +33,9 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
             message.chars().count()
         );
     }
+    // A user prompt stops a running background agent call; waiting ones
+    // stay, held back until the user is away again.
+    features.agent_calls.on_user_prompt_started();
     let client = acp.client.clone();
     let config = features.config.clone();
     let config_for_title = features.config.clone();

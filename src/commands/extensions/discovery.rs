@@ -99,6 +99,9 @@ pub async fn set_extension_enabled<R: tauri::Runtime>(
     // docs/design/EXTENSION_VIEWS.md).
     if !enabled {
         crate::ext_views::close_for_extension(&app, &id);
+        // Its background agent calls end too. The host switch and consent
+        // stay, for when it is turned on again.
+        features.agent_calls.on_extension_changed(&id);
     }
     crate::telemetry::track(
         &app,

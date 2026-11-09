@@ -31,6 +31,11 @@ pub fn graceful_shutdown<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         let _ = tray.set_visible(false);
     }
 
+    // Background agent calls go before anything touches the agent: no new
+    // turns, the running call is cancelled and gets up to 2 s to delete
+    // its session, its audit entry is written and the usage file saved.
+    crate::commands::agent_calls::shutdown_service(app);
+
     // Kill pocket-tts server and any in-flight pip install if running.
     // The Job Object reaps both on Windows when we exit, but macOS/Linux
     // have no equivalent — without an explicit kill here, a Cmd+Q during

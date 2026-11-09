@@ -352,7 +352,7 @@ catalog, as `Display` already does.
 
 | Event | Payload | Audience |
 |---|---|---|
-| `agent_calls_activity` | `{ running: [{ extension_id, name, purpose, label?, started_at }], waiting: n }` | Every first-party window (not sandboxes) |
+| `agent_calls_activity` | `{ running: [{ extension_id, name, purpose, label?, started_at }], waiting: n }` | The long-lived first-party windows: chat hosts, the launcher and Settings (`event_targets::emit_permission_audience`). Never sandboxes. |
 
 Emitted when a call starts or ends, and when the queue length changes.
 
@@ -459,8 +459,9 @@ Subtle, and only where the user already looks:
   New file `ui/js/floating/agent-call-indicator.js`, driven by
   `agent_calls_activity`.
 - **Tray tooltip**: "Kage · {extension} is using your agent" while a call
-  runs (`src/tray.rs`, `set_tooltip`). Skipped on Linux, where many trays
-  don't show tooltips.
+  runs (`src/tray.rs`, `set_tooltip`, posted to the main thread). Linux
+  trays don't show tooltips, and Tauri ignores the call there, so no
+  platform check is needed.
 - **No mascot pose, no notification, no sound.** Calls start only when the
   user is away, so the chip is rarely seen. The log is the real record.
 
@@ -808,18 +809,27 @@ only with a click lease (§3.8); anything else arrives as `idle`.
 | A user prompt starts (`send_message_streaming`) | `session/cancel`, `cancelled_user_activity` | Kept |
 | Floating input or window shown | Keeps running | Kept, but no new turn starts until idle again |
 | Agent disconnects (`_kage/agent_disconnected`) | `agent_disconnected` | Kept, wait for reconnect |
-| Active connection changes or is edited | `consent_stale` | Rejected `consent_stale` |
-| Extension disabled, uninstalled, grant removed | `cancelled_access_off` | Rejected `cancelled_access_off` |
+| Active connection changes or is edited (any `config_updated`) | `consent_stale` | Rejected `consent_stale` |
+| Extension disabled, uninstalled, grant removed or replaced | `cancelled_access_off` | Rejected `cancelled_access_off` |
 | Host switch turned off | `cancelled_access_off` | Rejected |
 | **Stop now** | `cancelled_by_user` | Rejected `cancelled_by_user`, 1 h pause |
 | Sandbox destroyed | The host cancels its ids (§3.8) | Same |
 | Shutdown (`graceful_shutdown`) | `cancelled_shutdown` | Rejected |
 
+The service doesn't need every place that changes the agent connection to
+call it. When it starts, it listens for `config_updated` in Rust and
+re-checks the gates of every waiting and running call (`on_agent_changed`).
+A settings save, a restored backup and a synced change all broadcast that
+event. Uninstall, grant removal or replacement (`commit_extension_install`)
+and `set_extension_enabled(false)` call `on_extension_changed` directly,
+because not all of them broadcast it.
+
 Shutdown order: `graceful_shutdown` calls `AgentCallService::shutdown()`
-first. That stops new turns, cancels the running call, waits up to 2 s
-for its session cleanup guard to drop (a `Condvar`), writes the audit
-entry and saves the usage file. Only then does shutdown disconnect the
-agent. The updater's `on_download_finish` path goes through the same
+right after it hides the windows and the tray, before anything else
+touches the agent. That stops new turns, cancels the running call, waits
+up to 2 s for its session cleanup guard to drop (a `Condvar`), writes the
+audit entry and saves the usage file. Only then does shutdown disconnect
+the agent. The updater's `on_download_finish` path goes through the same
 `graceful_shutdown`.
 
 ### 5.8 Consent binding
@@ -1476,7 +1486,13 @@ tests call `kage::paths::isolate(<tempdir>)` first.
 
 **Rust integration tests** (`tests/agent_calls_test.rs`, with
 `tests/mock_acp_server.rs` extended with scripted replies, `tool_call`
-updates and permission requests):
+updates and permission requests). They call the real commands on a mock
+Tauri app. The production notification handler needs the Wry runtime, so
+the tests install a small handler that routes the same way for background
+calls (chunks, the strict refusal through `note_tool_attempt`, the
+disconnect signal). The `Denied` audit entry and the strict decision stay
+covered by the unit tests beside the real handler, and the
+`agent_sessions` providers' hiding by the `agent_sessions` unit tests:
 - reserve → ready → send → result, with session files deleted and the id
   recorded and hidden from `list_sessions` and `agent_list_sessions`;
 - a permission request → rejected, `Denied` audit entry, call continues
@@ -1667,13 +1683,20 @@ and the later package rebases and owns only its own lines.
 `src/commands/system/updates.rs`, `src/commands/window/floating.rs`,
 `src/commands/messaging/streaming.rs`, `src/tray.rs`,
 `ui/js/shared/extension-permissions.js`, `tests/agent_calls_test.rs`,
-`tests/mock_acp_server.rs`)
+`tests/mock_acp_server.rs`, `ui-tests/shared/agent-call-commands.test.js`
+(new); one line each in `src/main.rs` (the `mod` line, and window focus
+as activity in the global window-event handler), `src/main/app_setup.rs`
+(start the service) and `src/events.rs` (the stale `allow`); in AC1's
+files, `InstalledExtensions` reads the new manifest field, and
+`AcpBackend` turns `run_with`'s `agent_unavailable` refusal into
+`RunError::Unavailable`, as §5.5 says)
 - The nine commands; `agent_background` in `VALID_CAPABILITIES` and
   `CAPABILITIES`; the `agentBackground` manifest field and normaliser;
   the audit variants.
 - The activity, uninstall, disable and shutdown hooks; the tray tooltip;
   emitting `agent_calls_activity`; the `agent_calls` field of
-  `FeatureServices` (no new managed type, §5.7).
+  `FeatureServices` (no new managed type, §5.7); the `config_updated`
+  re-check (§5.7).
 - Accept:
   - the integration tests in §12;
   - all parity tests pass;

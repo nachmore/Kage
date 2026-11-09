@@ -129,6 +129,42 @@ pub enum AuditEvent {
         #[serde(default)]
         duration_ms: u64,
     },
+    /// An extension's background agent call ended, whatever the outcome
+    /// (docs/design/EXTENSION_AGENT_CALLS.md §5.10). Ids and counts only:
+    /// never the prompt or the reply.
+    ExtensionAgentCall {
+        extension_id: String,
+        call_id: String,
+        purpose: String,
+        /// The extension's label for the call. Left out when it looks
+        /// like a secret.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+        /// The agent connection's display name at the time.
+        agent: String,
+        outcome: crate::agent_calls::AgentCallOutcome,
+        /// `user`, `activity`, `shutdown`, `access_off` or `extension`,
+        /// for a cancelled call.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cancel_reason: Option<String>,
+        #[serde(default)]
+        prompt_chars: u32,
+        #[serde(default)]
+        response_chars: u32,
+        #[serde(default)]
+        duration_ms: u64,
+        /// Secret-shaped strings replaced before sending.
+        #[serde(default)]
+        redactions: u32,
+    },
+    /// Background AI was turned on or off for an extension.
+    ExtensionAgentAccessChanged {
+        extension_id: String,
+        enabled: bool,
+        /// The agent connection's display name, when one was active.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent: Option<String>,
+    },
 }
 
 /// Longest command an audit entry keeps, in bytes — the same 2 KB the
@@ -205,6 +241,35 @@ impl AuditEvent {
                     )
                 }
             }
+            AuditEvent::ExtensionAgentCall {
+                extension_id,
+                purpose,
+                agent,
+                outcome,
+                prompt_chars,
+                ..
+            } => format!(
+                "{} sent {} characters to {} ({}): {}",
+                extension_id,
+                prompt_chars,
+                agent,
+                purpose,
+                serde_json::to_value(outcome)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default()
+            ),
+            AuditEvent::ExtensionAgentAccessChanged {
+                extension_id,
+                enabled,
+                agent,
+            } => match (enabled, agent) {
+                (true, Some(agent)) => {
+                    format!("Background AI turned on for {} ({})", extension_id, agent)
+                }
+                (true, None) => format!("Background AI turned on for {}", extension_id),
+                (false, _) => format!("Background AI turned off for {}", extension_id),
+            },
         }
     }
 }

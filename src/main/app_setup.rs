@@ -94,6 +94,8 @@ pub fn configure(
             std::thread::spawn(move || host_commands.start(handle));
         }
     }
+    // Background agent calls: hooks, strict-session hooks and the scheduler.
+    commands::agent_calls::start_service(app.handle());
     setup::configure_transparent_windows(app);
     crate::overlay_windows::configure_all(app);
     crate::commands::window::preload_context_menu(app.handle());

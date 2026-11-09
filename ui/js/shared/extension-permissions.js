@@ -166,6 +166,23 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     get_available_models: 'agent',
     get_slash_commands: 'agent',
 
+    // --- agent_background: background agent calls --------------------------
+    // One prompt on the user's agent, out of sight, through `context.agent`
+    // (docs/design/EXTENSION_AGENT_CALLS.md §3.5). The sandbox host
+    // force-injects `extensionId`; Rust re-checks the grant, the manifest
+    // block, the host switch and the consent on every call.
+    agent_call_reserve: 'agent_background',
+    agent_call_ready: 'agent_background',
+    agent_call_send: 'agent_background',
+    agent_call_cancel: 'agent_background',
+    agent_call_status: 'agent_background',
+    // Host-only (§3.6): the Background AI panel, its consent dialog and the
+    // launcher chip. An extension can never turn its own access on.
+    get_extension_agent_access: null,
+    set_extension_agent_access: null,
+    stop_extension_agent_calls: null,
+    get_extension_agent_request_detail: null,
+
     // --- activity tracker --------------------------------------------------
     start_activity_tracker: 'activity',
     stop_activity_tracker: 'activity',
@@ -594,6 +611,12 @@ export const CAPABILITIES = Object.freeze({
         label: 'Files you choose',
         description:
             'Ask you to pick a file, then read its text (plain text, Markdown, PDF, Word, \u2026). It gets only the file you pick, each time, never its folder or any other file.',
+    },
+    agent_background: {
+        icon: '\ud83c\udf19',
+        label: 'Background AI',
+        description:
+            'Ask your AI agent for help in the background, without a chat. Nothing is sent until you turn it on for this extension and confirm which agent gets the text.',
     },
 });
 

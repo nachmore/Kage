@@ -8,6 +8,31 @@ use tauri::{
     Manager,
 };
 
+/// Name the extension in the tray tooltip while its background AI request
+/// runs, and clear the tooltip when none runs
+/// (docs/design/EXTENSION_AGENT_CALLS.md §4.4). Linux trays don't show
+/// tooltips, and Tauri ignores the call there.
+///
+/// Posted to the main thread rather than waited for: the caller may be a
+/// background call finishing while shutdown holds the main thread.
+pub fn set_agent_call_tooltip<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    extension: Option<&str>,
+) {
+    let text = extension.map(|name| t!("tray.agent_call_tooltip", "extension" => name));
+    let handle = app.clone();
+    let posted = app.run_on_main_thread(move || {
+        if let Some(tray) = handle.tray_by_id("main-tray") {
+            if let Err(e) = tray.set_tooltip(text.as_deref()) {
+                log::debug!("Could not set the tray tooltip: {e}");
+            }
+        }
+    });
+    if let Err(e) = posted {
+        log::debug!("Could not update the tray tooltip: {e}");
+    }
+}
+
 /// Build and configure the system tray icon with menu.
 ///
 /// Production menu items are translated via the i18n catalog so a German user

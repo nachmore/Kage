@@ -182,6 +182,18 @@ fn all_event_kinds_roundtrip() {
         },
         file_read(Some("Q3 plan.pdf"), "ok"),
         file_read(None, "too_large"),
+        agent_call_event(Some("Organize 12 notes"), None),
+        agent_call_event(None, Some("activity")),
+        AuditEvent::ExtensionAgentAccessChanged {
+            extension_id: "mindmap".into(),
+            enabled: true,
+            agent: Some("Kiro".into()),
+        },
+        AuditEvent::ExtensionAgentAccessChanged {
+            extension_id: "mindmap".into(),
+            enabled: false,
+            agent: None,
+        },
     ];
     for (i, event) in events.iter().cloned().enumerate() {
         append_to(
@@ -286,6 +298,26 @@ fn file_read(file_name: Option<&str>, outcome: &str) -> AuditEvent {
     }
 }
 
+fn agent_call_event(label: Option<&str>, cancel_reason: Option<&str>) -> AuditEvent {
+    AuditEvent::ExtensionAgentCall {
+        extension_id: "mindmap".into(),
+        call_id: "0b7c2c1e-call".into(),
+        purpose: "organize".into(),
+        label: label.map(str::to_string),
+        agent: "Kiro".into(),
+        outcome: if cancel_reason.is_some() {
+            crate::agent_calls::AgentCallOutcome::Cancelled
+        } else {
+            crate::agent_calls::AgentCallOutcome::Ok
+        },
+        cancel_reason: cancel_reason.map(str::to_string),
+        prompt_chars: 9120,
+        response_chars: 2048,
+        duration_ms: 14_200,
+        redactions: 1,
+    }
+}
+
 #[test]
 fn extension_file_reads_are_tagged_and_keep_the_name_out_of_summaries() {
     let entry = AuditEntry::at_time(
@@ -323,4 +355,89 @@ fn extension_file_reads_are_tagged_and_keep_the_name_out_of_summaries() {
         panic!("wrong event");
     };
     assert_eq!((bytes, format), (0, None));
+}
+
+#[test]
+fn background_agent_call_entries_are_tagged_and_carry_no_text() {
+    let entry = AuditEntry::at_time(
+        "2026-11-09T10:00:00.000Z",
+        agent_call_event(Some("Organize 12 notes"), None),
+    );
+    let json: serde_json::Value = serde_json::to_value(&entry).unwrap();
+    assert_eq!(json["event"], "extension_agent_call");
+    assert_eq!(json["extension_id"], "mindmap");
+    assert_eq!(json["outcome"], "ok");
+    assert_eq!(json["prompt_chars"], 9120);
+    assert_eq!(json["duration_ms"], 14_200);
+    assert!(json.get("cancel_reason").is_none());
+    let keys: Vec<&str> = json
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    for forbidden in ["prompt", "reply", "text", "instructions", "input"] {
+        assert!(
+            !keys.contains(&forbidden),
+            "{forbidden} must never be logged"
+        );
+    }
+    assert_eq!(
+        entry.event.summary(),
+        "mindmap sent 9120 characters to Kiro (organize): ok"
+    );
+
+    let cancelled = serde_json::to_value(agent_call_event(None, Some("user"))).unwrap();
+    assert_eq!(cancelled["outcome"], "cancelled");
+    assert_eq!(cancelled["cancel_reason"], "user");
+    assert!(cancelled.get("label").is_none());
+}
+
+#[test]
+fn background_ai_access_entries_summarise_both_ways() {
+    let on = AuditEvent::ExtensionAgentAccessChanged {
+        extension_id: "mindmap".into(),
+        enabled: true,
+        agent: Some("Work agent (Claude Code)".into()),
+    };
+    assert_eq!(
+        serde_json::to_value(&on).unwrap()["event"],
+        "extension_agent_access_changed"
+    );
+    assert_eq!(
+        on.summary(),
+        "Background AI turned on for mindmap (Work agent (Claude Code))"
+    );
+    let off = AuditEvent::ExtensionAgentAccessChanged {
+        extension_id: "mindmap".into(),
+        enabled: false,
+        agent: Some("Kiro".into()),
+    };
+    assert_eq!(off.summary(), "Background AI turned off for mindmap");
+    let off_json = serde_json::to_value(AuditEvent::ExtensionAgentAccessChanged {
+        extension_id: "mindmap".into(),
+        enabled: false,
+        agent: None,
+    })
+    .unwrap();
+    assert!(off_json.get("agent").is_none());
+}
+
+#[test]
+fn a_reader_skips_agent_call_lines_it_cannot_read() {
+    // An older build doesn't know these variants, and a newer one may add
+    // outcomes: the reader skips such a line and keeps the rest.
+    let path = logpath(&tempdir());
+    let good = serde_json::to_string(&denied_entry("2026-11-09T10:00:01.000Z", "good")).unwrap();
+    let future = r#"{"at":"2026-11-09T10:00:02.000Z","event":"extension_agent_call","extension_id":"x","call_id":"c","purpose":"p","agent":"a","outcome":"something_new"}"#;
+    let known = serde_json::to_string(&AuditEntry::at_time(
+        "2026-11-09T10:00:03.000Z",
+        agent_call_event(None, None),
+    ))
+    .unwrap();
+    std::fs::write(&path, format!("{good}\n{future}\n{known}\n")).unwrap();
+    let got = read_recent(&path, 10);
+    assert_eq!(got.len(), 2);
+    assert_eq!(got[0].event, agent_call_event(None, None));
+    assert_eq!(got[1].event, denied_entry("", "good").event);
 }
