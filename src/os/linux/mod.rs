@@ -15,6 +15,7 @@ pub mod cloud_files;
 pub mod cursor;
 pub mod diagnostics;
 pub mod file_ops;
+pub mod file_probe;
 pub mod file_search;
 pub mod hotkey;
 pub mod icon;

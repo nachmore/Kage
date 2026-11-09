@@ -180,6 +180,8 @@ fn all_event_kinds_roundtrip() {
             exit_code: None,
             session_id: None,
         },
+        file_read(Some("Q3 plan.pdf"), "ok"),
+        file_read(None, "too_large"),
     ];
     for (i, event) in events.iter().cloned().enumerate() {
         append_to(
@@ -269,4 +271,56 @@ fn user_ran_command_entries_are_tagged_and_clipped() {
     assert!(clipped.ends_with('…'));
     assert!(clipped.len() <= types::USER_RAN_COMMAND_PREVIEW + '…'.len_utf8());
     assert!(clipped.trim_end_matches('…').chars().all(|c| c == 'é'));
+}
+
+fn file_read(file_name: Option<&str>, outcome: &str) -> AuditEvent {
+    AuditEvent::ExtensionFileRead {
+        extension_id: "mindmap".into(),
+        file_name: file_name.map(str::to_string),
+        format: Some("pdf".into()),
+        bytes: 48_000,
+        chars: if outcome == "ok" { 1200 } else { 0 },
+        truncated: false,
+        outcome: outcome.into(),
+        duration_ms: 350,
+    }
+}
+
+#[test]
+fn extension_file_reads_are_tagged_and_keep_the_name_out_of_summaries() {
+    let entry = AuditEntry::at_time(
+        "2026-11-09T12:00:00.000Z",
+        file_read(Some("Q3 plan.pdf"), "ok"),
+    );
+    let json: serde_json::Value = serde_json::to_value(&entry).unwrap();
+    assert_eq!(json["event"], "extension_file_read");
+    assert_eq!(json["extension_id"], "mindmap");
+    assert_eq!(json["file_name"], "Q3 plan.pdf");
+    assert_eq!(json["format"], "pdf");
+    assert_eq!(json["bytes"], 48_000);
+    assert_eq!(json["chars"], 1200);
+    assert_eq!(json["outcome"], "ok");
+    assert_eq!(json["duration_ms"], 350);
+    assert_eq!(
+        entry.event.summary(),
+        "Extension 'mindmap' read a file (pdf, 1200 characters)"
+    );
+
+    let failed = file_read(None, "too_large");
+    let json = serde_json::to_value(AuditEntry::at_time("2026", failed.clone())).unwrap();
+    assert!(json.get("file_name").is_none());
+    assert_eq!(
+        failed.summary(),
+        "Extension 'mindmap' couldn't read a file (too_large)"
+    );
+
+    // Only the required fields: an entry that left the rest out still reads.
+    let minimal: AuditEntry = serde_json::from_str(
+        r#"{"at":"2026","event":"extension_file_read","extension_id":"x","outcome":"cancelled"}"#,
+    )
+    .unwrap();
+    let AuditEvent::ExtensionFileRead { bytes, format, .. } = minimal.event else {
+        panic!("wrong event");
+    };
+    assert_eq!((bytes, format), (0, None));
 }

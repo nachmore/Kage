@@ -364,6 +364,7 @@ pub const VALID_CAPABILITIES: &[&str] = &[
     "automation",
     "tts",
     "views",
+    "file_text",
 ];
 
 /// Filter a raw permission list to a deduped, lowercase set of known

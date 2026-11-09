@@ -9,6 +9,8 @@
 //!   - `views` — extension view windows (open, boot, compose, copy, list).
 //!   - `sync` — `context.sync`: push, pull, ack and status of an
 //!     extension's synced records.
+//!   - `file_text` — `context.files`: read the text of a file the user
+//!     picks.
 //!
 //! Submodules pull this module's shared imports via `use super::*`, and the
 //! flat re-exports below preserve the original `commands::extensions::*`
@@ -26,6 +28,7 @@ use log::{error, info, warn};
 use tauri::{Emitter, Manager, State};
 
 mod discovery;
+mod file_text;
 mod files;
 mod install;
 mod store;
@@ -35,6 +38,7 @@ mod welcome;
 
 // Flat re-export preserves the previous `commands::extensions::*` surface.
 pub use discovery::*;
+pub use file_text::*;
 pub use files::*;
 pub use install::*;
 pub use store::*;

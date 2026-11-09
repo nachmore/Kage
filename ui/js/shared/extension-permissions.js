@@ -106,6 +106,13 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     search_files: 'filesystem',
     resolve_directories: 'filesystem',
 
+    // --- file_text: the text of one file the user picks --------------------
+    // The user picks the file in the OS dialog each time; the extension gets
+    // its text, never its path (docs/design/EXTENSION_FILE_TEXT.md §3.5).
+    pick_file_text: 'file_text',
+    cancel_file_text: 'file_text',
+    file_text_support: 'file_text',
+
     // --- window: Kage window chrome ----------------------------------------
     resize_floating_window: 'window',
     set_floating_opacity: 'window',
@@ -573,6 +580,12 @@ export const CAPABILITIES = Object.freeze({
         label: 'Its own windows',
         description:
             'Show windows the extension draws itself, such as a map or a board. What you type in those windows goes to the extension. Kage labels them with the extension\u2019s name.',
+    },
+    file_text: {
+        icon: '📄',
+        label: 'Files you choose',
+        description:
+            'Ask you to pick a file, then read its text (plain text, Markdown, PDF, Word, \u2026). It gets only the file you pick, each time, never its folder or any other file.',
     },
 });
 

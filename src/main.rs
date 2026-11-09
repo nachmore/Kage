@@ -35,6 +35,7 @@ mod ext_views;
 #[allow(dead_code)] // Nothing records folder sync's changes until sync lands.
 mod extension_data_events;
 mod extensions;
+mod file_text;
 mod hotkey_norm;
 mod i18n;
 mod internal_sites;
