@@ -602,20 +602,7 @@ export const InputMethods = {
                     if (indicator) indicator.remove();
                 }
 
-                this.elements.contentArea.classList.remove('visible');
-                this.toolSources = [];
-                this.toolUsages = [];
-                this._toolCallIds = new Set();
-                this._sourceDomains = new Set();
-                const sourcesEl2 = document.getElementById('toolSources');
-                if (sourcesEl2) sourcesEl2.remove();
-                const compactEl2 = document.getElementById('toolSourcesCompact');
-                if (compactEl2) compactEl2.remove();
-                this._removeShellActivity();
-                await this.windowManager.resetHeightForNewMessage();
-                this.startThinking();
-                this.updateDatetimeVisibility();
-                this.elements.expandBtn.classList.remove('visible');
+                await this._clearResponseForNewTurn();
 
                 // A cancelled/Stopped turn may still be draining on this
                 // session; keep isWaitingForResponse false until its tail
@@ -624,17 +611,7 @@ export const InputMethods = {
                 if (!(await this._awaitPriorTurnsSettled())) return;
 
                 // No actionable match — send to agent
-                this.currentResponse = '';
-                this.elements.responseText.textContent = this.currentResponse;
-                this.elements.contentArea.classList.add('visible');
-                this.elements.expandBtn.classList.add('visible');
-                this.isWaitingForResponse = true;
-                this.extensionToolController.reset();
-                this.automationPlanController.reset();
-                this._promptGeneration++;
-                const _gen = this._promptGeneration;
-                await this.windowManager.resizeWindow();
-                this.banner.dismiss();
+                await this._startResponseTurn();
 
                 // Prepend screen context (source window info) and any
                 // App Mode steering. Both ride at the head of the
@@ -679,6 +656,83 @@ export const InputMethods = {
         } catch (error) {
             console.error('Error handling input:', error);
             this.showError(errLabel(t('floating.error.error_label'), error));
+        }
+    },
+
+    /** Clear the previous response (text, chips, shell blocks) before a new prompt. */
+    async _clearResponseForNewTurn() {
+        this.elements.contentArea.classList.remove('visible');
+        this.toolSources = [];
+        this.toolUsages = [];
+        this._toolCallIds = new Set();
+        this._sourceDomains = new Set();
+        document.getElementById('toolSources')?.remove();
+        document.getElementById('toolSourcesCompact')?.remove();
+        this._removeShellActivity();
+        await this.windowManager.resetHeightForNewMessage();
+        this.startThinking();
+        this.updateDatetimeVisibility();
+        this.elements.expandBtn.classList.remove('visible');
+    },
+
+    /** The prompt is about to go: show an empty response that's waiting. */
+    async _startResponseTurn() {
+        this.currentResponse = '';
+        this.elements.responseText.textContent = this.currentResponse;
+        this.elements.contentArea.classList.add('visible');
+        this.elements.expandBtn.classList.add('visible');
+        this.isWaitingForResponse = true;
+        this.extensionToolController.reset();
+        this.automationPlanController.reset();
+        this._promptGeneration++;
+        await this.windowManager.resizeWindow();
+        this.banner.dismiss();
+    },
+
+    /**
+     * Whether a prompt can go to `sessionId` now: it's this window's session,
+     * it's set up, and no turn is in flight or held (nor a plan waiting for
+     * review).
+     */
+    canSendAgentPrompt(sessionId) {
+        return (
+            !!sessionId &&
+            sessionId === this.floatingSessionId &&
+            !this.bootstrappingSession &&
+            !this.sessionBootstrapError &&
+            !this.isWaitingForResponse &&
+            !this._heldSend &&
+            !this._pendingTurns?.length &&
+            !this._pendingPlanRevision
+        );
+    },
+
+    /**
+     * Send `message` as the user's next prompt (the chat window shows it as
+     * their bubble), without touching the input, its attachments or the
+     * selection: it hands the result of a command the user ran outside the
+     * agent's sandbox back to the agent (shared/shell-run-view.js). Throws
+     * when `canSendAgentPrompt` says no (the caller queues) or the send
+     * fails.
+     */
+    async sendAgentPrompt(sessionId, message) {
+        if (!this.canSendAgentPrompt(sessionId)) throw new Error('The agent is busy');
+        await this._clearResponseForNewTurn();
+        // A send the user started meanwhile wins (see _awaitPriorTurnsSettled).
+        if (!(await this._awaitPriorTurnsSettled())) throw new Error('Superseded by a new prompt');
+        await this._startResponseTurn();
+        window.__TAURI__?.event?.emit('floating_message_sent', { message });
+        trackEvent('message_sent', {
+            source: 'shell_run',
+            length: messageLengthBucket(message),
+        });
+        try {
+            await this._sendTrackedTurn({ sessionId, message, attachments: null });
+        } catch (error) {
+            this.isWaitingForResponse = false;
+            this.stopThinking();
+            this.showError(errLabel(t('floating.error.error_label'), error));
+            throw error;
         }
     },
 

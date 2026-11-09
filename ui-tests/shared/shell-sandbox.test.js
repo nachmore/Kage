@@ -413,7 +413,15 @@ describe('the notice, in English', () => {
         );
         expect(n.querySelector('.shell-cmd-sandbox-warn').hidden).toBe(true);
         const labels = [...n.querySelectorAll('button')].map((b) => b.textContent);
-        expect(labels).toEqual(['Copy command', 'Copy & open Terminal']);
+        expect(labels).toEqual([
+            'Run it here',
+            'Run in Terminal',
+            'Copy command',
+            'Copy & open Terminal',
+        ]);
+        // Run in Terminal is macOS-only (jsdom's platform isn't a Mac).
+        expect(n.querySelector('.shell-run-here').hidden).toBe(false);
+        expect(n.querySelector('.shell-run-terminal').hidden).toBe(true);
     });
 
     it('warns about hidden characters and several lines', () => {

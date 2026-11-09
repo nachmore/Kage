@@ -224,16 +224,66 @@ export function createComposerMixin(dependencies) {
                 this.isConnected = true;
                 this.updateConnectionStatus();
             } catch (error) {
-                this.hideTypingIndicator();
-                if (this.currentStreamingMessage) {
-                    this.currentStreamingMessage.remove();
-                    this.currentStreamingMessage = null;
-                }
-                this.showError(errLabel(t('chat.error.error_label'), error));
-                this.isConnected = false;
+                this._abortStreamingSend(error);
+            }
+        }
+
+        /** A send the backend refused: undo startStreaming and say why. */
+        _abortStreamingSend(error) {
+            this.hideTypingIndicator();
+            if (this.currentStreamingMessage) {
+                this.currentStreamingMessage.remove();
+                this.currentStreamingMessage = null;
+            }
+            this.showError(errLabel(t('chat.error.error_label'), error));
+            this.isConnected = false;
+            this.updateConnectionStatus();
+            this.isWaitingForResponse = false;
+            this.updateInputState();
+        }
+
+        /**
+         * Whether a prompt can go to `sessionId` now: it's the session this
+         * window shows, and no turn is in flight on it (here, from another
+         * window, or a plan waiting for review).
+         */
+        canSendAgentPrompt(sessionId) {
+            return (
+                !!sessionId &&
+                sessionId === this.activeSessionId &&
+                !this.isWaitingForResponse &&
+                !this._pendingPlanRevision &&
+                !this.streamRegistry?.isStreaming(sessionId)
+            );
+        }
+
+        /**
+         * Send `message` as the user's next prompt, shown in the chat like
+         * one they typed, without touching the composer (its draft and
+         * attachments stay) or the slash/`>` command handling. Hands the
+         * result of a command the user ran outside the agent's sandbox back
+         * to the agent (shared/shell-run-view.js). Throws when
+         * `canSendAgentPrompt` says no (the caller queues) or the send fails.
+         */
+        async sendAgentPrompt(sessionId, message) {
+            if (!this.canSendAgentPrompt(sessionId)) throw new Error('The agent is busy');
+            this.addUserMessage(message);
+            this.startStreaming();
+            try {
+                trackEvent('message_sent', {
+                    source: 'shell_run',
+                    length: messageLengthBucket(message),
+                });
+                await this.invoke('send_message_streaming', {
+                    sessionId,
+                    message,
+                    attachments: null,
+                });
+                this.isConnected = true;
                 this.updateConnectionStatus();
-                this.isWaitingForResponse = false;
-                this.updateInputState();
+            } catch (error) {
+                this._abortStreamingSend(error);
+                throw error;
             }
         }
 

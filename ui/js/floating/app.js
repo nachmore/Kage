@@ -31,6 +31,7 @@ import { ResponseUiMethods } from './app/response-ui.js';
 import { ResultMenuMethods } from './app/result-menu.js';
 import { applyMixin } from '../shared/mixin.js';
 import { HOST_FEATURE_DATE_PICKER } from '../shared/extension-sandbox-host.js';
+import { setShellRunHost } from '../shared/shell-run-view.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -423,6 +424,14 @@ export class FloatingApp {
         this._historySaved = ''; // stash current input when entering history
 
         this.elements = {};
+
+        // A command the user ran outside the agent's sandbox (a shell
+        // block's sandbox notice) reports back as their next prompt here.
+        setShellRunHost({
+            sessionId: () => this.floatingSessionId,
+            canSend: (sessionId) => this.canSendAgentPrompt(sessionId),
+            send: (sessionId, text) => this.sendAgentPrompt(sessionId, text),
+        });
     }
 
     get _extensionToolCallHandled() {

@@ -46,6 +46,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                         <option value="revoked">${t('settings.tool_permissions.audit.filter.revoked')}</option>
                         <option value="expired">${t('settings.tool_permissions.audit.filter.expired')}</option>
                         <option value="terminator_mode_changed">${t('settings.tool_permissions.audit.filter.terminator')}</option>
+                        <option value="user_ran_command">${t('settings.tool_permissions.audit.filter.user_ran')}</option>
                     </select>
                     <button id="auditLogRefreshBtn" class="reset-permissions-btn" style="background:#3a3640;">${t('settings.tool_permissions.audit.refresh')}</button>
                     <button id="auditLogClearBtn" class="reset-permissions-btn">${t('settings.tool_permissions.audit.clear')}</button>
@@ -584,6 +585,42 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                     ? t('settings.tool_permissions.audit.summary.terminator_on')
                     : t('settings.tool_permissions.audit.summary.terminator_off');
                 break;
+            case 'user_ran_command': {
+                // A command the user ran themselves from a sandbox notice.
+                icon = '▶️';
+                summary =
+                    entry.via === 'terminal'
+                        ? t('settings.tool_permissions.audit.summary.user_ran_terminal')
+                        : t('settings.tool_permissions.audit.summary.user_ran');
+                const details = [];
+                if (entry.outcome === 'exited' && Number.isInteger(entry.exit_code)) {
+                    details.push(
+                        t('settings.tool_permissions.audit.meta.exit_code', {
+                            code: entry.exit_code,
+                        })
+                    );
+                } else if (entry.outcome === 'cancelled') {
+                    details.push(t('settings.tool_permissions.audit.meta.stopped'));
+                } else if (entry.outcome === 'timed_out') {
+                    details.push(t('settings.tool_permissions.audit.meta.timed_out'));
+                } else if (entry.outcome === 'failed_to_start') {
+                    details.push(t('settings.tool_permissions.audit.meta.not_started'));
+                }
+                if (entry.session_id) {
+                    details.push(
+                        t('settings.tool_permissions.audit.meta.session', {
+                            id: escapeHtml(entry.session_id.slice(0, 8)),
+                        })
+                    );
+                }
+                if (entry.command) {
+                    details.push(
+                        `<code dir="ltr">${escapeHtml(String(entry.command).slice(0, 140))}</code>`
+                    );
+                }
+                meta = details.join(' · ');
+                break;
+            }
             default:
                 icon = '❔';
                 summary = t('settings.tool_permissions.audit.summary.unknown', {

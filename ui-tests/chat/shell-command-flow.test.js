@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { marked } from 'marked';
 import { isShellCommandExpanded, setShellCommandExpanded } from '../../ui/js/shared/shell-command-view.js';
 import { buildHistoryTools } from '../../ui/js/shared/tool-call-history.js';
+import { _resetShellRunsForTests } from '../../ui/js/shared/shell-run-view.js';
 
 let ChatApp;
 beforeAll(async () => {
@@ -230,5 +231,108 @@ describe('chat window shell commands', () => {
             expect(text).not.toContain('SECRET123');
             expect(text).not.toContain('shell');
         }
+    });
+});
+
+describe('chat window: running a blocked command yourself', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    function blockedTurn(app, command) {
+        start(app, 'a', command);
+        tool(app, {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'a',
+            status: 'failed',
+            rawOutput: {
+                items: [
+                    {
+                        Json: {
+                            exit_status: 'exit status: 1',
+                            stdout: '',
+                            stderr: 'sandbox-exec: sandbox_apply: Operation not permitted',
+                        },
+                    },
+                ],
+            },
+        });
+        return completeTurn(app);
+    }
+
+    function fakeBackend() {
+        const runs = [];
+        const invoke = vi.fn((cmd, args) => {
+            if (cmd === 'user_shell_run_context') {
+                return Promise.resolve({ cwd: '/home/me', shell: 'zsh', terminal: false });
+            }
+            if (cmd === 'run_user_shell_command') {
+                return new Promise((resolve) => runs.push({ args, resolve }));
+            }
+            return Promise.resolve(null);
+        });
+        window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn(async () => () => {}) } };
+        return runs;
+    }
+
+    afterEach(() => {
+        _resetShellRunsForTests();
+        delete window.__TAURI__;
+    });
+
+    it('tells the agent as the next prompt, once the turn in progress has ended', async () => {
+        const app = makeApp();
+        const runs = fakeBackend();
+        app.elements.chatInput.value = 'a draft the user is typing';
+        await blockedTurn(app, 'brew install awscli');
+        const block = listBlocks()[0];
+        block.querySelector('.shell-run-here').click();
+        await flush();
+        await flush();
+        block.querySelector('.shell-run-confirm .shell-run-go').click();
+        await flush();
+        expect(runs).toHaveLength(1);
+        expect(runs[0].args).toMatchObject({ command: 'brew install awscli', sessionId: SID });
+
+        // The user asked something else meanwhile: the result waits for it.
+        app.isWaitingForResponse = true;
+        runs[0].resolve({
+            outcome: 'exited',
+            exitCode: 0,
+            signal: null,
+            output: '🍺 awscli installed\n',
+            truncated: false,
+        });
+        await flush();
+        await flush();
+        expect(app.invoke).not.toHaveBeenCalledWith('send_message_streaming', expect.anything());
+        expect(block.querySelector('.shell-run-agent-text').textContent).toBe(
+            'shared.shell.sandbox.agent.queued'
+        );
+
+        app.isWaitingForResponse = false;
+        await new Promise((r) => setTimeout(r, 650));
+        const sends = app.invoke.mock.calls.filter(([c]) => c === 'send_message_streaming');
+        expect(sends).toHaveLength(1);
+        const { sessionId, message: text, attachments } = sends[0][1];
+        expect(sessionId).toBe(SID);
+        expect(attachments).toBeNull();
+        expect(text).toContain('I ran this outside your sandbox: `brew install awscli` — exit code 0');
+        expect(text).toContain('🍺 awscli installed');
+        // Shown as the user's message; the draft in the composer is untouched.
+        const bubbles = [...document.querySelectorAll('.message.user')];
+        expect(bubbles.at(-1).textContent).toContain('I ran this outside your sandbox');
+        expect(app.elements.chatInput.value).toBe('a draft the user is typing');
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(block.querySelector('.shell-run-agent-text').textContent).toBe(
+            'shared.shell.sandbox.agent.sent'
+        );
+    });
+
+    it('sends only to the session in view, when no turn is in flight', () => {
+        const app = makeApp();
+        app.isWaitingForResponse = false;
+        expect(app.canSendAgentPrompt(SID)).toBe(true);
+        expect(app.canSendAgentPrompt('other')).toBe(false);
+        app.isWaitingForResponse = true;
+        expect(app.canSendAgentPrompt(SID)).toBe(false);
     });
 });
