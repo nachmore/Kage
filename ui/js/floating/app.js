@@ -30,7 +30,7 @@ import { InputMethods } from './app/input.js';
 import { ResponseUiMethods } from './app/response-ui.js';
 import { ResultMenuMethods } from './app/result-menu.js';
 import { applyMixin } from '../shared/mixin.js';
-import { HOST_FEATURE_DATE_PICKER } from '../shared/extension-sandbox-host.js';
+import { HOST_FEATURE_DATE_PICKER, HOST_FEATURE_VIEWS } from '../shared/extension-sandbox-host.js';
 import { setShellRunHost } from '../shared/shell-run-view.js';
 
 export class FloatingApp {
@@ -93,9 +93,15 @@ export class FloatingApp {
         this._promptGeneration = 0; // incremented each time we send a user message
         this.attachmentManager = new AttachmentManager();
         // The floating window hosts the month-calendar date picker, so it
-        // offers that feature to (calendar-capable) extensions.
+        // offers that feature to (calendar-capable) extensions. It opens
+        // extension views too, and stays open beside one it opened
+        // (docs/design/EXTENSION_VIEWS.md §15.2, Rule A).
         this.extensionManager = new ExtensionManager(invoke, {
-            hostFeatures: [HOST_FEATURE_DATE_PICKER],
+            hostFeatures: [HOST_FEATURE_DATE_PICKER, HOST_FEATURE_VIEWS],
+            resultSource: 'launcher',
+            onBeforeOpenView: () => this._armViewCompanion(),
+            listen,
+            windowLabel: appWindow?.label || WINDOW.FLOATING,
         });
         this.extensionToolController = new ExtensionToolController({
             invoke,

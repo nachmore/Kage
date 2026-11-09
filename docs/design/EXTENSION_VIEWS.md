@@ -1201,32 +1201,48 @@ and response. Two rules prevent that:
 
 **Rule A, the moment of opening.** When the launcher opens a view, it sets
 `this._suppressBlurHideUntil = Date.now() + 1500` (the result menu uses
-the same mechanism) and `this._viewCompanion = true` before calling
-`ext_view_open`. Building a new WebView window can take a few hundred
-milliseconds; the suppression covers it. The launcher clears its input as
-after any executed result, but keeps its response area.
+the same mechanism; a longer suppression already armed is kept) and
+`this._viewCompanion = true` before calling `ext_view_open`. Building a
+new WebView window can take a few hundred milliseconds; the suppression
+covers it. The launcher clears its input as after any executed result,
+but keeps its response area. The floating window passes this as the
+extension manager's `onBeforeOpenView` (`_armViewCompanion`), so it
+covers every opener in the launcher: result rows, formatter cards,
+widgets and toolbar buttons. It runs only once the §6.2 checks pass.
 
 **Rule B, moving focus between the launcher and views.** In the blur
-handler, after the existing guards and before hiding:
+handler, after the existing guards and before hiding
+(`_staysForView(sequence)` in `lifecycle-visibility.js`):
 
 ```js
+if (!this.extensionManager?.hasViewCapableExtensions?.()) return false;   // no view can exist: hide
 const { view_focused } = await invoke('ext_view_focus_state').catch(() => ({ view_focused: false }));
-if (view_focused) { this._viewCompanion = true; return; }   // focus went to a view: stay
+if (sequence !== this._visibilitySequence) return true;   // the launcher got focus back meanwhile
+if (!view_focused || !(await this._isWindowVisible())) return false;   // already hidden (Esc): hide path
+this._viewCompanion = true; return true;   // focus went to a view: stay
 ```
 
 `ext_view_focus_state` answers at once with `false` when no view window is
-visible, so the common blur isn't slowed down. When one is visible it
-waits up to 120 ms for a view to report focus (the order of the two focus
-events isn't guaranteed).
+visible. The launcher asks it only when one of its enabled extensions
+holds `views` and declares a view (`ExtensionManager.hasViewCapableExtensions`),
+because Rust closes a view window when its extension is turned off or
+loses the grant, so the common blur costs no IPC at all. When a view is
+visible it waits up to 120 ms for a view to report focus (the order of
+the two focus events isn't guaranteed). A launcher that is already
+hidden (Esc, a hide action) runs its hide path as before.
 
 The launcher then still has to hide when the user leaves Kage from the
 view. Rust handles a view's `Focused(false)`: after 150 ms, if neither the
 launcher nor any view window is focused, it emits `ext_view_focus_lost` to
-the launcher. The launcher runs its normal hide path if
-`_viewCompanion` is set and it isn't focused. `_viewCompanion` is cleared
-whenever the launcher hides or shows.
+the launcher. The launcher runs its normal hide path (the same guards,
+not the suppression timers) if `_viewCompanion` is set and it isn't
+focused. `_viewCompanion` is cleared whenever the launcher hides or shows.
+The launcher listens for `ext_view_focus_lost` and `floating_compose` on
+its own window (`appWindow.listen`).
 
-The decision is a pure function, unit-tested in Rust and JS:
+The decision is a pure function in Rust, unit-tested there. The launcher
+doesn't compute it (it can't see other windows' focus); its tests cover
+how it reacts to `ext_view_focus_lost`:
 
 ```
 should_release_launcher(focused_labels) = !focused_labels.any(l => l == "floating" || is_ext_view_label(l))
@@ -1331,7 +1347,11 @@ Notes:
   and emits `floating_compose { text }` to it. A hidden launcher is
   centred on the active monitor, as other host-initiated shows (the
   welcome and update banners) do, without selection capture. The launcher
-  replaces its input, selects it and does **not** send.
+  replaces its input, selects it and does **not** send. It fires the
+  input's `input` event, so autogrow and suggestions follow, as for
+  typing. With `ui.preserve_last_response` off, the show-time reset skips
+  a launcher that was composed into in the last second, so the text
+  isn't wiped.
 - Lengths for compose and copy count UTF-16 units, as `copyTextError`
   does in JS.
 - `ext_view_open`'s `source` is checked against the closed list in §9.1;
