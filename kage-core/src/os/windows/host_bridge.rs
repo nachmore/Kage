@@ -324,6 +324,11 @@ impl Listener {
             };
             // SAFETY: a live server instance; blocking connect.
             let connected = unsafe { ConnectNamedPipe(raw(&pipe), None) };
+            // The next instance first, before this one can close (below,
+            // when its client already went): with no instance left, the
+            // name would be free for any process to claim.
+            let next = create_instance(&self.name, &self.sd, false)?;
+            *self.next.lock().unwrap_or_else(|p| p.into_inner()) = Some(next);
             if let Err(e) = connected {
                 if e.code() != ERROR_PIPE_CONNECTED.to_hresult() {
                     // The client went away before we got to it.
@@ -333,8 +338,6 @@ impl Listener {
             if stop.load(Ordering::SeqCst) {
                 return Ok(None);
             }
-            let next = create_instance(&self.name, &self.sd, false)?;
-            *self.next.lock().unwrap_or_else(|p| p.into_inner()) = Some(next);
 
             let mut pid = 0u32;
             // SAFETY: a connected server instance and an out-pointer.
