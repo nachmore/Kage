@@ -287,5 +287,14 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::ext_sync_push,
         crate::commands::ext_sync_pull,
         crate::commands::ext_sync_ack,
+        crate::commands::agent_call_reserve,
+        crate::commands::agent_call_ready,
+        crate::commands::agent_call_send,
+        crate::commands::agent_call_cancel,
+        crate::commands::agent_call_status,
+        crate::commands::get_extension_agent_access,
+        crate::commands::set_extension_agent_access,
+        crate::commands::stop_extension_agent_calls,
+        crate::commands::get_extension_agent_request_detail,
     ]
 }

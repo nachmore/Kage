@@ -3801,11 +3801,11 @@ Files listed by more than one design:
 | File | Packages, in merge order |
 |---|---|
 | `src/error.rs` | AC0, C0, S4 |
-| `src/events.rs` | AC0, FT-C, V1, C0, V3 (one stale `allow`), S4 |
+| `src/events.rs` | AC0, FT-C, V1, C0, V3 (one stale `allow`), AC3 (one stale `allow`), S4 |
 | `ui/js/shared/events.js` | AC0, FT-C, V1, C0, S4 |
 | `locales/*/messages.json` | AC0, FT-C, V1, C0, then later strings of every package (S6 merges sync's fragments) |
 | `src/lib.rs` | V1, FT5, AC1, C0 |
-| `src/main.rs` | V1, V2, V3 (one comment), FT5, C0, S4 |
+| `src/main.rs` | V1, V2, V3 (one comment), FT5, AC3 (the `mod` line, window focus), C0, S4 |
 | `src/state.rs` | V2, AC3, S4 |
 | `src/setup.rs` | V2, S4 |
 | `src/commands/registry.rs` | V1, FT5, AC3, C0, S4 |

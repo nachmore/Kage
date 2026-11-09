@@ -364,6 +364,7 @@ pub const VALID_CAPABILITIES: &[&str] = &[
     "automation",
     "tts",
     "views",
+    "agent_background",
 ];
 
 /// Filter a raw permission list to a deduped, lowercase set of known
@@ -422,6 +423,12 @@ pub struct ExtensionManifest {
     /// [`ExtensionManifest::sensitive_data_patterns`].
     #[serde(default, rename = "sensitiveData")]
     pub sensitive_data: Option<serde_json::Value>,
+    /// The `agentBackground` block: why and for what the extension asks
+    /// the agent in the background (`agent_background` capability). Kept
+    /// raw, like `sensitiveData`; read it through
+    /// [`ExtensionManifest::agent_background_decl`].
+    #[serde(default, rename = "agentBackground")]
+    pub agent_background: Option<serde_json::Value>,
 }
 
 impl ExtensionManifest {
@@ -433,6 +440,15 @@ impl ExtensionManifest {
     /// Every `config` entry, as backups read it (see [`config_field_decls`]).
     pub fn config_field_decls(&self) -> Vec<ConfigFieldDecl> {
         config_field_decls(self.config.as_ref(), &self.id)
+    }
+
+    /// The `agentBackground` block, normalised. `None` when it is absent
+    /// or malformed: background agent calls then fail `not_available`
+    /// (docs/design/EXTENSION_AGENT_CALLS.md §3.2).
+    pub fn agent_background_decl(&self) -> Option<crate::agent_calls::AgentBackgroundDecl> {
+        self.agent_background
+            .as_ref()
+            .and_then(crate::agent_calls::AgentBackgroundDecl::from_manifest)
     }
 
     /// The valid `contributes.views` entries (see [`views::normalize_views`]).
@@ -604,6 +620,55 @@ mod tests {
             normalize_permissions(&["Views".to_string()], "test"),
             vec!["views"]
         );
+    }
+
+    #[test]
+    fn agent_background_is_a_valid_capability() {
+        assert!(VALID_CAPABILITIES.contains(&"agent_background"));
+        assert_eq!(
+            normalize_permissions(&[" Agent_Background ".to_string()], "test"),
+            vec!["agent_background"]
+        );
+    }
+
+    #[test]
+    fn agent_background_block_round_trips_and_normalizes() {
+        let m = parse_manifest(serde_json::json!({
+            "permissions": ["storage", "agent_background"],
+            "agentBackground": {
+                "reason": "__MSG_manifest.agent_background_reason__",
+                "purposes": ["organize"],
+                "maxPromptChars": 16000,
+                "dailyCalls": 40,
+                "future": true
+            }
+        }));
+        let decl = m.agent_background_decl().expect("a valid block");
+        assert_eq!(decl.reason, "__MSG_manifest.agent_background_reason__");
+        assert_eq!(decl.purposes, vec!["organize"]);
+        assert_eq!(decl.max_prompt_chars, Some(16000));
+        assert_eq!(decl.daily_calls, Some(40));
+        let value = serde_json::to_value(&m).expect("serialize");
+        assert_eq!(
+            value["agentBackground"]["future"], true,
+            "the raw value round-trips untouched"
+        );
+    }
+
+    #[test]
+    fn a_malformed_agent_background_block_means_not_declared() {
+        for raw in [
+            serde_json::json!("organize"),
+            serde_json::json!({ "purposes": ["organize"] }),
+            serde_json::json!({ "reason": "Why", "purposes": [] }),
+            serde_json::json!({ "reason": "Why", "purposes": ["Bad-Id"] }),
+        ] {
+            let m = parse_manifest(serde_json::json!({ "agentBackground": raw }));
+            assert!(m.agent_background_decl().is_none(), "{raw}");
+        }
+        assert!(parse_manifest(serde_json::json!({}))
+            .agent_background_decl()
+            .is_none());
     }
 
     #[test]

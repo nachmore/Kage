@@ -195,6 +195,13 @@ pub fn scratch_dir() -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
+/// Whether `e` is `run_with`'s `agent_unavailable` refusal (an `AppError`
+/// inside the `anyhow::Error`).
+fn is_unavailable(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<crate::error::AppError>()
+        .is_some_and(|a| a.key == "errors.agent_call.agent_unavailable")
+}
+
 /// The agent behind Kage's ACP client.
 pub struct AcpBackend {
     client: Arc<AcpClient>,
@@ -259,6 +266,9 @@ impl AgentBackend for AcpBackend {
             Ok(reply) => Ok(reply),
             Err(_) if ctl.stopped().is_some() && !ctl.was_sent() => Err(RunError::Stopped),
             Err(_) if !self.client.is_connected() && !ctl.was_sent() => Err(RunError::Unavailable),
+            // `run_with` refused before anything was spawned or sent: the
+            // agent is connected but not healthy (§5.5).
+            Err(e) if !ctl.was_sent() && is_unavailable(&e) => Err(RunError::Unavailable),
             Err(e) => Err(RunError::Agent(e.to_string())),
         }
     }
@@ -320,6 +330,25 @@ mod tests {
             ctl.cancel_due(now + chrono::Duration::milliseconds(2_500)),
             None
         );
+    }
+
+    #[test]
+    fn run_withs_unavailable_refusal_is_recognised() {
+        let refused: anyhow::Error = crate::error::AppError::keyed(
+            crate::error::ErrorKind::ConnectionLost,
+            "errors.agent_call.agent_unavailable",
+            &[],
+        )
+        .into();
+        assert!(is_unavailable(&refused));
+        assert!(!is_unavailable(&anyhow::anyhow!("Session creation failed")));
+        let other: anyhow::Error = crate::error::AppError::keyed(
+            crate::error::ErrorKind::ConnectionLost,
+            "errors.agent_call.agent_disconnected",
+            &[],
+        )
+        .into();
+        assert!(!is_unavailable(&other));
     }
 
     #[test]

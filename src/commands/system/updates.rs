@@ -182,5 +182,7 @@ pub async fn clear_update_flag(features: State<'_, FeatureServices>) -> Result<(
 #[tauri::command]
 pub async fn touch_floating_activity(features: State<'_, FeatureServices>) -> Result<(), AppError> {
     features.updater.touch_activity();
+    // Background agent calls hold back new turns while the user types.
+    features.agent_calls.note_user_activity();
     Ok(())
 }

@@ -83,6 +83,8 @@ pub fn configure(
         slash_commands,
         pending_permissions,
     );
+    // Background agent calls: hooks, strict-session hooks and the scheduler.
+    commands::agent_calls::start_service(app.handle());
     setup::configure_transparent_windows(app);
     crate::overlay_windows::configure_all(app);
     crate::commands::window::preload_context_menu(app.handle());

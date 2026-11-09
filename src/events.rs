@@ -126,7 +126,6 @@ pub const AUTOMATION_STEP_COMPLETE: &str = "automation_step_complete";
 /// of waiting calls changed. Payload: `{ running: [{ extension_id, name,
 /// purpose, label?, started_at }], waiting }`. Sent to first-party
 /// windows only, never to extension sandboxes.
-#[allow(dead_code)] // The background agent-call service will emit it; the app doesn't yet.
 pub const AGENT_CALLS_ACTIVITY: &str = "agent_calls_activity";
 
 // --- Extension file text --------------------------------------------

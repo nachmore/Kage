@@ -46,7 +46,7 @@ mod tests;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 
@@ -306,15 +306,7 @@ impl ExtensionDirectory for InstalledExtensions {
         let item = crate::extensions::discover_items("extension", &HashMap::new())
             .into_iter()
             .find(|i| i.manifest.id == extension_id)?;
-        // `agentBackground` is read from the manifest file itself, so this
-        // doesn't depend on `ExtensionManifest` modelling the field.
-        let decl = std::fs::read_to_string(Path::new(&item.path).join("manifest.json"))
-            .ok()
-            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-            .and_then(|v| {
-                v.get("agentBackground")
-                    .and_then(AgentBackgroundDecl::from_manifest)
-            });
+        let decl = item.manifest.agent_background_decl();
         Some(ManifestFacts {
             name: crate::config_export::sensitive::display_name(&item),
             decl,

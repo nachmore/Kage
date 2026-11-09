@@ -101,8 +101,12 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
     config.extension_states.remove(&id);
     config.extensions.remove(&id);
     config.extension_grants.remove(&id);
+    // Background AI consent named this install; a later one asks again.
+    config.extension_agent_access.remove(&id);
     let _ = config.save();
     drop(config);
+    // Its background agent calls end (`cancelled_access_off`).
+    features.agent_calls.on_extension_changed(&id);
 
     // Stored data is keyed only by id, so leaving it would hand an old
     // extension's tokens to any later extension installed under the same id.
@@ -187,6 +191,10 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
         .map_err(|e| format!("Failed to save config: {}", e))?;
     drop(config);
 
+    // A grant (or an updated manifest) without `agent_background` or its
+    // `agentBackground` block ends the extension's background agent calls.
+    features.agent_calls.on_extension_changed(&extension_id);
+
     // A grant (or an updated manifest) without `views` closes the
     // extension's view windows. With `views` still held they stay, and
     // their pages reload in place on `extensions_changed`.
@@ -214,7 +222,8 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
 }
 
 /// Remove a recorded grant (e.g. when uninstalling an extension). Its
-/// view windows close: without a grant it holds no `views`.
+/// view windows close: without a grant it holds no `views`. Its background
+/// AI access goes with the grant, and its calls end.
 #[tauri::command]
 pub async fn remove_extension_grant<R: tauri::Runtime>(
     extension_id: String,
@@ -225,13 +234,19 @@ pub async fn remove_extension_grant<R: tauri::Runtime>(
         .map_err(|e| format!("Invalid extension id: {}", e))?;
 
     let mut config = features.config.lock_or_recover();
-    if config.extension_grants.remove(&extension_id).is_some() {
+    let had_grant = config.extension_grants.remove(&extension_id).is_some();
+    let had_access = config
+        .extension_agent_access
+        .remove(&extension_id)
+        .is_some();
+    if had_grant || had_access {
         info!("Removed capability grant for '{}'", extension_id);
         config
             .save()
             .map_err(|e| format!("Failed to save config: {}", e))?;
     }
     drop(config);
+    features.agent_calls.on_extension_changed(&extension_id);
     crate::ext_views::close_for_extension(&app, &extension_id);
     Ok(())
 }

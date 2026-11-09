@@ -177,6 +177,7 @@ pub fn show_floating_at_mouse<R: tauri::Runtime>(window: &WebviewWindow<R>) {
         return;
     }
     features.updater.touch_activity();
+    features.agent_calls.note_user_activity();
 
     // Clear selection — clipboard mode doesn't use it
     if let Ok(mut sel) = ui.last_selection.lock() {
@@ -284,7 +285,9 @@ pub fn toggle_floating_window<R: tauri::Runtime>(window: &WebviewWindow<R>) {
                 }
 
                 // Record floating window activity for the updater idle check
+                // and for background agent calls, which wait until idle.
                 features.updater.touch_activity();
+                features.agent_calls.note_user_activity();
 
                 // Store the source window info for screen context
                 if let Ok(mut sw) = ui_state.source_window.lock() {
