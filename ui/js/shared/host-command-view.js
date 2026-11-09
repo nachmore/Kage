@@ -12,7 +12,8 @@
  * Every prompt answers only its own request (`answer_host_command` with
  * its id; the backend also checks the window), each answer once. Nothing
  * here is focused when a prompt appears, so keys typed elsewhere can't
- * answer it, and Run takes a single deliberate click. Unanswered prompts
+ * answer it; Run and Always allow take a single deliberate click (or
+ * Space), never Enter. Unanswered prompts
  * are denied by the backend after five minutes.
  *
  * Once approved — or when a rule ran it without asking — the card shows
@@ -76,6 +77,23 @@ function button(className, label, iconName) {
     span.textContent = label;
     btn.append(span);
     return btn;
+}
+
+/**
+ * An answer that runs the command: a click of its own
+ * (`onDeliberateClick`), and never Enter. A prompt takes no focus, but
+ * Tab / Shift+Tab from the composer can land on one of its buttons, and
+ * an Enter meant for a message must not run a command. Space still
+ * presses it, for keyboard users.
+ */
+function onApproveClick(btn, fn) {
+    btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    });
+    onDeliberateClick(btn, fn);
 }
 
 /** The guard's warning: what it found, in words. */
@@ -267,7 +285,7 @@ export function showHostCommandPrompt(p) {
                 if (e.key === 'Enter') e.preventDefault();
                 e.stopPropagation();
             });
-            onDeliberateClick(alwaysBtn, () => answer(card, 'always', input.value));
+            onApproveClick(alwaysBtn, () => answer(card, 'always', input.value));
             always.append(alwaysBtn, input);
             card.prefix = input;
             actions.append(always);
@@ -277,7 +295,7 @@ export function showHostCommandPrompt(p) {
             t('shared.host_command.run_once'),
             'play'
         );
-        onDeliberateClick(run, () => answer(card, 'run_once'));
+        onApproveClick(run, () => answer(card, 'run_once'));
         actions.append(run);
     }
     root.append(status, actions, card.runSlot);

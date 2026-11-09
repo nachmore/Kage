@@ -123,6 +123,34 @@ describe('the prompt', () => {
         expect(card.contains(document.activeElement)).toBe(false);
     });
 
+    it('never runs on Enter, even with a run button focused', async () => {
+        const tauri = fakeTauri();
+        await installHostCommandUi({ tray });
+        const card = showHostCommandPrompt(prompt()).el;
+        for (const btn of [runOnce(card), always(card)]) {
+            // Tab / Shift+Tab from the composer can land here.
+            btn.focus();
+            const enter = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                bubbles: true,
+                cancelable: true,
+            });
+            btn.dispatchEvent(enter);
+            // A button presses itself on an Enter nobody cancelled.
+            expect(enter.defaultPrevented).toBe(true);
+            const space = new KeyboardEvent('keydown', {
+                key: ' ',
+                bubbles: true,
+                cancelable: true,
+            });
+            btn.dispatchEvent(space);
+            expect(space.defaultPrevented).toBe(false);
+        }
+        await flush();
+        expect(tauri.answers()).toHaveLength(0);
+        expect(q(card, '.host-cmd-actions')).not.toBeNull();
+    });
+
     it('shows one prompt per request, each answering only its own', async () => {
         const tauri = fakeTauri();
         await installHostCommandUi({ tray });
