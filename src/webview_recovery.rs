@@ -236,6 +236,13 @@ pub fn install_process_failed_for<R: tauri::Runtime>(webview: &tauri::Webview<R>
     process_failures::install_process_failed_for(webview);
 }
 
+/// A window was destroyed: forget that its label has a listener, so a
+/// window built later under the same label (extension view windows are
+/// destroyed and rebuilt) gets one of its own.
+pub fn forget_webview(label: &str) {
+    process_failures::forget_webview(label);
+}
+
 /// Predicate the log shim asks for every record. Returns `true` if the
 /// caller should hand this record to `trigger_recovery_async`. Lifted
 /// out of the shim so it can be unit-tested without faking the

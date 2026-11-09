@@ -88,6 +88,12 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
         // Otherwise this was a fresh install: roll it back fully below.
     }
 
+    // Its view windows go first, so none is left showing files that are
+    // about to be deleted.
+    if kind == "extension" {
+        crate::ext_views::close_for_extension(&app, &id);
+    }
+
     extensions::uninstall(&id, &kind).map_err(|e| format!("Uninstall failed: {}", e))?;
 
     // Remove from enabled states and extension config
@@ -103,6 +109,12 @@ pub async fn uninstall_extension<R: tauri::Runtime>(
     // Safe now that a declined upgrade of an approved item returns above.
     if let Err(e) = super::files::purge_extension_data(&id) {
         warn!("Failed to remove stored data for '{}': {}", id, e);
+    }
+    // Saved view window positions go with it (they're keyed by id too).
+    if kind == "extension" {
+        if let Err(e) = crate::ext_views::geometry::remove_entries(&id, None) {
+            warn!("Failed to remove view window positions for '{}': {}", id, e);
+        }
     }
 
     crate::telemetry::track(
@@ -166,11 +178,25 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
         "Committing install for '{}': capabilities {:?}",
         extension_id, record.granted
     );
-    config.extension_grants.insert(extension_id.clone(), record);
+    config
+        .extension_grants
+        .insert(extension_id.clone(), record.clone());
+    let states = config.extension_states.clone();
     config
         .save()
         .map_err(|e| format!("Failed to save config: {}", e))?;
     drop(config);
+
+    // A grant (or an updated manifest) without `views` closes the
+    // extension's view windows. With `views` still held they stay, and
+    // their pages reload in place on `extensions_changed`.
+    let holds_views = extensions::discover_items("extension", &states)
+        .iter()
+        .find(|i| i.manifest.id == extension_id)
+        .is_some_and(|i| crate::ext_views::holds_views(&i.manifest, Some(&record)));
+    if !holds_views {
+        crate::ext_views::close_for_extension(&app, &extension_id);
+    }
 
     // Anonymous install-success event. We send only the extension id,
     // which is a published identifier (visible in the extension store),
@@ -187,11 +213,13 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
     Ok(())
 }
 
-/// Remove a recorded grant (e.g. when uninstalling an extension).
+/// Remove a recorded grant (e.g. when uninstalling an extension). Its
+/// view windows close: without a grant it holds no `views`.
 #[tauri::command]
-pub async fn remove_extension_grant(
+pub async fn remove_extension_grant<R: tauri::Runtime>(
     extension_id: String,
     features: State<'_, FeatureServices>,
+    app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     extensions::validate_extension_id(&extension_id)
         .map_err(|e| format!("Invalid extension id: {}", e))?;
@@ -203,5 +231,7 @@ pub async fn remove_extension_grant(
             .save()
             .map_err(|e| format!("Failed to save config: {}", e))?;
     }
+    drop(config);
+    crate::ext_views::close_for_extension(&app, &extension_id);
     Ok(())
 }

@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "extension-view",
+  "description": "Capability for extension view windows (ext-view:*): only what the first-party view page uses. The extension's iframe inside it can't reach Tauri at all.",
+  "windows": ["ext-view:*"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:event:allow-listen",
+    "core:window:default",
+    "core:window:allow-close",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-title",
+    "core:window:allow-is-visible",
+    "core:webview:default"
+  ]
+}

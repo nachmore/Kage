@@ -52,3 +52,7 @@ pub fn present_without_activating_impl(ns_window: *mut std::ffi::c_void) {
     window.orderFrontRegardless();
     window.makeKeyWindow();
 }
+
+pub fn can_position_windows_impl() -> bool {
+    true
+}

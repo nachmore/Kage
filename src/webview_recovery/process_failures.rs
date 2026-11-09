@@ -100,8 +100,9 @@ fn record_process_failure(label: &str, kind: &str) {
         *slot = Some(event);
     }
 
-    match action_for_process_failed_kind(kind) {
+    match action_for_process_failed(label, kind) {
         ProcessFailedAction::ReloadWindow => attempt_window_reload(label),
+        ProcessFailedAction::DestroyViewWindow => destroy_view_window(label),
         ProcessFailedAction::RestartApp => {
             error!(
                 "webview-recovery: browser process for '{}' exited — controller is dead, \
@@ -114,15 +115,20 @@ fn record_process_failure(label: &str, kind: &str) {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProcessFailedAction {
     ReloadWindow,
+    /// An extension view window's renderer failed: destroy the window
+    /// rather than reload it, so a view that crashes its renderer can't
+    /// loop (docs/design/EXTENSION_VIEWS.md §7.3). The next open builds it
+    /// again.
+    DestroyViewWindow,
     RestartApp,
     Ignore,
 }
 
-#[cfg(target_os = "windows")]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 fn action_for_process_failed_kind(kind: &str) -> ProcessFailedAction {
     match kind {
         "render_process_exited" | "render_process_unresponsive" | "frame_render_process_exited" => {
@@ -131,6 +137,35 @@ fn action_for_process_failed_kind(kind: &str) -> ProcessFailedAction {
         "browser_process_exited" => ProcessFailedAction::RestartApp,
         _ => ProcessFailedAction::Ignore,
     }
+}
+
+/// [`action_for_process_failed_kind`], except that a view window whose
+/// renderer failed is destroyed instead of reloaded. A browser-process
+/// exit still restarts the app: every window is dead then.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn action_for_process_failed(label: &str, kind: &str) -> ProcessFailedAction {
+    match action_for_process_failed_kind(kind) {
+        ProcessFailedAction::ReloadWindow if crate::window_labels::is_ext_view_label(label) => {
+            ProcessFailedAction::DestroyViewWindow
+        }
+        action => action,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn destroy_view_window(label: &str) {
+    let Some(app) = APP_HANDLE.get() else {
+        warn!(
+            "webview-recovery: can't destroy '{}' — no AppHandle stashed",
+            label
+        );
+        return;
+    };
+    info!(
+        "webview-recovery: destroying view window '{}' after its renderer failed",
+        label
+    );
+    crate::ext_views::destroy_view(app, label);
 }
 
 #[cfg(target_os = "windows")]
@@ -181,6 +216,18 @@ pub(super) fn install_process_failed_for<R: tauri::Runtime>(webview: &tauri::Web
 
 #[cfg(not(target_os = "windows"))]
 pub(super) fn install_process_failed_for<R: tauri::Runtime>(_webview: &tauri::Webview<R>) {}
+
+#[cfg(target_os = "windows")]
+pub(super) fn forget_webview(label: &str) {
+    let mut installed = match LISTENER_INSTALLED.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    installed.remove(label);
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(super) fn forget_webview(_label: &str) {}
 
 #[cfg(target_os = "windows")]
 static LISTENER_INSTALLED: LazyLock<Mutex<std::collections::HashSet<String>>> =
@@ -284,10 +331,8 @@ fn process_failed_kind_str(
 
 #[cfg(test)]
 mod tests {
-    #[cfg(target_os = "windows")]
-    use super::{action_for_process_failed_kind, ProcessFailedAction};
+    use super::{action_for_process_failed, action_for_process_failed_kind, ProcessFailedAction};
 
-    #[cfg(target_os = "windows")]
     #[test]
     fn process_failed_kind_maps_to_correct_action() {
         use ProcessFailedAction::*;
@@ -314,5 +359,34 @@ mod tests {
             Ignore
         );
         assert_eq!(action_for_process_failed_kind("unrecognized_kind"), Ignore);
+    }
+
+    #[test]
+    fn a_failed_view_renderer_destroys_the_view_window() {
+        use ProcessFailedAction::*;
+
+        let view = "ext-view:mindmap:explorer";
+        for kind in [
+            "render_process_exited",
+            "render_process_unresponsive",
+            "frame_render_process_exited",
+        ] {
+            assert_eq!(action_for_process_failed(view, kind), DestroyViewWindow);
+            assert_eq!(action_for_process_failed("settings", kind), ReloadWindow);
+            assert_eq!(action_for_process_failed("chat-abc", kind), ReloadWindow);
+        }
+        assert_eq!(
+            action_for_process_failed(view, "browser_process_exited"),
+            RestartApp
+        );
+        assert_eq!(
+            action_for_process_failed(view, "gpu_process_exited"),
+            Ignore
+        );
+        // A label that only looks like a view is treated as any window.
+        assert_eq!(
+            action_for_process_failed("ext-view:bad:Label", "render_process_exited"),
+            ReloadWindow
+        );
     }
 }

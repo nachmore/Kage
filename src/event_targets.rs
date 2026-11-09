@@ -115,7 +115,6 @@ where
 
 /// Emit to one extension view window. Refuses any label that isn't a view
 /// window's, so it can't be used to reach the launcher or a chat window.
-#[allow(dead_code)] // The view window lifecycle will call it; the app doesn't yet.
 pub fn emit_to_ext_view<R, S>(app: &impl Emitter<R>, label: &str, event: &str, payload: &S)
 where
     R: Runtime,

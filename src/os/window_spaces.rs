@@ -44,3 +44,11 @@ pub fn present_without_activating(ns_window: *mut std::ffi::c_void) {
 pub fn use_popup_menu_level(ns_window: *mut std::ffi::c_void) {
     crate::os::platform::window_spaces::use_popup_menu_level_impl(ns_window)
 }
+
+/// Whether Kage may choose where its own windows appear. False in a
+/// Wayland session, where the compositor places every toplevel and
+/// ignores positions; extension view windows then restore only their
+/// size (docs/design/EXTENSION_VIEWS.md §7.5).
+pub fn can_position_windows() -> bool {
+    crate::os::platform::window_spaces::can_position_windows_impl()
+}

@@ -78,10 +78,13 @@ impl UpdaterState {
 /// for the silent-update idle gate. Covers the fixed user-facing windows
 /// plus every per-session `chat-<uuid>` window — a user mid-conversation
 /// in a chat window must block a silent relaunch just like one in `main`.
+/// An open extension view (`ext-view:*`) counts too: the user is working
+/// in it (docs/design/EXTENSION_VIEWS.md §19).
 pub(super) fn is_user_facing_label(label: &str) -> bool {
     label == crate::window_labels::FLOATING
         || label == crate::window_labels::SETTINGS
         || crate::window_labels::is_session_host_label(label)
+        || crate::window_labels::is_ext_view_label(label)
 }
 
 pub(super) fn is_any_user_window_visible(app: &tauri::AppHandle) -> bool {
@@ -181,6 +184,13 @@ mod tests {
     fn chat_session_windows_are_user_facing() {
         let label = window_labels::chat_label("11111111-2222-3333-4444-555555555555");
         assert!(is_user_facing_label(&label));
+    }
+
+    #[test]
+    fn extension_view_windows_are_user_facing() {
+        let label = window_labels::ext_view_label("mindmap", "explorer").unwrap();
+        assert!(is_user_facing_label(&label));
+        assert!(!is_user_facing_label("ext-view:bad:Label"));
     }
 
     #[test]

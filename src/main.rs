@@ -31,7 +31,6 @@ mod ephemeral_session;
 mod error;
 mod event_targets;
 mod events;
-#[allow(dead_code)] // Only the view commands' types are used until the view windows land.
 mod ext_views;
 #[allow(dead_code)] // The storage change coalescer will use it; the app doesn't yet.
 mod extension_data_events;
@@ -449,6 +448,12 @@ async fn run() {
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 setup::handle_window_close(window, api);
+            }
+            // Extension view windows: geometry saves on move and resize,
+            // focus for the launcher's companion rule, and registry
+            // cleanup when one is destroyed.
+            if window_labels::is_ext_view_label(window.label()) {
+                ext_views::handle_window_event(window, event);
             }
             if let tauri::WindowEvent::Destroyed = event {
                 // The window's extension tool steering goes with it. Tauri

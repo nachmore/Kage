@@ -68,7 +68,6 @@ pub const EXT_VIEW_PREFIX: &str = "ext-view:";
 
 /// Build the label for an extension's view window. `None` when either id
 /// is invalid, so a label can never carry a second `:` separator.
-#[allow(dead_code)] // `ext_view_open` will build labels; the app doesn't yet.
 pub fn ext_view_label(extension_id: &str, view_id: &str) -> Option<String> {
     valid_ext_view_parts(extension_id, view_id)
         .then(|| format!("{}{}:{}", EXT_VIEW_PREFIX, extension_id, view_id))
@@ -76,7 +75,6 @@ pub fn ext_view_label(extension_id: &str, view_id: &str) -> Option<String> {
 
 /// Split a view window label into `(extension_id, view_id)`. `None` for
 /// any other label, including a prefixed one with invalid ids.
-#[allow(dead_code)] // The view commands will parse labels; the app doesn't yet.
 pub fn parse_ext_view_label(label: &str) -> Option<(&str, &str)> {
     let (extension_id, view_id) = label.strip_prefix(EXT_VIEW_PREFIX)?.split_once(':')?;
     valid_ext_view_parts(extension_id, view_id).then_some((extension_id, view_id))

@@ -673,6 +673,10 @@ pub fn spawn_changelog_cache_refresh<R: tauri::Runtime>(app: &App<R>) {
 /// persists in the tray. Logs (rather than panics) if hide fails.
 /// On macOS, also hides the app to return focus to the previous application.
 pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi) {
+    if window_labels::is_ext_view_label(window.label()) {
+        close_view_window(window, api);
+        return;
+    }
     if let Err(e) = window.hide() {
         log::warn!("Failed to hide window on close: {}", e);
     }
@@ -695,6 +699,74 @@ pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi)
         update_activation_policy_excluding(window.app_handle(), Some(&closing_label));
         hide_macos_app();
     }
+}
+
+/// Close of an extension view window (docs/design/EXTENSION_VIEWS.md
+/// §7.3, §15.1). It hides, like every Kage window: its geometry is saved
+/// first, the page is told, and a teardown timer starts. On macOS a view
+/// in native full screen is destroyed instead, because hiding it would
+/// leave an empty full-screen Space behind.
+fn close_view_window(window: &tauri::Window, api: &tauri::CloseRequestApi) {
+    let app = window.app_handle();
+    let label = window.label().to_string();
+    let fullscreen = window.is_fullscreen().unwrap_or(false);
+    if crate::ext_views::should_destroy_on_close(cfg!(target_os = "macos"), fullscreen) {
+        // Not prevented: the window system closes and destroys it.
+        crate::ext_views::forget_closing(app, &label);
+    } else {
+        crate::ext_views::save_geometry_now(app, &label);
+        if let Err(e) = window.hide() {
+            log::warn!("Failed to hide view window on close: {}", e);
+        }
+        api.prevent_close();
+        crate::ext_views::after_hide(app, &label);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        update_activation_policy_excluding(app, Some(&label));
+        // Closing a view leaves the user in an open chat or settings
+        // window; only with none left does the app hide.
+        let others: Vec<String> = app
+            .webview_windows()
+            .iter()
+            .filter(|(l, w)| {
+                (is_real_window_label(l) || is_session_host_label(l))
+                    && w.is_visible().unwrap_or(false)
+            })
+            .map(|(l, _)| l.clone())
+            .collect();
+        let others: Vec<&str> = others.iter().map(String::as_str).collect();
+        if should_hide_app_on_close(&label, &others) {
+            hide_macos_app();
+        }
+    }
+}
+
+/// Windows that count as "real" for the macOS activation policy (Dock and
+/// ⌘Tab): chat sessions, settings, store, welcome, and extension views.
+/// The floating launcher, inline assist and context menu are overlays.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn is_real_window_label(label: &str) -> bool {
+    matches!(
+        label,
+        window_labels::MAIN
+            | window_labels::SETTINGS
+            | window_labels::STORE
+            | window_labels::WELCOME
+    ) || window_labels::is_ext_view_label(label)
+}
+
+/// The macOS close rule as a pure function: closing a window hides the
+/// whole app (returning focus to the previous app), except that closing a
+/// view window does so only when no other real window is still visible.
+/// `visible_real_windows` may include the closing window itself.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn should_hide_app_on_close(closing: &str, visible_real_windows: &[&str]) -> bool {
+    if !window_labels::is_ext_view_label(closing) {
+        return true;
+    }
+    visible_real_windows.iter().all(|l| *l == closing)
 }
 
 /// Make Kage the active app (macOS `activateIgnoringOtherApps`), e.g. before
@@ -733,7 +805,8 @@ pub fn hide_macos_app() {
 }
 
 /// Update the macOS activation policy based on whether any "real" window
-/// (chat, settings, store, welcome) is visible. When at least one is
+/// (chat, settings, store, welcome, extension views; see
+/// [`is_real_window_label`]) is visible. When at least one is
 /// visible, switch to Regular (shows in Cmd+Tab and Dock). When none are
 /// visible, switch to Accessory (hidden from Cmd+Tab and Dock).
 ///
@@ -758,21 +831,10 @@ pub fn update_activation_policy_excluding<R: tauri::Runtime>(
     use tauri::ActivationPolicy;
 
     // Windows that count as "real" for Cmd+Tab purposes
-    let real_windows = [
-        window_labels::MAIN,
-        window_labels::SETTINGS,
-        window_labels::STORE,
-        window_labels::WELCOME,
-    ];
-
-    let any_visible = real_windows.iter().any(|label| {
-        if exclude == Some(*label) {
-            return false;
-        }
-        app_handle
-            .get_webview_window(label)
-            .and_then(|w| w.is_visible().ok())
-            .unwrap_or(false)
+    let any_visible = app_handle.webview_windows().iter().any(|(label, w)| {
+        is_real_window_label(label)
+            && exclude != Some(label.as_str())
+            && w.is_visible().unwrap_or(false)
     });
 
     let desired = if any_visible {
@@ -869,7 +931,8 @@ pub fn start_session_watcher(app: &App) -> Option<crate::commands::sessions::Ses
 
 #[cfg(test)]
 mod tests {
-    use super::settle;
+    use super::{is_real_window_label, settle, should_hide_app_on_close};
+    use crate::window_labels;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::Notify;
@@ -926,5 +989,46 @@ mod tests {
         feeder.abort();
         assert!(took >= Duration::from_millis(300), "{took:?}");
         assert!(took < Duration::from_secs(2), "{took:?}");
+    }
+
+    #[test]
+    fn real_windows_include_extension_views() {
+        for label in [
+            window_labels::MAIN,
+            window_labels::SETTINGS,
+            window_labels::STORE,
+            window_labels::WELCOME,
+            "ext-view:mindmap:explorer",
+        ] {
+            assert!(is_real_window_label(label), "{label}");
+        }
+        for label in [
+            window_labels::FLOATING,
+            window_labels::INLINE_ASSIST,
+            window_labels::CONTEXT_MENU,
+            "ext-view:bad:Label",
+            "ext-view:",
+        ] {
+            assert!(!is_real_window_label(label), "{label}");
+        }
+    }
+
+    #[test]
+    fn closing_a_view_hides_the_app_only_when_nothing_else_is_open() {
+        let view = "ext-view:mindmap:explorer";
+        assert!(should_hide_app_on_close(view, &[]));
+        assert!(should_hide_app_on_close(view, &[view]));
+        assert!(!should_hide_app_on_close(
+            view,
+            &[view, window_labels::MAIN]
+        ));
+        assert!(!should_hide_app_on_close(view, &[window_labels::SETTINGS]));
+        assert!(!should_hide_app_on_close(view, &["ext-view:mindmap:board"]));
+        // Every other window keeps today's rule: always hide the app.
+        assert!(should_hide_app_on_close(
+            window_labels::SETTINGS,
+            &[window_labels::MAIN]
+        ));
+        assert!(should_hide_app_on_close(window_labels::MAIN, &[]));
     }
 }
