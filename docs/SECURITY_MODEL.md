@@ -69,6 +69,7 @@ runtime — they ship with the app.
 | Message formatter      | ✅ Yes — host hands the rendered HTML to the sandbox; sandbox returns replacement HTML which is sanitized before injection |
 | Widget                 | ✅ Yes — widget returns HTML + action declarations on a refresh interval the extension controls |
 | Custom `renderResult`  | ✅ Yes — sandbox returns sanitized HTML for individual result rows |
+| View                   | ✅ Yes — a visible sandboxed iframe in its own window; CSP blocks the view's own network access (the extension's hidden instances still have it, see "Known gaps"); the host bar and title are Kage's. See "Extension views". |
 
 The disabled contribution points don't break an extension's install or
 its other providers; they just don't execute. Extensions that relied
@@ -203,15 +204,23 @@ with per-capability descriptions. Summary:
 
 `storage` · `clipboard` · `urls` · `launch` · `network` · `oauth` ·
 `filesystem` · `window` · `windows` · `notifications` · `calendar` ·
-`session` · `agent` · `activity` · `automation` · `tts`
+`session` · `agent` · `activity` · `automation` · `tts` · `views`
+
+`views` maps to no command. It lets the host open the windows an
+extension's manifest declares (see "Extension views"), and Rust checks
+it again on every open and every load of a view window.
 
 `clipboard` is read access. Writing needs no capability but only ever
 happens on a user's click, through the host: a search result's `copy`
-action, or a settings `action` with `copy`. The settings path accepts
-plain text only — at most 2048 characters, with no control characters
-other than tab and newlines, and no bidi overrides, so a "Copy" button
-can't put terminal escape sequences, or text that displays differently,
-on the clipboard.
+action, a settings `action` with `copy`, or `context.view.copyText` in
+a view window. The settings path accepts plain text only — at most 2048
+characters, with no control characters other than tab and newlines, and
+no bidi overrides, so a "Copy" button can't put terminal escape
+sequences, or text that displays differently, on the clipboard. A view's
+copy follows the same rules with a limit of 8192 characters, and only
+while the view window is in front, right after a click or key press in
+it, at most twice a second. `ext_view_copy_text` checks the text, the
+focus and the rate again in Rust.
 
 `oauth` listeners bind `127.0.0.1` on an ephemeral port and serve one
 matching request. They close on timeout (at most 10 minutes), on
@@ -251,6 +260,11 @@ adding protection given the sandbox is doing the heavy lifting.
   rather than an iframe.
 - A stricter CSP on just the sandbox iframe's host document could
   be added as belt-and-braces without much downside.
+
+The one CSP Kage sets today is on an extension view's iframe (see
+"Extension views"): it takes away that iframe's own network access.
+The hidden sandbox iframes in the launcher, chat and Settings have none
+yet (see "Known gaps").
 
 ## Links and navigation
 
@@ -310,6 +324,110 @@ Programmatic opens (`context.invoke('open_url', …)`) still require
 extension only after the same capability and argument checks as its own
 `invoke()` (`ExtensionManager.extensionInvokeDenial`), and opens only
 `http(s)` / `mailto` links that way.
+
+**Links in a view need `urls`.** In an extension view the extension
+owns the visible document and can fake a click, so there is no free
+user-click path there. The view runtime cancels every link click
+(capture phase) and opens absolute `http(s)` / `mailto` links through
+`invoke('open_url')`, which the host checks like any other `invoke()`;
+without `urls` nothing opens. A view iframe that navigates itself
+(`location.href = …`) is cancelled by the Rust guard on macOS and Linux.
+On Windows the guard doesn't see iframe navigations, so the view page
+watches the iframe's `load` event on every platform: any load after the
+first document means the frame navigated, and the page destroys the
+sandbox at once and says so.
+
+## Extension views
+
+An extension with the `views` capability can show windows it draws
+itself (`docs/EXTENSIONS.md` § Views; design:
+`docs/design/EXTENSION_VIEWS.md`). Until views, no extension code
+painted straight to the user or got raw keystrokes: everything else is
+HTML the host sanitises. So `views` is its own capability, shown at
+install time. The page in a view window (`ui/extension-view.html`,
+label `ext-view:<extension>:<view>`) is first-party. The extension's
+code runs in a visible iframe inside it, with the same sandbox and the
+same capability checks at the port as every other contribution point.
+
+- **The sandbox is the same.** The iframe's `sandbox` is exactly
+  `allow-scripts`: a null origin, no Tauri, and no pop-ups, forms,
+  modals, top navigation, pointer lock or downloads. Its `allow`
+  attribute denies camera, microphone, geolocation, clipboard read and
+  write, display capture, full screen, payment, USB, serial, HID,
+  Bluetooth, MIDI, wake lock, web share and autoplay. The page itself
+  gets its Tauri permissions from its own capability file,
+  `capabilities/extension-view.json` (window pattern `ext-view:*`),
+  which lists only the core event and window permissions it uses.
+- **Identity comes from the label.** Rust builds the label from
+  validated ids and derives everything from it. `ext_view_boot` takes
+  no id argument, and a view window can open only views of its own
+  extension. Rust checks the opener before it looks anything up, so a
+  view can't learn whether another extension is installed.
+- **Only a user action opens a view.** An extension returns an
+  `open_view` effect from a handler the host runs for a click or key
+  press (a result row, a card or widget button, a toolbar button, a
+  settings action), or calls `context.view.open` in a view right after
+  a click or key press there. Nothing opens one at any other time, so a
+  timer or an agent tool call can't. `ext_view_open` accepts only the
+  openers `floating`, `main`, `chat-*`, `settings` and `ext-view:*`,
+  and checks again that the extension is installed and on, holds `views`
+  (requested ∩ granted), declares the view, and sends valid params (a
+  JSON object, at most 4096 bytes and 4 levels deep, never put in a
+  URL). `ext_view_boot` repeats the first four checks on every load.
+- **The extension can't pass for Kage.** Kage draws a bar above the
+  iframe, outside it, that always names the extension, and the window
+  title always ends with the extension's name (the extension sets only
+  a subtitle). Kage never asks for a password, a passphrase or a
+  permission inside a view window; its prompts appear in the launcher,
+  chat or Settings. View windows are normal decorated windows: never
+  frameless, transparent, always-on-top, element-full-screen or smaller
+  than their `minSize` (at least 320 × 240), and the extension doesn't
+  choose where they appear.
+- **No network of its own.** The view's srcdoc starts with a CSP:
+  `default-src 'none'`; scripts and styles inline or `blob:`; images,
+  fonts, media and `connect-src` only `blob:` and `data:`; no frames,
+  objects, forms or `<base>`. Before the view module loads, the runtime
+  deletes WebRTC and hides `contentWindow` / `contentDocument` of child
+  frames (an `about:blank` child isn't a navigation, so `frame-src`
+  doesn't stop it). `window[0]` still reaches such a frame, so this is
+  defence in depth, not a boundary. The bigger residual: the
+  extension's hidden instances share its storage and can still reach
+  the network, so a view can hand them what it shows or what the user
+  types (see "Known gaps").
+- **Window-bound commands are refused in a view**
+  (`VIEW_SURFACE_DENIED_COMMANDS` in `extension-permissions.js`):
+  sending prompts, cancelling, steering, tool responses, the window's
+  session, the floating window's size and opacity, chat geometry,
+  `notify_frontend_ready`, and the background agent calls. A prompt
+  sent from a view would route its permission requests to a window
+  with no permission UI.
+- **The view's requests to the host are narrow:** a subtitle, close,
+  open another of its views, compose (fills the launcher's input, never
+  sends), copy plain text, open its settings. The last four need the
+  view window in front and a recent user activation
+  (`navigator.userActivation`, which script can't fake; where the
+  engine lacks it, focus plus the rate limit). All but close are
+  rate-limited (1 or 2 a second; 10 for the subtitle), and text is
+  plain and capped (2000 characters to compose, 8192 to copy). Rust
+  checks the focus, the text and the rate again for compose and copy.
+- **Files dropped on a view never reach it.** Tauri's native drop
+  handler takes OS file drops before the page sees them, and the page
+  ignores its events, so neither contents nor paths reach the
+  extension.
+- **Window spam is bounded.** One window per view, at most 4 views per
+  extension, at most 4 view windows at once (2 of them hidden). A view
+  hidden for 10 minutes is destroyed. Turning the extension off,
+  uninstalling it, or a grant without `views` destroys its view windows
+  at once. On Windows, a view window whose WebView2 process fails is
+  destroyed, not reloaded, so a crashing view can't loop. A busy view
+  can't block the native close button, and the watchdog offers Reload.
+- **Storage change events carry key names only**, of the extension's
+  own keys, to its own sandboxes, and only to those that hold
+  `storage`. The writer's window label becomes a `self` flag; the
+  sandbox never sees a label.
+- **Window geometry stays on the computer.** Each view's size and
+  position (`<local data>/kage/extension-views.json`, owner-only) is
+  never in a backup and never synced.
 
 ## Defense in depth
 
@@ -833,6 +951,11 @@ not even encrypted (docs/design/SYNC.md §11.5).
 | Malicious markdown injecting script tags              | ✅ Blocked | Rendering pipeline strips document markers. |
 | Link or redirect turns a Kage window into a remote page | ✅ Blocked | JS link handler in every window + Rust `on_navigation` guard. See "Links and navigation". |
 | Extension opens the browser without `urls` via an iframe redirect | ✅ Blocked | The guard never opens URLs it can't attribute to the main frame. |
+| An extension view shows a web page inside a Kage window | ✅ Blocked | Rust guard on macOS/Linux; the view page stops a frame that navigates on every platform. See "Links and navigation". |
+| An extension view imitates Kage (a fake permission prompt, passphrase request or sign-in) | ⚠ Mitigated | Kage's bar and the window title always name the extension; Kage never prompts inside a view; views open only on a user action and can't be frameless, transparent or always-on-top. See "Extension views". |
+| An extension view sends data out over the network | ⚠ Mitigated | The view's own CSP allows no remote requests and WebRTC is removed. The extension's hidden instances still have the network and share its storage. See "Known gaps". |
+| An extension floods the screen with windows | ✅ Blocked | Opening needs a user action; one window per view, 4 views per extension, 4 view windows in all (2 hidden); rate limits inside a view. |
+| An extension view calls a command bound to the launcher or chat window | ✅ Blocked | `VIEW_SURFACE_DENIED_COMMANDS`. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
 | Agent output or an extension runs a shell command outside the agent's sandbox | ✅ Blocked | Only the confirm's own click runs one, once; the commands are `null` for extensions and refuse non-Kage windows. See "Commands you run yourself". |
 | An agent runs a command outside its sandbox without the user | ✅ Blocked | Only the user's answer in Kage, or a rule they made for simple commands (never for credential-touching ones or ones with hidden characters), runs it. See "Commands an agent runs outside its sandbox". |
@@ -859,8 +982,16 @@ closures.
 
 Future improvements being considered, none blocking:
 
-- **Content-Security-Policy header on the sandbox iframe itself**,
-  belt-and-braces beyond the sanitizer.
+- **Content-Security-Policy on the hidden sandbox iframes.** A view's
+  iframe has one (see "Extension views"). The hidden iframes in the
+  launcher, chat and Settings don't yet, because existing extensions
+  may rely on direct requests; store extensions need an audit first.
+  Until then, a hidden sandbox can make direct network requests to a
+  server that allows any origin, whatever its grant. The same
+  extension's hidden instances share its storage with its views, so a
+  view's CSP is defence in depth: an extension can still send out what
+  its view shows by writing it to storage for a hidden instance to
+  send.
 - **Fine-grained capability grants** — let users approve a subset
   of the requested capabilities instead of all-or-nothing.
 
