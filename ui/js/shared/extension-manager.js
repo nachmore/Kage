@@ -17,7 +17,11 @@
  *     follow-up.
  */
 
-import { ExtensionSandboxPool, hostFeaturesFor } from './extension-sandbox-host.js';
+import {
+    ExtensionSandboxPool,
+    hostFeaturesFor,
+    SYNC_HOST_FEATURES,
+} from './extension-sandbox-host.js';
 import { deliverToSandbox, installExtensionDataEvents } from './extension-data-events.js';
 import { openViewDenial, runOpenViewEffect } from './extension-host-effects.js';
 import { normalizeViews, normalizeViewSource } from './extension-view-policy.js';
@@ -225,7 +229,15 @@ export class ExtensionManager {
      */
     constructor(invoke, opts = {}) {
         this.invoke = invoke;
-        this._hostFeatures = Array.isArray(opts.hostFeatures) ? opts.hostFeatures.slice() : [];
+        // Every window with extension instances offers folder sync of their
+        // data (docs/design/SYNC.md §12.3); each extension gets it only with
+        // the `sync` grant (`hostFeaturesFor`).
+        this._hostFeatures = [
+            ...new Set([
+                ...(Array.isArray(opts.hostFeatures) ? opts.hostFeatures : []),
+                ...SYNC_HOST_FEATURES,
+            ]),
+        ];
         this._resultViewSource = normalizeViewSource(opts.resultSource);
         this._onBeforeOpenView =
             typeof opts.onBeforeOpenView === 'function' ? opts.onBeforeOpenView : null;

@@ -30,7 +30,7 @@ import { EVT } from '../shared/events.js';
 import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { deliverToSandbox, installExtensionDataEvents } from '../shared/extension-data-events.js';
-import { HOST_FEATURE_VIEWS } from '../shared/extension-sandbox-host.js';
+import { HOST_FEATURE_VIEWS, SYNC_HOST_FEATURES } from '../shared/extension-sandbox-host.js';
 
 // First-party settings modules (registration order matches the sidebar
 // in settings.html — see the comments in that file for the contract).
@@ -235,7 +235,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Host features the settings sandboxes are offered (each gets the ones
     // its grant allows): settings actions may open the extension's views
     // (docs/design/EXTENSION_VIEWS.md §9.4).
-    const SETTINGS_HOST_FEATURES = [HOST_FEATURE_VIEWS];
+    // Folder sync of extension data too (docs/design/SYNC.md §12.3).
+    const SETTINGS_HOST_FEATURES = [HOST_FEATURE_VIEWS, ...SYNC_HOST_FEATURES];
 
     // Storage changes made in other windows reach the matching settings
     // sandbox, when it holds `storage` (EXTENSION_VIEWS.md §10.1).

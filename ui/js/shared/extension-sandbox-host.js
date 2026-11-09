@@ -34,6 +34,7 @@
  */
 
 import { getConfig, onConfigChange } from './config-cache.js';
+import { EVT } from './events.js';
 import { decideInvoke } from './extension-permissions.js';
 import { validateExtensionInvokeArgs } from './extension-url-policy.js';
 import {
@@ -200,6 +201,7 @@ export const RUNTIME_SOURCE_PATHS = [
     'js/extension-sandbox/runtime/sandboxed-worker.js',
     'js/extension-sandbox/runtime/host-api.js',
     'js/extension-sandbox/runtime/view-api.js',
+    'js/extension-sandbox/runtime/sync-api.js',
     'js/extension-sandbox/runtime.js',
 ];
 
@@ -244,13 +246,19 @@ async function getSandboxRuntimeSource() {
  *   - `extension_data` commands take `extensionId` (Tauri auto-renames the
  *     Rust `extension_id: String` to camelCase across the IPC boundary).
  *   - `*_extension_config` commands take a bare `id: String`.
+ *   - `ext_sync_*` commands (`context.sync`, docs/design/SYNC.md §12.6)
+ *     take `extensionId`.
  */
-const IDENTITY_SCOPED_COMMANDS = Object.freeze({
+export const IDENTITY_SCOPED_COMMANDS = Object.freeze({
     save_extension_data: 'extensionId',
     load_extension_data: 'extensionId',
     delete_extension_data: 'extensionId',
     get_extension_config: 'id',
     save_extension_config: 'id',
+    ext_sync_status: 'extensionId',
+    ext_sync_push: 'extensionId',
+    ext_sync_pull: 'extensionId',
+    ext_sync_ack: 'extensionId',
 });
 
 /**
@@ -340,12 +348,19 @@ export const HOST_FEATURE_DATE_PICKER = 'date-picker';
 /**
  * Folder sync for extension data (docs/design/SYNC.md §12.4–§12.6): whole
  * keys, lists inside a key, and record collections (`context.sync`). Each
- * will require the `sync` capability. Not offered yet: WP-S5 adds them to
- * the map below, so until then {@link hostFeaturesFor} drops them.
+ * requires the `sync` capability. The floating, chat, settings and view
+ * windows offer all three (EXTENSION_VIEWS.md §9.4).
  */
 export const HOST_FEATURE_SYNC_KEYS = 'sync.keys';
 export const HOST_FEATURE_SYNC_LISTS = 'sync.lists';
 export const HOST_FEATURE_SYNC_RECORDS = 'sync.records';
+
+/** The three sync features, for a window's offered list. */
+export const SYNC_HOST_FEATURES = Object.freeze([
+    HOST_FEATURE_SYNC_KEYS,
+    HOST_FEATURE_SYNC_LISTS,
+    HOST_FEATURE_SYNC_RECORDS,
+]);
 
 /**
  * Extension views (docs/design/EXTENSION_VIEWS.md §9.4): `open_view`
@@ -359,7 +374,69 @@ export const HOST_FEATURE_VIEWS = 'views';
 const HOST_FEATURE_CAPABILITY = Object.freeze({
     [HOST_FEATURE_DATE_PICKER]: 'calendar',
     [HOST_FEATURE_VIEWS]: 'views',
+    [HOST_FEATURE_SYNC_KEYS]: 'sync',
+    [HOST_FEATURE_SYNC_LISTS]: 'sync',
+    [HOST_FEATURE_SYNC_RECORDS]: 'sync',
 });
+
+// --- `extension_sync_changes` (docs/design/SYNC.md §12.6) -------------------
+
+/** Why a collection changed, as `context.sync.onChanges` reports it. */
+export const SYNC_CHANGE_REASONS = Object.freeze(['remote', 'enabled', 'reset', 'purged']);
+
+/** Collection names (`^[a-z][a-z0-9_]{0,31}$`). */
+const SYNC_COLLECTION_RE = /^[a-z][a-z0-9_]{0,31}$/;
+
+/** Live sandboxes offered `sync.records` in this window. */
+const syncSandboxes = new Set();
+let syncEventsInstalled = false;
+
+/**
+ * Hand one `extension_sync_changes` payload
+ * (`{ extension_id, collections, reason }`) to this window's sandboxes of
+ * that extension. Malformed payloads are dropped.
+ *
+ * @param {unknown} payload
+ * @param {Iterable<ExtensionSandbox>} [sandboxes] - default: the live ones
+ * @returns {number} how many sandboxes were told
+ */
+export function deliverSyncChanges(payload, sandboxes = syncSandboxes) {
+    if (!payload || typeof payload !== 'object') return 0;
+    const id = payload.extension_id;
+    if (typeof id !== 'string' || !id) return 0;
+    const reason = SYNC_CHANGE_REASONS.includes(payload.reason) ? payload.reason : null;
+    if (!reason) return 0;
+    const collections = Array.isArray(payload.collections)
+        ? payload.collections.filter((c) => typeof c === 'string' && SYNC_COLLECTION_RE.test(c))
+        : [];
+    let told = 0;
+    for (const s of sandboxes) {
+        if (s.extensionId === id && s.notifySyncChanges(collections, reason)) told += 1;
+    }
+    return told;
+}
+
+/**
+ * Listen for `extension_sync_changes` in this window, once, and forward
+ * each to the matching sandboxes.
+ *
+ * @param {Function} [listen] - Tauri's `listen`; default: the window's
+ * @returns {Promise<boolean>} whether a listener is installed
+ */
+export async function installExtensionSyncEvents(listen) {
+    if (syncEventsInstalled) return true;
+    const fn = listen || globalThis.window?.__TAURI__?.event?.listen;
+    if (typeof fn !== 'function') return false;
+    syncEventsInstalled = true;
+    try {
+        await fn(EVT.EXTENSION_SYNC_CHANGES, (event) => deliverSyncChanges(event?.payload));
+        return true;
+    } catch (e) {
+        syncEventsInstalled = false;
+        console.warn('[sandbox] sync change events unavailable:', e);
+        return false;
+    }
+}
 
 /**
  * Which of the features a window offers (`offered`) this extension may use,
@@ -583,6 +660,11 @@ export class ExtensionSandbox {
         this.widgetIds = Array.isArray(initResult.result?.widgetIds)
             ? initResult.result.widgetIds.slice()
             : [];
+        // `context.sync.onChanges` hears of remote changes (SYNC.md §12.6).
+        if (this.hostFeatures.includes(HOST_FEATURE_SYNC_RECORDS) && !this._destroyed) {
+            syncSandboxes.add(this);
+            installExtensionSyncEvents().catch(() => {});
+        }
     }
 
     /**
@@ -650,6 +732,32 @@ export class ExtensionSandbox {
             return true;
         } catch (e) {
             console.warn(`[sandbox ${this.extensionId}] storage-changed failed:`, e);
+            return false;
+        }
+    }
+
+    /**
+     * Tell the sandbox that its synced records changed (docs/design/SYNC.md
+     * §12.6): `{ type: 'sync-changes', collections, reason }`, which
+     * `context.sync.onChanges` delivers. Only to an extension this window
+     * offered `sync.records`, which needs the `sync` grant.
+     *
+     * @param {string[]} collections
+     * @param {string} reason
+     * @returns {boolean} whether a message was posted
+     */
+    notifySyncChanges(collections, reason) {
+        if (this._destroyed || !this._ready || !this._port) return false;
+        if (!this.hostFeatures.includes(HOST_FEATURE_SYNC_RECORDS)) return false;
+        if (!this.capabilities.has('sync') || !SYNC_CHANGE_REASONS.includes(reason)) return false;
+        const clean = Array.isArray(collections)
+            ? collections.filter((c) => typeof c === 'string' && SYNC_COLLECTION_RE.test(c))
+            : [];
+        try {
+            this._port.postMessage({ type: 'sync-changes', collections: clean, reason });
+            return true;
+        } catch (e) {
+            console.warn(`[sandbox ${this.extensionId}] sync-changes failed:`, e);
             return false;
         }
     }
@@ -726,6 +834,7 @@ export class ExtensionSandbox {
     destroy() {
         if (this._destroyed) return;
         this._destroyed = true;
+        syncSandboxes.delete(this);
 
         // A hint is a lease on a shared, visible thing — drop it immediately
         // rather than letting the mascot hold the pose until the TTL expires.

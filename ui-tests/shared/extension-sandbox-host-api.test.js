@@ -24,8 +24,11 @@ describe('storage change events and views (docs/design/EXTENSION_VIEWS.md §9.4)
         ).toEqual([HOST_FEATURE_DATE_PICKER, HOST_FEATURE_VIEWS]);
         // A runtime feature isn't something a window offers.
         expect(hostFeaturesFor(['storage.change_events'], ['storage'])).toEqual([]);
-        // Sync isn't offered yet (WP-S5).
-        expect(hostFeaturesFor([HOST_FEATURE_SYNC_RECORDS], ['sync', 'views'])).toEqual([]);
+        // Sync needs the sync grant (SYNC.md §12.3).
+        expect(hostFeaturesFor([HOST_FEATURE_SYNC_RECORDS], ['views'])).toEqual([]);
+        expect(hostFeaturesFor([HOST_FEATURE_SYNC_RECORDS], ['sync', 'views'])).toEqual([
+            HOST_FEATURE_SYNC_RECORDS,
+        ]);
     });
 });
 
