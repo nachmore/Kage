@@ -54,16 +54,29 @@ pub fn normalize_word(word: &str) -> Option<&str> {
     ok.then_some(word)
 }
 
+/// What a platform spell checker flagged in a word.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Misspelling {
+    /// The flagged part of the word, in UTF-16 code units (what NSRange and
+    /// ISpellingError report). Usually the whole word (NSSpellChecker flags
+    /// all of "l'ordinateurr"), but a checker that splits off an elided
+    /// article would flag only "ordinateurr".
+    pub range: std::ops::Range<usize>,
+    /// Replacements for the flagged part, best first.
+    pub guesses: Vec<String>,
+}
+
 /// Check one word with the OS spell checker. `None`: spelled correctly, not
 /// a checkable word (see `normalize_word`), or no spell checker on this OS.
-/// `Some(guesses)`: misspelled, with up to `MAX_SUGGESTIONS` replacements,
-/// best first (possibly none).
+/// `Some(guesses)`: misspelled, with up to `MAX_SUGGESTIONS` replacements
+/// for the whole word, best first (possibly none).
 ///
 /// Blocking; run it on the main thread when `NEEDS_MAIN_THREAD`, else on a
 /// blocking thread.
 pub fn check_word(word: &str) -> Option<Vec<String>> {
     let word = normalize_word(word)?;
-    let guesses = crate::os::platform::spell_check::check_word_impl(word)?;
+    let found = crate::os::platform::spell_check::check_word_impl(word)?;
+    let guesses = whole_word_guesses(word, found.range, found.guesses);
     Some(tidy_suggestions(word, guesses))
 }
 
@@ -75,6 +88,49 @@ pub fn check_word(word: &str) -> Option<Vec<String>> {
 pub fn learn_word(word: &str) -> Result<(), String> {
     let word = normalize_word(word).ok_or_else(|| "not a single word".to_string())?;
     crate::os::platform::spell_check::learn_word_impl(word)
+}
+
+/// The guesses for the flagged part of `word` (`range`, UTF-16 units) as
+/// replacements for the whole word, which is what the menu replaces: the
+/// text around the flagged part is kept ("l'" + "ordinateur"). No guesses
+/// if `range` doesn't fit the word, rather than ones that would drop text.
+fn whole_word_guesses(
+    word: &str,
+    range: std::ops::Range<usize>,
+    guesses: Vec<String>,
+) -> Vec<String> {
+    let Some((before, after)) = split_around_utf16(word, range) else {
+        return Vec::new();
+    };
+    if before.is_empty() && after.is_empty() {
+        return guesses;
+    }
+    guesses
+        .iter()
+        .map(|g| g.trim())
+        .filter(|g| !g.is_empty())
+        .map(|g| format!("{before}{g}{after}"))
+        .collect()
+}
+
+/// `word` before and after its UTF-16 `range`; `None` if the range is out
+/// of bounds, backwards, or splits a character.
+fn split_around_utf16(word: &str, range: std::ops::Range<usize>) -> Option<(&str, &str)> {
+    let byte_at = |unit: usize| -> Option<usize> {
+        let mut units = 0;
+        for (byte, c) in word.char_indices() {
+            if units == unit {
+                return Some(byte);
+            }
+            units += c.len_utf16();
+        }
+        (units == unit).then_some(word.len())
+    };
+    if range.start > range.end {
+        return None;
+    }
+    let (start, end) = (byte_at(range.start)?, byte_at(range.end)?);
+    Some((&word[..start], &word[end..]))
 }
 
 /// Trimmed, non-empty, not the word itself, no duplicates, bounded length,
@@ -144,6 +200,32 @@ mod tests {
         );
         let long = vec!["x".repeat(MAX_SUGGESTION_CHARS + 1), "ok".into()];
         assert_eq!(tidy_suggestions("ko", long), ["ok"]);
+    }
+
+    #[test]
+    fn guesses_for_part_of_a_word_keep_the_rest_of_it() {
+        let guesses = vec!["ordinateur".to_string(), " ordinateurs ".into(), "".into()];
+        assert_eq!(
+            whole_word_guesses("l'ordinateurr", 2..13, guesses),
+            ["l'ordinateur", "l'ordinateurs"]
+        );
+        // Whole word flagged: the guesses as they are.
+        let guesses = vec!["hello".to_string()];
+        assert_eq!(whole_word_guesses("helloo", 0..6, guesses), ["hello"]);
+        // UTF-16 offsets: the astral letter before the flagged part is two
+        // units long.
+        let word = "\u{1D400}xyzz";
+        assert_eq!(
+            whole_word_guesses(word, 2..6, vec!["xyz".into()]),
+            ["\u{1D400}xyz"]
+        );
+        // A range that doesn't fit the word gives no guesses rather than
+        // ones that would drop text.
+        assert!(whole_word_guesses(word, 1..6, vec!["xyz".into()]).is_empty());
+        assert!(whole_word_guesses("abc", 1..9, vec!["b".into()]).is_empty());
+        #[allow(clippy::reversed_empty_ranges)]
+        let backwards = 2..1;
+        assert!(whole_word_guesses("abc", backwards, vec!["b".into()]).is_empty());
     }
 
     #[test]

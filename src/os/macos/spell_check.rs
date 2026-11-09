@@ -2,6 +2,8 @@
 // default so WKWebView underlines misspelled words, and answer spelling
 // questions with NSSpellChecker. See src/os/spell_check.rs.
 
+use crate::os::spell_check::Misspelling;
+use objc2::rc::autoreleasepool;
 use objc2::runtime::AnyObject;
 use objc2_app_kit::NSSpellChecker;
 use objc2_foundation::{NSDictionary, NSNotFound, NSNumber, NSString, NSUserDefaults};
@@ -24,31 +26,38 @@ pub fn enable_webview_spell_checking_impl() {
     unsafe { NSUserDefaults::standardUserDefaults().registerDefaults(&fallback) };
 }
 
-/// `None` when `word` is spelled correctly, else NSSpellChecker's guesses
-/// for it, best first. Uses the checker's language setting, which is
-/// "Automatic by Language" unless the user picked one in System Settings —
-/// the same language WebKit underlines with.
-pub fn check_word_impl(word: &str) -> Option<Vec<String>> {
-    let checker = NSSpellChecker::sharedSpellChecker();
-    let text = NSString::from_str(word);
-    let misspelled = checker.checkSpellingOfString_startingAt(&text, 0);
-    if misspelled.length == 0 || misspelled.location == NSNotFound as usize {
-        return None;
-    }
-    // Tag 0: no per-document ignore list (WebKit keeps its own per page).
-    let guesses = checker
-        .guessesForWordRange_inString_language_inSpellDocumentWithTag(misspelled, &text, None, 0);
-    Some(
-        guesses
-            .map(|list| list.iter().map(|g| g.to_string()).collect())
-            .unwrap_or_default(),
-    )
+/// `None` when `word` is spelled correctly, else the flagged part of it and
+/// NSSpellChecker's guesses for that part, best first. Uses the checker's
+/// language setting, which is "Automatic by Language" unless the user
+/// picked one in System Settings — the same language WebKit underlines
+/// with.
+pub fn check_word_impl(word: &str) -> Option<Misspelling> {
+    // Drain whatever the checker autoreleases here, on whichever thread.
+    autoreleasepool(|_| {
+        let checker = NSSpellChecker::sharedSpellChecker();
+        let text = NSString::from_str(word);
+        let flagged = checker.checkSpellingOfString_startingAt(&text, 0);
+        if flagged.length == 0 || flagged.location == NSNotFound as usize {
+            return None;
+        }
+        // Tag 0: no per-document ignore list (WebKit keeps its own per page).
+        let guesses = checker
+            .guessesForWordRange_inString_language_inSpellDocumentWithTag(flagged, &text, None, 0);
+        Some(Misspelling {
+            range: flagged.location..flagged.location.saturating_add(flagged.length),
+            guesses: guesses
+                .map(|list| list.iter().map(|g| g.to_string()).collect())
+                .unwrap_or_default(),
+        })
+    })
 }
 
 /// Adds `word` to the user's spelling dictionary (shared by every app,
 /// WebKit included).
 pub fn learn_word_impl(word: &str) -> Result<(), String> {
-    NSSpellChecker::sharedSpellChecker().learnWord(&NSString::from_str(word));
+    autoreleasepool(|_| {
+        NSSpellChecker::sharedSpellChecker().learnWord(&NSString::from_str(word));
+    });
     Ok(())
 }
 

@@ -6,7 +6,7 @@ pub const NEEDS_MAIN_THREAD: bool = false;
 pub fn enable_webview_spell_checking_impl() {}
 
 /// Every word counts as correct, so the menu stays the plain text menu.
-pub fn check_word_impl(_word: &str) -> Option<Vec<String>> {
+pub fn check_word_impl(_word: &str) -> Option<crate::os::spell_check::Misspelling> {
     None
 }
 

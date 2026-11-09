@@ -787,6 +787,48 @@ mod tests {
     }
 
     #[test]
+    fn keeps_the_spelling_menu_items() {
+        // What ui/js/shared/spell-menu.js sends for a misspelled word.
+        let req: MenuRequest = serde_json::from_value(serde_json::json!({
+            "items": [
+                { "id": "spell:0", "label": "l'ordinateur" },
+                { "id": "spell:1", "label": "\u{5E6}\u{5D4}\u{5F4}\u{5DC}" },
+                { "separator": true },
+                { "id": "spell:learn", "labelKey": "context_menu.learn_spelling" },
+                { "separator": true },
+                { "id": "cut", "labelKey": "context_menu.cut", "enabled": true }
+            ]
+        }))
+        .unwrap();
+        let items = sanitize_menu_items(req.items.unwrap());
+        let shape: Vec<&str> = items
+            .iter()
+            .map(|i| if i.separator { "-" } else { i.id.as_str() })
+            .collect();
+        assert_eq!(
+            shape,
+            ["spell:0", "spell:1", "-", "spell:learn", "-", "cut"]
+        );
+        assert_eq!(items[0].label.as_deref(), Some("l'ordinateur"));
+        assert_eq!(
+            items[1].label.as_deref(),
+            Some("\u{5E6}\u{5D4}\u{5F4}\u{5DC}")
+        );
+        assert_eq!(
+            items[3].label_key.as_deref(),
+            Some("context_menu.learn_spelling")
+        );
+        let none = sanitize_menu_items(vec![MenuItem {
+            id: "spell:none".into(),
+            label_key: Some("context_menu.no_guesses".into()),
+            enabled: false,
+            ..Default::default()
+        }]);
+        assert_eq!(none.len(), 1);
+        assert!(!none[0].enabled);
+    }
+
+    #[test]
     fn bounds_labels_hints_vars_and_count() {
         let mut vars = serde_json::Map::new();
         vars.insert("name".into(), serde_json::json!("x".repeat(500)));

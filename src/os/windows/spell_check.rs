@@ -3,6 +3,7 @@
 // (ISpellCheckerFactory / ISpellChecker), the same checker WebView2 uses.
 // See src/os/spell_check.rs.
 
+use crate::os::spell_check::Misspelling;
 use windows::core::{HSTRING, PWSTR};
 use windows::Win32::Foundation::E_FAIL;
 use windows::Win32::Globalization::{
@@ -27,7 +28,7 @@ const MAX_ENUMERATED: usize = 32;
 
 pub fn enable_webview_spell_checking_impl() {}
 
-pub fn check_word_impl(word: &str) -> Option<Vec<String>> {
+pub fn check_word_impl(word: &str) -> Option<Misspelling> {
     with_com(|| check(word)).unwrap_or_else(|e| {
         log::debug!("[spell-check] check failed: {e}");
         None
@@ -97,7 +98,7 @@ fn candidate_languages(preferred: impl Iterator<Item = String>) -> Vec<String> {
     out
 }
 
-fn check(word: &str) -> windows::core::Result<Option<Vec<String>>> {
+fn check(word: &str) -> windows::core::Result<Option<Misspelling>> {
     let checker = create_checker()?;
     let text = HSTRING::from(word);
     // SAFETY: `checker` is live; `text` outlives the call.
@@ -111,29 +112,38 @@ fn check(word: &str) -> windows::core::Result<Option<Vec<String>>> {
     };
     // SAFETY: `error` is a live ISpellingError.
     let action = unsafe { error.CorrectiveAction()? };
-    if action == CORRECTIVE_ACTION_REPLACE {
-        // An autocorrect entry: one definite replacement.
-        // SAFETY: as above; the returned string is ours to free.
-        let replacement = unsafe { take_co_string(error.Replacement()?) };
-        return Ok(Some(replacement.into_iter().collect()));
-    }
-    if action != CORRECTIVE_ACTION_GET_SUGGESTIONS {
+    if action != CORRECTIVE_ACTION_REPLACE && action != CORRECTIVE_ACTION_GET_SUGGESTIONS {
         // CORRECTIVE_ACTION_DELETE (a repeated word) can't apply to one
         // word; NONE means nothing to fix.
         return Ok(None);
     }
-    // The flagged part of the text (UTF-16 offsets); the whole word, in
-    // practice.
+    // The flagged part of the text, in UTF-16 units: usually the whole
+    // word, but a checker may flag only part of it ("l'" + "ordinateurr").
     // SAFETY: `error` is a live ISpellingError.
     let (start, len) = unsafe { (error.StartIndex()? as usize, error.Length()? as usize) };
-    let flagged = text
-        .get(start..start.saturating_add(len))
-        .filter(|w| !w.is_empty())
-        .map(HSTRING::from_wide)
-        .unwrap_or_else(|| text.clone());
-    // SAFETY: `checker` is live; `flagged` outlives the call.
-    let suggestions = unsafe { checker.Suggest(&flagged)? };
-    Ok(Some(read_strings(&suggestions)))
+    let range = flagged_range(start, len, text.len());
+    let guesses = if action == CORRECTIVE_ACTION_REPLACE {
+        // An autocorrect entry: one definite replacement for the range.
+        // SAFETY: as above; the returned string is ours to free.
+        unsafe { take_co_string(error.Replacement()?) }
+            .into_iter()
+            .collect()
+    } else {
+        let flagged = HSTRING::from_wide(&text[range.clone()]);
+        // SAFETY: `checker` is live; `flagged` outlives the call.
+        let suggestions = unsafe { checker.Suggest(&flagged)? };
+        read_strings(&suggestions)
+    };
+    Ok(Some(Misspelling { range, guesses }))
+}
+
+/// `start..start + len` within a text `total` UTF-16 units long; the whole
+/// text if that's empty or out of bounds.
+fn flagged_range(start: usize, len: usize, total: usize) -> std::ops::Range<usize> {
+    match start.checked_add(len) {
+        Some(end) if len > 0 && end <= total => start..end,
+        _ => 0..total,
+    }
 }
 
 /// Every string in `list` (up to `MAX_ENUMERATED`), freeing each.
@@ -181,6 +191,15 @@ mod tests {
         assert_eq!(candidate_languages(std::iter::empty()), ["en-US"]);
         let en = candidate_languages(["EN-us".to_string()].into_iter());
         assert_eq!(en, ["EN-us", "EN"]);
+    }
+
+    #[test]
+    fn flagged_range_stays_inside_the_text() {
+        assert_eq!(flagged_range(2, 11, 13), 2..13);
+        assert_eq!(flagged_range(0, 6, 6), 0..6);
+        assert_eq!(flagged_range(3, 0, 6), 0..6);
+        assert_eq!(flagged_range(4, 5, 6), 0..6);
+        assert_eq!(flagged_range(usize::MAX, 2, 6), 0..6);
     }
 
     #[test]
