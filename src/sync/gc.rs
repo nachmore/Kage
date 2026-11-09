@@ -111,7 +111,7 @@ impl SyncEngine {
                 _ => None,
             })
             .collect();
-        heads.sort_by(|a, b| b.0.cmp(&a.0));
+        heads.sort_by_key(|h| std::cmp::Reverse(h.0));
         if heads.len() > KEEP_HEADS {
             let old_enough = heads[KEEP_HEADS - 1]
                 .1
@@ -205,12 +205,11 @@ impl SyncEngine {
             conflicts::retention_pass(tx, now, me, hlc)?;
             tx.set_meta("hlc_last", &hlc.last().to_string())?;
             for d in devices {
-                if d.state == "retired" && d.ingested_seq >= d.head_seq && d.head_seq > 0 {
-                    retired.push(d);
-                } else if d.state == "removed"
-                    && d.ingested_seq >= d.head_seq
-                    && now - d.last_seen_ms >= REMOVED_DIR_MS
-                {
+                let read = d.ingested_seq >= d.head_seq;
+                let left = d.state == "retired" && read && d.head_seq > 0;
+                let removed =
+                    d.state == "removed" && read && now - d.last_seen_ms >= REMOVED_DIR_MS;
+                if left || removed {
                     retired.push(d);
                 }
             }

@@ -188,12 +188,10 @@ fn i29_chats_are_copied_read_only() {
     b.reopen();
     let mut cloud = SimCloud::new();
     a.create();
-    for c in [&mut a] {
-        c.ask(EngineRequest::SetCategory {
-            category: kage::sync::types::Category::Chats,
-            on: true,
-        });
-    }
+    a.ask(EngineRequest::SetCategory {
+        category: kage::sync::types::Category::Chats,
+        on: true,
+    });
     cloud.step(&mut [&mut a, &mut b]);
     b.join(JoinChoice::Theirs);
     b.ask(EngineRequest::SetCategory {

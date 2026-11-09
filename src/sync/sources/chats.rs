@@ -107,7 +107,7 @@ impl ChatHistory for RegistryHistory {
                 });
             }
         }
-        out.sort_by(|a, b| b.updated_ms.cmp(&a.updated_ms));
+        out.sort_by_key(|c| std::cmp::Reverse(c.updated_ms));
         out
     }
 
@@ -392,7 +392,7 @@ pub fn list_mirrors(dir: &Path) -> Vec<(PathBuf, MirrorMeta)> {
             }
         }
     }
-    out.sort_by(|a, b| b.1.updated.cmp(&a.1.updated));
+    out.sort_by_key(|m| std::cmp::Reverse(m.1.updated));
     out
 }
 

@@ -141,7 +141,7 @@ impl SyncEngine {
                 _ => {}
             }
         }
-        heads.sort_by(|a, b| b.0.cmp(&a.0));
+        heads.sort_by_key(|h| std::cmp::Reverse(h.0));
         let row = {
             let core = self.core.as_mut().expect("on");
             core.replica.tx(|tx| tx.device(dev))?
@@ -339,6 +339,7 @@ impl SyncEngine {
         let bucket = move |ns: &str, id: &str| keys.bucket(ns, id, 1 << 16);
         let mut found = 0;
         let mut touched = Vec::new();
+        let mut churn: Vec<((String, String, String), DeviceId)> = Vec::new();
         core.replica.tx(|tx| {
             for v in records {
                 let rec = match Record::from_json(ns, v) {
@@ -352,14 +353,27 @@ impl SyncEngine {
                     let b = tx
                         .bucket_of(&rec.ns, &rec.id)?
                         .unwrap_or_else(|| bucket(&rec.ns, &rec.id));
-                    let had_del = tx.record(&rec.ns, &rec.id)?.and_then(|r| r.del);
+                    let before = tx.record(&rec.ns, &rec.id)?;
+                    let had_del = before.as_ref().and_then(|r| r.del.clone());
                     let out = tx.merge(&rec, b)?;
                     if out.changed {
                         touched.push((rec.ns.clone(), rec.id.clone()));
-                        let now_del = tx.record(&rec.ns, &rec.id)?.and_then(|r| r.del);
+                        let after = tx.record(&rec.ns, &rec.id)?;
+                        let now_del = after.as_ref().and_then(|r| r.del.clone());
                         if now_del.is_some() && now_del != had_del {
                             tx.set_meta(&tseq_key(&rec.ns, &rec.id), &(my_seq + 1).to_string())?;
                             tx.clear_acks(&rec.ns, &rec.id)?;
+                        }
+                        // Cells that changed here count for the churn guard.
+                        if let (Some(before), Some(after)) = (&before, &after) {
+                            for (k, c) in &after.cells {
+                                if before.cells.get(k).map(|x| x.stamp) != Some(c.stamp) {
+                                    churn.push((
+                                        (rec.ns.clone(), rec.id.clone(), k.name.clone()),
+                                        c.stamp.dev,
+                                    ));
+                                }
+                            }
                         }
                     }
                     if rec.del.is_some() {
@@ -373,6 +387,10 @@ impl SyncEngine {
             Ok(())
         })?;
         changed.extend(touched);
+        let now = self.env.clock.now_ms();
+        for (key, dev) in churn {
+            self.note_churn(vec![key], dev, now);
+        }
         Ok(found)
     }
 

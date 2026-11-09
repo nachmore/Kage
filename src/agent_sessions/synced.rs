@@ -30,6 +30,7 @@ impl SyncedChatsProvider {
     }
 
     /// A provider over `dir`, for tests.
+    #[cfg(test)]
     pub fn at(dir: PathBuf) -> Self {
         Self { dir: Some(dir) }
     }

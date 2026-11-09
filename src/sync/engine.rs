@@ -807,6 +807,7 @@ impl SyncEngine {
             for (k, p) in cx.tx.projected_in(&ns)? {
                 projected.entry(k.id).or_default().insert(k.field, p);
             }
+            let mut written_ids: BTreeSet<String> = BTreeSet::new();
             let mut ids: BTreeSet<String> = local.keys().cloned().collect();
             ids.extend(projected.keys().cloned());
             // Lost ids (§4.4): local items no record knows, and records no
@@ -851,6 +852,9 @@ impl SyncEngine {
                 )?;
                 if wrote {
                     out.written += 1;
+                    if ns == CFG_NS {
+                        written_ids.insert(target_id.clone());
+                    }
                 }
                 if let Some(l) = local_rec {
                     if let Some(h) = super::guards::approval_of(
@@ -868,6 +872,12 @@ impl SyncEngine {
             }
             if catalog::list_spec(&ns).is_some() && !keep_order {
                 out.written += capture_order(&mut cx, local, &alias)?;
+            }
+            if !written_ids.is_empty()
+                && !catalog::RENAMED.is_empty()
+                && older_catalog_active(cx.tx, now)?
+            {
+                dual_write_renamed(&mut cx, catalog::RENAMED, &written_ids)?;
             }
             cx.tx.set_meta("hlc_last", &cx.hlc.last().to_string())?;
             Ok(out)
@@ -1271,22 +1281,15 @@ impl SyncEngine {
     ) -> anyhow::Result<()> {
         let os = self.env.os;
         let specs = self.specs.clone();
-        let me = self.core.as_ref().map(|c| c.me);
-        let now = self.now();
-        let mut churn = Vec::new();
         let Some(core) = self.core.as_mut() else {
             return Ok(());
         };
         core.replica.tx(|tx| {
-            let mut proj_before: BTreeMap<(String, String), [u8; 32]> = BTreeMap::new();
             for ns in writes
                 .iter()
                 .map(|w| w.ns.as_str())
                 .collect::<BTreeSet<_>>()
             {
-                for (k, p) in tx.projected_in(ns)? {
-                    proj_before.insert((k.id, k.field), p.0);
-                }
                 if catalog::list_spec(ns).is_some() {
                     set_known_order(tx, ns, &local_order(read_back, ns))?;
                 }
@@ -1341,14 +1344,6 @@ impl SyncEngine {
                     if !pinned && t_split.contains_key(&name) && !same(&rbv, &tv) && rb.is_some() {
                         tx.set_pin(&key, Some((rbv.clone(), PinReason::Lossy)))?;
                     }
-                    if let (Some(s), Some(me)) = (stamp, me) {
-                        let was = proj_before
-                            .get(&(w.id.clone(), name.clone()))
-                            .is_some_and(|h| *h != hash(&rbv));
-                        if s.dev != me && was {
-                            churn.push(((w.ns.clone(), w.id.clone(), name.clone()), s.dev));
-                        }
-                    }
                 }
                 if rec.cells.contains_key(&FieldKey::all(ORDER)) {
                     let c = &rec.cells[&FieldKey::all(ORDER)];
@@ -1359,12 +1354,7 @@ impl SyncEngine {
                 }
             }
             Ok(())
-        })?;
-        for (hit, dev) in churn {
-            // A remote change counts for the computer that made it.
-            self.note_churn(vec![hit], dev, now);
-        }
-        Ok(())
+        })
     }
 
     // --- Requests -------------------------------------------------------------------
@@ -2179,6 +2169,8 @@ fn rematch_lost(
     if orphans.is_empty() {
         return Ok(BTreeMap::new());
     }
+    // A record's position is where the file last showed it.
+    let known = known_order(cx.tx, &ns)?;
     let mut missing = BTreeMap::new();
     for id in projected.keys() {
         if local.get(id).is_some_and(Option::is_some) {
@@ -2192,16 +2184,14 @@ fn rematch_lost(
         }
         let pins = pins_of(cx.tx, &ns, id)?;
         let mut fields = effective_record(cx.spec, &rec, None, &pins, cx.os).fields;
-        // Compare positions as positions.
         fields.remove(ORDER);
+        if let Some(pos) = known.iter().position(|k| k == id) {
+            fields.insert(ORDER.to_string(), Value::from(pos as u64));
+        }
         missing.insert(id.clone(), fields);
     }
     let name_field = catalog::label_field(&ns);
-    let mut orphans_cmp = orphans.clone();
-    for f in orphans_cmp.values_mut() {
-        f.remove(ORDER);
-    }
-    let pairs = super::sources::lists::rematch(&orphans_cmp, &missing, name_field);
+    let pairs = super::sources::lists::rematch(&orphans, &missing, name_field);
     Ok(pairs.into_iter().collect())
 }
 
@@ -2308,6 +2298,59 @@ fn capture_order(
             Some((hash(&Value::String(key)), Some(stamp), Some(Scope::All))),
         )?;
         n += 1;
+    }
+    Ok(n)
+}
+
+/// Whether an active computer reports an older catalog than this build's
+/// (§8.11 renamed paths).
+fn older_catalog_active(tx: &Tx<'_>, now: i64) -> anyhow::Result<bool> {
+    for d in tx.devices()? {
+        if !super::gc::is_active(&d, now) {
+            continue;
+        }
+        let theirs: u32 = tx
+            .meta(&format!("catalog.{}", d.dev))?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        if theirs < catalog::CATALOG_VERSION {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Write every cell just captured for a renamed setting under its old
+/// path too, so an older Kage still sees the change (§8.11). Returns how
+/// many records it wrote.
+pub(crate) fn dual_write_renamed(
+    cx: &mut Cx<'_, '_>,
+    table: &[(&str, &str)],
+    written: &BTreeSet<String>,
+) -> anyhow::Result<usize> {
+    let mut n = 0;
+    for (old, new) in table {
+        if !written.contains(*new) {
+            continue;
+        }
+        let Some(src) = cx.tx.record(CFG_NS, new)? else {
+            continue;
+        };
+        let mut dst = cx
+            .tx
+            .record(CFG_NS, old)?
+            .unwrap_or_else(|| Record::new(CFG_NS, *old));
+        let mut changed = false;
+        for (k, c) in &src.cells {
+            if dst.cells.get(k).is_none_or(|d| d.stamp < c.stamp) {
+                dst.cells.insert(k.clone(), c.clone());
+                changed = true;
+            }
+        }
+        if changed {
+            cx.write(&dst)?;
+            n += 1;
+        }
     }
     Ok(n)
 }
@@ -2580,5 +2623,51 @@ mod tests {
             Value::from("C:\\win"),
             "no cell keeps local"
         );
+    }
+
+    /// While an older Kage is around, a renamed path is written under its
+    /// old name too (§8.11).
+    #[test]
+    fn renamed_paths_are_written_twice() {
+        let mut replica = Replica::open_in_memory().unwrap();
+        let keys = Keys::derive(&[3; 32]);
+        let me = DeviceId([4; 10]);
+        let mut hlc = Hlc::new(0);
+        let spec = super::super::sources::config::spec();
+        replica
+            .tx(|tx| {
+                let mut r = Record::new(CFG_NS, "ui.new_name");
+                r.cells.insert(
+                    FieldKey::all("v"),
+                    Cell {
+                        value: Value::from("dark"),
+                        stamp: Stamp::new(9, me),
+                        wall_ms: 1,
+                        anc: vec![],
+                    },
+                );
+                tx.write(&r, 0)?;
+                let mut cx = Cx {
+                    tx,
+                    me,
+                    os: OsKind::Macos,
+                    now: 1,
+                    hlc: &mut hlc,
+                    keys: &keys,
+                    origin: Origin::User,
+                    spec: &spec,
+                };
+                let written: BTreeSet<String> = ["ui.new_name".to_string()].into();
+                let table = [("ui.old_name", "ui.new_name")];
+                assert_eq!(dual_write_renamed(&mut cx, &table, &written)?, 1);
+                assert_eq!(dual_write_renamed(&mut cx, &table, &written)?, 0, "once");
+                let old = cx.tx.record(CFG_NS, "ui.old_name")?.unwrap();
+                assert_eq!(
+                    old.cell("v", Scope::All).unwrap().value,
+                    Value::from("dark")
+                );
+                Ok(())
+            })
+            .unwrap();
     }
 }

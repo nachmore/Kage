@@ -203,14 +203,13 @@ pub(crate) fn apply(
     id: &str,
     target: &mut LocalRecord,
     local: Option<&LocalRecord>,
-    rec: &Record,
+    _rec: &Record,
     local_cfg: &Config,
-    installed: &BTreeSet<String>,
+    _installed: &BTreeSet<String>,
     approved: &BTreeMap<String, String>,
     rules: &Rules,
     os: OsKind,
 ) -> anyhow::Result<()> {
-    let _ = installed;
     if ns == CFG_NS {
         let key = LocalKey::new(ns, id, FIELD);
         let pinned = tx.pin(&key)?;
@@ -285,22 +284,19 @@ pub(crate) fn apply(
             target.fields.insert("enabled".into(), Value::Bool(false));
             tx.set_meta(&format!("held.{key}"), &h)?;
         }
-        "list.connections" => {
-            // Only the active connection runs by itself.
-            if local_cfg.acp.active_connection_id == id {
-                if let Some(prev) = local.and_then(|l| l.fields.get("mode")).cloned() {
-                    if !same(&prev, &r) {
-                        let k = LocalKey::new(ns, id, "mode");
-                        tx.set_pin(&k, Some((prev.clone(), PinReason::NeedsApproval)))?;
-                        target.fields.insert("mode".into(), prev);
-                        tx.set_meta(&format!("held.{key}"), &h)?;
-                    }
+        // Only the active connection runs by itself.
+        "list.connections" if local_cfg.acp.active_connection_id == id => {
+            if let Some(prev) = local.and_then(|l| l.fields.get("mode")).cloned() {
+                if !same(&prev, &r) {
+                    let k = LocalKey::new(ns, id, "mode");
+                    tx.set_pin(&k, Some((prev.clone(), PinReason::NeedsApproval)))?;
+                    target.fields.insert("mode".into(), prev);
+                    tx.set_meta(&format!("held.{key}"), &h)?;
                 }
             }
         }
         _ => {}
     }
-    let _ = rec;
     Ok(())
 }
 

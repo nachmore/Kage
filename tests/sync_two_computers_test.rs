@@ -527,3 +527,64 @@ fn i24_consent_is_per_computer() {
     // The grant never travels.
     assert_eq!(a.config().extension_grants["weather"].granted.len(), 2);
 }
+
+/// §4.4 "Lost ids": an older Kage or an editor dropped an item's id and a
+/// new one was minted. Capture matches the item to its record, gives it
+/// its old id back, and nothing is deleted or duplicated anywhere.
+#[test]
+fn lost_ids_are_matched_back() {
+    let (mut cloud, mut a, mut b, _) = pair(JoinChoice::Theirs);
+    a.edit(|c| c.shortcuts = vec![shortcut("one", "https://1"), shortcut("two", "https://2")]);
+    cloud.settle(&mut [&mut a, &mut b], 3);
+    let ids: Vec<String> = a
+        .config()
+        .shortcuts
+        .iter()
+        .map(|s| s.sync_id.clone())
+        .collect();
+    // The ids are gone (and one item was renamed meanwhile).
+    a.edit(|c| {
+        for s in c.shortcuts.iter_mut() {
+            s.sync_id = String::new();
+        }
+        c.shortcuts[1].name = "two!".into();
+    });
+    cloud.settle(&mut [&mut a, &mut b], 3);
+    let after: Vec<String> = a
+        .config()
+        .shortcuts
+        .iter()
+        .map(|s| s.sync_id.clone())
+        .collect();
+    assert_eq!(after, ids, "the old ids are back");
+    let names: Vec<String> = b
+        .config()
+        .shortcuts
+        .iter()
+        .map(|s| s.name.clone())
+        .collect();
+    assert_eq!(names, vec!["one", "two!"]);
+    assert!(a.conflicts().is_empty());
+    assert!(b.conflicts().is_empty());
+}
+
+/// §8.10 churn: a value two computers keep changing back and forth is
+/// frozen for the session, and the Sync page says so.
+#[test]
+fn a_value_that_keeps_flipping_is_frozen() {
+    let (mut cloud, mut a, mut b, clock) = pair(JoinChoice::Theirs);
+    // Each computer rewrites the value after it sees the other's (two
+    // builds that disagree about it).
+    for i in 0..24 {
+        let (who, theme) = if i % 2 == 0 {
+            (&mut a, "dark")
+        } else {
+            (&mut b, "light")
+        };
+        set_theme(who, theme);
+        cloud.settle(&mut [&mut a, &mut b], 2);
+        advance(&clock, 60_000);
+    }
+    let frozen = |c: &SimComputer| c.status().problems.iter().any(|p| p.kind == "churn");
+    assert!(frozen(&a) || frozen(&b), "{:?}", a.status().problems);
+}

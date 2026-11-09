@@ -289,9 +289,11 @@ pub fn rematch(
     let mut out = Vec::new();
     let mut free_o: BTreeSet<&String> = orphans.keys().collect();
     let mut free_m: BTreeSet<&String> = missing.keys().collect();
+    // Positions aside, and an empty field the same as a missing one.
     let without_order = |m: &Map<String, Value>| {
         let mut c = m.clone();
         c.remove(ORDER);
+        c.retain(|_, v| !v.is_null());
         c
     };
     // 1. All known fields equal.
@@ -373,17 +375,19 @@ mod tests {
 
     #[test]
     fn items_become_records_without_their_id_or_local_fields() {
-        let mut c = Config::default();
-        c.macros = vec![serde_json::from_value(json!({
-            "name": "Daily", "sync_id": "sabc",
-            "trigger": { "type": "schedule", "interval": "every_1h", "last_run": "2026-01-01T00:00:00Z" }
-        }))
-        .unwrap()];
-        c.shortcuts = vec![
-            serde_json::from_value(json!({ "name": "gh", "sync_id": "s1", "action_type": "open_url", "url": "https://x" })).unwrap(),
-            serde_json::from_value(json!({ "name": "vim", "sync_id": "s2", "action_type": "run_program", "path": "/usr/bin/vim" })).unwrap(),
-            serde_json::from_value(json!({ "name": "no id" })).unwrap(),
-        ];
+        let c = Config {
+            macros: vec![serde_json::from_value(json!({
+                "name": "Daily", "sync_id": "sabc",
+                "trigger": { "type": "schedule", "interval": "every_1h", "last_run": "2026-01-01T00:00:00Z" }
+            }))
+            .unwrap()],
+            shortcuts: vec![
+                serde_json::from_value(json!({ "name": "gh", "sync_id": "s1", "action_type": "open_url", "url": "https://x" })).unwrap(),
+                serde_json::from_value(json!({ "name": "vim", "sync_id": "s2", "action_type": "run_program", "path": "/usr/bin/vim" })).unwrap(),
+                serde_json::from_value(json!({ "name": "no id" })).unwrap(),
+            ],
+            ..Config::default()
+        };
         let st = state_of(&c, OsKind::Macos);
         let m = st.get("list.macros", "sabc").unwrap();
         assert!(m.fields.get("sync_id").is_none());
@@ -410,15 +414,17 @@ mod tests {
 
     #[test]
     fn writes_rebuild_the_list_in_order_and_keep_local_fields() {
-        let mut c = Config::default();
-        c.macros = vec![
-            serde_json::from_value(json!({
-                "name": "A", "sync_id": "sa",
-                "trigger": { "type": "schedule", "interval": "every_1h", "last_run": "2026-01-01T00:00:00Z" }
-            }))
-            .unwrap(),
-            serde_json::from_value(json!({ "name": "mine", "sync_id": "sl" })).unwrap(),
-        ];
+        let c = Config {
+            macros: vec![
+                serde_json::from_value(json!({
+                    "name": "A", "sync_id": "sa",
+                    "trigger": { "type": "schedule", "interval": "every_1h", "last_run": "2026-01-01T00:00:00Z" }
+                }))
+                .unwrap(),
+                serde_json::from_value(json!({ "name": "mine", "sync_id": "sl" })).unwrap(),
+            ],
+            ..Config::default()
+        };
         let rec = |name: &str, order: &str, trigger: Value| LocalRecord {
             fields: obj(json!({ "name": name, "order": order, "trigger": trigger })),
             avail: None,

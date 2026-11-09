@@ -217,24 +217,24 @@ impl SyncEngine {
         }
         if top > my_seq {
             let path = dir.join(folder::head_name(top));
-            match self.read_open(&path, FileKind::Head, me, None, now) {
-                Ok(plain) => {
-                    let head: HeadFile = serde_json::from_slice(&plain)?;
-                    if !instances.contains(&head.instance) && !self.rt.adopt_own {
-                        return self.collision();
-                    }
-                    self.rt.adopt_own = false;
-                    // Restored from a backup of this computer: take its
-                    // newer state back in and continue after it.
-                    log::info!("sync: this computer's folder has a newer head of its own; folding it back in");
-                    self.fold_own_head(&head, now)?;
-                    if let Some(core) = self.core.as_mut() {
-                        core.my_seq = top;
-                        core.replica
-                            .tx(|tx| tx.set_meta("my_seq", &top.to_string()))?;
-                    }
+            // Not readable yet: try again next tick.
+            if let Ok(plain) = self.read_open(&path, FileKind::Head, me, None, now) {
+                let head: HeadFile = serde_json::from_slice(&plain)?;
+                if !instances.contains(&head.instance) && !self.rt.adopt_own {
+                    return self.collision();
                 }
-                Err(_) => {}
+                self.rt.adopt_own = false;
+                // Restored from a backup of this computer: take its newer
+                // state back in and continue after it.
+                log::info!(
+                    "sync: this computer's folder has a newer head of its own; folding it back in"
+                );
+                self.fold_own_head(&head, now)?;
+                if let Some(core) = self.core.as_mut() {
+                    core.my_seq = top;
+                    core.replica
+                        .tx(|tx| tx.set_meta("my_seq", &top.to_string()))?;
+                }
             }
             return Ok(());
         }

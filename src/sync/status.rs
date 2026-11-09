@@ -1016,7 +1016,7 @@ impl SyncEngine {
                 out.push(s);
             }
         }
-        out.sort_by(|a, b| b.loser.at.cmp(&a.loser.at));
+        out.sort_by_key(|c| std::cmp::Reverse(c.loser.at));
         Ok(out)
     }
 

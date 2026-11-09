@@ -334,6 +334,44 @@ fn a_newer_schema_is_read_only() {
     assert!(items.iter().any(|r| r.id == "sfuture"), "republished");
 }
 
+/// Removing an extension's data from the folder (§8.7): every computer
+/// drops the cells and turns that extension's data sync off; local files
+/// are never touched.
+#[test]
+fn purging_an_extensions_data_reaches_every_computer() {
+    let (mut cloud, mut a, mut b, _) = pair(JoinChoice::Theirs);
+    let mut f = Forger::new(&a);
+    let items: Vec<Record> = (0..3)
+        .map(|i| {
+            record(
+                "ext.weather.c.items",
+                &format!("r{i}"),
+                vec![(FieldKey::all("v"), f.cell(json!({ "city": i })))],
+            )
+        })
+        .collect();
+    f.publish(&a, vec![("ext.weather.c.items", 1, items)], 1);
+    cloud.settle(&mut [&mut a, &mut b], 3);
+    let (_, on_b) = f.read(&b, "ext.weather.c.items");
+    assert_eq!(
+        on_b.len(),
+        3,
+        "B carries an extension's data it can't use yet"
+    );
+    a.ask(kage::sync::EngineRequest::PurgeExtension("weather".into()));
+    cloud.settle(&mut [&mut a, &mut b], 3);
+    for c in [&a, &b] {
+        let (_, left) = f.read(c, "ext.weather.c.items");
+        assert!(left.is_empty(), "{} still publishes it", c.name);
+        let prefs = kage::sync::prefs::DevicePrefs::load(&c.local);
+        assert!(
+            prefs.ext_data_off.iter().any(|e| e == "weather"),
+            "{}",
+            c.name
+        );
+    }
+}
+
 /// Keep the OS import in use.
 #[allow(dead_code)]
 const _OS: OsKind = OsKind::Linux;

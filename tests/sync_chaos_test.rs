@@ -24,7 +24,10 @@ fn shortcut(name: &str, url: &str) -> kage::config::ShortcutConfig {
 }
 
 /// One computer's synced view, for comparing computers of one OS.
-fn view(c: &SimComputer) -> (String, u8, Vec<(String, String)>) {
+/// Theme, font size and shortcuts (name, url) in order.
+type View = (String, u8, Vec<(String, String)>);
+
+fn view(c: &SimComputer) -> View {
     let cfg = c.config();
     (
         cfg.ui.theme.clone(),
@@ -131,7 +134,7 @@ fn run(seed: u64) {
             let seeded = rng.random::<u64>();
             cloud.step_with(&mut refs, |who, p| {
                 let h = seeded ^ p.to_string_lossy().len() as u64;
-                if drop_to.is_some_and(|d| names[d] == who) && h % 3 == 0 {
+                if drop_to.is_some_and(|d| names[d] == who) && h.is_multiple_of(3) {
                     if half {
                         Deliver::Truncated
                     } else {
@@ -168,7 +171,7 @@ fn run(seed: u64) {
     }
     // Every computer of one OS shows the same; the shared parts agree
     // across OSes; the conflicts lists are the same everywhere.
-    let mut by_os: BTreeMap<OsKind, (String, u8, Vec<(String, String)>)> = BTreeMap::new();
+    let mut by_os: BTreeMap<OsKind, View> = BTreeMap::new();
     let first = view(&comps[0]);
     let mut conflict_ids: Option<BTreeSet<String>> = None;
     for c in comps.iter_mut() {

@@ -19,7 +19,7 @@ use kage::config::Config;
 use kage::extensions::InstalledItem;
 use kage::sync::crypto::KdfCost;
 use kage::sync::engine::{
-    Clock, CommitError, ConfigPort, EngineEnv, HostEvents, LoadReset, SyncEngine, TickReport, Wake,
+    CommitError, ConfigPort, EngineEnv, HostEvents, LoadReset, SyncEngine, TickReport, Wake,
 };
 use kage::sync::prefs::SyncCategories;
 use kage::sync::sources::{self, HostDirs, Source};
@@ -126,10 +126,13 @@ impl ConfigPort for Port {
     }
 }
 
+/// A telemetry event and its props.
+pub type Tracked = (String, Vec<(String, String)>);
+
 /// What the engine told the app.
 #[derive(Default)]
 pub struct Events {
-    pub tracked: Mutex<Vec<(String, Vec<(String, String)>)>>,
+    pub tracked: Mutex<Vec<Tracked>>,
     pub notified: Mutex<Vec<String>>,
     pub applied: Mutex<Vec<String>>,
     pub statuses: Mutex<Vec<SyncStatus>>,
@@ -158,6 +161,8 @@ impl HostEvents for Events {
 
 /// A shared clock all computers read, so a test moves time for all.
 pub fn clock() -> Arc<FakeClock> {
+    // Every test starts here: isolate user dirs before anything else.
+    isolate();
     Arc::new(FakeClock::new(T0))
 }
 

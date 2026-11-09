@@ -222,6 +222,7 @@ impl Config {
     /// (the schema-mismatch salvage), or nothing. Folder sync projects the
     /// synced values over a reset instead of spreading its defaults
     /// (docs/design/SYNC.md §8.10).
+    #[allow(dead_code)] // The app's sync port reads it once WP-S4 wires the engine.
     pub fn load_was_reset() -> crate::sync::engine::LoadReset {
         LOAD_RESET.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
@@ -1377,14 +1378,16 @@ mod load_resilience_tests {
     /// Every list item gets a stable id once; a repeated id is replaced.
     #[test]
     fn ensure_item_ids_is_stable_and_fixes_repeats() {
-        let mut c = Config::default();
-        c.shortcuts = vec![
-            serde_json::from_value(serde_json::json!({ "name": "a" })).unwrap(),
-            serde_json::from_value(serde_json::json!({ "name": "b", "sync_id": "sfixed" }))
-                .unwrap(),
-            serde_json::from_value(serde_json::json!({ "name": "c", "sync_id": "sfixed" }))
-                .unwrap(),
-        ];
+        let mut c = Config {
+            shortcuts: vec![
+                serde_json::from_value(serde_json::json!({ "name": "a" })).unwrap(),
+                serde_json::from_value(serde_json::json!({ "name": "b", "sync_id": "sfixed" }))
+                    .unwrap(),
+                serde_json::from_value(serde_json::json!({ "name": "c", "sync_id": "sfixed" }))
+                    .unwrap(),
+            ],
+            ..Config::default()
+        };
         c.acp.connections[0].id = String::new();
         c.acp.active_connection_id = String::new();
         assert!(c.ensure_item_ids());
