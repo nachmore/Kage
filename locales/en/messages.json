@@ -3333,6 +3333,14 @@
     "message": "Menu",
     "description": "Accessible name of the right-click menu"
   },
+  "context_menu.no_guesses": {
+    "message": "No guesses found",
+    "description": "Right-click menu on a misspelled word — shown (disabled) when the spell checker has no replacement to suggest"
+  },
+  "context_menu.learn_spelling": {
+    "message": "Learn spelling",
+    "description": "Right-click menu on a misspelled word — add the word to the user's spelling dictionary so it's no longer flagged"
+  },
   "result_menu.open": {
     "message": "Open",
     "description": "Result right-click menu — open the app, file or folder"

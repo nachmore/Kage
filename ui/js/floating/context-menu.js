@@ -5,6 +5,8 @@
  * - On an app / file / folder result row: that result's menu (Open, Show
  *   in Finder / Open file location, Copy, Uninstall, …), built from what
  *   the backend says the result supports on this OS.
+ * - On a misspelled word in the launcher input: the spell checker's
+ *   suggestions and Learn spelling above the text menu (spell-menu.js).
  * - Anywhere else, or for any other kind of row: the text menu (Cut, Copy,
  *   Paste, Settings, Close, and Inspect in dev mode), as always.
  * - Keyboard: Shift+F10 or the Menu key opens the selected result's menu
@@ -23,6 +25,16 @@ import { waitForTauri } from '../shared/tauri-init.js';
 import { DISMISSED, createPopupMenuClient, isMenuKey } from '../shared/popup-menu.js';
 import { buildResultMenuItems, resultMenuTarget } from '../shared/result-menu.js';
 import { isMac } from '../shared/shortcuts.js';
+import {
+    SPELL_LOOKUP_TIMEOUT_MS,
+    cleanSuggestions,
+    findSpellWord,
+    inputOffsetAtPoint,
+    replaceWord,
+    spellChoice,
+    spellMenuItems,
+    withTimeout,
+} from '../shared/spell-menu.js';
 
 waitForTauri(({ invoke, appWindow, listen }) => {
     initContextMenu(invoke, appWindow, listen);
@@ -34,6 +46,14 @@ const KEYBOARD_CONTEXTMENU_SWALLOW_MS = 600;
 function initContextMenu(invoke, appWindow, listen) {
     const menu = createPopupMenuClient({ invoke, listen });
     const mac = isMac();
+    // Dev mode adds Inspect to the text menu; the spelling menu lists the
+    // text items itself, so it needs to know too. Checked once.
+    let devMode = false;
+    Promise.resolve(invoke('is_dev_mode'))
+        .then((v) => {
+            devMode = !!v;
+        })
+        .catch(() => {});
     // Menus being prepared or shown. `window._contextMenuOpen` (read by the
     // floating window's blur handler) stays true while any is, so a menu
     // replacing another doesn't briefly let the launcher hide.
@@ -88,6 +108,64 @@ function initContextMenu(invoke, appWindow, listen) {
         }
     }
 
+    /**
+     * Start looking up the right-clicked word in the launcher input, if
+     * the click was on one: `{ input, range, lookup }`, where `lookup`
+     * resolves to the suggestions when the word is misspelled, else (or
+     * if the backend takes too long) `null`. Synchronous up to the
+     * invoke, so it reads the selection as it was at the click.
+     */
+    function startSpellLookup(e) {
+        const input = e.target?.closest?.('.input-box');
+        if (!input || typeof input.value !== 'string' || input.spellcheck === false) return null;
+        const range = findSpellWord({
+            text: input.value,
+            selectionStart: input.selectionStart,
+            selectionEnd: input.selectionEnd,
+            pointOffset: inputOffsetAtPoint(input, e.clientX, e.clientY),
+        });
+        if (!range) return null;
+        const asked = Promise.resolve(invoke('spell_suggestions', { word: range.word })).then(
+            (r) => (r?.misspelled ? cleanSuggestions(r.suggestions) : null)
+        );
+        return { input, range, lookup: withTimeout(asked, SPELL_LOOKUP_TIMEOUT_MS, null) };
+    }
+
+    /** Show the spelling menu; false if the word is fine (caller falls back). */
+    async function openSpellMenu(spell, point) {
+        const suggestions = await spell.lookup;
+        if (!suggestions) return false;
+        hold();
+        try {
+            const items = spellMenuItems(suggestions, { devMode });
+            const choice = await menu.open({ ...point, items });
+            window._contextMenuOpen = false;
+            const pick = spellChoice(choice.action, suggestions);
+            if (pick?.replace !== undefined) {
+                replaceWord(spell.input, spell.range, pick.replace);
+            } else if (pick?.learn) {
+                await learnSpelling(spell);
+            } else {
+                await runTextAction(choice.action);
+            }
+            return true;
+        } finally {
+            release();
+        }
+    }
+
+    async function learnSpelling({ input, range }) {
+        try {
+            await invoke('learn_spelling', { word: range.word });
+        } catch (e) {
+            console.warn('[context-menu] learn_spelling failed:', e);
+            return;
+        }
+        // WebKit re-checks text when it's edited, not when the dictionary
+        // changes: put the same word back so its underline goes.
+        replaceWord(input, range, range.word);
+    }
+
     async function openTextMenu(point) {
         hold();
         try {
@@ -106,11 +184,15 @@ function initContextMenu(invoke, appWindow, listen) {
         // opens the menu can blur this window.
         hold();
         try {
+            // Before the first await: the lookup runs alongside the
+            // position query, and reads the selection as of the click.
+            const spell = startSpellLookup(e);
             const point = await screenPoint(e.clientX, e.clientY);
             const row = e.target?.closest?.('.app-suggestion-item');
             if (row?._kageResult && (await openResultMenu(row._kageResult, point, false))) {
                 return;
             }
+            if (spell && (await openSpellMenu(spell, point))) return;
             await openTextMenu(point);
         } catch (err) {
             console.error('Failed to show context menu:', err);
