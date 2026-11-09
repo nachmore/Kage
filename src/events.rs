@@ -129,6 +129,16 @@ pub const AUTOMATION_STEP_COMPLETE: &str = "automation_step_complete";
 #[allow(dead_code)] // The background agent-call service will emit it; the app doesn't yet.
 pub const AGENT_CALLS_ACTIVITY: &str = "agent_calls_activity";
 
+// --- Extension file text --------------------------------------------
+
+/// Progress of an extension's `pick_file_text` request. Payload:
+/// `{ extension_id, phase, file? }`; `phase` is `dialog_closed` (with
+/// `picked: bool`), `reading`, `downloading`, `extracting` or `done`, and
+/// `file` is the cleaned file name. Sent only to the window that called
+/// the command, never to extension sandboxes.
+#[allow(dead_code)] // The file text commands will emit it; the app doesn't yet.
+pub const FILE_TEXT_PROGRESS: &str = "file_text_progress";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,6 +170,7 @@ mod tests {
             AGENT_DISCONNECTED,
             AUTOMATION_STEP_COMPLETE,
             AGENT_CALLS_ACTIVITY,
+            FILE_TEXT_PROGRESS,
         ];
         for name in all {
             assert!(

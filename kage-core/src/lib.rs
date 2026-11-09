@@ -10,6 +10,7 @@
 pub mod calendar;
 pub mod changelog_cache;
 pub mod computer_control;
+pub mod file_text_wire;
 pub mod folder_tools;
 pub mod lock_ext;
 pub mod mcp_json_rpc;

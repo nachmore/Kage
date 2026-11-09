@@ -340,8 +340,8 @@ All keys live under `errors.file_text.` in `locales/en/messages.json`.
 | `unavailable` | internal | Rust | File reading isn't available in this copy of Kage. |
 | `dialog_failed` | internal | Rust | The file picker couldn't open. |
 | `not_a_file` | invalid_input | Rust | {name} isn't a regular file. |
-| `unsupported` | invalid_input | Rust | Kage can't read .{extension} files here. It reads: {formats}. |
-| `wrong_content` | invalid_input | Rust | {name} doesn't contain what its .{extension} name says. |
+| `unsupported` | invalid_input | Rust | Kage can't read .{ext} files here. It reads: {formats}. |
+| `wrong_content` | invalid_input | Rust | {name} doesn't contain what its .{ext} name says. |
 | `too_large` | invalid_input | Rust | {name} is {size}. Kage reads files up to {limit}. |
 | `read_failed` | internal | Rust | Couldn't read {name}. |
 | `not_downloaded` | timeout | Rust | {name} didn't finish downloading. Try again when it's on this computer. |
@@ -355,10 +355,12 @@ All keys live under `errors.file_text.` in `locales/en/messages.json`.
 | `worker_failed` | internal | Rust | The file reader stopped unexpectedly. |
 
 `{extension}` is the injected display name. `{name}` is the cleaned file
-name. `{size}` and `{limit}` are formatted by the host (`48.2 MB`).
-`{formats}` is a list of extensions (`.txt, .md, .pdf, .docx`), which needs
-no translation. Errors the JS host raises carry `errorKind` and `errorKey`
-the same way Rust errors do, so extensions can branch on them.
+name. `{ext}` is the file's extension without the dot (a separate name, so
+it can't be confused with `{extension}`). `{size}` and `{limit}` are
+formatted by the host (`48.2 MB`). `{formats}` is a list of extensions
+(`.txt, .md, .pdf, .docx`), which needs no translation. Errors the JS
+host raises carry `errorKind` and `errorKey` the same way Rust errors do,
+so extensions can branch on them.
 
 Rust-side UI strings, also in `locales/en/messages.json`:
 - `file_text.dialog.title`: "{extension}: choose a file to read"
@@ -715,7 +717,11 @@ Types in `kage-core/src/file_text_wire.rs` (serde only), shared by the app
 and the worker, like `CalendarEvent` is for the calendar helper.
 
 Request on stdin: `u32` LE header length, the header as JSON, `u64` LE
-payload length, the payload bytes.
+payload length, the payload bytes. `write_request` and `read_request` in
+the same module write and read this frame, so both sides use one copy.
+They refuse a header over 4 KiB or a payload over 32 MiB before
+allocating. `WORKER_BIN_NAME` (`kage-file-text`), `WORKER_FLAG` (`--v1`)
+and `WIRE_VERSION` (1) live there too.
 
 ```rust
 pub struct WorkerRequest {
@@ -775,7 +781,8 @@ only guards against a broken install.
 | Between dialogs | 3 s per extension | Rust |
 
 The constants live in `kage-core/src/file_text_wire.rs` so both sides and
-the tests use one copy.
+the tests use one copy. The three JS host limits (click lease, ask bar,
+cooldown) live in `ui/js/shared/extension-file-text.js`.
 
 ### 5.8 Format detection
 
@@ -1523,7 +1530,9 @@ with EXTENSION_AGENT_CALLS's `AC-X1` and `AC-MM1`…`AC-MM3`.
 - Files:
   - `kage-core/src/file_text_wire.rs`, `kage-core/src/lib.rs` (mod line):
     `Format`, `Warning`, `Pages`, `WorkerRequest`, `WorkerResponse`,
-    `WorkerErrorCode`, the limit constants, the extension table;
+    `WorkerErrorCode`, the limit constants, the extension table (with the
+    `READS_P1_FORMATS` switch), and the frame helpers `write_request` and
+    `read_request`;
   - `src/events.rs` and `ui/js/shared/events.js` (`FILE_TEXT_PROGRESS`);
   - `locales/en/messages.json` (every key in §3.8 and §4.7), then
     `locales/<other>/messages.json` through `scripts/translate.py`.
@@ -1555,8 +1564,9 @@ with EXTENSION_AGENT_CALLS's `AC-X1` and `AC-MM1`…`AC-MM3`.
 **WP-FT2 OOXML** (`kage-file-text/src/ooxml/**`,
 `kage-file-text/tests/ooxml_*.rs`, `kage-file-text/fuzz/fuzz_targets/ooxml.rs`)
 - DOCX in P0. PPTX in the same package but reported through
-  `file_text_support` only once FT8's P1 switch is flipped (one constant in
-  the wire crate's format table, owned by FT-C, changed in FT8).
+  `file_text_support` only once FT8's P1 switch is flipped
+  (`READS_P1_FORMATS` in the wire crate's format table, owned by FT-C,
+  changed in FT8).
 - Accept: §3.7 conventions; §12 limit cases; Strict OOXML; fuzz target
   runs 10 minutes clean.
 

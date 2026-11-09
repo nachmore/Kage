@@ -2253,6 +2253,10 @@
     "message": "Background AI",
     "description": "Filter — only background AI events"
   },
+  "settings.tool_permissions.audit.filter.file_read": {
+    "message": "File reads",
+    "description": "Filter — only files that extensions read"
+  },
   "settings.tool_permissions.audit.refresh": {
     "message": "Refresh",
     "description": "Button to reload the audit log"
@@ -2320,6 +2324,14 @@
   "settings.tool_permissions.audit.summary.extension_agent_access_off": {
     "message": "Background AI turned off for <strong>{extension}</strong>",
     "description": "Audit row summary — background AI switched off for an extension (HTML allowed)"
+  },
+  "settings.tool_permissions.audit.summary.extension_file_read": {
+    "message": "<strong>{extension}</strong> read {file} ({format}, {size}, {chars} characters)",
+    "description": "Audit row summary — an extension read a file the user picked (HTML allowed). {file} is the file name; {format} is an id such as pdf; {size} is a size such as 48.2 MB; {chars} is a number."
+  },
+  "settings.tool_permissions.audit.summary.extension_file_read_failed": {
+    "message": "<strong>{extension}</strong> couldn't read {file}",
+    "description": "Audit row summary — an extension's read of a file the user picked failed (HTML allowed). {file} is the file name."
   },
   "settings.tool_permissions.audit.meta.session": {
     "message": "session {id}",
@@ -4395,6 +4407,14 @@
   },
   "settings.manager.cap.agent_background.desc": {
     "message": "Ask your AI agent for help in the background, without a chat. Nothing is sent until you turn it on for this extension and confirm which agent gets the text.",
+    "description": "Capability badge tooltip and install-prompt description"
+  },
+  "settings.manager.cap.file_text.label": {
+    "message": "Files you choose",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.file_text.desc": {
+    "message": "Ask you to pick a file, then read its text (plain text, Markdown, PDF, Word, …). It gets only the file you pick, each time, never its folder or any other file.",
     "description": "Capability badge tooltip and install-prompt description"
   },
   "settings.manager.error.failed_load": {
@@ -7208,5 +7228,133 @@
   "errors.agent_call.not_ready": {
     "message": "This request hasn't been given its turn yet.",
     "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: the extension tried to send before Kage gave the request its turn."
+  },
+  "errors.file_text.not_granted": {
+    "message": "{extension} doesn't have permission to read files you choose.",
+    "description": "Reading a file the user picked for an extension. The extension lacks the Files you choose permission. {extension} is the extension's name."
+  },
+  "errors.file_text.extension_disabled": {
+    "message": "{extension} is turned off.",
+    "description": "Reading a file the user picked for an extension. The extension is disabled, so it can't ask for a file. {extension} is the extension's name."
+  },
+  "errors.file_text.invalid_formats": {
+    "message": "Unknown file type requested. Kage reads: {formats}.",
+    "description": "Reading a file the user picked for an extension. Developer-facing: the extension asked for a format Kage doesn't know. {formats} is a list of file extensions such as .txt, .md, .pdf; keep it verbatim."
+  },
+  "errors.file_text.invalid_max_chars": {
+    "message": "The character limit must be between 1 and {max}.",
+    "description": "Reading a file the user picked for an extension. Developer-facing: the extension asked for a character limit out of range. {max} is a number."
+  },
+  "errors.file_text.busy": {
+    "message": "Kage is already reading a file. Try again when it's done.",
+    "description": "Reading a file the user picked for an extension. Only one file can be read at a time, or the ask bar is already showing."
+  },
+  "errors.file_text.too_soon": {
+    "message": "Wait a moment before choosing another file.",
+    "description": "Reading a file the user picked for an extension. The extension asked for another file within a few seconds of the last dialog."
+  },
+  "errors.file_text.declined": {
+    "message": "You chose \"Not now\". Try again in a moment.",
+    "description": "Reading a file the user picked for an extension. The user clicked Not now on the ask bar, and the extension asked again too soon. \"Not now\" is the button label (file_text.ask.dismiss)."
+  },
+  "errors.file_text.no_window": {
+    "message": "Open Kage to choose a file.",
+    "description": "Reading a file the user picked for an extension. The window that would show the ask bar is hidden, so Kage didn't ask."
+  },
+  "errors.file_text.unavailable": {
+    "message": "File reading isn't available in this copy of Kage.",
+    "description": "Reading a file the user picked for an extension. The file reader that ships with Kage is missing from the install."
+  },
+  "errors.file_text.dialog_failed": {
+    "message": "The file picker couldn't open.",
+    "description": "Reading a file the user picked for an extension. The system's file dialog failed to open."
+  },
+  "errors.file_text.not_a_file": {
+    "message": "{name} isn't a regular file.",
+    "description": "Reading a file the user picked for an extension. The user picked a folder, a package or a device. {name} is the file name."
+  },
+  "errors.file_text.unsupported": {
+    "message": "Kage can't read .{ext} files here. It reads: {formats}.",
+    "description": "Reading a file the user picked for an extension. The picked file's type isn't one the extension asked for. {ext} is the file's extension without the dot; {formats} is a list of file extensions such as .txt, .md, .pdf. Keep both verbatim."
+  },
+  "errors.file_text.wrong_content": {
+    "message": "{name} doesn't contain what its .{ext} name says.",
+    "description": "Reading a file the user picked for an extension. The file's contents don't match its extension (for example a renamed file). {name} is the file name; {ext} is its extension without the dot."
+  },
+  "errors.file_text.too_large": {
+    "message": "{name} is {size}. Kage reads files up to {limit}.",
+    "description": "Reading a file the user picked for an extension. The file is over the size limit. {name} is the file name; {size} and {limit} are sizes such as 48.2 MB."
+  },
+  "errors.file_text.read_failed": {
+    "message": "Couldn't read {name}.",
+    "description": "Reading a file the user picked for an extension. The operating system refused or failed the read. {name} is the file name."
+  },
+  "errors.file_text.not_downloaded": {
+    "message": "{name} didn't finish downloading. Try again when it's on this computer.",
+    "description": "Reading a file the user picked for an extension. The file lives on a cloud drive and didn't download in time. {name} is the file name."
+  },
+  "errors.file_text.encrypted": {
+    "message": "{name} is password-protected. Remove the password and try again.",
+    "description": "Reading a file the user picked for an extension. The document needs a password to open. {name} is the file name."
+  },
+  "errors.file_text.legacy_format": {
+    "message": "{name} uses an old format Kage can't read. Save it as .docx or PDF and try again.",
+    "description": "Reading a file the user picked for an extension. An old binary Office file (such as .doc) saved with a new extension. {name} is the file name; keep .docx and PDF verbatim."
+  },
+  "errors.file_text.not_text": {
+    "message": "{name} doesn't look like a text file.",
+    "description": "Reading a file the user picked for an extension. A file named as text holds binary data. {name} is the file name."
+  },
+  "errors.file_text.malformed": {
+    "message": "{name} looks damaged and couldn't be read.",
+    "description": "Reading a file the user picked for an extension. The document is broken or not what it claims to be. {name} is the file name."
+  },
+  "errors.file_text.too_complex": {
+    "message": "{name} is too complex to read safely.",
+    "description": "Reading a file the user picked for an extension. The document went over a safety limit (size, nesting or memory). {name} is the file name."
+  },
+  "errors.file_text.timeout": {
+    "message": "Reading {name} took too long, so Kage stopped.",
+    "description": "Reading a file the user picked for an extension. Extracting the text went over the time limit. {name} is the file name."
+  },
+  "errors.file_text.cancelled": {
+    "message": "Reading {name} was cancelled.",
+    "description": "Reading a file the user picked for an extension. The user or the extension cancelled the read. {name} is the file name."
+  },
+  "errors.file_text.worker_failed": {
+    "message": "The file reader stopped unexpectedly.",
+    "description": "Reading a file the user picked for an extension. Kage's separate file reader process failed or returned something it couldn't use."
+  },
+  "file_text.dialog.title": {
+    "message": "{extension}: choose a file to read",
+    "description": "Title of the system file dialog an extension opens. {extension} is the extension's name. On macOS it shows as the dialog's message line."
+  },
+  "file_text.dialog.filter": {
+    "message": "Supported files",
+    "description": "File type filter in the system file dialog: the file types Kage can read"
+  },
+  "file_text.ask.message": {
+    "message": "{extension} wants to read a file you choose.",
+    "description": "Ask bar shown when an extension asks for a file without a click. {extension} is the extension's name."
+  },
+  "file_text.ask.choose": {
+    "message": "Choose file…",
+    "description": "Ask bar button: open the file dialog"
+  },
+  "file_text.ask.dismiss": {
+    "message": "Not now",
+    "description": "Ask bar button: don't open the file dialog"
+  },
+  "file_text.progress.reading": {
+    "message": "Reading {file}…",
+    "description": "Progress chip while Kage reads a file the user picked. {file} is the file name."
+  },
+  "file_text.progress.downloading": {
+    "message": "Downloading {file}…",
+    "description": "Progress chip while a cloud drive downloads the file the user picked. {file} is the file name."
+  },
+  "file_text.progress.cancel": {
+    "message": "Cancel",
+    "description": "Progress chip button: stop reading the file"
   }
 }

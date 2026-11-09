@@ -47,4 +47,7 @@ export const EVT = {
 
     // Background agent calls (first-party windows only)
     AGENT_CALLS_ACTIVITY: 'agent_calls_activity',
+
+    // Extension file text (the calling window only)
+    FILE_TEXT_PROGRESS: 'file_text_progress',
 };
