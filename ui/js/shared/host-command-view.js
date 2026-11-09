@@ -452,22 +452,33 @@ export function rehomeHostCommandCards() {
 }
 
 /**
- * Wire this window up. `tray`: where cards go when `place(cardEl,
- * payload)` doesn't put them somewhere better (return true when it did).
- * Re-shows the prompts still waiting for this window (after a reload).
+ * Whether `payload` is for this window. Tauri hands an event emitted to
+ * one window to every window listening globally, so the backend names the
+ * window in each payload and the others ignore it.
  */
-export async function installHostCommandUi({ tray, place } = {}) {
+export function isForThisWindow(payload, windowLabel) {
+    return !windowLabel || payload?.window === windowLabel;
+}
+
+/**
+ * Wire this window up. `windowLabel`: this window's label (prompts and
+ * updates for other windows are ignored). `tray`: where cards go when
+ * `place(cardEl, payload)` doesn't put them somewhere better (return true
+ * when it did). Re-shows the prompts still waiting for this window (after
+ * a reload).
+ */
+export async function installHostCommandUi({ tray, place, windowLabel } = {}) {
     disposeHostCommandUi();
     ui = { tray: tray || null, place: place || null, unlisten: [], timer: null };
     const api = window.__TAURI__;
     const listen = api?.event?.listen;
     if (typeof listen === 'function') {
-        const offPrompt = await listen(EVT.HOST_COMMAND_PROMPT, (e) =>
-            showHostCommandPrompt(e?.payload)
-        );
-        const offUpdate = await listen(EVT.HOST_COMMAND_UPDATE, (e) =>
-            onHostCommandUpdate(e?.payload)
-        );
+        const offPrompt = await listen(EVT.HOST_COMMAND_PROMPT, (e) => {
+            if (isForThisWindow(e?.payload, windowLabel)) showHostCommandPrompt(e.payload);
+        });
+        const offUpdate = await listen(EVT.HOST_COMMAND_UPDATE, (e) => {
+            if (isForThisWindow(e?.payload, windowLabel)) onHostCommandUpdate(e.payload);
+        });
         ui?.unlisten.push(offPrompt, offUpdate);
     }
     if (ui) ui.timer = setInterval(rehomeHostCommandCards, REHOME_MS);

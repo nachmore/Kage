@@ -83,9 +83,10 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     // their runs), and runs whose block a new prompt or reset removed:
     // both in the tray above the input, which a reset never clears.
     setRunChipTray(document.getElementById('shellRunChips'));
-    installHostCommandUi({ tray: document.getElementById('hostCommandTray') }).catch((e) =>
-        console.warn('[floating] host command prompts unavailable:', e)
-    );
+    installHostCommandUi({
+        tray: document.getElementById('hostCommandTray'),
+        windowLabel: appWindow?.label || WINDOW.FLOATING,
+    }).catch((e) => console.warn('[floating] host command prompts unavailable:', e));
     // Extension manager will be set asynchronously after extensions load in background
     app._onExtensionsReady = () => setMarkdownExtManager(app.extensionManager);
     // Don't await — init() does extension loading in the background and

@@ -212,7 +212,7 @@ impl Request<'_> {
             app,
             &self.window,
             crate::events::HOST_COMMAND_UPDATE,
-            &serde_json::json!({ "requestId": &self.id, "phase": "closed", "reason": reason }),
+            &serde_json::json!({ "requestId": &self.id, "window": &self.window, "phase": "closed", "reason": reason }),
         );
     }
 }
@@ -547,6 +547,9 @@ fn prompt_payload(r: &Request<'_>, reason: AskReason, can_always: bool) -> serde
             .unwrap_or_else(|_| chrono::Duration::minutes(5));
     serde_json::json!({
         "requestId": &r.id,
+        // Tauri hands a targeted event to every window listening globally
+        // too: each window shows only what names it.
+        "window": &r.window,
         "command": &r.req.command,
         "cwd": r.cwd.to_string_lossy(),
         "shell": &r.shell,
@@ -672,6 +675,7 @@ fn run(
         crate::events::HOST_COMMAND_UPDATE,
         &serde_json::json!({
             "requestId": &r.id,
+            "window": &r.window,
             "phase": "started",
             "runId": &run_id,
             "approvedBy": approved_by,
@@ -760,7 +764,7 @@ fn run(
                 app,
                 &r.window,
                 crate::events::HOST_COMMAND_UPDATE,
-                &serde_json::json!({ "requestId": &r.id, "phase": "finished", "runId": &run_id, "result": &report }),
+                &serde_json::json!({ "requestId": &r.id, "window": &r.window, "phase": "finished", "runId": &run_id, "result": &report }),
             );
             let (tail, cut) = host_bridge::output_tail(&report.output, OUTPUT_TAIL_BYTES);
             HostCommandResponse::ran(RunSummary {
@@ -792,7 +796,7 @@ fn run(
                 app,
                 &r.window,
                 crate::events::HOST_COMMAND_UPDATE,
-                &serde_json::json!({ "requestId": &r.id, "phase": "failed", "runId": &run_id, "error": &error }),
+                &serde_json::json!({ "requestId": &r.id, "window": &r.window, "phase": "failed", "runId": &run_id, "error": &error }),
             );
             HostCommandResponse::error(format!("The command couldn't start: {error}"))
         }

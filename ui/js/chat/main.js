@@ -160,6 +160,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     installHostCommandUi({
         tray: document.getElementById('hostCommandTray'),
         place: (card, prompt) => app.placeHostCommandCard(card, prompt),
+        windowLabel: app.windowLabel,
     }).catch((e) => console.warn('[chat] host command prompts unavailable:', e));
     // Surface init failures to the backend log — without this catch a
     // throw inside any of the awaits below would silently leave the

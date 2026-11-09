@@ -280,6 +280,23 @@ describe('the prompt', () => {
         expect(q(card, '.host-cmd-title').textContent).toBe('shared.host_command.title_unknown');
     });
 
+    it('shows only the prompts and updates for this window', async () => {
+        const tauri = fakeTauri();
+        await installHostCommandUi({ tray, windowLabel: 'chat-1' });
+        tauri.emit('host_command_prompt', prompt({ window: 'floating' }));
+        tauri.emit('host_command_update', {
+            requestId: 'hc-5',
+            window: 'floating',
+            phase: 'started',
+            runId: 'kage-run-dddddddddddddddddddddddd',
+            approvedBy: 'rule',
+            command: 'make',
+        });
+        expect(qa(tray, '.host-cmd-card')).toHaveLength(0);
+        tauri.emit('host_command_prompt', prompt({ window: 'chat-1' }));
+        expect(qa(tray, '.host-cmd-card')).toHaveLength(1);
+    });
+
     it('shows again the prompts still waiting after a reload', async () => {
         fakeTauri({ pending: [prompt(), prompt({ requestId: 'hc-9' })] });
         await installHostCommandUi({ tray });
