@@ -165,6 +165,8 @@ fn cwd_defaults_to_home_and_must_be_an_existing_directory() {
 
 // --- Which shell --------------------------------------------------------------
 
+// POSIX paths aren't absolute on Windows, and the function only runs on Unix.
+#[cfg(unix)]
 #[test]
 fn login_shell_is_shell_env_when_posix_else_zsh_else_sh() {
     use std::ffi::OsStr;

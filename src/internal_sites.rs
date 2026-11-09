@@ -645,6 +645,8 @@ mod tests {
     fn proxy_receives_url_via_env_not_script_text() {
         let mut p = profile(vec![], vec![]);
         p.proxy.script = r#"[Console]::Out.Write("$env:KAGE_URL|$env:KAGE_RESPONSE")"#.into();
+        // A cold PowerShell start on a busy CI runner can pass the 15 s default.
+        p.proxy.timeout_ms = MAX_PROXY_TIMEOUT_MS;
         let run = run_proxy_with(
             &p,
             "https://a.test/?q=$(Get-Date)",
