@@ -37,7 +37,8 @@ const MAX_AGENT_RUNS: usize = 4;
 /// How long a request waits for its tool call to show up in the ACP stream.
 const MATCH_WAIT: Duration = Duration::from_millis(1500);
 
-/// A client gets this long to send its request line.
+/// A client gets this long, in all, to send its request line: a client
+/// that trickles bytes in (or sends none) can't keep a connection slot.
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How often a waiting request looks for an answer, the clock and its
@@ -123,29 +124,48 @@ fn accept_loop(app: tauri::AppHandle, listener: Arc<BridgeListener>, stop: Arc<A
     }
 }
 
-fn handle_connection(app: &tauri::AppHandle, mut stream: BridgeStream) {
-    let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
-    let response = match host_bridge::read_line_bounded(&mut stream, host_bridge::MAX_REQUEST_BYTES)
-    {
+/// What reading a connection's request came to.
+enum Incoming {
+    Request(HostCommandRequest),
+    /// Answer with this and close.
+    Refused(HostCommandResponse),
+    /// Close without answering (nothing arrived, or not in time).
+    Drop,
+}
+
+/// Read and parse the one request a connection carries, within
+/// [`READ_TIMEOUT`] in all.
+fn read_request(stream: &mut BridgeStream) -> Incoming {
+    match stream.read_line_within(host_bridge::MAX_REQUEST_BYTES, READ_TIMEOUT) {
         Ok(LineRead::Line(line)) => match host_bridge::parse_request(&line) {
-            Ok(request) => {
-                let _ = stream.set_read_timeout(None);
-                process(app, &request, &stream)
-            }
+            Ok(request) => Incoming::Request(request),
             Err(e) => {
                 warn!("Host bridge: refused a request: {e}");
-                HostCommandResponse::error(format!("Kage refused the request: {e}."))
+                Incoming::Refused(HostCommandResponse::error(format!(
+                    "Kage refused the request: {e}."
+                )))
             }
         },
-        Ok(LineRead::TooLong) => HostCommandResponse::error(format!(
+        Ok(LineRead::TooLong) => Incoming::Refused(HostCommandResponse::error(format!(
             "Kage refused the request: larger than {} bytes.",
             host_bridge::MAX_REQUEST_BYTES
-        )),
-        Ok(LineRead::Eof) => return,
+        ))),
+        Ok(LineRead::Eof) => Incoming::Drop,
         Err(e) => {
             warn!("Host bridge: couldn't read a request: {e}");
-            return;
+            Incoming::Drop
         }
+    }
+}
+
+fn handle_connection(app: &tauri::AppHandle, mut stream: BridgeStream) {
+    let response = match read_request(&mut stream) {
+        Incoming::Request(request) => {
+            let _ = stream.set_read_timeout(None);
+            process(app, &request, &stream)
+        }
+        Incoming::Refused(response) => response,
+        Incoming::Drop => return,
     };
     if let Err(e) = stream
         .write_all(response.to_line().as_bytes())
@@ -353,7 +373,22 @@ fn process(
     stream: &BridgeStream,
 ) -> HostCommandResponse {
     let id = new_id("hc");
-    let matched = super::tracker::tracker().claim_waiting(&req.command, MATCH_WAIT);
+    // A working directory that can't be shown as written: the user would
+    // approve a different folder from the one the command runs in.
+    if req.cwd.as_deref().is_some_and(|c| !rules::is_plain_path(c)) {
+        let why = "The working directory contains hidden or control characters.".to_string();
+        AuditStep {
+            action: "refused".into(),
+            request_id: Some(id),
+            command: Some(crate::permission_audit::command_preview(&req.command)),
+            outcome: Some(why.clone()),
+            ..AuditStep::default()
+        }
+        .write();
+        return HostCommandResponse::error(why);
+    }
+    let matched =
+        super::tracker::tracker().claim_waiting(&req.command, req.cwd.as_deref(), MATCH_WAIT);
     let session_id = matched.as_ref().and_then(|m| m.session_id.clone());
     let tool_call_id = matched.as_ref().map(|m| m.tool_call_id.clone());
     // No tool runs on a strict session (a background agent call), not even
@@ -403,6 +438,7 @@ fn process(
             return HostCommandResponse::error(why);
         }
     };
+    let hits = guard::request_hits(&req.command, &cwd);
     let r = Request {
         id,
         req,
@@ -414,7 +450,7 @@ fn process(
         agent,
         cwd,
         shell: runner::user_shell_invocation("", None).label,
-        hits: guard::credential_hits(&req.command),
+        hits,
     };
     info!(
         "Host command {}: requested ({} bytes, program '{}', {}matched to a session{})",
@@ -821,5 +857,96 @@ fn run(
             );
             HostCommandResponse::error(format!("The command couldn't start: {error}"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kage_core::os::host_bridge::{connect, BridgeListener};
+
+    fn endpoint_in(root: &std::path::Path) -> kage_core::os::host_bridge::Endpoint {
+        #[cfg(unix)]
+        {
+            let dir = kage_core::os::host_bridge::bridge_dir_in(root);
+            let socket = dir.join(kage_core::os::host_bridge::SOCKET_NAME);
+            kage_core::os::host_bridge::Endpoint::Unix { dir, socket }
+        }
+        #[cfg(windows)]
+        {
+            let _ = root;
+            kage_core::os::host_bridge::Endpoint::Pipe(format!(
+                r"\\.\pipe\kage-host-bridge-test-{}",
+                uuid::Uuid::new_v4().simple()
+            ))
+        }
+    }
+
+    /// A connection to a listener in a temp dir, from a client that sends
+    /// `send` (in pieces `gap` apart) on a thread of its own.
+    fn connection(
+        root: &std::path::Path,
+        pieces: Vec<Vec<u8>>,
+        gap: Duration,
+    ) -> (BridgeStream, std::thread::JoinHandle<()>, BridgeListener) {
+        let ep = endpoint_in(root);
+        let listener = BridgeListener::bind(&ep).unwrap();
+        let client_ep = ep.clone();
+        let client = std::thread::spawn(move || {
+            let mut s = connect(&client_ep).unwrap();
+            for piece in pieces {
+                if s.write_all(&piece).and_then(|()| s.flush()).is_err() {
+                    break;
+                }
+                std::thread::sleep(gap);
+            }
+        });
+        let stop = AtomicBool::new(false);
+        let stream = listener.accept(&stop).unwrap().expect("a connection");
+        (stream, client, listener)
+    }
+
+    #[test]
+    fn a_client_that_never_finishes_its_request_is_dropped_in_time() {
+        let tmp = tempfile::tempdir().unwrap();
+        // A byte every 200 ms, never a newline: under the old per-read
+        // timeout this held its connection slot for days.
+        let pieces = vec![b"{".to_vec(); 60];
+        let (mut stream, client, _l) = connection(tmp.path(), pieces, Duration::from_millis(200));
+        let started = Instant::now();
+        assert!(matches!(read_request(&mut stream), Incoming::Drop));
+        let took = started.elapsed();
+        assert!(
+            took < READ_TIMEOUT + Duration::from_secs(2),
+            "held for {took:?}"
+        );
+        drop(stream);
+        client.join().unwrap();
+    }
+
+    #[test]
+    fn a_valid_request_is_read_and_a_bad_one_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let req = HostCommandRequest::new("ls", None, "r", 5, None);
+        let (mut stream, client, _l) =
+            connection(tmp.path(), vec![req.to_line().into_bytes()], Duration::ZERO);
+        match read_request(&mut stream) {
+            Incoming::Request(got) => assert_eq!(got, req),
+            _ => panic!("not read"),
+        }
+        client.join().unwrap();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut stream, client, _l) = connection(
+            tmp.path(),
+            vec![b"{\"v\":1,\"command\":\"ls\"}\n".to_vec()],
+            Duration::ZERO,
+        );
+        match read_request(&mut stream) {
+            Incoming::Refused(r) => assert_eq!(r.status, host_bridge::ResponseStatus::Error),
+            Incoming::Request(r) => panic!("read {r:?}"),
+            Incoming::Drop => panic!("dropped"),
+        }
+        client.join().unwrap();
     }
 }

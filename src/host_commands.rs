@@ -46,31 +46,53 @@ pub fn is_host_command_title(title: &str) -> bool {
         == Some((crate::mcp_registration::MCP_SERVER_KEY, TOOL_NAME))
 }
 
+/// Whether an ACP tool kind is what agents report for an MCP tool: absent
+/// or `other` (the same rule as `classify_mcp_server` in the permission
+/// handler). A built-in tool (above all `execute`, whose kiro-cli title is
+/// the command itself) is never ours, whatever its title says.
+fn is_mcp_kind(kind: Option<&str>) -> bool {
+    matches!(kind.filter(|k| !k.is_empty()), None | Some("other"))
+}
+
 /// Feed one `tool_call` / `tool_call_update` to the [`tracker`].
-/// `first_title` is the title the call was first seen with.
+/// `first_title` / `first_kind` are what the call was first seen with.
 pub fn observe_tool_call(
     session_id: Option<&str>,
     update: &serde_json::Value,
     first_title: Option<&str>,
+    first_kind: Option<&str>,
 ) {
     let Some(call_id) = update.get("toolCallId").and_then(|v| v.as_str()) else {
         return;
     };
+    let tracker = tracker::tracker();
+    let kind = update
+        .get("kind")
+        .and_then(|k| k.as_str())
+        .filter(|k| !k.is_empty())
+        .or(first_kind);
+    if !is_mcp_kind(kind) {
+        // Not an MCP call after all (a shell command titled like ours).
+        tracker.forget(call_id);
+        return;
+    }
     let ours = first_title.is_some_and(is_host_command_title)
         || update
             .get("title")
             .and_then(|t| t.as_str())
             .is_some_and(is_host_command_title);
-    let tracker = tracker::tracker();
     if !ours && !tracker.knows(call_id) {
         return;
     }
-    let command = update
-        .get("rawInput")
-        .and_then(|ri| ri.get("command"))
-        .and_then(|c| c.as_str());
+    // Command and working directory from the same `rawInput`, so the
+    // match is against what this call asked for as a whole.
+    let input = update.get("rawInput").and_then(|ri| {
+        let command = ri.get("command").and_then(|c| c.as_str())?;
+        let cwd = ri.get("cwd").and_then(|c| c.as_str());
+        Some(tracker::CallInput::new(command, cwd))
+    });
     let status = update.get("status").and_then(|s| s.as_str());
-    tracker.observe(session_id, call_id, command, status);
+    tracker.observe(session_id, call_id, input, status);
 }
 
 /// The bridge and its waiting prompts. Lives in
@@ -138,17 +160,24 @@ mod tests {
     }
 
     #[test]
-    fn tool_calls_of_our_tool_are_tracked_by_command() {
+    fn tool_calls_of_our_tool_are_tracked_by_command_and_cwd() {
         let update = serde_json::json!({
             "sessionUpdate": "tool_call",
             "toolCallId": "host-cmd-test-1",
             "title": "Running: @kage-computer-control/run_outside_sandbox",
             "status": "pending",
-            "rawInput": { "command": "brew install host-cmd-test", "reason": "r" },
+            "rawInput": {
+                "command": "brew install host-cmd-test",
+                "cwd": "/tmp/host-cmd-test",
+                "reason": "r"
+            },
         });
-        observe_tool_call(Some("s1"), &update, None);
+        observe_tool_call(Some("s1"), &update, None, None);
+        assert!(tracker::tracker()
+            .claim("brew install host-cmd-test", None)
+            .is_none());
         let m = tracker::tracker()
-            .claim("brew install host-cmd-test")
+            .claim("brew install host-cmd-test", Some("/tmp/host-cmd-test"))
             .expect("tracked");
         assert_eq!(m.session_id.as_deref(), Some("s1"));
 
@@ -158,9 +187,45 @@ mod tests {
             "title": "Running: @kage-computer-control/run_script",
             "rawInput": { "command": "brew install host-cmd-test-2" },
         });
-        observe_tool_call(Some("s1"), &other, None);
+        observe_tool_call(Some("s1"), &other, None, None);
         assert!(tracker::tracker()
-            .claim("brew install host-cmd-test-2")
+            .claim("brew install host-cmd-test-2", None)
             .is_none());
+    }
+
+    #[test]
+    fn a_shell_command_titled_like_our_tool_is_not_tracked() {
+        // kiro-cli titles a shell call `Running: <command>`, so the command
+        // `@kage-computer-control/run_outside_sandbox` reads like our tool;
+        // its kind says otherwise.
+        let title = "Running: @kage-computer-control/run_outside_sandbox";
+        let shell = serde_json::json!({
+            "toolCallId": "host-cmd-test-3",
+            "title": title,
+            "kind": "execute",
+            "rawInput": { "command": "brew install host-cmd-test-3" },
+        });
+        observe_tool_call(Some("s1"), &shell, None, None);
+        assert!(!tracker::tracker().knows("host-cmd-test-3"));
+
+        // The kind recorded from the call's first update counts too.
+        let later = serde_json::json!({
+            "toolCallId": "host-cmd-test-4",
+            "rawInput": { "command": "brew install host-cmd-test-4" },
+        });
+        observe_tool_call(Some("s1"), &later, Some(title), Some("execute"));
+        assert!(!tracker::tracker().knows("host-cmd-test-4"));
+
+        // `other` (or no kind) is an MCP call.
+        let mcp = serde_json::json!({
+            "toolCallId": "host-cmd-test-5",
+            "title": title,
+            "kind": "other",
+            "rawInput": { "command": "brew install host-cmd-test-5" },
+        });
+        observe_tool_call(Some("s1"), &mcp, None, None);
+        assert!(tracker::tracker()
+            .claim("brew install host-cmd-test-5", None)
+            .is_some());
     }
 }

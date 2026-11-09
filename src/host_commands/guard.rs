@@ -115,7 +115,7 @@ fn file_hits(text: &str, add: &mut impl FnMut(CredentialHit)) {
     if text.contains("library/keychains") || text.contains(".keychain") {
         add(CredentialHit::Keychain);
     }
-    if text.contains("/environ") {
+    if text.contains("/environ") || text.contains("getenvironmentvariables") {
         add(CredentialHit::EnvDump);
     }
     if CREDENTIAL_ENV_VARS.iter().any(|v| text.contains(v)) {
@@ -183,6 +183,39 @@ const CREDENTIAL_ENV_VARS: &[&str] = &[
     "azure_client_secret",
 ];
 
+/// Credential stores a working directory lies in (`~/.aws`, `~/.ssh`, …):
+/// there, `cat credentials` or `tar czf - .` reads them without naming
+/// them. The path as given and, when it resolves, as the folder it really
+/// is (a symlink in the agent's workspace can point into `~/.aws`).
+pub fn path_hits(path: &std::path::Path) -> Vec<CredentialHit> {
+    let mut hits: Vec<CredentialHit> = Vec::new();
+    let mut add = |h: CredentialHit| {
+        if !hits.contains(&h) {
+            hits.push(h);
+        }
+    };
+    let real = std::fs::canonicalize(path).ok();
+    for p in std::iter::once(path).chain(real.as_deref()) {
+        let text = p.to_string_lossy();
+        file_hits(&normalize(&text, None), &mut add);
+        file_hits(&normalize(&text, Some('/')), &mut add);
+    }
+    hits
+}
+
+/// Everything the guard flags in a request: its command
+/// ([`credential_hits`]) and the folder it runs in ([`path_hits`]), each
+/// once, in a stable order.
+pub fn request_hits(command: &str, cwd: &std::path::Path) -> Vec<CredentialHit> {
+    let mut hits = credential_hits(command);
+    for h in path_hits(cwd) {
+        if !hits.contains(&h) {
+            hits.push(h);
+        }
+    }
+    hits
+}
+
 /// Everything the guard flags in `command`, each once, in a stable order.
 pub fn credential_hits(command: &str) -> Vec<CredentialHit> {
     let text = normalize(command, None);
@@ -206,6 +239,13 @@ pub fn credential_hits(command: &str) -> Vec<CredentialHit> {
         }) {
             add(CredentialHit::HiddenGlob);
         }
+        // PowerShell's environment drive: `ls env:`, `gci Env:\`, `$env:X`.
+        if words
+            .iter()
+            .any(|w| w.trim_start_matches('$').starts_with("env:"))
+        {
+            add(CredentialHit::EnvDump);
+        }
         let Some((program, args)) = program_and_args(&words) else {
             continue;
         };
@@ -220,6 +260,9 @@ pub fn credential_hits(command: &str) -> Vec<CredentialHit> {
                     &["sso", "get-role-credentials"],
                     &["ecr", "get-login-password"],
                     &["codeartifact", "get-authorization-token"],
+                    &["iam", "create-access-key"],
+                    &["secretsmanager", "get-secret-value"],
+                    &["secretsmanager", "batch-get-secret-value"],
                 ];
                 creds
                     .iter()
@@ -235,7 +278,8 @@ pub fn credential_hits(command: &str) -> Vec<CredentialHit> {
                 })
                 .then_some(CredentialHit::Keychain),
             "gh" => (has_in_order(&args, &["auth", "token"])
-                || has_in_order(&args, &["auth", "status", "--show-token"]))
+                || has_in_order(&args, &["auth", "status", "--show-token"])
+                || has_in_order(&args, &["auth", "status", "-t"]))
             .then_some(CredentialHit::Git),
             "git" => (has_in_order(&args, &["credential"])
                 || args.first() == Some(&"credential-osxkeychain"))
@@ -253,6 +297,17 @@ pub fn credential_hits(command: &str) -> Vec<CredentialHit> {
             "env" | "printenv" => args
                 .iter()
                 .all(|a| a.starts_with('-'))
+                .then_some(CredentialHit::EnvDump),
+            // `ps e`, `ps -E`, `ps eww`: every process's environment (BSD
+            // and macOS; `-e` there too). Linux's `ps -ef` is a false alarm.
+            "ps" => args
+                .iter()
+                .enumerate()
+                .any(|(i, a)| {
+                    let short = a.starts_with('-') && !a.starts_with("--");
+                    let bsd = i == 0 && a.chars().all(|c| c.is_ascii_alphabetic());
+                    (short || bsd) && a.contains('e')
+                })
                 .then_some(CredentialHit::EnvDump),
             // `set -e` sets an option; `set` alone lists variables.
             "set" => args.is_empty().then_some(CredentialHit::EnvDump),
@@ -401,6 +456,55 @@ mod tests {
         ] {
             assert_eq!(hits(cmd), Vec::<CredentialHit>::new(), "{cmd}");
         }
+    }
+
+    #[test]
+    fn more_secret_reads() {
+        for (cmd, hit) in [
+            ("aws secretsmanager get-secret-value --secret-id x", Aws),
+            ("aws iam create-access-key --user-name me", Aws),
+            ("gh auth status -t", Git),
+            ("ls env:", EnvDump),
+            ("Get-ChildItem Env:\\", EnvDump),
+            ("gci env:AWS_PROFILE", EnvDump),
+            ("echo $env:PATH", EnvDump),
+            ("[Environment]::GetEnvironmentVariables()", EnvDump),
+            ("ps eww", EnvDump),
+            ("ps -E -p 1", EnvDump),
+        ] {
+            assert!(hits(cmd).contains(&hit), "{cmd}: {:?}", hits(cmd));
+        }
+        for cmd in [
+            "ps aux",
+            "ps -ax",
+            "ps -o user,pid",
+            "aws secretsmanager list-secrets",
+        ] {
+            assert_eq!(hits(cmd), Vec::<CredentialHit>::new(), "{cmd}");
+        }
+    }
+
+    #[test]
+    fn a_working_directory_inside_a_credential_store_is_flagged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let aws = tmp.path().join(".aws");
+        std::fs::create_dir(&aws).unwrap();
+        // `cat credentials` names nothing; the folder it runs in does.
+        assert_eq!(credential_hits("cat credentials"), vec![]);
+        assert_eq!(request_hits("cat credentials", &aws), vec![Aws]);
+        assert_eq!(path_hits(&tmp.path().join(".ssh")), vec![Ssh]);
+
+        // A link elsewhere that leads there.
+        #[cfg(unix)]
+        {
+            let link = tmp.path().join("project");
+            std::os::unix::fs::symlink(&aws, &link).unwrap();
+            assert_eq!(request_hits("cat credentials", &link), vec![Aws]);
+        }
+
+        // Command and folder findings are merged, each once.
+        assert_eq!(request_hits("cat ~/.aws/config", &aws), vec![Aws]);
+        assert_eq!(request_hits("ls", tmp.path()), vec![]);
     }
 
     #[test]

@@ -211,16 +211,17 @@ pub fn setup_notification_handler(
                         // bridge can be matched to this session (a strict
                         // session's too, so the bridge can refuse it).
                         {
-                            let first_title = update
+                            let first = update
                                 .get("toolCallId")
                                 .and_then(|v| v.as_str())
                                 .and_then(|id| {
-                                    tool_names.lock().ok().and_then(|n| n.get(id).map(|e| e.0.clone()))
+                                    tool_names.lock().ok().and_then(|n| n.get(id).cloned())
                                 });
                             crate::host_commands::observe_tool_call(
                                 update_session_id.as_deref(),
                                 update,
-                                first_title.as_deref(),
+                                first.as_ref().map(|(title, _)| title.as_str()),
+                                first.as_ref().and_then(|(_, kind)| kind.as_deref()),
                             );
                         }
                         // No tool may run on a strict session (a background
