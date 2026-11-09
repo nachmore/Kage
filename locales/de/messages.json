@@ -12310,5 +12310,95 @@
     "description": "Error from running a command the user chose to run themselves, outside the AI agent's sandbox. {error} is the error macOS reported.",
     "_machine_translated": true,
     "_source_hash": "811883ae543c2cf7"
+  },
+  "errors.agent_call.field_invalid": {
+    "message": "„{field}“ ist ungültig.",
+    "description": "A background AI request (an extension asking the user's agent for help with no chat). Developer-facing: one field of the request has characters or a shape Kage doesn't accept. {field} is the field name.",
+    "_machine_translated": true,
+    "_source_hash": "395237a07dcdf1eb"
+  },
+  "errors.ext_view.needs_user_action": {
+    "message": "Klicken Sie zuerst in das Fenster oder drücken Sie eine Taste.",
+    "description": "An extension window tried to open a window, copy text or send text to the launcher without a recent click or key press from the user.",
+    "_machine_translated": true,
+    "_source_hash": "a665ba7de4a5a5ff"
+  },
+  "ext_view.state.approve": {
+    "message": "Genehmigen",
+    "description": "Button in an extension's own window when the extension needs the user's approval to open it. Opens the Store, where the user reviews and approves what the extension asks to do.",
+    "_machine_translated": true,
+    "_source_hash": "ff22112920fff5c7"
+  },
+  "settings.sync.folder.reason.missing": {
+    "message": "Dieser Ordner existiert nicht.",
+    "description": "Sync setup, choosing a folder: why the picked folder can't be used.",
+    "_machine_translated": true,
+    "_source_hash": "70f7c9261ec18699"
+  },
+  "settings.sync.folder.reason.not_a_folder": {
+    "message": "Das ist eine Datei, kein Ordner.",
+    "description": "Sync setup, choosing a folder: the picked path, or the “Kage Sync” inside it, is a file.",
+    "_machine_translated": true,
+    "_source_hash": "a72e317940e123bb"
+  },
+  "settings.sync.folder.reason.drive_root": {
+    "message": "Wählen Sie einen Ordner, nicht die oberste Ebene eines Laufwerks.",
+    "description": "Sync setup, choosing a folder: the user picked a drive root such as C:\\ or /.",
+    "_machine_translated": true,
+    "_source_hash": "e850621392d32fbb"
+  },
+  "settings.sync.folder.reason.kage_folder": {
+    "message": "Dies ist einer von Kages eigenen Ordnern. Wählen Sie einen Ordner, den Ihre Sync-App synchronisiert.",
+    "description": "Sync setup, choosing a folder: the folder is inside Kage's settings or data folders.",
+    "_machine_translated": true,
+    "_source_hash": "d4f355810d178415"
+  },
+  "settings.sync.folder.reason.temp": {
+    "message": "Dies ist ein temporärer Ordner. Seine Dateien können jederzeit gelöscht werden.",
+    "description": "Sync setup, choosing a folder: the folder is inside the system's temporary folder.",
+    "_machine_translated": true,
+    "_source_hash": "0a09488a734dd773"
+  },
+  "settings.sync.folder.reason.read_only": {
+    "message": "Kage kann in diesem Ordner keine Dateien erstellen.",
+    "description": "Sync setup, choosing a folder: the folder is read-only.",
+    "_machine_translated": true,
+    "_source_hash": "492ba55fa1c383fc"
+  },
+  "settings.sync.folder.reason.denied": {
+    "message": "Kage darf diesen Ordner nicht öffnen.",
+    "description": "Sync setup, choosing a folder: the OS denied access to the folder.",
+    "_machine_translated": true,
+    "_source_hash": "ed614c8703fd4b99"
+  },
+  "settings.sync.folder.reason.unreadable": {
+    "message": "Kage kann diesen Ordner nicht lesen.",
+    "description": "Sync setup, choosing a folder: listing or reading the folder failed for another reason.",
+    "_machine_translated": true,
+    "_source_hash": "31f8bbae744c1286"
+  },
+  "settings.sync.folder.reason.not_responding": {
+    "message": "Dieser Ordner reagiert nicht. Prüfen Sie, ob Ihre Sync-App läuft, und versuchen Sie es erneut.",
+    "description": "Sync setup, choosing a folder: reading the folder timed out (for example a stalled cloud drive).",
+    "_machine_translated": true,
+    "_source_hash": "61a02e6544c4283f"
+  },
+  "settings.sync.folder.reason.inside_sync": {
+    "message": "Dieser Ordner befindet sich in einem „Kage Sync“-Ordner. Wählen Sie den Ordner, der „Kage Sync“ enthält.",
+    "description": "Sync setup, choosing a folder: the user picked a folder inside Kage's own sync folder structure. “Kage Sync” is the folder name and stays untranslated.",
+    "_machine_translated": true,
+    "_source_hash": "b40e4b41b85c0697"
+  },
+  "settings.sync.folder.reason.not_downloaded": {
+    "message": "Dieser Ordner wurde noch nicht vollständig heruntergeladen. Versuchen Sie es gleich noch einmal.",
+    "description": "Sync setup, choosing a folder: the sync folder's files are still placeholders in the cloud app.",
+    "_machine_translated": true,
+    "_source_hash": "658c784072c39fbd"
+  },
+  "settings.sync.folder.reason.incomplete": {
+    "message": "In diesem „Kage Sync“-Ordner fehlt eine Datei. Warten Sie, bis Ihre Sync-App fertig ist, oder wählen Sie einen anderen Ordner.",
+    "description": "Sync setup, choosing a folder: the folder has computers' data but no kage-sync.json. “Kage Sync” is the folder name and stays untranslated.",
+    "_machine_translated": true,
+    "_source_hash": "4965303c733b933b"
   }
 }
