@@ -96,7 +96,6 @@ where
 /// windows (`ext-view:*`). The audience of `extension_data_changed`; each
 /// window's host code forwards a batch only to the matching extension's
 /// sandbox.
-#[allow(dead_code)] // The storage change coalescer will call it; the app doesn't yet.
 pub fn emit_to_extension_hosts<R, S>(app: &impl Emitter<R>, event: &str, payload: &S)
 where
     R: Runtime,

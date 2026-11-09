@@ -3651,21 +3651,25 @@ Files listed by more than one design:
 | File | Packages, in merge order |
 |---|---|
 | `src/error.rs` | AC0, C0, S4 |
-| `src/events.rs`, `ui/js/shared/events.js` | AC0, FT-C, V1, C0, S4 |
+| `src/events.rs` | AC0, FT-C, V1, C0, V3 (one stale `allow`), S4 |
+| `ui/js/shared/events.js` | AC0, FT-C, V1, C0, S4 |
 | `locales/*/messages.json` | AC0, FT-C, V1, C0, then later strings of every package (S6 merges sync's fragments) |
 | `src/lib.rs` | V1, FT5, AC1, C0 |
-| `src/main.rs` | V1, V2, FT5, C0, S4 |
+| `src/main.rs` | V1, V2, V3 (one comment), FT5, C0, S4 |
 | `src/state.rs` | V2, AC3, S4 |
 | `src/setup.rs` | V2, S4 |
 | `src/commands/registry.rs` | V1, FT5, AC3, C0, S4 |
 | `src/commands/mod.rs` | AC3, C0, S4 |
 | `src/commands/extensions/mod.rs` | V1, FT5, C0, S5 |
 | `src/commands/extensions/files.rs` | V3, S5 |
-| `src/commands/extensions/install.rs`, `discovery.rs` | V2, AC3, S5 |
+| `src/commands/extensions/install.rs` | V2, V3 (one argument), AC3, S5 |
+| `src/commands/extensions/discovery.rs` | V2, AC3, S5 |
 | `src/commands/system/config_io.rs` | V3, AC4, S4 |
 | `src/commands/system/lifecycle.rs`, `src/tray.rs` | AC3, S4 |
 | `src/extensions.rs` | V1, FT5, AC3, S5 |
 | `src/config.rs`, `src/config_export/allowlist.rs` | AC0, S3 |
+| `src/config_export.rs` | V3, S3 |
+| `src/config_export/tests.rs` | V3, AC4 |
 | `src/config/permissions.rs` | AC0, S3 |
 | `src/permission_audit/types.rs`, `tests.rs` | FT5, AC3 |
 | `src/agent_sessions/*` | AC2, S3 |

@@ -790,12 +790,21 @@ direct message bus between instances (§26).
   `app: AppHandle` and `window: WebviewWindow` parameters (invisible to
   callers). After the write is on disk (the rename has happened) they
   record `{ extension_id, key, op, window: <caller label> }` in a
-  coalescer.
+  coalescer. A failed write records nothing. Deleting a key that has no
+  file is no change and records nothing.
 - The coalescer (`src/extension_data_events.rs`) batches per extension for
-  **100 ms**. A later change to the same key replaces the earlier one. A
-  batch over **64** keys becomes one `{ key: '*', op: 'bulk' }`. It emits
-  `extension_data_changed` with `event_targets::emit_to_extension_hosts`
-  (new helper: `floating`, `main`, `chat-*`, `settings`, `ext-view:*`):
+  **100 ms**, counted from the batch's first change (a steady stream of
+  writes still emits every 100 ms). A later change to the same key
+  replaces the earlier one, at the later write's place in the order. A
+  batch over **64** keys becomes one `{ key: '*', op: 'bulk' }`; later
+  changes in that window fold into it. Its `source` is the latest
+  writer's, and it keeps `window` only if one window wrote every change
+  (so that window still sees `self: true`). The coalescer is one
+  process-wide static behind `extension_data_events::record(app, id,
+  change)` and `record_bulk(app, id, source)`, so no state is managed.
+  It emits `extension_data_changed` with
+  `event_targets::emit_to_extension_hosts` (new helper: `floating`,
+  `main`, `chat-*`, `settings`, `ext-view:*`):
 
   ```json
   { "extension_id": "mindmap",
@@ -804,16 +813,26 @@ direct message bus between instances (§26).
 
 - Other sources use the same path:
   - a committed backup import (`import_config_bundle`): one `bulk` entry
-    per extension whose data it wrote, `source: "import"`;
+    per extension whose data it wrote, `source: "import"`. The ids come
+    from `config_export::CommittedFiles::data_extensions()`;
   - the planned folder sync: `source: "sync"` (§21);
-  - uninstall: `bulk`, `source: "uninstall"`, though the instances are
-    torn down anyway.
+  - uninstall: `bulk`, `source: "uninstall"`, when the extension had
+    stored data (`purge_extension_data` takes the `AppHandle`), though the
+    instances are torn down anyway.
 - Each window's host code (`ui/js/shared/extension-data-events.js`,
   installed by the extension manager, the settings window and the view
   page) forwards a batch only to the sandbox whose extension id matches,
   and only if it holds `storage`. It adds
   `self = (change.window === myLabel)` and drops the label before
-  forwarding.
+  forwarding. The API:
+  - `installExtensionDataEvents({ listen, myLabel, deliver })` listens
+    and calls `deliver(extensionId, changes)` once per valid batch.
+    `myLabel` is a string or a function that returns it. It resolves to
+    an unlisten function. Malformed entries are dropped.
+  - `deliverToSandbox(sandboxFor)` builds that `deliver`: it calls
+    `sandboxFor(extensionId)` and, when the sandbox holds `storage`
+    (`holdsStorage`), its `notifyStorageChanged(changes)` (§8.6, V4).
+    Callers use it rather than repeat the `storage` check.
 - Events carry key names only, never data. An instance re-reads what it
   needs.
 
@@ -1517,6 +1536,9 @@ runs everything.
   kept.
 - `files.rs`: save and delete still atomic and owner-only; a change is
   recorded only after a successful write.
+- `config_export`: `CommittedFiles::data_extensions()` names the
+  extensions a full import writes data for, and none for a settings-only
+  one.
 
 Commands: `cargo test --lib extensions::`, `cargo test --lib
 window_labels::`, `cargo test --lib ext_views::`, `cargo test --lib
@@ -1536,6 +1558,11 @@ updater::`.
   - `ext_view_boot` from a non-view window → `not_a_view_window`;
   - disable and uninstall destroy the window; uninstall removes geometry;
   - a full encrypted export doesn't contain `extension-views.json`.
+- `tests/extension_data_events_test.rs` (new; isolated): saves and a
+  delete from `floating` reach `settings` and a view window as one batch,
+  after the coalescing window and well under a second, with the data
+  readable; `store` gets nothing; a refused write or a delete of a missing
+  key emits nothing; the writer's label is in the batch.
 - The existing parity tests pass unchanged in shape:
   `command_error_type_parity_test`, `command_permissions_parity_test`,
   `state_manage_parity_test`, `user_dirs_isolation_test`,
@@ -1556,6 +1583,10 @@ updater::`.
   and rate limits; unknown kinds ignored; a second iframe `load` tears the
   sandbox down and reports `navigated`; `storage-changed` reaches only the
   matching sandbox and only with `storage`.
+- `shared/extension-data-events.test.js`: `self` from the writer's label,
+  the label dropped; malformed payloads and entries dropped; delivery only
+  to the matching sandbox with `storage` (`deliverToSandbox`); op, source,
+  bulk key and batch cap match `src/extension_data_events.rs`.
 - `shared/extension-permissions.test.js`: `views` in `CAPABILITIES`;
   every new command is `null`; the view-surface denylist refuses its
   commands only on the view surface.
@@ -1742,12 +1773,25 @@ package codes against this document.
   `src/commands/system/config_io.rs` (emit `bulk` after a committed
   import), `ui/js/shared/extension-data-events.js` (new:
   `installExtensionDataEvents({ listen, myLabel, deliver })`, adds `self`,
-  filters by extension id), `ui-tests/shared/extension-data-events.test.js`
-  (new).
+  filters by extension id; `deliverToSandbox` for the `storage` check),
+  `ui-tests/shared/extension-data-events.test.js` (new),
+  `tests/extension_data_events_test.rs` (new, isolated: a save in one
+  mock window reaches the extension hosts as one batch).
+  Small additions outside that list, found while building it:
+  `src/config_export.rs` (`CommittedFiles::data_extensions()`: the
+  import's private file list was the only record of whose data it wrote)
+  with one test in `src/config_export/tests.rs`;
+  `src/commands/extensions/install.rs` (uninstall passes `app` to
+  `purge_extension_data`, for the `uninstall` bulk); the stale
+  `#[allow(dead_code)]` on `events::EXTENSION_DATA_CHANGED` and
+  `event_targets::emit_to_extension_hosts`, now used; and the comment on
+  `src/main.rs`'s `mod extension_data_events` (its `allow` stays until
+  sync records changes). SYNC §23.2 lists them.
 - **Done when:**
   - `cargo test --lib extension_data_events::` and `cargo test --lib
     commands::extensions::` pass.
-  - The vitest file passes.
+  - The vitest file passes, and `cargo test --test
+    extension_data_events_test` passes.
   - A save in one window produces one batch in another within 150 ms
     (manual, dev build).
   - `cargo clippy` and `cargo fmt --check` are clean.

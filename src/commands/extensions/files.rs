@@ -1,8 +1,11 @@
 //! Reading bytes out of a user-installed extension's directory: locale
 //! catalogs (`_locales/<lang>/messages.json`) and arbitrary provider/settings
 //! files. Both validate the extension id and guard against `..` traversal.
+//! Also the extension-data store, whose writes tell the extension's other
+//! instances (`crate::extension_data_events`).
 
 use super::*;
+use crate::extension_data_events::{self, Change, ChangeOp, ChangeSource};
 
 /// Load an extension's `_locales/<lang>/messages.json`. Falls back through
 /// region-stripped variants ("zh-CN" → "zh") and finally to "en". Returns the
@@ -183,20 +186,73 @@ fn resolve_data_path(extension_id: &str, key: &str) -> Result<std::path::PathBuf
 }
 
 /// Delete everything an extension stored (its whole data dir). Called on
-/// uninstall; a missing dir counts as success.
-pub(super) fn purge_extension_data(extension_id: &str) -> Result<(), String> {
+/// uninstall; a missing dir counts as success. When something was removed,
+/// the extension's remaining instances get a `bulk` change (source
+/// `uninstall`), though they are torn down anyway.
+pub(super) fn purge_extension_data<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    extension_id: &str,
+) -> Result<(), String> {
+    if remove_extension_data_dir(extension_id)? {
+        extension_data_events::record_bulk(app, extension_id, ChangeSource::Uninstall);
+    }
+    Ok(())
+}
+
+/// Remove an extension's data dir. `Ok(true)` when it existed.
+fn remove_extension_data_dir(extension_id: &str) -> Result<bool, String> {
     extensions::validate_extension_id(extension_id)
         .map_err(|e| format!("Invalid extension id: {}", e))?;
     let dir = extension_data_root()?.join(extension_id);
     match std::fs::remove_dir_all(&dir) {
         Ok(()) => {
             info!("Removed stored data for '{}'", extension_id);
-            Ok(())
+            Ok(true)
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(format!(
             "Failed to remove extension data for '{}': {}",
             extension_id, e
+        )),
+    }
+}
+
+/// Write one data file, atomically and owner-only, then name the change
+/// for the coalescer. A failed write names nothing.
+fn write_extension_data(
+    extension_id: &str,
+    key: &str,
+    data: &str,
+    window_label: &str,
+) -> Result<Change, String> {
+    let path = resolve_data_path(extension_id, key)?;
+    crate::atomic_write::write(&path, data, crate::atomic_write::Perms::Private).map_err(|e| {
+        format!(
+            "Failed to save extension data '{}/{}': {}",
+            extension_id, key, e
+        )
+    })?;
+    Ok(Change::from_window(key, ChangeOp::Save, window_label))
+}
+
+/// Delete one data file, then name the change for the coalescer. A key
+/// with no file is no change (`Ok(None)`); a failed delete names nothing.
+fn remove_extension_data(
+    extension_id: &str,
+    key: &str,
+    window_label: &str,
+) -> Result<Option<Change>, String> {
+    let path = resolve_data_path(extension_id, key)?;
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(Some(Change::from_window(
+            key,
+            ChangeOp::Delete,
+            window_label,
+        ))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!(
+            "Failed to delete extension data '{}/{}': {}",
+            extension_id, key, e
         )),
     }
 }
@@ -207,19 +263,20 @@ pub(super) fn purge_extension_data(extension_id: &str) -> Result<(), String> {
 /// Atomic and owner-only (`crate::atomic_write`): extensions keep API keys
 /// here, and a write torn by a crash or the updater's exit would leave a
 /// file the extension can never parse again.
+///
+/// Once the file is in place, the extension's instances in every window
+/// hear of it (`extension_data_changed`, EXTENSION_VIEWS §10). Tauri
+/// injects `app` and `window`; callers pass only the first three.
 #[tauri::command]
-pub async fn save_extension_data(
+pub async fn save_extension_data<R: tauri::Runtime>(
     extension_id: String,
     key: String,
     data: String,
+    app: tauri::AppHandle<R>,
+    window: tauri::WebviewWindow<R>,
 ) -> Result<(), AppError> {
-    let path = resolve_data_path(&extension_id, &key)?;
-    crate::atomic_write::write(&path, &data, crate::atomic_write::Perms::Private).map_err(|e| {
-        format!(
-            "Failed to save extension data '{}/{}': {}",
-            extension_id, key, e
-        )
-    })?;
+    let change = write_extension_data(&extension_id, &key, &data, window.label())?;
+    extension_data_events::record(&app, &extension_id, change);
     Ok(())
 }
 
@@ -240,18 +297,20 @@ pub async fn load_extension_data(
     }
 }
 
-/// Delete extension data file.
+/// Delete extension data file. Deleting a key that has no file is a no-op
+/// and tells no one; a real delete reaches the extension's instances in
+/// every window, like a save.
 #[tauri::command]
-pub async fn delete_extension_data(extension_id: String, key: String) -> Result<(), AppError> {
-    let path = resolve_data_path(&extension_id, &key)?;
-    match std::fs::remove_file(&path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!(
-            "Failed to delete extension data '{}/{}': {}",
-            extension_id, key, e
-        ))?,
+pub async fn delete_extension_data<R: tauri::Runtime>(
+    extension_id: String,
+    key: String,
+    app: tauri::AppHandle<R>,
+    window: tauri::WebviewWindow<R>,
+) -> Result<(), AppError> {
+    if let Some(change) = remove_extension_data(&extension_id, &key, window.label())? {
+        extension_data_events::record(&app, &extension_id, change);
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -266,7 +325,8 @@ mod tests {
     }
 
     fn save(ext: &str, key: &str, data: &str) {
-        block_on(save_extension_data(ext.into(), key.into(), data.into())).unwrap();
+        let change = write_extension_data(ext, key, data, "floating").unwrap();
+        assert_eq!(change, Change::from_window(key, ChangeOp::Save, "floating"));
     }
 
     fn load(ext: &str, key: &str) -> Option<String> {
@@ -358,6 +418,46 @@ mod tests {
         }
         stop.store(true, std::sync::atomic::Ordering::Relaxed);
         reader.join().unwrap();
+    }
+
+    #[test]
+    fn a_change_is_named_only_after_a_successful_write() {
+        let _root = data_root_lock();
+        let ext = "events-test-writes";
+        let change =
+            write_extension_data(ext, "mm-meta", "{}", "ext-view:mindmap:explorer").expect("save");
+        assert_eq!(
+            change,
+            Change::from_window("mm-meta", ChangeOp::Save, "ext-view:mindmap:explorer")
+        );
+        // The change is named once the data is readable.
+        assert_eq!(load(ext, "mm-meta").as_deref(), Some("{}"));
+
+        // A refused key or id writes nothing and names nothing.
+        assert!(write_extension_data(ext, "../escape", "{}", "floating").is_err());
+        assert!(write_extension_data("Bad Id", "k", "{}", "floating").is_err());
+        assert!(remove_extension_data(ext, "../escape", "floating").is_err());
+
+        // A delete is a change only when there was a file.
+        assert_eq!(
+            remove_extension_data(ext, "mm-meta", "main").unwrap(),
+            Some(Change::from_window("mm-meta", ChangeOp::Delete, "main"))
+        );
+        assert_eq!(load(ext, "mm-meta"), None);
+        assert_eq!(remove_extension_data(ext, "mm-meta", "main").unwrap(), None);
+    }
+
+    #[test]
+    fn purging_reports_whether_there_was_data() {
+        let _root = data_root_lock();
+        let ext = "events-test-purge";
+        save(ext, "a", "{}");
+        let dir = extension_data_root().unwrap().join(ext);
+        assert!(dir.join("a.json").exists());
+        assert!(remove_extension_data_dir(ext).unwrap());
+        assert!(!dir.exists());
+        assert!(!remove_extension_data_dir(ext).unwrap());
+        assert!(remove_extension_data_dir("../x").is_err());
     }
 
     #[cfg(unix)]

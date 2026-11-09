@@ -33,7 +33,7 @@ mod event_targets;
 mod events;
 #[allow(dead_code)] // Only the view commands' types are used until the view windows land.
 mod ext_views;
-#[allow(dead_code)] // The storage change coalescer will use it; the app doesn't yet.
+#[allow(dead_code)] // Nothing records folder sync's changes until sync lands.
 mod extension_data_events;
 mod extensions;
 mod hotkey_norm;

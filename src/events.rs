@@ -166,7 +166,6 @@ pub const FLOATING_COMPOSE: &str = "floating_compose";
 /// [{ key, op, source, window? }] }`, key names only, never data. Sent to
 /// the windows that run extension instances
 /// (`event_targets::emit_to_extension_hosts`).
-#[allow(dead_code)] // The storage change coalescer will emit it; the app doesn't yet.
 pub const EXTENSION_DATA_CHANGED: &str = "extension_data_changed";
 
 // --- Folder sync ----------------------------------------------------
