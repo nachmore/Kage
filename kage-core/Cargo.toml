@@ -31,6 +31,7 @@ os = [
     "dep:objc2",
     "dep:objc2-app-kit",
     "dep:objc2-foundation",
+    "dep:libc",
 ]
 
 [dependencies]
@@ -69,7 +70,7 @@ windows = { version = "0.62", optional = true, features = [
 [target.'cfg(unix)'.dependencies]
 # Peer credentials and poll for the host-command bridge socket
 # (os/unix/host_bridge.rs); proc_pidpath for os/macos/kage_target.rs.
-libc = "0.2"
+libc = { version = "0.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # CGEvent-based input synthesis + AX accessibility provider.

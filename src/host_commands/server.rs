@@ -356,6 +356,24 @@ fn process(
     let matched = super::tracker::tracker().claim_waiting(&req.command, MATCH_WAIT);
     let session_id = matched.as_ref().and_then(|m| m.session_id.clone());
     let tool_call_id = matched.as_ref().map(|m| m.tool_call_id.clone());
+    // No tool runs on a strict session (a background agent call), not even
+    // with the user's approval: its owner never asked for one.
+    if session_id
+        .as_deref()
+        .is_some_and(crate::ephemeral_session::is_strict)
+    {
+        info!("Host command {id}: refused, it came from a background agent call");
+        AuditStep {
+            action: "refused".into(),
+            request_id: Some(id),
+            command: Some(crate::permission_audit::command_preview(&req.command)),
+            session_id,
+            outcome: Some("background agent call".into()),
+            ..AuditStep::default()
+        }
+        .write();
+        return HostCommandResponse::error("Tools can't run in this session.");
+    }
     let background = session_id
         .as_deref()
         .is_some_and(|sid| is_background(app, sid));

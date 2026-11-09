@@ -206,6 +206,23 @@ pub fn setup_notification_handler(
                         return;
                     }
                     if kind == "tool_call" || kind == "tool_call_update" {
+                        // Kage's own `run_outside_sandbox` calls: remember
+                        // their commands, so a request arriving over the host
+                        // bridge can be matched to this session (a strict
+                        // session's too, so the bridge can refuse it).
+                        {
+                            let first_title = update
+                                .get("toolCallId")
+                                .and_then(|v| v.as_str())
+                                .and_then(|id| {
+                                    tool_names.lock().ok().and_then(|n| n.get(id).map(|e| e.0.clone()))
+                                });
+                            crate::host_commands::observe_tool_call(
+                                update_session_id.as_deref(),
+                                update,
+                                first_title.as_deref(),
+                            );
+                        }
                         // No tool may run on a strict session (a background
                         // agent call). An agent set to run tools without
                         // asking only shows it here: stop the turn, tell the
@@ -282,22 +299,6 @@ pub fn setup_notification_handler(
                                     }
                                 }
                             }
-                        }
-                        // Kage's own `run_outside_sandbox` calls: remember
-                        // their commands, so a request arriving over the host
-                        // bridge can be matched to this session.
-                        {
-                            let first_title = update
-                                .get("toolCallId")
-                                .and_then(|v| v.as_str())
-                                .and_then(|id| {
-                                    tool_names.lock().ok().and_then(|n| n.get(id).map(|e| e.0.clone()))
-                                });
-                            crate::host_commands::observe_tool_call(
-                                update_session_id.as_deref(),
-                                update,
-                                first_title.as_deref(),
-                            );
                         }
                         // Forward to streaming-aware windows; frontend
                         // filters by sessionId in the payload. Skipped for
@@ -835,31 +836,6 @@ fn handle_permission_notification(
         .and_then(|t| t.as_str());
     let mcp_server = classify_mcp_server(&tool_title, request_title, tool_kind.as_deref());
 
-    // Kage's own `run_outside_sandbox` — exactly that server and tool — is
-    // allowed here without a prompt: the real gate is at execution, where
-    // Kage asks the user (or applies their rules) once the command reaches
-    // it over the host bridge. Asking twice would only teach clicking
-    // through. An explicit per-tool Deny the user set still wins.
-    if is_host_command_call(&tool_title, request_title, tool_kind.as_deref()) {
-        let denied = config
-            .lock_or_recover()
-            .tool_permissions
-            .tools
-            .iter()
-            .any(|t| {
-                t.title == tool_title && t.effective_policy() == crate::config::PolicyKind::Deny
-            });
-        if !denied {
-            info!("Allowed {tool_title}: Kage asks the user when the command reaches it");
-            if let Some(request_id) = notification.get("id") {
-                if let Err(e) = client.send_permission_response(request_id, "allow_once") {
-                    warn!("Failed to send auto permission response: {}", e);
-                }
-            }
-            return;
-        }
-    }
-
     let timestamp = chrono::Utc::now().to_rfc3339();
 
     // Category trust applies only to prompts the user can see. Background
@@ -882,6 +858,33 @@ fn handle_permission_notification(
         hidden_session,
     };
     let strict = request_session.is_some_and(crate::ephemeral_session::is_strict);
+
+    // Kage's own `run_outside_sandbox` — exactly that server and tool — is
+    // allowed here without a prompt: the real gate is at execution, where
+    // Kage asks the user (or applies their rules) once the command reaches
+    // it over the host bridge. Asking twice would only teach clicking
+    // through. Never on a strict session (no tool runs there; the strict
+    // route below refuses it), and an explicit per-tool Deny the user set
+    // still wins.
+    if !strict && is_host_command_call(&tool_title, request_title, tool_kind.as_deref()) {
+        let denied = config
+            .lock_or_recover()
+            .tool_permissions
+            .tools
+            .iter()
+            .any(|t| {
+                t.title == tool_title && t.effective_policy() == crate::config::PolicyKind::Deny
+            });
+        if !denied {
+            info!("Allowed {tool_title}: Kage asks the user when the command reaches it");
+            if let Some(request_id) = notification.get("id") {
+                if let Err(e) = client.send_permission_response(request_id, "allow_once") {
+                    warn!("Failed to send auto permission response: {}", e);
+                }
+            }
+            return;
+        }
+    }
 
     // Hold the lock just long enough to mutate the in-memory config and
     // decide whether a disk save is due. The actual save is dispatched
@@ -1102,6 +1105,12 @@ mod strict_permission_tests {
                 granted_at: "2026-11-01T00:00:00Z".into(),
                 grant_type: GrantType::Always,
             }],
+            // Commands outside the agent's sandbox: a rule and allow-all.
+            host_command_rules: vec![crate::config::HostCommandRule {
+                prefix: "rm".into(),
+                created_at: String::new(),
+            }],
+            host_commands_allow_all: true,
         }
     }
 
