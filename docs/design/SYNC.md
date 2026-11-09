@@ -809,10 +809,16 @@ Field names inside a record:
 | Field key | Meaning |
 |---|---|
 | `f@s` | Whole field `f` at scope `s` |
-| `f[]<element>@all` | One element of a set field. `<element>` is the element's canonical JSON (≤ 128 characters). Value `true` = present, `false` = removed. |
-| `f{}<key>@all` | One entry of a map field. Value `null` = removed. |
+| `f[]<element>@all` | One element of a set field. `<element>` is the element's canonical JSON (≤ 128 characters). Value `true` = present, `false` = removed. A longer element is named `#<32 hex of its SHA-256>`, and its value is the element itself while present. |
+| `f{}<key>@all` | One entry of a map field. Value `null` = removed. A key over 128 characters, or one starting with `#`, is named `#<32 hex>` the same way, with the value `[key, value]`. |
 | `+<first>@all` | A group of fields that must change together (`+status` holds `{status, doneAt, suggested, confidence}`) |
+| `v@all` | The whole record, for a `whole` structure |
 | `avail@all`, `order@all` | List items: where the item exists; its position |
+
+Field names hold no `@`, `[]` or `{}` and don't start with `+`
+(`split::valid_field_name`); the scope is after the last `@`. A set
+comes back from `join` sorted by canonical JSON, and `null` reads as
+"absent" (`src/sync/split.rs`).
 
 Because sets, maps and groups are encoded as separate cells, **every cell
 merges the same way: the higher stamp wins.** No merge rule is evaluated
@@ -1047,17 +1053,26 @@ Tombstones:
 - `del` merges by the higher stamp.
 - A tombstone newer than every cell hides the record. A cell newer than
   the tombstone shows it again.
-- **Delete beats an edit it hadn't seen.** For each cell `c` older than
-  `del` but newer than every stamp in `del.anc` (so the deleter hadn't
-  seen it): conflict `edit_vs_delete` ("Edited on Home Mac, deleted on
-  Work PC"). Restore brings the record back. A concurrent edit this
+- **Delete beats an edit it hadn't seen.** While the record is hidden,
+  for each cell `c` older than `del` but newer than every stamp in
+  `del.anc`, and from another computer than the deleter (so the deleter
+  hadn't seen it): conflict `edit_vs_delete` ("Edited on Home Mac,
+  deleted on Work PC"), one per field. Set elements and map entries don't
+  count. Restore brings the record back. A concurrent edit this
   approximation misses is still in "Recently deleted" with the whole
   record for 30 days.
-- **An edit beats a delete it hadn't seen.** For a winning cell `c` with
-  `c.stamp > del.stamp` and `del.stamp ∉ c.anc`: info conflict
-  `delete_vs_edit` ("Deleted on Work PC, but changed later on Home Mac.
-  [Delete anyway]"). Restoring a deleted item puts `del.stamp` into the
-  new cells' `anc`, so a deliberate restore isn't reported.
+- **An edit beats a delete it hadn't seen.** When cells newer than `del`
+  show the record again and none of them names `del.stamp` in its `anc`:
+  one info conflict `delete_vs_edit` per record (no field; the winner is
+  the newest such cell): "Deleted on Work PC, but changed later on Home
+  Mac. [Delete anyway]". Restoring a deleted item puts `del.stamp` into
+  the new cells' `anc`, so a deliberate restore isn't reported, even
+  together with another computer's edit.
+- A merge reports a cell-and-tombstone pair only when one of the two
+  arrived in that merge; a pair it held already was reported when it
+  first met. `delete_vs_edit` is reported only when the tombstone is new
+  here or the record was hidden before the merge; a further edit of a
+  record that is already back isn't reported again.
 
 Properties (tested, §18.1):
 - **No silent loss.** A value stops being current only because a cell
