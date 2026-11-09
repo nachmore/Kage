@@ -52,12 +52,24 @@ windows = { version = "0.62", optional = true, features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell",
     "Win32_UI_Input_KeyboardAndMouse",
+    # Host-command bridge named pipe (os/windows/host_bridge.rs).
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
     "Management_Deployment",
     "ApplicationModel",
     "ApplicationModel_Core",
     "Foundation",
     "Foundation_Collections",
 ] }
+
+[target.'cfg(unix)'.dependencies]
+# Peer credentials and poll for the host-command bridge socket
+# (os/unix/host_bridge.rs); proc_pidpath for os/macos/kage_target.rs.
+libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # CGEvent-based input synthesis + AX accessibility provider.

@@ -3117,6 +3117,7 @@ dependencies = [
  "core-foundation 0.10.1",
  "core-graphics",
  "dirs",
+ "libc",
  "log",
  "objc2",
  "objc2-app-kit",

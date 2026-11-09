@@ -8,3 +8,5 @@ pub mod accessibility;
 pub mod input;
 pub mod launcher;
 pub mod process;
+
+pub use crate::os::unix::host_bridge;

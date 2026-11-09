@@ -5,3 +5,5 @@ pub mod ax_worker;
 pub mod input;
 pub mod launcher;
 pub mod process;
+
+pub use crate::os::unix::host_bridge;
