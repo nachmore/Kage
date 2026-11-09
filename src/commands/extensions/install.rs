@@ -177,6 +177,7 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
         granted,
         approved_version,
         approved_at: chrono::Utc::now().to_rfc3339(),
+        origin: None,
     };
     info!(
         "Committing install for '{}': capabilities {:?}",

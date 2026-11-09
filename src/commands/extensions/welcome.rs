@@ -219,6 +219,7 @@ fn seed_grant(cfg: &mut crate::config::Config, manifest: &extensions::ExtensionM
             granted,
             approved_version: manifest.version.clone(),
             approved_at: chrono::Utc::now().to_rfc3339(),
+            origin: None,
         },
     );
 }

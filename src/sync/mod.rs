@@ -3,9 +3,14 @@
 //! through a folder the user already syncs. Each computer writes only its
 //! own encrypted, write-once files; every computer merges them the same way.
 //!
-//! This is the C0 skeleton of §19: every interface with stub bodies. Every
-//! request answers `sync_unavailable`, and nothing touches the disk. The
-//! work packages of §20 fill it in.
+//! - [`engine`]: one tick captures, ingests, merges, projects and
+//!   publishes, on the `kage-sync` thread ([`scheduler`]).
+//! - [`sources`]: the parts of Kage that sync plugs into.
+//! - [`types`], [`merge`], [`replica`]: the data model and its merge.
+//! - [`folder`], [`envelope`], [`crypto`], [`keystore`]: the folder.
+//!
+//! Sync is offered only where [`sync_available`] says so: debug builds and
+//! the dev channel, until the owner turns it on for everyone.
 
 pub mod canonical;
 pub mod catalog;
@@ -50,8 +55,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use types::{Category, OsKind, ScopeAction};
 
-/// Log text for a stub that isn't written yet. Logs stay English.
-pub(crate) const NOT_BUILT: &str = "folder sync isn't built yet";
+/// Sync is offered to everyone. Until the owner flips this, only debug
+/// builds and the dev channel get it (docs/design/SYNC.md §20, WP-S4).
+pub const RELEASED: bool = false;
+
+/// Whether this build offers folder sync: a released feature, a debug
+/// build, or a dev-channel build (`+dev.` in the version).
+pub fn sync_available() -> bool {
+    RELEASED || cfg!(debug_assertions) || env!("CARGO_PKG_VERSION").contains("+dev.")
+}
 
 /// Sync is off, locked or paused on this computer, or not in this build.
 pub fn unavailable() -> AppError {
@@ -518,5 +530,50 @@ mod tests {
         assert_eq!(cats, SyncCategories::default());
         let prefs: prefs::DevicePrefs = serde_json::from_str("{}").unwrap();
         assert!(!prefs.enabled && prefs.categories.settings && !prefs.categories.chats);
+    }
+
+    /// A backup never holds sync's own state (§6.1): a megabyte of random
+    /// bytes in `<data_local>/kage/sync/` doesn't grow the encrypted full
+    /// backup. (Other tests may write small extension data meanwhile, so
+    /// the check allows for that.)
+    #[test]
+    fn a_backup_never_contains_sync_state() {
+        use rand::RngCore;
+        let config = crate::config::Config::default();
+        let size = || {
+            crate::config_export::export(
+                &config,
+                crate::config_export::ExportMode::Encrypted,
+                Some("backup passphrase"),
+                &[],
+            )
+            .unwrap()
+            .len()
+        };
+        let before = size();
+        let dir = crate::paths::data_local_dir().unwrap().join("kage/sync");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut noise = vec![0u8; 1 << 20];
+        rand::rng().fill_bytes(&mut noise);
+        std::fs::write(dir.join("replica.db"), &noise).unwrap();
+        std::fs::write(dir.join("key.bin"), b"{\"v\":1,\"keys\":{}}").unwrap();
+        let after = size();
+        assert!(after < before + (512 << 10), "{before} -> {after}");
+        let _ = std::fs::remove_file(dir.join("replica.db"));
+        let _ = std::fs::remove_file(dir.join("key.bin"));
+    }
+
+    #[test]
+    fn sync_is_offered_in_debug_and_dev_builds_only() {
+        assert_eq!(
+            sync_available(),
+            cfg!(debug_assertions) || RELEASED || env!("CARGO_PKG_VERSION").contains("+dev.")
+        );
+        // A handle in a build without sync never starts a thread.
+        if !sync_available() {
+            let h = SyncHandle::pending();
+            h.start(|| anyhow::bail!("never called"), Duration::ZERO);
+            assert!(!h.started());
+        }
     }
 }

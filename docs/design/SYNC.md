@@ -1,6 +1,7 @@
 # Kage folder sync
 
-Status: design, ready to build. Nothing here is implemented yet.
+Status: being built. WP-S1, WP-S2 and WP-S3 (the engine and host
+sources) are in; the app wiring (WP-S4) and the rest follow §20.
 
 Kage syncs through a folder the user already syncs: Dropbox, iCloud Drive,
 OneDrive, Google Drive, Syncthing, a network share, or any folder. There is
@@ -1285,6 +1286,11 @@ their runnable part changed:
   Settings page counts as approval.
 - Held state is a `needs_approval` pin, so the hold never travels back to
   the folder as a change.
+- [Keep off] leaves the item held and stops asking until its runnable
+  part changes again. A held active pointer is listed under the
+  connection it points to. It follows the synced value again once that
+  value names an approved connection, one that runs nothing, or the one
+  already active here.
 - Shortcuts are not held. They run only when the user triggers them.
 
 **Consent.** Synced `extension_states.<id> = true` switches an extension
@@ -3305,6 +3311,88 @@ what the matching command takes) and `JoinPreview`.
 }
 ```
 
+What WP-S3 built, beyond the signatures above:
+- **Source conventions** (`sources.rs`), so the engine stays generic:
+  - a list reports each item's position as a number in the field
+    `order`; a write to a list namespace carries every record that exists
+    here, `order` as the fractional key, and the source rebuilds the whole
+    list in `(order, id)` order, this computer's own items where they
+    were;
+  - `LocalRecord::avail` is the default `avail` of a *new* item;
+  - a field may hold `sources::unchanged()` ("the value you last saw"),
+    which the engine skips (chat transcripts aren't loaded every pass);
+  - `Structure::per_os` may name a record as `@<id>`: that record's
+    fields default to per OS (the `cfg` namespace's `PerOs` rows);
+  - every `read_local` result is captured before anything is written over
+    it.
+- `sources::host_sources(port, HostDirs { config_kage_dir, sync_dir }, os,
+  chats)` builds WP-S3's four sources for the app. `sources::chats` has a
+  `ChatHistory` trait and `RegistryHistory` over
+  `AgentSessionRegistry`; mirrors are `chats/<device>/<key>.json` and
+  `.jsonl` (`key` is a hash of the record id), read by
+  `agent_sessions::synced::SyncedChatsProvider` (id `synced`).
+- `SyncEngine::{note_wake, next_deadline, now_ms, watch_dir}` for the
+  thread, `set_kdf_cost` for tests, and `engine::kill::{arm, disarm}`:
+  the §18.3 kill points (inert unless a test arms one).
+- `SyncHandle::started()`; `sync::sync_available()` and `sync::RELEASED`
+  (the release gate: debug builds and `+dev.` versions, until the owner
+  sets `RELEASED`). `SyncHandle::start` does nothing where sync isn't
+  available.
+- Values: an explicit `null` cell at this OS or at `all` means "no value"
+  (the field is cleared here); only when no cell exists at either does the
+  local value stay (R4). A field written as absent that reads back as its
+  type's default isn't lossy.
+- List order: capture compares the local order with the order the file
+  last showed (meta `order.<ns>`). A local order that still matches it is
+  stale, not a reorder, so newer keys from elsewhere aren't overwritten.
+- "Recently deleted" rows (`sync_list_conflicts("deleted")`) have ids
+  `d|<ns>|<id>` and kind `edit_vs_delete`; `sync_resolve_conflict` with
+  `restore` brings the record back.
+- Removing an extension's data writes one record per extension,
+  `sync.ns_state/ext.<id>` with a `purged` cell, covering all of its
+  `ext.<id>.*` namespaces.
+- Status problems the engine adds: `sync.problem.device_collision`,
+  `.held_back`, `.not_this_version`, `.churn`, `.duplicates` and
+  `.config_reset`, besides `clock_warning` and `unreadable`.
+
+Decisions WP-S3 made where the design was open or didn't fit the code:
+- **Extension on/off is WP-S3's.** `extension_states.<id>` is a `cfg`
+  record, so the config source owns it, with the consent guard and the
+  `not_installed` pins of §8.2 (I24 is WP-S3's). WP-S5 keeps `installs`,
+  extension settings (`cfg.ext`) and the data modes.
+- **Join backup.** The engine never reads app folders, so instead of a
+  `config_export` backup it keeps every syncable local value the sources
+  report (their `LocalState`) in `sync/trash/join-<time>.json`
+  (owner-only). **Undo joining** writes it back through the sources, then
+  leaves.
+- **A join previews what has arrived.** `sync_join` reads the folder
+  once and answers; the status says what is still downloading. Only a
+  rebuild of a lost replica (an automatic join) waits up to 2 minutes.
+- **Lost or stolen.** The computer removed with a key rotation can't read
+  the revocation, which is in the new epoch: it shows `locked`, not
+  `removed`.
+- **The losing creator** of two folders made at once sees `reset` and
+  joins the winner, as after a Start over elsewhere.
+- **A bulk delete answered "keep"** brings the items back as new edits
+  (for config lists that is also "Cancel"); "Only here" for an
+  extension's data is `sync_set_extension_data(off)`.
+- **Validation** uses `config_export::allowlist::{shape_of, accepts}`
+  (`check` stays private). A ⌘Space-style system shortcut clash isn't
+  reported by the engine; the hotkey picker (WP-S6) already checks it.
+- **Dataless reads on macOS.** The engine thread never reads folder files
+  itself (every read goes through `RealFs`'s pool with a timeout), so it
+  doesn't set `IOPOL_MATERIALIZE_DATALESS_FILES_OFF`; that call would
+  belong in `os::cloud_files` (WP-S2) if wanted.
+- **Chats** publish once idle for 10 minutes; a chat still active at
+  exit publishes at the next start.
+- **I5** (a stale Settings save) is the `save_config` three-way merge of
+  WP-S4 and the field-level save of WP-S6; the engine only sees the saved
+  file, so I5 is tested there.
+- **Strings.** WP-S3's EN strings went straight into
+  `locales/en/messages.json` (`errors.sync.*`, `sync.problem.*`,
+  `sync.label.*`, `sync.conflicts.label.*`, `sync.review.*`,
+  `sync.readme`); the other catalogs need a `scripts/translate.py` run.
+
 ### 19.5 Tauri commands
 
 Every command returns `Result<T, AppError>`, is registered in
@@ -3516,9 +3604,10 @@ everyone branches from it.
 - **Done when:**
   - §8 is implemented; §4.3 and §4.4 are implemented exactly, and the
     §4.7 tests pass.
-  - Integration scenarios I1–I24 and I27–I30 pass; §18.3 fault injection
-    passes; the chaos test passes 100 seeds in CI mode. The harness runs
-    in under 60 seconds with `jobs=2`.
+  - Integration scenarios I1–I24 (except I5, which is WP-S4's and WP-S6's,
+    §19.4) and I27–I30 pass; §18.3 fault injection passes; the chaos test
+    passes 100 seeds in CI mode. The harness runs in under 60 seconds with
+    `jobs=2`.
   - The engine never does folder I/O on the caller's thread;
     `SyncHandle::wake` never blocks.
   - Existing config, allowlist, backup and `config_serde_default_parity_test`
@@ -3562,9 +3651,10 @@ everyone branches from it.
 
 ### WP-S5 Extension sync
 
-- **Files (owned):** `src/sync/sources/extensions.rs` (installs, on/off
-  consent, settings per §12.1, keys, lists and collections modes,
-  quotas, store-theme auto-install), `src/extensions.rs` (manifest `sync`
+- **Files (owned):** `src/sync/sources/extensions.rs` (installs,
+  settings per §12.1, keys, lists and collections modes, quotas,
+  store-theme auto-install; on/off and its consent guard are WP-S3's
+  `cfg` records, §19.4), `src/extensions.rs` (manifest `sync`
   field, `normalize_sync`, `config.<field>.sync`),
   `src/commands/extensions/sync.rs`, `src/commands/extensions/mod.rs`,
   `src/commands/extensions/files.rs` (notify; the per-key lock, which

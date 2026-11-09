@@ -2389,6 +2389,7 @@ fn grant(caps: &[&str]) -> crate::config::ExtensionGrant {
         granted: caps.iter().map(|c| c.to_string()).collect(),
         approved_version: "1.0.0".into(),
         approved_at: "2026-01-01T00:00:00Z".into(),
+        origin: None,
     }
 }
 

@@ -3,7 +3,22 @@
 //! back. WP-S3 writes `config`, `lists`, `steering` and `chats`; WP-S5 the
 //! extension source.
 //!
-//! C0 skeleton: the trait and its types. No source exists yet.
+//! Conventions every source follows, so the engine can stay generic:
+//! - A record's fields are its synced fields only. Fields that stay on
+//!   this computer are left out of [`LocalRecord::fields`]; the source
+//!   keeps them from its own copy when it writes the record back.
+//! - A list keeps its order in the field [`ORDER`]: [`Source::read_local`]
+//!   reports each item's position in the local list as a number, and a
+//!   [`LocalWrite`] carries the merged fractional key as a string. The
+//!   engine turns local positions into keys that move as few items as
+//!   possible, so two reorders on two computers merge. A write to a list
+//!   namespace always carries every record that exists here, so the source
+//!   can rebuild the whole list in `(order, id)` order.
+//! - [`LocalRecord::avail`] is where a *new* item exists by default (`all`
+//!   or an OS name). The engine writes it once, when the record is new.
+//! - A field may hold [`unchanged`] to say "the same value you last saw":
+//!   the engine skips it without looking at it. A source with large values
+//!   (chat transcripts) uses it so it doesn't load what didn't change.
 
 pub mod chats;
 pub mod config;
@@ -11,11 +26,31 @@ pub mod lists;
 pub mod steering;
 
 use super::crypto::Keys;
+use super::engine::ConfigPort;
 use super::replica::ExtStore;
 use super::types::{Category, DefaultScope, DeviceId, Origin, Structure};
 use super::{ExtReply, ExtRequest};
 use crate::error::AppError;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+pub use super::split::ORDER;
+
+/// The marker of [`unchanged`].
+pub const UNCHANGED_KEY: &str = "$unchanged";
+
+/// A field value that means "the value the engine last saw".
+pub fn unchanged() -> serde_json::Value {
+    serde_json::json!({ UNCHANGED_KEY: true })
+}
+
+/// Whether `v` is [`unchanged`].
+pub fn is_unchanged(v: &serde_json::Value) -> bool {
+    v.as_object().is_some_and(|o| {
+        o.len() == 1 && o.get(UNCHANGED_KEY) == Some(&serde_json::Value::Bool(true))
+    })
+}
 
 /// One namespace a source owns.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +81,20 @@ pub struct LocalRecord {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LocalState {
     pub records: BTreeMap<(String, String), Option<LocalRecord>>,
+}
+
+impl LocalState {
+    /// The record `ns`/`id`, if the files hold it.
+    pub fn get(&self, ns: &str, id: &str) -> Option<&LocalRecord> {
+        self.records
+            .get(&(ns.to_string(), id.to_string()))
+            .and_then(Option::as_ref)
+    }
+
+    pub fn put(&mut self, ns: &str, id: &str, r: LocalRecord) {
+        self.records
+            .insert((ns.to_string(), id.to_string()), Some(r));
+    }
 }
 
 /// One merged value to write into the local files. `None` removes it.
@@ -109,4 +158,55 @@ pub trait CaptureCtx {
     fn store(&mut self) -> &mut dyn ExtStore;
     fn keys(&self) -> &Keys;
     fn device(&self) -> DeviceId;
+}
+
+/// Where the host sources find their files.
+pub struct HostDirs {
+    /// `<config>/kage`: `config.json`'s folder, where the steering docs
+    /// live.
+    pub config_kage_dir: PathBuf,
+    /// `<data_local>/kage/sync`: the engine's own folder; chat mirrors go
+    /// in `chats/` there.
+    pub sync_dir: PathBuf,
+}
+
+/// The sources WP-S3 owns, for the app to hand the engine: single
+/// settings, lists, steering docs and, when `chats` is given, chat
+/// history.
+pub fn host_sources(
+    port: Arc<dyn ConfigPort>,
+    dirs: HostDirs,
+    os: super::types::OsKind,
+    chats: Option<Arc<dyn chats::ChatHistory>>,
+) -> Vec<Box<dyn Source>> {
+    let mut out: Vec<Box<dyn Source>> = vec![
+        Box::new(config::ConfigSource::new(port.clone())),
+        Box::new(lists::ListsSource::new(port.clone(), os)),
+        Box::new(steering::SteeringSource::new(
+            port,
+            dirs.config_kage_dir.clone(),
+        )),
+    ];
+    if let Some(history) = chats {
+        out.push(Box::new(chats::ChatsSource::new(
+            history,
+            dirs.sync_dir.clone(),
+        )));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_unchanged_marker_is_recognised_only_alone() {
+        assert!(is_unchanged(&unchanged()));
+        assert!(!is_unchanged(
+            &serde_json::json!({ "$unchanged": true, "x": 1 })
+        ));
+        assert!(!is_unchanged(&serde_json::json!({ "$unchanged": false })));
+        assert!(!is_unchanged(&serde_json::json!("x")));
+    }
 }

@@ -66,6 +66,9 @@ pub struct ContextRule {
     /// Lets a user temporarily disable a rule without deleting it.
     #[serde(default = "crate::config::default_true")]
     pub enabled: bool,
+    /// Stable id for folder sync (docs/design/SYNC.md §4.4).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub sync_id: String,
 }
 
 /// Lowercase + strip a trailing `.exe`. Pure helper so tests can pin
@@ -182,6 +185,7 @@ pub fn default_starter_rules() -> Vec<ContextRule> {
             executable: exe.into(),
             steering: steering.into(),
             enabled: true,
+            sync_id: String::new(),
         }
     }
     vec![
@@ -258,6 +262,7 @@ mod tests {
             executable: exe.to_string(),
             steering: steering.to_string(),
             enabled: true,
+            sync_id: String::new(),
         }
     }
 
@@ -316,6 +321,7 @@ mod tests {
                 executable: "code".into(),
                 steering: "x".into(),
                 enabled: false,
+                sync_id: String::new(),
             },
             rule("On", "code", "y"),
         ];

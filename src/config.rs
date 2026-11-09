@@ -14,6 +14,11 @@ static SAVE_LOCK: Mutex<()> = Mutex::new(());
 /// becomes a no-op so this build's defaults can't overwrite it.
 static PRESERVE_NEWER_FILE: AtomicBool = AtomicBool::new(false);
 static NEWER_SKIP_LOGGED: AtomicBool = AtomicBool::new(false);
+/// What `load` had to reset this run, for folder sync: a reset
+/// `config.json` must not spread its defaults to other computers
+/// (docs/design/SYNC.md §8.10).
+static LOAD_RESET: Mutex<crate::sync::engine::LoadReset> =
+    Mutex::new(crate::sync::engine::LoadReset::None);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -128,6 +133,11 @@ pub use speech::*;
 pub use ui::*;
 pub use updates::*;
 
+/// A new stable list item id: `s` and 16 random base32 characters.
+fn new_item_id() -> String {
+    format!("s{}", crate::sync::crypto::random_id())
+}
+
 fn default_config_version() -> u32 {
     config_migrations::CURRENT_VERSION
 }
@@ -198,11 +208,67 @@ impl Config {
 
     pub fn load() -> Result<Self> {
         let config_path = Self::get_config_path()?;
-        let (config, preserve_newer) = Self::load_from(&config_path)?;
+        let mut reset = crate::sync::engine::LoadReset::None;
+        let (config, preserve_newer) = Self::load_from_noting(&config_path, &mut reset)?;
         if preserve_newer {
             PRESERVE_NEWER_FILE.store(true, Ordering::SeqCst);
         }
+        *LOAD_RESET.lock().unwrap_or_else(|e| e.into_inner()) = reset;
         Ok(config)
+    }
+
+    /// What the last [`Config::load`] reset: everything (a corrupt,
+    /// oversized, unmigratable or missing file), some top-level sections
+    /// (the schema-mismatch salvage), or nothing. Folder sync projects the
+    /// synced values over a reset instead of spreading its defaults
+    /// (docs/design/SYNC.md §8.10).
+    #[allow(dead_code)] // The app's sync port reads it once WP-S4 wires the engine.
+    pub fn load_was_reset() -> crate::sync::engine::LoadReset {
+        LOAD_RESET.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Give every list item without a stable id one, and a new one to an
+    /// item whose id repeats an earlier item's: `sync_id` on shortcuts,
+    /// automations, custom actions, app modes and store sources, `id` on
+    /// agent connections and internal sites. `s` plus 16 random base32
+    /// characters. Returns whether anything changed. Folder sync merges
+    /// lists item by item by these ids (docs/design/SYNC.md §4.4).
+    pub fn ensure_item_ids(&mut self) -> bool {
+        fn fill<'a>(ids: impl Iterator<Item = &'a mut String>) -> bool {
+            let mut seen = std::collections::HashSet::new();
+            let mut changed = false;
+            for id in ids {
+                if id.is_empty() || !seen.insert(id.clone()) {
+                    *id = new_item_id();
+                    seen.insert(id.clone());
+                    changed = true;
+                }
+            }
+            changed
+        }
+        let mut changed = fill(self.shortcuts.iter_mut().map(|i| &mut i.sync_id));
+        changed |= fill(self.macros.iter_mut().map(|i| &mut i.sync_id));
+        changed |= fill(
+            self.quick_actions
+                .custom_actions
+                .iter_mut()
+                .map(|i| &mut i.sync_id),
+        );
+        changed |= fill(self.context_rules.iter_mut().map(|i| &mut i.sync_id));
+        changed |= fill(self.store_sources.iter_mut().map(|i| &mut i.sync_id));
+        changed |= fill(self.internal_sites.iter_mut().map(|i| &mut i.id));
+        // An active pointer at an empty id follows the connection that
+        // gets one.
+        let active_was_empty = self.acp.active_connection_id.is_empty()
+            && self.acp.connections.iter().any(|c| c.id.is_empty());
+        let first_empty = self.acp.connections.iter().position(|c| c.id.is_empty());
+        if fill(self.acp.connections.iter_mut().map(|i| &mut i.id)) {
+            changed = true;
+            if let (true, Some(i)) = (active_was_empty, first_empty) {
+                self.acp.active_connection_id = self.acp.connections[i].id.clone();
+            }
+        }
+        changed
     }
 
     /// Load from an explicit path. The bool is `true` when the file was
@@ -210,10 +276,22 @@ impl Config {
     /// (`load` turns that into the process-wide `save()` guard). Saves made
     /// here go through `save_to` directly: they run before any other thread
     /// can touch the config.
+    #[cfg(test)]
     fn load_from(config_path: &std::path::Path) -> Result<(Self, bool)> {
+        Self::load_from_noting(config_path, &mut crate::sync::engine::LoadReset::None)
+    }
+
+    /// [`Self::load_from`], noting in `reset` what had to be reset.
+    fn load_from_noting(
+        config_path: &std::path::Path,
+        reset: &mut crate::sync::engine::LoadReset,
+    ) -> Result<(Self, bool)> {
+        use crate::sync::engine::LoadReset;
         if !config_path.exists() {
-            let config = Self::default();
+            let mut config = Self::default();
+            config.ensure_item_ids();
             config.save_to(config_path)?;
+            *reset = LoadReset::All;
             return Ok((config, false));
         }
 
@@ -229,8 +307,10 @@ impl Config {
                 Self::MAX_CONFIG_SIZE
             );
             Self::backup_corrupt(config_path, "oversized");
-            let config = Self::default();
+            let mut config = Self::default();
+            config.ensure_item_ids();
             config.save_to(config_path)?;
+            *reset = LoadReset::All;
             return Ok((config, false));
         }
 
@@ -248,8 +328,10 @@ impl Config {
                     e
                 );
                 Self::backup_corrupt(config_path, "invalid-json");
-                let config = Self::default();
+                let mut config = Self::default();
+                config.ensure_item_ids();
                 config.save_to(config_path)?;
+                *reset = LoadReset::All;
                 return Ok((config, false));
             }
         };
@@ -271,8 +353,10 @@ impl Config {
                 }
                 log::warn!("Config migration failed ({}); backing up and resetting", e);
                 Self::backup_corrupt(config_path, "migration-failed");
-                let config = Self::default();
+                let mut config = Self::default();
+                config.ensure_item_ids();
                 config.save_to(config_path)?;
+                *reset = LoadReset::All;
                 return Ok((config, false));
             }
         };
@@ -295,11 +379,15 @@ impl Config {
                         dropped
                     );
                     salvaged.fold_legacy_extension_enabled();
+                    salvaged.ensure_item_ids();
+                    *reset = LoadReset::Sections(dropped);
                     return Ok((salvaged, false));
                 }
                 log::warn!("Post-migration config did not match current schema ({}); backing up and resetting", e);
-                let config = Self::default();
+                let mut config = Self::default();
+                config.ensure_item_ids();
                 config.save_to(config_path)?;
+                *reset = LoadReset::All;
                 return Ok((config, false));
             }
         };
@@ -307,6 +395,7 @@ impl Config {
         // If migrations bumped the version or the legacy fold changed
         // something, persist the upgrade so we don't rerun them every launch.
         let mut upgraded = config.fold_legacy_extension_enabled();
+        upgraded |= config.ensure_item_ids();
         if config.version < config_migrations::CURRENT_VERSION {
             config.version = config_migrations::CURRENT_VERSION;
             upgraded = true;
@@ -433,7 +522,11 @@ impl Config {
             return Ok(());
         }
         let config_path = Self::get_config_path()?;
-        self.save_to_recorded(&config_path, record)
+        self.save_to_recorded(&config_path, record)?;
+        // Folder sync captures the change from the file (§8.2); this only
+        // wakes it. A no-op until the engine is installed.
+        crate::sync::notify("config", crate::sync::types::Origin::User);
+        Ok(())
     }
 
     /// Inner save — exposed so tests can drive the atomic-write logic
@@ -1259,6 +1352,59 @@ mod load_resilience_tests {
         assert!(!preserve);
         assert!(cfg.debug_mode, "valid sections survive");
         assert_eq!(cfg.hotkey.key, "Space", "bad section falls back to default");
+    }
+
+    /// Folder sync needs to know what `load` reset (SYNC.md §8.10).
+    #[test]
+    fn load_notes_what_it_reset() {
+        use crate::sync::engine::LoadReset;
+        let dir = tempfile::tempdir().unwrap();
+        let mut reset = LoadReset::None;
+        let path = write(dir.path(), r#"{ "version": 1, "hotkey": { "key": 42 } }"#);
+        Config::load_from_noting(&path, &mut reset).unwrap();
+        assert_eq!(reset, LoadReset::Sections(vec!["hotkey".into()]));
+        let path = write(dir.path(), "{ not json");
+        Config::load_from_noting(&path, &mut reset).unwrap();
+        assert_eq!(reset, LoadReset::All);
+        let missing = dir.path().join("nested/missing.json");
+        let mut reset = LoadReset::None;
+        Config::load_from_noting(&missing, &mut reset).unwrap();
+        assert_eq!(reset, LoadReset::All, "a missing file counts as a reset");
+        let mut reset = LoadReset::None;
+        Config::load_from_noting(&missing, &mut reset).unwrap();
+        assert_eq!(reset, LoadReset::None, "a file that reads is no reset");
+    }
+
+    /// Every list item gets a stable id once; a repeated id is replaced.
+    #[test]
+    fn ensure_item_ids_is_stable_and_fixes_repeats() {
+        let mut c = Config {
+            shortcuts: vec![
+                serde_json::from_value(serde_json::json!({ "name": "a" })).unwrap(),
+                serde_json::from_value(serde_json::json!({ "name": "b", "sync_id": "sfixed" }))
+                    .unwrap(),
+                serde_json::from_value(serde_json::json!({ "name": "c", "sync_id": "sfixed" }))
+                    .unwrap(),
+            ],
+            ..Config::default()
+        };
+        c.acp.connections[0].id = String::new();
+        c.acp.active_connection_id = String::new();
+        assert!(c.ensure_item_ids());
+        let ids: Vec<&str> = c.shortcuts.iter().map(|s| s.sync_id.as_str()).collect();
+        assert_eq!(ids[1], "sfixed");
+        assert!(ids[0].starts_with('s') && ids[0].len() == 17);
+        assert_ne!(ids[2], "sfixed");
+        assert!(c.context_rules.iter().all(|r| !r.sync_id.is_empty()));
+        assert!(!c.acp.connections[0].id.is_empty());
+        assert_eq!(c.acp.active_connection_id, c.acp.connections[0].id);
+        let before = serde_json::to_value(&c).unwrap();
+        assert!(!c.ensure_item_ids(), "a second run changes nothing");
+        assert_eq!(serde_json::to_value(&c).unwrap(), before);
+        // An empty id is never written.
+        let s: crate::config::ShortcutConfig =
+            serde_json::from_value(serde_json::json!({ "name": "x" })).unwrap();
+        assert!(serde_json::to_value(&s).unwrap().get("sync_id").is_none());
     }
 
     #[test]

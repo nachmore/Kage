@@ -30,6 +30,10 @@ pub struct QuickAction {
     /// Empty means show for all types.
     #[serde(default)]
     pub content_types: Vec<String>,
+    /// Stable id for folder sync (docs/design/SYNC.md §4.4). Given by
+    /// `Config::ensure_item_ids`; old builds ignore it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub sync_id: String,
 }
 
 impl Default for QuickActionsConfig {
@@ -68,6 +72,9 @@ pub struct MacroConfig {
     /// AI-generated summary of what this automation does
     #[serde(default)]
     pub summary: Option<String>,
+    /// Stable id for folder sync (docs/design/SYNC.md §4.4).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub sync_id: String,
 }
 
 /// How an automation is triggered.
@@ -239,4 +246,7 @@ pub struct ShortcutConfig {
     pub script: Option<String>, // For script action type — JS function body
     #[serde(default)]
     pub script_action: Option<String>, // What to do with script result: "run_program", "open_url", "prompt", "text"
+    /// Stable id for folder sync (docs/design/SYNC.md §4.4).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub sync_id: String,
 }

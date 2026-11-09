@@ -130,6 +130,8 @@ CSP is intentionally `null` in `tauri.conf.json` — the trust boundary is the t
 
 JSON in user config dir (`%APPDATA%/kage/config.json` etc.). Loaded by `Config::load`, migrated by `config_migrations`. **Every field must have `#[serde(default)]`** — old configs must keep loading after a schema change. Updates broadcast a `config_updated` Tauri event; all windows listen and reapply theme/hotkeys from there.
 
+A new `Config` field needs a row in `sync::catalog` as well as `config_export::allowlist` (folder sync, `docs/design/SYNC.md` §4.7); a new list item struct needs a `sync_id` that `Config::ensure_item_ids` fills.
+
 **Resolve per-user directories through `crate::paths` (`config_dir`, `data_local_dir`, `data_dir`, `cache_dir`, `home_dir`), never `dirs::*_dir()`.** `kage_core::paths` honours a test-isolation root (`paths::isolate(..)` / `KAGE_USER_DIRS`); this crate's unit tests isolate automatically, and `tests/mock_app_test.rs` isolates before its command sweep. The sweep calls every command against the real OS, and before this a local `cargo test` overwrote a developer's real `config.json` and emptied their permission audit log. `tests/user_dirs_isolation_test.rs` fails on new direct `dirs::` calls in `src/`. Integration tests that dispatch commands or save config must call `kage::paths::isolate(<tempdir>)` first.
 
 Extensions persist data via `save_extension_data` / `load_extension_data` Tauri commands (JSON in `config_dir/extension-data/`). **Never use `localStorage`** — WebView2 can wipe it on update or reinstall.

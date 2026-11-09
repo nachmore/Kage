@@ -8600,5 +8600,157 @@
   "settings.tool_permissions.audit.meta.host_by.other": {
     "message": "approved",
     "description": "Detail of an audit log entry: the command was let run in a way this version does not know."
+  },
+  "errors.sync.failed": {
+    "message": "Sync couldn't do that. Try again.",
+    "description": "A sync action failed for an internal reason."
+  },
+  "errors.sync.timeout": {
+    "message": "Sync didn't answer in time. Try again.",
+    "description": "A sync action waited too long for the sync engine."
+  },
+  "errors.sync.passphrase_short": {
+    "message": "Use a passphrase of at least 12 characters.",
+    "description": "Sync setup: the passphrase is too short."
+  },
+  "errors.sync.already_on": {
+    "message": "Sync is already on on this computer.",
+    "description": "Sync setup was started while sync is already set up here."
+  },
+  "errors.sync.folder_exists": {
+    "message": "This folder already has Kage sync. Join it instead.",
+    "description": "Sync setup: creating a sync folder where one exists."
+  },
+  "errors.sync.folder_write": {
+    "message": "Kage couldn't create its folder there.",
+    "description": "Sync setup: writing the new sync folder failed."
+  },
+  "errors.sync.not_a_sync_folder": {
+    "message": "This folder doesn't have Kage sync yet.",
+    "description": "Sync join: the chosen folder has no Kage sync data."
+  },
+  "errors.sync.not_ready": {
+    "message": "The sync folder hasn't finished downloading. Try again in a moment.",
+    "description": "Sync join or unlock: the folder's files aren't downloaded yet."
+  },
+  "errors.sync.newer_format": {
+    "message": "This sync folder needs a newer Kage. Update Kage on this computer first.",
+    "description": "Sync join: the folder was made by a newer Kage."
+  },
+  "errors.sync.no_such_item": {
+    "message": "That item isn't there anymore.",
+    "description": "A sync action named a setting, item or computer that doesn't exist."
+  },
+  "errors.sync.no_such_conflict": {
+    "message": "That conflict isn't there anymore.",
+    "description": "A conflicts-list action named an entry that doesn't exist."
+  },
+  "errors.sync.no_join_backup": {
+    "message": "There's nothing to undo.",
+    "description": "Undo joining was asked for, but this computer has no join backup."
+  },
+  "errors.sync.not_this_folder": {
+    "message": "That's a different sync folder.",
+    "description": "Find folder: the chosen folder belongs to another sync setup."
+  },
+  "errors.sync.no_name": {
+    "message": "Give this computer a name.",
+    "description": "Renaming this computer for sync with an empty name."
+  },
+  "sync.problem.device_collision": {
+    "message": "Another computer used this computer's sync identity. This one has a new one now.",
+    "description": "Sync problem: a copied profile or clone was detected and fixed."
+  },
+  "sync.problem.held_back": {
+    "message": "{count, plural, one {1 value stays on this computer because it looks like a key} other {# values stay on this computer because they look like keys}}",
+    "description": "Sync: values that look like credentials are not synced."
+  },
+  "sync.problem.not_this_version": {
+    "message": "{count, plural, one {1 setting from your other computers doesn't work on this version} other {# settings from your other computers don't work on this version}}",
+    "description": "Sync: values from a newer Kage that this version can't use."
+  },
+  "sync.problem.churn": {
+    "message": "{count, plural, one {Kage stopped syncing 1 item that kept changing} other {Kage stopped syncing # items that kept changing}}",
+    "description": "Sync: values two computers kept changing back and forth are paused for this session."
+  },
+  "sync.problem.duplicates": {
+    "message": "{count, plural, one {Your sync app made 1 copy of a Kage file. Kage removed it.} other {Your sync app made # copies of Kage files. Kage removed them.}}",
+    "description": "Sync: conflicted copies the sync app made in this computer's folder."
+  },
+  "sync.problem.config_reset": {
+    "message": "Your settings on this computer couldn't be read, so Kage restored them from sync.",
+    "description": "Sync: config.json was reset at load and the synced values were applied."
+  },
+  "sync.review.consent": {
+    "message": "{extension} needs your approval on this computer",
+    "description": "Needs your attention: an extension switched on elsewhere stays off here until approved. {extension} is an extension id or name."
+  },
+  "sync.review.mass_delete_out": {
+    "message": "This will delete {count, plural, one {1 item} other {# items}} from {what} on all your computers.",
+    "description": "Needs your attention: this computer deleted many items at once. {what} is a list name."
+  },
+  "sync.label.setting": {
+    "message": "Setting {path}",
+    "description": "Conflicts list: a setting this version has no name for. {path} is its path."
+  },
+  "sync.label.extension_state": {
+    "message": "{extension} on or off",
+    "description": "Conflicts list: whether an extension is switched on. {extension} is its id."
+  },
+  "sync.label.connections": {
+    "message": "Agents",
+    "description": "Conflicts list and Settings → Sync: the agent connections list."
+  },
+  "sync.label.active_connection": {
+    "message": "Active agent",
+    "description": "Conflicts list: which agent connection is in use."
+  },
+  "sync.label.show_response_actions": {
+    "message": "Show actions under responses",
+    "description": "Conflicts list: the setting that shows copy/retry buttons under agent responses."
+  },
+  "sync.label.mascot_animations": {
+    "message": "Animate Kage",
+    "description": "Conflicts list: the mascot animation setting."
+  },
+  "sync.label.mascot_extension_hints": {
+    "message": "Let extensions animate Kage",
+    "description": "Conflicts list: the setting that lets extensions animate the mascot."
+  },
+  "sync.label.store_sources": {
+    "message": "Additional stores",
+    "description": "Conflicts list: the list of extra extension stores."
+  },
+  "sync.label.battery_multiplier": {
+    "message": "Automations on battery",
+    "description": "Conflicts list: how much slower scheduled automations run on battery."
+  },
+  "sync.label.low_battery_multiplier": {
+    "message": "Automations on low battery",
+    "description": "Conflicts list: how much slower scheduled automations run on low battery."
+  },
+  "sync.label.disable_signals": {
+    "message": "Pause signal automations on low battery",
+    "description": "Conflicts list: the setting that pauses signal-triggered automations on low battery."
+  },
+  "sync.label.steering.user": {
+    "message": "Your steering document",
+    "description": "Conflicts list: the user's own steering document."
+  },
+  "sync.label.steering.auto": {
+    "message": "What Kage learned about you",
+    "description": "Conflicts list: the auto-generated steering document."
+  },
+  "sync.conflicts.label.item": {
+    "message": "“{name}”",
+    "description": "Conflicts list: a list item, by its name. {name} is the item's name."
+  },
+  "sync.conflicts.label.record": {
+    "message": "“{name}”",
+    "description": "Conflicts list: an extension's record, by its name. {name} is the record's name."
+  },
+  "sync.readme": {
+    "message": "This folder holds Kage sync data. Kage uses it to keep your settings the same on all your computers. Everything in it is encrypted. Please don't edit, move or rename the files in it.",
+    "description": "README.txt written once into a new sync folder. Shown in the user's language with English below."
   }
 }

@@ -180,6 +180,7 @@ fn harness(ext: &str, turns: Vec<Turn>, connect: bool) -> Harness {
             granted: vec!["storage".into(), "agent_background".into()],
             approved_version: "1.0.0".into(),
             approved_at: String::new(),
+            origin: None,
         },
     );
     let config = Arc::new(std::sync::Mutex::new(config));

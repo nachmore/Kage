@@ -472,6 +472,8 @@ pub fn generate_steering_document(
     // Atomic: this runs at quit, where a torn write would wipe the
     // steering the agent has learned about the user.
     crate::atomic_write::write(&auto_path, &content, crate::atomic_write::Perms::Private)?;
+    // Folder sync reads the change from the file; this only wakes it.
+    crate::sync::notify("steering", crate::sync::types::Origin::User);
 
     info!(
         "Auto-steering document updated ({} bytes) at {:?}",

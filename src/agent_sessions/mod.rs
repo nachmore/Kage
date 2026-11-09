@@ -19,6 +19,7 @@
 pub mod claude_code;
 pub mod kiro_cli;
 pub mod kiro_desktop;
+pub mod synced;
 
 use crate::error::AppError;
 use serde::Serialize;
@@ -119,6 +120,8 @@ impl AgentSessionRegistry {
                 hide_throwaway(kiro_cli::KiroCliProvider::new()),
                 hide_throwaway(kiro_desktop::KiroDesktopProvider::new()),
                 hide_throwaway(claude_code::ClaudeCodeProvider::new()),
+                // Folder sync's read-only copies of other computers' chats.
+                Arc::new(synced::SyncedChatsProvider::new()),
             ],
         }
     }

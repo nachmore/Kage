@@ -255,11 +255,13 @@ mod tests {
                     name: "Team".to_string(),
                     url: "https://team.example/store/".to_string(),
                     enabled: true,
+                    sync_id: String::new(),
                 },
                 crate::config::StoreSource {
                     name: "Off".to_string(),
                     url: "https://off.example".to_string(),
                     enabled: false,
+                    sync_id: String::new(),
                 },
             ],
             ..Default::default()
