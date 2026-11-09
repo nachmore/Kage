@@ -12,6 +12,12 @@ use std::path::PathBuf;
 /// recognises its own `run_outside_sandbox` calls.
 pub const MCP_SERVER_KEY: &str = "kage-computer-control";
 
+/// The per-request `timeout` (ms) Kage's entry asks the agent's MCP client
+/// for. kiro-cli waits 2 minutes by default, but `run_outside_sandbox`
+/// legitimately waits for the user's answer (up to 5 minutes) and then for
+/// the command (up to 30): the bridge's own reply wait, rounded up.
+pub const MCP_REQUEST_TIMEOUT_MS: u64 = 40 * 60 * 1000;
+
 /// Outcome of `upsert_server_entry` — lets the caller skip a write when nothing changed.
 #[derive(Debug, PartialEq, Eq)]
 pub enum UpsertOutcome {
@@ -21,6 +27,9 @@ pub enum UpsertOutcome {
     Inserted,
     /// Entry existed but `command` differed; updated to the new path.
     PathUpdated,
+    /// Same path, but its request `timeout` was missing or too short for
+    /// `run_outside_sandbox`; raised to [`MCP_REQUEST_TIMEOUT_MS`].
+    TimeoutUpdated,
 }
 
 /// Insert or update the managed server entry in an mcp.json document, preserving
@@ -45,14 +54,20 @@ pub fn upsert_server_entry(
         .as_object_mut()
         .expect("mcpServers just normalized to object");
 
-    let outcome = match servers.get(server_key) {
+    let outcome = match servers.get_mut(server_key) {
         Some(existing) => {
             let existing_cmd = existing
                 .get("command")
                 .and_then(|c| c.as_str())
                 .unwrap_or("");
             if existing_cmd == command_path {
-                return UpsertOutcome::Unchanged;
+                let timeout = existing.get("timeout").and_then(|t| t.as_u64());
+                if timeout.is_some_and(|t| t >= MCP_REQUEST_TIMEOUT_MS) {
+                    return UpsertOutcome::Unchanged;
+                }
+                // Only the timeout: the rest of the entry stays as it is.
+                existing["timeout"] = serde_json::json!(MCP_REQUEST_TIMEOUT_MS);
+                return UpsertOutcome::TimeoutUpdated;
             }
             UpsertOutcome::PathUpdated
         }
@@ -65,7 +80,8 @@ pub fn upsert_server_entry(
             "command": command_path,
             "args": [],
             "disabled": false,
-            "autoApprove": []
+            "autoApprove": [],
+            "timeout": MCP_REQUEST_TIMEOUT_MS
         }),
     );
     outcome
@@ -167,6 +183,12 @@ pub fn ensure_registered() {
             info!(
                 "Updating {} MCP server path to: {}",
                 MCP_SERVER_KEY, path_str
+            );
+        }
+        UpsertOutcome::TimeoutUpdated => {
+            info!(
+                "Raising the {} MCP server's request timeout to {} ms",
+                MCP_SERVER_KEY, MCP_REQUEST_TIMEOUT_MS
             );
         }
     }
@@ -281,13 +303,48 @@ mod tests {
         assert_eq!(cfg["mcpServers"]["kage-cc"]["disabled"], false);
         assert_eq!(cfg["mcpServers"]["kage-cc"]["args"], json!([]));
         assert_eq!(cfg["mcpServers"]["kage-cc"]["autoApprove"], json!([]));
+        assert_eq!(
+            cfg["mcpServers"]["kage-cc"]["timeout"],
+            json!(MCP_REQUEST_TIMEOUT_MS)
+        );
+    }
+
+    #[test]
+    fn upsert_raises_a_missing_or_short_timeout_and_keeps_the_rest() {
+        for old in [json!(null), json!(120000)] {
+            let mut entry = json!({
+                "command": "/usr/bin/kage-cc", "args": [], "disabled": false,
+                "autoApprove": ["get_ui_tree"]
+            });
+            if !old.is_null() {
+                entry["timeout"] = old;
+            }
+            let mut cfg = json!({ "mcpServers": { "kage-cc": entry } });
+            assert_eq!(
+                upsert_server_entry(&mut cfg, "kage-cc", "/usr/bin/kage-cc"),
+                UpsertOutcome::TimeoutUpdated
+            );
+            let e = &cfg["mcpServers"]["kage-cc"];
+            assert_eq!(e["timeout"], json!(MCP_REQUEST_TIMEOUT_MS));
+            assert_eq!(e["autoApprove"], json!(["get_ui_tree"]));
+            assert_eq!(
+                upsert_server_entry(&mut cfg, "kage-cc", "/usr/bin/kage-cc"),
+                UpsertOutcome::Unchanged
+            );
+        }
+    }
+
+    #[test]
+    fn the_timeout_covers_the_whole_bridge_wait() {
+        let wait = kage_core::host_bridge::reply_wait(kage_core::host_bridge::MAX_RUN_TIMEOUT_SECS);
+        assert!(u128::from(MCP_REQUEST_TIMEOUT_MS) >= wait.as_millis());
     }
 
     #[test]
     fn upsert_with_same_path_is_unchanged() {
         let mut cfg = json!({
             "mcpServers": {
-                "kage-cc": { "command": "/usr/bin/kage-cc", "args": [], "disabled": false, "autoApprove": [] }
+                "kage-cc": { "command": "/usr/bin/kage-cc", "args": [], "disabled": false, "autoApprove": [], "timeout": MCP_REQUEST_TIMEOUT_MS }
             }
         });
         let snapshot = cfg.clone();
