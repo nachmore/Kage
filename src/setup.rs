@@ -119,7 +119,9 @@ pub fn install_show_sessions_listener<R: tauri::Runtime>(app: &App<R>) {
                 target_label
             );
             if target_label == window_labels::MAIN {
-                if let Err(e) = crate::commands::window::open_chat_window(handle.clone()).await {
+                if let Err(e) =
+                    crate::commands::window::open_chat_window(handle.clone(), None).await
+                {
                     log::error!("Failed to open chat window from IPC signal: {}", e);
                 }
             } else if let Some(window) = handle.get_webview_window(&target_label) {

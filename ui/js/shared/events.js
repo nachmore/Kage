@@ -31,6 +31,7 @@ export const EVT = {
 
     // Sessions (formerly show-sessions)
     SHOW_SESSIONS: 'show_sessions',
+    CHAT_OPEN_SESSION: 'chat_open_session',
 
     // Context menu (formerly context-menu-action). RENDER: backend → menu
     // window; ACTION: menu window → the window that asked (JS-only).

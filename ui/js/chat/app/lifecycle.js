@@ -1,4 +1,5 @@
 import { installFileTextBroker, isWindowShown } from '../../shared/extension-file-text.js';
+import { EVT } from '../../shared/events.js';
 import { HOST_FEATURE_FILE_TEXT, HOST_FEATURE_VIEWS } from '../../shared/extension-sandbox-host.js';
 
 export function createLifecycleMixin(dependencies) {
@@ -27,6 +28,7 @@ export function createLifecycleMixin(dependencies) {
             this.setupEventListeners();
             this.setupStreamingListeners();
             this._listenForInitialMessageSession();
+            this._listenForOpenSession();
             // Load user info early — before any of the awaits below — so that
             // historical messages rendered by displaySession (triggered either
             // from this init or from the tauri://focus listener in main.js)
@@ -168,6 +170,48 @@ export function createLifecycleMixin(dependencies) {
                 this.elements.chatHeaderTitle.textContent =
                     stripKageTags(existing?.title) || t('chat.session.current_title');
             });
+        }
+
+        /**
+         * `>chats` (and the launcher's expand button / mascot double-click)
+         * opens this window on the default session: the one the floating
+         * launcher is on. The backend sends its id once the window is shown.
+         * Only the window the payload names acts on it.
+         */
+        _listenForOpenSession() {
+            this.listen(EVT.CHAT_OPEN_SESSION, (event) => {
+                const { sessionId, label } = event?.payload || {};
+                if (!sessionId || label !== this.windowLabel) return;
+                this.openDefaultSession(sessionId).catch((e) =>
+                    console.error('[CHAT] Failed to open the default session:', e)
+                );
+            });
+        }
+
+        /** Show `sessionId`, the launcher's session, as this window's chat. */
+        async openDefaultSession(sessionId) {
+            this.floatingSessionId = sessionId;
+            if (!this.sessions.some((s) => s.session_id === sessionId)) {
+                await this.loadSessions();
+            }
+            if (!this.sessions.some((s) => s.session_id === sessionId)) {
+                // Not on disk yet (nothing sent in it): list it, as init does
+                // for this window's own new session.
+                const now = new Date().toISOString();
+                this.sessions.unshift({
+                    session_id: sessionId,
+                    title: t('chat.session.current_title'),
+                    created_at: now,
+                    updated_at: now,
+                });
+            }
+            this.renderSessionList();
+            if (sessionId === this.activeSessionId) return;
+            await this.selectSession(sessionId, { emptyIfNew: true });
+            if (this.activeSessionId !== sessionId) return;
+            const session = this.sessions.find((s) => s.session_id === sessionId);
+            this.elements.chatHeaderTitle.textContent =
+                stripKageTags(session?.title) || t('chat.session.current_title');
         }
 
         cacheElements() {

@@ -71,7 +71,7 @@ You can also set a global hotkey for voice input and, on Windows, one for clipbo
 
 | Command | What it does |
 |---|---|
-| `>chats` | Open the chat sessions window |
+| `>chats` | Open the chat window on the conversation the launcher is in |
 | `>settings` | Open Settings |
 | `>store` | Open the Extension Store |
 | `>extensions` | Open Settings at the Extensions page |

@@ -83,6 +83,11 @@ pub const INLINE_ASSIST_ERROR: &str = "inline_assist_error";
 /// list to the front. Renamed from `show-sessions`.
 pub const SHOW_SESSIONS: &str = "show_sessions";
 
+/// Switch the main chat window to a session (the floating launcher's, when
+/// `>chats` opens it). Payload: `{ sessionId, label }`; `label` is the
+/// target window, which is the only one that acts on it.
+pub const CHAT_OPEN_SESSION: &str = "chat_open_session";
+
 // --- Context menu ---------------------------------------------------
 
 /// A menu for the context-menu window to render (`MenuRender` payload:
@@ -229,6 +234,7 @@ mod tests {
             INLINE_ASSIST_SHOW,
             INLINE_ASSIST_ERROR,
             SHOW_SESSIONS,
+            CHAT_OPEN_SESSION,
             CONTEXT_MENU_RENDER,
             CLIPBOARD_HISTORY_MODE,
             VOICE_MODE,

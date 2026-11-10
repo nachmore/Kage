@@ -83,6 +83,33 @@ pub async fn open_chat_window<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Re
     Ok(())
 }
 
+/// Ask the main chat window to switch to the floating launcher's session,
+/// the default session. Nothing happens if floating has none yet. The
+/// payload names its target window: an event sent to one window still
+/// reaches listeners registered globally in the others.
+pub fn show_floating_session_in_chat<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    use tauri::Emitter;
+    let Some(ui) = app.try_state::<crate::state::UiState>() else {
+        return;
+    };
+    let Some(session_id) = ui
+        .window_sessions
+        .lock_or_recover()
+        .get(window_labels::FLOATING)
+        .cloned()
+    else {
+        return;
+    };
+    let payload = serde_json::json!({ "sessionId": session_id, "label": window_labels::MAIN });
+    if let Err(e) = app.emit_to(
+        window_labels::MAIN,
+        crate::events::CHAT_OPEN_SESSION,
+        payload,
+    ) {
+        warn!("Failed to ask the chat window to open the default session: {e}");
+    }
+}
+
 /// Record this chat window as the most-recently-focused. Read by the
 /// single-instance handler and "show chat" affordances to decide which
 /// window to surface when the user has multiple open.

@@ -86,7 +86,8 @@ const LOCAL_COMMANDS = [
         icon: '💬',
         execute: async (invoke, appWindow) => {
             document.dispatchEvent(new CustomEvent('kage-clear'));
-            await invoke('open_chat_window');
+            // Open on the default session: the one the launcher is on.
+            await invoke('open_chat_window', { showDefaultSession: true });
             await appWindow.hide();
         },
     },

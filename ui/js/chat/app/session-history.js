@@ -18,8 +18,10 @@ export function createSessionHistoryMixin(dependencies) {
          *   even when it's already active (e.g. after the Other Agents view
          *   painted over the transcript). The ACP switch is skipped then —
          *   the backend is already on this session.
+         *   `emptyIfNew` shows an empty conversation instead of an error when
+         *   the session has nothing on disk yet (the launcher's fresh session).
          */
-        async selectSession(sessionId, { force = false } = {}) {
+        async selectSession(sessionId, { force = false, emptyIfNew = false } = {}) {
             const sameSession = sessionId === this.activeSessionId;
             if (sameSession && !force) return;
 
@@ -76,8 +78,13 @@ export function createSessionHistoryMixin(dependencies) {
                 rendered = this.displaySession(sessionData);
             } catch (error) {
                 if (isStale()) return;
-                console.error('Failed to load session files:', error);
-                this.showError(errLabel(t('chat.error.failed_load_session'), error));
+                if (emptyIfNew) {
+                    console.log('[CHAT] Session not on disk yet, showing it empty:', sessionId);
+                    this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.continue')}</div>`;
+                } else {
+                    console.error('Failed to load session files:', error);
+                    this.showError(errLabel(t('chat.error.failed_load_session'), error));
+                }
             }
 
             // Mid-stream switch-in: the session is already live in the agent

@@ -381,7 +381,7 @@ export const ResponseUiMethods = {
 
     async handleExpandClick() {
         try {
-            await this.invoke('open_chat_window');
+            await this.invoke('open_chat_window', { showDefaultSession: true });
             await this.appWindow.hide();
         } catch (error) {
             console.error('Error opening chat window:', error);

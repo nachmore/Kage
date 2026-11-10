@@ -29,9 +29,19 @@ pub async fn start_drag_window<R: tauri::Runtime>(
     implementation::start_drag_window(window).await
 }
 
+/// Show the chat window. With `show_default_session`, it then switches to
+/// the default session: the one the floating launcher is on (`>chats`, the
+/// launcher's expand button and the mascot double-click pass it).
 #[tauri::command]
-pub async fn open_chat_window<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), AppError> {
-    implementation::open_chat_window(app).await
+pub async fn open_chat_window<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    show_default_session: Option<bool>,
+) -> Result<(), AppError> {
+    implementation::open_chat_window(app.clone()).await?;
+    if show_default_session == Some(true) {
+        implementation::show_floating_session_in_chat(&app);
+    }
+    Ok(())
 }
 
 #[tauri::command]

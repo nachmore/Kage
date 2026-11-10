@@ -70,7 +70,7 @@ export const LifecycleInitMethods = {
         // Double-click ghost to open full chat window
         this.windowManager._onDoubleClick = async () => {
             try {
-                await this.invoke('open_chat_window');
+                await this.invoke('open_chat_window', { showDefaultSession: true });
                 await this.appWindow.hide();
             } catch (err) {
                 console.error('Failed to open chat window:', err);
