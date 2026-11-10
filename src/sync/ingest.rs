@@ -203,6 +203,11 @@ impl SyncEngine {
                 // Authentic, but not this file: ignore it.
                 continue;
             }
+            // The key epoch it writes with, for the epoch floor (§11.3).
+            if let Some(core) = self.core.as_mut() {
+                core.replica
+                    .tx(|tx| tx.set_meta(&head_epoch_key(dev), &epoch.to_string()))?;
+            }
             if head.min_reader > READER_VERSION {
                 self.note_device(dev, &head, row.as_ref(), false, "needs_update")?;
                 break;
@@ -216,10 +221,6 @@ impl SyncEngine {
             self.clock_check(dev, &head, now);
             let state = if head.retired { "retired" } else { "ok" };
             self.note_device(dev, &head, row.as_ref(), complete, state)?;
-            if let Some(core) = self.core.as_mut() {
-                core.replica
-                    .tx(|tx| tx.set_meta(&head_epoch_key(dev), &epoch.to_string()))?;
-            }
             break;
         }
         Ok(())
