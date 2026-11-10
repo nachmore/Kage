@@ -519,6 +519,14 @@ chip goes away on `done`. File names are shown in `<bdi>` with
 
   The log already has "Clear". It is on this machine only (§5.16).
 
+  The entry holds the extension's id only. The row names the extension
+  by its installed manifest name (`__MSG_*__` resolved, cleaned like the
+  display name in §5.10), else by the id; Settings asks for the list of
+  extensions only when the log holds a file read. An entry without a file
+  name (it looked like a secret) shows "a file (name not shown)". Sizes
+  are written as the host's error messages write them (`48.2 MB`), and
+  names sit in `<bdi>`.
+
 ### 4.6 No new setting
 
 There is no switch for this feature. Each read needs the user to pick the
@@ -541,6 +549,8 @@ All in `locales/en/messages.json`:
   `file_text.progress.cancel` ("Cancel")
 - `settings.tool_permissions.audit.summary.extension_file_read`,
   `settings.tool_permissions.audit.summary.extension_file_read_failed`,
+  `settings.tool_permissions.audit.summary.extension_file_read_unnamed`
+  ("a file (name not shown)", added in WP-FT7),
   `settings.tool_permissions.audit.filter.file_read`
 - `errors.file_text.declined`, `errors.file_text.no_window` (raised by the
   JS host, listed in §3.8)
@@ -2133,6 +2143,18 @@ host feature for the settings pool), `ui/js/settings/tool-permissions.js`
 tests)
 - Accept: rows and filter render for both outcomes; the pill shows with
   its tooltip; `tool-permissions.js` doesn't grow by more than 15 lines.
+- Done: `audit-file-reads.js` draws the rows and the filter option and
+  finds the extension names (§4.5); `tool-permissions.js` grew by 12
+  lines (the import, the option, the row and one call that loads the
+  names, so two delegate calls, not one). The filter's value is the
+  event name, `extension_file_read`, since the list filters on it.
+  `buildSandboxedSettingsModule` in `manager.js` adds `files.pick_text`
+  to what the settings pool offers (so the list in `settings/main.js`
+  stays as it is) and passes `displayName` and `displayIcon` through
+  `extensionDisplay`, so a name without a translation is the id, never
+  a raw token. One new key, `…summary.extension_file_read_unnamed`
+  (§4.7). Tests: `ui-tests/settings/audit-file-reads.test.js` and
+  `ui-tests/settings/file-text-settings.test.js`.
 
 **WP-FT8 Docs and release** (`docs/EXTENSIONS.md`, `docs/SECURITY_MODEL.md`,
 `docs/PRIVACY.md`, and the P1 format switch in
