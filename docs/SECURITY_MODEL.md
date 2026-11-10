@@ -616,11 +616,11 @@ The engine is `src/agent_calls/`, its commands and wiring
 - **What's recorded.** One audit entry per call that was sent
   (`extension_agent_call`: purpose, label unless it looks like a secret,
   the agent's name, outcome, sizes, duration, redactions) and one per
-  switch change (`extension_agent_access_changed`). Never prompt or reply
-  text. The entry is written when the call ends, so a call that Kage
-  crashed during has none: the same best-effort contract as the rest of
-  the audit log. The app log has one English line per call, with ids and
-  counts.
+  switch change or OK for a new agent (`extension_agent_access_changed`).
+  Never prompt or reply text. The entry is written when the call ends, so
+  a call that Kage crashed during has none: the same best-effort contract
+  as the rest of the audit log. The app log has one English line per
+  call, with ids and counts.
   Telemetry counts calls only. The last 5 prompts and replies stay in
   memory for **Show what was sent**, and are gone when Kage quits. The
   `/debug` flag logs every prompt, these included (`docs/DEBUG_MODE.md`).

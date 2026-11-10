@@ -951,3 +951,57 @@ fn another_extensions_call_ids_are_unknown() {
         .unwrap();
     assert_eq!(h.ext_call_status().unwrap()["waiting"], 0);
 }
+
+#[test]
+fn a_grant_without_background_ai_forgets_the_switch_and_the_ok() {
+    let _serial = serial();
+    let h = harness("ac3-regrant", Vec::new(), true);
+    assert_eq!(h.ext_call_status().unwrap()["access"], "on");
+    let commit = |granted: Value| {
+        invoke(
+            &h.settings,
+            "commit_extension_install",
+            json!({ "extensionId": h.ext, "granted": granted, "approvedVersion": "1.0.0" }),
+        )
+    };
+    // An update the user approved without Background AI. Its calls can't
+    // run, and Settings shows no Background AI panel to switch it off in.
+    commit(json!(["storage"])).expect("commit the grant");
+    assert_eq!(h.ext_call_status().unwrap()["available"], false);
+    // A later update asks for it again, and the user approves the
+    // permission at install.
+    commit(json!(["storage", "agent_background"])).expect("commit the grant");
+    let status = h.ext_call_status().unwrap();
+    assert_eq!(status["available"], true);
+    // Nothing is sent until the user turns it on and confirms the agent.
+    assert_eq!(status["access"], "off");
+    let refused = h.ext_call("agent_call_reserve", json!({ "purpose": "organize" }));
+    assert_eq!(err_key(&refused), "errors.agent_call.access_off");
+}
+
+#[test]
+fn a_shutdown_called_off_takes_calls_again() {
+    let _serial = serial();
+    if low_battery() {
+        return;
+    }
+    let h = harness(
+        "ac3-resume",
+        vec![Turn(vec![
+            Step::Chunks(vec!["Let me check.".into()]),
+            Step::ToolCall,
+            Step::WaitForCancel(WAIT),
+        ])],
+        true,
+    );
+    // The updater shuts down for an install that then fails, and Kage
+    // keeps running (`updater::install`, restore after a failed install).
+    kage::commands::agent_calls::shutdown_service(h.app.handle());
+    let refused = h.ext_call("agent_call_reserve", json!({ "purpose": "organize" }));
+    assert_eq!(err_key(&refused), "errors.agent_call.cancelled_shutdown");
+    kage::commands::agent_calls::resume_service(h.app.handle());
+    // Turns start again, and a tool the agent starts still stops the call.
+    let (_, result) = h.call(plain("Summarise."));
+    assert_eq!(err_key(&result), "errors.agent_call.tool_attempted");
+    assert_eq!(h.last_call_entry()["outcome"], "tool_attempted");
+}

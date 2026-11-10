@@ -142,6 +142,9 @@ fn restore_after_failed_install<R: tauri::Runtime>(app: &tauri::AppHandle<R>, te
     if let Some(procs) = app.try_state::<crate::state::ChildProcesses>() {
         procs.host_commands.resume(app);
     }
+    // Teardown shut extensions' background agent calls down (no new
+    // turns, every reservation refused); take them again.
+    crate::commands::agent_calls::resume_service(app);
     crate::commands::system::register_all_hotkeys(app);
     for label in &teardown.windows {
         if let Some(window) = app.get_webview_window(label) {

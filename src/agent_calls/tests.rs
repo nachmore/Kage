@@ -1820,17 +1820,75 @@ async fn turning_on_needs_the_current_agents_token() {
         .set_access(EXT, true, panel.consent_token.clone(), None)
         .unwrap();
     assert_eq!(h.svc.status(EXT).access, Access::On);
+    // The OK for the changed agent is audited; the switch didn't flip, so
+    // telemetry has nothing new.
+    assert_eq!(h.hooks.access.lock_or_recover().len(), 2);
+    assert!(h.hooks.access.lock_or_recover()[1].enabled);
+    assert_eq!(h.hooks.events("extension_agent_access_changed").len(), 1);
 
     // Off: consent goes, the allowance stays.
     h.svc.set_access(EXT, false, None, None).unwrap();
     let entry = h.config.lock_or_recover().extension_agent_access[EXT].clone();
     assert!(!entry.enabled && entry.consent.is_none());
     assert_eq!(entry.allowance, AgentAllowance::High);
-    assert_eq!(h.hooks.access.lock_or_recover().len(), 2);
+    assert_eq!(h.hooks.access.lock_or_recover().len(), 3);
     assert_eq!(
         h.hooks.events("extension_agent_access_changed")[1]["enabled"],
         0
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn each_ok_is_audited_with_the_agent_it_names() {
+    let h = harness();
+    // The switch is on, but the user's agent changed: the consent is stale.
+    {
+        let mut cfg = h.config.lock_or_recover();
+        let conn = &mut cfg.acp.connections[0];
+        conn.name = "Work agent".into();
+        conn.mode = AcpMode::Local {
+            spawn_command: "claude-agent-acp --profile work".into(),
+        };
+    }
+    let panel = h.svc.access_panel(EXT);
+    assert_eq!(panel.access, Access::ConsentStale);
+    assert!(panel.enabled);
+    // "Allow again" records the OK for the new agent.
+    h.svc
+        .set_access(EXT, true, panel.consent_token, None)
+        .unwrap();
+    assert_eq!(
+        h.hooks.access.lock_or_recover().clone(),
+        vec![AccessRecord {
+            extension_id: EXT.into(),
+            enabled: true,
+            agent: Some("Work agent (Claude Code)".into()),
+        }]
+    );
+    // Switched on with no OK recorded (a hand-edited config): the OK the
+    // user then gives is audited too.
+    h.config
+        .lock_or_recover()
+        .extension_agent_access
+        .get_mut(OTHER)
+        .unwrap()
+        .consent = None;
+    let panel = h.svc.access_panel(OTHER);
+    assert_eq!(panel.access, Access::NeedsConsent);
+    h.svc
+        .set_access(OTHER, true, panel.consent_token, None)
+        .unwrap();
+    assert_eq!(h.hooks.access.lock_or_recover().len(), 2);
+    assert_eq!(h.hooks.access.lock_or_recover()[1].extension_id, OTHER);
+    // Nothing new while it is on: an allowance change, or the same OK again.
+    h.svc
+        .set_access(EXT, true, None, Some(AgentAllowance::Low))
+        .unwrap();
+    let token = h.svc.access_panel(EXT).consent_token;
+    h.svc.set_access(EXT, true, token, None).unwrap();
+    assert_eq!(h.hooks.access.lock_or_recover().len(), 2);
+    // No flip of the switch, so no telemetry.
+    assert!(h.hooks.events("extension_agent_access_changed").is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1956,8 +2014,13 @@ async fn usage_survives_a_restart() {
     assert_eq!(status.machine_tag, tag, "the machine id is kept");
 }
 
+/// Tests that start the scheduler task: the free hooks reach the newest
+/// started service, so they run one at a time.
+static STARTED: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn start_runs_the_scheduler_and_the_free_hooks_reach_it() {
+    let _started = STARTED.lock().await;
     let h = harness();
     h.svc.start(h.hooks.clone());
     // No manual pump: the scheduler task gives the turn.
@@ -1988,6 +2051,82 @@ async fn start_runs_the_scheduler_and_the_free_hooks_reach_it() {
         .await
         .unwrap();
     *GLOBAL.lock_or_recover() = None;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_shutdown_called_off_takes_calls_again() {
+    // An update that fails to install after `graceful_shutdown` keeps Kage
+    // running. Background AI must work again, scheduler task included.
+    let _started = STARTED.lock().await;
+    let h = harness();
+    h.svc.start(h.hooks.clone());
+    let svc = h.svc.clone();
+    tokio::task::spawn_blocking(move || svc.shutdown())
+        .await
+        .unwrap();
+    let e = h
+        .svc
+        .reserve(EXT, reserve_args("organize", None, None))
+        .unwrap_err();
+    assert_eq!(key(&e), "cancelled_shutdown");
+
+    h.svc.resume();
+    // No manual pump: the scheduler task runs again and gives the turn.
+    let call_id = h.reserve(EXT);
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        h.svc.ready(EXT, id(&call_id)),
+    )
+    .await
+    .expect("the task gave the turn")
+    .unwrap();
+    h.backend.push(Script::Reply("done".into()));
+    let result = h
+        .svc
+        .send(EXT, send_args(&call_id, request("i", json!("d"))))
+        .await
+        .unwrap();
+    assert_eq!(result.text, "done");
+    assert_eq!(h.hooks.calls().len(), 1);
+    let svc = h.svc.clone();
+    tokio::task::spawn_blocking(move || svc.shutdown())
+        .await
+        .unwrap();
+    *GLOBAL.lock_or_recover() = None;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_second_shutdown_returns_at_once() {
+    // `graceful_shutdown` and then the app's exit event both shut the
+    // service down. The second must not wait again for a session the
+    // agent won't end.
+    let h = harness();
+    h.backend.push(Script::Stubborn);
+    let task = h.send_in_background(EXT, request("i", json!("d"))).await;
+    let svc = h.svc.clone();
+    tokio::task::spawn_blocking(move || svc.shutdown())
+        .await
+        .unwrap();
+    assert_eq!(key(&task.await.unwrap().unwrap_err()), "cancelled_shutdown");
+    let svc = h.svc.clone();
+    let started = std::time::Instant::now();
+    tokio::task::spawn_blocking(move || svc.shutdown())
+        .await
+        .unwrap();
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(limits::SHUTDOWN_WAIT_MS / 2),
+        "the second shutdown waited {:?}",
+        started.elapsed()
+    );
+    assert_eq!(h.hooks.calls().len(), 1, "one audit entry");
+    h.backend.release();
+    let backend = h.backend.clone();
+    let svc = h.svc.clone();
+    until(move || {
+        *svc.runners.0.lock_or_recover() == 0 && backend.runs.load(Ordering::SeqCst) == 1
+    })
+    .await;
+    assert_eq!(h.hooks.calls().len(), 1, "still one when the session ends");
 }
 
 // --- Logging ---------------------------------------------------------------------------------------
