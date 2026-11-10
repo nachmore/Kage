@@ -20,7 +20,8 @@ fn main() {
     println!("cargo:rerun-if-changed=locales/");
     println!("cargo:rerun-if-changed=pocket_tts/");
     println!("cargo:rerun-if-changed=Cargo.toml");
-    println!("cargo:rerun-if-changed=.aptabase-key");
+    // `.aptabase-key` is watched further down, and only when the env var
+    // doesn't already decide the key.
     println!("cargo:rerun-if-env-changed=APTABASE_KEY");
     println!("cargo:rerun-if-env-changed=KAGE_LOCAL_DEV_BUILD");
     // The sidecars are provisioned by this script (see provision_sidecar),
@@ -76,6 +77,14 @@ fn main() {
     // builds stay silent because running `cargo tauri dev` without a key
     // is a normal, intended workflow.
     let key_from_env = std::env::var("APTABASE_KEY").ok().filter(|s| !s.is_empty());
+    // A watched file that doesn't exist makes Cargo re-run this script, and
+    // rebuild the whole crate, on every build. CI sets the env var and has
+    // no file, so each of its cargo steps recompiled kage from scratch. The
+    // env var wins over the file, so while it's set the file can't change
+    // the key, and `rerun-if-env-changed` above covers the var itself.
+    if key_from_env.is_none() {
+        println!("cargo:rerun-if-changed=.aptabase-key");
+    }
     let key_from_file = std::fs::read_to_string(".aptabase-key")
         .ok()
         .map(|s| s.trim().to_string())

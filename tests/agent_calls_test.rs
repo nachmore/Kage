@@ -344,6 +344,21 @@ impl Harness {
             .to_string()
     }
 
+    /// [`Harness::prompt_session`] for a call from [`Harness::start_call`]:
+    /// when the prompt never arrives, the panic says what the send answered
+    /// instead, so a refused or failed call is told apart from a slow one.
+    fn prompt_session_of(&self, rx: &mpsc::Receiver<Result<Value, Value>>) -> String {
+        let arrived = self
+            .agent
+            .wait_until(WAIT, |a| !a.params_of("session/prompt").is_empty());
+        assert!(
+            arrived,
+            "the prompt reaches the agent (the send answered: {:?})",
+            rx.try_recv()
+        );
+        self.prompt_session()
+    }
+
     fn assert_cancelled(&self, session: &str) {
         assert!(
             self.agent
@@ -556,6 +571,13 @@ fn a_tool_the_agent_asks_for_is_refused_and_stops_the_call() {
     let (_, result) = h.call(plain("Read this."));
     assert_eq!(err_key(&result), "errors.agent_call.tool_attempted");
     let session = h.prompt_session();
+    // The answer and the stop go out together; the call can end before the
+    // agent has read the answer.
+    assert!(
+        h.agent
+            .wait_until(WAIT, |a| !a.permission_answers().is_empty()),
+        "the permission request is answered"
+    );
     assert_eq!(
         h.agent.permission_answers(),
         vec![json!({ "outcome": { "outcome": "selected", "optionId": "mock-reject" } })],
@@ -689,7 +711,7 @@ fn a_user_prompt_stops_the_running_call() {
         true,
     );
     let (_, rx) = h.start_call(plain("Organise."));
-    let session = h.prompt_session();
+    let session = h.prompt_session_of(&rx);
     let main = mock_window(&h.app, "main");
     invoke(
         &main,
@@ -725,7 +747,7 @@ fn turning_the_extension_off_or_uninstalling_it_ends_its_calls() {
     );
     // A running call ends when the extension is turned off…
     let (_, rx) = h.start_call(plain("Organise."));
-    let session = h.prompt_session();
+    let session = h.prompt_session_of(&rx);
     invoke(
         &h.settings,
         "set_extension_enabled",
@@ -843,7 +865,7 @@ fn stop_now_cancels_and_pauses_the_extension() {
         true,
     );
     let (_, rx) = h.start_call(plain("Organise."));
-    let session = h.prompt_session();
+    let session = h.prompt_session_of(&rx);
     h.host("stop_extension_agent_calls", json!({})).unwrap();
     let result = rx.recv_timeout(WAIT).expect("the send answers");
     assert_eq!(err_key(&result), "errors.agent_call.cancelled_by_user");
@@ -878,7 +900,7 @@ fn shutdown_cancels_the_call_and_cleans_up() {
         true,
     );
     let (_, rx) = h.start_call(plain("Organise."));
-    let session = h.prompt_session();
+    let session = h.prompt_session_of(&rx);
     kage::commands::system::graceful_shutdown(h.app.handle());
     let result = rx.recv_timeout(WAIT).expect("the send answers");
     assert_eq!(err_key(&result), "errors.agent_call.cancelled_shutdown");
