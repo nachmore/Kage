@@ -343,6 +343,25 @@ impl AcpClient {
             .cloned()
     }
 
+    /// Whether a turn is in flight on `session_id`: a `session/prompt` holds
+    /// its per-session lock (user turns, steering, titling, tool-result
+    /// follow-ups), or a user prompt is recorded and queued behind one.
+    /// Lets a window tell a real live turn from a stale "streaming" mark
+    /// left by notifications that weren't part of any turn.
+    pub fn is_turn_in_flight(&self, session_id: &str) -> bool {
+        if self
+            .in_flight_prompts
+            .lock_or_recover()
+            .contains_key(session_id)
+        {
+            return true;
+        }
+        // Read the lock without creating one: a session never prompted in
+        // this process has no lock and nothing in flight.
+        let lock = self.prompt_locks.lock_or_recover().get(session_id).cloned();
+        lock.is_some_and(|l| matches!(l.try_lock(), Err(std::sync::TryLockError::WouldBlock)))
+    }
+
     /// Drop the in-flight prompt record for `session_id`. Called from the
     /// send epilogues (complete or failed) — after that the turn is on disk
     /// (or dead) and the viewport reads it from there.
@@ -616,6 +635,28 @@ impl Drop for BackgroundPromptGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turn_in_flight_follows_the_prompt_lock_and_the_recorded_prompt() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        // Never prompted: no lock, nothing in flight (and none is created).
+        assert!(!client.is_turn_in_flight("s1"));
+        assert!(!client.prompt_locks.lock_or_recover().contains_key("s1"));
+        // A session/prompt holds the lock for its whole round-trip.
+        let lock = client.prompt_lock_for("s1");
+        {
+            let _held = lock.lock_or_recover();
+            assert!(client.is_turn_in_flight("s1"));
+        }
+        assert!(!client.is_turn_in_flight("s1"));
+        // A user prompt recorded but still queued behind another one.
+        client.set_in_flight_prompt("s1", "hello");
+        assert!(client.is_turn_in_flight("s1"));
+        client.clear_in_flight_prompt("s1");
+        assert!(!client.is_turn_in_flight("s1"));
+    }
 
     #[test]
     fn background_prompt_session_unmarked_by_default() {

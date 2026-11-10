@@ -87,6 +87,19 @@ export function createSessionHistoryMixin(dependencies) {
                 }
             }
 
+            // A "streaming" mark can outlive any turn: a chunk or tool update
+            // that wasn't part of one (e.g. around a session reload after an
+            // update) marks the session live and nothing ever completes it.
+            // Ask the backend before attaching, so the window doesn't sit on
+            // a typing indicator and a Stop button for a turn that isn't there.
+            if (this.streamRegistry.isStreaming(sessionId) && !(await this._turnInFlight(sessionId))) {
+                if (isStale()) return;
+                console.warn('[CHAT] No turn in flight on', sessionId, '- clearing a stale streaming mark');
+                this.streamRegistry.fail(sessionId);
+                this.renderSessionList();
+            }
+            if (isStale()) return;
+
             // Mid-stream switch-in: the session is already live in the agent
             // process — do NOT `switch_acp_session` (its session/load would
             // both be redundant and drop live chunks while the replay guard
@@ -249,6 +262,20 @@ export function createSessionHistoryMixin(dependencies) {
                 this.showTypingIndicator();
             }
             this.scrollToBottom(true);
+        }
+
+        /**
+         * Whether the backend has a turn running on `sessionId`. When it
+         * can't say (an older backend, or the call failed), assume it does:
+         * that keeps today's behaviour of attaching to the stream.
+         */
+        async _turnInFlight(sessionId) {
+            try {
+                const peek = await this.invoke('get_session_stream_snapshot', { sessionId });
+                return peek?.inFlight !== false;
+            } catch {
+                return true;
+            }
         }
 
         /** Bump and return the selection token (see selectSession). */

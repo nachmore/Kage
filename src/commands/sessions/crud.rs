@@ -846,7 +846,8 @@ pub async fn switch_acp_session<R: tauri::Runtime>(
 /// live chunk stream continues from that point. `text` is empty when
 /// nothing is in flight (or the turn just completed and the bucket was
 /// evicted); `prompt` is null for turns not started by a user prompt
-/// (steering, titling).
+/// (steering, titling). `inFlight` says whether a turn is running at all,
+/// so a window can drop a "streaming" mark no turn backs.
 #[tauri::command]
 pub async fn get_session_stream_snapshot(
     session_id: String,
@@ -855,6 +856,7 @@ pub async fn get_session_stream_snapshot(
     Ok(serde_json::json!({
         "prompt": acp.client.peek_in_flight_prompt(&session_id),
         "text": acp.client.peek_session_accumulator(&session_id),
+        "inFlight": acp.client.is_turn_in_flight(&session_id),
     }))
 }
 
