@@ -28,6 +28,7 @@ use kage::state::{build_managed_state, FeatureServices, ManagedState};
 use mock_acp_server::{ScriptedAgent, Step, Turn};
 use serde_json::{json, Value};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tauri::test::{mock_builder, MockRuntime};
@@ -63,11 +64,22 @@ fn low_battery() -> bool {
 
 const WAIT: Duration = Duration::from_secs(15);
 
+/// Which harness is current. The disconnect signal and the strict-session
+/// registry are process-wide, and the newest service owns the hooks, so an
+/// earlier test's client, which can notice its agent closing after that
+/// test ended, would end the current test's call. Only the current
+/// harness's client is routed.
+static HARNESS: AtomicUsize = AtomicUsize::new(0);
+
 /// Route what the agent sends, as the production handler does for a
 /// background call (see the module docs).
 fn route_notifications(client: &Arc<AcpClient>) {
     let weak = Arc::downgrade(client);
+    let mine = HARNESS.fetch_add(1, Ordering::SeqCst) + 1;
     client.set_notification_handler(move |msg: Value| {
+        if HARNESS.load(Ordering::SeqCst) != mine {
+            return;
+        }
         let Some(client) = weak.upgrade() else {
             return;
         };

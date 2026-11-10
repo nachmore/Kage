@@ -19,9 +19,15 @@ fn set_theme(c: &mut SimComputer, theme: &str) {
     c.edit(move |cfg| cfg.ui.theme = theme);
 }
 
+/// `p` with `/` between its parts on every OS, for substring checks: on
+/// Windows the engine joins the parts with `\`.
+fn slashed(p: &Path) -> String {
+    p.to_string_lossy().replace('\\', "/")
+}
+
 /// Files of `dev`'s directory that `c` doesn't have yet.
 fn new_files_of(c: &SimComputer, dev: &str, p: &Path) -> bool {
-    p.to_string_lossy().contains(&format!("/devices/{dev}/")) && c.fs.get(p).is_none()
+    slashed(p).contains(&format!("/devices/{dev}/")) && c.fs.get(p).is_none()
 }
 
 /// I12: files from A arrive half written first. Nothing is applied from
@@ -35,7 +41,7 @@ fn i12_partial_files_wait() {
     let b_view = b.fs.clone();
     cloud.step_with(&mut [&mut a, &mut b], |who, p| {
         if who == "Work PC"
-            && p.to_string_lossy().contains(&format!("/devices/{a_dev}/"))
+            && slashed(p).contains(&format!("/devices/{a_dev}/"))
             && b_view.get(p).is_none()
         {
             Deliver::Truncated
@@ -144,7 +150,7 @@ fn i28_tampering_is_refused() {
             continue;
         }
         let mut bytes = bytes;
-        if p.to_string_lossy().contains("/shards/") {
+        if slashed(&p).contains("/shards/") {
             let i = bytes.len() / 2;
             bytes[i] ^= 0x40;
         }
@@ -179,7 +185,7 @@ fn i28_tampering_is_refused() {
 }
 
 fn new_files_of_view(view: &kage::sync::testing::FaultyFs, dev: &str, p: &Path) -> bool {
-    p.to_string_lossy().contains(&format!("/devices/{dev}/")) && view.get(p).is_none()
+    slashed(p).contains(&format!("/devices/{dev}/")) && view.get(p).is_none()
 }
 
 /// A full disk and failing writes keep the edits; the publish catches up.
