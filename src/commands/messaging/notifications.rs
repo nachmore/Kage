@@ -479,8 +479,34 @@ pub fn setup_notification_handler(
             return;
         }
 
+        // The agent asking Kage itself to read or write a file or run a
+        // terminal is a tool, too. On a strict session (a background agent
+        // call) that stops the call, as a `tool_call` does.
+        if is_client_tool_request(method) {
+            if let Some(sid) = notification
+                .get("params")
+                .and_then(|p| p.get("sessionId"))
+                .and_then(|s| s.as_str())
+                .filter(|sid| crate::ephemeral_session::is_strict(sid))
+            {
+                info!(
+                    "Agent sent {} on strict session {}: a tool attempt",
+                    method, sid
+                );
+                crate::ephemeral_session::note_tool_attempt(&client_for_handler, sid);
+                return;
+            }
+        }
+
         info!("Unhandled notification: {}", method);
     });
+}
+
+/// ACP's client-side tools: the agent asks Kage to read or write a file
+/// (`fs/*`) or to run a terminal (`terminal/*`). Kage advertises them in
+/// `initialize` but runs none of them.
+fn is_client_tool_request(method: &str) -> bool {
+    method.starts_with("fs/") || method.starts_with("terminal/")
 }
 
 /// How often the chunk-flush thread wakes up to drain the pending-chunks
@@ -1091,7 +1117,7 @@ fn handle_permission_notification(
 
 #[cfg(test)]
 mod strict_permission_tests {
-    use super::{reject_once_option, route_permission, PermissionRoute};
+    use super::{is_client_tool_request, reject_once_option, route_permission, PermissionRoute};
     use crate::config::{
         GrantType, PolicyKind, PolicyRowChange, ToolPermissionsConfig, ToolPolicy, ToolRequest,
     };
@@ -1213,6 +1239,27 @@ mod strict_permission_tests {
             ] } }),
         ] {
             assert_eq!(reject_once_option(&n), "reject_once", "{n}");
+        }
+    }
+
+    #[test]
+    fn asking_kage_for_a_file_or_a_terminal_is_a_tool() {
+        for method in [
+            "fs/read_text_file",
+            "fs/write_text_file",
+            "terminal/create",
+            "terminal/output",
+        ] {
+            assert!(is_client_tool_request(method), "{method}");
+        }
+        for method in [
+            "session/update",
+            "session/request_permission",
+            "_kage/agent_disconnected",
+            "fsx/read",
+            "",
+        ] {
+            assert!(!is_client_tool_request(method), "{method}");
         }
     }
 }

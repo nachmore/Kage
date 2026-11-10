@@ -86,6 +86,11 @@ Gates 3 and 4 are set together: turning the host switch on always shows
 the consent dialog. If the active agent connection changes later, gate 4
 fails (`consent_stale`) until the user confirms again.
 
+As built: a grant without `agent_background` (an update the user approved
+without it) also forgets gates 3 and 4 (§5.13). Settings shows no panel
+without the capability, so the user couldn't switch it off meanwhile, and
+a later grant that adds it back asks again.
+
 ## 3. API surface
 
 ### 3.1 Capability
@@ -299,6 +304,12 @@ only.
 (§5.8). `set_extension_agent_access` recomputes it. If it differs, the
 agent changed while the dialog was open, and the call fails with
 `agent_changed`.
+
+As built: `set_extension_agent_access` writes the audit entry for every
+OK the user gives, with the agent it names, and for every switch-off. That
+includes **Allow again** after an agent change, where the switch was
+already on. An allowance change writes none. Telemetry
+(`extension_agent_access_changed`) counts flips of the switch only.
 
 ### 3.7 Errors and i18n keys
 
@@ -736,7 +747,10 @@ servers and built-in tools. So "no tool use" is enforced in three layers:
 3. **Stop.** Some agents can be set to run tools without asking the
    client. When the notification handler sees a `tool_call` or
    `tool_call_update` for a strict session, it calls `note_tool_attempt`
-   too, and forwards nothing to any window.
+   too, and forwards nothing to any window. As built, so does an
+   `fs/*` or `terminal/*` request the agent sends Kage for a strict
+   session: those are tools too. Kage advertises them in `initialize` but
+   runs none of them.
 
    `ephemeral_session::note_tool_attempt` counts one attempt per session
    (a `tool_call` and the permission request after it are one attempt).
@@ -798,6 +812,12 @@ provider for more when hidden ids took places on the page), and so does
 `list_sessions`' scanner (`ephemeral_session::is_hidden`), so no Kage
 session list ever shows them. Existing ephemeral callers (script
 generation, internal-site drafting) get this for free.
+
+As built: the ids alone aren't enough. An id drops off the list after 30
+days, or after 1,000 ids (five days at the global cap), and some agents
+keep their history for good. So the providers also skip a session whose
+working folder (`container`) is the scratch folder, or whose title starts
+with the framing's first line (`agent_calls::prompt::HEADER`).
 
 **Reply cap while streaming.** A new `AcpClient::accumulator_len(id) ->
 usize` returns the byte length of the session's reply bucket. The
@@ -906,6 +926,12 @@ up to 2 s for its session cleanup guard to drop (a `Condvar`), writes the
 audit entry and saves the usage file. Only then does shutdown disconnect
 the agent. The updater's `on_download_finish` path goes through the same
 `graceful_shutdown`.
+
+As built: the app's `RunEvent::Exit` handler calls it too, for exits that
+skip `graceful_shutdown`; a second call returns at once. An update that
+fails to install after `graceful_shutdown` leaves Kage running, so
+`restore_after_failed_install` calls `resume_service`: calls are taken
+again, the scheduler task restarts, and the strict-session hooks are back.
 
 ### 5.8 Consent binding
 
@@ -1043,7 +1069,9 @@ pub struct AgentConsent {
 // Config: #[serde(default)] pub extension_agent_access: HashMap<String, ExtensionAgentAccess>
 ```
 
-`uninstall_extension` and `remove_extension_grant` delete the entry.
+`uninstall_extension` and `remove_extension_grant` delete the entry, and
+so does `commit_extension_install` with a grant that lacks
+`agent_background` (as built, §2).
 `set_extension_enabled(false)` keeps it but cancels calls.
 
 **Backend-owned.** Only `set_extension_agent_access`, uninstall and grant

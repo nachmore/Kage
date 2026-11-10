@@ -73,10 +73,7 @@ pub fn start_service<R: Runtime>(app: &AppHandle<R>) {
     };
     let svc = features.agent_calls.clone();
     svc.start(Arc::new(AppHooks::new(app.clone())));
-    ephemeral_session::set_strict_hooks(Some(StrictHooks {
-        tool_attempt: crate::agent_calls::note_tool_attempt,
-        disconnected: crate::agent_calls::on_disconnect,
-    }));
+    ephemeral_session::set_strict_hooks(Some(strict_hooks()));
     let weak = Arc::downgrade(&svc);
     app.listen_any(crate::events::CONFIG_UPDATED, move |_| {
         if let Some(svc) = weak.upgrade() {
@@ -94,6 +91,24 @@ pub fn shutdown_service<R: Runtime>(app: &AppHandle<R>) {
         features.agent_calls.shutdown();
     }
     ephemeral_session::set_strict_hooks(None);
+}
+
+/// Kage didn't quit after [`shutdown_service`] (an update that failed to
+/// install): take calls again, with the scheduler and the strict-session
+/// hooks back.
+pub fn resume_service<R: Runtime>(app: &AppHandle<R>) {
+    let Some(features) = app.try_state::<FeatureServices>() else {
+        return;
+    };
+    features.agent_calls.resume();
+    ephemeral_session::set_strict_hooks(Some(strict_hooks()));
+}
+
+fn strict_hooks() -> StrictHooks {
+    StrictHooks {
+        tool_attempt: crate::agent_calls::note_tool_attempt,
+        disconnected: crate::agent_calls::on_disconnect,
+    }
 }
 
 // --- Hooks ---------------------------------------------------------------------------

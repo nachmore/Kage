@@ -32,6 +32,10 @@ pub fn run(
             if let Some(procs) = handler.try_state::<crate::state::ChildProcesses>() {
                 procs.host_commands.stop();
             }
+            // A background agent call in flight is cancelled, its session
+            // deleted and its audit entry written, before the agent goes
+            // (a no-op after graceful_shutdown already did it).
+            commands::agent_calls::shutdown_service(handler);
             if let Some(acp) = handler.try_state::<crate::state::AcpHandles>() {
                 acp.client.disconnect();
             }

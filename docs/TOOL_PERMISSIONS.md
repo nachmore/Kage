@@ -105,9 +105,9 @@ whatever the user's policies say:
 
 The audit log also records each call itself (`extension_agent_call`:
 the extension, purpose, label, agent, outcome and sizes, never the text)
-and each time the user turns background AI on or off for an extension
-(`extension_agent_access_changed`). The audit viewer's **Background AI**
-filter shows only these.
+and each time the user turns background AI on or off for an extension,
+or allows it again for a new agent (`extension_agent_access_changed`).
+The audit viewer's **Background AI** filter shows only these.
 
 ## Approvals and the agent's own sandbox
 

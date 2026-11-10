@@ -191,30 +191,47 @@ impl AgentSessionProvider for HideThrowaway {
     }
 }
 
-/// The newest `limit` sessions of `provider` whose id isn't in `hidden`.
+/// The newest `limit` sessions of `provider` that aren't Kage's throwaway
+/// sessions: an id in `hidden`, or a background agent call
+/// ([`is_background_call`]).
 ///
-/// Asks for `limit` first. When hidden sessions took some of those places
-/// and the provider had more, asks again for more (at least twice as many,
-/// at most `limit + hidden.len()`). Usually no hidden session is among the
+/// Asks for `limit` first. When throwaway sessions took some of those
+/// places and the provider had more, asks again for more (at least twice
+/// as many). While only hidden ids were skipped, that is at most
+/// `limit + hidden.len()`. Usually no throwaway session is among the
 /// newest, so one call is enough.
 fn list_visible(
     provider: &dyn AgentSessionProvider,
     limit: usize,
     hidden: &std::collections::HashSet<String>,
 ) -> Result<Vec<AgentSession>, AppError> {
-    if hidden.is_empty() {
-        return provider.list_sessions(limit);
-    }
-    let most = limit.saturating_add(hidden.len());
+    let scratch = crate::ephemeral_session::scratch_dir();
     let mut ask = limit;
     loop {
         let listed = provider.list_sessions(ask)?;
         let got = listed.len();
+        let mut background = 0usize;
         let mut visible: Vec<AgentSession> = listed
             .into_iter()
-            .filter(|s| !hidden.contains(&s.session_id))
+            .filter(|s| {
+                if hidden.contains(&s.session_id) {
+                    return false;
+                }
+                if is_background_call(s, scratch.as_deref()) {
+                    background += 1;
+                    return false;
+                }
+                true
+            })
             .collect();
         let skipped = got - visible.len();
+        // Hidden ids take at most `hidden.len()` places. Background calls
+        // the bounded hidden list has dropped can take any number.
+        let most = if background > 0 {
+            usize::MAX
+        } else {
+            limit.saturating_add(hidden.len())
+        };
         // At least double, so even a page of hidden sessions takes only a
         // few calls.
         let next = limit
@@ -227,6 +244,36 @@ fn list_visible(
         }
         ask = next;
     }
+}
+
+/// One of Kage's background agent calls, by what the agent's own history
+/// keeps of it: it ran in Kage's scratch folder (`scratch`), or its title
+/// is the framed prompt's first line. The hidden ids alone aren't enough:
+/// the list keeps 1,000 ids for 30 days, and some agents keep their
+/// history for good (docs/design/EXTENSION_AGENT_CALLS.md §5.5).
+fn is_background_call(session: &AgentSession, scratch: Option<&std::path::Path>) -> bool {
+    session
+        .title
+        .trim_start()
+        .starts_with(crate::agent_calls::prompt::HEADER)
+        || session
+            .container
+            .as_deref()
+            .zip(scratch)
+            .is_some_and(|(container, dir)| same_folder(container, dir))
+}
+
+/// Whether `path` names `dir`, whatever the separators, a trailing one, or
+/// ASCII case (folders are case-insensitive by default on Windows and
+/// macOS).
+fn same_folder(path: &str, dir: &std::path::Path) -> bool {
+    let norm = |s: &str| {
+        s.replace('\\', "/")
+            .trim_end_matches('/')
+            .to_ascii_lowercase()
+    };
+    let path = norm(path);
+    !path.is_empty() && path == norm(&dir.to_string_lossy())
 }
 
 /// A user message's own text: without the extension tool steering Kage puts
@@ -415,6 +462,68 @@ mod tests {
         let got = list_visible(&p, 1, &hidden(&["h1", "h2", "h3"])).unwrap();
         assert_eq!(ids(&got), ["a"]);
         assert!(p.asked().iter().all(|&n| n <= 4), "{:?}", p.asked());
+    }
+
+    /// A provider that lists these sessions, newest first.
+    struct ListedProvider(Vec<AgentSession>);
+
+    impl AgentSessionProvider for ListedProvider {
+        fn id(&self) -> &'static str {
+            "listed"
+        }
+        fn label(&self) -> &'static str {
+            "Listed"
+        }
+        fn is_available(&self) -> bool {
+            true
+        }
+        fn list_sessions(&self, limit: usize) -> Result<Vec<AgentSession>, AppError> {
+            Ok(self.0.iter().take(limit).cloned().collect())
+        }
+        fn load_session(&self, _: &SessionLocator) -> Result<Vec<AgentMessage>, AppError> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn session(id: &str, container: Option<&str>, title: &str) -> AgentSession {
+        AgentSession {
+            provider_id: "listed".into(),
+            session_id: id.into(),
+            title: title.into(),
+            updated_at: String::new(),
+            message_count: 1,
+            container: container.map(str::to_string),
+            locator: serde_json::Value::Null,
+            extras: serde_json::Value::Null,
+        }
+    }
+
+    #[test]
+    fn listing_skips_background_calls_the_hidden_list_has_dropped() {
+        // An agent that keeps its own history keeps Kage's background
+        // calls for good, but their ids leave the hidden list after 30
+        // days or 1,000 ids. They ran in the scratch folder, and their
+        // title is the framed prompt's first line.
+        let dir = crate::ephemeral_session::scratch_dir()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let header = crate::agent_calls::prompt::HEADER;
+        let p = ListedProvider(vec![
+            session("bg1", Some(&dir), "Untitled"),
+            session("a", Some("/work/project"), "Plan the week"),
+            session("bg2", Some(&format!("{}/", dir.to_uppercase())), ""),
+            session("bg3", None, &format!("{header} Follow these rules")),
+            session("b", None, "Kage background notes"),
+            session("bg4", Some(&dir.replace('/', "\\")), "Untitled"),
+            session("c", Some(&format!("{dir}-other")), "Next steps"),
+            session("d", None, "Later"),
+        ]);
+        let got = list_visible(&p, 3, &hidden(&[])).unwrap();
+        assert_eq!(ids(&got), ["a", "b", "c"]);
+        // Their places don't cut the page short, with or without hidden ids.
+        let got = list_visible(&p, 4, &hidden(&["a"])).unwrap();
+        assert_eq!(ids(&got), ["b", "c", "d"]);
     }
 
     #[test]

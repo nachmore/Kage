@@ -231,6 +231,17 @@ pub async fn commit_extension_install<R: tauri::Runtime>(
     config
         .extension_grants
         .insert(extension_id.clone(), record.clone());
+    // Background AI's switch and consent go with the capability. Settings
+    // shows no Background AI panel without it, so the user couldn't turn
+    // the switch off meanwhile, and a later grant that adds it back must
+    // ask again (EXTENSION_AGENT_CALLS §2).
+    if !record
+        .granted
+        .iter()
+        .any(|c| c == crate::agent_calls::CAPABILITY)
+    {
+        config.extension_agent_access.remove(&extension_id);
+    }
     let states = config.extension_states.clone();
     config
         .save()

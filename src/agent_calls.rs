@@ -47,7 +47,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 
 use crate::config::{AgentAllowance, AgentConsent, Config, ExtensionAgentAccess};
@@ -569,6 +569,8 @@ pub struct AgentCallService {
     runners: (Mutex<usize>, Condvar),
     /// Serialises usage-file writes, oldest snapshot first.
     persist_lock: Mutex<()>,
+    /// Bumped for each scheduler task started; an older task stops.
+    scheduler_generation: AtomicU64,
 }
 
 fn ms_between(a: DateTime<Utc>, b: DateTime<Utc>) -> u64 {
@@ -612,6 +614,7 @@ impl AgentCallService {
             wake: tokio::sync::Notify::new(),
             runners: (Mutex::new(0), Condvar::new()),
             persist_lock: Mutex::new(()),
+            scheduler_generation: AtomicU64::new(0),
         }
     }
 
@@ -621,12 +624,37 @@ impl AgentCallService {
     pub fn start(self: &Arc<Self>, hooks: Arc<dyn AgentCallHooks>) {
         self.set_hooks(hooks);
         *GLOBAL.lock_or_recover() = Some(Arc::downgrade(self));
+        self.spawn_scheduler();
+    }
+
+    /// Kage didn't quit after [`shutdown`](Self::shutdown) after all (an
+    /// update that failed to install): take calls again and restart the
+    /// scheduler task. A no-op unless the service was shut down.
+    pub fn resume(self: &Arc<Self>) {
+        {
+            let mut st = self.state.lock_or_recover();
+            if !st.shutting_down {
+                return;
+            }
+            st.shutting_down = false;
+        }
+        info_line("Background AI resumed: Kage is not quitting after all".to_string());
+        self.spawn_scheduler();
+    }
+
+    /// Start the scheduler task. A task started earlier stops at its next
+    /// wake, so only the newest one runs.
+    fn spawn_scheduler(self: &Arc<Self>) {
+        let generation = self.scheduler_generation.fetch_add(1, Ordering::SeqCst) + 1;
         let weak = Arc::downgrade(self);
         tauri::async_runtime::spawn(async move {
             loop {
                 let Some(svc) = weak.upgrade() else {
                     break;
                 };
+                if svc.scheduler_generation.load(Ordering::SeqCst) != generation {
+                    break;
+                }
                 if svc.state.lock_or_recover().shutting_down {
                     break;
                 }
@@ -1582,11 +1610,16 @@ impl AgentCallService {
                 &[("extension", &g.name)],
             ));
         }
-        let (was_on, label) = {
+        let (was_on, was_allowed, label) = {
             let mut cfg = self.config.lock_or_recover();
             let active = cfg.acp.active_connection().cloned();
             let before = cfg.extension_agent_access.get(extension_id).cloned();
             let was_on = before.as_ref().is_some_and(|e| e.enabled);
+            // Calls could run: on, with an OK for the agent active now.
+            let was_allowed = consent::access_state(
+                before.as_ref(),
+                active.as_ref().map(consent::fingerprint).as_deref(),
+            ) == Access::On;
             let mut entry = before.clone().unwrap_or_default();
             let label = active.as_ref().map(consent::agent_label);
             if enabled {
@@ -1647,24 +1680,31 @@ impl AgentCallService {
                     return Err(AppError::internal(format!("Failed to save config: {e}")));
                 }
             }
-            (was_on, label)
+            (was_on, was_allowed, label)
         };
-        if was_on != enabled {
-            let hooks = self.hooks();
+        // The audit log keeps every OK the user gives, with the agent it
+        // names: also one given while the switch was already on (the
+        // agent changed, or no OK was recorded). And every switch-off.
+        // Telemetry counts flips of the switch only.
+        let audited = if enabled { !was_allowed } else { was_on };
+        let hooks = self.hooks();
+        if audited {
             hooks.audit_access(&AccessRecord {
                 extension_id: extension_id.to_string(),
                 enabled,
                 agent: label,
             });
-            hooks.telemetry(
-                "extension_agent_access_changed",
-                serde_json::json!({ "extension_id": extension_id, "enabled": u8::from(enabled) }),
-            );
             info_line(format!(
                 "Background AI turned {} for extension {}",
                 if enabled { "on" } else { "off" },
                 extension_id
             ));
+        }
+        if was_on != enabled {
+            hooks.telemetry(
+                "extension_agent_access_changed",
+                serde_json::json!({ "extension_id": extension_id, "enabled": u8::from(enabled) }),
+            );
         }
         if !enabled {
             self.on_extension_changed(extension_id);
@@ -1843,10 +1883,14 @@ impl AgentCallService {
 
     /// Kage is quitting: no new turns; the running call is cancelled and
     /// gets up to 2 s to delete its session; its audit entry is written and
-    /// the usage file saved. Call before disconnecting the agent.
+    /// the usage file saved. Call before disconnecting the agent. Every
+    /// exit path calls it, so a second call returns at once.
     pub fn shutdown(&self) {
         let running = {
             let mut st = self.state.lock_or_recover();
+            if st.shutting_down {
+                return;
+            }
             st.shutting_down = true;
             let e = call_error(ErrorKind::Cancelled, "cancelled_shutdown", &[]);
             self.end_matching(&mut st, |_| true, &e)
