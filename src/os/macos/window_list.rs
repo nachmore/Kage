@@ -492,6 +492,32 @@ pub fn get_window_icons(handles: &[u64]) -> std::collections::HashMap<u64, Strin
     result
 }
 
+/// The icon of a running app whose name (as the activity tracker records
+/// it: `localizedName`) matches `name`, ignoring case. Caches it under that
+/// name. `None` if no running app has that name or it has no bundle.
+pub fn app_icon_by_name(name: &str) -> Option<String> {
+    use objc2::rc::autoreleasepool;
+    use objc2_app_kit::NSWorkspace;
+
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let path = autoreleasepool(|_pool| {
+        let apps = NSWorkspace::sharedWorkspace().runningApplications();
+        apps.iter().find_map(|app| {
+            let app_name = app.localizedName()?.to_string();
+            if !app_name.trim().eq_ignore_ascii_case(name) {
+                return None;
+            }
+            Some(app.bundleURL()?.path()?.to_string())
+        })
+    })?;
+    let icon = crate::os::icon::extract_icon_base64_cached(&path)?;
+    crate::os::icon::register_process_name_icon(name, &icon);
+    Some(icon)
+}
+
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {
     // Use NSRunningApplication to activate by PID — fast, no Accessibility TCC.
     use objc2::rc::autoreleasepool;
@@ -937,5 +963,25 @@ mod tests {
     fn app_only_handle_is_the_bare_pid() {
         assert_eq!(pack_handle(4321, 0), 4321);
         assert_eq!(unpack_handle(4321), (4321, 0));
+    }
+}
+
+#[cfg(test)]
+mod app_icon_by_name_tests {
+    use super::app_icon_by_name;
+
+    // Needs a logged-in GUI session (Finder running), so it's opt-in:
+    // `cargo test --lib app_icon_by_name -- --ignored`.
+    #[test]
+    #[ignore]
+    fn finds_a_running_app_by_its_name_in_any_case() {
+        let icon = app_icon_by_name("finder").expect("Finder is running");
+        assert!(
+            icon.starts_with("data:image/"),
+            "{}",
+            &icon[..icon.len().min(40)]
+        );
+        assert_eq!(app_icon_by_name("no such app, really"), None);
+        assert_eq!(app_icon_by_name("  "), None);
     }
 }

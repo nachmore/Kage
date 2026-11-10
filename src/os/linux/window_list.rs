@@ -153,6 +153,11 @@ fn get_process_name_linux(pid: u32) -> String {
         .unwrap_or_default()
 }
 
+/// No by-name lookup beyond the window-enumeration cache on this platform.
+pub fn app_icon_by_name(_name: &str) -> Option<String> {
+    None
+}
+
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {
     // Try wmctrl first — -ia activates and restores minimized windows
     let wmctrl_ok = Command::new("wmctrl")

@@ -85,6 +85,16 @@ impl AppLauncher {
             .then(|| (app.name.clone(), app.path.clone()))
     }
 
+    /// The scanned icon of the app with exactly this display name
+    /// (case-insensitive), if it has one.
+    pub fn icon_by_name(&self, name: &str) -> Option<String> {
+        let app = self.app_registry.get(&name.trim().to_lowercase())?;
+        if !app.name.trim().eq_ignore_ascii_case(name.trim()) {
+            return None;
+        }
+        app.icon_base64.clone().filter(|i| !i.is_empty())
+    }
+
     /// Drop the app at `path` right away (it was just moved to the Trash),
     /// so it stops showing before the install watcher's rescan lands.
     pub fn remove_app_at(&mut self, path: &std::path::Path) {
@@ -219,6 +229,26 @@ mod tests {
         );
         assert_eq!(l.get_by_name("Slac"), None);
         assert_eq!(l.get_by_name(""), None);
+    }
+
+    #[test]
+    fn icon_by_name_is_exact_and_skips_apps_without_an_icon() {
+        let mut l = launcher_with(&[
+            ("Google Chrome", "/Applications/Google Chrome.app"),
+            ("Notes", "/System/Applications/Notes.app"),
+        ]);
+        let mut registry = std::mem::take(&mut l.app_registry);
+        registry.get_mut("google chrome").unwrap().icon_base64 =
+            Some("data:image/png;base64,AA".into());
+        registry.get_mut("notes").unwrap().icon_base64 = Some(String::new());
+        l.apply_registry(registry);
+        assert_eq!(
+            l.icon_by_name("google chrome").as_deref(),
+            Some("data:image/png;base64,AA")
+        );
+        assert_eq!(l.icon_by_name("Google"), None);
+        assert_eq!(l.icon_by_name("Notes"), None);
+        assert_eq!(l.icon_by_name(""), None);
     }
 
     #[test]

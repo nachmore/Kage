@@ -42,7 +42,8 @@ pub fn focus_window(handle: u64) -> Result<(), String> {
     crate::os::platform::window_list::focus_window_impl(handle)
 }
 
-/// Look up a cached app icon by process name (e.g. "winword", "chrome").
+/// Look up an app icon by process name (e.g. "winword", "chrome", or on
+/// macOS the app's name, "Google Chrome").
 /// Returns the base64 data URI if found in the cache populated by an
 /// earlier `list_windows()` (Windows) or `get_window_icons()` call. On
 /// Windows, an empty cache is primed by enumerating windows once — covers
@@ -57,7 +58,9 @@ pub fn get_app_icon(process_name: &str) -> Option<String> {
         let _ = list_windows();
         return crate::os::icon::get_icon_by_process_name(process_name);
     }
-    None
+    // macOS: nothing fills the by-name cache unless the window switcher ran,
+    // so ask the running apps for one with this name.
+    crate::os::platform::window_list::app_icon_by_name(process_name)
 }
 
 /// Get the foreground window's title and process name.

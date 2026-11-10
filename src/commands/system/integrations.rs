@@ -645,8 +645,30 @@ pub async fn is_activity_tracker_running(
 }
 
 #[tauri::command]
-pub async fn get_app_icon(process_name: String) -> Result<Option<String>, AppError> {
-    Ok(crate::os::get_app_icon(&process_name))
+pub async fn get_app_icon(
+    process_name: String,
+    features: State<'_, FeatureServices>,
+) -> Result<Option<String>, AppError> {
+    if let Some(icon) = os::icon::get_icon_by_process_name(&process_name) {
+        return Ok(Some(icon));
+    }
+    // The launcher's entry with exactly that name: its icon was extracted
+    // when the apps were scanned, so this costs nothing, and it covers apps
+    // that aren't running any more.
+    let scanned = features
+        .app_launcher
+        .lock()
+        .await
+        .icon_by_name(&process_name);
+    if let Some(icon) = scanned {
+        os::icon::register_process_name_icon(&process_name, &icon);
+        return Ok(Some(icon));
+    }
+    // The OS lookup: window enumeration (Windows), or the running apps
+    // (macOS). AppKit and icon extraction stay off the async workers.
+    tauri::async_runtime::spawn_blocking(move || os::get_app_icon(&process_name))
+        .await
+        .map_err(|e| AppError::from(format!("Task error: {e}")))
 }
 
 #[cfg(test)]

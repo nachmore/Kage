@@ -190,6 +190,11 @@ pub fn list_windows_with_minimized_impl() -> Vec<WindowInfo> {
     list_windows_impl()
 }
 
+/// No by-name lookup beyond the window-enumeration cache on this platform.
+pub fn app_icon_by_name(_name: &str) -> Option<String> {
+    None
+}
+
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {
     let hwnd = handle as isize;
     unsafe {
