@@ -744,6 +744,98 @@ body.dark-theme button.datetime-date[aria-expanded="true"] {
     left: 10px;
 }
 
+/* Background AI chip (floating/agent-call-indicator.js): its own row at
+   the inline end, right above the toolbar's context indicator. Shown only
+   while an extension's background call runs. Logical properties, so it
+   sits on the left in RTL. */
+.speech-bubble > .agent-call-indicator {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+    padding-block: 4px 0;
+    padding-inline: 12px;
+    font-size: 11px;
+}
+.speech-bubble > .agent-call-indicator[hidden] {
+    display: none;
+}
+.agent-call-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-inline-size: 100%;
+    padding-block: 2px;
+    padding-inline: 8px;
+    border: 1px solid var(--kage-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 999px;
+    background: transparent;
+    color: var(--kage-text-muted, #6b7280);
+    font: inherit;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+.agent-call-chip:hover,
+.agent-call-chip[aria-expanded="true"] {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--kage-text, #e5e7eb);
+}
+body.light-theme .agent-call-chip:hover,
+body.light-theme .agent-call-chip[aria-expanded="true"] {
+    background: rgba(0, 0, 0, 0.06);
+    color: #374151;
+}
+.agent-call-chip:focus-visible,
+.agent-call-action:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 1px;
+}
+.agent-call-chip-icon {
+    flex-shrink: 0;
+}
+.agent-call-chip-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.agent-call-chip-waiting {
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+.agent-call-chip-waiting[hidden],
+.agent-call-actions[hidden] {
+    display: none;
+}
+.agent-call-actions {
+    display: inline-flex;
+    gap: 4px;
+}
+.agent-call-action {
+    padding-block: 2px;
+    padding-inline: 8px;
+    border: 1px solid var(--kage-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 999px;
+    background: transparent;
+    color: var(--kage-text, #e5e7eb);
+    font: inherit;
+    cursor: pointer;
+}
+.agent-call-action:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+body.light-theme .agent-call-action {
+    color: #374151;
+}
+body.light-theme .agent-call-action:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
 /* Floating toolbar — attach file/image, extension buttons */
 .floating-toolbar {
     display: flex;

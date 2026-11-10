@@ -478,10 +478,14 @@ alone never allows. Only one consent dialog is open at a time.
 Subtle, and only where the user already looks:
 
 - **Floating window**: while a call runs and the window is visible, a
-  small chip next to the context indicator: "🌙 {extension} is using your
-  agent", plus "+{n} waiting". Clicking it shows **Stop** and **Settings**.
-  New file `ui/js/floating/agent-call-indicator.js`, driven by
-  `agent_calls_activity`.
+  small chip at the inline end of its own row, right above the toolbar's
+  context indicator: "🌙 {extension} is using your agent", plus "+{n}
+  waiting". Clicking it shows **Stop** and **Settings**. New file
+  `ui/js/floating/agent-call-indicator.js`, driven by
+  `agent_calls_activity`. (As built, WP-AC6: the toolbar is off by
+  default, `ui.show_floating_toolbar`, so a chip inside it would rarely
+  show. The row is a flow child of the bubble, so the window's resize
+  observer makes room for it.)
 - **Tray tooltip**: "Kage · {extension} is using your agent" while a call
   runs (`src/tray.rs`, `set_tooltip`, posted to the main thread). Linux
   trays don't show tooltips, and Tauri ignores the call there, so no
