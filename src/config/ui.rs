@@ -68,7 +68,7 @@ pub struct UiConfig {
     pub mascot_animations: bool,
     /// Whether extensions may hint at the mascot (music, meeting, etc.).
     /// Off here means the mascot ignores extension hints even if the
-    /// extension holds the capability. Independent of the master above.
+    /// extension holds the capability. Independent of the main switch above.
     #[serde(default = "default_true")]
     pub mascot_extension_hints: bool,
     /// macOS: turn the launcher / inline-assist / context-menu windows into

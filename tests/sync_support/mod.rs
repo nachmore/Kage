@@ -443,7 +443,7 @@ pub enum Deliver {
 /// The cloud between the computers.
 #[derive(Default)]
 pub struct SimCloud {
-    master: BTreeMap<PathBuf, Vec<u8>>,
+    cloud_copy: BTreeMap<PathBuf, Vec<u8>>,
     /// What each computer's copy held after the last step, by name.
     last: BTreeMap<String, BTreeMap<PathBuf, Vec<u8>>>,
     /// Files each computer is still downloading: never uploaded back.
@@ -494,24 +494,25 @@ impl SimCloud {
                 // Another computer wrote this path since this one last
                 // synced: the sync app keeps both, as a conflicted copy.
                 let clash = self
-                    .master
+                    .cloud_copy
                     .get(p)
                     .is_some_and(|m| m != b && last.get(p) != Some(m));
                 if clash {
-                    self.master.insert(conflicted_copy(p, &c.name), b.clone());
+                    self.cloud_copy
+                        .insert(conflicted_copy(p, &c.name), b.clone());
                 } else {
-                    self.master.insert(p.clone(), b.clone());
+                    self.cloud_copy.insert(p.clone(), b.clone());
                 }
             }
             for p in last.keys() {
                 if !now.contains_key(p) {
-                    self.master.remove(p);
+                    self.cloud_copy.remove(p);
                 }
             }
         }
         for c in comps.iter_mut() {
             let now: BTreeMap<PathBuf, Vec<u8>> = c.fs.files_under(CHOSEN).into_iter().collect();
-            for (p, b) in &self.master {
+            for (p, b) in &self.cloud_copy {
                 if now.get(p) == Some(b) {
                     continue;
                 }
@@ -529,7 +530,7 @@ impl SimCloud {
                 }
             }
             for p in now.keys() {
-                if !self.master.contains_key(p) && !is_own_temp(p) {
+                if !self.cloud_copy.contains_key(p) && !is_own_temp(p) {
                     c.fs.delete(p);
                 }
             }
@@ -542,7 +543,7 @@ impl SimCloud {
             // delete: remember only what the cloud has too.
             let mut seen = after.clone();
             for (p, b) in &after {
-                if self.master.get(p) != Some(b) {
+                if self.cloud_copy.get(p) != Some(b) {
                     seen.remove(p);
                 }
             }
@@ -562,7 +563,7 @@ impl SimCloud {
 
     /// The files under `prefix` in the cloud.
     pub fn files(&self, prefix: &str) -> Vec<PathBuf> {
-        self.master
+        self.cloud_copy
             .keys()
             .filter(|p| p.starts_with(prefix))
             .cloned()
