@@ -14500,5 +14500,35 @@
     "description": "About → Backup & restore: open Settings → Sync.",
     "_machine_translated": true,
     "_source_hash": "770819c2affe5661"
+  },
+  "settings.tool_permissions.audit.summary.extension_file_read_unnamed": {
+    "message": "एक फ़ाइल (नाम नहीं दिखाया गया)",
+    "description": "Audit row — stands in for {file} in the two file-read summaries when Kage didn't keep the file's name, because it looked like a password or key. Lowercase: it goes inside a sentence such as \"Mind Map read a file (name not shown) (pdf, 2 MB, 1,200 characters)\".",
+    "_machine_translated": true,
+    "_source_hash": "9922291bee8b13a7"
+  },
+  "settings.manager.ext.agent.allowance.option": {
+    "message": "{level} (प्रतिदिन {calls} अनुरोध)",
+    "description": "One option of the daily allowance select. {level} is Low, Normal or High; {calls} is that level's number of background requests a day",
+    "_machine_translated": true,
+    "_source_hash": "e1f5dfd41449ddba"
+  },
+  "settings.manager.ext.agent.log.sent_prompt": {
+    "message": "Kage ने आपके एजेंट को क्या भेजा",
+    "description": "Heading above the exact prompt of one background request, in the read-only view",
+    "_machine_translated": true,
+    "_source_hash": "f1c6222589404642"
+  },
+  "settings.manager.ext.agent.log.sent_reply": {
+    "message": "एजेंट का जवाब",
+    "description": "Heading above the agent's exact reply to one background request, in the read-only view",
+    "_machine_translated": true,
+    "_source_hash": "9ece83743fe4737e"
+  },
+  "settings.manager.ext.agent.log.close": {
+    "message": "बंद करें",
+    "description": "Button that closes the read-only view of one background request",
+    "_machine_translated": true,
+    "_source_hash": "4bee7e5d81853e2e"
   }
 }
