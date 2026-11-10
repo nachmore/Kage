@@ -52,6 +52,7 @@ mod ollama;
 mod os;
 mod overlay_windows;
 mod panic_handler;
+mod path_complete;
 mod paths;
 mod permission_audit;
 mod process_manager;

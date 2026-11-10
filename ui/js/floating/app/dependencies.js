@@ -52,6 +52,7 @@ import {
     loadFrecency,
     setExtensionManager,
     searchDebounceMs,
+    looksLikePath,
 } from '../search-unified.js';
 import { buildExecCtx } from '../../shared/exec-context.js';
 import { ExtensionManager } from '../../shared/extension-manager.js';
@@ -167,6 +168,7 @@ export {
     runToolbarHostEffect,
     sanitizeExtensionHtml,
     searchDebounceMs,
+    looksLikePath,
     sendAppNotification,
     setAppIconInvoke,
     setExtensionManager,

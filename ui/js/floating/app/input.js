@@ -4,6 +4,7 @@ import {
     errLabel,
     getConfig,
     handleEnterAction,
+    looksLikePath,
     messageLengthBucket,
     signalMascotRecovered,
     submitSelection,
@@ -368,6 +369,12 @@ export const InputMethods = {
 
         if (!message && !hasAttachments && !hasSelection) return;
 
+        // A path typed faster than its suggestions arrived: open it, or its
+        // only completion, rather than sending the path to the agent.
+        if (!hasSelection && !hasAttachments && looksLikePath(message)) {
+            if (await this._openTypedPath(message)) return;
+        }
+
         const result = await handleEnterAction({
             message,
             suggestions: this.currentMatches,
@@ -381,6 +388,42 @@ export const InputMethods = {
         });
 
         await this._applyEnterActionResult(result);
+    },
+
+    /**
+     * Enter on a path with no suggestion selected: open the entry the input
+     * names exactly, or its only completion. With several candidates, show
+     * them instead (true either way, so the path isn't sent to the agent).
+     * False when nothing matches.
+     */
+    async _openTypedPath(message) {
+        let entries = [];
+        try {
+            entries = (await this.invoke('complete_path', { prefix: message })) || [];
+        } catch (e) {
+            console.warn('[Launcher] Path completion failed:', e);
+            return false;
+        }
+        const bare = (s) => s.replace(/[\\/]+$/, '');
+        const pick =
+            entries.find((e) => bare(e.display) === bare(message)) ||
+            (entries.length === 1 ? entries[0] : null);
+        if (pick) {
+            try {
+                await this.invoke('open_path', { path: pick.path });
+            } catch (e) {
+                console.warn('[Launcher] Opening the path failed:', e);
+                return false;
+            }
+            this.resetUI();
+            await this.appWindow.hide();
+            return true;
+        }
+        if (entries.length > 1) {
+            await this.handleInputChange();
+            return true;
+        }
+        return false;
     },
 
     /**

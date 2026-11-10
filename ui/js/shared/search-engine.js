@@ -284,6 +284,25 @@ export function looksLikeFileSearch(query) {
 }
 
 /**
+ * Whether `query` is a path the launcher completes from disk: `~`, `~/…`,
+ * a drive path (`C:\…`), or an absolute path with at least two `/` (a lone
+ * `/word` is a slash command). Network paths (`//server`, `\\server`) are
+ * left out. Mirrors `path_complete::looks_like_path` in the backend, which
+ * has the final say. Pure predicate — exported for unit tests.
+ *
+ * @param {string} query
+ * @returns {boolean}
+ */
+export function looksLikePath(query) {
+    const s = (query || '').trim();
+    if (!s || s.length > 1024 || /[\n\r\0]/.test(s)) return false;
+    if (s.startsWith('//') || s.startsWith('\\\\')) return false;
+    if (s === '~' || /^~[\\/]/.test(s)) return true;
+    if (/^[A-Za-z]:[\\/]/.test(s)) return true;
+    return s.startsWith('/') && (s.match(/\//g) || []).length >= 2;
+}
+
+/**
  * Debounce (ms) to apply before dispatching a search for `query`:
  * file-shaped queries wait longer (disk I/O), everything else is snappy.
  *
@@ -298,6 +317,8 @@ export function searchDebounceMs(query) {
 
 export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     if (!query) return [];
+    const trimmedQuery = query.trim();
+    const pathQuery = looksLikePath(trimmedQuery);
 
     const results = [];
 
@@ -367,8 +388,8 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
         }
     }
 
-    // / slash commands
-    if (query.startsWith('/')) {
+    // / slash commands (an absolute path like `/Users/…` is completed below)
+    if (query.startsWith('/') && !looksLikePath(query)) {
         const slashCmds = matchSlashCommands(query);
         if (slashCmds) {
             for (const cmd of slashCmds) {
@@ -565,13 +586,18 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
                             data: { value: r.value },
                         });
                     } else if (r.type === 'path') {
+                        // A typed path that exists. Without a trailing
+                        // separator its completion row names it (and ranks
+                        // first); with one, the completions list what's
+                        // inside, so opening the folder itself goes first.
+                        if (pathQuery && !/[\\/]$/.test(trimmedQuery)) continue;
                         mapped.push({
                             id: 'path:' + r.value,
                             type: 'path',
                             label: r.pathType === 'file' ? 'Open File' : 'Open Folder',
                             description: r.value,
                             icon: r.pathType === 'file' ? '📄' : '📁',
-                            score: r.score || 87,
+                            score: pathQuery ? 99 : r.score || 87,
                             data: { value: r.value, pathType: r.pathType },
                         });
                     } else if (r.type === 'system') {
@@ -612,8 +638,40 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
             .catch(() => []),
     });
 
+    // Path completion: `~/Down` offers `~/Downloads/`. Enter opens the
+    // entry; Tab fills its path in (`name`) to keep going. Ranked above
+    // everything else, and it replaces the indexed file search for
+    // path-shaped input, which would only repeat these rows slower.
+    if (pathQuery) {
+        asyncTasks.push({
+            name: null,
+            promise: invoke('complete_path', { prefix: trimmedQuery })
+                .then((entries) =>
+                    (entries || []).map((c, i) => {
+                        const ext =
+                            !c.is_folder && c.name.includes('.')
+                                ? c.name.split('.').pop().toLowerCase()
+                                : '';
+                        return {
+                            id: 'file:' + c.path,
+                            type: 'file',
+                            label: c.display,
+                            name: c.display,
+                            description: c.path,
+                            icon: c.is_folder ? '📁' : _fileIcon(ext),
+                            score: 98 - i,
+                            data: { path: c.path, is_folder: c.is_folder },
+                        };
+                    })
+                )
+                .catch((e) => {
+                    console.warn('[Search] Path completion failed:', e);
+                    return [];
+                }),
+        });
+    }
+
     // File search — conditional
-    const trimmedQuery = query.trim();
     const findPrefix = trimmedQuery.toLowerCase().startsWith('>find ');
     const hasExtension = /\.\w{1,6}$/.test(trimmedQuery) && !trimmedQuery.includes(' ');
     // Only treat `*`/`?` as a glob when the query has no spaces — otherwise a
@@ -621,7 +679,7 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     // glob (`report_*.pdf`, `2024?.txt`) never contains spaces.
     const hasWildcard =
         !trimmedQuery.includes(' ') && (trimmedQuery.includes('*') || trimmedQuery.includes('?'));
-    if (findPrefix || hasExtension || hasWildcard) {
+    if (!pathQuery && (findPrefix || hasExtension || hasWildcard)) {
         const fileQuery = findPrefix
             ? trimmedQuery.replace(/^>?find\s+/i, '').trim()
             : trimmedQuery;

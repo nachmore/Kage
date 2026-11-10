@@ -10,6 +10,7 @@ export {
     getExtensionManager,
     looksLikeFileSearch,
     searchDebounceMs,
+    looksLikePath,
 } from '../shared/search-engine.js';
 
 // --- Floating-specific suggestion renderer ---

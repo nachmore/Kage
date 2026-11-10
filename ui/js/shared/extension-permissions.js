@@ -104,6 +104,8 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     execute_folder_plan: null,
     get_common_folders: 'filesystem',
     search_files: 'filesystem',
+    // The launcher's own path completion: never for extensions.
+    complete_path: null,
     resolve_directories: 'filesystem',
 
     // --- file_text: the text of one file the user picks --------------------

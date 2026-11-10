@@ -107,6 +107,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::record_shortcut_usage,
         crate::commands::get_shortcut_history,
         crate::commands::search_files,
+        crate::commands::complete_path,
         crate::commands::get_calendar_events,
         crate::commands::get_calendar_events_for_date,
         crate::commands::get_calendar_busy_days,

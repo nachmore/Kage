@@ -129,6 +129,30 @@ pub async fn search_files(
     }
 }
 
+/// Complete a path the user is typing in the launcher (`~/Down` →
+/// `~/Downloads/`): the entries of one folder that match, capped. Empty for
+/// input that isn't path-shaped, a folder that can't be read, or one that
+/// takes too long to list (a stalled network mount).
+#[tauri::command]
+pub async fn complete_path(
+    prefix: String,
+) -> Result<Vec<crate::path_complete::PathCompletion>, AppError> {
+    if !crate::path_complete::looks_like_path(&prefix) {
+        return Ok(Vec::new());
+    }
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        let home = crate::paths::home_dir();
+        crate::path_complete::complete(&prefix, home.as_deref())
+    });
+    match tokio::time::timeout(std::time::Duration::from_millis(750), task).await {
+        Ok(joined) => Ok(joined.map_err(|e| format!("Path completion failed: {}", e))?),
+        Err(_) => {
+            warn!("[complete_path] listing the folder took over 750 ms; offering nothing");
+            Ok(Vec::new())
+        }
+    }
+}
+
 /// Get upcoming calendar events.
 #[tauri::command]
 pub async fn get_calendar_events(
