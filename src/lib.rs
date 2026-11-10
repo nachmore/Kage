@@ -62,6 +62,7 @@ pub mod navigation_guard;
 pub mod overlay_windows;
 pub mod setup;
 pub mod state;
+pub mod sync_app;
 pub mod telemetry;
 pub mod tray;
 pub mod updater;

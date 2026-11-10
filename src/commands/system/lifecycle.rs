@@ -36,6 +36,16 @@ pub fn graceful_shutdown<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     // its session, its audit entry is written and the usage file saved.
     crate::commands::agent_calls::shutdown_service(app);
 
+    // Folder sync captures and publishes this computer's own edits, before
+    // the agent is disconnected and, on the updater path, before the Job
+    // Object's kill flag is released (docs/design/SYNC.md §14.1): 1.5 s,
+    // 500 ms when an update is installing. The installer holds the install
+    // slot while it runs, so a slot we can't take means an update.
+    if let Some(features) = app.try_state::<FeatureServices>() {
+        let updating = features.updater.try_claim_install().is_none();
+        crate::sync_app::flush_for_exit(app, crate::sync_app::exit_budget(updating));
+    }
+
     // Kill pocket-tts server and any in-flight pip install if running.
     // The Job Object reaps both on Windows when we exit, but macOS/Linux
     // have no equivalent — without an explicit kill here, a Cmd+Q during

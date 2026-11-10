@@ -15,6 +15,10 @@ pub fn run(
             if let Ok(mut slot) = session_watcher.lock() {
                 slot.take();
             }
+            // Folder sync publishes this computer's own edits (at most
+            // 1.5 s); what doesn't finish goes out at the next start. A
+            // no-op after graceful_shutdown already flushed.
+            crate::sync_app::flush_for_exit(handler, crate::sync_app::EXIT_FLUSH);
             telemetry::record_shutdown(handler);
             // Exits that skip graceful_shutdown (macOS logout/restart via
             // the quit Apple Event, any `app.exit`) land here, and the

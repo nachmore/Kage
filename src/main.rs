@@ -36,7 +36,6 @@ mod error;
 mod event_targets;
 mod events;
 mod ext_views;
-#[allow(dead_code)] // Nothing records folder sync's changes until sync lands.
 mod extension_data_events;
 mod extensions;
 mod file_text;
@@ -64,8 +63,11 @@ mod slash_format;
 mod startup;
 mod state;
 mod steering_io;
-#[allow(dead_code)] // Only the sync commands' types are used until the engine lands.
+// The binary runs the engine through `sync_app` and the commands; the rest
+// of its public API (test fakes, helpers) serves the library and its tests.
+#[allow(dead_code)]
 mod sync;
+mod sync_app;
 mod system_shortcut_takeover;
 mod telemetry;
 mod tray;
@@ -484,6 +486,8 @@ async fn run() {
                 if let Some(features) = window.try_state::<state::FeatureServices>() {
                     features.agent_calls.note_user_activity();
                 }
+                // Folder sync reads what arrived, if it last did a while ago.
+                setup::wake_sync_on_focus(window.app_handle());
             }
             if let tauri::WindowEvent::Destroyed = event {
                 // The window's extension tool steering goes with it. Tauri
@@ -544,7 +548,22 @@ async fn run() {
     // FeatureServices (and its Config) are managed. Gated on the user
     // having opted in and the build having a compile-time key.
     if let Some(features) = app.try_state::<state::FeatureServices>() {
+        use lock_ext::LockExt;
+        let daily_ping = || {
+            features
+                .config
+                .lock_or_recover()
+                .telemetry
+                .last_daily_ping
+                .clone()
+        };
+        let before = daily_ping();
         telemetry::record_startup_events(app.handle(), &features.config);
+        // `app_daily_active` went out: folder sync's `sync_daily` goes with
+        // it, once the engine reports that sync is on (SYNC.md §16).
+        if daily_ping() != before {
+            sync_app::mark_daily_due();
+        }
     }
 
     // Drive the Tauri event loop, flushing telemetry on exit so the

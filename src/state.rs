@@ -341,6 +341,13 @@ pub struct FeatureServices {
     /// (docs/design/EXTENSION_AGENT_CALLS.md). Built here, started from
     /// `setup()` (`commands::agent_calls::start_service`).
     pub agent_calls: Arc<crate::agent_calls::AgentCallService>,
+    /// Folder sync's engine thread (docs/design/SYNC.md §14). Pending, with
+    /// no thread, until `setup()` starts it (`sync_app::start`); every
+    /// request answers `sync_unavailable` until then.
+    pub sync: crate::sync::SyncHandle,
+    /// The last configs by revision: `get_config_snapshot`, the
+    /// `save_config` three-way merge and sync's commits (SYNC.md §9.5).
+    pub config_revisions: Arc<crate::sync_app::ConfigRevisions>,
 }
 
 /// The full set of Tauri-managed state, built in one place so
@@ -407,6 +414,8 @@ pub fn build_managed_state(
             activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
             agent_session_registry: Arc::new(crate::agent_sessions::AgentSessionRegistry::new()),
             automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
+            sync: crate::sync::SyncHandle::pending(),
+            config_revisions: Arc::new(crate::sync_app::ConfigRevisions::new()),
         },
     }
 }

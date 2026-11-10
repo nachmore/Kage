@@ -275,7 +275,7 @@ describe('folder sync (contracts only)', () => {
     );
 
     it('registers every sync command as host-only until the sync capability lands', () => {
-        expect(syncCommands.length).toBe(38);
+        expect(syncCommands.length).toBe(39);
         for (const cmd of syncCommands) {
             expect(COMMAND_CAPABILITIES[cmd], cmd).toBeNull();
             expect(decideInvoke(cmd, all).allow, cmd).toBe(false);

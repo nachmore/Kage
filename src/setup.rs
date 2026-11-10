@@ -916,6 +916,22 @@ pub fn start_updater(app: &App) {
     );
 }
 
+/// Start folder sync's engine thread. It does nothing for 10 s (and until
+/// the first window painted), so sync never touches the folder or its
+/// database on the startup path (docs/design/SYNC.md §14.1). A build
+/// without sync starts nothing.
+pub fn start_sync<R: tauri::Runtime>(app: &App<R>) {
+    crate::sync_app::start(app.handle(), crate::sync_app::START_DELAY);
+}
+
+/// A Kage window was shown or focused: sync reads the folder if it last
+/// did more than a minute ago (§14.1). Never blocks.
+pub fn wake_sync_on_focus<R: tauri::Runtime>(app: &AppHandle<R>) {
+    if let Some(features) = app.try_state::<FeatureServices>() {
+        features.sync.wake(crate::sync::engine::Wake::Focus);
+    }
+}
+
 /// Watch the sessions directory for external changes (e.g., the agent
 /// backend creating sessions outside of this process). Returns the
 /// watcher handle so the caller can drop it on shutdown — that

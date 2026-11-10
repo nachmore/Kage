@@ -167,23 +167,19 @@ pub const EXTENSION_DATA_CHANGED: &str = "extension_data_changed";
 /// The sync status changed. Payload: `SyncStatus` (docs/design/SYNC.md
 /// §19.4). Listened to by Settings → Sync, the tray and the Settings
 /// sidebar badge.
-#[allow(dead_code)] // The sync engine will emit it; the app doesn't yet.
 pub const SYNC_STATUS_CHANGED: &str = "sync_status_changed";
 
 /// The number of open conflicts changed. Payload: `{ open }`.
-#[allow(dead_code)] // The sync engine will emit it; the app doesn't yet.
 pub const SYNC_CONFLICTS_CHANGED: &str = "sync_conflicts_changed";
 
 /// Sync wrote values into `config.json`. Payload: `{ keys: [catalog
 /// paths] }`. Emitted before `config_updated`, so a Settings section with
 /// unsaved edits can say what changed.
-#[allow(dead_code)] // The sync engine will emit it; the app doesn't yet.
 pub const SYNC_APPLIED: &str = "sync_applied";
 
 /// Synced records of an extension changed. Payload: `{ extension_id,
 /// collections, reason }`, where reason is `remote`, `enabled`, `reset` or
 /// `purged`. The sandbox hosts pass it to that extension only.
-#[allow(dead_code)] // The sync engine will emit it; the app doesn't yet.
 pub const EXTENSION_SYNC_CHANGES: &str = "extension_sync_changes";
 // --- Commands the user runs themselves -------------------------------
 
