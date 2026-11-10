@@ -279,17 +279,18 @@ jobs:
         # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
         # exhaustion on Windows; CI inherits that.
         #
-        # timeout-minutes: measured green runs take 2m17s (Windows) /
-        # 1m03s (macOS) — the test binaries are built in the step
-        # above, so this is pure test execution. 5 min is >2x the slowest
-        # observed pass. A hung test (a command blocking on an OS
+        # timeout-minutes: with folder sync's two-computer and chaos
+        # suites, a green Windows run takes about 3m30s of tests, plus
+        # ~1m30s when build.rs re-runs and kage recompiles in this step
+        # (it still does on Windows even with the binaries prebuilt
+        # above). 10 min is about 2x that. A hung test (a command blocking on an OS
         # service that never answers headless) previously wedged the
         # job 40+ min until force-cancel — which destroys the logs; a
         # step timeout fails WITH logs preserved so the culprit binary
         # is identifiable. The mock-app sweep additionally has its own
         # 3s-per-command watchdog + 120s budget, so in-test hangs
         # self-report well before this backstop.
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: cargo test --workspace
 
       # End-to-end startup smoke test: launch the freshly built binary
