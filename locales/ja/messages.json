@@ -13126,5 +13126,1379 @@
     "description": "README.txt written once into a new sync folder. Shown in the user's language with English below.",
     "_machine_translated": true,
     "_source_hash": "03e4679308a20b74"
+  },
+  "tray.sync_state.up_to_date": {
+    "message": "最新の状態です",
+    "description": "{status} of the tray's sync line (tray.sync_status): this computer has sent and read everything.",
+    "_machine_translated": true,
+    "_source_hash": "e5081c08e8db9241"
+  },
+  "tray.sync_state.syncing": {
+    "message": "同期中…",
+    "description": "{status} of the tray's sync line (tray.sync_status): sync is sending or reading changes.",
+    "_machine_translated": true,
+    "_source_hash": "b308af81651203bf"
+  },
+  "tray.sync_state.waiting": {
+    "message": "ファイルを待っています",
+    "description": "{status} of the tray's sync line (tray.sync_status): the sync app hasn't downloaded some files yet.",
+    "_machine_translated": true,
+    "_source_hash": "838ea8b6a1da61e3"
+  },
+  "tray.sync_state.paused": {
+    "message": "一時停止中",
+    "description": "{status} of the tray's sync line (tray.sync_status): the user paused sync.",
+    "_machine_translated": true,
+    "_source_hash": "a40b9120696a3221"
+  },
+  "tray.sync_state.attention": {
+    "message": "確認が必要です",
+    "description": "{status} of the tray's sync line (tray.sync_status): sync stopped and Settings → Sync says why.",
+    "_machine_translated": true,
+    "_source_hash": "65e0401103596626"
+  },
+  "errors.sync.bad_request": {
+    "message": "同期でその値を使用できませんでした。もう一度お試しください。",
+    "description": "A sync command got a folder path that isn't absolute, or a pause time that isn't a time.",
+    "_machine_translated": true,
+    "_source_hash": "3edf26d9852c5b78"
+  },
+  "sync.notify.title": {
+    "message": "Kage 同期",
+    "description": "Title of an OS notification about folder sync, shown only for problems the user must fix.",
+    "_machine_translated": true,
+    "_source_hash": "93e81bce9d2ef084"
+  },
+  "sync.notify.removed": {
+    "message": "このコンピューターは同期から削除されました。再度参加するには、設定 → 同期 を開いてください。",
+    "description": "OS notification: another computer removed this one from sync.",
+    "_machine_translated": true,
+    "_source_hash": "65611bf4aba4fb13"
+  },
+  "sync.notify.reset": {
+    "message": "別のコンピューターで同期がやり直されました。再度参加するには、設定 → 同期 を開いてください。",
+    "description": "OS notification: another computer started sync over, so this one must join again.",
+    "_machine_translated": true,
+    "_source_hash": "99f78d1a5f8253f0"
+  },
+  "sync.review.suggestion": {
+    "message": "{name} がほかのコンピューターにあります",
+    "description": "Needs your attention: an extension or command pack installed on another computer isn't installed here. [Review] opens the install prompt. {name} is the item's id or name.",
+    "_machine_translated": true,
+    "_source_hash": "df5a8b0782386cb8"
+  },
+  "sync.review.suggestion_sideload": {
+    "message": "{name} がほかのコンピューターにあります。入手元からこのコンピューターにインストールしてください。",
+    "description": "Needs your attention: an item installed from a file on another computer isn't installed here. {name} is the item's id or name.",
+    "_machine_translated": true,
+    "_source_hash": "a4bd97b160724edf"
+  },
+  "sync.review.removal": {
+    "message": "{name} は {computer} で削除されました",
+    "description": "Needs your attention: an item still installed here was uninstalled on another computer. Buttons: Remove here, Keep. {name} is the item's id or name; {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "7e4d74b79ba57921"
+  },
+  "errors.sync.bad_cursor": {
+    "message": "その同期カーソルは Kage が発行したものではありません。",
+    "description": "Error to an extension: context.sync.ack got a cursor that isn't a number from pull.",
+    "_machine_translated": true,
+    "_source_hash": "6dd11d6e272e3e8b"
+  },
+  "errors.sync.ext_bad_request": {
+    "message": "有効な拡張機能 ID ではありません。",
+    "description": "Error to an extension: a context.sync call named an invalid extension id.",
+    "_machine_translated": true,
+    "_source_hash": "d33b2cfdc46dfcc1"
+  },
+  "errors.sync.ext_push_too_large": {
+    "message": "1 回の同期プッシュで送信できるのは、レコードと削除の合計 500 件、4 MB までです。",
+    "description": "Error to an extension: context.sync.push was over the per-call limits. Push in smaller batches.",
+    "_machine_translated": true,
+    "_source_hash": "617495cdacf83c98"
+  },
+  "settings.sync.unavailable": {
+    "message": "このバージョンの Kage では同期を利用できません。",
+    "description": "Settings → Sync, when this build doesn't offer folder sync.",
+    "_machine_translated": true,
+    "_source_hash": "10c44de322c9d873"
+  },
+  "settings.sync.off.syncs": {
+    "message": "同期対象：設定 · ショートカットと自動化 · 拡張機能とそのデータ",
+    "description": "Settings → Sync while off: what sync copies between computers.",
+    "_machine_translated": true,
+    "_source_hash": "3e9fa1fc7743a37e"
+  },
+  "settings.sync.off.chats_optional": {
+    "message": "チャット履歴は、オンにした場合のみ同期されます。",
+    "description": "Settings → Sync while off, after the list of what stays on each computer.",
+    "_machine_translated": true,
+    "_source_hash": "2bc7dd3bbcc0f245"
+  },
+  "settings.sync.setup.again": {
+    "message": "もう一度設定",
+    "description": "Settings → Sync while a setup is unfinished: start the setup steps again.",
+    "_machine_translated": true,
+    "_source_hash": "bdde38f389d8c680"
+  },
+  "settings.sync.setup.step": {
+    "message": "ステップ {n}/{of}",
+    "description": "Settings → Sync setup: which step the user is on.",
+    "_machine_translated": true,
+    "_source_hash": "cc1227844bfe5eea"
+  },
+  "settings.sync.setup.continue": {
+    "message": "続行",
+    "description": "Settings → Sync setup: go to the next step.",
+    "_machine_translated": true,
+    "_source_hash": "eda3337ec437d2a9"
+  },
+  "settings.sync.setup.back": {
+    "message": "戻る",
+    "description": "Settings → Sync setup: go to the previous step.",
+    "_machine_translated": true,
+    "_source_hash": "c8d3c4982b4569a3"
+  },
+  "settings.sync.setup.cancel": {
+    "message": "キャンセル",
+    "description": "Settings → Sync: cancel a setup or a form.",
+    "_machine_translated": true,
+    "_source_hash": "82dc750749ff3dff"
+  },
+  "settings.sync.setup.folder.title": {
+    "message": "フォルダーを選択",
+    "description": "Settings → Sync setup, step 1 title, and the folder picker's title.",
+    "_machine_translated": true,
+    "_source_hash": "a92b73073f968404"
+  },
+  "settings.sync.setup.folder.help": {
+    "message": "Dropbox、iCloud Drive、OneDrive など、同期アプリですでに同期しているフォルダーを選択してください。",
+    "description": "Settings → Sync setup, step 1.",
+    "_machine_translated": true,
+    "_source_hash": "9715cfd6ffaca1b4"
+  },
+  "settings.sync.setup.folder.other": {
+    "message": "別のフォルダー…",
+    "description": "Settings → Sync setup, step 1: open the folder picker.",
+    "_machine_translated": true,
+    "_source_hash": "0607b52dbb6849a7"
+  },
+  "settings.sync.folder.new": {
+    "message": "Kage はここに「Kage Sync」という名前のフォルダーを作成します。",
+    "description": "Settings → Sync setup: the chosen folder has no Kage sync yet.",
+    "_machine_translated": true,
+    "_source_hash": "fe2efc0977a0f8a7"
+  },
+  "settings.sync.folder.existing": {
+    "message": "{count, plural, other {このフォルダーには、すでに # 台のコンピューターからの Kage 同期があります。このコンピューターもそこに参加します。}}",
+    "description": "Settings → Sync setup: the chosen folder already holds Kage sync. Computer names are encrypted until the passphrase unlocks them.",
+    "_machine_translated": true,
+    "_source_hash": "8aad852deb1257d1"
+  },
+  "settings.sync.folder.unknown_sync": {
+    "message": "Kage はこのフォルダーが同期されているか判断できません。別のツールで同期している場合は問題ありません。",
+    "description": "Settings → Sync setup: a note (not an error) for a folder Kage doesn't recognise as a cloud folder.",
+    "_machine_translated": true,
+    "_source_hash": "255d76c27adb3078"
+  },
+  "settings.sync.folder.newer_format": {
+    "message": "この同期フォルダーには新しいバージョンの Kage が必要です。まずこのコンピューターの Kage をアップデートしてください。",
+    "description": "Settings → Sync setup: the folder was made by a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "e01628c3899b446b"
+  },
+  "settings.sync.check_updates": {
+    "message": "アップデートを確認",
+    "description": "Settings → Sync: open Settings → Updates.",
+    "_machine_translated": true,
+    "_source_hash": "0b4617378bb6a0b8"
+  },
+  "settings.sync.tip.keep_downloaded_windows": {
+    "message": "Kage はこのフォルダーをダウンロード済みの状態に保ちます。",
+    "description": "Settings → Sync setup tip for OneDrive or Dropbox on Windows.",
+    "_machine_translated": true,
+    "_source_hash": "2f8e216bfe7b3a5b"
+  },
+  "settings.sync.tip.icloud": {
+    "message": "このフォルダーには「ダウンロードしたままにする」を推奨します。",
+    "description": "Settings → Sync setup tip for iCloud Drive.",
+    "_machine_translated": true,
+    "_source_hash": "5677c5879a457fdd"
+  },
+  "settings.sync.tip.google_drive": {
+    "message": "ミラーモードを使用するか、フォルダーをオフラインで使用可能にしてください。",
+    "description": "Settings → Sync setup tip for Google Drive.",
+    "_machine_translated": true,
+    "_source_hash": "1a78e5c64ea68684"
+  },
+  "settings.sync.tip.syncthing": {
+    "message": "2 台のコンピューターが同時にオンラインになることが多い場合に最適に動作します。",
+    "description": "Settings → Sync setup tip for Syncthing.",
+    "_machine_translated": true,
+    "_source_hash": "401eded24b9b3f5b"
+  },
+  "settings.sync.tip.generic": {
+    "message": "同期アプリで、このフォルダーをこのコンピューターにダウンロードしたままにするよう設定してください。",
+    "description": "Settings → Sync: how to stop the sync app from leaving files online-only.",
+    "_machine_translated": true,
+    "_source_hash": "32dd10784024a47e"
+  },
+  "settings.sync.setup.passphrase.create_title": {
+    "message": "同期パスフレーズを作成",
+    "description": "Settings → Sync setup, step 2 when creating a sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "8a560401a4fe179b"
+  },
+  "settings.sync.setup.passphrase.join_title": {
+    "message": "同期パスフレーズを入力",
+    "description": "Settings → Sync setup, step 2 when joining a sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "843973006c8baeba"
+  },
+  "settings.sync.setup.passphrase.label": {
+    "message": "パスフレーズ",
+    "description": "Settings → Sync: the passphrase field.",
+    "_machine_translated": true,
+    "_source_hash": "5a0b24ccf514199b"
+  },
+  "settings.sync.setup.passphrase.confirm": {
+    "message": "もう一度入力",
+    "description": "Settings → Sync: the field that confirms a new passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "19dba44516997e18"
+  },
+  "settings.sync.setup.passphrase.rule": {
+    "message": "{count} 文字以上にしてください。",
+    "description": "Settings → Sync: the passphrase length rule.",
+    "_machine_translated": true,
+    "_source_hash": "a49932aca0361bd0"
+  },
+  "settings.sync.setup.passphrase.make": {
+    "message": "自動で作成",
+    "description": "Settings → Sync setup: generate a passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "7c27aa4cdeb82ba7"
+  },
+  "settings.sync.setup.passphrase.generated": {
+    "message": "パスフレーズ：",
+    "description": "Settings → Sync setup: shown before a generated passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "db906a7540bf9e95"
+  },
+  "settings.sync.setup.passphrase.copy": {
+    "message": "コピー",
+    "description": "Settings → Sync setup: copy the generated passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "3af98ae2e4226f2f"
+  },
+  "settings.sync.setup.passphrase.once": {
+    "message": "各コンピューターで一度ずつ入力します。",
+    "description": "Settings → Sync setup, before the note that the passphrase can't be recovered.",
+    "_machine_translated": true,
+    "_source_hash": "e1df7e4832df6866"
+  },
+  "settings.sync.setup.passphrase.join_help": {
+    "message": "最初のコンピューターで同期を設定したときに作成したパスフレーズです。",
+    "description": "Settings → Sync setup when joining.",
+    "_machine_translated": true,
+    "_source_hash": "2f554a6b24c5f0f5"
+  },
+  "settings.sync.passphrase.required": {
+    "message": "パスフレーズを入力してください。",
+    "description": "Settings → Sync: the passphrase field is empty.",
+    "_machine_translated": true,
+    "_source_hash": "dc49a5a5a0b630b8"
+  },
+  "settings.sync.passphrase.mismatch": {
+    "message": "2 つのパスフレーズが一致しません。",
+    "description": "Settings → Sync: the confirm field doesn't match.",
+    "_machine_translated": true,
+    "_source_hash": "5812ec99ca49f57c"
+  },
+  "settings.sync.setup.name.title": {
+    "message": "このコンピューターに名前を付ける",
+    "description": "Settings → Sync setup, step 3.",
+    "_machine_translated": true,
+    "_source_hash": "32468823bab3883f"
+  },
+  "settings.sync.setup.name.label": {
+    "message": "コンピューター名",
+    "description": "Settings → Sync: the computer name field.",
+    "_machine_translated": true,
+    "_source_hash": "00eb8cbef58d650d"
+  },
+  "settings.sync.setup.name.help": {
+    "message": "この名前はほかのコンピューターに表示されます。名前は暗号化されたファイル内にのみ保存されます。",
+    "description": "Settings → Sync setup, step 3.",
+    "_machine_translated": true,
+    "_source_hash": "fba210bf6876a97f"
+  },
+  "settings.sync.name.default.macos": {
+    "message": "自分の Mac",
+    "description": "Settings → Sync setup: the suggested name of this computer on macOS.",
+    "_machine_translated": true,
+    "_source_hash": "8d356c206127bbcf"
+  },
+  "settings.sync.name.default.windows": {
+    "message": "自分の PC",
+    "description": "Settings → Sync setup: the suggested name of this computer on Windows.",
+    "_machine_translated": true,
+    "_source_hash": "2b742193a4cdce7c"
+  },
+  "settings.sync.name.default.linux": {
+    "message": "自分の Linux コンピューター",
+    "description": "Settings → Sync setup: the suggested name of this computer on Linux.",
+    "_machine_translated": true,
+    "_source_hash": "9d91690d4f051fe8"
+  },
+  "settings.sync.setup.categories.title": {
+    "message": "このコンピューターで同期する項目",
+    "description": "Settings → Sync setup, step 4.",
+    "_machine_translated": true,
+    "_source_hash": "3e03918dbf5af821"
+  },
+  "settings.sync.setup.categories.pasted_keys": {
+    "message": "ショートカットとオートメーションは入力したとおりに同期されます。キーを貼り付けている場合は、そのキーも暗号化されて同期されます。",
+    "description": "Settings → Sync setup, step 4.",
+    "_machine_translated": true,
+    "_source_hash": "70b4971e5d8947ea"
+  },
+  "settings.sync.category.settings_desc": {
+    "message": "環境設定、エージェント、アプリモード、パーソナライズ",
+    "description": "Settings → Sync: what the Settings category holds.",
+    "_machine_translated": true,
+    "_source_hash": "c2d0d381879a3b18"
+  },
+  "settings.sync.category.automations_desc": {
+    "message": "コマンド、プロンプト、オートメーション、カスタムアクション",
+    "description": "Settings → Sync setup: what the Shortcuts & automations category holds.",
+    "_machine_translated": true,
+    "_source_hash": "e23ec77c59653f91"
+  },
+  "settings.sync.category.extensions_desc": {
+    "message": "使用している拡張機能とその設定、およびデータ同期に対応した拡張機能のデータ",
+    "description": "Settings → Sync setup: what the Extensions category holds.",
+    "_machine_translated": true,
+    "_source_hash": "364edde7b518c15b"
+  },
+  "settings.sync.category.chats_desc": {
+    "message": "ほかのコンピューターにあるチャットの読み取り専用コピー",
+    "description": "Settings → Sync setup: what the Chat history category holds.",
+    "_machine_translated": true,
+    "_source_hash": "745f3d3652e0f662"
+  },
+  "settings.sync.category.automations_counts": {
+    "message": "{shortcuts, plural, other {ショートカット # 件}} · {macros, plural, other {オートメーション # 件}} · {actions, plural, other {カスタムアクション # 件}}",
+    "description": "Settings → Sync: how much the Shortcuts & automations category holds on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "32aecaf7815ed604"
+  },
+  "settings.sync.category.extensions_count": {
+    "message": "{count, plural, other {拡張機能 # 件}}",
+    "description": "Settings → Sync: how many extensions are installed.",
+    "_machine_translated": true,
+    "_source_hash": "c62f8784bc97b755"
+  },
+  "settings.sync.category.chats_on": {
+    "message": "オン",
+    "description": "Settings → Sync: the Chat history category is on.",
+    "_machine_translated": true,
+    "_source_hash": "1f59bf43d1aae1b6"
+  },
+  "settings.sync.category.off": {
+    "message": "オフ",
+    "description": "Settings → Sync: a category is off.",
+    "_machine_translated": true,
+    "_source_hash": "302eda57ba41b460"
+  },
+  "settings.sync.setup.turn_on": {
+    "message": "同期をオンにする",
+    "description": "Settings → Sync setup: create the sync folder and start syncing.",
+    "_machine_translated": true,
+    "_source_hash": "5edfcbe543942597"
+  },
+  "settings.sync.setup.unlock": {
+    "message": "ロック解除",
+    "description": "Settings → Sync setup when joining: check the passphrase and preview what joining changes.",
+    "_machine_translated": true,
+    "_source_hash": "3ab7bb122cbf6344"
+  },
+  "settings.sync.setup.join": {
+    "message": "参加",
+    "description": "Settings → Sync setup: join the other computers.",
+    "_machine_translated": true,
+    "_source_hash": "5e326bf38efc0a09"
+  },
+  "settings.sync.join.title": {
+    "message": "ほかのコンピューターに参加",
+    "description": "Settings → Sync setup: the join step.",
+    "_machine_translated": true,
+    "_source_hash": "01f4206254a35450"
+  },
+  "settings.sync.join.from": {
+    "message": "このフォルダーには {computers} からの Kage 同期データがあります。",
+    "description": "Settings → Sync setup: the computers already in the folder. {computers} is a list of names with their OS.",
+    "_machine_translated": true,
+    "_source_hash": "46073f24fc9d6e04"
+  },
+  "settings.sync.join.computer": {
+    "message": "{name}（{os}）",
+    "description": "Settings → Sync setup: one computer in the folder, with its OS.",
+    "_machine_translated": true,
+    "_source_hash": "8884e2758de8cd19"
+  },
+  "settings.sync.join.question": {
+    "message": "このコンピューターにはすでに設定があります。設定が異なる場合、どちらを優先しますか？",
+    "description": "Settings → Sync setup: the join choice.",
+    "_machine_translated": true,
+    "_source_hash": "b8c99d987efeee70"
+  },
+  "settings.sync.join.counts": {
+    "message": "{different, plural, =0 {異なる設定はありません。} other {# 件の設定が異なります。}}{only_here, plural, =0 {} other {# 件の項目はこのコンピューターにのみ存在し、保持されます。}}",
+    "description": "Settings → Sync setup: what joining changes.",
+    "_machine_translated": true,
+    "_source_hash": "3c64cb5bc8a8d1e6"
+  },
+  "settings.sync.done.title": {
+    "message": "同期はオンです",
+    "description": "Settings → Sync: setup finished.",
+    "_machine_translated": true,
+    "_source_hash": "215c7cd96d11ce49"
+  },
+  "settings.sync.done.button": {
+    "message": "完了",
+    "description": "Settings → Sync: close the setup.",
+    "_machine_translated": true,
+    "_source_hash": "581db0f639b5836e"
+  },
+  "settings.sync.done.suggestions": {
+    "message": "{count, plural, other {ほかのコンピューターにある # 件の拡張機能がまだこのコンピューターにインストールされていません}}",
+    "description": "Settings → Sync after setup.",
+    "_machine_translated": true,
+    "_source_hash": "4229756465881837"
+  },
+  "settings.sync.done.replaced": {
+    "message": "{count, plural, other {このコンピューターの # 件の設定が同期された設定に置き換えられました}}",
+    "description": "Settings → Sync after joining.",
+    "_machine_translated": true,
+    "_source_hash": "fdeaea45a467cddc"
+  },
+  "settings.sync.review": {
+    "message": "確認",
+    "description": "Settings → Sync: open what needs a decision.",
+    "_machine_translated": true,
+    "_source_hash": "b8ddcd6b6ef481e4"
+  },
+  "settings.sync.undo": {
+    "message": "元に戻す",
+    "description": "Settings → Sync after joining: undo joining.",
+    "_machine_translated": true,
+    "_source_hash": "806daad3f03ef96a"
+  },
+  "settings.sync.back": {
+    "message": "戻る",
+    "description": "Settings → Sync: back to the main page.",
+    "_machine_translated": true,
+    "_source_hash": "0f060401c8bb660b"
+  },
+  "settings.sync.sync_now": {
+    "message": "今すぐ同期",
+    "description": "Settings → Sync: run sync at once.",
+    "_machine_translated": true,
+    "_source_hash": "3653ca933c1f2c78"
+  },
+  "settings.sync.syncing_now": {
+    "message": "同期しています…",
+    "description": "Settings → Sync after Sync now.",
+    "_machine_translated": true,
+    "_source_hash": "7e38121849470cdd"
+  },
+  "settings.sync.pause": {
+    "message": "一時停止",
+    "description": "Settings → Sync: open the pause choices.",
+    "_machine_translated": true,
+    "_source_hash": "736962e79d5965ae"
+  },
+  "settings.sync.pause.1h": {
+    "message": "1 時間",
+    "description": "Settings → Sync: pause for an hour.",
+    "_machine_translated": true,
+    "_source_hash": "ea6c04f73101f9e1"
+  },
+  "settings.sync.pause.tomorrow": {
+    "message": "明日まで",
+    "description": "Settings → Sync: pause until tomorrow morning.",
+    "_machine_translated": true,
+    "_source_hash": "f21ec784dc6f32f2"
+  },
+  "settings.sync.pause.forever": {
+    "message": "再開するまで",
+    "description": "Settings → Sync: pause with no end.",
+    "_machine_translated": true,
+    "_source_hash": "581c41a00f1a8ff1"
+  },
+  "settings.sync.action.resume": {
+    "message": "再開",
+    "description": "Settings → Sync: end a pause.",
+    "_machine_translated": true,
+    "_source_hash": "e88155942f8c989a"
+  },
+  "settings.sync.action.keep_downloaded": {
+    "message": "ダウンロードしたままにする方法",
+    "description": "Settings → Sync: show how to keep the sync folder downloaded.",
+    "_machine_translated": true,
+    "_source_hash": "f43cd80cae4eae93"
+  },
+  "settings.sync.action.unlock": {
+    "message": "パスフレーズを入力",
+    "description": "Settings → Sync: unlock sync with the passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "03366e4f0592c3fb"
+  },
+  "settings.sync.action.find_folder": {
+    "message": "フォルダーを探す",
+    "description": "Settings → Sync: look for a sync folder that moved.",
+    "_machine_translated": true,
+    "_source_hash": "f33535feab0a5042"
+  },
+  "settings.sync.action.choose_folder": {
+    "message": "フォルダーを選択…",
+    "description": "Settings → Sync: use a different sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "bdf6f9e9922ea99f"
+  },
+  "settings.sync.action.start_over_here": {
+    "message": "このコンピューターからやり直す",
+    "description": "Settings → Sync when the sync folder is empty.",
+    "_machine_translated": true,
+    "_source_hash": "6f720aa5a343154e"
+  },
+  "settings.sync.action.turn_off": {
+    "message": "同期をオフにする",
+    "description": "Settings → Sync when the sync folder is empty.",
+    "_machine_translated": true,
+    "_source_hash": "23be5e5eacaa15b9"
+  },
+  "settings.sync.action.join_again": {
+    "message": "再度参加",
+    "description": "Settings → Sync after sync was started over or this computer was removed.",
+    "_machine_translated": true,
+    "_source_hash": "651546811bad463f"
+  },
+  "settings.sync.action.ok": {
+    "message": "OK",
+    "description": "Settings → Sync: acknowledge that this computer was removed (turns sync off here).",
+    "_machine_translated": true,
+    "_source_hash": "73e827f69ba74ac7"
+  },
+  "settings.sync.find.found": {
+    "message": "同期フォルダーが見つかりました。",
+    "description": "Settings → Sync after Find folder succeeded.",
+    "_machine_translated": true,
+    "_source_hash": "b65afe40334c02d8"
+  },
+  "settings.sync.find.not_found": {
+    "message": "Kage は同期フォルダーを見つけられませんでした。代わりにフォルダーを選択してください。",
+    "description": "Settings → Sync after Find folder found nothing.",
+    "_machine_translated": true,
+    "_source_hash": "f3d5895df6e2abbe"
+  },
+  "settings.sync.folder_label": {
+    "message": "フォルダー",
+    "description": "Settings → Sync: the sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "aadc450f05ba9225"
+  },
+  "settings.sync.this_computer": {
+    "message": "このコンピューター",
+    "description": "Settings → Sync: this computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "932c5417da9d8611"
+  },
+  "settings.sync.change": {
+    "message": "変更…",
+    "description": "Settings → Sync: change the sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "c1cb27cf4975c58a"
+  },
+  "settings.sync.rename": {
+    "message": "名前を変更",
+    "description": "Settings → Sync: rename this computer.",
+    "_machine_translated": true,
+    "_source_hash": "7e0aea6072c60f00"
+  },
+  "settings.sync.save": {
+    "message": "保存",
+    "description": "Settings → Sync: save a form.",
+    "_machine_translated": true,
+    "_source_hash": "6318e59c8ba1d942"
+  },
+  "settings.sync.choose": {
+    "message": "選択…",
+    "description": "Settings → Sync: choose which extensions sync their data.",
+    "_machine_translated": true,
+    "_source_hash": "3bbf8b96ea4bf728"
+  },
+  "settings.sync.change_folder.title": {
+    "message": "同期フォルダーを変更しますか？",
+    "description": "Settings → Sync: confirm before changing the folder.",
+    "_machine_translated": true,
+    "_source_hash": "66c19263b1756091"
+  },
+  "settings.sync.change_folder.body": {
+    "message": "このコンピューターで同期をオフにしてから、選択したフォルダーで再度設定します。ほかのコンピューターでも同じ変更が必要です。",
+    "description": "Settings → Sync: what changing the folder does.",
+    "_machine_translated": true,
+    "_source_hash": "3d35130a7a762e4b"
+  },
+  "settings.sync.change_folder.ok": {
+    "message": "別のフォルダーを選択",
+    "description": "Settings → Sync: confirm changing the folder.",
+    "_machine_translated": true,
+    "_source_hash": "e293b143b3b08187"
+  },
+  "settings.sync.categories.title": {
+    "message": "このコンピューターで同期する項目",
+    "description": "Settings → Sync: the categories.",
+    "_machine_translated": true,
+    "_source_hash": "1ca15945d2c283ad"
+  },
+  "settings.sync.attention.title": {
+    "message": "確認が必要です",
+    "description": "Settings → Sync: items waiting for a decision.",
+    "_machine_translated": true,
+    "_source_hash": "6fc5f5817ed1ac58"
+  },
+  "settings.sync.attention.conflicts": {
+    "message": "{count, plural, other {# 件の競合}}",
+    "description": "Settings → Sync: open conflicts.",
+    "_machine_translated": true,
+    "_source_hash": "dff4312ccac65335"
+  },
+  "settings.sync.attention.suggestions": {
+    "message": "{count, plural, other {ほかのコンピューターに # 個の拡張機能があります}}",
+    "description": "Settings → Sync: install suggestions.",
+    "_machine_translated": true,
+    "_source_hash": "355c985aeea47dd9"
+  },
+  "settings.sync.attention_badge": {
+    "message": "{count, plural, other {確認が必要な項目が # 件あります}}",
+    "description": "Accessible label of the count on the Sync sidebar item.",
+    "_machine_translated": true,
+    "_source_hash": "b0ee9f32b4f1044c"
+  },
+  "settings.sync.devices.title": {
+    "message": "お使いのコンピューター",
+    "description": "Settings → Sync: the computers that sync.",
+    "_machine_translated": true,
+    "_source_hash": "1dd402635dff31ee"
+  },
+  "settings.sync.devices.this": {
+    "message": "このコンピューター",
+    "description": "Settings → Sync: marks this computer in the list.",
+    "_machine_translated": true,
+    "_source_hash": "3998709b31da2dc0"
+  },
+  "settings.sync.devices.synced": {
+    "message": "{time}に同期",
+    "description": "Settings → Sync: when another computer last wrote to the folder.",
+    "_machine_translated": true,
+    "_source_hash": "f6033920da0bf549"
+  },
+  "settings.sync.devices.inactive": {
+    "message": "最終同期 {time} · 非アクティブ",
+    "description": "Settings → Sync: a computer that hasn't synced for a long time.",
+    "_machine_translated": true,
+    "_source_hash": "205f6c82afdfe963"
+  },
+  "settings.sync.devices.needs_update": {
+    "message": "新しいバージョンの Kage が必要",
+    "description": "Settings → Sync: a computer that can't read the folder until it updates.",
+    "_machine_translated": true,
+    "_source_hash": "28cdcf8c4b9d89fb"
+  },
+  "settings.sync.devices.retired": {
+    "message": "削除済み",
+    "description": "Settings → Sync: a computer that left or was removed.",
+    "_machine_translated": true,
+    "_source_hash": "8b7d1f5f0f22a827"
+  },
+  "settings.sync.devices.remove": {
+    "message": "同期から削除…",
+    "description": "Settings → Sync: remove another computer.",
+    "_machine_translated": true,
+    "_source_hash": "0f80a7722f9e899b"
+  },
+  "settings.sync.devices.remove_label": {
+    "message": "{name} を同期から削除",
+    "description": "Accessible label of the remove button for one computer.",
+    "_machine_translated": true,
+    "_source_hash": "47cfc29fb9a8ebc0"
+  },
+  "settings.sync.devices.remove_confirm": {
+    "message": "{name} を同期から削除しますか？変更は受信されなくなります。設定はそのまま残ります。",
+    "description": "Settings → Sync: confirm removing a computer.",
+    "_machine_translated": true,
+    "_source_hash": "4e26c49e9754a6e7"
+  },
+  "settings.sync.devices.lost": {
+    "message": "紛失または盗難にあいました。暗号化キーとパスフレーズを変更します。",
+    "description": "Settings → Sync: also rotate the key when removing a computer.",
+    "_machine_translated": true,
+    "_source_hash": "bd88342354cdf7f4"
+  },
+  "settings.sync.passphrase.new": {
+    "message": "新しいパスフレーズ",
+    "description": "Settings → Sync: a new passphrase field.",
+    "_machine_translated": true,
+    "_source_hash": "3c3abed7bee85d8a"
+  },
+  "settings.sync.not_synced.title": {
+    "message": "ここでは同期されません",
+    "description": "Settings → Sync: values that stay on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "d34dbeb9d48b30ee"
+  },
+  "settings.sync.not_synced.help": {
+    "message": "これらの値はこのコンピューターに保持されます。Kage がここに値を表示することはありません。",
+    "description": "Settings → Sync: held values are listed by label only.",
+    "_machine_translated": true,
+    "_source_hash": "a502f76d8ae0b599"
+  },
+  "settings.sync.details": {
+    "message": "詳細",
+    "description": "Settings → Sync: list the held values.",
+    "_machine_translated": true,
+    "_source_hash": "d948745b5e3a8f8d"
+  },
+  "settings.sync.stays.title": {
+    "message": "各コンピューターに保持",
+    "description": "Settings → Sync: what never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "2c406b389f55b7f8"
+  },
+  "settings.sync.stays.list": {
+    "message": "サインインと API キー · ツールの権限 · 拡張機能の権限 · ウィンドウの位置 · ログイン時に起動 · プライバシーの選択 · ログ",
+    "description": "Settings → Sync: what never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "00dd8b10f359ce8b"
+  },
+  "settings.sync.advanced": {
+    "message": "詳細",
+    "description": "Settings → Sync: the advanced actions.",
+    "_machine_translated": true,
+    "_source_hash": "46d1bbc09be0bacf"
+  },
+  "settings.sync.passphrase.change_start": {
+    "message": "パスフレーズを変更…",
+    "description": "Settings → Sync: change the passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "d7bffc8abc60c430"
+  },
+  "settings.sync.passphrase.change_button": {
+    "message": "パスフレーズを変更",
+    "description": "Settings → Sync: save the new passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "6caa61b335e7b173"
+  },
+  "settings.sync.passphrase.change_help": {
+    "message": "他のコンピューターは引き続き同期されます。別のコンピューターを参加させるときは、新しいパスフレーズを使用してください。",
+    "description": "Settings → Sync: what changing the passphrase does.",
+    "_machine_translated": true,
+    "_source_hash": "fd4f530ef05d1959"
+  },
+  "settings.sync.passphrase.changed": {
+    "message": "パスフレーズを変更しました。",
+    "description": "Settings → Sync after the passphrase changed.",
+    "_machine_translated": true,
+    "_source_hash": "89d0e5bad02df1bc"
+  },
+  "settings.sync.key_store_line": {
+    "message": "キーの保存場所: {store}",
+    "description": "Settings → Sync: where this computer keeps the sync key.",
+    "_machine_translated": true,
+    "_source_hash": "3856750f9c334e3b"
+  },
+  "settings.sync.key_store.keychain": {
+    "message": "キーチェーン",
+    "description": "Settings → Sync: the key is in the macOS Keychain.",
+    "_machine_translated": true,
+    "_source_hash": "68c237e751ad8366"
+  },
+  "settings.sync.key_store.credential_manager": {
+    "message": "資格情報マネージャー",
+    "description": "Settings → Sync: the key is in Windows Credential Manager.",
+    "_machine_translated": true,
+    "_source_hash": "5125bc3448cb78f7"
+  },
+  "settings.sync.key_store.secret_service": {
+    "message": "Secret Service",
+    "description": "Settings → Sync: the key is in the Linux Secret Service.",
+    "_machine_translated": true,
+    "_source_hash": "ac11b126ab9d6329"
+  },
+  "settings.sync.key_store.file": {
+    "message": "本人のみが読み取れるファイル",
+    "description": "Settings → Sync: the key is in an owner-only file.",
+    "_machine_translated": true,
+    "_source_hash": "bd6b10ba3ba4779f"
+  },
+  "settings.sync.key_store.memory": {
+    "message": "メモリのみ",
+    "description": "Settings → Sync: the key is only in memory (tests).",
+    "_machine_translated": true,
+    "_source_hash": "d5138bfe3ee169a2"
+  },
+  "settings.sync.undo_join_until": {
+    "message": "参加を取り消す（{date} まで）",
+    "description": "Settings → Sync: undo joining, while it can still be undone.",
+    "_machine_translated": true,
+    "_source_hash": "0484e265ae18259e"
+  },
+  "settings.sync.undo_join_button": {
+    "message": "参加を取り消す",
+    "description": "Settings → Sync → Conflicts: undo joining.",
+    "_machine_translated": true,
+    "_source_hash": "5f44fb61ad1ff6af"
+  },
+  "settings.sync.undo_join.title": {
+    "message": "参加を取り消しますか？",
+    "description": "Settings → Sync: confirm undoing a join.",
+    "_machine_translated": true,
+    "_source_hash": "b0da9373e74ea290"
+  },
+  "settings.sync.undo_join.body": {
+    "message": "このコンピューターの同期をオフにし、参加前の設定に戻します。このコンピューターから送信された内容は、他のコンピューターに残ります。",
+    "description": "Settings → Sync: what undoing a join does.",
+    "_machine_translated": true,
+    "_source_hash": "5903011ba9c96c32"
+  },
+  "settings.sync.undo_join.ok": {
+    "message": "参加を取り消す",
+    "description": "Settings → Sync: confirm undoing a join.",
+    "_machine_translated": true,
+    "_source_hash": "1abe5d16d21fe8a9"
+  },
+  "settings.sync.leave.start": {
+    "message": "このコンピューターの同期をオフにする…",
+    "description": "Settings → Sync: leave sync.",
+    "_machine_translated": true,
+    "_source_hash": "f2f696c9ed9d902c"
+  },
+  "settings.sync.leave.title": {
+    "message": "このコンピューターの同期をオフにしますか？",
+    "description": "Settings → Sync: confirm leaving.",
+    "_machine_translated": true,
+    "_source_hash": "33d5986389cd0de8"
+  },
+  "settings.sync.leave.body": {
+    "message": "このコンピューターの設定は現在のまま保持されます。他のコンピューターは引き続き同期されます。",
+    "description": "Settings → Sync: what leaving does.",
+    "_machine_translated": true,
+    "_source_hash": "854a70eb0501432a"
+  },
+  "settings.sync.leave.ok": {
+    "message": "オフにする",
+    "description": "Settings → Sync: confirm leaving.",
+    "_machine_translated": true,
+    "_source_hash": "785de6ea65ab96a4"
+  },
+  "settings.sync.start_over.start": {
+    "message": "最初からやり直す…",
+    "description": "Settings → Sync: start sync over from this computer.",
+    "_machine_translated": true,
+    "_source_hash": "6ba2e8c12e73be44"
+  },
+  "settings.sync.start_over.title": {
+    "message": "同期を最初からやり直しますか？",
+    "description": "Settings → Sync: the start over form.",
+    "_machine_translated": true,
+    "_source_hash": "6c2d41708f52103c"
+  },
+  "settings.sync.start_over.body": {
+    "message": "「Kage Sync」内のすべてを別の場所に移動し、新しいパスフレーズを使って、このコンピューターの設定から同期をやり直します。他のコンピューターは、再度参加させるまで同期が停止します。それらの設定はそのまま保持されます。",
+    "description": "Settings → Sync: what start over does.",
+    "_machine_translated": true,
+    "_source_hash": "541d19f9729435d8"
+  },
+  "settings.sync.start_over.ack": {
+    "message": "すべてのコンピューターを再度参加させる必要があることを理解しました",
+    "description": "Settings → Sync: the start over confirmation box.",
+    "_machine_translated": true,
+    "_source_hash": "0fb84575e0b8eaa6"
+  },
+  "settings.sync.start_over.need_ack": {
+    "message": "先にチェックボックスをオンにして確認してください。",
+    "description": "Settings → Sync: start over without the confirmation box.",
+    "_machine_translated": true,
+    "_source_hash": "bc2149228d3d62f4"
+  },
+  "settings.sync.start_over.button": {
+    "message": "最初からやり直す",
+    "description": "Settings → Sync: confirm start over.",
+    "_machine_translated": true,
+    "_source_hash": "6f5d67b844ea4f51"
+  },
+  "settings.sync.ext.title": {
+    "message": "拡張機能",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "c96dc428fda606e9"
+  },
+  "settings.sync.ext.intro": {
+    "message": "使用している拡張機能とその設定は「拡張機能」で同期されます。一部の拡張機能はデータも同期できます。",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "c59ce8dd20b753e2"
+  },
+  "settings.sync.ext.settings_and_data": {
+    "message": "設定とデータ",
+    "description": "Settings → Sync → Extensions: this extension syncs its settings and data.",
+    "_machine_translated": true,
+    "_source_hash": "6f4a5bf644e85396"
+  },
+  "settings.sync.ext.settings_only": {
+    "message": "設定のみ",
+    "description": "Settings → Sync → Extensions: this extension syncs only its settings.",
+    "_machine_translated": true,
+    "_source_hash": "15728d01c532ca7c"
+  },
+  "settings.sync.ext.sync_data": {
+    "message": "データを同期",
+    "description": "Settings → Sync → Extensions: the data switch.",
+    "_machine_translated": true,
+    "_source_hash": "f4507038c9237a07"
+  },
+  "settings.sync.ext.sign_in_local": {
+    "message": "サインイン情報は各コンピューターに保持されます",
+    "description": "Settings → Sync → Extensions: an extension with a sign-in.",
+    "_machine_translated": true,
+    "_source_hash": "bcbea0221c9daf6e"
+  },
+  "settings.sync.ext.no_data": {
+    "message": "この拡張機能はデータを同期しません",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "e7abe34ed1c61989"
+  },
+  "settings.sync.ext.none": {
+    "message": "拡張機能はインストールされていません。",
+    "description": "Settings → Sync → Extensions with nothing installed.",
+    "_machine_translated": true,
+    "_source_hash": "b6979c63f7cfad5a"
+  },
+  "settings.sync.ext.purge": {
+    "message": "同期フォルダーからデータを削除…",
+    "description": "Settings → Sync → Extensions: purge one extension's synced data.",
+    "_machine_translated": true,
+    "_source_hash": "9b30dd48e7082a20"
+  },
+  "settings.sync.ext.purge_title": {
+    "message": "この拡張機能のデータを同期フォルダーから削除しますか？",
+    "description": "Settings → Sync → Extensions: confirm a purge.",
+    "_machine_translated": true,
+    "_source_hash": "aa1d48ff43a190bd"
+  },
+  "settings.sync.ext.purge_body": {
+    "message": "すべてのコンピューターでデータの同期が停止します。各コンピューターには独自のコピーが残ります。",
+    "description": "Settings → Sync → Extensions: what a purge does.",
+    "_machine_translated": true,
+    "_source_hash": "c799a575f2ecbb83"
+  },
+  "settings.sync.ext.purge_ok": {
+    "message": "同期フォルダーから削除",
+    "description": "Settings → Sync → Extensions: confirm a purge.",
+    "_machine_translated": true,
+    "_source_hash": "2a378427cda11282"
+  },
+  "settings.sync.ext.purged": {
+    "message": "同期フォルダーから削除しました。",
+    "description": "Settings → Sync → Extensions after a purge.",
+    "_machine_translated": true,
+    "_source_hash": "eddd5db3169f7478"
+  },
+  "settings.sync.remote_changed": {
+    "message": "ここにある一部の設定が別のコンピューターで変更されました。",
+    "description": "A Settings section with unsaved edits, after a synced change arrived for it.",
+    "_machine_translated": true,
+    "_source_hash": "46978006e62f2f38"
+  },
+  "settings.sync.remote_changed_show": {
+    "message": "新しい値を表示",
+    "description": "Drop the unsaved edits and show the synced values.",
+    "_machine_translated": true,
+    "_source_hash": "87365a36b400bbee"
+  },
+  "settings.sync.conflicts.another_computer": {
+    "message": "別のコンピューター",
+    "description": "Settings → Sync → Conflicts: a computer whose name isn't known.",
+    "_machine_translated": true,
+    "_source_hash": "8a155fd55db2e86a"
+  },
+  "settings.sync_scope.per_os_short": {
+    "message": "コンピューターの種類ごと",
+    "description": "The where-it-applies control for a value set per OS (hotkeys, paths).",
+    "_machine_translated": true,
+    "_source_hash": "1fee8ec1f1b54003"
+  },
+  "settings.sync_scope.held": {
+    "message": "このコンピューターでは同期しない",
+    "description": "The where-it-applies control for a value held on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "096a634155c6c14d"
+  },
+  "settings.sync_scope.all_value": {
+    "message": "すべてのコンピューター: {value}",
+    "description": "Under the control when this OS has its own value: the shared value.",
+    "_machine_translated": true,
+    "_source_hash": "0058310257c1c1c5"
+  },
+  "settings.sync_scope.differs": {
+    "message": "{os, select, macos {Mac では異なります} windows {Windows では異なります} other {Linux では異なります}}",
+    "description": "The where-it-applies control when another OS has its own value.",
+    "_machine_translated": true,
+    "_source_hash": "08b93bd973bce175"
+  },
+  "settings.sync_scope.other_uses": {
+    "message": "{os, select, macos {Mac では {value} を使用} windows {Windows PC では {value} を使用} other {Linux PC では {value} を使用}}",
+    "description": "The where-it-applies menu: another OS's value.",
+    "_machine_translated": true,
+    "_source_hash": "5060bf0d3697f5fe"
+  },
+  "settings.sync_scope.action.all_value": {
+    "message": "すべてのコンピューターで {value} を使用",
+    "description": "The where-it-applies menu: make this OS's value the shared one.",
+    "_machine_translated": true,
+    "_source_hash": "2160263f4b75dae7"
+  },
+  "settings.sync_scope.aria": {
+    "message": "{name}: {where}。変更",
+    "description": "Accessible label of the where-it-applies control.",
+    "_machine_translated": true,
+    "_source_hash": "75fbdf0c63a5952b"
+  },
+  "settings.sync_scope.menu_label": {
+    "message": "適用範囲",
+    "description": "Accessible label of the where-it-applies menu.",
+    "_machine_translated": true,
+    "_source_hash": "4c38157eb30ad1e6"
+  },
+  "settings.sync_scope.available_on": {
+    "message": "利用可能なコンピューター:",
+    "description": "List item editors: where the item exists.",
+    "_machine_translated": true,
+    "_source_hash": "d35cf90b5df43e4b"
+  },
+  "settings.sync_scope.confirm_this_computer.title": {
+    "message": "このコンピューターのみに保持しますか？",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "f2b628b83e83d233"
+  },
+  "settings.sync_scope.confirm_this_computer.message": {
+    "message": "{name} をほかのコンピューターから削除し、このコンピューターのみに保持しますか？",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "1518f9734a6c9430"
+  },
+  "settings.sync_scope.confirm_this_computer.ok": {
+    "message": "このコンピューターのみに保持",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "664bf30cc2698eb8"
+  },
+  "settings.sync_scope.confirm_this_computer.cancel": {
+    "message": "キャンセル",
+    "description": "Cancel keeping an item only here.",
+    "_machine_translated": true,
+    "_source_hash": "29cc731f22ca1a84"
+  },
+  "settings.sync_scope.failed": {
+    "message": "適用範囲を変更できませんでした",
+    "description": "Error title when a scope change failed.",
+    "_machine_translated": true,
+    "_source_hash": "0bda1d1274c5db70"
+  },
+  "settings.sync_scope.sign_in_local": {
+    "message": "このコンピューター · サインイン情報は同期されません",
+    "description": "An extension's sign-in field never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "a131fbb4e6c53cd1"
+  },
+  "settings.sync_scope.undo": {
+    "message": "元に戻す",
+    "description": "The changed-everywhere note: undo the change.",
+    "_machine_translated": true,
+    "_source_hash": "594ee83adc30a54a"
+  },
+  "settings.sync_scope.value.on": {
+    "message": "オン",
+    "description": "A synced switch that is on.",
+    "_machine_translated": true,
+    "_source_hash": "e7175056f09ad54c"
+  },
+  "settings.sync_scope.value.off": {
+    "message": "オフ",
+    "description": "A synced switch that is off.",
+    "_machine_translated": true,
+    "_source_hash": "27330fcff7372eeb"
+  },
+  "sync.status.waiting_any": {
+    "message": "{count, plural, other {# 個のファイル}}のダウンロードを待っています",
+    "description": "Settings → Sync status line: the sync app hasn't delivered some files yet.",
+    "_machine_translated": true,
+    "_source_hash": "b12aaf5879d8e9f0"
+  },
+  "sync.status.reset_elsewhere": {
+    "message": "別のコンピューターで同期がやり直されました",
+    "description": "Settings → Sync status line.",
+    "_machine_translated": true,
+    "_source_hash": "a0522ce2c97f5260"
+  },
+  "sync.status.removed_elsewhere": {
+    "message": "このコンピューターは別のコンピューターで同期から削除されました",
+    "description": "Settings → Sync status line.",
+    "_machine_translated": true,
+    "_source_hash": "38b12f783463176e"
+  },
+  "sync.conflicts.today": {
+    "message": "今日",
+    "description": "Settings → Sync → Conflicts: entries from today.",
+    "_machine_translated": true,
+    "_source_hash": "16f0d28d1f74f96a"
+  },
+  "sync.conflicts.earlier": {
+    "message": "以前",
+    "description": "Settings → Sync → Conflicts: older entries.",
+    "_machine_translated": true,
+    "_source_hash": "234d0ef0cc2dab31"
+  },
+  "sync.conflicts.earlier_actions": {
+    "message": "参加と復元",
+    "description": "Settings → Sync → Conflicts: grouped entries.",
+    "_machine_translated": true,
+    "_source_hash": "af282a967ead0a7d"
+  },
+  "sync.conflicts.deleted_on": {
+    "message": "{computer} で削除、{time}",
+    "description": "Settings → Sync → Recently deleted.",
+    "_machine_translated": true,
+    "_source_hash": "f18b370e84626341"
+  },
+  "sync.conflicts.keep_all": {
+    "message": "すべて保持",
+    "description": "Settings → Sync → Conflicts: dismiss every entry of a group.",
+    "_machine_translated": true,
+    "_source_hash": "236a702bdd94807e"
+  },
+  "sync.conflicts.hide": {
+    "message": "非表示",
+    "description": "Settings → Sync → Conflicts: collapse a group.",
+    "_machine_translated": true,
+    "_source_hash": "4c732e73238a01ec"
+  },
+  "sync.conflicts.show_versions": {
+    "message": "{count, plural, other {# 件のバージョンを表示}}",
+    "description": "Settings → Sync → Conflicts: Kage's own generated documents.",
+    "_machine_translated": true,
+    "_source_hash": "5d05a87d990c2af9"
+  },
+  "sync.conflicts.state.dismissed": {
+    "message": "現在のバージョンを保持しました",
+    "description": "Settings → Sync → Resolved.",
+    "_machine_translated": true,
+    "_source_hash": "4b8f4477da7dd9c3"
+  },
+  "sync.conflicts.state.restored": {
+    "message": "復元済み",
+    "description": "Settings → Sync → Resolved.",
+    "_machine_translated": true,
+    "_source_hash": "4baa9e05952a7c86"
+  },
+  "sync.conflicts.compare.field": {
+    "message": "項目",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "da533f8e9f13f80d"
+  },
+  "sync.conflicts.compare.now": {
+    "message": "現在",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "2812355f633ed761"
+  },
+  "sync.conflicts.compare.replaced": {
+    "message": "置き換え済み",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "d42345663ec721fc"
+  },
+  "sync.conflicts.empty.replaced": {
+    "message": "競合はありません。",
+    "description": "Settings → Sync → Conflicts, empty.",
+    "_machine_translated": true,
+    "_source_hash": "904bb58df0e4dbb4"
+  },
+  "sync.conflicts.empty.deleted": {
+    "message": "最近削除された項目はありません。",
+    "description": "Settings → Sync → Recently deleted, empty.",
+    "_machine_translated": true,
+    "_source_hash": "e469e43856306f33"
+  },
+  "sync.conflicts.empty.resolved": {
+    "message": "解決済みの項目はまだありません。",
+    "description": "Settings → Sync → Resolved, empty.",
+    "_machine_translated": true,
+    "_source_hash": "91221fc7eb1616a0"
+  },
+  "sync.review.heading": {
+    "message": "確認",
+    "description": "Settings → Sync → Review: title.",
+    "_machine_translated": true,
+    "_source_hash": "ca7a9275b90711e1"
+  },
+  "sync.review.empty": {
+    "message": "確認が必要な項目はありません。",
+    "description": "Settings → Sync → Review, empty.",
+    "_machine_translated": true,
+    "_source_hash": "710c8ca4c3764831"
+  },
+  "sync.review.runnable_intro": {
+    "message": "これらはお使いの他のコンピューターから同期されました。許可するまで、このコンピューターではオフのままです。",
+    "description": "Settings → Sync → Review: synced items that start programs.",
+    "_machine_translated": true,
+    "_source_hash": "cc7ab066cc5fffd8"
+  },
+  "sync.review.title.mass_changes": {
+    "message": "{count, plural, other {# 件の一括削除が確認を待っています}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "79566384bcf71ad1"
+  },
+  "sync.review.title.approvals": {
+    "message": "{count, plural, other {# 個の拡張機能にこのコンピューターでの承認が必要です}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "1d11f28ac4afd56d"
+  },
+  "sync.review.title.suggestions": {
+    "message": "{count, plural, other {# 個の拡張機能が他のコンピューターにあります}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "3a498aa8e26296ac"
+  },
+  "sync.review.title.removals": {
+    "message": "{count, plural, other {# 個の拡張機能が他のコンピューターで削除されました}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "a5cc4143ee3e6666"
+  },
+  "sync.review.from": {
+    "message": "{computer} から",
+    "description": "Settings → Sync → Review: which computer the item came from.",
+    "_machine_translated": true,
+    "_source_hash": "e6a8f3fe85faf5d0"
+  },
+  "sync.review.allow": {
+    "message": "このコンピューターで許可",
+    "description": "Settings → Sync → Review: approve a synced item that starts programs.",
+    "_machine_translated": true,
+    "_source_hash": "08ac88edc4a2d2a4"
+  },
+  "sync.review.keep_off": {
+    "message": "オフのままにする",
+    "description": "Settings → Sync → Review: leave it off here.",
+    "_machine_translated": true,
+    "_source_hash": "1acb8fac22f82e0e"
+  },
+  "sync.review.delete_here": {
+    "message": "ここでも削除",
+    "description": "Settings → Sync → Review: accept a bulk delete from another computer.",
+    "_machine_translated": true,
+    "_source_hash": "5c0666fdd30c5885"
+  },
+  "sync.review.keep_them": {
+    "message": "残す",
+    "description": "Settings → Sync → Review: refuse a bulk delete from another computer.",
+    "_machine_translated": true,
+    "_source_hash": "8d29bb6e819522ed"
+  },
+  "sync.review.delete_everywhere": {
+    "message": "すべてのコンピューターで削除",
+    "description": "Settings → Sync → Review: confirm this computer's bulk delete.",
+    "_machine_translated": true,
+    "_source_hash": "3bbee4f22efb5177"
+  },
+  "sync.review.cancel_delete": {
+    "message": "キャンセル",
+    "description": "Settings → Sync → Review: undo this computer's bulk delete.",
+    "_machine_translated": true,
+    "_source_hash": "aa2c95b7c685a882"
+  },
+  "sync.review.not_here": {
+    "message": "このコンピューターでは使わない",
+    "description": "Settings → Sync → Review: don't suggest it again.",
+    "_machine_translated": true,
+    "_source_hash": "24bc2a0d223fab17"
+  },
+  "sync.review.remove_here": {
+    "message": "ここでも削除",
+    "description": "Settings → Sync → Review: uninstall here what was removed elsewhere.",
+    "_machine_translated": true,
+    "_source_hash": "159b982693d86b8c"
+  },
+  "sync.review.keep": {
+    "message": "残す",
+    "description": "Settings → Sync → Review: keep an extension removed elsewhere.",
+    "_machine_translated": true,
+    "_source_hash": "6aec9b2d7d963b5e"
+  },
+  "sync.review.sideload_hint": {
+    "message": "入手元からこのコンピューターにインストールしてください。",
+    "description": "Settings → Sync → Review: a sideloaded extension can't install itself.",
+    "_machine_translated": true,
+    "_source_hash": "a9fba9d698bf970d"
+  },
+  "chat.session_list.synced_group": {
+    "message": "他のコンピューター",
+    "description": "Chat history: heading over chats copied from the user's other computers by folder sync.",
+    "_machine_translated": true,
+    "_source_hash": "f13c00fe85c2359a"
+  },
+  "chat.session.synced_banner": {
+    "message": "読み取り専用 · {computer} のチャット",
+    "description": "Chat history: banner over a chat from another computer. {computer} is that computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "741989b92a2e73ce"
+  },
+  "chat.session.synced_banner_unnamed": {
+    "message": "読み取り専用 · 他のコンピューターのチャット",
+    "description": "Chat history: banner over a chat from another computer whose name isn't known.",
+    "_machine_translated": true,
+    "_source_hash": "122b987f647d6373"
+  },
+  "chat.session.continue_here": {
+    "message": "ここで続ける",
+    "description": "Chat history: start a new chat on this computer with the other computer's chat attached.",
+    "_machine_translated": true,
+    "_source_hash": "0427d10c012a6ba0"
+  },
+  "chat.session.continue_here_title": {
+    "message": "このチャットを添付して、ここで新しいチャットを開始します",
+    "description": "Tooltip of Continue here.",
+    "_machine_translated": true,
+    "_source_hash": "dac361c64b7aaab0"
+  },
+  "settings.about.backup.sync_pointer": {
+    "message": "すべてのコンピューターで設定を同じに保つには、同期を使用してください。",
+    "description": "About → Backup & restore: a pointer to Settings → Sync.",
+    "_machine_translated": true,
+    "_source_hash": "ac6e6bcc8f097bbb"
+  },
+  "settings.about.backup.sync_pointer_btn": {
+    "message": "同期を開く",
+    "description": "About → Backup & restore: open Settings → Sync.",
+    "_machine_translated": true,
+    "_source_hash": "770819c2affe5661"
   }
 }

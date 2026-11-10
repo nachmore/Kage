@@ -13126,5 +13126,1379 @@
     "description": "README.txt written once into a new sync folder. Shown in the user's language with English below.",
     "_machine_translated": true,
     "_source_hash": "03e4679308a20b74"
+  },
+  "tray.sync_state.up_to_date": {
+    "message": "Naprakész",
+    "description": "{status} of the tray's sync line (tray.sync_status): this computer has sent and read everything.",
+    "_machine_translated": true,
+    "_source_hash": "e5081c08e8db9241"
+  },
+  "tray.sync_state.syncing": {
+    "message": "Szinkronizálás…",
+    "description": "{status} of the tray's sync line (tray.sync_status): sync is sending or reading changes.",
+    "_machine_translated": true,
+    "_source_hash": "b308af81651203bf"
+  },
+  "tray.sync_state.waiting": {
+    "message": "Várakozás a fájlokra",
+    "description": "{status} of the tray's sync line (tray.sync_status): the sync app hasn't downloaded some files yet.",
+    "_machine_translated": true,
+    "_source_hash": "838ea8b6a1da61e3"
+  },
+  "tray.sync_state.paused": {
+    "message": "Szüneteltetve",
+    "description": "{status} of the tray's sync line (tray.sync_status): the user paused sync.",
+    "_machine_translated": true,
+    "_source_hash": "a40b9120696a3221"
+  },
+  "tray.sync_state.attention": {
+    "message": "Beavatkozást igényel",
+    "description": "{status} of the tray's sync line (tray.sync_status): sync stopped and Settings → Sync says why.",
+    "_machine_translated": true,
+    "_source_hash": "65e0401103596626"
+  },
+  "errors.sync.bad_request": {
+    "message": "A szinkronizálás ezt nem tudta használni. Próbálja újra.",
+    "description": "A sync command got a folder path that isn't absolute, or a pause time that isn't a time.",
+    "_machine_translated": true,
+    "_source_hash": "3edf26d9852c5b78"
+  },
+  "sync.notify.title": {
+    "message": "Kage-szinkronizálás",
+    "description": "Title of an OS notification about folder sync, shown only for problems the user must fix.",
+    "_machine_translated": true,
+    "_source_hash": "93e81bce9d2ef084"
+  },
+  "sync.notify.removed": {
+    "message": "Ezt a számítógépet eltávolították a szinkronizálásból. Az újracsatlakozáshoz nyissa meg a Beállítások → Szinkronizálás részt.",
+    "description": "OS notification: another computer removed this one from sync.",
+    "_machine_translated": true,
+    "_source_hash": "65611bf4aba4fb13"
+  },
+  "sync.notify.reset": {
+    "message": "A szinkronizálást egy másik számítógépen újrakezdték. Az újracsatlakozáshoz nyissa meg a Beállítások → Szinkronizálás részt.",
+    "description": "OS notification: another computer started sync over, so this one must join again.",
+    "_machine_translated": true,
+    "_source_hash": "99f78d1a5f8253f0"
+  },
+  "sync.review.suggestion": {
+    "message": "A(z) {name} megtalálható a többi számítógépén",
+    "description": "Needs your attention: an extension or command pack installed on another computer isn't installed here. [Review] opens the install prompt. {name} is the item's id or name.",
+    "_machine_translated": true,
+    "_source_hash": "df5a8b0782386cb8"
+  },
+  "sync.review.suggestion_sideload": {
+    "message": "A(z) {name} megtalálható a többi számítógépén. Telepítse erre a számítógépre onnan, ahonnan beszerezte.",
+    "description": "Needs your attention: an item installed from a file on another computer isn't installed here. {name} is the item's id or name.",
+    "_machine_translated": true,
+    "_source_hash": "a4bd97b160724edf"
+  },
+  "sync.review.removal": {
+    "message": "A(z) {name} el lett távolítva a következőn: {computer}",
+    "description": "Needs your attention: an item still installed here was uninstalled on another computer. Buttons: Remove here, Keep. {name} is the item's id or name; {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "7e4d74b79ba57921"
+  },
+  "errors.sync.bad_cursor": {
+    "message": "Ezt a szinkronizálási kurzort nem a Kage adta ki.",
+    "description": "Error to an extension: context.sync.ack got a cursor that isn't a number from pull.",
+    "_machine_translated": true,
+    "_source_hash": "6dd11d6e272e3e8b"
+  },
+  "errors.sync.ext_bad_request": {
+    "message": "Ez nem érvényes bővítményazonosító.",
+    "description": "Error to an extension: a context.sync call named an invalid extension id.",
+    "_machine_translated": true,
+    "_source_hash": "d33b2cfdc46dfcc1"
+  },
+  "errors.sync.ext_push_too_large": {
+    "message": "Egy szinkronizálási küldés legfeljebb 500 rekordot és törlést, valamint 4 MB-ot tartalmazhat.",
+    "description": "Error to an extension: context.sync.push was over the per-call limits. Push in smaller batches.",
+    "_machine_translated": true,
+    "_source_hash": "617495cdacf83c98"
+  },
+  "settings.sync.unavailable": {
+    "message": "A szinkronizálás nem érhető el a Kage ezen verziójában.",
+    "description": "Settings → Sync, when this build doesn't offer folder sync.",
+    "_machine_translated": true,
+    "_source_hash": "10c44de322c9d873"
+  },
+  "settings.sync.off.syncs": {
+    "message": "Szinkronizálva: Beállítások · Billentyűparancsok és automatizálások · Bővítmények és adataik",
+    "description": "Settings → Sync while off: what sync copies between computers.",
+    "_machine_translated": true,
+    "_source_hash": "3e9fa1fc7743a37e"
+  },
+  "settings.sync.off.chats_optional": {
+    "message": "A csevegési előzmények csak akkor, ha bekapcsolja.",
+    "description": "Settings → Sync while off, after the list of what stays on each computer.",
+    "_machine_translated": true,
+    "_source_hash": "2bc7dd3bbcc0f245"
+  },
+  "settings.sync.setup.again": {
+    "message": "Beállítás újra",
+    "description": "Settings → Sync while a setup is unfinished: start the setup steps again.",
+    "_machine_translated": true,
+    "_source_hash": "bdde38f389d8c680"
+  },
+  "settings.sync.setup.step": {
+    "message": "{n}. lépés / {of}",
+    "description": "Settings → Sync setup: which step the user is on.",
+    "_machine_translated": true,
+    "_source_hash": "cc1227844bfe5eea"
+  },
+  "settings.sync.setup.continue": {
+    "message": "Tovább",
+    "description": "Settings → Sync setup: go to the next step.",
+    "_machine_translated": true,
+    "_source_hash": "eda3337ec437d2a9"
+  },
+  "settings.sync.setup.back": {
+    "message": "Vissza",
+    "description": "Settings → Sync setup: go to the previous step.",
+    "_machine_translated": true,
+    "_source_hash": "c8d3c4982b4569a3"
+  },
+  "settings.sync.setup.cancel": {
+    "message": "Mégse",
+    "description": "Settings → Sync: cancel a setup or a form.",
+    "_machine_translated": true,
+    "_source_hash": "82dc750749ff3dff"
+  },
+  "settings.sync.setup.folder.title": {
+    "message": "Válasszon mappát",
+    "description": "Settings → Sync setup, step 1 title, and the folder picker's title.",
+    "_machine_translated": true,
+    "_source_hash": "a92b73073f968404"
+  },
+  "settings.sync.setup.folder.help": {
+    "message": "Válasszon egy mappát, amelyet a szinkronizálóalkalmazása már szinkronizál, például Dropbox, iCloud Drive vagy OneDrive.",
+    "description": "Settings → Sync setup, step 1.",
+    "_machine_translated": true,
+    "_source_hash": "9715cfd6ffaca1b4"
+  },
+  "settings.sync.setup.folder.other": {
+    "message": "Másik mappa…",
+    "description": "Settings → Sync setup, step 1: open the folder picker.",
+    "_machine_translated": true,
+    "_source_hash": "0607b52dbb6849a7"
+  },
+  "settings.sync.folder.new": {
+    "message": "A Kage itt létrehoz egy „Kage Sync” nevű mappát.",
+    "description": "Settings → Sync setup: the chosen folder has no Kage sync yet.",
+    "_machine_translated": true,
+    "_source_hash": "fe2efc0977a0f8a7"
+  },
+  "settings.sync.folder.existing": {
+    "message": "{count, plural, one {Ebben a mappában már van Kage-szinkronizálás 1 számítógépről. Ez a számítógép csatlakozik hozzá.} other {Ebben a mappában már van Kage-szinkronizálás # számítógépről. Ez a számítógép csatlakozik hozzájuk.}}",
+    "description": "Settings → Sync setup: the chosen folder already holds Kage sync. Computer names are encrypted until the passphrase unlocks them.",
+    "_machine_translated": true,
+    "_source_hash": "8aad852deb1257d1"
+  },
+  "settings.sync.folder.unknown_sync": {
+    "message": "A Kage nem tudja megállapítani, hogy ez a mappa szinkronizálódik-e. Ez nem gond, ha egy másik eszköz szinkronizálja.",
+    "description": "Settings → Sync setup: a note (not an error) for a folder Kage doesn't recognise as a cloud folder.",
+    "_machine_translated": true,
+    "_source_hash": "255d76c27adb3078"
+  },
+  "settings.sync.folder.newer_format": {
+    "message": "Ehhez a szinkronizálási mappához a Kage újabb verziója szükséges. Először frissítse a Kage alkalmazást ezen a számítógépen.",
+    "description": "Settings → Sync setup: the folder was made by a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "e01628c3899b446b"
+  },
+  "settings.sync.check_updates": {
+    "message": "Frissítések keresése",
+    "description": "Settings → Sync: open Settings → Updates.",
+    "_machine_translated": true,
+    "_source_hash": "0b4617378bb6a0b8"
+  },
+  "settings.sync.tip.keep_downloaded_windows": {
+    "message": "A Kage ezt a mappát letöltve tartja.",
+    "description": "Settings → Sync setup tip for OneDrive or Dropbox on Windows.",
+    "_machine_translated": true,
+    "_source_hash": "2f8e216bfe7b3a5b"
+  },
+  "settings.sync.tip.icloud": {
+    "message": "Ehhez a mappához a Letöltve tartás (Keep Downloaded) ajánlott.",
+    "description": "Settings → Sync setup tip for iCloud Drive.",
+    "_machine_translated": true,
+    "_source_hash": "5677c5879a457fdd"
+  },
+  "settings.sync.tip.google_drive": {
+    "message": "Használja a Tükrözés módot, vagy tegye a mappát offline is elérhetővé.",
+    "description": "Settings → Sync setup tip for Google Drive.",
+    "_machine_translated": true,
+    "_source_hash": "1a78e5c64ea68684"
+  },
+  "settings.sync.tip.syncthing": {
+    "message": "Akkor működik a legjobban, ha két számítógépe gyakran egyszerre van online.",
+    "description": "Settings → Sync setup tip for Syncthing.",
+    "_machine_translated": true,
+    "_source_hash": "401eded24b9b3f5b"
+  },
+  "settings.sync.tip.generic": {
+    "message": "Állítsa be a szinkronizáló alkalmazást úgy, hogy ezt a mappát letöltve tartsa ezen a számítógépen.",
+    "description": "Settings → Sync: how to stop the sync app from leaving files online-only.",
+    "_machine_translated": true,
+    "_source_hash": "32dd10784024a47e"
+  },
+  "settings.sync.setup.passphrase.create_title": {
+    "message": "Szinkronizálási jelmondat létrehozása",
+    "description": "Settings → Sync setup, step 2 when creating a sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "8a560401a4fe179b"
+  },
+  "settings.sync.setup.passphrase.join_title": {
+    "message": "Adja meg a szinkronizálási jelmondatot",
+    "description": "Settings → Sync setup, step 2 when joining a sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "843973006c8baeba"
+  },
+  "settings.sync.setup.passphrase.label": {
+    "message": "Jelmondat",
+    "description": "Settings → Sync: the passphrase field.",
+    "_machine_translated": true,
+    "_source_hash": "5a0b24ccf514199b"
+  },
+  "settings.sync.setup.passphrase.confirm": {
+    "message": "Írja be újra",
+    "description": "Settings → Sync: the field that confirms a new passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "19dba44516997e18"
+  },
+  "settings.sync.setup.passphrase.rule": {
+    "message": "Legalább {count} karaktert használjon.",
+    "description": "Settings → Sync: the passphrase length rule.",
+    "_machine_translated": true,
+    "_source_hash": "a49932aca0361bd0"
+  },
+  "settings.sync.setup.passphrase.make": {
+    "message": "Hozzon létre egyet nekem",
+    "description": "Settings → Sync setup: generate a passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "7c27aa4cdeb82ba7"
+  },
+  "settings.sync.setup.passphrase.generated": {
+    "message": "Az Ön jelmondata:",
+    "description": "Settings → Sync setup: shown before a generated passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "db906a7540bf9e95"
+  },
+  "settings.sync.setup.passphrase.copy": {
+    "message": "Másolás",
+    "description": "Settings → Sync setup: copy the generated passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "3af98ae2e4226f2f"
+  },
+  "settings.sync.setup.passphrase.once": {
+    "message": "Minden számítógépén egyszer kell majd beírnia.",
+    "description": "Settings → Sync setup, before the note that the passphrase can't be recovered.",
+    "_machine_translated": true,
+    "_source_hash": "e1df7e4832df6866"
+  },
+  "settings.sync.setup.passphrase.join_help": {
+    "message": "Ez az a jelmondat, amelyet az első számítógépén, a szinkronizálás beállításakor hozott létre.",
+    "description": "Settings → Sync setup when joining.",
+    "_machine_translated": true,
+    "_source_hash": "2f554a6b24c5f0f5"
+  },
+  "settings.sync.passphrase.required": {
+    "message": "Adja meg a jelmondatot.",
+    "description": "Settings → Sync: the passphrase field is empty.",
+    "_machine_translated": true,
+    "_source_hash": "dc49a5a5a0b630b8"
+  },
+  "settings.sync.passphrase.mismatch": {
+    "message": "A két jelmondat nem egyezik.",
+    "description": "Settings → Sync: the confirm field doesn't match.",
+    "_machine_translated": true,
+    "_source_hash": "5812ec99ca49f57c"
+  },
+  "settings.sync.setup.name.title": {
+    "message": "Számítógép elnevezése",
+    "description": "Settings → Sync setup, step 3.",
+    "_machine_translated": true,
+    "_source_hash": "32468823bab3883f"
+  },
+  "settings.sync.setup.name.label": {
+    "message": "Számítógép neve",
+    "description": "Settings → Sync: the computer name field.",
+    "_machine_translated": true,
+    "_source_hash": "00eb8cbef58d650d"
+  },
+  "settings.sync.setup.name.help": {
+    "message": "A többi számítógépe ezt a nevet látja. Csak a titkosított fájlokban van tárolva.",
+    "description": "Settings → Sync setup, step 3.",
+    "_machine_translated": true,
+    "_source_hash": "fba210bf6876a97f"
+  },
+  "settings.sync.name.default.macos": {
+    "message": "Saját Mac",
+    "description": "Settings → Sync setup: the suggested name of this computer on macOS.",
+    "_machine_translated": true,
+    "_source_hash": "8d356c206127bbcf"
+  },
+  "settings.sync.name.default.windows": {
+    "message": "Saját PC",
+    "description": "Settings → Sync setup: the suggested name of this computer on Windows.",
+    "_machine_translated": true,
+    "_source_hash": "2b742193a4cdce7c"
+  },
+  "settings.sync.name.default.linux": {
+    "message": "Saját Linux-számítógép",
+    "description": "Settings → Sync setup: the suggested name of this computer on Linux.",
+    "_machine_translated": true,
+    "_source_hash": "9d91690d4f051fe8"
+  },
+  "settings.sync.setup.categories.title": {
+    "message": "Mi legyen szinkronizálva ezen a számítógépen",
+    "description": "Settings → Sync setup, step 4.",
+    "_machine_translated": true,
+    "_source_hash": "3e03918dbf5af821"
+  },
+  "settings.sync.setup.categories.pasted_keys": {
+    "message": "A parancsikonok és automatizálások úgy szinkronizálódnak, ahogy beírta őket. Ha kulcsot illesztett be valamelyikbe, az is szinkronizálódik, titkosítva.",
+    "description": "Settings → Sync setup, step 4.",
+    "_machine_translated": true,
+    "_source_hash": "70b4971e5d8947ea"
+  },
+  "settings.sync.category.settings_desc": {
+    "message": "Beállítások, ügynökök, alkalmazásmódok, személyre szabás",
+    "description": "Settings → Sync: what the Settings category holds.",
+    "_machine_translated": true,
+    "_source_hash": "c2d0d381879a3b18"
+  },
+  "settings.sync.category.automations_desc": {
+    "message": "Parancsok, promptok, automatizálások és egyéni műveletek",
+    "description": "Settings → Sync setup: what the Shortcuts & automations category holds.",
+    "_machine_translated": true,
+    "_source_hash": "e23ec77c59653f91"
+  },
+  "settings.sync.category.extensions_desc": {
+    "message": "A használt bővítmények, azok beállításai, valamint a szinkronizálást támogató bővítmények adatai",
+    "description": "Settings → Sync setup: what the Extensions category holds.",
+    "_machine_translated": true,
+    "_source_hash": "364edde7b518c15b"
+  },
+  "settings.sync.category.chats_desc": {
+    "message": "A csevegései csak olvasható másolatai a többi számítógépén",
+    "description": "Settings → Sync setup: what the Chat history category holds.",
+    "_machine_translated": true,
+    "_source_hash": "745f3d3652e0f662"
+  },
+  "settings.sync.category.automations_counts": {
+    "message": "{shortcuts, plural, one {# parancsikon} other {# parancsikon}} · {macros, plural, one {# automatizálás} other {# automatizálás}} · {actions, plural, one {# egyéni művelet} other {# egyéni művelet}}",
+    "description": "Settings → Sync: how much the Shortcuts & automations category holds on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "32aecaf7815ed604"
+  },
+  "settings.sync.category.extensions_count": {
+    "message": "{count, plural, one {# bővítmény} other {# bővítmény}}",
+    "description": "Settings → Sync: how many extensions are installed.",
+    "_machine_translated": true,
+    "_source_hash": "c62f8784bc97b755"
+  },
+  "settings.sync.category.chats_on": {
+    "message": "Be",
+    "description": "Settings → Sync: the Chat history category is on.",
+    "_machine_translated": true,
+    "_source_hash": "1f59bf43d1aae1b6"
+  },
+  "settings.sync.category.off": {
+    "message": "Ki",
+    "description": "Settings → Sync: a category is off.",
+    "_machine_translated": true,
+    "_source_hash": "302eda57ba41b460"
+  },
+  "settings.sync.setup.turn_on": {
+    "message": "Szinkronizálás bekapcsolása",
+    "description": "Settings → Sync setup: create the sync folder and start syncing.",
+    "_machine_translated": true,
+    "_source_hash": "5edfcbe543942597"
+  },
+  "settings.sync.setup.unlock": {
+    "message": "Feloldás",
+    "description": "Settings → Sync setup when joining: check the passphrase and preview what joining changes.",
+    "_machine_translated": true,
+    "_source_hash": "3ab7bb122cbf6344"
+  },
+  "settings.sync.setup.join": {
+    "message": "Csatlakozás",
+    "description": "Settings → Sync setup: join the other computers.",
+    "_machine_translated": true,
+    "_source_hash": "5e326bf38efc0a09"
+  },
+  "settings.sync.join.title": {
+    "message": "Csatlakozás a többi számítógépéhez",
+    "description": "Settings → Sync setup: the join step.",
+    "_machine_translated": true,
+    "_source_hash": "01f4206254a35450"
+  },
+  "settings.sync.join.from": {
+    "message": "Ebben a mappában Kage-szinkronizálási adatok vannak a következő gépekről: {computers}.",
+    "description": "Settings → Sync setup: the computers already in the folder. {computers} is a list of names with their OS.",
+    "_machine_translated": true,
+    "_source_hash": "46073f24fc9d6e04"
+  },
+  "settings.sync.join.computer": {
+    "message": "{name} ({os})",
+    "description": "Settings → Sync setup: one computer in the folder, with its OS.",
+    "_machine_translated": true,
+    "_source_hash": "8884e2758de8cd19"
+  },
+  "settings.sync.join.question": {
+    "message": "Ezen a számítógépen már vannak beállítások. Eltérés esetén melyik legyen az érvényes?",
+    "description": "Settings → Sync setup: the join choice.",
+    "_machine_translated": true,
+    "_source_hash": "b8c99d987efeee70"
+  },
+  "settings.sync.join.counts": {
+    "message": "{different, plural, =0 {Nincs eltérő beállítás.} one {1 beállítás eltér.} other {# beállítás eltér.}} {only_here, plural, =0 {} one {1 elem csak ezen a számítógépen van meg; megmarad.} other {# elem csak ezen a számítógépen van meg; megmaradnak.}}",
+    "description": "Settings → Sync setup: what joining changes.",
+    "_machine_translated": true,
+    "_source_hash": "3c64cb5bc8a8d1e6"
+  },
+  "settings.sync.done.title": {
+    "message": "A szinkronizálás be van kapcsolva",
+    "description": "Settings → Sync: setup finished.",
+    "_machine_translated": true,
+    "_source_hash": "215c7cd96d11ce49"
+  },
+  "settings.sync.done.button": {
+    "message": "Kész",
+    "description": "Settings → Sync: close the setup.",
+    "_machine_translated": true,
+    "_source_hash": "581db0f639b5836e"
+  },
+  "settings.sync.done.suggestions": {
+    "message": "{count, plural, one {A többi számítógépéről 1 bővítmény még nincs telepítve itt} other {A többi számítógépéről # bővítmény még nincs telepítve itt}}",
+    "description": "Settings → Sync after setup.",
+    "_machine_translated": true,
+    "_source_hash": "4229756465881837"
+  },
+  "settings.sync.done.replaced": {
+    "message": "{count, plural, one {A számítógép 1 beállítását egy szinkronizált beállítás váltotta fel} other {A számítógép # beállítását szinkronizált beállítások váltották fel}}",
+    "description": "Settings → Sync after joining.",
+    "_machine_translated": true,
+    "_source_hash": "fdeaea45a467cddc"
+  },
+  "settings.sync.review": {
+    "message": "Áttekintés",
+    "description": "Settings → Sync: open what needs a decision.",
+    "_machine_translated": true,
+    "_source_hash": "b8ddcd6b6ef481e4"
+  },
+  "settings.sync.undo": {
+    "message": "Visszavonás",
+    "description": "Settings → Sync after joining: undo joining.",
+    "_machine_translated": true,
+    "_source_hash": "806daad3f03ef96a"
+  },
+  "settings.sync.back": {
+    "message": "Vissza",
+    "description": "Settings → Sync: back to the main page.",
+    "_machine_translated": true,
+    "_source_hash": "0f060401c8bb660b"
+  },
+  "settings.sync.sync_now": {
+    "message": "Szinkronizálás most",
+    "description": "Settings → Sync: run sync at once.",
+    "_machine_translated": true,
+    "_source_hash": "3653ca933c1f2c78"
+  },
+  "settings.sync.syncing_now": {
+    "message": "Szinkronizálás folyamatban…",
+    "description": "Settings → Sync after Sync now.",
+    "_machine_translated": true,
+    "_source_hash": "7e38121849470cdd"
+  },
+  "settings.sync.pause": {
+    "message": "Szüneteltetés",
+    "description": "Settings → Sync: open the pause choices.",
+    "_machine_translated": true,
+    "_source_hash": "736962e79d5965ae"
+  },
+  "settings.sync.pause.1h": {
+    "message": "1 órára",
+    "description": "Settings → Sync: pause for an hour.",
+    "_machine_translated": true,
+    "_source_hash": "ea6c04f73101f9e1"
+  },
+  "settings.sync.pause.tomorrow": {
+    "message": "Holnapig",
+    "description": "Settings → Sync: pause until tomorrow morning.",
+    "_machine_translated": true,
+    "_source_hash": "f21ec784dc6f32f2"
+  },
+  "settings.sync.pause.forever": {
+    "message": "Amíg újra nem indítom",
+    "description": "Settings → Sync: pause with no end.",
+    "_machine_translated": true,
+    "_source_hash": "581c41a00f1a8ff1"
+  },
+  "settings.sync.action.resume": {
+    "message": "Folytatás",
+    "description": "Settings → Sync: end a pause.",
+    "_machine_translated": true,
+    "_source_hash": "e88155942f8c989a"
+  },
+  "settings.sync.action.keep_downloaded": {
+    "message": "Hogyan tartható letöltve",
+    "description": "Settings → Sync: show how to keep the sync folder downloaded.",
+    "_machine_translated": true,
+    "_source_hash": "f43cd80cae4eae93"
+  },
+  "settings.sync.action.unlock": {
+    "message": "Jelmondat megadása",
+    "description": "Settings → Sync: unlock sync with the passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "03366e4f0592c3fb"
+  },
+  "settings.sync.action.find_folder": {
+    "message": "Mappa keresése",
+    "description": "Settings → Sync: look for a sync folder that moved.",
+    "_machine_translated": true,
+    "_source_hash": "f33535feab0a5042"
+  },
+  "settings.sync.action.choose_folder": {
+    "message": "Mappa kiválasztása…",
+    "description": "Settings → Sync: use a different sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "bdf6f9e9922ea99f"
+  },
+  "settings.sync.action.start_over_here": {
+    "message": "Újrakezdés erről a számítógépről",
+    "description": "Settings → Sync when the sync folder is empty.",
+    "_machine_translated": true,
+    "_source_hash": "6f720aa5a343154e"
+  },
+  "settings.sync.action.turn_off": {
+    "message": "Szinkronizálás kikapcsolása",
+    "description": "Settings → Sync when the sync folder is empty.",
+    "_machine_translated": true,
+    "_source_hash": "23be5e5eacaa15b9"
+  },
+  "settings.sync.action.join_again": {
+    "message": "Újracsatlakozás",
+    "description": "Settings → Sync after sync was started over or this computer was removed.",
+    "_machine_translated": true,
+    "_source_hash": "651546811bad463f"
+  },
+  "settings.sync.action.ok": {
+    "message": "OK",
+    "description": "Settings → Sync: acknowledge that this computer was removed (turns sync off here).",
+    "_machine_translated": true,
+    "_source_hash": "73e827f69ba74ac7"
+  },
+  "settings.sync.find.found": {
+    "message": "A szinkronizálási mappa megvan.",
+    "description": "Settings → Sync after Find folder succeeded.",
+    "_machine_translated": true,
+    "_source_hash": "b65afe40334c02d8"
+  },
+  "settings.sync.find.not_found": {
+    "message": "A Kage nem találta a szinkronizálási mappát. Válassza ki kézzel.",
+    "description": "Settings → Sync after Find folder found nothing.",
+    "_machine_translated": true,
+    "_source_hash": "f3d5895df6e2abbe"
+  },
+  "settings.sync.folder_label": {
+    "message": "Mappa",
+    "description": "Settings → Sync: the sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "aadc450f05ba9225"
+  },
+  "settings.sync.this_computer": {
+    "message": "Ez a számítógép",
+    "description": "Settings → Sync: this computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "932c5417da9d8611"
+  },
+  "settings.sync.change": {
+    "message": "Módosítás…",
+    "description": "Settings → Sync: change the sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "c1cb27cf4975c58a"
+  },
+  "settings.sync.rename": {
+    "message": "Átnevezés",
+    "description": "Settings → Sync: rename this computer.",
+    "_machine_translated": true,
+    "_source_hash": "7e0aea6072c60f00"
+  },
+  "settings.sync.save": {
+    "message": "Mentés",
+    "description": "Settings → Sync: save a form.",
+    "_machine_translated": true,
+    "_source_hash": "6318e59c8ba1d942"
+  },
+  "settings.sync.choose": {
+    "message": "Kiválasztás…",
+    "description": "Settings → Sync: choose which extensions sync their data.",
+    "_machine_translated": true,
+    "_source_hash": "3bbf8b96ea4bf728"
+  },
+  "settings.sync.change_folder.title": {
+    "message": "Módosítja a szinkronizálási mappát?",
+    "description": "Settings → Sync: confirm before changing the folder.",
+    "_machine_translated": true,
+    "_source_hash": "66c19263b1756091"
+  },
+  "settings.sync.change_folder.body": {
+    "message": "Ez kikapcsolja a szinkronizálást ezen a számítógépen, majd újra beállítja a kiválasztott mappával. A többi számítógépén is el kell végezni ugyanezt a módosítást.",
+    "description": "Settings → Sync: what changing the folder does.",
+    "_machine_translated": true,
+    "_source_hash": "3d35130a7a762e4b"
+  },
+  "settings.sync.change_folder.ok": {
+    "message": "Másik mappa kiválasztása",
+    "description": "Settings → Sync: confirm changing the folder.",
+    "_machine_translated": true,
+    "_source_hash": "e293b143b3b08187"
+  },
+  "settings.sync.categories.title": {
+    "message": "Mi szinkronizálódik ezen a számítógépen",
+    "description": "Settings → Sync: the categories.",
+    "_machine_translated": true,
+    "_source_hash": "1ca15945d2c283ad"
+  },
+  "settings.sync.attention.title": {
+    "message": "Figyelmet igényel",
+    "description": "Settings → Sync: items waiting for a decision.",
+    "_machine_translated": true,
+    "_source_hash": "6fc5f5817ed1ac58"
+  },
+  "settings.sync.attention.conflicts": {
+    "message": "{count, plural, one {1 ütközés} other {# ütközés}}",
+    "description": "Settings → Sync: open conflicts.",
+    "_machine_translated": true,
+    "_source_hash": "dff4312ccac65335"
+  },
+  "settings.sync.attention.suggestions": {
+    "message": "{count, plural, one {1 bővítmény megtalálható a többi számítógépén} other {# bővítmény megtalálható a többi számítógépén}}",
+    "description": "Settings → Sync: install suggestions.",
+    "_machine_translated": true,
+    "_source_hash": "355c985aeea47dd9"
+  },
+  "settings.sync.attention_badge": {
+    "message": "{count, plural, one {1 elem figyelmet igényel} other {# elem figyelmet igényel}}",
+    "description": "Accessible label of the count on the Sync sidebar item.",
+    "_machine_translated": true,
+    "_source_hash": "b0ee9f32b4f1044c"
+  },
+  "settings.sync.devices.title": {
+    "message": "Az Ön számítógépei",
+    "description": "Settings → Sync: the computers that sync.",
+    "_machine_translated": true,
+    "_source_hash": "1dd402635dff31ee"
+  },
+  "settings.sync.devices.this": {
+    "message": "ez a számítógép",
+    "description": "Settings → Sync: marks this computer in the list.",
+    "_machine_translated": true,
+    "_source_hash": "3998709b31da2dc0"
+  },
+  "settings.sync.devices.synced": {
+    "message": "szinkronizálva: {time}",
+    "description": "Settings → Sync: when another computer last wrote to the folder.",
+    "_machine_translated": true,
+    "_source_hash": "f6033920da0bf549"
+  },
+  "settings.sync.devices.inactive": {
+    "message": "utoljára szinkronizálva: {time} · inaktív",
+    "description": "Settings → Sync: a computer that hasn't synced for a long time.",
+    "_machine_translated": true,
+    "_source_hash": "205f6c82afdfe963"
+  },
+  "settings.sync.devices.needs_update": {
+    "message": "újabb Kage szükséges",
+    "description": "Settings → Sync: a computer that can't read the folder until it updates.",
+    "_machine_translated": true,
+    "_source_hash": "28cdcf8c4b9d89fb"
+  },
+  "settings.sync.devices.retired": {
+    "message": "eltávolítva",
+    "description": "Settings → Sync: a computer that left or was removed.",
+    "_machine_translated": true,
+    "_source_hash": "8b7d1f5f0f22a827"
+  },
+  "settings.sync.devices.remove": {
+    "message": "Eltávolítás a szinkronizálásból…",
+    "description": "Settings → Sync: remove another computer.",
+    "_machine_translated": true,
+    "_source_hash": "0f80a7722f9e899b"
+  },
+  "settings.sync.devices.remove_label": {
+    "message": "{name} eltávolítása a szinkronizálásból",
+    "description": "Accessible label of the remove button for one computer.",
+    "_machine_translated": true,
+    "_source_hash": "47cfc29fb9a8ebc0"
+  },
+  "settings.sync.devices.remove_confirm": {
+    "message": "Eltávolítja a(z) {name} számítógépet a szinkronizálásból? Többé nem kap módosításokat. A beállításai változatlanok maradnak.",
+    "description": "Settings → Sync: confirm removing a computer.",
+    "_machine_translated": true,
+    "_source_hash": "4e26c49e9754a6e7"
+  },
+  "settings.sync.devices.lost": {
+    "message": "Elveszett vagy ellopták. A titkosítási kulcs és a jelmondat módosítása.",
+    "description": "Settings → Sync: also rotate the key when removing a computer.",
+    "_machine_translated": true,
+    "_source_hash": "bd88342354cdf7f4"
+  },
+  "settings.sync.passphrase.new": {
+    "message": "Új jelmondat",
+    "description": "Settings → Sync: a new passphrase field.",
+    "_machine_translated": true,
+    "_source_hash": "3c3abed7bee85d8a"
+  },
+  "settings.sync.not_synced.title": {
+    "message": "Itt nincs szinkronizálva",
+    "description": "Settings → Sync: values that stay on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "d34dbeb9d48b30ee"
+  },
+  "settings.sync.not_synced.help": {
+    "message": "Ezek az értékek ezen a számítógépen maradnak. A Kage soha nem jeleníti meg őket itt.",
+    "description": "Settings → Sync: held values are listed by label only.",
+    "_machine_translated": true,
+    "_source_hash": "a502f76d8ae0b599"
+  },
+  "settings.sync.details": {
+    "message": "Részletek",
+    "description": "Settings → Sync: list the held values.",
+    "_machine_translated": true,
+    "_source_hash": "d948745b5e3a8f8d"
+  },
+  "settings.sync.stays.title": {
+    "message": "Minden számítógépen helyben marad",
+    "description": "Settings → Sync: what never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "2c406b389f55b7f8"
+  },
+  "settings.sync.stays.list": {
+    "message": "Bejelentkezések és API-kulcsok · eszközengedélyek · bővítményengedélyek · ablakpozíciók · indítás bejelentkezéskor · adatvédelmi beállítások · naplók",
+    "description": "Settings → Sync: what never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "00dd8b10f359ce8b"
+  },
+  "settings.sync.advanced": {
+    "message": "Speciális",
+    "description": "Settings → Sync: the advanced actions.",
+    "_machine_translated": true,
+    "_source_hash": "46d1bbc09be0bacf"
+  },
+  "settings.sync.passphrase.change_start": {
+    "message": "Jelmondat módosítása…",
+    "description": "Settings → Sync: change the passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "d7bffc8abc60c430"
+  },
+  "settings.sync.passphrase.change_button": {
+    "message": "Jelmondat módosítása",
+    "description": "Settings → Sync: save the new passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "6caa61b335e7b173"
+  },
+  "settings.sync.passphrase.change_help": {
+    "message": "A többi számítógépe továbbra is szinkronizál. Egy újabb számítógép csatlakoztatásakor az új jelmondatot használja.",
+    "description": "Settings → Sync: what changing the passphrase does.",
+    "_machine_translated": true,
+    "_source_hash": "fd4f530ef05d1959"
+  },
+  "settings.sync.passphrase.changed": {
+    "message": "A jelmondat módosítva.",
+    "description": "Settings → Sync after the passphrase changed.",
+    "_machine_translated": true,
+    "_source_hash": "89d0e5bad02df1bc"
+  },
+  "settings.sync.key_store_line": {
+    "message": "A kulcs tárolási helye: {store}",
+    "description": "Settings → Sync: where this computer keeps the sync key.",
+    "_machine_translated": true,
+    "_source_hash": "3856750f9c334e3b"
+  },
+  "settings.sync.key_store.keychain": {
+    "message": "Kulcskarika",
+    "description": "Settings → Sync: the key is in the macOS Keychain.",
+    "_machine_translated": true,
+    "_source_hash": "68c237e751ad8366"
+  },
+  "settings.sync.key_store.credential_manager": {
+    "message": "Hitelesítőadat-kezelő",
+    "description": "Settings → Sync: the key is in Windows Credential Manager.",
+    "_machine_translated": true,
+    "_source_hash": "5125bc3448cb78f7"
+  },
+  "settings.sync.key_store.secret_service": {
+    "message": "Secret Service",
+    "description": "Settings → Sync: the key is in the Linux Secret Service.",
+    "_machine_translated": true,
+    "_source_hash": "ac11b126ab9d6329"
+  },
+  "settings.sync.key_store.file": {
+    "message": "Csak Ön által olvasható fájl",
+    "description": "Settings → Sync: the key is in an owner-only file.",
+    "_machine_translated": true,
+    "_source_hash": "bd6b10ba3ba4779f"
+  },
+  "settings.sync.key_store.memory": {
+    "message": "Csak a memóriában",
+    "description": "Settings → Sync: the key is only in memory (tests).",
+    "_machine_translated": true,
+    "_source_hash": "d5138bfe3ee169a2"
+  },
+  "settings.sync.undo_join_until": {
+    "message": "Csatlakozás visszavonása ({date}-ig)",
+    "description": "Settings → Sync: undo joining, while it can still be undone.",
+    "_machine_translated": true,
+    "_source_hash": "0484e265ae18259e"
+  },
+  "settings.sync.undo_join_button": {
+    "message": "Csatlakozás visszavonása",
+    "description": "Settings → Sync → Conflicts: undo joining.",
+    "_machine_translated": true,
+    "_source_hash": "5f44fb61ad1ff6af"
+  },
+  "settings.sync.undo_join.title": {
+    "message": "Visszavonja a csatlakozást?",
+    "description": "Settings → Sync: confirm undoing a join.",
+    "_machine_translated": true,
+    "_source_hash": "b0da9373e74ea290"
+  },
+  "settings.sync.undo_join.body": {
+    "message": "Ezzel kikapcsolja itt a szinkronizálást, és visszaállítja a számítógép csatlakozás előtti beállításait. A többi számítógépe megtartja, amit erről a számítógépről kapott.",
+    "description": "Settings → Sync: what undoing a join does.",
+    "_machine_translated": true,
+    "_source_hash": "5903011ba9c96c32"
+  },
+  "settings.sync.undo_join.ok": {
+    "message": "Csatlakozás visszavonása",
+    "description": "Settings → Sync: confirm undoing a join.",
+    "_machine_translated": true,
+    "_source_hash": "1abe5d16d21fe8a9"
+  },
+  "settings.sync.leave.start": {
+    "message": "Szinkronizálás kikapcsolása ezen a számítógépen…",
+    "description": "Settings → Sync: leave sync.",
+    "_machine_translated": true,
+    "_source_hash": "f2f696c9ed9d902c"
+  },
+  "settings.sync.leave.title": {
+    "message": "Kikapcsolja a szinkronizálást ezen a számítógépen?",
+    "description": "Settings → Sync: confirm leaving.",
+    "_machine_translated": true,
+    "_source_hash": "33d5986389cd0de8"
+  },
+  "settings.sync.leave.body": {
+    "message": "Ez a számítógép megtartja a jelenlegi beállításait. A többi számítógépe továbbra is szinkronizál.",
+    "description": "Settings → Sync: what leaving does.",
+    "_machine_translated": true,
+    "_source_hash": "854a70eb0501432a"
+  },
+  "settings.sync.leave.ok": {
+    "message": "Kikapcsolás",
+    "description": "Settings → Sync: confirm leaving.",
+    "_machine_translated": true,
+    "_source_hash": "785de6ea65ab96a4"
+  },
+  "settings.sync.start_over.start": {
+    "message": "Újrakezdés…",
+    "description": "Settings → Sync: start sync over from this computer.",
+    "_machine_translated": true,
+    "_source_hash": "6ba2e8c12e73be44"
+  },
+  "settings.sync.start_over.title": {
+    "message": "Újrakezdi a szinkronizálást?",
+    "description": "Settings → Sync: the start over form.",
+    "_machine_translated": true,
+    "_source_hash": "6c2d41708f52103c"
+  },
+  "settings.sync.start_over.body": {
+    "message": "Ezzel a „Kage Sync” teljes tartalmát félreteszi, és új jelmondattal, ennek a számítógépnek a beállításaiból indul újra. A többi számítógépe addig nem szinkronizál, amíg újra nem csatlakoztatja őket. Az ő beállításaik változatlanok maradnak.",
+    "description": "Settings → Sync: what start over does.",
+    "_machine_translated": true,
+    "_source_hash": "541d19f9729435d8"
+  },
+  "settings.sync.start_over.ack": {
+    "message": "Tudomásul veszem, hogy minden számítógépnek újra csatlakoznia kell",
+    "description": "Settings → Sync: the start over confirmation box.",
+    "_machine_translated": true,
+    "_source_hash": "0fb84575e0b8eaa6"
+  },
+  "settings.sync.start_over.need_ack": {
+    "message": "Előbb jelölje be a megerősítő négyzetet.",
+    "description": "Settings → Sync: start over without the confirmation box.",
+    "_machine_translated": true,
+    "_source_hash": "bc2149228d3d62f4"
+  },
+  "settings.sync.start_over.button": {
+    "message": "Újrakezdés",
+    "description": "Settings → Sync: confirm start over.",
+    "_machine_translated": true,
+    "_source_hash": "6f5d67b844ea4f51"
+  },
+  "settings.sync.ext.title": {
+    "message": "Bővítmények",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "c96dc428fda606e9"
+  },
+  "settings.sync.ext.intro": {
+    "message": "A használt bővítmények és azok beállításai a „Bővítmények” elemmel szinkronizálódnak. Egyes bővítmények az adataikat is szinkronizálhatják.",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "c59ce8dd20b753e2"
+  },
+  "settings.sync.ext.settings_and_data": {
+    "message": "Beállítások és adatok",
+    "description": "Settings → Sync → Extensions: this extension syncs its settings and data.",
+    "_machine_translated": true,
+    "_source_hash": "6f4a5bf644e85396"
+  },
+  "settings.sync.ext.settings_only": {
+    "message": "Csak beállítások",
+    "description": "Settings → Sync → Extensions: this extension syncs only its settings.",
+    "_machine_translated": true,
+    "_source_hash": "15728d01c532ca7c"
+  },
+  "settings.sync.ext.sync_data": {
+    "message": "Adatok szinkronizálása",
+    "description": "Settings → Sync → Extensions: the data switch.",
+    "_machine_translated": true,
+    "_source_hash": "f4507038c9237a07"
+  },
+  "settings.sync.ext.sign_in_local": {
+    "message": "A bejelentkezés minden számítógépen külön marad",
+    "description": "Settings → Sync → Extensions: an extension with a sign-in.",
+    "_machine_translated": true,
+    "_source_hash": "bcbea0221c9daf6e"
+  },
+  "settings.sync.ext.no_data": {
+    "message": "Ez a bővítmény nem szinkronizál adatokat",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "e7abe34ed1c61989"
+  },
+  "settings.sync.ext.none": {
+    "message": "Nincs telepített bővítmény.",
+    "description": "Settings → Sync → Extensions with nothing installed.",
+    "_machine_translated": true,
+    "_source_hash": "b6979c63f7cfad5a"
+  },
+  "settings.sync.ext.purge": {
+    "message": "Adatainak eltávolítása a szinkronizálási mappából…",
+    "description": "Settings → Sync → Extensions: purge one extension's synced data.",
+    "_machine_translated": true,
+    "_source_hash": "9b30dd48e7082a20"
+  },
+  "settings.sync.ext.purge_title": {
+    "message": "Eltávolítja a bővítmény adatait a szinkronizálási mappából?",
+    "description": "Settings → Sync → Extensions: confirm a purge.",
+    "_machine_translated": true,
+    "_source_hash": "aa1d48ff43a190bd"
+  },
+  "settings.sync.ext.purge_body": {
+    "message": "Az adatai minden számítógépen megszűnnek szinkronizálódni. Minden számítógép megtartja a saját példányát.",
+    "description": "Settings → Sync → Extensions: what a purge does.",
+    "_machine_translated": true,
+    "_source_hash": "c799a575f2ecbb83"
+  },
+  "settings.sync.ext.purge_ok": {
+    "message": "Eltávolítás a szinkronizálási mappából",
+    "description": "Settings → Sync → Extensions: confirm a purge.",
+    "_machine_translated": true,
+    "_source_hash": "2a378427cda11282"
+  },
+  "settings.sync.ext.purged": {
+    "message": "Eltávolítva a szinkronizálási mappából.",
+    "description": "Settings → Sync → Extensions after a purge.",
+    "_machine_translated": true,
+    "_source_hash": "eddd5db3169f7478"
+  },
+  "settings.sync.remote_changed": {
+    "message": "Néhány itteni beállítás egy másik számítógépen megváltozott.",
+    "description": "A Settings section with unsaved edits, after a synced change arrived for it.",
+    "_machine_translated": true,
+    "_source_hash": "46978006e62f2f38"
+  },
+  "settings.sync.remote_changed_show": {
+    "message": "Új értékek megjelenítése",
+    "description": "Drop the unsaved edits and show the synced values.",
+    "_machine_translated": true,
+    "_source_hash": "87365a36b400bbee"
+  },
+  "settings.sync.conflicts.another_computer": {
+    "message": "egy másik számítógép",
+    "description": "Settings → Sync → Conflicts: a computer whose name isn't known.",
+    "_machine_translated": true,
+    "_source_hash": "8a155fd55db2e86a"
+  },
+  "settings.sync_scope.per_os_short": {
+    "message": "Számítógéptípusonként",
+    "description": "The where-it-applies control for a value set per OS (hotkeys, paths).",
+    "_machine_translated": true,
+    "_source_hash": "1fee8ec1f1b54003"
+  },
+  "settings.sync_scope.held": {
+    "message": "Itt nincs szinkronizálva",
+    "description": "The where-it-applies control for a value held on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "096a634155c6c14d"
+  },
+  "settings.sync_scope.all_value": {
+    "message": "Minden számítógép: {value}",
+    "description": "Under the control when this OS has its own value: the shared value.",
+    "_machine_translated": true,
+    "_source_hash": "0058310257c1c1c5"
+  },
+  "settings.sync_scope.differs": {
+    "message": "{os, select, macos {Maceken eltér} windows {Windowson eltér} other {Linuxon eltér}}",
+    "description": "The where-it-applies control when another OS has its own value.",
+    "_machine_translated": true,
+    "_source_hash": "08b93bd973bce175"
+  },
+  "settings.sync_scope.other_uses": {
+    "message": "{os, select, macos {A Macek ezt használják: {value}} windows {A windowsos gépek ezt használják: {value}} other {A linuxos gépek ezt használják: {value}}}",
+    "description": "The where-it-applies menu: another OS's value.",
+    "_machine_translated": true,
+    "_source_hash": "5060bf0d3697f5fe"
+  },
+  "settings.sync_scope.action.all_value": {
+    "message": "{value} használata minden számítógépen",
+    "description": "The where-it-applies menu: make this OS's value the shared one.",
+    "_machine_translated": true,
+    "_source_hash": "2160263f4b75dae7"
+  },
+  "settings.sync_scope.aria": {
+    "message": "{name}: {where}. Módosítás",
+    "description": "Accessible label of the where-it-applies control.",
+    "_machine_translated": true,
+    "_source_hash": "75fbdf0c63a5952b"
+  },
+  "settings.sync_scope.menu_label": {
+    "message": "Hol érvényes",
+    "description": "Accessible label of the where-it-applies menu.",
+    "_machine_translated": true,
+    "_source_hash": "4c38157eb30ad1e6"
+  },
+  "settings.sync_scope.available_on": {
+    "message": "Elérhető itt:",
+    "description": "List item editors: where the item exists.",
+    "_machine_translated": true,
+    "_source_hash": "d35cf90b5df43e4b"
+  },
+  "settings.sync_scope.confirm_this_computer.title": {
+    "message": "Csak ezen a számítógépen marad?",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "f2b628b83e83d233"
+  },
+  "settings.sync_scope.confirm_this_computer.message": {
+    "message": "Eltávolítja a(z) {name} elemet a többi számítógépéről, és csak itt tartja meg?",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "1518f9734a6c9430"
+  },
+  "settings.sync_scope.confirm_this_computer.ok": {
+    "message": "Csak itt marad",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "664bf30cc2698eb8"
+  },
+  "settings.sync_scope.confirm_this_computer.cancel": {
+    "message": "Mégse",
+    "description": "Cancel keeping an item only here.",
+    "_machine_translated": true,
+    "_source_hash": "29cc731f22ca1a84"
+  },
+  "settings.sync_scope.failed": {
+    "message": "Nem sikerült módosítani, hol érvényes",
+    "description": "Error title when a scope change failed.",
+    "_machine_translated": true,
+    "_source_hash": "0bda1d1274c5db70"
+  },
+  "settings.sync_scope.sign_in_local": {
+    "message": "Ez a számítógép · a bejelentkezések nem szinkronizálódnak",
+    "description": "An extension's sign-in field never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "a131fbb4e6c53cd1"
+  },
+  "settings.sync_scope.undo": {
+    "message": "Visszavonás",
+    "description": "The changed-everywhere note: undo the change.",
+    "_machine_translated": true,
+    "_source_hash": "594ee83adc30a54a"
+  },
+  "settings.sync_scope.value.on": {
+    "message": "Be",
+    "description": "A synced switch that is on.",
+    "_machine_translated": true,
+    "_source_hash": "e7175056f09ad54c"
+  },
+  "settings.sync_scope.value.off": {
+    "message": "Ki",
+    "description": "A synced switch that is off.",
+    "_machine_translated": true,
+    "_source_hash": "27330fcff7372eeb"
+  },
+  "sync.status.waiting_any": {
+    "message": "Várakozás {count, plural, one {# fájl} other {# fájl}} letöltésére",
+    "description": "Settings → Sync status line: the sync app hasn't delivered some files yet.",
+    "_machine_translated": true,
+    "_source_hash": "b12aaf5879d8e9f0"
+  },
+  "sync.status.reset_elsewhere": {
+    "message": "A szinkronizálás újra lett kezdve egy másik számítógépen",
+    "description": "Settings → Sync status line.",
+    "_machine_translated": true,
+    "_source_hash": "a0522ce2c97f5260"
+  },
+  "sync.status.removed_elsewhere": {
+    "message": "Ezt a számítógépet egy másik számítógépen eltávolították a szinkronizálásból",
+    "description": "Settings → Sync status line.",
+    "_machine_translated": true,
+    "_source_hash": "38b12f783463176e"
+  },
+  "sync.conflicts.today": {
+    "message": "Ma",
+    "description": "Settings → Sync → Conflicts: entries from today.",
+    "_machine_translated": true,
+    "_source_hash": "16f0d28d1f74f96a"
+  },
+  "sync.conflicts.earlier": {
+    "message": "Korábban",
+    "description": "Settings → Sync → Conflicts: older entries.",
+    "_machine_translated": true,
+    "_source_hash": "234d0ef0cc2dab31"
+  },
+  "sync.conflicts.earlier_actions": {
+    "message": "Csatlakozások és visszaállítások",
+    "description": "Settings → Sync → Conflicts: grouped entries.",
+    "_machine_translated": true,
+    "_source_hash": "af282a967ead0a7d"
+  },
+  "sync.conflicts.deleted_on": {
+    "message": "Törölve: {computer}, {time}",
+    "description": "Settings → Sync → Recently deleted.",
+    "_machine_translated": true,
+    "_source_hash": "f18b370e84626341"
+  },
+  "sync.conflicts.keep_all": {
+    "message": "Összes megtartása",
+    "description": "Settings → Sync → Conflicts: dismiss every entry of a group.",
+    "_machine_translated": true,
+    "_source_hash": "236a702bdd94807e"
+  },
+  "sync.conflicts.hide": {
+    "message": "Elrejtés",
+    "description": "Settings → Sync → Conflicts: collapse a group.",
+    "_machine_translated": true,
+    "_source_hash": "4c732e73238a01ec"
+  },
+  "sync.conflicts.show_versions": {
+    "message": "{count, plural, one {1 verzió megjelenítése} other {# verzió megjelenítése}}",
+    "description": "Settings → Sync → Conflicts: Kage's own generated documents.",
+    "_machine_translated": true,
+    "_source_hash": "5d05a87d990c2af9"
+  },
+  "sync.conflicts.state.dismissed": {
+    "message": "A jelenlegi verzió megtartva",
+    "description": "Settings → Sync → Resolved.",
+    "_machine_translated": true,
+    "_source_hash": "4b8f4477da7dd9c3"
+  },
+  "sync.conflicts.state.restored": {
+    "message": "Visszaállítva",
+    "description": "Settings → Sync → Resolved.",
+    "_machine_translated": true,
+    "_source_hash": "4baa9e05952a7c86"
+  },
+  "sync.conflicts.compare.field": {
+    "message": "Mező",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "da533f8e9f13f80d"
+  },
+  "sync.conflicts.compare.now": {
+    "message": "Most",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "2812355f633ed761"
+  },
+  "sync.conflicts.compare.replaced": {
+    "message": "Lecserélt",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "d42345663ec721fc"
+  },
+  "sync.conflicts.empty.replaced": {
+    "message": "Nincsenek ütközések.",
+    "description": "Settings → Sync → Conflicts, empty.",
+    "_machine_translated": true,
+    "_source_hash": "904bb58df0e4dbb4"
+  },
+  "sync.conflicts.empty.deleted": {
+    "message": "Mostanában nem történt törlés.",
+    "description": "Settings → Sync → Recently deleted, empty.",
+    "_machine_translated": true,
+    "_source_hash": "e469e43856306f33"
+  },
+  "sync.conflicts.empty.resolved": {
+    "message": "Még nincs feloldott elem.",
+    "description": "Settings → Sync → Resolved, empty.",
+    "_machine_translated": true,
+    "_source_hash": "91221fc7eb1616a0"
+  },
+  "sync.review.heading": {
+    "message": "Áttekintés",
+    "description": "Settings → Sync → Review: title.",
+    "_machine_translated": true,
+    "_source_hash": "ca7a9275b90711e1"
+  },
+  "sync.review.empty": {
+    "message": "Semmi sem igényli a figyelmét.",
+    "description": "Settings → Sync → Review, empty.",
+    "_machine_translated": true,
+    "_source_hash": "710c8ca4c3764831"
+  },
+  "sync.review.runnable_intro": {
+    "message": "Ezek a többi számítógépéről érkeztek. Itt kikapcsolva maradnak, amíg nem engedélyezi őket.",
+    "description": "Settings → Sync → Review: synced items that start programs.",
+    "_machine_translated": true,
+    "_source_hash": "cc7ab066cc5fffd8"
+  },
+  "sync.review.title.mass_changes": {
+    "message": "{count, plural, one {1 tömeges törlés vár Önre} other {# tömeges törlés vár Önre}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "79566384bcf71ad1"
+  },
+  "sync.review.title.approvals": {
+    "message": "{count, plural, one {1 bővítmény jóváhagyásra vár itt} other {# bővítmény jóváhagyásra vár itt}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "1d11f28ac4afd56d"
+  },
+  "sync.review.title.suggestions": {
+    "message": "{count, plural, one {1 bővítmény megtalálható a többi számítógépén} other {# bővítmény megtalálható a többi számítógépén}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "3a498aa8e26296ac"
+  },
+  "sync.review.title.removals": {
+    "message": "{count, plural, one {1 bővítményt máshol eltávolítottak} other {# bővítményt máshol eltávolítottak}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "a5cc4143ee3e6666"
+  },
+  "sync.review.from": {
+    "message": "Forrás: {computer}",
+    "description": "Settings → Sync → Review: which computer the item came from.",
+    "_machine_translated": true,
+    "_source_hash": "e6a8f3fe85faf5d0"
+  },
+  "sync.review.allow": {
+    "message": "Engedélyezés ezen a számítógépen",
+    "description": "Settings → Sync → Review: approve a synced item that starts programs.",
+    "_machine_translated": true,
+    "_source_hash": "08ac88edc4a2d2a4"
+  },
+  "sync.review.keep_off": {
+    "message": "Maradjon kikapcsolva",
+    "description": "Settings → Sync → Review: leave it off here.",
+    "_machine_translated": true,
+    "_source_hash": "1acb8fac22f82e0e"
+  },
+  "sync.review.delete_here": {
+    "message": "Törlés itt is",
+    "description": "Settings → Sync → Review: accept a bulk delete from another computer.",
+    "_machine_translated": true,
+    "_source_hash": "5c0666fdd30c5885"
+  },
+  "sync.review.keep_them": {
+    "message": "Megtartás",
+    "description": "Settings → Sync → Review: refuse a bulk delete from another computer.",
+    "_machine_translated": true,
+    "_source_hash": "8d29bb6e819522ed"
+  },
+  "sync.review.delete_everywhere": {
+    "message": "Törlés mindenhol",
+    "description": "Settings → Sync → Review: confirm this computer's bulk delete.",
+    "_machine_translated": true,
+    "_source_hash": "3bbee4f22efb5177"
+  },
+  "sync.review.cancel_delete": {
+    "message": "Mégse",
+    "description": "Settings → Sync → Review: undo this computer's bulk delete.",
+    "_machine_translated": true,
+    "_source_hash": "aa2c95b7c685a882"
+  },
+  "sync.review.not_here": {
+    "message": "Ezen a számítógépen ne",
+    "description": "Settings → Sync → Review: don't suggest it again.",
+    "_machine_translated": true,
+    "_source_hash": "24bc2a0d223fab17"
+  },
+  "sync.review.remove_here": {
+    "message": "Eltávolítás innen",
+    "description": "Settings → Sync → Review: uninstall here what was removed elsewhere.",
+    "_machine_translated": true,
+    "_source_hash": "159b982693d86b8c"
+  },
+  "sync.review.keep": {
+    "message": "Megtartás",
+    "description": "Settings → Sync → Review: keep an extension removed elsewhere.",
+    "_machine_translated": true,
+    "_source_hash": "6aec9b2d7d963b5e"
+  },
+  "sync.review.sideload_hint": {
+    "message": "Telepítse ezen a számítógépen onnan, ahonnan beszerezte.",
+    "description": "Settings → Sync → Review: a sideloaded extension can't install itself.",
+    "_machine_translated": true,
+    "_source_hash": "a9fba9d698bf970d"
+  },
+  "chat.session_list.synced_group": {
+    "message": "A többi számítógépén",
+    "description": "Chat history: heading over chats copied from the user's other computers by folder sync.",
+    "_machine_translated": true,
+    "_source_hash": "f13c00fe85c2359a"
+  },
+  "chat.session.synced_banner": {
+    "message": "Csak olvasható · csevegés innen: {computer}",
+    "description": "Chat history: banner over a chat from another computer. {computer} is that computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "741989b92a2e73ce"
+  },
+  "chat.session.synced_banner_unnamed": {
+    "message": "Csak olvasható · csevegés egy másik számítógépről",
+    "description": "Chat history: banner over a chat from another computer whose name isn't known.",
+    "_machine_translated": true,
+    "_source_hash": "122b987f647d6373"
+  },
+  "chat.session.continue_here": {
+    "message": "Folytatás itt",
+    "description": "Chat history: start a new chat on this computer with the other computer's chat attached.",
+    "_machine_translated": true,
+    "_source_hash": "0427d10c012a6ba0"
+  },
+  "chat.session.continue_here_title": {
+    "message": "Új csevegés indítása itt, ehhez a csevegéshez csatolva",
+    "description": "Tooltip of Continue here.",
+    "_machine_translated": true,
+    "_source_hash": "dac361c64b7aaab0"
+  },
+  "settings.about.backup.sync_pointer": {
+    "message": "Ha azt szeretné, hogy a beállításai minden számítógépén azonosak legyenek, használja a Szinkronizálást.",
+    "description": "About → Backup & restore: a pointer to Settings → Sync.",
+    "_machine_translated": true,
+    "_source_hash": "ac6e6bcc8f097bbb"
+  },
+  "settings.about.backup.sync_pointer_btn": {
+    "message": "Szinkronizálás megnyitása",
+    "description": "About → Backup & restore: open Settings → Sync.",
+    "_machine_translated": true,
+    "_source_hash": "770819c2affe5661"
   }
 }

@@ -13126,5 +13126,1379 @@
     "description": "README.txt written once into a new sync folder. Shown in the user's language with English below.",
     "_machine_translated": true,
     "_source_hash": "03e4679308a20b74"
+  },
+  "tray.sync_state.up_to_date": {
+    "message": "Atualizado",
+    "description": "{status} of the tray's sync line (tray.sync_status): this computer has sent and read everything.",
+    "_machine_translated": true,
+    "_source_hash": "e5081c08e8db9241"
+  },
+  "tray.sync_state.syncing": {
+    "message": "Sincronizando…",
+    "description": "{status} of the tray's sync line (tray.sync_status): sync is sending or reading changes.",
+    "_machine_translated": true,
+    "_source_hash": "b308af81651203bf"
+  },
+  "tray.sync_state.waiting": {
+    "message": "Aguardando arquivos",
+    "description": "{status} of the tray's sync line (tray.sync_status): the sync app hasn't downloaded some files yet.",
+    "_machine_translated": true,
+    "_source_hash": "838ea8b6a1da61e3"
+  },
+  "tray.sync_state.paused": {
+    "message": "Pausado",
+    "description": "{status} of the tray's sync line (tray.sync_status): the user paused sync.",
+    "_machine_translated": true,
+    "_source_hash": "a40b9120696a3221"
+  },
+  "tray.sync_state.attention": {
+    "message": "Requer sua atenção",
+    "description": "{status} of the tray's sync line (tray.sync_status): sync stopped and Settings → Sync says why.",
+    "_machine_translated": true,
+    "_source_hash": "65e0401103596626"
+  },
+  "errors.sync.bad_request": {
+    "message": "A sincronização não conseguiu usar isso. Tente novamente.",
+    "description": "A sync command got a folder path that isn't absolute, or a pause time that isn't a time.",
+    "_machine_translated": true,
+    "_source_hash": "3edf26d9852c5b78"
+  },
+  "sync.notify.title": {
+    "message": "Sincronização do Kage",
+    "description": "Title of an OS notification about folder sync, shown only for problems the user must fix.",
+    "_machine_translated": true,
+    "_source_hash": "93e81bce9d2ef084"
+  },
+  "sync.notify.removed": {
+    "message": "Este computador foi removido da sincronização. Abra Configurações → Sincronização para entrar novamente.",
+    "description": "OS notification: another computer removed this one from sync.",
+    "_machine_translated": true,
+    "_source_hash": "65611bf4aba4fb13"
+  },
+  "sync.notify.reset": {
+    "message": "A sincronização foi reiniciada em outro computador. Abra Configurações → Sincronização para entrar novamente.",
+    "description": "OS notification: another computer started sync over, so this one must join again.",
+    "_machine_translated": true,
+    "_source_hash": "99f78d1a5f8253f0"
+  },
+  "sync.review.suggestion": {
+    "message": "{name} está nos seus outros computadores",
+    "description": "Needs your attention: an extension or command pack installed on another computer isn't installed here. [Review] opens the install prompt. {name} is the item's id or name.",
+    "_machine_translated": true,
+    "_source_hash": "df5a8b0782386cb8"
+  },
+  "sync.review.suggestion_sideload": {
+    "message": "{name} está nos seus outros computadores. Instale-o neste computador a partir de onde você o obteve.",
+    "description": "Needs your attention: an item installed from a file on another computer isn't installed here. {name} is the item's id or name.",
+    "_machine_translated": true,
+    "_source_hash": "a4bd97b160724edf"
+  },
+  "sync.review.removal": {
+    "message": "{name} foi removido em {computer}",
+    "description": "Needs your attention: an item still installed here was uninstalled on another computer. Buttons: Remove here, Keep. {name} is the item's id or name; {computer} is a computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "7e4d74b79ba57921"
+  },
+  "errors.sync.bad_cursor": {
+    "message": "Esse cursor de sincronização não foi fornecido pelo Kage.",
+    "description": "Error to an extension: context.sync.ack got a cursor that isn't a number from pull.",
+    "_machine_translated": true,
+    "_source_hash": "6dd11d6e272e3e8b"
+  },
+  "errors.sync.ext_bad_request": {
+    "message": "Esse não é um ID de extensão válido.",
+    "description": "Error to an extension: a context.sync call named an invalid extension id.",
+    "_machine_translated": true,
+    "_source_hash": "d33b2cfdc46dfcc1"
+  },
+  "errors.sync.ext_push_too_large": {
+    "message": "Um envio de sincronização pode conter no máximo 500 registros e exclusões, e 4 MB.",
+    "description": "Error to an extension: context.sync.push was over the per-call limits. Push in smaller batches.",
+    "_machine_translated": true,
+    "_source_hash": "617495cdacf83c98"
+  },
+  "settings.sync.unavailable": {
+    "message": "A sincronização não está disponível nesta versão do Kage.",
+    "description": "Settings → Sync, when this build doesn't offer folder sync.",
+    "_machine_translated": true,
+    "_source_hash": "10c44de322c9d873"
+  },
+  "settings.sync.off.syncs": {
+    "message": "Sincroniza: Configurações · Atalhos e automações · Extensões e seus dados",
+    "description": "Settings → Sync while off: what sync copies between computers.",
+    "_machine_translated": true,
+    "_source_hash": "3e9fa1fc7743a37e"
+  },
+  "settings.sync.off.chats_optional": {
+    "message": "Histórico de conversas somente se você ativá-lo.",
+    "description": "Settings → Sync while off, after the list of what stays on each computer.",
+    "_machine_translated": true,
+    "_source_hash": "2bc7dd3bbcc0f245"
+  },
+  "settings.sync.setup.again": {
+    "message": "Configurar novamente",
+    "description": "Settings → Sync while a setup is unfinished: start the setup steps again.",
+    "_machine_translated": true,
+    "_source_hash": "bdde38f389d8c680"
+  },
+  "settings.sync.setup.step": {
+    "message": "Etapa {n} de {of}",
+    "description": "Settings → Sync setup: which step the user is on.",
+    "_machine_translated": true,
+    "_source_hash": "cc1227844bfe5eea"
+  },
+  "settings.sync.setup.continue": {
+    "message": "Continuar",
+    "description": "Settings → Sync setup: go to the next step.",
+    "_machine_translated": true,
+    "_source_hash": "eda3337ec437d2a9"
+  },
+  "settings.sync.setup.back": {
+    "message": "Voltar",
+    "description": "Settings → Sync setup: go to the previous step.",
+    "_machine_translated": true,
+    "_source_hash": "c8d3c4982b4569a3"
+  },
+  "settings.sync.setup.cancel": {
+    "message": "Cancelar",
+    "description": "Settings → Sync: cancel a setup or a form.",
+    "_machine_translated": true,
+    "_source_hash": "82dc750749ff3dff"
+  },
+  "settings.sync.setup.folder.title": {
+    "message": "Escolha uma pasta",
+    "description": "Settings → Sync setup, step 1 title, and the folder picker's title.",
+    "_machine_translated": true,
+    "_source_hash": "a92b73073f968404"
+  },
+  "settings.sync.setup.folder.help": {
+    "message": "Escolha uma pasta que seu app de sincronização já sincroniza, como Dropbox, iCloud Drive ou OneDrive.",
+    "description": "Settings → Sync setup, step 1.",
+    "_machine_translated": true,
+    "_source_hash": "9715cfd6ffaca1b4"
+  },
+  "settings.sync.setup.folder.other": {
+    "message": "Outra pasta…",
+    "description": "Settings → Sync setup, step 1: open the folder picker.",
+    "_machine_translated": true,
+    "_source_hash": "0607b52dbb6849a7"
+  },
+  "settings.sync.folder.new": {
+    "message": "O Kage criará uma pasta chamada “Kage Sync” aqui.",
+    "description": "Settings → Sync setup: the chosen folder has no Kage sync yet.",
+    "_machine_translated": true,
+    "_source_hash": "fe2efc0977a0f8a7"
+  },
+  "settings.sync.folder.existing": {
+    "message": "{count, plural, one {Esta pasta já tem sincronização do Kage de 1 computador. Este computador vai se juntar a ele.} other {Esta pasta já tem sincronização do Kage de # computadores. Este computador vai se juntar a eles.}}",
+    "description": "Settings → Sync setup: the chosen folder already holds Kage sync. Computer names are encrypted until the passphrase unlocks them.",
+    "_machine_translated": true,
+    "_source_hash": "8aad852deb1257d1"
+  },
+  "settings.sync.folder.unknown_sync": {
+    "message": "O Kage não consegue saber se esta pasta é sincronizada. Não há problema se outra ferramenta a sincronizar.",
+    "description": "Settings → Sync setup: a note (not an error) for a folder Kage doesn't recognise as a cloud folder.",
+    "_machine_translated": true,
+    "_source_hash": "255d76c27adb3078"
+  },
+  "settings.sync.folder.newer_format": {
+    "message": "Esta pasta de sincronização precisa de uma versão mais recente do Kage. Atualize o Kage neste computador primeiro.",
+    "description": "Settings → Sync setup: the folder was made by a newer Kage.",
+    "_machine_translated": true,
+    "_source_hash": "e01628c3899b446b"
+  },
+  "settings.sync.check_updates": {
+    "message": "Verificar atualizações",
+    "description": "Settings → Sync: open Settings → Updates.",
+    "_machine_translated": true,
+    "_source_hash": "0b4617378bb6a0b8"
+  },
+  "settings.sync.tip.keep_downloaded_windows": {
+    "message": "O Kage manterá esta pasta baixada.",
+    "description": "Settings → Sync setup tip for OneDrive or Dropbox on Windows.",
+    "_machine_translated": true,
+    "_source_hash": "2f8e216bfe7b3a5b"
+  },
+  "settings.sync.tip.icloud": {
+    "message": "Recomenda-se usar Manter Baixado para esta pasta.",
+    "description": "Settings → Sync setup tip for iCloud Drive.",
+    "_machine_translated": true,
+    "_source_hash": "5677c5879a457fdd"
+  },
+  "settings.sync.tip.google_drive": {
+    "message": "Use o modo Espelhar ou disponibilize a pasta off-line.",
+    "description": "Settings → Sync setup tip for Google Drive.",
+    "_machine_translated": true,
+    "_source_hash": "1a78e5c64ea68684"
+  },
+  "settings.sync.tip.syncthing": {
+    "message": "Funciona melhor quando dois dos seus computadores costumam estar on-line ao mesmo tempo.",
+    "description": "Settings → Sync setup tip for Syncthing.",
+    "_machine_translated": true,
+    "_source_hash": "401eded24b9b3f5b"
+  },
+  "settings.sync.tip.generic": {
+    "message": "Configure seu app de sincronização para manter esta pasta baixada neste computador.",
+    "description": "Settings → Sync: how to stop the sync app from leaving files online-only.",
+    "_machine_translated": true,
+    "_source_hash": "32dd10784024a47e"
+  },
+  "settings.sync.setup.passphrase.create_title": {
+    "message": "Crie uma frase secreta de sincronização",
+    "description": "Settings → Sync setup, step 2 when creating a sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "8a560401a4fe179b"
+  },
+  "settings.sync.setup.passphrase.join_title": {
+    "message": "Digite sua frase secreta de sincronização",
+    "description": "Settings → Sync setup, step 2 when joining a sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "843973006c8baeba"
+  },
+  "settings.sync.setup.passphrase.label": {
+    "message": "Frase secreta",
+    "description": "Settings → Sync: the passphrase field.",
+    "_machine_translated": true,
+    "_source_hash": "5a0b24ccf514199b"
+  },
+  "settings.sync.setup.passphrase.confirm": {
+    "message": "Digite novamente",
+    "description": "Settings → Sync: the field that confirms a new passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "19dba44516997e18"
+  },
+  "settings.sync.setup.passphrase.rule": {
+    "message": "Use pelo menos {count} caracteres.",
+    "description": "Settings → Sync: the passphrase length rule.",
+    "_machine_translated": true,
+    "_source_hash": "a49932aca0361bd0"
+  },
+  "settings.sync.setup.passphrase.make": {
+    "message": "Criar uma para mim",
+    "description": "Settings → Sync setup: generate a passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "7c27aa4cdeb82ba7"
+  },
+  "settings.sync.setup.passphrase.generated": {
+    "message": "Sua frase secreta:",
+    "description": "Settings → Sync setup: shown before a generated passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "db906a7540bf9e95"
+  },
+  "settings.sync.setup.passphrase.copy": {
+    "message": "Copiar",
+    "description": "Settings → Sync setup: copy the generated passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "3af98ae2e4226f2f"
+  },
+  "settings.sync.setup.passphrase.once": {
+    "message": "Você vai digitá-la uma vez em cada um dos seus computadores.",
+    "description": "Settings → Sync setup, before the note that the passphrase can't be recovered.",
+    "_machine_translated": true,
+    "_source_hash": "e1df7e4832df6866"
+  },
+  "settings.sync.setup.passphrase.join_help": {
+    "message": "É a frase secreta que você criou ao configurar a sincronização no seu primeiro computador.",
+    "description": "Settings → Sync setup when joining.",
+    "_machine_translated": true,
+    "_source_hash": "2f554a6b24c5f0f5"
+  },
+  "settings.sync.passphrase.required": {
+    "message": "Digite a frase secreta.",
+    "description": "Settings → Sync: the passphrase field is empty.",
+    "_machine_translated": true,
+    "_source_hash": "dc49a5a5a0b630b8"
+  },
+  "settings.sync.passphrase.mismatch": {
+    "message": "As duas frases secretas não são iguais.",
+    "description": "Settings → Sync: the confirm field doesn't match.",
+    "_machine_translated": true,
+    "_source_hash": "5812ec99ca49f57c"
+  },
+  "settings.sync.setup.name.title": {
+    "message": "Dê um nome a este computador",
+    "description": "Settings → Sync setup, step 3.",
+    "_machine_translated": true,
+    "_source_hash": "32468823bab3883f"
+  },
+  "settings.sync.setup.name.label": {
+    "message": "Nome do computador",
+    "description": "Settings → Sync: the computer name field.",
+    "_machine_translated": true,
+    "_source_hash": "00eb8cbef58d650d"
+  },
+  "settings.sync.setup.name.help": {
+    "message": "Seus outros computadores mostram este nome. Ele fica armazenado apenas dentro dos arquivos criptografados.",
+    "description": "Settings → Sync setup, step 3.",
+    "_machine_translated": true,
+    "_source_hash": "fba210bf6876a97f"
+  },
+  "settings.sync.name.default.macos": {
+    "message": "Meu Mac",
+    "description": "Settings → Sync setup: the suggested name of this computer on macOS.",
+    "_machine_translated": true,
+    "_source_hash": "8d356c206127bbcf"
+  },
+  "settings.sync.name.default.windows": {
+    "message": "Meu PC",
+    "description": "Settings → Sync setup: the suggested name of this computer on Windows.",
+    "_machine_translated": true,
+    "_source_hash": "2b742193a4cdce7c"
+  },
+  "settings.sync.name.default.linux": {
+    "message": "Meu computador Linux",
+    "description": "Settings → Sync setup: the suggested name of this computer on Linux.",
+    "_machine_translated": true,
+    "_source_hash": "9d91690d4f051fe8"
+  },
+  "settings.sync.setup.categories.title": {
+    "message": "O que sincronizar neste computador",
+    "description": "Settings → Sync setup, step 4.",
+    "_machine_translated": true,
+    "_source_hash": "3e03918dbf5af821"
+  },
+  "settings.sync.setup.categories.pasted_keys": {
+    "message": "Atalhos e automações são sincronizados exatamente como você os digitou. Se você colou uma chave em algum deles, ela também é sincronizada, criptografada.",
+    "description": "Settings → Sync setup, step 4.",
+    "_machine_translated": true,
+    "_source_hash": "70b4971e5d8947ea"
+  },
+  "settings.sync.category.settings_desc": {
+    "message": "Preferências, agentes, modos do app, personalização",
+    "description": "Settings → Sync: what the Settings category holds.",
+    "_machine_translated": true,
+    "_source_hash": "c2d0d381879a3b18"
+  },
+  "settings.sync.category.automations_desc": {
+    "message": "Comandos, prompts, automações e ações personalizadas",
+    "description": "Settings → Sync setup: what the Shortcuts & automations category holds.",
+    "_machine_translated": true,
+    "_source_hash": "e23ec77c59653f91"
+  },
+  "settings.sync.category.extensions_desc": {
+    "message": "Quais extensões você usa, as configurações delas e os dados das extensões que os sincronizam",
+    "description": "Settings → Sync setup: what the Extensions category holds.",
+    "_machine_translated": true,
+    "_source_hash": "364edde7b518c15b"
+  },
+  "settings.sync.category.chats_desc": {
+    "message": "Cópias somente leitura das suas conversas nos seus outros computadores",
+    "description": "Settings → Sync setup: what the Chat history category holds.",
+    "_machine_translated": true,
+    "_source_hash": "745f3d3652e0f662"
+  },
+  "settings.sync.category.automations_counts": {
+    "message": "{shortcuts, plural, one {# atalho} other {# atalhos}} · {macros, plural, one {# automação} other {# automações}} · {actions, plural, one {# ação personalizada} other {# ações personalizadas}}",
+    "description": "Settings → Sync: how much the Shortcuts & automations category holds on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "32aecaf7815ed604"
+  },
+  "settings.sync.category.extensions_count": {
+    "message": "{count, plural, one {# extensão} other {# extensões}}",
+    "description": "Settings → Sync: how many extensions are installed.",
+    "_machine_translated": true,
+    "_source_hash": "c62f8784bc97b755"
+  },
+  "settings.sync.category.chats_on": {
+    "message": "Ativado",
+    "description": "Settings → Sync: the Chat history category is on.",
+    "_machine_translated": true,
+    "_source_hash": "1f59bf43d1aae1b6"
+  },
+  "settings.sync.category.off": {
+    "message": "Desativado",
+    "description": "Settings → Sync: a category is off.",
+    "_machine_translated": true,
+    "_source_hash": "302eda57ba41b460"
+  },
+  "settings.sync.setup.turn_on": {
+    "message": "Ativar sincronização",
+    "description": "Settings → Sync setup: create the sync folder and start syncing.",
+    "_machine_translated": true,
+    "_source_hash": "5edfcbe543942597"
+  },
+  "settings.sync.setup.unlock": {
+    "message": "Desbloquear",
+    "description": "Settings → Sync setup when joining: check the passphrase and preview what joining changes.",
+    "_machine_translated": true,
+    "_source_hash": "3ab7bb122cbf6344"
+  },
+  "settings.sync.setup.join": {
+    "message": "Conectar",
+    "description": "Settings → Sync setup: join the other computers.",
+    "_machine_translated": true,
+    "_source_hash": "5e326bf38efc0a09"
+  },
+  "settings.sync.join.title": {
+    "message": "Conecte-se aos seus outros computadores",
+    "description": "Settings → Sync setup: the join step.",
+    "_machine_translated": true,
+    "_source_hash": "01f4206254a35450"
+  },
+  "settings.sync.join.from": {
+    "message": "Esta pasta contém a sincronização do Kage de {computers}.",
+    "description": "Settings → Sync setup: the computers already in the folder. {computers} is a list of names with their OS.",
+    "_machine_translated": true,
+    "_source_hash": "46073f24fc9d6e04"
+  },
+  "settings.sync.join.computer": {
+    "message": "{name} ({os})",
+    "description": "Settings → Sync setup: one computer in the folder, with its OS.",
+    "_machine_translated": true,
+    "_source_hash": "8884e2758de8cd19"
+  },
+  "settings.sync.join.question": {
+    "message": "Este computador já tem configurações. Quais devem prevalecer onde houver diferenças?",
+    "description": "Settings → Sync setup: the join choice.",
+    "_machine_translated": true,
+    "_source_hash": "b8c99d987efeee70"
+  },
+  "settings.sync.join.counts": {
+    "message": "{different, plural, =0 {Nenhuma configuração é diferente.} one {1 configuração é diferente.} other {# configurações são diferentes.}} {only_here, plural, =0 {} one {1 item existe apenas neste computador; ele será mantido.} other {# itens existem apenas neste computador; eles serão mantidos.}}",
+    "description": "Settings → Sync setup: what joining changes.",
+    "_machine_translated": true,
+    "_source_hash": "3c64cb5bc8a8d1e6"
+  },
+  "settings.sync.done.title": {
+    "message": "A sincronização está ativada",
+    "description": "Settings → Sync: setup finished.",
+    "_machine_translated": true,
+    "_source_hash": "215c7cd96d11ce49"
+  },
+  "settings.sync.done.button": {
+    "message": "Concluído",
+    "description": "Settings → Sync: close the setup.",
+    "_machine_translated": true,
+    "_source_hash": "581db0f639b5836e"
+  },
+  "settings.sync.done.suggestions": {
+    "message": "{count, plural, one {1 extensão dos seus outros computadores ainda não está instalada aqui} other {# extensões dos seus outros computadores ainda não estão instaladas aqui}}",
+    "description": "Settings → Sync after setup.",
+    "_machine_translated": true,
+    "_source_hash": "4229756465881837"
+  },
+  "settings.sync.done.replaced": {
+    "message": "{count, plural, one {1 definição neste computador foi substituída por uma sincronizada} other {# definições neste computador foram substituídas por definições sincronizadas}}",
+    "description": "Settings → Sync after joining.",
+    "_machine_translated": true,
+    "_source_hash": "fdeaea45a467cddc"
+  },
+  "settings.sync.review": {
+    "message": "Rever",
+    "description": "Settings → Sync: open what needs a decision.",
+    "_machine_translated": true,
+    "_source_hash": "b8ddcd6b6ef481e4"
+  },
+  "settings.sync.undo": {
+    "message": "Anular",
+    "description": "Settings → Sync after joining: undo joining.",
+    "_machine_translated": true,
+    "_source_hash": "806daad3f03ef96a"
+  },
+  "settings.sync.back": {
+    "message": "Voltar",
+    "description": "Settings → Sync: back to the main page.",
+    "_machine_translated": true,
+    "_source_hash": "0f060401c8bb660b"
+  },
+  "settings.sync.sync_now": {
+    "message": "Sincronizar agora",
+    "description": "Settings → Sync: run sync at once.",
+    "_machine_translated": true,
+    "_source_hash": "3653ca933c1f2c78"
+  },
+  "settings.sync.syncing_now": {
+    "message": "A sincronizar…",
+    "description": "Settings → Sync after Sync now.",
+    "_machine_translated": true,
+    "_source_hash": "7e38121849470cdd"
+  },
+  "settings.sync.pause": {
+    "message": "Pausar",
+    "description": "Settings → Sync: open the pause choices.",
+    "_machine_translated": true,
+    "_source_hash": "736962e79d5965ae"
+  },
+  "settings.sync.pause.1h": {
+    "message": "Durante 1 hora",
+    "description": "Settings → Sync: pause for an hour.",
+    "_machine_translated": true,
+    "_source_hash": "ea6c04f73101f9e1"
+  },
+  "settings.sync.pause.tomorrow": {
+    "message": "Até amanhã",
+    "description": "Settings → Sync: pause until tomorrow morning.",
+    "_machine_translated": true,
+    "_source_hash": "f21ec784dc6f32f2"
+  },
+  "settings.sync.pause.forever": {
+    "message": "Até eu retomar",
+    "description": "Settings → Sync: pause with no end.",
+    "_machine_translated": true,
+    "_source_hash": "581c41a00f1a8ff1"
+  },
+  "settings.sync.action.resume": {
+    "message": "Retomar",
+    "description": "Settings → Sync: end a pause.",
+    "_machine_translated": true,
+    "_source_hash": "e88155942f8c989a"
+  },
+  "settings.sync.action.keep_downloaded": {
+    "message": "Como mantê-la transferida",
+    "description": "Settings → Sync: show how to keep the sync folder downloaded.",
+    "_machine_translated": true,
+    "_source_hash": "f43cd80cae4eae93"
+  },
+  "settings.sync.action.unlock": {
+    "message": "Introduzir frase de acesso",
+    "description": "Settings → Sync: unlock sync with the passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "03366e4f0592c3fb"
+  },
+  "settings.sync.action.find_folder": {
+    "message": "Procurar pasta",
+    "description": "Settings → Sync: look for a sync folder that moved.",
+    "_machine_translated": true,
+    "_source_hash": "f33535feab0a5042"
+  },
+  "settings.sync.action.choose_folder": {
+    "message": "Escolher pasta…",
+    "description": "Settings → Sync: use a different sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "bdf6f9e9922ea99f"
+  },
+  "settings.sync.action.start_over_here": {
+    "message": "Recomeçar a partir deste computador",
+    "description": "Settings → Sync when the sync folder is empty.",
+    "_machine_translated": true,
+    "_source_hash": "6f720aa5a343154e"
+  },
+  "settings.sync.action.turn_off": {
+    "message": "Desativar sincronização",
+    "description": "Settings → Sync when the sync folder is empty.",
+    "_machine_translated": true,
+    "_source_hash": "23be5e5eacaa15b9"
+  },
+  "settings.sync.action.join_again": {
+    "message": "Aderir novamente",
+    "description": "Settings → Sync after sync was started over or this computer was removed.",
+    "_machine_translated": true,
+    "_source_hash": "651546811bad463f"
+  },
+  "settings.sync.action.ok": {
+    "message": "OK",
+    "description": "Settings → Sync: acknowledge that this computer was removed (turns sync off here).",
+    "_machine_translated": true,
+    "_source_hash": "73e827f69ba74ac7"
+  },
+  "settings.sync.find.found": {
+    "message": "A sua pasta de sincronização foi encontrada.",
+    "description": "Settings → Sync after Find folder succeeded.",
+    "_machine_translated": true,
+    "_source_hash": "b65afe40334c02d8"
+  },
+  "settings.sync.find.not_found": {
+    "message": "O Kage não encontrou a sua pasta de sincronização. Escolha-a manualmente.",
+    "description": "Settings → Sync after Find folder found nothing.",
+    "_machine_translated": true,
+    "_source_hash": "f3d5895df6e2abbe"
+  },
+  "settings.sync.folder_label": {
+    "message": "Pasta",
+    "description": "Settings → Sync: the sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "aadc450f05ba9225"
+  },
+  "settings.sync.this_computer": {
+    "message": "Este computador",
+    "description": "Settings → Sync: this computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "932c5417da9d8611"
+  },
+  "settings.sync.change": {
+    "message": "Alterar…",
+    "description": "Settings → Sync: change the sync folder.",
+    "_machine_translated": true,
+    "_source_hash": "c1cb27cf4975c58a"
+  },
+  "settings.sync.rename": {
+    "message": "Mudar o nome",
+    "description": "Settings → Sync: rename this computer.",
+    "_machine_translated": true,
+    "_source_hash": "7e0aea6072c60f00"
+  },
+  "settings.sync.save": {
+    "message": "Salvar",
+    "description": "Settings → Sync: save a form.",
+    "_machine_translated": true,
+    "_source_hash": "6318e59c8ba1d942"
+  },
+  "settings.sync.choose": {
+    "message": "Escolher…",
+    "description": "Settings → Sync: choose which extensions sync their data.",
+    "_machine_translated": true,
+    "_source_hash": "3bbf8b96ea4bf728"
+  },
+  "settings.sync.change_folder.title": {
+    "message": "Alterar a pasta de sincronização?",
+    "description": "Settings → Sync: confirm before changing the folder.",
+    "_machine_translated": true,
+    "_source_hash": "66c19263b1756091"
+  },
+  "settings.sync.change_folder.body": {
+    "message": "Isso desativa a sincronização neste computador e depois a configura novamente com a pasta que você escolher. Seus outros computadores precisam da mesma alteração.",
+    "description": "Settings → Sync: what changing the folder does.",
+    "_machine_translated": true,
+    "_source_hash": "3d35130a7a762e4b"
+  },
+  "settings.sync.change_folder.ok": {
+    "message": "Escolher outra pasta",
+    "description": "Settings → Sync: confirm changing the folder.",
+    "_machine_translated": true,
+    "_source_hash": "e293b143b3b08187"
+  },
+  "settings.sync.categories.title": {
+    "message": "O que é sincronizado neste computador",
+    "description": "Settings → Sync: the categories.",
+    "_machine_translated": true,
+    "_source_hash": "1ca15945d2c283ad"
+  },
+  "settings.sync.attention.title": {
+    "message": "Requer sua atenção",
+    "description": "Settings → Sync: items waiting for a decision.",
+    "_machine_translated": true,
+    "_source_hash": "6fc5f5817ed1ac58"
+  },
+  "settings.sync.attention.conflicts": {
+    "message": "{count, plural, one {1 conflito} other {# conflitos}}",
+    "description": "Settings → Sync: open conflicts.",
+    "_machine_translated": true,
+    "_source_hash": "dff4312ccac65335"
+  },
+  "settings.sync.attention.suggestions": {
+    "message": "{count, plural, one {1 extensão está nos seus outros computadores} other {# extensões estão nos seus outros computadores}}",
+    "description": "Settings → Sync: install suggestions.",
+    "_machine_translated": true,
+    "_source_hash": "355c985aeea47dd9"
+  },
+  "settings.sync.attention_badge": {
+    "message": "{count, plural, one {1 item requer sua atenção} other {# itens requerem sua atenção}}",
+    "description": "Accessible label of the count on the Sync sidebar item.",
+    "_machine_translated": true,
+    "_source_hash": "b0ee9f32b4f1044c"
+  },
+  "settings.sync.devices.title": {
+    "message": "Seus computadores",
+    "description": "Settings → Sync: the computers that sync.",
+    "_machine_translated": true,
+    "_source_hash": "1dd402635dff31ee"
+  },
+  "settings.sync.devices.this": {
+    "message": "este computador",
+    "description": "Settings → Sync: marks this computer in the list.",
+    "_machine_translated": true,
+    "_source_hash": "3998709b31da2dc0"
+  },
+  "settings.sync.devices.synced": {
+    "message": "sincronizado {time}",
+    "description": "Settings → Sync: when another computer last wrote to the folder.",
+    "_machine_translated": true,
+    "_source_hash": "f6033920da0bf549"
+  },
+  "settings.sync.devices.inactive": {
+    "message": "última sincronização {time} · inativo",
+    "description": "Settings → Sync: a computer that hasn't synced for a long time.",
+    "_machine_translated": true,
+    "_source_hash": "205f6c82afdfe963"
+  },
+  "settings.sync.devices.needs_update": {
+    "message": "precisa de uma versão mais recente do Kage",
+    "description": "Settings → Sync: a computer that can't read the folder until it updates.",
+    "_machine_translated": true,
+    "_source_hash": "28cdcf8c4b9d89fb"
+  },
+  "settings.sync.devices.retired": {
+    "message": "removido",
+    "description": "Settings → Sync: a computer that left or was removed.",
+    "_machine_translated": true,
+    "_source_hash": "8b7d1f5f0f22a827"
+  },
+  "settings.sync.devices.remove": {
+    "message": "Remover da sincronização…",
+    "description": "Settings → Sync: remove another computer.",
+    "_machine_translated": true,
+    "_source_hash": "0f80a7722f9e899b"
+  },
+  "settings.sync.devices.remove_label": {
+    "message": "Remover {name} da sincronização",
+    "description": "Accessible label of the remove button for one computer.",
+    "_machine_translated": true,
+    "_source_hash": "47cfc29fb9a8ebc0"
+  },
+  "settings.sync.devices.remove_confirm": {
+    "message": "Remover {name} da sincronização? Ele deixará de receber alterações. As configurações dele permanecem como estão.",
+    "description": "Settings → Sync: confirm removing a computer.",
+    "_machine_translated": true,
+    "_source_hash": "4e26c49e9754a6e7"
+  },
+  "settings.sync.devices.lost": {
+    "message": "Ele foi perdido ou roubado. Alterar a chave de criptografia e a frase secreta.",
+    "description": "Settings → Sync: also rotate the key when removing a computer.",
+    "_machine_translated": true,
+    "_source_hash": "bd88342354cdf7f4"
+  },
+  "settings.sync.passphrase.new": {
+    "message": "Nova frase secreta",
+    "description": "Settings → Sync: a new passphrase field.",
+    "_machine_translated": true,
+    "_source_hash": "3c3abed7bee85d8a"
+  },
+  "settings.sync.not_synced.title": {
+    "message": "Não sincronizado aqui",
+    "description": "Settings → Sync: values that stay on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "d34dbeb9d48b30ee"
+  },
+  "settings.sync.not_synced.help": {
+    "message": "Esses valores permanecem neste computador. O Kage nunca os exibe aqui.",
+    "description": "Settings → Sync: held values are listed by label only.",
+    "_machine_translated": true,
+    "_source_hash": "a502f76d8ae0b599"
+  },
+  "settings.sync.details": {
+    "message": "Detalhes",
+    "description": "Settings → Sync: list the held values.",
+    "_machine_translated": true,
+    "_source_hash": "d948745b5e3a8f8d"
+  },
+  "settings.sync.stays.title": {
+    "message": "Permanece em cada computador",
+    "description": "Settings → Sync: what never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "2c406b389f55b7f8"
+  },
+  "settings.sync.stays.list": {
+    "message": "Inícios de sessão e chaves de API · permissões de ferramentas · permissões de extensões · posições das janelas · iniciar com a sessão · opções de privacidade · registos",
+    "description": "Settings → Sync: what never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "00dd8b10f359ce8b"
+  },
+  "settings.sync.advanced": {
+    "message": "Avançado",
+    "description": "Settings → Sync: the advanced actions.",
+    "_machine_translated": true,
+    "_source_hash": "46d1bbc09be0bacf"
+  },
+  "settings.sync.passphrase.change_start": {
+    "message": "Alterar frase-passe…",
+    "description": "Settings → Sync: change the passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "d7bffc8abc60c430"
+  },
+  "settings.sync.passphrase.change_button": {
+    "message": "Alterar frase-passe",
+    "description": "Settings → Sync: save the new passphrase.",
+    "_machine_translated": true,
+    "_source_hash": "6caa61b335e7b173"
+  },
+  "settings.sync.passphrase.change_help": {
+    "message": "Os seus outros computadores continuam a sincronizar. Utilize a nova frase-passe quando associar outro computador.",
+    "description": "Settings → Sync: what changing the passphrase does.",
+    "_machine_translated": true,
+    "_source_hash": "fd4f530ef05d1959"
+  },
+  "settings.sync.passphrase.changed": {
+    "message": "Frase-passe alterada.",
+    "description": "Settings → Sync after the passphrase changed.",
+    "_machine_translated": true,
+    "_source_hash": "89d0e5bad02df1bc"
+  },
+  "settings.sync.key_store_line": {
+    "message": "Onde a chave é guardada: {store}",
+    "description": "Settings → Sync: where this computer keeps the sync key.",
+    "_machine_translated": true,
+    "_source_hash": "3856750f9c334e3b"
+  },
+  "settings.sync.key_store.keychain": {
+    "message": "Keychain",
+    "description": "Settings → Sync: the key is in the macOS Keychain.",
+    "_machine_translated": true,
+    "_source_hash": "68c237e751ad8366"
+  },
+  "settings.sync.key_store.credential_manager": {
+    "message": "Gestor de Credenciais",
+    "description": "Settings → Sync: the key is in Windows Credential Manager.",
+    "_machine_translated": true,
+    "_source_hash": "5125bc3448cb78f7"
+  },
+  "settings.sync.key_store.secret_service": {
+    "message": "Secret Service",
+    "description": "Settings → Sync: the key is in the Linux Secret Service.",
+    "_machine_translated": true,
+    "_source_hash": "ac11b126ab9d6329"
+  },
+  "settings.sync.key_store.file": {
+    "message": "Um ficheiro que só você pode ler",
+    "description": "Settings → Sync: the key is in an owner-only file.",
+    "_machine_translated": true,
+    "_source_hash": "bd6b10ba3ba4779f"
+  },
+  "settings.sync.key_store.memory": {
+    "message": "Apenas em memória",
+    "description": "Settings → Sync: the key is only in memory (tests).",
+    "_machine_translated": true,
+    "_source_hash": "d5138bfe3ee169a2"
+  },
+  "settings.sync.undo_join_until": {
+    "message": "Anular associação (até {date})",
+    "description": "Settings → Sync: undo joining, while it can still be undone.",
+    "_machine_translated": true,
+    "_source_hash": "0484e265ae18259e"
+  },
+  "settings.sync.undo_join_button": {
+    "message": "Anular associação",
+    "description": "Settings → Sync → Conflicts: undo joining.",
+    "_machine_translated": true,
+    "_source_hash": "5f44fb61ad1ff6af"
+  },
+  "settings.sync.undo_join.title": {
+    "message": "Anular associação?",
+    "description": "Settings → Sync: confirm undoing a join.",
+    "_machine_translated": true,
+    "_source_hash": "b0da9373e74ea290"
+  },
+  "settings.sync.undo_join.body": {
+    "message": "Isto desativa a sincronização aqui e repõe as definições que este computador tinha antes de se associar. Os seus outros computadores mantêm o que este computador enviou.",
+    "description": "Settings → Sync: what undoing a join does.",
+    "_machine_translated": true,
+    "_source_hash": "5903011ba9c96c32"
+  },
+  "settings.sync.undo_join.ok": {
+    "message": "Anular associação",
+    "description": "Settings → Sync: confirm undoing a join.",
+    "_machine_translated": true,
+    "_source_hash": "1abe5d16d21fe8a9"
+  },
+  "settings.sync.leave.start": {
+    "message": "Desativar a sincronização neste computador…",
+    "description": "Settings → Sync: leave sync.",
+    "_machine_translated": true,
+    "_source_hash": "f2f696c9ed9d902c"
+  },
+  "settings.sync.leave.title": {
+    "message": "Desativar a sincronização neste computador?",
+    "description": "Settings → Sync: confirm leaving.",
+    "_machine_translated": true,
+    "_source_hash": "33d5986389cd0de8"
+  },
+  "settings.sync.leave.body": {
+    "message": "Este computador mantém as definições tal como estão agora. Os seus outros computadores continuam a sincronizar.",
+    "description": "Settings → Sync: what leaving does.",
+    "_machine_translated": true,
+    "_source_hash": "854a70eb0501432a"
+  },
+  "settings.sync.leave.ok": {
+    "message": "Desativar",
+    "description": "Settings → Sync: confirm leaving.",
+    "_machine_translated": true,
+    "_source_hash": "785de6ea65ab96a4"
+  },
+  "settings.sync.start_over.start": {
+    "message": "Recomeçar…",
+    "description": "Settings → Sync: start sync over from this computer.",
+    "_machine_translated": true,
+    "_source_hash": "6ba2e8c12e73be44"
+  },
+  "settings.sync.start_over.title": {
+    "message": "Recomeçar a sincronização?",
+    "description": "Settings → Sync: the start over form.",
+    "_machine_translated": true,
+    "_source_hash": "6c2d41708f52103c"
+  },
+  "settings.sync.start_over.body": {
+    "message": "Isto põe de parte tudo o que está em “Kage Sync” e recomeça a partir das definições deste computador, com uma nova frase-passe. Os seus outros computadores deixam de sincronizar até voltar a associá-los. As definições deles ficam como estão.",
+    "description": "Settings → Sync: what start over does.",
+    "_machine_translated": true,
+    "_source_hash": "541d19f9729435d8"
+  },
+  "settings.sync.start_over.ack": {
+    "message": "Compreendo que todos os computadores terão de se associar novamente",
+    "description": "Settings → Sync: the start over confirmation box.",
+    "_machine_translated": true,
+    "_source_hash": "0fb84575e0b8eaa6"
+  },
+  "settings.sync.start_over.need_ack": {
+    "message": "Primeiro, marque a caixa para confirmar.",
+    "description": "Settings → Sync: start over without the confirmation box.",
+    "_machine_translated": true,
+    "_source_hash": "bc2149228d3d62f4"
+  },
+  "settings.sync.start_over.button": {
+    "message": "Recomeçar",
+    "description": "Settings → Sync: confirm start over.",
+    "_machine_translated": true,
+    "_source_hash": "6f5d67b844ea4f51"
+  },
+  "settings.sync.ext.title": {
+    "message": "Extensões",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "c96dc428fda606e9"
+  },
+  "settings.sync.ext.intro": {
+    "message": "As extensões que você usa e as respetivas definições são sincronizadas com “Extensões”. Algumas extensões também podem sincronizar os seus dados.",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "c59ce8dd20b753e2"
+  },
+  "settings.sync.ext.settings_and_data": {
+    "message": "Definições e dados",
+    "description": "Settings → Sync → Extensions: this extension syncs its settings and data.",
+    "_machine_translated": true,
+    "_source_hash": "6f4a5bf644e85396"
+  },
+  "settings.sync.ext.settings_only": {
+    "message": "Apenas definições",
+    "description": "Settings → Sync → Extensions: this extension syncs only its settings.",
+    "_machine_translated": true,
+    "_source_hash": "15728d01c532ca7c"
+  },
+  "settings.sync.ext.sync_data": {
+    "message": "Sincronizar dados",
+    "description": "Settings → Sync → Extensions: the data switch.",
+    "_machine_translated": true,
+    "_source_hash": "f4507038c9237a07"
+  },
+  "settings.sync.ext.sign_in_local": {
+    "message": "O início de sessão fica em cada computador",
+    "description": "Settings → Sync → Extensions: an extension with a sign-in.",
+    "_machine_translated": true,
+    "_source_hash": "bcbea0221c9daf6e"
+  },
+  "settings.sync.ext.no_data": {
+    "message": "Esta extensão não sincroniza dados",
+    "description": "Settings → Sync → Extensions.",
+    "_machine_translated": true,
+    "_source_hash": "e7abe34ed1c61989"
+  },
+  "settings.sync.ext.none": {
+    "message": "Não há extensões instaladas.",
+    "description": "Settings → Sync → Extensions with nothing installed.",
+    "_machine_translated": true,
+    "_source_hash": "b6979c63f7cfad5a"
+  },
+  "settings.sync.ext.purge": {
+    "message": "Remover os dados dela da pasta de sincronização…",
+    "description": "Settings → Sync → Extensions: purge one extension's synced data.",
+    "_machine_translated": true,
+    "_source_hash": "9b30dd48e7082a20"
+  },
+  "settings.sync.ext.purge_title": {
+    "message": "Remover os dados desta extensão da pasta de sincronização?",
+    "description": "Settings → Sync → Extensions: confirm a purge.",
+    "_machine_translated": true,
+    "_source_hash": "aa1d48ff43a190bd"
+  },
+  "settings.sync.ext.purge_body": {
+    "message": "Os dados dela deixam de ser sincronizados em todos os computadores. Cada computador mantém a sua própria cópia.",
+    "description": "Settings → Sync → Extensions: what a purge does.",
+    "_machine_translated": true,
+    "_source_hash": "c799a575f2ecbb83"
+  },
+  "settings.sync.ext.purge_ok": {
+    "message": "Remover da pasta de sincronização",
+    "description": "Settings → Sync → Extensions: confirm a purge.",
+    "_machine_translated": true,
+    "_source_hash": "2a378427cda11282"
+  },
+  "settings.sync.ext.purged": {
+    "message": "Removido da pasta de sincronização.",
+    "description": "Settings → Sync → Extensions after a purge.",
+    "_machine_translated": true,
+    "_source_hash": "eddd5db3169f7478"
+  },
+  "settings.sync.remote_changed": {
+    "message": "Algumas definições aqui foram alteradas noutro computador.",
+    "description": "A Settings section with unsaved edits, after a synced change arrived for it.",
+    "_machine_translated": true,
+    "_source_hash": "46978006e62f2f38"
+  },
+  "settings.sync.remote_changed_show": {
+    "message": "Mostrar os novos valores",
+    "description": "Drop the unsaved edits and show the synced values.",
+    "_machine_translated": true,
+    "_source_hash": "87365a36b400bbee"
+  },
+  "settings.sync.conflicts.another_computer": {
+    "message": "outro computador",
+    "description": "Settings → Sync → Conflicts: a computer whose name isn't known.",
+    "_machine_translated": true,
+    "_source_hash": "8a155fd55db2e86a"
+  },
+  "settings.sync_scope.per_os_short": {
+    "message": "Cada tipo de computador",
+    "description": "The where-it-applies control for a value set per OS (hotkeys, paths).",
+    "_machine_translated": true,
+    "_source_hash": "1fee8ec1f1b54003"
+  },
+  "settings.sync_scope.held": {
+    "message": "Não sincronizado aqui",
+    "description": "The where-it-applies control for a value held on this computer.",
+    "_machine_translated": true,
+    "_source_hash": "096a634155c6c14d"
+  },
+  "settings.sync_scope.all_value": {
+    "message": "Todos os computadores: {value}",
+    "description": "Under the control when this OS has its own value: the shared value.",
+    "_machine_translated": true,
+    "_source_hash": "0058310257c1c1c5"
+  },
+  "settings.sync_scope.differs": {
+    "message": "{os, select, macos {Diferente nos Macs} windows {Diferente no Windows} other {Diferente no Linux}}",
+    "description": "The where-it-applies control when another OS has its own value.",
+    "_machine_translated": true,
+    "_source_hash": "08b93bd973bce175"
+  },
+  "settings.sync_scope.other_uses": {
+    "message": "{os, select, macos {Os Macs usam {value}} windows {Os PCs com Windows usam {value}} other {Os PCs com Linux usam {value}}}",
+    "description": "The where-it-applies menu: another OS's value.",
+    "_machine_translated": true,
+    "_source_hash": "5060bf0d3697f5fe"
+  },
+  "settings.sync_scope.action.all_value": {
+    "message": "Usar {value} em todos os computadores",
+    "description": "The where-it-applies menu: make this OS's value the shared one.",
+    "_machine_translated": true,
+    "_source_hash": "2160263f4b75dae7"
+  },
+  "settings.sync_scope.aria": {
+    "message": "{name}: {where}. Alterar",
+    "description": "Accessible label of the where-it-applies control.",
+    "_machine_translated": true,
+    "_source_hash": "75fbdf0c63a5952b"
+  },
+  "settings.sync_scope.menu_label": {
+    "message": "Onde se aplica",
+    "description": "Accessible label of the where-it-applies menu.",
+    "_machine_translated": true,
+    "_source_hash": "4c38157eb30ad1e6"
+  },
+  "settings.sync_scope.available_on": {
+    "message": "Disponível em:",
+    "description": "List item editors: where the item exists.",
+    "_machine_translated": true,
+    "_source_hash": "d35cf90b5df43e4b"
+  },
+  "settings.sync_scope.confirm_this_computer.title": {
+    "message": "Manter apenas neste computador?",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "f2b628b83e83d233"
+  },
+  "settings.sync_scope.confirm_this_computer.message": {
+    "message": "Remover {name} dos seus outros computadores e mantê-lo apenas aqui?",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "1518f9734a6c9430"
+  },
+  "settings.sync_scope.confirm_this_computer.ok": {
+    "message": "Manter só aqui",
+    "description": "Confirm before an item stops syncing.",
+    "_machine_translated": true,
+    "_source_hash": "664bf30cc2698eb8"
+  },
+  "settings.sync_scope.confirm_this_computer.cancel": {
+    "message": "Cancelar",
+    "description": "Cancel keeping an item only here.",
+    "_machine_translated": true,
+    "_source_hash": "29cc731f22ca1a84"
+  },
+  "settings.sync_scope.failed": {
+    "message": "Não foi possível alterar onde isto se aplica",
+    "description": "Error title when a scope change failed.",
+    "_machine_translated": true,
+    "_source_hash": "0bda1d1274c5db70"
+  },
+  "settings.sync_scope.sign_in_local": {
+    "message": "Este computador · os inícios de sessão não são sincronizados",
+    "description": "An extension's sign-in field never syncs.",
+    "_machine_translated": true,
+    "_source_hash": "a131fbb4e6c53cd1"
+  },
+  "settings.sync_scope.undo": {
+    "message": "Desfazer",
+    "description": "The changed-everywhere note: undo the change.",
+    "_machine_translated": true,
+    "_source_hash": "594ee83adc30a54a"
+  },
+  "settings.sync_scope.value.on": {
+    "message": "Ativado",
+    "description": "A synced switch that is on.",
+    "_machine_translated": true,
+    "_source_hash": "e7175056f09ad54c"
+  },
+  "settings.sync_scope.value.off": {
+    "message": "Desativado",
+    "description": "A synced switch that is off.",
+    "_machine_translated": true,
+    "_source_hash": "27330fcff7372eeb"
+  },
+  "sync.status.waiting_any": {
+    "message": "A aguardar a transferência de {count, plural, one {# ficheiro} other {# ficheiros}}",
+    "description": "Settings → Sync status line: the sync app hasn't delivered some files yet.",
+    "_machine_translated": true,
+    "_source_hash": "b12aaf5879d8e9f0"
+  },
+  "sync.status.reset_elsewhere": {
+    "message": "A sincronização foi reiniciada noutro computador",
+    "description": "Settings → Sync status line.",
+    "_machine_translated": true,
+    "_source_hash": "a0522ce2c97f5260"
+  },
+  "sync.status.removed_elsewhere": {
+    "message": "Este computador foi removido da sincronização noutro computador",
+    "description": "Settings → Sync status line.",
+    "_machine_translated": true,
+    "_source_hash": "38b12f783463176e"
+  },
+  "sync.conflicts.today": {
+    "message": "Hoje",
+    "description": "Settings → Sync → Conflicts: entries from today.",
+    "_machine_translated": true,
+    "_source_hash": "16f0d28d1f74f96a"
+  },
+  "sync.conflicts.earlier": {
+    "message": "Anteriores",
+    "description": "Settings → Sync → Conflicts: older entries.",
+    "_machine_translated": true,
+    "_source_hash": "234d0ef0cc2dab31"
+  },
+  "sync.conflicts.earlier_actions": {
+    "message": "Junções e restauros",
+    "description": "Settings → Sync → Conflicts: grouped entries.",
+    "_machine_translated": true,
+    "_source_hash": "af282a967ead0a7d"
+  },
+  "sync.conflicts.deleted_on": {
+    "message": "Eliminado em {computer}, {time}",
+    "description": "Settings → Sync → Recently deleted.",
+    "_machine_translated": true,
+    "_source_hash": "f18b370e84626341"
+  },
+  "sync.conflicts.keep_all": {
+    "message": "Manter tudo",
+    "description": "Settings → Sync → Conflicts: dismiss every entry of a group.",
+    "_machine_translated": true,
+    "_source_hash": "236a702bdd94807e"
+  },
+  "sync.conflicts.hide": {
+    "message": "Ocultar",
+    "description": "Settings → Sync → Conflicts: collapse a group.",
+    "_machine_translated": true,
+    "_source_hash": "4c732e73238a01ec"
+  },
+  "sync.conflicts.show_versions": {
+    "message": "{count, plural, one {Mostrar 1 versão} other {Mostrar # versões}}",
+    "description": "Settings → Sync → Conflicts: Kage's own generated documents.",
+    "_machine_translated": true,
+    "_source_hash": "5d05a87d990c2af9"
+  },
+  "sync.conflicts.state.dismissed": {
+    "message": "Versão atual mantida",
+    "description": "Settings → Sync → Resolved.",
+    "_machine_translated": true,
+    "_source_hash": "4b8f4477da7dd9c3"
+  },
+  "sync.conflicts.state.restored": {
+    "message": "Restaurado",
+    "description": "Settings → Sync → Resolved.",
+    "_machine_translated": true,
+    "_source_hash": "4baa9e05952a7c86"
+  },
+  "sync.conflicts.compare.field": {
+    "message": "Campo",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "da533f8e9f13f80d"
+  },
+  "sync.conflicts.compare.now": {
+    "message": "Agora",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "2812355f633ed761"
+  },
+  "sync.conflicts.compare.replaced": {
+    "message": "Substituído",
+    "description": "Settings → Sync → Compare: column.",
+    "_machine_translated": true,
+    "_source_hash": "d42345663ec721fc"
+  },
+  "sync.conflicts.empty.replaced": {
+    "message": "Nenhum conflito.",
+    "description": "Settings → Sync → Conflicts, empty.",
+    "_machine_translated": true,
+    "_source_hash": "904bb58df0e4dbb4"
+  },
+  "sync.conflicts.empty.deleted": {
+    "message": "Nada foi excluído recentemente.",
+    "description": "Settings → Sync → Recently deleted, empty.",
+    "_machine_translated": true,
+    "_source_hash": "e469e43856306f33"
+  },
+  "sync.conflicts.empty.resolved": {
+    "message": "Nada resolvido ainda.",
+    "description": "Settings → Sync → Resolved, empty.",
+    "_machine_translated": true,
+    "_source_hash": "91221fc7eb1616a0"
+  },
+  "sync.review.heading": {
+    "message": "Revisão",
+    "description": "Settings → Sync → Review: title.",
+    "_machine_translated": true,
+    "_source_hash": "ca7a9275b90711e1"
+  },
+  "sync.review.empty": {
+    "message": "Nada precisa da sua atenção.",
+    "description": "Settings → Sync → Review, empty.",
+    "_machine_translated": true,
+    "_source_hash": "710c8ca4c3764831"
+  },
+  "sync.review.runnable_intro": {
+    "message": "Eles vieram dos seus outros computadores. Ficam desativados aqui até que você os permita.",
+    "description": "Settings → Sync → Review: synced items that start programs.",
+    "_machine_translated": true,
+    "_source_hash": "cc7ab066cc5fffd8"
+  },
+  "sync.review.title.mass_changes": {
+    "message": "{count, plural, one {1 exclusão em massa aguarda você} other {# exclusões em massa aguardam você}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "79566384bcf71ad1"
+  },
+  "sync.review.title.approvals": {
+    "message": "{count, plural, one {1 extensão precisa de aprovação aqui} other {# extensões precisam de aprovação aqui}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "1d11f28ac4afd56d"
+  },
+  "sync.review.title.suggestions": {
+    "message": "{count, plural, one {1 extensão está nos seus outros computadores} other {# extensões estão nos seus outros computadores}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "3a498aa8e26296ac"
+  },
+  "sync.review.title.removals": {
+    "message": "{count, plural, one {1 extensão foi removida em outro lugar} other {# extensões foram removidas em outro lugar}}",
+    "description": "Settings → Sync → Review.",
+    "_machine_translated": true,
+    "_source_hash": "a5cc4143ee3e6666"
+  },
+  "sync.review.from": {
+    "message": "De {computer}",
+    "description": "Settings → Sync → Review: which computer the item came from.",
+    "_machine_translated": true,
+    "_source_hash": "e6a8f3fe85faf5d0"
+  },
+  "sync.review.allow": {
+    "message": "Permitir neste computador",
+    "description": "Settings → Sync → Review: approve a synced item that starts programs.",
+    "_machine_translated": true,
+    "_source_hash": "08ac88edc4a2d2a4"
+  },
+  "sync.review.keep_off": {
+    "message": "Manter desativado",
+    "description": "Settings → Sync → Review: leave it off here.",
+    "_machine_translated": true,
+    "_source_hash": "1acb8fac22f82e0e"
+  },
+  "sync.review.delete_here": {
+    "message": "Excluir aqui também",
+    "description": "Settings → Sync → Review: accept a bulk delete from another computer.",
+    "_machine_translated": true,
+    "_source_hash": "5c0666fdd30c5885"
+  },
+  "sync.review.keep_them": {
+    "message": "Mantê-los",
+    "description": "Settings → Sync → Review: refuse a bulk delete from another computer.",
+    "_machine_translated": true,
+    "_source_hash": "8d29bb6e819522ed"
+  },
+  "sync.review.delete_everywhere": {
+    "message": "Excluir em todos os lugares",
+    "description": "Settings → Sync → Review: confirm this computer's bulk delete.",
+    "_machine_translated": true,
+    "_source_hash": "3bbee4f22efb5177"
+  },
+  "sync.review.cancel_delete": {
+    "message": "Cancelar",
+    "description": "Settings → Sync → Review: undo this computer's bulk delete.",
+    "_machine_translated": true,
+    "_source_hash": "aa2c95b7c685a882"
+  },
+  "sync.review.not_here": {
+    "message": "Não neste computador",
+    "description": "Settings → Sync → Review: don't suggest it again.",
+    "_machine_translated": true,
+    "_source_hash": "24bc2a0d223fab17"
+  },
+  "sync.review.remove_here": {
+    "message": "Remover aqui",
+    "description": "Settings → Sync → Review: uninstall here what was removed elsewhere.",
+    "_machine_translated": true,
+    "_source_hash": "159b982693d86b8c"
+  },
+  "sync.review.keep": {
+    "message": "Manter",
+    "description": "Settings → Sync → Review: keep an extension removed elsewhere.",
+    "_machine_translated": true,
+    "_source_hash": "6aec9b2d7d963b5e"
+  },
+  "sync.review.sideload_hint": {
+    "message": "Instale-a neste computador a partir de onde você a obteve.",
+    "description": "Settings → Sync → Review: a sideloaded extension can't install itself.",
+    "_machine_translated": true,
+    "_source_hash": "a9fba9d698bf970d"
+  },
+  "chat.session_list.synced_group": {
+    "message": "Nos seus outros computadores",
+    "description": "Chat history: heading over chats copied from the user's other computers by folder sync.",
+    "_machine_translated": true,
+    "_source_hash": "f13c00fe85c2359a"
+  },
+  "chat.session.synced_banner": {
+    "message": "Somente leitura · uma conversa de {computer}",
+    "description": "Chat history: banner over a chat from another computer. {computer} is that computer's name.",
+    "_machine_translated": true,
+    "_source_hash": "741989b92a2e73ce"
+  },
+  "chat.session.synced_banner_unnamed": {
+    "message": "Somente leitura · uma conversa de outro computador",
+    "description": "Chat history: banner over a chat from another computer whose name isn't known.",
+    "_machine_translated": true,
+    "_source_hash": "122b987f647d6373"
+  },
+  "chat.session.continue_here": {
+    "message": "Continuar aqui",
+    "description": "Chat history: start a new chat on this computer with the other computer's chat attached.",
+    "_machine_translated": true,
+    "_source_hash": "0427d10c012a6ba0"
+  },
+  "chat.session.continue_here_title": {
+    "message": "Iniciar um novo chat aqui com este chat anexado",
+    "description": "Tooltip of Continue here.",
+    "_machine_translated": true,
+    "_source_hash": "dac361c64b7aaab0"
+  },
+  "settings.about.backup.sync_pointer": {
+    "message": "Para manter as suas definições iguais em todos os seus computadores, use a Sincronização.",
+    "description": "About → Backup & restore: a pointer to Settings → Sync.",
+    "_machine_translated": true,
+    "_source_hash": "ac6e6bcc8f097bbb"
+  },
+  "settings.about.backup.sync_pointer_btn": {
+    "message": "Abrir Sincronização",
+    "description": "About → Backup & restore: open Settings → Sync.",
+    "_machine_translated": true,
+    "_source_hash": "770819c2affe5661"
   }
 }
