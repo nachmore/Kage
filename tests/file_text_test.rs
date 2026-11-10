@@ -17,7 +17,8 @@ use kage::file_text::slot::Slot;
 use kage::file_text::worker::{run_worker, Extractor, Worker, WorkerFailure};
 use kage::file_text::{run, FileText, Request};
 use kage_core::file_text_wire::{
-    Format, WorkerRequest, DEFAULT_MAX_CHARS, WIRE_VERSION, WORKER_BIN_NAME, WORKER_DEADLINE,
+    Format, WorkerRequest, DEFAULT_MAX_CHARS, READS_P1_FORMATS, WIRE_VERSION, WORKER_BIN_NAME,
+    WORKER_DEADLINE,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -121,6 +122,33 @@ fn the_worker_reads_text_and_markdown() {
     assert_eq!(got.format, Format::Markdown);
     assert_eq!(got.title.as_deref(), Some("Quarterly plan"));
     assert!(got.text.contains("- ship it"));
+}
+
+#[test]
+fn the_worker_reads_html_and_rtf_once_they_are_switched_on() {
+    let both = [Format::Html, Format::Rtf];
+    let page = b"<title>Trip</title><h2>Day one</h2><p>Walk &amp; swim</p>";
+    let doc = b"{\\rtf1\\ansi{\\info{\\title Recipe}}\\pard Flour\\par Water}";
+    if !READS_P1_FORMATS {
+        // Never reached through `pick_file_text`, which drops these formats
+        // first; the worker refuses them too.
+        assert_eq!(
+            read_file("trip.html", page, &both).unwrap_err(),
+            "errors.file_text.unsupported"
+        );
+        return;
+    }
+    let got = read_file("trip.html", page, &both).unwrap();
+    assert_eq!(got.format, Format::Html);
+    assert_eq!(got.extension, "html");
+    assert_eq!(got.title.as_deref(), Some("Trip"));
+    assert_eq!(got.text, "## Day one\n\nWalk & swim");
+
+    let got = read_file("Recipe.RTF", doc, &both).unwrap();
+    assert_eq!(got.format, Format::Rtf);
+    assert_eq!(got.extension, "rtf");
+    assert_eq!(got.title.as_deref(), Some("Recipe"));
+    assert_eq!(got.text, "Flour\n\nWater");
 }
 
 #[test]
@@ -345,4 +373,16 @@ fn the_commands_refuse_before_any_dialog() {
     assert_eq!(support["max_input_bytes"], 33_554_432);
     assert_eq!(support["default_max_chars"], 100_000);
     assert_eq!(support["formats"][0]["id"], "text");
+    let ids: Vec<&str> = support["formats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["id"].as_str().unwrap())
+        .collect();
+    let first = ["text", "markdown", "pdf", "docx"];
+    if READS_P1_FORMATS {
+        assert_eq!(ids, [&first[..], &["html", "pptx", "rtf"]].concat());
+    } else {
+        assert_eq!(ids, first);
+    }
 }
