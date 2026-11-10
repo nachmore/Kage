@@ -1,11 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import { HOST_FEATURES, invokeError } from '../../ui/js/extension-sandbox/runtime/host-api.js';
 import {
+    ExtensionSandbox,
+    HOST_FEATURE_AGENT_BACKGROUND,
     HOST_FEATURE_DATE_PICKER,
     HOST_FEATURE_SYNC_RECORDS,
     HOST_FEATURE_VIEWS,
     hostFeaturesFor,
 } from '../../ui/js/shared/extension-sandbox-host.js';
+
+describe('background agent calls (docs/design/EXTENSION_AGENT_CALLS.md §3.3)', () => {
+    it('agent.background is offered only to an extension holding agent_background', () => {
+        expect(HOST_FEATURE_AGENT_BACKGROUND).toBe('agent.background');
+        const offered = [HOST_FEATURE_VIEWS, HOST_FEATURE_AGENT_BACKGROUND];
+        expect(hostFeaturesFor(offered, ['agent_background'])).toEqual(['agent.background']);
+        // The visible `agent` capability isn't enough, and nothing else is.
+        expect(hostFeaturesFor(offered, ['agent', 'storage', 'views'])).toEqual(['views']);
+        expect(hostFeaturesFor([HOST_FEATURE_AGENT_BACKGROUND], [])).toEqual([]);
+    });
+
+    it('a sandbox re-filters it, and a view sandbox never has it', () => {
+        const spec = {
+            extensionId: 'mindmap',
+            capabilities: ['agent_background'],
+            hostFeatures: [HOST_FEATURE_AGENT_BACKGROUND],
+        };
+        expect(new ExtensionSandbox(spec, () => {}, document.body).hostFeatures).toEqual([
+            'agent.background',
+        ]);
+        const noGrant = new ExtensionSandbox(
+            { ...spec, capabilities: ['storage'] },
+            () => {},
+            document.body
+        );
+        expect(noGrant.hostFeatures).toEqual([]);
+        const view = new ExtensionSandbox(
+            {
+                ...spec,
+                capabilities: ['agent_background', 'views'],
+                hostFeatures: [HOST_FEATURE_AGENT_BACKGROUND, HOST_FEATURE_VIEWS],
+                surface: 'view',
+                viewId: 'main',
+                views: [{ id: 'main', title: 'Main', module: './main.js' }],
+            },
+            () => {},
+            document.body
+        );
+        expect(view.hostFeatures).toEqual(['views']);
+    });
+});
 
 describe('storage change events and views (docs/design/EXTENSION_VIEWS.md §9.4)', () => {
     it('every runtime advertises storage.change_events', () => {

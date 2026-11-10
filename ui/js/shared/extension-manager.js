@@ -19,6 +19,7 @@
 
 import {
     ExtensionSandboxPool,
+    HOST_FEATURE_AGENT_BACKGROUND,
     hostFeaturesFor,
     SYNC_HOST_FEATURES,
 } from './extension-sandbox-host.js';
@@ -231,11 +232,14 @@ export class ExtensionManager {
         this.invoke = invoke;
         // Every window with extension instances offers folder sync of their
         // data (docs/design/SYNC.md §12.3); each extension gets it only with
-        // the `sync` grant (`hostFeaturesFor`).
+        // the `sync` grant (`hostFeaturesFor`). Their long-lived instances
+        // may also ask the agent in the background
+        // (docs/design/EXTENSION_AGENT_CALLS.md §3.3), with `agent_background`.
         this._hostFeatures = [
             ...new Set([
                 ...(Array.isArray(opts.hostFeatures) ? opts.hostFeatures : []),
                 ...SYNC_HOST_FEATURES,
+                HOST_FEATURE_AGENT_BACKGROUND,
             ]),
         ];
         this._resultViewSource = normalizeViewSource(opts.resultSource);
