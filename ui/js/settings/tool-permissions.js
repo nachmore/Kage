@@ -4,6 +4,12 @@ import { errMessage } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
+import {
+    FILE_READ_EVENT,
+    fileReadFilterOption,
+    fileReadRow,
+    loadFileReadNames,
+} from './audit-file-reads.js';
 /**
  * Agent Tools Settings Module
  * Shows tools seen during permission requests with per-tool policy toggles.
@@ -75,6 +81,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                         <option value="terminator_mode_changed">${t('settings.tool_permissions.audit.filter.terminator')}</option>
                         <option value="user_ran_command">${t('settings.tool_permissions.audit.filter.user_ran')}</option>
                         <option value="host_command">${t('settings.tool_permissions.audit.filter.host_command')}</option>
+                        ${fileReadFilterOption()}
                     </select>
                     <button id="auditLogRefreshBtn" class="reset-permissions-btn" style="background:#3a3640;">${t('settings.tool_permissions.audit.refresh')}</button>
                     <button id="auditLogClearBtn" class="reset-permissions-btn">${t('settings.tool_permissions.audit.clear')}</button>
@@ -667,6 +674,8 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 limit: 500,
             });
             this.auditEntries = Array.isArray(entries) ? entries : [];
+            // The names of the extensions that read files (audit-file-reads.js).
+            this.auditNames = await loadFileReadNames(this.auditEntries);
         } catch (e) {
             console.error('Failed to load audit log:', e);
             this.auditEntries = [];
@@ -852,6 +861,9 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 meta = details.join(' · ');
                 break;
             }
+            case FILE_READ_EVENT:
+                ({ icon, summary, meta } = fileReadRow(entry, this.auditNames));
+                break;
             default:
                 icon = '❔';
                 summary = t('settings.tool_permissions.audit.summary.unknown', {
