@@ -16,7 +16,7 @@ use kage::sync::types::{Cell, DeviceId, FieldKey, OsKind, Record, Scope, Stamp};
 use kage::sync::JoinChoice;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use sync_support::*;
 
 /// A computer running a newer Kage, writing straight into the folder.
@@ -142,7 +142,9 @@ impl Forger {
                 .into_iter()
                 .map(|(p, _)| p)
                 .filter(|p| {
-                    p.parent().unwrap().to_string_lossy() == dir
+                    // Compare as paths: on Windows the engine joins the
+                    // parts with `\`, so the strings differ.
+                    p.parent() == Some(Path::new(&dir))
                         && p.file_name()
                             .unwrap()
                             .to_string_lossy()
