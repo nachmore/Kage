@@ -1,6 +1,9 @@
 # Design: reading a file the user picks (extension file text)
 
-Status: design, ready to build. Nothing here is implemented yet.
+Status: built in Kage (WP-FT0 to WP-FT8; §13 says what each package
+did and where it departed from the first draft). All seven formats are
+on. The Kage-Extensions packages (FT-X1, FT-MM1 to FT-MM3) belong to
+that repo. The manual checklist in §12 is still to be run on each OS.
 
 This document specifies a host API that lets an extension ask the user to
 pick one file and get its text back. The first user is Mind Map, which
@@ -2144,6 +2147,28 @@ tests)
   "what Kage keeps".
 - Accept: links resolve; the docs match the merged behaviour; manual
   checklist complete on all three OSes.
+- Done: `READS_P1_FORMATS` is on, so `file_text_support`, the dialog
+  filter and the worker offer HTML, PPTX and RTF. Turning it off again
+  is the rollback; the tests have a branch for each setting. The switch needed test
+  changes outside this package's files: `kage-file-text/tests/worker.rs`
+  asserted that the worker refuses HTML, and now reads HTML and RTF
+  through the worker process when the switch is on;
+  `src/file_text/tests.rs` (P1 formats kept by the argument check) and
+  `tests/file_text_test.rs` (HTML and RTF through the app's request
+  path, and the seven formats from `file_text_support`) gained cases.
+  EXTENSIONS.md gained the section, the capability and host-feature
+  rows, the two error kinds (with when host-raised errors carry a kind)
+  and the hint comment. It lists Settings among the windows that offer
+  `files.pick_text`, as §3.3 says; WP-FT7 gives the settings pool the
+  feature. SECURITY_MODEL.md gained the section "Files the
+  user picks", `file_text` in the capability summary, the audit log's
+  new entry, the three guarantee rows, and two known gaps: the settings
+  `pick_file` effect's missing size cap (§7) and the stronger worker
+  sandbox (§14). PRIVACY.md gained "Files you choose for an extension"
+  (the event and what Kage keeps). The privacy policy version stays 1:
+  the event carries the same kind of data as `extension_installed`
+  plus coarse buckets, and no new class of data. Manual checklist not
+  run yet.
 
 ### Kage-Extensions repo
 
