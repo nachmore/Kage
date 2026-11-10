@@ -3,8 +3,9 @@
  * Coordinates all settings modules and handles save/load operations.
  */
 
-import { onConfigChange } from '../shared/config-cache.js';
-import { errLabel } from '../shared/error-message.js';
+import { getConfigSnapshot, onConfigChange, saveConfig } from '../shared/config-cache.js';
+import { errLabel, errMessage } from '../shared/error-message.js';
+import { EVT } from '../shared/events.js';
 import { resolveExtensionConfig } from '../shared/extension-config.js';
 import {
     applyManifestI18n,
@@ -15,12 +16,24 @@ import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
 import { renderSchema } from '../shared/settings-renderer.js';
 import { t } from '../shared/i18n.js';
+import {
+    attachScopeChips,
+    pathsOverlap,
+    showChangedEverywhereToast,
+    syncIsOn,
+} from '../shared/sync-scope-chip.js';
 import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 import { SettingsModule } from './base.js';
 import { DIRTY_EVENT_TYPES, DirtyTracker, dirtySectionForEvent } from './dirty-tracker.js';
 import { renderCapabilityBadges } from './extension-capabilities.js';
 import { renderExtensionViewsBlock } from './extension-views-block.js';
+import { applyPaths, diffPaths, settingPaths, valueAt } from './field-save.js';
 import { registerSettingsActions, setSettingsManager } from './module-registry.js';
+import { renderSyncChip } from './sync-ext-chip.js';
+import { wireSyncSidebar } from './sync.js';
+
+/** How many times "Changed on all your computers" shows per window. */
+const CHANGED_EVERYWHERE_MAX = 3;
 
 // --- Sandboxed extension settings ------------------------------------------
 //
@@ -244,6 +257,14 @@ export class SettingsManager {
         // Bumped whenever config is (re)applied or saved, so a refresh whose
         // get_config was issued earlier can't apply an older snapshot.
         this._refreshGen = 0;
+        // module id → the config its load() last got. Save runs the
+        // module's save() on a copy of it and writes only what changed
+        // (field-level save, docs/design/SYNC.md §9.5).
+        this._loadSnapshots = new Map();
+        // The latest sync status (null until known) and how often the
+        // "Changed on all your computers" note has shown.
+        this._syncStatus = null;
+        this._changedEverywhereShown = 0;
         const onEdit = (event) => {
             const id = dirtySectionForEvent(event);
             if (id) this.markDirty(id);
@@ -268,6 +289,51 @@ export class SettingsManager {
                 if (active) this._refreshIfClean(active);
             }, 150);
         });
+
+        // A synced change arrived (it comes just before config_updated). A
+        // section with unsaved edits keeps them, and says what happened
+        // (docs/design/SYNC.md §9.4).
+        window.__TAURI__.event
+            ?.listen?.(EVT.SYNC_APPLIED, (event) => this._onSyncApplied(event?.payload))
+            ?.catch?.(() => {});
+    }
+
+    /** Sections with unsaved edits that hold a row sync just changed. */
+    _onSyncApplied(payload) {
+        const keys = Array.isArray(payload?.keys) ? payload.keys.map(String) : [];
+        if (keys.length === 0) return;
+        for (const module of this.modules) {
+            if (!this._dirty.isDirty(module.id)) continue;
+            const section = document.querySelector(`[data-section-content="${module.id}"]`);
+            if (!section) continue;
+            const rows = [...section.querySelectorAll('[data-sync-path]')];
+            const hit = rows.some((row) => keys.some((k) => pathsOverlap(row.dataset.syncPath, k)));
+            if (hit) this._showRemoteChangeBanner(module, section);
+        }
+    }
+
+    _showRemoteChangeBanner(module, section) {
+        if (section.querySelector('.sync-remote-banner')) return;
+        const banner = document.createElement('div');
+        banner.className = 'sync-remote-banner';
+        banner.setAttribute('role', 'status');
+        // Not an edit (dirty-tracker.js skips it): the user drops theirs.
+        banner.dataset.syncUi = '';
+        const text = document.createElement('span');
+        text.textContent = t('settings.sync.remote_changed');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'setting-button';
+        btn.textContent = t('settings.sync.remote_changed_show');
+        btn.addEventListener('click', () => {
+            banner.remove();
+            this._dirty.clear(module.id);
+            this._refreshIfClean(module);
+        });
+        banner.append(text, btn);
+        const header = section.querySelector('.settings-section-header');
+        if (header) header.after(banner);
+        else section.prepend(banner);
     }
 
     /** Flag a module as holding unsaved edits (see the constructor). */
@@ -298,7 +364,7 @@ export class SettingsManager {
         const gen = ++this._refreshGen;
         let config;
         try {
-            config = await this.invoke('get_config');
+            ({ config } = await getConfigSnapshot(this.invoke));
         } catch (e) {
             console.warn(`[Settings] Refresh of ${module.id} failed:`, e);
             return;
@@ -351,8 +417,8 @@ export class SettingsManager {
                 // Framework-owned header: icon + title on left, enable/disable button on right.
                 // icon/title/description come from the (untrusted) extension manifest and
                 // this window has full __TAURI__ access — always escape.
-                html += `<h2 class="settings-section-header ext-section-header">
-                    <span>${escapeHtml(module.icon)} ${escapeHtml(module.title)}</span>
+                html += `<h2 class="settings-section-header ext-section-header" data-sync-path="extension_states.${extId}" data-sync-name="${escapeAttr(module.title)}">
+                    <span>${escapeHtml(module.icon)} ${escapeHtml(module.title)}<span class="sync-chip-slot" data-sync-chip-slot></span></span>
                     <button class="setting-button" id="ext-toggle-btn-${extId}" style="min-width:80px;font-size:12px;" data-action="toggleExtension" data-arg="${extId}">${escapeHtml(t('settings.manager.ext.disable'))}</button>
                     <input type="hidden" id="ext-enabled-${extId}" value="true">
                 </h2>`;
@@ -361,6 +427,13 @@ export class SettingsManager {
                 }
                 // Capability badges — visible surface of the extension permission system
                 html += renderCapabilityBadges(module._capabilities, module._legacyPermissions);
+                // Then what syncs (docs/design/SYNC.md §12.3, header order §23.3).
+                html += renderSyncChip(module._extensionId, {
+                    invoke: this.invoke,
+                    t,
+                    manifest: module._manifest,
+                    capabilities: module._capabilities,
+                });
                 html += `<div id="ext-content-${extId}">`;
                 html += renderExtensionViewsBlock(module);
                 html += module.renderContent ? module.renderContent() : module.render();
@@ -406,6 +479,36 @@ export class SettingsManager {
         if (this.modules.length > 0) {
             this._initializeModule(this.modules[0]);
         }
+
+        this._attachSync(container);
+    }
+
+    /**
+     * Once per window: the where-it-applies controls on every row with a
+     * `data-sync-path` (they follow re-renders by themselves), and the Sync
+     * sidebar item. Both stay invisible while sync is off.
+     */
+    _attachSync(container) {
+        if (this._syncAttached) {
+            // A redraw: re-show what depends on the last status.
+            this._syncSidebar?.reapply();
+            return;
+        }
+        this._syncAttached = true;
+        const listen = window.__TAURI__?.event?.listen;
+        if (typeof listen !== 'function') return;
+        this._detachScopeChips = attachScopeChips(container, {
+            invoke: this.invoke,
+            listen,
+            t,
+        });
+        this._syncSidebar = wireSyncSidebar({
+            invoke: this.invoke,
+            listen,
+            onStatus: (status) => {
+                this._syncStatus = status;
+            },
+        });
     }
 
     /**
@@ -444,12 +547,18 @@ export class SettingsManager {
 
     /** Load a single module (plus its extension enabled state) from saved config. */
     async _loadModule(module) {
-        const config = await this.invoke('get_config');
+        const { config } = await getConfigSnapshot(this.invoke);
         if (this._dirty.isDirty(module.id)) return;
         this._applyModuleConfig(module, config);
     }
 
     _applyModuleConfig(module, config) {
+        // A copy, taken before load(): modules keep references into the
+        // config they get and edit them in place.
+        this._loadSnapshots.set(module.id, structuredClone(config));
+        document
+            .querySelector(`[data-section-content="${module.id}"] .sync-remote-banner`)
+            ?.remove();
         module.load(config);
         // Load extension enabled state
         if (module._extensionId) {
@@ -516,7 +625,7 @@ export class SettingsManager {
      */
     async load() {
         try {
-            const config = await this.invoke('get_config');
+            const { config } = await getConfigSnapshot(this.invoke);
             // A full load is authoritative (boot, extension re-render, backup
             // import): every section now mirrors config, so none is dirty,
             // and any in-flight per-module refresh is superseded.
@@ -571,37 +680,59 @@ export class SettingsManager {
                 }
             }
 
-            // Start from the current config so fields not owned by any module
-            // (e.g. first_run_completed) are preserved across saves.
+            // Field-level save (docs/design/SYNC.md §9.5): each dirty module
+            // writes its DOM into a copy of the config it loaded, and only
+            // the paths it changed go into a fresh copy of the current
+            // config. A field another window or another computer changed
+            // meanwhile keeps its new value, and the backend's three-way
+            // merge (`baseRevision`) covers the gap between this read and
+            // the write.
             //
             // Do NOT touch `config.version` — the backend bumps it inside
             // `Config::load`'s migration runner, and overwriting it here
             // makes the next launch re-migrate from scratch. The 2→3
             // migration interprets a v1-stamped config with
             // first_run_completed=true as a pre-telemetry user and
-            // force-disables their opt-in. So a "harmless" `version = 1`
-            // here was silently flipping telemetry off on every Settings
-            // save. Trust whatever value `get_config` already returned.
-            const config = await this.invoke('get_config');
+            // force-disables their opt-in. No module writes it, so the
+            // fresh value always goes back unchanged.
+            const { revision, config } = await getConfigSnapshot(this.invoke);
+            const savedChanges = [];
             dirtyModules.forEach((module) => {
-                module.save(config);
+                const loaded = this._loadSnapshots.get(module.id);
+                const before = structuredClone(loaded ?? config);
+                const edited = structuredClone(before);
+                module.save(edited);
                 // Save extension enabled state
                 if (module._extensionId) {
-                    if (!config.extension_states) config.extension_states = {};
+                    if (!edited.extension_states) edited.extension_states = {};
                     const el = document.getElementById('ext-enabled-' + module._extensionId);
                     if (el) {
-                        config.extension_states[module._extensionId] = el.value === 'true';
+                        edited.extension_states[module._extensionId] = el.value === 'true';
                     }
+                }
+                const changes = diffPaths(before, edited);
+                applyPaths(config, edited, changes);
+                for (const path of settingPaths(changes)) {
+                    const segs = path.split('.');
+                    savedChanges.push({
+                        path,
+                        before: valueAt(before, segs),
+                        after: valueAt(edited, segs),
+                    });
                 }
             });
 
             // Save to backend. Still done when nothing is dirty so Save keeps
             // re-applying runtime config exactly as before.
-            await this.invoke('save_config', { config });
+            await saveConfig(config, { baseRevision: revision, invoke: this.invoke });
             this._dirty.clearSaved(dirtySnapshot);
             // A refresh that fetched config before this write must not
             // apply it over the values just saved.
             this._refreshGen++;
+            // Reload what was saved, so a new list item carries the id the
+            // backend gave it and a second Save doesn't add it again.
+            await this._reloadSaved(dirtyModules);
+            this._noteChangedEverywhere(savedChanges);
 
             // Check if any module needs a restart
             const needsRestart = this.modules.some((m) => m._needsRestart);
@@ -637,6 +768,84 @@ export class SettingsManager {
             this.showStatus(t('settings.manager.status.save_failed', { message: msg }), 'error');
             return false;
         }
+    }
+
+    /**
+     * Reload the modules a Save just wrote, unless they were edited again
+     * while it was in flight. Best effort: the save itself succeeded.
+     */
+    async _reloadSaved(modules) {
+        const clean = modules.filter((m) => !this._dirty.isDirty(m.id));
+        if (clean.length === 0) return;
+        let config;
+        try {
+            ({ config } = await getConfigSnapshot(this.invoke));
+        } catch (e) {
+            console.warn('[Settings] Reload after save failed:', e);
+            return;
+        }
+        for (const module of clean) {
+            if (this._dirty.isDirty(module.id) || !this.modules.includes(module)) continue;
+            try {
+                this._applyModuleConfig(module, config);
+            } catch (e) {
+                console.error(`Settings module ${module.id} load failed:`, e);
+            }
+        }
+    }
+
+    /**
+     * The first few times a shared setting changes after sync is set up,
+     * say that it changed everywhere, with Undo and "Only on this
+     * computer" (docs/design/SYNC.md §9.4).
+     */
+    _noteChangedEverywhere(changes) {
+        if (!syncIsOn(this._syncStatus) || changes.length === 0) return;
+        if (this._changedEverywhereShown >= CHANGED_EVERYWHERE_MAX) return;
+        const shared = new Set(
+            [...document.querySelectorAll('[data-sync-path][data-sync-applies="all"]')].map(
+                (el) => el.dataset.syncPath
+            )
+        );
+        const hits = changes.filter((c) =>
+            [...shared].some((p) => !p.includes('/') && pathsOverlap(p, c.path))
+        );
+        if (hits.length === 0) return;
+        this._changedEverywhereShown++;
+        const rows = [...shared].filter((p) => hits.some((c) => pathsOverlap(p, c.path)));
+        const writeBack = async (pick) => {
+            const { revision, config } = await getConfigSnapshot(this.invoke);
+            for (const c of hits) {
+                const segs = c.path.split('.');
+                const value = pick(c);
+                let parent = config;
+                for (const s of segs.slice(0, -1)) {
+                    if (parent[s] == null || typeof parent[s] !== 'object') parent[s] = {};
+                    parent = parent[s];
+                }
+                const last = segs[segs.length - 1];
+                if (value === undefined) delete parent[last];
+                else parent[last] = structuredClone(value);
+            }
+            await saveConfig(config, { baseRevision: revision, invoke: this.invoke });
+        };
+        showChangedEverywhereToast({
+            t,
+            onUndo: () => writeBack((c) => c.before),
+            onOnlyHere: async () => {
+                // Put the shared value back, keep this one only here.
+                await writeBack((c) => c.before);
+                for (const path of rows) {
+                    await this.invoke('sync_set_scope', { path, action: 'this_computer' });
+                }
+                await writeBack((c) => c.after);
+            },
+            onError: (e) =>
+                this.showStatus(
+                    t('settings.manager.status.save_failed', { message: errMessage(e) }),
+                    'error'
+                ),
+        });
     }
 
     /**
@@ -723,6 +932,8 @@ export class SettingsManager {
     destroy() {
         this.modules.forEach((module) => module.destroy());
         this.modules = [];
+        this._detachScopeChips?.();
+        this._detachScopeChips = null;
     }
 }
 

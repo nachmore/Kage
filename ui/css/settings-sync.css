@@ -1,0 +1,660 @@
+/*
+ * Settings → Sync and the where-it-applies controls on Settings rows
+ * (docs/design/SYNC.md §9.4, §13). Logical properties only, so RTL
+ * layouts mirror without extra rules. Nothing here applies while sync is
+ * off: the controls aren't in the DOM then.
+ */
+
+/* --- Where-it-applies control ------------------------------------------------ */
+
+.sync-scope-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-inline-start: 8px;
+    padding: 1px 8px;
+    border: 1px solid var(--kage-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--kage-text-muted);
+    font: inherit;
+    font-size: 11px;
+    font-weight: normal;
+    line-height: 16px;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.sync-scope-chip:hover,
+.sync-scope-chip:focus-visible {
+    color: var(--kage-text);
+    border-color: var(--kage-accent);
+    outline: none;
+}
+
+.sync-scope-chip-icon {
+    font-size: 11px;
+}
+
+/* Shared with no overrides: a quiet icon, the words on hover and focus. */
+.sync-scope-chip--quiet {
+    border-color: transparent;
+    opacity: 0.6;
+}
+
+.sync-scope-chip--quiet .sync-scope-chip-label {
+    display: none;
+}
+
+.sync-scope-chip--quiet:hover .sync-scope-chip-label,
+.sync-scope-chip--quiet:focus-visible .sync-scope-chip-label {
+    display: inline;
+}
+
+.sync-scope-chip--quiet:hover,
+.sync-scope-chip--quiet:focus-visible {
+    opacity: 1;
+}
+
+.sync-scope-chip--override,
+.sync-scope-chip--pinned {
+    color: var(--kage-accent-light);
+    border-color: var(--kage-accent);
+}
+
+.sync-scope-chip--differs {
+    border-color: transparent;
+    opacity: 0.75;
+}
+
+.sync-scope-chip--local,
+.sync-scope-chip--held {
+    cursor: default;
+    opacity: 0.75;
+}
+
+.sync-scope-chip--held {
+    color: var(--kage-warning);
+    border-color: var(--kage-warning);
+}
+
+.sync-scope-sub {
+    font-size: 11px;
+    color: var(--kage-text-muted);
+    margin-block: 2px 4px;
+}
+
+.sync-chip-slot:empty {
+    display: none;
+}
+
+.sync-scope-menu {
+    position: fixed;
+    z-index: 10000;
+    min-inline-size: 220px;
+    max-inline-size: 360px;
+    padding: 4px;
+    background: var(--kage-bg-elevated);
+    border: 1px solid var(--kage-border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.sync-scope-menu-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    inline-size: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--kage-text);
+    font: inherit;
+    font-size: 12px;
+    text-align: start;
+    cursor: pointer;
+}
+
+.sync-scope-menu-item:hover,
+.sync-scope-menu-item:focus-visible {
+    background: var(--kage-accent-glow);
+    outline: none;
+}
+
+.sync-scope-menu-check {
+    inline-size: 12px;
+    flex: none;
+}
+
+.sync-scope-menu-label {
+    flex: 1;
+}
+
+.sync-scope-menu-detail,
+.sync-scope-menu-info {
+    color: var(--kage-text-muted);
+    font-size: 11px;
+}
+
+.sync-scope-menu-info {
+    padding-block: 4px;
+    padding-inline: 26px 8px;
+}
+
+.sync-scope-menu-sep {
+    block-size: 1px;
+    margin-block: 4px;
+    background: var(--kage-border-subtle);
+}
+
+/* "Available on" in list item editors. */
+.sync-avail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-block: 8px;
+    font-size: 12px;
+}
+
+.sync-avail-title {
+    color: var(--kage-text-muted);
+}
+
+.sync-avail-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* "Changed on all your computers." */
+.sync-toast {
+    position: fixed;
+    inset-block-end: 72px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--kage-bg-elevated);
+    color: var(--kage-text);
+    border: 1px solid var(--kage-border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    font-size: 12px;
+}
+
+[dir="rtl"] .sync-toast {
+    transform: translateX(50%);
+}
+
+.sync-toast-btn {
+    padding: 3px 8px;
+    border: 1px solid var(--kage-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--kage-accent-light);
+    font: inherit;
+    cursor: pointer;
+}
+
+/* "Some settings here changed on another computer." */
+.sync-remote-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-block-end: 12px;
+    padding: 8px 12px;
+    border: 1px solid var(--kage-accent);
+    border-radius: 8px;
+    background: var(--kage-accent-glow);
+    font-size: 12px;
+}
+
+/* Extension header chips (after the capability badges). */
+.sync-ext-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-block: -8px 12px;
+}
+
+.sync-ext-chip {
+    padding: 1px 8px;
+    border: 1px solid var(--kage-border);
+    border-radius: 999px;
+    color: var(--kage-text-muted);
+    font-size: 11px;
+}
+
+.sync-sidebar-badge {
+    margin-inline-start: auto;
+    min-inline-size: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--kage-warning);
+    color: #fff;
+    font-size: 10px;
+    line-height: 18px;
+    text-align: center;
+}
+
+/* --- Settings → Sync ------------------------------------------------------------ */
+
+.sync-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 13px;
+}
+
+.sync-body p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.sync-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.sync-head-actions,
+.sync-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-status-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.sync-dot {
+    inline-size: 9px;
+    block-size: 9px;
+    border-radius: 50%;
+    background: var(--kage-text-muted);
+    flex: none;
+}
+
+.sync-dot--ok {
+    background: var(--kage-success);
+}
+
+.sync-dot--busy {
+    background: var(--kage-accent);
+}
+
+.sync-dot--warn {
+    background: var(--kage-warning);
+}
+
+.sync-problem,
+.sync-flash {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+}
+
+.sync-error {
+    padding: 6px 10px;
+    border: 1px solid var(--kage-error);
+    border-radius: 6px;
+    color: var(--kage-error);
+    font-size: 12px;
+}
+
+.sync-subtitle {
+    margin: 14px 0 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: var(--kage-text-muted);
+}
+
+.sync-step-title {
+    margin: 0;
+    font-size: 15px;
+}
+
+.sync-step-title:focus {
+    outline: none;
+}
+
+.sync-step-count {
+    font-size: 11px;
+    color: var(--kage-text-muted);
+}
+
+.sync-setup {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sync-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-inline-size: 360px;
+}
+
+.sync-field > span,
+.sync-fact-label {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+}
+
+.sync-check,
+.sync-choice,
+.sync-category label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-picks,
+.sync-devices,
+.sync-attention,
+.sync-not-synced,
+.sync-conflict-list,
+.sync-review-list,
+.sync-ext-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sync-pick {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    inline-size: 100%;
+    max-inline-size: 480px;
+    padding: 8px 10px;
+    border: 1px solid var(--kage-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--kage-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.sync-pick.selected,
+.sync-pick:focus-visible {
+    border-color: var(--kage-accent);
+    outline: none;
+}
+
+.sync-pick-path {
+    font-size: 11px;
+    color: var(--kage-text-muted);
+}
+
+.sync-folder-result {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--kage-bg-elevated);
+}
+
+.sync-folder-result--not_usable,
+.sync-folder-result--newer_format {
+    border: 1px solid var(--kage-warning);
+}
+
+.sync-folder-chosen {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+    overflow-wrap: anywhere;
+}
+
+.sync-generated {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-generated-value {
+    font-family: var(--kage-font-mono);
+    user-select: all;
+}
+
+.sync-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.sync-category {
+    display: grid;
+    grid-template-columns: minmax(180px, auto) 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-category-name {
+    font-weight: 500;
+}
+
+.sync-facts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sync-fact {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-fact-value {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+}
+
+.sync-attention-row,
+.sync-not-synced li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-attention-text {
+    flex: 1;
+}
+
+.sync-device {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) 90px minmax(140px, 1.5fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-device--inactive,
+.sync-device--retired {
+    opacity: 0.7;
+}
+
+.sync-device .sync-inline-form {
+    grid-column: 1 / -1;
+}
+
+.sync-inline-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--kage-border);
+    border-radius: 8px;
+    background: var(--kage-bg-elevated);
+}
+
+.sync-advanced summary {
+    cursor: pointer;
+    color: var(--kage-text-muted);
+}
+
+.sync-advanced-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-block: 8px;
+}
+
+.sync-view-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sync-view-head .sync-step-title {
+    flex: 1;
+}
+
+.sync-tabs {
+    display: flex;
+    gap: 4px;
+    border-block-end: 1px solid var(--kage-border-subtle);
+}
+
+.sync-tab {
+    padding: 6px 10px;
+    border: 0;
+    border-block-end: 2px solid transparent;
+    background: transparent;
+    color: var(--kage-text-muted);
+    font: inherit;
+    cursor: pointer;
+}
+
+.sync-tab.active {
+    color: var(--kage-text);
+    border-block-end-color: var(--kage-accent);
+}
+
+.sync-conflict,
+.sync-review-item,
+.sync-ext {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--kage-border-subtle);
+    border-radius: 8px;
+}
+
+.sync-conflict-title,
+.sync-review-label {
+    font-weight: 500;
+}
+
+.sync-conflict-line {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+}
+
+.sync-compare {
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.sync-compare th,
+.sync-compare td {
+    padding: 4px 8px;
+    border: 1px solid var(--kage-border-subtle);
+    text-align: start;
+    vertical-align: top;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.sync-runnable {
+    margin: 0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--kage-term-bg);
+    font-family: var(--kage-font-mono);
+    font-size: 11px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.sync-ext {
+    display: grid;
+    grid-template-columns: 24px minmax(120px, 1fr) auto;
+    align-items: center;
+}
+
+.sync-ext > .setting-description,
+.sync-ext > div,
+.sync-ext > .sync-check,
+.sync-ext > button {
+    grid-column: 2 / -1;
+}
+
+.sync-pause {
+    position: relative;
+}
+
+.sync-pause-menu {
+    position: absolute;
+    inset-inline-end: 0;
+    inset-block-start: calc(100% + 4px);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 180px;
+    padding: 4px;
+    background: var(--kage-bg-elevated);
+    border: 1px solid var(--kage-border);
+    border-radius: 8px;
+}
+
+.sync-pause-item {
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--kage-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.sync-pause-item:hover,
+.sync-pause-item:focus-visible {
+    background: var(--kage-accent-glow);
+    outline: none;
+}
+
+.visually-hidden {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}

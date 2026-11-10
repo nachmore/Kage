@@ -45,27 +45,31 @@ export class IntegrationSettingsModule extends SettingsModule {
                         shortcut: copyShortcut,
                     }),
                     'captureSelection',
-                    true
+                    true,
+                    { syncPath: 'system.capture_selection' }
                 )}
 
                 ${this.createControlRow(
                     t('settings.integration.blocklist.label'),
                     t('settings.integration.blocklist.description', { shortcut: copyShortcut }),
-                    `<textarea id="captureSelectionBlocklist" rows="6" class="setting-input" spellcheck="false" style="font-family: var(--kage-font-mono, monospace); width: 100%; resize: vertical;"></textarea>`
+                    `<textarea id="captureSelectionBlocklist" rows="6" class="setting-input" spellcheck="false" style="font-family: var(--kage-font-mono, monospace); width: 100%; resize: vertical;"></textarea>`,
+                    { syncPath: 'system.capture_selection_blocklist' }
                 )}
 
                 ${this.createCheckboxRow(
                     t('settings.integration.show_notifications.label'),
                     t('settings.integration.show_notifications.description'),
                     'showNotifications',
-                    true
+                    true,
+                    { syncPath: 'system.show_notifications' }
                 )}
 
                 ${this.createCheckboxRow(
                     t('settings.integration.screen_context.label'),
                     t('settings.integration.screen_context.description'),
                     'screenContext',
-                    true
+                    true,
+                    { syncPath: 'system.screen_context' }
                 )}
 
                 <div class="setting-row" style="padding-left: 28px;">

@@ -222,7 +222,7 @@ export class AutomationsSettingsModule extends SettingsModule {
             battery: p.battery_multiplier,
             low: p.low_battery_multiplier,
         });
-        container.innerHTML = `<div class="setting-row"><div class="setting-label">${t('settings.automations.power_mode.label')}</div><div class="setting-description">${t('settings.automations.power_mode.description')}</div><select class="setting-select" id="automationPowerMode" style="max-width:280px;">${modeOpts}</select></div><div id="powerDetailsRow" style="${p.mode === 'auto' ? '' : 'display:none;'}"><div class="setting-row"><div class="setting-description">${detailHtml}</div></div></div>`;
+        container.innerHTML = `<div class="setting-row" data-sync-path="automation_power.mode"><div class="setting-label">${t('settings.automations.power_mode.label')}</div><div class="setting-description">${t('settings.automations.power_mode.description')}</div><select class="setting-select" id="automationPowerMode" style="max-width:280px;">${modeOpts}</select></div><div id="powerDetailsRow" style="${p.mode === 'auto' ? '' : 'display:none;'}"><div class="setting-row"><div class="setting-description">${detailHtml}</div></div></div>`;
         document.getElementById('automationPowerMode')?.addEventListener('change', (e) => {
             this._powerConfig.mode = e.target.value;
             const d = document.getElementById('powerDetailsRow');
@@ -269,6 +269,11 @@ export class AutomationsSettingsModule extends SettingsModule {
                 'auto-card' +
                 (auto.enabled === false ? ' disabled' : '') +
                 (i === this._expandedIndex ? ' expanded' : '');
+            // Where it exists, when sync is on (docs/design/SYNC.md §9.4).
+            if (auto.sync_id && i !== this._expandedIndex) {
+                card.dataset.syncPath = `macros/${auto.sync_id}`;
+                card.dataset.syncName = auto.name || '';
+            }
             if (i === this._expandedIndex) {
                 card.innerHTML = this._expandedCardHtml(auto, i);
                 list.appendChild(card);
@@ -302,7 +307,7 @@ export class AutomationsSettingsModule extends SettingsModule {
         return `<div class="auto-collapsed"${tooltip}>
             <span class="auto-collapsed-icon">${auto.icon || '🔄'}</span>
             <div class="auto-collapsed-info">
-                <div class="auto-collapsed-name">${escapeAutomationHtml(auto.name)}</div>
+                <div class="auto-collapsed-name" data-sync-chip-slot>${escapeAutomationHtml(auto.name)}</div>
                 <div class="auto-collapsed-summary">${escapeAutomationHtml(summary)}</div>
             </div>
             <span class="auto-trigger-badge">${badge}</span>
@@ -393,7 +398,10 @@ export class AutomationsSettingsModule extends SettingsModule {
             stepsHtml += stepHtml(step, si, auto.steps.length);
         });
 
-        return `<div id="autoValidation_${i}" style="display:none;"></div>
+        const syncAvail = auto.sync_id
+            ? `<div data-sync-avail="macros/${escapeAutomationHtml(auto.sync_id)}" data-sync-name="${escapeAutomationHtml(auto.name || '')}" hidden></div>`
+            : '';
+        return `${syncAvail}<div id="autoValidation_${i}" style="display:none;"></div>
             <div class="auto-header-row">
                 <input class="auto-icon-input" value="${escapeAutomationHtml(auto.icon)}" maxlength="2" spellcheck="false">
                 <input class="auto-name-input" value="${escapeAutomationHtml(auto.name)}" placeholder="Automation name" style="flex:1;font-weight:500;font-size:14px;">

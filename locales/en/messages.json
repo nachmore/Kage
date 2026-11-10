@@ -8812,5 +8812,861 @@
   "errors.sync.ext_push_too_large": {
     "message": "A sync push can carry at most 500 records and deletes, and 4 MB.",
     "description": "Error to an extension: context.sync.push was over the per-call limits. Push in smaller batches."
+  },
+  "settings.sync.unavailable": {
+    "message": "Sync isn't available in this version of Kage.",
+    "description": "Settings → Sync, when this build doesn't offer folder sync."
+  },
+  "settings.sync.off.syncs": {
+    "message": "Syncs: Settings · Shortcuts & automations · Extensions and their data",
+    "description": "Settings → Sync while off: what sync copies between computers."
+  },
+  "settings.sync.off.chats_optional": {
+    "message": "Chat history only if you turn it on.",
+    "description": "Settings → Sync while off, after the list of what stays on each computer."
+  },
+  "settings.sync.setup.again": {
+    "message": "Set up again",
+    "description": "Settings → Sync while a setup is unfinished: start the setup steps again."
+  },
+  "settings.sync.setup.step": {
+    "message": "Step {n} of {of}",
+    "description": "Settings → Sync setup: which step the user is on."
+  },
+  "settings.sync.setup.continue": {
+    "message": "Continue",
+    "description": "Settings → Sync setup: go to the next step."
+  },
+  "settings.sync.setup.back": {
+    "message": "Back",
+    "description": "Settings → Sync setup: go to the previous step."
+  },
+  "settings.sync.setup.cancel": {
+    "message": "Cancel",
+    "description": "Settings → Sync: cancel a setup or a form."
+  },
+  "settings.sync.setup.folder.title": {
+    "message": "Choose a folder",
+    "description": "Settings → Sync setup, step 1 title, and the folder picker's title."
+  },
+  "settings.sync.setup.folder.help": {
+    "message": "Pick a folder your sync app already syncs, like Dropbox, iCloud Drive or OneDrive.",
+    "description": "Settings → Sync setup, step 1."
+  },
+  "settings.sync.setup.folder.other": {
+    "message": "Another folder…",
+    "description": "Settings → Sync setup, step 1: open the folder picker."
+  },
+  "settings.sync.folder.new": {
+    "message": "Kage will create a folder named “Kage Sync” here.",
+    "description": "Settings → Sync setup: the chosen folder has no Kage sync yet."
+  },
+  "settings.sync.folder.existing": {
+    "message": "{count, plural, one {This folder already has Kage sync from 1 computer. This computer will join it.} other {This folder already has Kage sync from # computers. This computer will join them.}}",
+    "description": "Settings → Sync setup: the chosen folder already holds Kage sync. Computer names are encrypted until the passphrase unlocks them."
+  },
+  "settings.sync.folder.unknown_sync": {
+    "message": "Kage can't tell if this folder syncs. That's fine if another tool syncs it.",
+    "description": "Settings → Sync setup: a note (not an error) for a folder Kage doesn't recognise as a cloud folder."
+  },
+  "settings.sync.folder.newer_format": {
+    "message": "This sync folder needs a newer Kage. Update Kage on this computer first.",
+    "description": "Settings → Sync setup: the folder was made by a newer Kage."
+  },
+  "settings.sync.check_updates": {
+    "message": "Check for updates",
+    "description": "Settings → Sync: open Settings → Updates."
+  },
+  "settings.sync.tip.keep_downloaded_windows": {
+    "message": "Kage will keep this folder downloaded.",
+    "description": "Settings → Sync setup tip for OneDrive or Dropbox on Windows."
+  },
+  "settings.sync.tip.icloud": {
+    "message": "Keep Downloaded is recommended for this folder.",
+    "description": "Settings → Sync setup tip for iCloud Drive."
+  },
+  "settings.sync.tip.google_drive": {
+    "message": "Use Mirror mode, or make the folder available offline.",
+    "description": "Settings → Sync setup tip for Google Drive."
+  },
+  "settings.sync.tip.syncthing": {
+    "message": "Works best when two of your computers are often online at the same time.",
+    "description": "Settings → Sync setup tip for Syncthing."
+  },
+  "settings.sync.tip.generic": {
+    "message": "Set your sync app to keep this folder downloaded on this computer.",
+    "description": "Settings → Sync: how to stop the sync app from leaving files online-only."
+  },
+  "settings.sync.setup.passphrase.create_title": {
+    "message": "Make a sync passphrase",
+    "description": "Settings → Sync setup, step 2 when creating a sync folder."
+  },
+  "settings.sync.setup.passphrase.join_title": {
+    "message": "Enter your sync passphrase",
+    "description": "Settings → Sync setup, step 2 when joining a sync folder."
+  },
+  "settings.sync.setup.passphrase.label": {
+    "message": "Passphrase",
+    "description": "Settings → Sync: the passphrase field."
+  },
+  "settings.sync.setup.passphrase.confirm": {
+    "message": "Type it again",
+    "description": "Settings → Sync: the field that confirms a new passphrase."
+  },
+  "settings.sync.setup.passphrase.rule": {
+    "message": "Use at least {count} characters.",
+    "description": "Settings → Sync: the passphrase length rule."
+  },
+  "settings.sync.setup.passphrase.make": {
+    "message": "Make one for me",
+    "description": "Settings → Sync setup: generate a passphrase."
+  },
+  "settings.sync.setup.passphrase.generated": {
+    "message": "Your passphrase:",
+    "description": "Settings → Sync setup: shown before a generated passphrase."
+  },
+  "settings.sync.setup.passphrase.copy": {
+    "message": "Copy",
+    "description": "Settings → Sync setup: copy the generated passphrase."
+  },
+  "settings.sync.setup.passphrase.once": {
+    "message": "You'll type it once on each of your computers.",
+    "description": "Settings → Sync setup, before the note that the passphrase can't be recovered."
+  },
+  "settings.sync.setup.passphrase.join_help": {
+    "message": "It's the passphrase you made when you set up sync on your first computer.",
+    "description": "Settings → Sync setup when joining."
+  },
+  "settings.sync.passphrase.required": {
+    "message": "Enter the passphrase.",
+    "description": "Settings → Sync: the passphrase field is empty."
+  },
+  "settings.sync.passphrase.mismatch": {
+    "message": "The two passphrases aren't the same.",
+    "description": "Settings → Sync: the confirm field doesn't match."
+  },
+  "settings.sync.setup.name.title": {
+    "message": "Name this computer",
+    "description": "Settings → Sync setup, step 3."
+  },
+  "settings.sync.setup.name.label": {
+    "message": "Computer name",
+    "description": "Settings → Sync: the computer name field."
+  },
+  "settings.sync.setup.name.help": {
+    "message": "Your other computers show this name. It's stored only inside the encrypted files.",
+    "description": "Settings → Sync setup, step 3."
+  },
+  "settings.sync.name.default.macos": {
+    "message": "My Mac",
+    "description": "Settings → Sync setup: the suggested name of this computer on macOS."
+  },
+  "settings.sync.name.default.windows": {
+    "message": "My PC",
+    "description": "Settings → Sync setup: the suggested name of this computer on Windows."
+  },
+  "settings.sync.name.default.linux": {
+    "message": "My Linux computer",
+    "description": "Settings → Sync setup: the suggested name of this computer on Linux."
+  },
+  "settings.sync.setup.categories.title": {
+    "message": "What to sync on this computer",
+    "description": "Settings → Sync setup, step 4."
+  },
+  "settings.sync.setup.categories.pasted_keys": {
+    "message": "Shortcuts and automations sync as you typed them. If you pasted a key into one, it syncs too, encrypted.",
+    "description": "Settings → Sync setup, step 4."
+  },
+  "settings.sync.category.settings_desc": {
+    "message": "Preferences, agents, app modes, personalization",
+    "description": "Settings → Sync: what the Settings category holds."
+  },
+  "settings.sync.category.automations_desc": {
+    "message": "Commands, prompts, automations and custom actions",
+    "description": "Settings → Sync setup: what the Shortcuts & automations category holds."
+  },
+  "settings.sync.category.extensions_desc": {
+    "message": "Which extensions you use, their settings, and data for extensions that sync it",
+    "description": "Settings → Sync setup: what the Extensions category holds."
+  },
+  "settings.sync.category.chats_desc": {
+    "message": "Read-only copies of your chats on your other computers",
+    "description": "Settings → Sync setup: what the Chat history category holds."
+  },
+  "settings.sync.category.automations_counts": {
+    "message": "{shortcuts, plural, one {# shortcut} other {# shortcuts}} · {macros, plural, one {# automation} other {# automations}} · {actions, plural, one {# custom action} other {# custom actions}}",
+    "description": "Settings → Sync: how much the Shortcuts & automations category holds on this computer."
+  },
+  "settings.sync.category.extensions_count": {
+    "message": "{count, plural, one {# extension} other {# extensions}}",
+    "description": "Settings → Sync: how many extensions are installed."
+  },
+  "settings.sync.category.chats_on": {
+    "message": "On",
+    "description": "Settings → Sync: the Chat history category is on."
+  },
+  "settings.sync.category.off": {
+    "message": "Off",
+    "description": "Settings → Sync: a category is off."
+  },
+  "settings.sync.setup.turn_on": {
+    "message": "Turn on sync",
+    "description": "Settings → Sync setup: create the sync folder and start syncing."
+  },
+  "settings.sync.setup.unlock": {
+    "message": "Unlock",
+    "description": "Settings → Sync setup when joining: check the passphrase and preview what joining changes."
+  },
+  "settings.sync.setup.join": {
+    "message": "Join",
+    "description": "Settings → Sync setup: join the other computers."
+  },
+  "settings.sync.join.title": {
+    "message": "Join your other computers",
+    "description": "Settings → Sync setup: the join step."
+  },
+  "settings.sync.join.from": {
+    "message": "This folder has Kage sync from {computers}.",
+    "description": "Settings → Sync setup: the computers already in the folder. {computers} is a list of names with their OS."
+  },
+  "settings.sync.join.computer": {
+    "message": "{name} ({os})",
+    "description": "Settings → Sync setup: one computer in the folder, with its OS."
+  },
+  "settings.sync.join.question": {
+    "message": "This computer already has settings. Which should win where they differ?",
+    "description": "Settings → Sync setup: the join choice."
+  },
+  "settings.sync.join.counts": {
+    "message": "{different, plural, =0 {No settings differ.} one {1 setting differs.} other {# settings differ.}} {only_here, plural, =0 {} one {1 item is only on this computer; it's kept.} other {# items are only on this computer; they're kept.}}",
+    "description": "Settings → Sync setup: what joining changes."
+  },
+  "settings.sync.done.title": {
+    "message": "Sync is on",
+    "description": "Settings → Sync: setup finished."
+  },
+  "settings.sync.done.button": {
+    "message": "Done",
+    "description": "Settings → Sync: close the setup."
+  },
+  "settings.sync.done.suggestions": {
+    "message": "{count, plural, one {1 extension from your other computers isn't installed here yet} other {# extensions from your other computers aren't installed here yet}}",
+    "description": "Settings → Sync after setup."
+  },
+  "settings.sync.done.replaced": {
+    "message": "{count, plural, one {1 setting on this computer was replaced by a synced one} other {# settings on this computer were replaced by synced ones}}",
+    "description": "Settings → Sync after joining."
+  },
+  "settings.sync.review": {
+    "message": "Review",
+    "description": "Settings → Sync: open what needs a decision."
+  },
+  "settings.sync.undo": {
+    "message": "Undo",
+    "description": "Settings → Sync after joining: undo joining."
+  },
+  "settings.sync.back": {
+    "message": "Back",
+    "description": "Settings → Sync: back to the main page."
+  },
+  "settings.sync.sync_now": {
+    "message": "Sync now",
+    "description": "Settings → Sync: run sync at once."
+  },
+  "settings.sync.syncing_now": {
+    "message": "Syncing now…",
+    "description": "Settings → Sync after Sync now."
+  },
+  "settings.sync.pause": {
+    "message": "Pause",
+    "description": "Settings → Sync: open the pause choices."
+  },
+  "settings.sync.pause.1h": {
+    "message": "For 1 hour",
+    "description": "Settings → Sync: pause for an hour."
+  },
+  "settings.sync.pause.tomorrow": {
+    "message": "Until tomorrow",
+    "description": "Settings → Sync: pause until tomorrow morning."
+  },
+  "settings.sync.pause.forever": {
+    "message": "Until I resume",
+    "description": "Settings → Sync: pause with no end."
+  },
+  "settings.sync.action.resume": {
+    "message": "Resume",
+    "description": "Settings → Sync: end a pause."
+  },
+  "settings.sync.action.keep_downloaded": {
+    "message": "How to keep it downloaded",
+    "description": "Settings → Sync: show how to keep the sync folder downloaded."
+  },
+  "settings.sync.action.unlock": {
+    "message": "Enter passphrase",
+    "description": "Settings → Sync: unlock sync with the passphrase."
+  },
+  "settings.sync.action.find_folder": {
+    "message": "Find folder",
+    "description": "Settings → Sync: look for a sync folder that moved."
+  },
+  "settings.sync.action.choose_folder": {
+    "message": "Choose folder…",
+    "description": "Settings → Sync: use a different sync folder."
+  },
+  "settings.sync.action.start_over_here": {
+    "message": "Start over from this computer",
+    "description": "Settings → Sync when the sync folder is empty."
+  },
+  "settings.sync.action.turn_off": {
+    "message": "Turn off sync",
+    "description": "Settings → Sync when the sync folder is empty."
+  },
+  "settings.sync.action.join_again": {
+    "message": "Join again",
+    "description": "Settings → Sync after sync was started over or this computer was removed."
+  },
+  "settings.sync.action.ok": {
+    "message": "OK",
+    "description": "Settings → Sync: acknowledge that this computer was removed (turns sync off here)."
+  },
+  "settings.sync.find.found": {
+    "message": "Found your sync folder.",
+    "description": "Settings → Sync after Find folder succeeded."
+  },
+  "settings.sync.find.not_found": {
+    "message": "Kage couldn't find your sync folder. Choose it instead.",
+    "description": "Settings → Sync after Find folder found nothing."
+  },
+  "settings.sync.folder_label": {
+    "message": "Folder",
+    "description": "Settings → Sync: the sync folder."
+  },
+  "settings.sync.this_computer": {
+    "message": "This computer",
+    "description": "Settings → Sync: this computer's name."
+  },
+  "settings.sync.change": {
+    "message": "Change…",
+    "description": "Settings → Sync: change the sync folder."
+  },
+  "settings.sync.rename": {
+    "message": "Rename",
+    "description": "Settings → Sync: rename this computer."
+  },
+  "settings.sync.save": {
+    "message": "Save",
+    "description": "Settings → Sync: save a form."
+  },
+  "settings.sync.choose": {
+    "message": "Choose…",
+    "description": "Settings → Sync: choose which extensions sync their data."
+  },
+  "settings.sync.change_folder.title": {
+    "message": "Change the sync folder?",
+    "description": "Settings → Sync: confirm before changing the folder."
+  },
+  "settings.sync.change_folder.body": {
+    "message": "This turns sync off on this computer, then sets it up again with the folder you choose. Your other computers need the same change.",
+    "description": "Settings → Sync: what changing the folder does."
+  },
+  "settings.sync.change_folder.ok": {
+    "message": "Choose another folder",
+    "description": "Settings → Sync: confirm changing the folder."
+  },
+  "settings.sync.categories.title": {
+    "message": "What syncs on this computer",
+    "description": "Settings → Sync: the categories."
+  },
+  "settings.sync.attention.title": {
+    "message": "Needs your attention",
+    "description": "Settings → Sync: items waiting for a decision."
+  },
+  "settings.sync.attention.conflicts": {
+    "message": "{count, plural, one {1 conflict} other {# conflicts}}",
+    "description": "Settings → Sync: open conflicts."
+  },
+  "settings.sync.attention.suggestions": {
+    "message": "{count, plural, one {1 extension is on your other computers} other {# extensions are on your other computers}}",
+    "description": "Settings → Sync: install suggestions."
+  },
+  "settings.sync.attention_badge": {
+    "message": "{count, plural, one {1 item needs your attention} other {# items need your attention}}",
+    "description": "Accessible label of the count on the Sync sidebar item."
+  },
+  "settings.sync.devices.title": {
+    "message": "Your computers",
+    "description": "Settings → Sync: the computers that sync."
+  },
+  "settings.sync.devices.this": {
+    "message": "this computer",
+    "description": "Settings → Sync: marks this computer in the list."
+  },
+  "settings.sync.devices.synced": {
+    "message": "synced {time}",
+    "description": "Settings → Sync: when another computer last wrote to the folder."
+  },
+  "settings.sync.devices.inactive": {
+    "message": "last synced {time} · inactive",
+    "description": "Settings → Sync: a computer that hasn't synced for a long time."
+  },
+  "settings.sync.devices.needs_update": {
+    "message": "needs a newer Kage",
+    "description": "Settings → Sync: a computer that can't read the folder until it updates."
+  },
+  "settings.sync.devices.retired": {
+    "message": "removed",
+    "description": "Settings → Sync: a computer that left or was removed."
+  },
+  "settings.sync.devices.remove": {
+    "message": "Remove from sync…",
+    "description": "Settings → Sync: remove another computer."
+  },
+  "settings.sync.devices.remove_label": {
+    "message": "Remove {name} from sync",
+    "description": "Accessible label of the remove button for one computer."
+  },
+  "settings.sync.devices.remove_confirm": {
+    "message": "Remove {name} from sync? It stops getting changes. Its settings stay as they are.",
+    "description": "Settings → Sync: confirm removing a computer."
+  },
+  "settings.sync.devices.lost": {
+    "message": "It's lost or stolen. Change the encryption key and the passphrase.",
+    "description": "Settings → Sync: also rotate the key when removing a computer."
+  },
+  "settings.sync.passphrase.new": {
+    "message": "New passphrase",
+    "description": "Settings → Sync: a new passphrase field."
+  },
+  "settings.sync.not_synced.title": {
+    "message": "Not synced here",
+    "description": "Settings → Sync: values that stay on this computer."
+  },
+  "settings.sync.not_synced.help": {
+    "message": "These values stay on this computer. Kage never shows them here.",
+    "description": "Settings → Sync: held values are listed by label only."
+  },
+  "settings.sync.details": {
+    "message": "Details",
+    "description": "Settings → Sync: list the held values."
+  },
+  "settings.sync.stays.title": {
+    "message": "Stays on each computer",
+    "description": "Settings → Sync: what never syncs."
+  },
+  "settings.sync.stays.list": {
+    "message": "Sign-ins and API keys · tool permissions · extension permissions · window positions · start at login · privacy choices · logs",
+    "description": "Settings → Sync: what never syncs."
+  },
+  "settings.sync.advanced": {
+    "message": "Advanced",
+    "description": "Settings → Sync: the advanced actions."
+  },
+  "settings.sync.passphrase.change_start": {
+    "message": "Change passphrase…",
+    "description": "Settings → Sync: change the passphrase."
+  },
+  "settings.sync.passphrase.change_button": {
+    "message": "Change passphrase",
+    "description": "Settings → Sync: save the new passphrase."
+  },
+  "settings.sync.passphrase.change_help": {
+    "message": "Your other computers keep syncing. Use the new passphrase when you join another computer.",
+    "description": "Settings → Sync: what changing the passphrase does."
+  },
+  "settings.sync.passphrase.changed": {
+    "message": "Passphrase changed.",
+    "description": "Settings → Sync after the passphrase changed."
+  },
+  "settings.sync.key_store_line": {
+    "message": "Where the key is kept: {store}",
+    "description": "Settings → Sync: where this computer keeps the sync key."
+  },
+  "settings.sync.key_store.keychain": {
+    "message": "Keychain",
+    "description": "Settings → Sync: the key is in the macOS Keychain."
+  },
+  "settings.sync.key_store.credential_manager": {
+    "message": "Credential Manager",
+    "description": "Settings → Sync: the key is in Windows Credential Manager."
+  },
+  "settings.sync.key_store.secret_service": {
+    "message": "Secret Service",
+    "description": "Settings → Sync: the key is in the Linux Secret Service."
+  },
+  "settings.sync.key_store.file": {
+    "message": "A file only you can read",
+    "description": "Settings → Sync: the key is in an owner-only file."
+  },
+  "settings.sync.key_store.memory": {
+    "message": "Memory only",
+    "description": "Settings → Sync: the key is only in memory (tests)."
+  },
+  "settings.sync.undo_join_until": {
+    "message": "Undo joining (until {date})",
+    "description": "Settings → Sync: undo joining, while it can still be undone."
+  },
+  "settings.sync.undo_join_button": {
+    "message": "Undo joining",
+    "description": "Settings → Sync → Conflicts: undo joining."
+  },
+  "settings.sync.undo_join.title": {
+    "message": "Undo joining?",
+    "description": "Settings → Sync: confirm undoing a join."
+  },
+  "settings.sync.undo_join.body": {
+    "message": "This turns sync off here and puts back this computer's settings from before it joined. Your other computers keep what this computer sent.",
+    "description": "Settings → Sync: what undoing a join does."
+  },
+  "settings.sync.undo_join.ok": {
+    "message": "Undo joining",
+    "description": "Settings → Sync: confirm undoing a join."
+  },
+  "settings.sync.leave.start": {
+    "message": "Turn off sync on this computer…",
+    "description": "Settings → Sync: leave sync."
+  },
+  "settings.sync.leave.title": {
+    "message": "Turn off sync on this computer?",
+    "description": "Settings → Sync: confirm leaving."
+  },
+  "settings.sync.leave.body": {
+    "message": "This computer keeps its settings as they are now. Your other computers keep syncing.",
+    "description": "Settings → Sync: what leaving does."
+  },
+  "settings.sync.leave.ok": {
+    "message": "Turn off",
+    "description": "Settings → Sync: confirm leaving."
+  },
+  "settings.sync.start_over.start": {
+    "message": "Start over…",
+    "description": "Settings → Sync: start sync over from this computer."
+  },
+  "settings.sync.start_over.title": {
+    "message": "Start sync over?",
+    "description": "Settings → Sync: the start over form."
+  },
+  "settings.sync.start_over.body": {
+    "message": "This moves everything in “Kage Sync” aside and starts again from this computer's settings, with a new passphrase. Your other computers stop syncing until you join them again. Their settings stay as they are.",
+    "description": "Settings → Sync: what start over does."
+  },
+  "settings.sync.start_over.ack": {
+    "message": "I understand every computer must join again",
+    "description": "Settings → Sync: the start over confirmation box."
+  },
+  "settings.sync.start_over.need_ack": {
+    "message": "Tick the box to confirm first.",
+    "description": "Settings → Sync: start over without the confirmation box."
+  },
+  "settings.sync.start_over.button": {
+    "message": "Start over",
+    "description": "Settings → Sync: confirm start over."
+  },
+  "settings.sync.ext.title": {
+    "message": "Extensions",
+    "description": "Settings → Sync → Extensions."
+  },
+  "settings.sync.ext.intro": {
+    "message": "Which extensions you use and their settings sync with “Extensions”. Some extensions can also sync their data.",
+    "description": "Settings → Sync → Extensions."
+  },
+  "settings.sync.ext.settings_and_data": {
+    "message": "Settings and data",
+    "description": "Settings → Sync → Extensions: this extension syncs its settings and data."
+  },
+  "settings.sync.ext.settings_only": {
+    "message": "Settings only",
+    "description": "Settings → Sync → Extensions: this extension syncs only its settings."
+  },
+  "settings.sync.ext.sync_data": {
+    "message": "Sync data",
+    "description": "Settings → Sync → Extensions: the data switch."
+  },
+  "settings.sync.ext.sign_in_local": {
+    "message": "Sign-in stays on each computer",
+    "description": "Settings → Sync → Extensions: an extension with a sign-in."
+  },
+  "settings.sync.ext.no_data": {
+    "message": "This extension doesn't sync data",
+    "description": "Settings → Sync → Extensions."
+  },
+  "settings.sync.ext.none": {
+    "message": "No extensions are installed.",
+    "description": "Settings → Sync → Extensions with nothing installed."
+  },
+  "settings.sync.ext.purge": {
+    "message": "Remove its data from the sync folder…",
+    "description": "Settings → Sync → Extensions: purge one extension's synced data."
+  },
+  "settings.sync.ext.purge_title": {
+    "message": "Remove this extension's data from the sync folder?",
+    "description": "Settings → Sync → Extensions: confirm a purge."
+  },
+  "settings.sync.ext.purge_body": {
+    "message": "Its data stops syncing on every computer. Each computer keeps its own copy.",
+    "description": "Settings → Sync → Extensions: what a purge does."
+  },
+  "settings.sync.ext.purge_ok": {
+    "message": "Remove from sync folder",
+    "description": "Settings → Sync → Extensions: confirm a purge."
+  },
+  "settings.sync.ext.purged": {
+    "message": "Removed from the sync folder.",
+    "description": "Settings → Sync → Extensions after a purge."
+  },
+  "settings.sync.remote_changed": {
+    "message": "Some settings here changed on another computer.",
+    "description": "A Settings section with unsaved edits, after a synced change arrived for it."
+  },
+  "settings.sync.remote_changed_show": {
+    "message": "Show the new values",
+    "description": "Drop the unsaved edits and show the synced values."
+  },
+  "settings.sync.conflicts.another_computer": {
+    "message": "another computer",
+    "description": "Settings → Sync → Conflicts: a computer whose name isn't known."
+  },
+  "settings.sync_scope.per_os_short": {
+    "message": "Each kind of computer",
+    "description": "The where-it-applies control for a value set per OS (hotkeys, paths)."
+  },
+  "settings.sync_scope.held": {
+    "message": "Not synced here",
+    "description": "The where-it-applies control for a value held on this computer."
+  },
+  "settings.sync_scope.all_value": {
+    "message": "All computers: {value}",
+    "description": "Under the control when this OS has its own value: the shared value."
+  },
+  "settings.sync_scope.differs": {
+    "message": "{os, select, macos {Differs on Macs} windows {Differs on Windows} other {Differs on Linux}}",
+    "description": "The where-it-applies control when another OS has its own value."
+  },
+  "settings.sync_scope.other_uses": {
+    "message": "{os, select, macos {Macs use {value}} windows {Windows PCs use {value}} other {Linux PCs use {value}}}",
+    "description": "The where-it-applies menu: another OS's value."
+  },
+  "settings.sync_scope.action.all_value": {
+    "message": "Use {value} on all computers",
+    "description": "The where-it-applies menu: make this OS's value the shared one."
+  },
+  "settings.sync_scope.aria": {
+    "message": "{name}: {where}. Change",
+    "description": "Accessible label of the where-it-applies control."
+  },
+  "settings.sync_scope.menu_label": {
+    "message": "Where this applies",
+    "description": "Accessible label of the where-it-applies menu."
+  },
+  "settings.sync_scope.available_on": {
+    "message": "Available on:",
+    "description": "List item editors: where the item exists."
+  },
+  "settings.sync_scope.confirm_this_computer.title": {
+    "message": "Keep it only on this computer?",
+    "description": "Confirm before an item stops syncing."
+  },
+  "settings.sync_scope.confirm_this_computer.message": {
+    "message": "Remove {name} from your other computers and keep it only here?",
+    "description": "Confirm before an item stops syncing."
+  },
+  "settings.sync_scope.confirm_this_computer.ok": {
+    "message": "Keep only here",
+    "description": "Confirm before an item stops syncing."
+  },
+  "settings.sync_scope.confirm_this_computer.cancel": {
+    "message": "Cancel",
+    "description": "Cancel keeping an item only here."
+  },
+  "settings.sync_scope.failed": {
+    "message": "Couldn't change where this applies",
+    "description": "Error title when a scope change failed."
+  },
+  "settings.sync_scope.sign_in_local": {
+    "message": "This computer · sign-ins don't sync",
+    "description": "An extension's sign-in field never syncs."
+  },
+  "settings.sync_scope.undo": {
+    "message": "Undo",
+    "description": "The changed-everywhere note: undo the change."
+  },
+  "settings.sync_scope.value.on": {
+    "message": "On",
+    "description": "A synced switch that is on."
+  },
+  "settings.sync_scope.value.off": {
+    "message": "Off",
+    "description": "A synced switch that is off."
+  },
+  "sync.status.waiting_any": {
+    "message": "Waiting for {count, plural, one {# file} other {# files}} to download",
+    "description": "Settings → Sync status line: the sync app hasn't delivered some files yet."
+  },
+  "sync.status.reset_elsewhere": {
+    "message": "Sync was started over on another computer",
+    "description": "Settings → Sync status line."
+  },
+  "sync.status.removed_elsewhere": {
+    "message": "This computer was removed from sync on another computer",
+    "description": "Settings → Sync status line."
+  },
+  "sync.conflicts.today": {
+    "message": "Today",
+    "description": "Settings → Sync → Conflicts: entries from today."
+  },
+  "sync.conflicts.earlier": {
+    "message": "Earlier",
+    "description": "Settings → Sync → Conflicts: older entries."
+  },
+  "sync.conflicts.earlier_actions": {
+    "message": "Joins and restores",
+    "description": "Settings → Sync → Conflicts: grouped entries."
+  },
+  "sync.conflicts.deleted_on": {
+    "message": "Deleted on {computer}, {time}",
+    "description": "Settings → Sync → Recently deleted."
+  },
+  "sync.conflicts.keep_all": {
+    "message": "Keep all",
+    "description": "Settings → Sync → Conflicts: dismiss every entry of a group."
+  },
+  "sync.conflicts.hide": {
+    "message": "Hide",
+    "description": "Settings → Sync → Conflicts: collapse a group."
+  },
+  "sync.conflicts.show_versions": {
+    "message": "{count, plural, one {Show 1 version} other {Show # versions}}",
+    "description": "Settings → Sync → Conflicts: Kage's own generated documents."
+  },
+  "sync.conflicts.state.dismissed": {
+    "message": "Kept the current version",
+    "description": "Settings → Sync → Resolved."
+  },
+  "sync.conflicts.state.restored": {
+    "message": "Restored",
+    "description": "Settings → Sync → Resolved."
+  },
+  "sync.conflicts.compare.field": {
+    "message": "Field",
+    "description": "Settings → Sync → Compare: column."
+  },
+  "sync.conflicts.compare.now": {
+    "message": "Now",
+    "description": "Settings → Sync → Compare: column."
+  },
+  "sync.conflicts.compare.replaced": {
+    "message": "Replaced",
+    "description": "Settings → Sync → Compare: column."
+  },
+  "sync.conflicts.empty.replaced": {
+    "message": "No conflicts.",
+    "description": "Settings → Sync → Conflicts, empty."
+  },
+  "sync.conflicts.empty.deleted": {
+    "message": "Nothing was deleted recently.",
+    "description": "Settings → Sync → Recently deleted, empty."
+  },
+  "sync.conflicts.empty.resolved": {
+    "message": "Nothing resolved yet.",
+    "description": "Settings → Sync → Resolved, empty."
+  },
+  "sync.review.heading": {
+    "message": "Review",
+    "description": "Settings → Sync → Review: title."
+  },
+  "sync.review.empty": {
+    "message": "Nothing needs your attention.",
+    "description": "Settings → Sync → Review, empty."
+  },
+  "sync.review.runnable_intro": {
+    "message": "They came from your other computers. They stay off here until you allow them.",
+    "description": "Settings → Sync → Review: synced items that start programs."
+  },
+  "sync.review.title.mass_changes": {
+    "message": "{count, plural, one {1 bulk delete waits for you} other {# bulk deletes wait for you}}",
+    "description": "Settings → Sync → Review."
+  },
+  "sync.review.title.approvals": {
+    "message": "{count, plural, one {1 extension needs approval here} other {# extensions need approval here}}",
+    "description": "Settings → Sync → Review."
+  },
+  "sync.review.title.suggestions": {
+    "message": "{count, plural, one {1 extension is on your other computers} other {# extensions are on your other computers}}",
+    "description": "Settings → Sync → Review."
+  },
+  "sync.review.title.removals": {
+    "message": "{count, plural, one {1 extension was removed elsewhere} other {# extensions were removed elsewhere}}",
+    "description": "Settings → Sync → Review."
+  },
+  "sync.review.from": {
+    "message": "From {computer}",
+    "description": "Settings → Sync → Review: which computer the item came from."
+  },
+  "sync.review.allow": {
+    "message": "Allow on this computer",
+    "description": "Settings → Sync → Review: approve a synced item that starts programs."
+  },
+  "sync.review.keep_off": {
+    "message": "Keep off",
+    "description": "Settings → Sync → Review: leave it off here."
+  },
+  "sync.review.delete_here": {
+    "message": "Delete here too",
+    "description": "Settings → Sync → Review: accept a bulk delete from another computer."
+  },
+  "sync.review.keep_them": {
+    "message": "Keep them",
+    "description": "Settings → Sync → Review: refuse a bulk delete from another computer."
+  },
+  "sync.review.delete_everywhere": {
+    "message": "Delete everywhere",
+    "description": "Settings → Sync → Review: confirm this computer's bulk delete."
+  },
+  "sync.review.cancel_delete": {
+    "message": "Cancel",
+    "description": "Settings → Sync → Review: undo this computer's bulk delete."
+  },
+  "sync.review.not_here": {
+    "message": "Not on this computer",
+    "description": "Settings → Sync → Review: don't suggest it again."
+  },
+  "sync.review.remove_here": {
+    "message": "Remove here",
+    "description": "Settings → Sync → Review: uninstall here what was removed elsewhere."
+  },
+  "sync.review.keep": {
+    "message": "Keep",
+    "description": "Settings → Sync → Review: keep an extension removed elsewhere."
+  },
+  "sync.review.sideload_hint": {
+    "message": "Install it on this computer from where you got it.",
+    "description": "Settings → Sync → Review: a sideloaded extension can't install itself."
+  },
+  "chat.session_list.synced_group": {
+    "message": "On your other computers",
+    "description": "Chat history: heading over chats copied from the user's other computers by folder sync."
+  },
+  "chat.session.synced_banner": {
+    "message": "Read-only · a chat from {computer}",
+    "description": "Chat history: banner over a chat from another computer. {computer} is that computer's name."
+  },
+  "chat.session.synced_banner_unnamed": {
+    "message": "Read-only · a chat from another computer",
+    "description": "Chat history: banner over a chat from another computer whose name isn't known."
+  },
+  "chat.session.continue_here": {
+    "message": "Continue here",
+    "description": "Chat history: start a new chat on this computer with the other computer's chat attached."
+  },
+  "chat.session.continue_here_title": {
+    "message": "Start a new chat here with this chat attached",
+    "description": "Tooltip of Continue here."
+  },
+  "settings.about.backup.sync_pointer": {
+    "message": "To keep your settings the same on all your computers, use Sync.",
+    "description": "About → Backup & restore: a pointer to Settings → Sync."
+  },
+  "settings.about.backup.sync_pointer_btn": {
+    "message": "Open Sync",
+    "description": "About → Backup & restore: open Settings → Sync."
   }
 }

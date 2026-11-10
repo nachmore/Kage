@@ -14,7 +14,7 @@ export class ModelSettingsModule extends SettingsModule {
         return `
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
-                <div class="setting-row">
+                <div class="setting-row" data-sync-path="acp.agent.default_model">
                     <div class="setting-label">${t('settings.model.default.label')}</div>
                     <div class="setting-description">${t('settings.model.default.description')}</div>
                     <div class="setting-control">
@@ -23,7 +23,7 @@ export class ModelSettingsModule extends SettingsModule {
                         </select>
                     </div>
                 </div>
-                <div class="setting-row">
+                <div class="setting-row" data-sync-path="acp.agent.auto_compact_threshold">
                     <div class="setting-label">${t('settings.model.auto_compact.label')}</div>
                     <div class="setting-description">${t('settings.model.auto_compact.description')}</div>
                     <div class="setting-control" style="display:flex;align-items:center;gap:8px;">

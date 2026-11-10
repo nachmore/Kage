@@ -44,12 +44,13 @@ export function renderShortcutsSettings(module) {
                         <button class="dialog-close-btn" data-action="shortcuts.closeDialog">×</button>
                     </div>
                     <div class="shortcut-dialog-body">
+                        <div id="shortcutSyncAvail" data-sync-item-avail hidden></div>
                         <div class="dialog-field">
                             <label>${t('settings.shortcuts.dialog.name.label')}</label>
                             <input type="text" id="shortcutName" class="setting-input" placeholder="${t('settings.shortcuts.dialog.name.placeholder')}">
                         </div>
-                        <div class="dialog-field">
-                            <label>${t('settings.shortcuts.dialog.trigger.label')}</label>
+                        <div class="dialog-field" data-sync-field="shortcut">
+                            <label>${t('settings.shortcuts.dialog.trigger.label')}</label><span class="sync-chip-slot" data-sync-chip-slot></span>
                             <input type="text" id="shortcutTrigger" class="setting-input" spellcheck="false" placeholder="${t('settings.shortcuts.dialog.trigger.placeholder')}">
                         </div>
                         <div class="dialog-field">
@@ -76,16 +77,16 @@ export function renderShortcutsSettings(module) {
 
                         <!-- Run Program Fields -->
                         <div id="runProgramFields">
-                            <div class="dialog-field">
-                                <label>${t('settings.shortcuts.dialog.run.path.label')}</label>
+                            <div class="dialog-field" data-sync-field="path">
+                                <label>${t('settings.shortcuts.dialog.run.path.label')}</label><span class="sync-chip-slot" data-sync-chip-slot></span>
                                 <input type="text" id="shortcutPath" class="setting-input" spellcheck="false" placeholder="e.g., C:\\Program Files\\VSCode\\code.exe">
                             </div>
-                            <div class="dialog-field">
-                                <label>${t('settings.shortcuts.dialog.run.work_dir.label')}</label>
+                            <div class="dialog-field" data-sync-field="working_directory">
+                                <label>${t('settings.shortcuts.dialog.run.work_dir.label')}</label><span class="sync-chip-slot" data-sync-chip-slot></span>
                                 <input type="text" id="shortcutWorkDir" class="setting-input" spellcheck="false" placeholder="${t('settings.shortcuts.dialog.run.work_dir.placeholder')}">
                             </div>
-                            <div class="dialog-field">
-                                <label>${t('settings.shortcuts.dialog.run.args.label')}</label>
+                            <div class="dialog-field" data-sync-field="arguments">
+                                <label>${t('settings.shortcuts.dialog.run.args.label')}</label><span class="sync-chip-slot" data-sync-chip-slot></span>
                                 <input type="text" id="shortcutArgs" class="setting-input" spellcheck="false" placeholder="${t('settings.shortcuts.dialog.run.args.placeholder')}">
                                 <div class="setting-description" style="margin-top: 4px;">
                                     ${t('settings.shortcuts.dialog.run.args.help')}
@@ -313,12 +314,15 @@ export function renderShortcutsListView(module) {
                 iconHtml = `<span style="font-size:18px;margin-right:8px;">⚡</span>`;
             }
 
+            const syncAttrs = s.sync_id
+                ? ` data-sync-path="shortcuts/${escapeAttr(s.sync_id)}" data-sync-name="${escapeAttr(s.name || '')}"`
+                : '';
             return `
-                <div class="shortcut-item">
+                <div class="shortcut-item"${syncAttrs}>
                     <div class="shortcut-info" style="display:flex;align-items:flex-start;">
                         <div style="padding-top:2px;">${iconHtml}</div>
                         <div>
-                            <div class="shortcut-name">${escapeHtml(s.name)}</div>
+                            <div class="shortcut-name" data-sync-chip-slot>${escapeHtml(s.name)}</div>
                             <div class="shortcut-trigger">${escapeHtml(s.shortcut)}</div>
                             <div class="shortcut-details">${details}</div>
                         </div>

@@ -1,6 +1,7 @@
 import { SettingsModule } from './base.js';
 import { isMac, isWindows, platformKeyLabel } from '../shared/shortcuts.js';
 import { t } from '../shared/i18n.js';
+import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
 /**
  * Hotkey & Shortcuts Settings Module - uses shared HotkeyPicker component
  */
@@ -22,7 +23,8 @@ export class HotkeySettingsModule extends SettingsModule {
             ? this.createControlRow(
                   t('settings.hotkey.clipboard.label'),
                   t('settings.hotkey.clipboard.description'),
-                  '<div id="settingsClipboardHotkeyPicker"></div>'
+                  '<div id="settingsClipboardHotkeyPicker"></div>',
+                  { syncPath: 'clipboard_hotkey' }
               )
             : '';
         const clipboardShortcutRef = showClipboardHistory
@@ -51,18 +53,21 @@ export class HotkeySettingsModule extends SettingsModule {
                     // system-shortcut prompt explains and asks first.
                     (isMac()
                         ? '<div class="hk-picker-presets" id="settingsHotkeyPresets"></div>'
-                        : '')
+                        : ''),
+                { syncPath: 'hotkey' }
             ) +
             this.createControlRow(
                 t('settings.hotkey.voice.label'),
                 t('settings.hotkey.voice.description'),
-                '<div id="settingsVoiceHotkeyPicker"></div>'
+                '<div id="settingsVoiceHotkeyPicker"></div>',
+                { syncPath: 'voice_hotkey' }
             ) +
             clipboardHotkeyRow +
             this.createControlRow(
                 t('settings.hotkey.inline_assist.label'),
                 t('settings.hotkey.inline_assist.description'),
-                '<div id="settingsInlineAssistHotkeyPicker"></div>'
+                '<div id="settingsInlineAssistHotkeyPicker"></div>',
+                { syncPath: 'inline_assist_hotkey' }
             ) +
             '<div class="setting-section-label">' +
             t('settings.hotkey.shortcuts.section') +
@@ -140,9 +145,9 @@ export class HotkeySettingsModule extends SettingsModule {
         );
         this._picker.onChange(async (hk) => {
             try {
-                const config = await invoke('get_config');
+                const { revision, config } = await getConfigSnapshot(invoke);
                 config.hotkey = hk;
-                await invoke('save_config', { config });
+                await saveConfig(config, { baseRevision: revision, invoke });
             } catch (e) {
                 console.error('Failed to save hotkey:', e);
             }
@@ -172,9 +177,9 @@ export class HotkeySettingsModule extends SettingsModule {
             );
             this._cbPicker.onChange(async (hk) => {
                 try {
-                    const config = await invoke('get_config');
+                    const { revision, config } = await getConfigSnapshot(invoke);
                     config.clipboard_hotkey = hk.key ? hk : null;
-                    await invoke('save_config', { config });
+                    await saveConfig(config, { baseRevision: revision, invoke });
                 } catch (e) {
                     console.error('Failed to save clipboard hotkey:', e);
                 }
@@ -192,9 +197,9 @@ export class HotkeySettingsModule extends SettingsModule {
             );
             this._iaPicker.onChange(async (hk) => {
                 try {
-                    const config = await invoke('get_config');
+                    const { revision, config } = await getConfigSnapshot(invoke);
                     config.inline_assist_hotkey = hk.key ? hk : null;
-                    await invoke('save_config', { config });
+                    await saveConfig(config, { baseRevision: revision, invoke });
                 } catch (e) {
                     console.error('Failed to save inline assist hotkey:', e);
                 }
@@ -212,9 +217,9 @@ export class HotkeySettingsModule extends SettingsModule {
             );
             this._voicePicker.onChange(async (hk) => {
                 try {
-                    const config = await invoke('get_config');
+                    const { revision, config } = await getConfigSnapshot(invoke);
                     config.voice_hotkey = hk.key ? hk : null;
-                    await invoke('save_config', { config });
+                    await saveConfig(config, { baseRevision: revision, invoke });
                 } catch (e) {
                     console.error('Failed to save voice hotkey:', e);
                 }

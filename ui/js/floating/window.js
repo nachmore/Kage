@@ -23,6 +23,7 @@ import {
     MAX_HEIGHT_PERCENT,
     MIN_WIDTH_LOGICAL,
 } from './window-sizing-config.js';
+import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
 
 export class WindowManager {
     constructor(invoke) {
@@ -896,14 +897,14 @@ export class WindowManager {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
             try {
-                const config = await this.invoke('get_config');
+                const { revision, config } = await getConfigSnapshot(this.invoke);
                 if (config.ui?.remember_launcher_size) {
                     const scale = window.devicePixelRatio || 1;
                     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
                     const size = await appWindow.innerSize();
                     config.ui.launcher_width = Math.round(size.width / scale);
                     config.ui.launcher_height = Math.round(size.height / scale);
-                    await this.invoke('save_config', { config });
+                    await saveConfig(config, { baseRevision: revision, invoke: this.invoke });
                 }
             } catch {}
         };

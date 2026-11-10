@@ -82,6 +82,7 @@ let saved;
 beforeAll(async () => {
     setupTauriMock({
         get_config: async () => structuredClone(backend),
+        get_config_snapshot: async () => ({ revision: 0, config: structuredClone(backend) }),
         save_config: async ({ config }) => {
             saved.push(structuredClone(config));
             backend = structuredClone(config);

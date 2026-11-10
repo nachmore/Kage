@@ -134,3 +134,49 @@ export async function getConfig(invoke) {
 export function invalidateConfig() {
     _cachedPromise = null;
 }
+
+function _defaultInvoke() {
+    const invoke = window?.__TAURI__?.core?.invoke;
+    if (typeof invoke !== 'function') throw new Error('Tauri invoke is not available');
+    return invoke;
+}
+
+/**
+ * The current Config and the revision a later `saveConfig` names as its
+ * base (docs/design/SYNC.md §9.5). Read it right before you change the
+ * config and save, so the backend can tell your changes apart from the
+ * fields you only carried along.
+ *
+ * @param {Function} [invoke] - the Tauri `invoke`; defaults to the global.
+ * @returns {Promise<{ revision: number | null, config: object }>}
+ */
+export async function getConfigSnapshot(invoke) {
+    _ensureInvalidationListener();
+    const snap = await (invoke || _defaultInvoke())('get_config_snapshot');
+    const revision = Number.isInteger(snap?.revision) ? snap.revision : null;
+    return { revision, config: snap?.config ?? {} };
+}
+
+/**
+ * Save a whole Config. `baseRevision` is the revision of the snapshot the
+ * caller started from (`getConfigSnapshot`). The backend keeps the current
+ * value of every field the caller didn't change since that revision, so a
+ * stale copy can't revert a change another window or another computer
+ * made (§9.5). Without it the save replaces everything, as before.
+ *
+ * Every in-tree caller saves through here, never `invoke('save_config')`
+ * (ui-tests/settings/manager-field-save.test.js checks).
+ *
+ * @param {object} config
+ * @param {{ baseRevision?: number | null, invoke?: Function }} [opts]
+ * @returns {Promise<{ revision: number | null }>} the new revision, when the
+ *   backend reports one.
+ */
+export async function saveConfig(config, { baseRevision, invoke } = {}) {
+    const args = { config };
+    if (Number.isInteger(baseRevision)) args.baseRevision = baseRevision;
+    const result = await (invoke || _defaultInvoke())('save_config', args);
+    // config_updated invalidates too; this covers the gap before it lands.
+    _cachedPromise = null;
+    return { revision: Number.isInteger(result?.revision) ? result.revision : null };
+}

@@ -419,13 +419,17 @@ export class InternalSitesSettingsModule extends SettingsModule {
                           content: p.content_rules.length,
                       })
                     : t('settings.internal_sites.list.no_script');
+                // Where it exists, when sync is on (docs/design/SYNC.md §9.4).
+                const sync = p.id
+                    ? ` data-sync-path="internal_sites/${escapeAttr(p.id)}" data-sync-name="${escapeAttr(name)}"`
+                    : '';
                 return `
-                <div class="internal-site-row">
+                <div class="internal-site-row"${sync}>
                     <label class="kage-checkbox" title="${escapeAttr(t('settings.internal_sites.enabled'))}">
                         <input type="checkbox" data-is-field="list-enabled" data-is-index="${i}"${p.enabled ? ' checked' : ''}>
                     </label>
                     <div class="internal-site-row-text">
-                        <div class="internal-site-row-name">${escapeHtml(name)}</div>
+                        <div class="internal-site-row-name" data-sync-chip-slot>${escapeHtml(name)}</div>
                         <div class="setting-description" style="margin:0;">${escapeHtml(summary)}</div>
                     </div>
                     <button class="setting-button" data-is-action="edit" data-is-index="${i}">${escapeHtml(t('settings.internal_sites.list.edit'))}</button>
@@ -486,6 +490,7 @@ export class InternalSitesSettingsModule extends SettingsModule {
                     <span style="font-size:12px;">${escapeHtml(t('settings.internal_sites.enabled'))}</span>
                 </label>
             </div>
+            ${p.id ? `<div data-sync-avail="internal_sites/${escapeAttr(p.id)}" data-sync-name="${escapeAttr(p.name)}" hidden></div>` : ''}
 
             ${this.createControlRow(
                 label('name'),
@@ -525,7 +530,7 @@ export class InternalSitesSettingsModule extends SettingsModule {
                 <button class="setting-button" data-is-action="add-content-rule" style="${SECONDARY_BTN}margin-top:6px;">${label('add_content_rule')}</button>
             </div>
 
-            <div class="setting-row">
+            <div class="setting-row"${p.id ? ` data-sync-path="internal_sites/${escapeAttr(p.id)}/proxy"` : ''}>
                 <div class="setting-label">${label('script')}</div>
                 <div class="setting-description">${t('settings.internal_sites.editor.script_description_html')}</div>
                 <div class="internal-site-script-bar">

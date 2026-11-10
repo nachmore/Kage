@@ -3,6 +3,7 @@ import { getToolEmoji, escapeHtml, LTR_SLOT, setTextWithLtrValue } from '../shar
 import { errMessage } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
+import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
 /**
  * Agent Tools Settings Module
  * Shows tools seen during permission requests with per-tool policy toggles.
@@ -25,7 +26,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         return `
             <div class="settings-section-header">${this.icon} ${t('settings.tool_permissions.title')}</div>
 
-            <div class="setting-row">
+            <div class="setting-row" data-sync-path="tool_permissions.tools">
                 <div class="setting-label">${t('settings.tool_permissions.seen.label')}</div>
                 <div class="setting-description">
                     ${t('settings.tool_permissions.seen.description')}
@@ -51,7 +52,8 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 t('settings.tool_permissions.host.allow_all.label'),
                 t('settings.tool_permissions.host.allow_all.description'),
                 'hostCommandsAllowAll',
-                false
+                false,
+                { syncPath: 'tool_permissions.host_commands_allow_all' }
             )}
             <div class="setting-row">
                 <button type="button" class="host-audit-link" id="hostCommandAuditLink">${t('settings.tool_permissions.host.audit_link')}</button>
@@ -88,7 +90,8 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 t('settings.tool_permissions.trust_commands.label'),
                 t('settings.tool_permissions.trust_commands.description'),
                 'trustAllCommands',
-                false
+                false,
+                { syncPath: 'tool_permissions.trust_all' }
             )}
             <div class="setting-row">
                 <div class="setting-label">${t('settings.tool_permissions.trusted_servers.label')}</div>
@@ -108,7 +111,8 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                             t('settings.tool_permissions.terminator.label'),
                             t('settings.tool_permissions.terminator.description'),
                             'terminatorMode',
-                            false
+                            false,
+                            { syncPath: 'tool_permissions.terminator_mode' }
                         )}
                     </div>
                 </div>
@@ -250,7 +254,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 await this._revokeAllServers(invoke);
                 await this._clearHostCommandRules(invoke);
                 try {
-                    const config = await invoke('get_config');
+                    const { revision, config } = await getConfigSnapshot(invoke);
                     config.tool_permissions = {
                         trust_all: false,
                         terminator_mode: false,
@@ -261,7 +265,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                             config.tool_permissions?.host_commands_allow_all ?? false,
                         tools: [],
                     };
-                    await invoke('save_config', { config });
+                    await saveConfig(config, { baseRevision: revision, invoke });
                     this._syncTrustCommands(config);
                     this._syncTrustedServers(config);
                     this._syncHostCommands(config);

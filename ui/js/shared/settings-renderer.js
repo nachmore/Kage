@@ -394,13 +394,35 @@ export class RenderedSettings {
         return `${labelHtml}\n${rows}`;
     }
 
+    /**
+     * Where a setting applies, when Kage sync is on (docs/design/SYNC.md
+     * §9.4): the row names its config path `extensions.<id>.<field>`, and a
+     * sign-in field says it stays on this computer. The marks draw nothing
+     * by themselves; `sync-scope-chip.js` fills them only while sync is on.
+     */
+    _syncRowAttr(ctrl) {
+        if (!ctrl.id || ctrl.type === 'action' || ctrl.type === 'info') return '';
+        if (String(ctrl.id).startsWith('__') || this._isSensitive(ctrl)) return '';
+        return ` data-sync-path="${escapeAttr(`extensions.${this.extensionId}.${ctrl.id}`)}"`;
+    }
+
+    _syncLocalSlot(ctrl) {
+        return this._isSensitive(ctrl) ? '<span data-sync-local="sign_in" hidden></span>' : '';
+    }
+
+    _isSensitive(ctrl) {
+        const entry = this.manifest?.config?.[ctrl.id];
+        return !!entry && typeof entry === 'object' && entry.sensitive === true;
+    }
+
     _renderRow(ctrl) {
         // Ids/numbers are schema-validated; escaping is defence in depth
         // since this markup lands in the privileged settings window.
         const rowId = escapeAttr(this._rowId(ctrl));
-        const showWhenAttr = ctrl.showWhen
-            ? ` data-ext-showwhen='${escapeAttr(JSON.stringify(ctrl.showWhen))}'`
-            : '';
+        const showWhenAttr =
+            (ctrl.showWhen
+                ? ` data-ext-showwhen='${escapeAttr(JSON.stringify(ctrl.showWhen))}'`
+                : '') + this._syncRowAttr(ctrl);
 
         switch (ctrl.type) {
             case 'checkbox':
@@ -431,6 +453,7 @@ export class RenderedSettings {
                         <span>${escapeHtml(ctrl.label)}</span>
                         <input type="checkbox" id="${inputId}" data-ext-ctrl>
                     </label>
+                    <span class="sync-chip-slot" data-sync-chip-slot>${this._syncLocalSlot(ctrl)}</span>
                     ${ctrl.description ? `<div class="setting-description">${escapeHtml(ctrl.description)}</div>` : ''}
                 </div>
             </div>`;
@@ -441,7 +464,7 @@ export class RenderedSettings {
         const style = ctrl.maxWidth ? ` style="max-width:${+ctrl.maxWidth}px;"` : '';
         return `
             <div class="setting-row" id="${rowId}"${showWhenAttr}>
-                <div class="setting-label">${escapeHtml(ctrl.label)}</div>
+                <div class="setting-label">${escapeHtml(ctrl.label)}${this._syncLocalSlot(ctrl)}</div>
                 ${ctrl.description ? `<div class="setting-description">${escapeHtml(ctrl.description)}</div>` : ''}
                 <div class="setting-control">
                     <input type="text" class="setting-input" id="${inputId}" data-ext-ctrl
@@ -458,7 +481,7 @@ export class RenderedSettings {
         const stepAttr = typeof ctrl.step === 'number' ? ` step="${escapeAttr(ctrl.step)}"` : '';
         return `
             <div class="setting-row" id="${rowId}"${showWhenAttr}>
-                <div class="setting-label">${escapeHtml(ctrl.label)}</div>
+                <div class="setting-label">${escapeHtml(ctrl.label)}${this._syncLocalSlot(ctrl)}</div>
                 ${ctrl.description ? `<div class="setting-description">${escapeHtml(ctrl.description)}</div>` : ''}
                 <div class="setting-control">
                     <input type="number" class="setting-input" id="${inputId}" data-ext-ctrl${minAttr}${maxAttr}${stepAttr}${style}>
@@ -474,7 +497,7 @@ export class RenderedSettings {
             .join('');
         return `
             <div class="setting-row" id="${rowId}"${showWhenAttr}>
-                <div class="setting-label">${escapeHtml(ctrl.label)}</div>
+                <div class="setting-label">${escapeHtml(ctrl.label)}${this._syncLocalSlot(ctrl)}</div>
                 ${ctrl.description ? `<div class="setting-description">${escapeHtml(ctrl.description)}</div>` : ''}
                 <div class="setting-control">
                     <select class="setting-input" id="${inputId}" data-ext-ctrl${style}>${opts}</select>

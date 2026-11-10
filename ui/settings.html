@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="css/shared-components.css">
     <link rel="stylesheet" href="css/shared-rtl.css">
     <link rel="stylesheet" href="css/settings-layout.css">
+    <link rel="stylesheet" href="css/settings-sync.css">
     <style>
         /* Reset — kept inline since shared-base.css has light-theme defaults */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -102,6 +103,12 @@
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-section-title" data-i18n="settings.sidebar.about_group">About</div>
+                <!-- Folder sync (docs/design/SYNC.md §13). Hidden until sync_get_status
+                     reports that sync is offered (settings/sync.js wireSyncSidebar). -->
+                <div class="sidebar-item hidden" data-section="sync" data-action="switchSection" data-arg="sync" id="syncSidebarItem">
+                    <span class="sidebar-item-icon">🔄</span>
+                    <span data-i18n="settings.sync.title">Sync</span>
+                </div>
                 <div class="sidebar-item" data-section="privacy" data-action="switchSection" data-arg="privacy">
                     <span class="sidebar-item-icon">🛡️</span>
                     <span data-i18n="settings.sidebar.privacy">Privacy</span>

@@ -50,6 +50,7 @@ function mockBackend(servers, { failFor = null } = {}) {
     const backend = configWith([...servers]);
     const mock = setupTauriMock({
         get_config: async () => structuredClone(backend),
+        get_config_snapshot: async () => ({ revision: 0, config: structuredClone(backend) }),
         save_config: async () => undefined,
         set_tool_kind_trusted: async () => undefined,
         set_mcp_server_trusted: async ({ server, trusted }) => {

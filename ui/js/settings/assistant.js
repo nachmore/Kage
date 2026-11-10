@@ -73,7 +73,7 @@ export class AssistantSettingsModule extends SettingsModule {
                 <div id="personalization-main">
                     <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
-                    <div class="setting-row">
+                    <div class="setting-row" data-sync-path="acp.agent.auto_steering_enabled">
                         <div class="setting-label">${t('settings.assistant.learn.label')}</div>
                         <div class="setting-checkbox-row">
                             <label class="kage-checkbox">
@@ -109,17 +109,19 @@ export class AssistantSettingsModule extends SettingsModule {
                         t('settings.assistant.quick_actions.show_responses.label'),
                         t('settings.assistant.quick_actions.show_responses.description'),
                         'showResponseActions',
-                        true
+                        true,
+                        { syncPath: 'ui.show_response_actions' }
                     )}
 
                     ${this.createCheckboxRow(
                         t('settings.assistant.quick_actions.show_selection.label'),
                         t('settings.assistant.quick_actions.show_selection.description'),
                         'quickActionsEnabled',
-                        true
+                        true,
+                        { syncPath: 'quick_actions.enabled' }
                     )}
 
-                    <div class="setting-row">
+                    <div class="setting-row" data-sync-path="quick_actions.translate_language">
                         <div class="setting-label">${t('settings.assistant.quick_actions.translate_lang.label')}</div>
                         <div class="setting-description" id="translateLanguageDesc">${t('settings.assistant.quick_actions.translate_lang.fallback_description')}</div>
                         <div class="setting-control">
@@ -529,6 +531,13 @@ export class AssistantSettingsModule extends SettingsModule {
         row.className = 'app-mode-row';
         row.style.cssText =
             'border:1px solid var(--kage-border);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;';
+        // The rule's id survives the rebuild in _collectAppModes, and names
+        // it for the where-it-applies chip (docs/design/SYNC.md §4.4).
+        if (rule?.sync_id) {
+            row.dataset.syncId = rule.sync_id;
+            row.dataset.syncPath = `context_rules/${rule.sync_id}`;
+            row.dataset.syncName = rule.friendly_name || '';
+        }
         const nameVal = escapeAttr(rule?.friendly_name || '');
         const exeVal = escapeAttr(rule?.executable || '');
         const steeringVal = rule?.steering || '';
@@ -663,6 +672,13 @@ export class AssistantSettingsModule extends SettingsModule {
         const row = document.createElement('div');
         row.className = 'custom-action-row';
         row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px;';
+        // The item's id survives the rebuild in _collectCustomActions, and
+        // names it for the where-it-applies chip (docs/design/SYNC.md §4.4).
+        if (action?.sync_id) {
+            row.dataset.syncId = action.sync_id;
+            row.dataset.syncPath = `quick_actions.custom_actions/${action.sync_id}`;
+            row.dataset.syncName = action.label || '';
+        }
         row.innerHTML = `
             <input type="text" class="setting-input ca-icon" placeholder="📝" value="${escapeAttr(action?.icon || '')}" style="width:40px;text-align:center;">
             <input type="text" class="setting-input ca-label" placeholder="Label" value="${escapeAttr(action?.label || '')}" style="width:100px;">
@@ -681,12 +697,14 @@ export class AssistantSettingsModule extends SettingsModule {
             const label = row.querySelector('.ca-label')?.value?.trim();
             const prompt = row.querySelector('.ca-prompt')?.value?.trim();
             if (label && prompt) {
-                actions.push({
+                const item = {
                     label,
                     icon: row.querySelector('.ca-icon')?.value?.trim() || '⚡',
                     prompt,
                     content_types: [],
-                });
+                };
+                if (row.dataset.syncId) item.sync_id = row.dataset.syncId;
+                actions.push(item);
             }
         }
         return actions;

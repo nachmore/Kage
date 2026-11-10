@@ -39,7 +39,8 @@ export class PrivacySettingsModule extends SettingsModule {
                     t('settings.privacy.toggle.label'),
                     t('settings.privacy.toggle.description'),
                     'telemetryEnabled',
-                    true
+                    true,
+                    { syncPath: 'telemetry' }
                 )}
 
                 <div class="setting-row">

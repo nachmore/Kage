@@ -469,6 +469,7 @@
     import * as kageAgentConnections from './js/shared/agent-connections.js';
     import { initI18n, applyStaticTranslations, t } from './js/shared/i18n.js';
     import { initLinkHandler } from './js/shared/link-handler.js';
+    import { getConfigSnapshot, saveConfig } from './js/shared/config-cache.js';
 
     async function initWelcome() {
         if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
@@ -639,7 +640,7 @@
                 hotkeyPicker = new HotkeyPicker(document.getElementById('hotkeyPickerContainer'), invoke, { modifiers: ['Alt'], key: 'Space' });
             }
             hotkeyPicker.onChange(async (hk) => {
-                try { const c = await invoke('get_config'); c.hotkey = hk; await invoke('save_config', { config: c }); } catch {}
+                try { const { revision, config: c } = await getConfigSnapshot(invoke); c.hotkey = hk; await saveConfig(c, { baseRevision: revision, invoke }); } catch {}
             });
 
             // Pre-fill the connection editor from the active saved
@@ -830,7 +831,7 @@
                     if (from === 1) {
                         try {
                             const api = kageAgentConnections;
-                            const config = await invoke('get_config');
+                            const { revision, config } = await getConfigSnapshot(invoke);
                             if (!config.acp) config.acp = {};
 
                             // The user can land in three states:
@@ -854,7 +855,7 @@
                                 config.acp.connections = [conn];
                                 config.acp.active_connection_id = conn.id;
                             }
-                            await invoke('save_config', { config });
+                            await saveConfig(config, { baseRevision: revision, invoke });
                         } catch (e) {
                             console.error('Failed to save ACP config:', e);
                         }
@@ -1011,11 +1012,11 @@
                 if (first) {
                     const conn = kageAgentConnections.connectionFromDetected(first);
                     if (!conn.id) conn.id = kageAgentConnections.uuidLite();
-                    const config = await invoke('get_config');
+                    const { revision, config } = await getConfigSnapshot(invoke);
                     if (!config.acp) config.acp = {};
                     config.acp.connections = [conn];
                     config.acp.active_connection_id = conn.id;
-                    await invoke('save_config', { config });
+                    await saveConfig(config, { baseRevision: revision, invoke });
                     console.log('[welcome] skip: saved first detected agent', first.name);
                 } else {
                     console.log('[welcome] skip: no agent detected, proceeding without one');
