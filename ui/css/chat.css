@@ -342,6 +342,9 @@ body {
     background: var(--kage-gradient);
     color: #19161d;
     border-radius: 16px 16px 4px 16px;
+    /* Keep the user's line breaks and blank lines, as typed. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .message.assistant .message-content {
@@ -1282,10 +1285,23 @@ body.light-theme .sidebar-toggle-btn {
     color: var(--kage-text-bright, #ffffff);
 }
 
-/* User message actions (timestamp only, right-aligned) */
+/* User message actions: the timestamp, right-aligned, with a Copy button
+   beside it that shows on hover (or keyboard focus). */
 .message.user .message-actions.user-actions {
     opacity: 0.7;
     justify-content: flex-end;
+    gap: 4px;
+}
+.message.user .user-actions .msg-timestamp {
+    margin-inline-start: 0;
+}
+.message.user .user-actions .msg-action-btn {
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.message.user .message-bubble:hover .user-actions .msg-action-btn,
+.message.user .user-actions .msg-action-btn:focus-visible {
+    opacity: 1;
 }
 
 /* Kage Desktop session viewer */

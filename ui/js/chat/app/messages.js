@@ -9,6 +9,28 @@ function replyText(contentDiv) {
     return clone.textContent || '';
 }
 
+/** What the user typed in their bubble, without its attachment previews. */
+export function userText(contentDiv) {
+    const clone = contentDiv.cloneNode(true);
+    for (const node of clone.querySelectorAll('.message-attachments')) node.remove();
+    return clone.textContent || '';
+}
+
+const COPY_ICON =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const COPIED_ICON =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+/** Copy `text`, and show a tick on `btn` for a moment. */
+function copyWithTick(btn, text) {
+    return navigator.clipboard.writeText(text).then(() => {
+        btn.innerHTML = COPIED_ICON;
+        setTimeout(() => {
+            btn.innerHTML = COPY_ICON;
+        }, 1500);
+    });
+}
+
 export function createMessagesMixin(dependencies) {
     const {
         renderMarkdown,
@@ -119,11 +141,18 @@ export function createMessagesMixin(dependencies) {
 
             bubble.appendChild(contentDiv);
 
-            // Timestamp for user messages
+            // Timestamp for user messages, and a Copy button that shows on
+            // hover beside it.
             if (role === 'user') {
                 const tsEl = document.createElement('div');
                 tsEl.className = 'message-actions user-actions';
-                tsEl.innerHTML = '<span class="msg-timestamp"></span>';
+                tsEl.innerHTML = `<button class="msg-action-btn" data-action="copy" title="${t('chat.message.action.copy')}" aria-label="${t('chat.message.action.copy')}">${COPY_ICON}</button><span class="msg-timestamp"></span>`;
+                const copyBtn = tsEl.querySelector('[data-action="copy"]');
+                copyBtn.onclick = () => {
+                    copyWithTick(copyBtn, userText(contentDiv)).catch((e) =>
+                        console.warn('[CHAT] Copy failed:', e)
+                    );
+                };
                 bubble.appendChild(tsEl);
             }
 
@@ -145,16 +174,10 @@ export function createMessagesMixin(dependencies) {
             `;
                 // Wire up action buttons
                 actions.querySelector('[data-action="copy"]').onclick = () => {
-                    const text = replyText(contentDiv);
-                    navigator.clipboard.writeText(text).then(() => {
-                        const btn = actions.querySelector('[data-action="copy"]');
-                        btn.innerHTML =
-                            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-                        setTimeout(() => {
-                            btn.innerHTML =
-                                '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-                        }, 1500);
-                    });
+                    const btn = actions.querySelector('[data-action="copy"]');
+                    copyWithTick(btn, replyText(contentDiv)).catch((e) =>
+                        console.warn('[CHAT] Copy failed:', e)
+                    );
                 };
                 actions.querySelector('[data-action="speak"]').onclick = () => {
                     if (this.speech) {
