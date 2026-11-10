@@ -215,7 +215,7 @@ pub fn content(bytes: &[u8], codes: bool) -> Scan {
                             let set = scan.shown.entry(name.clone()).or_default();
                             for s in &strings {
                                 set.extend(
-                                    s.chunks_exact(2).map(|p| u16::from_be_bytes([p[0], p[1]])),
+                                    s.as_chunks::<2>().0.iter().map(|p| u16::from_be_bytes(*p)),
                                 );
                             }
                         }
