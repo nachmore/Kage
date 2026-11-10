@@ -1,6 +1,10 @@
 # Design: background agent calls for extensions
 
-Status: design, ready to build. Nothing here is implemented yet.
+Status: being built. WP-AC0 to WP-AC4 (contracts, engine, strict
+sessions, commands and wiring, backups) and WP-AC7 (docs) are in Kage.
+The sandbox runtime (WP-AC5) and the host UI (WP-AC6) follow §13, and
+Mind Map's side is Kage-Extensions work. The guide for extension authors
+is [`docs/EXTENSIONS.md`](../EXTENSIONS.md) § Background agent calls.
 
 This document specifies a host API that lets an extension ask the user's
 agent for help in the background, with no chat. The first user is Mind
@@ -115,7 +119,7 @@ gates. An extension may hold either, both or neither.
 
 | Field | Required | Rule |
 |---|---|---|
-| `agentBackground.reason` | Yes | 1–300 characters after `__MSG_…__` resolution. Shown in the consent dialog as a quote from the extension. Plain text. |
+| `agentBackground.reason` | Yes | Plain text of 1–300 characters, or a whole `__MSG_…__` token of any length, which the UI resolves (the Rust normaliser can't, so it doesn't count a token's translations). Shown in the consent dialog as a quote from the extension. |
 | `agentBackground.purposes` | Yes | 1–8 ids, each `^[a-z][a-z0-9_]{0,23}$`. A call must name one. Shown in the log. |
 | `agentBackground.maxPromptChars` | No | Lowers the host cap (§5.6) for this extension. Never raises it. |
 | `agentBackground.dailyCalls` | No | The extension's suggested "Normal" allowance. Clamped to the host's Normal level. |
@@ -1741,7 +1745,8 @@ floating window's CSS file, the matching `ui-tests` files)
 
 **WP-AC7 Docs** (`docs/EXTENSIONS.md`, `docs/SECURITY_MODEL.md`,
 `docs/PRIVACY.md`, `docs/TOOL_PERMISSIONS.md`, `docs/DEBUG_MODE.md`,
-`ui/js/shared/telemetry.js` (`KNOWN_EVENTS`))
+`ui/js/shared/telemetry.js` (`KNOWN_EVENTS`),
+`ui-tests/shared/agent-calls-docs.test.js` (new))
 - `EXTENSIONS.md`:
   - the capability row;
   - the manifest fields;
@@ -1754,6 +1759,15 @@ floating window's CSS file, the matching `ui-tests` files)
 - Accept: the docs match the shipped limits, commands and keys. A wording
   change found while writing them goes back through AC0's catalog process
   (EN, then `translate.py`), after AC0 has merged.
+  `agent-calls-docs.test.js` holds the docs to the code: every
+  `errors.agent_call.*` key with the kind Rust gives it, the limits in
+  `src/agent_calls/limits.rs`, the nine commands and the three telemetry
+  events.
+- The docs pass found no wording change for the catalog. It describes
+  the runtime API (§3.4), the `agent_access` effect and the panel as this
+  design specifies them, because WP-AC5 and WP-AC6 land beside it; their
+  behaviour is feature-detected (`agent.background`), so the guide holds
+  on a host without them.
 
 ### Kage-Extensions repo
 
