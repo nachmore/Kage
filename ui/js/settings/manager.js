@@ -9,10 +9,11 @@ import { EVT } from '../shared/events.js';
 import { resolveExtensionConfig } from '../shared/extension-config.js';
 import {
     applyManifestI18n,
+    extensionDisplay,
     fetchExtensionLocaleViaInvoke,
     fetchSharedSourcesViaInvoke,
 } from '../shared/extension-manager.js';
-import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
+import { ExtensionSandboxPool, HOST_FEATURE_FILE_TEXT } from '../shared/extension-sandbox-host.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
 import { renderSchema } from '../shared/settings-renderer.js';
 import { t } from '../shared/i18n.js';
@@ -179,6 +180,9 @@ export async function buildSandboxedSettingsModule({
         ? await fetchExtensionLocaleViaInvoke(invoke, manifest)
         : { catalog: {}, fallback: {}, language: 'en', rtl: false };
     const localizedManifest = applyManifestI18n(manifest, i18n.catalog, i18n.fallback);
+    // The file dialog's title and the ask bar name the extension with this
+    // (docs/design/EXTENSION_FILE_TEXT.md §3.9).
+    const display = extensionDisplay({ manifest, localizedManifest }, manifest.id);
 
     const sandbox = await pool.load({
         extensionId: manifest.id,
@@ -190,8 +194,13 @@ export async function buildSandboxedSettingsModule({
         i18nFallback: i18n.fallback,
         i18nLanguage: i18n.language,
         i18nRtl: i18n.rtl,
-        // What this window offers (filtered by the grant in the sandbox).
-        hostFeatures,
+        // What this window offers (filtered by the grant in the sandbox, which
+        // also drops duplicates). Settings can also read a file the user
+        // picks: the window's default file broker attaches the dialog to it
+        // (EXTENSION_FILE_TEXT §3.3, §5.3).
+        hostFeatures: [...(hostFeatures ?? []), HOST_FEATURE_FILE_TEXT],
+        displayName: display.name,
+        displayIcon: display.icon,
     });
 
     if (!sandbox.hasSettings) {
