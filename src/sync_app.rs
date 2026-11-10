@@ -103,8 +103,8 @@ pub fn flush_for_exit<R: Runtime>(app: &AppHandle<R>, budget: Duration) {
 pub fn engine_env<R: Runtime>(
     app: &AppHandle<R>,
 ) -> anyhow::Result<(EngineEnv, Vec<Box<dyn Source>>)> {
-    use crate::sync::keystore::{default_key_store, key_store_for, KeyStoreKind};
     use crate::commands::extensions::AppExtensionHost;
+    use crate::sync::keystore::{default_key_store, key_store_for, KeyStoreKind};
     use crate::sync::sources::extensions::{ExtensionHost, ExtensionsSource};
     use crate::sync::sources::{chats, host_sources, HostDirs};
     let features = app

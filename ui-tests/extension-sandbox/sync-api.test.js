@@ -204,7 +204,7 @@ describe('the sync capability and its commands', () => {
         const host = Object.keys(COMMAND_CAPABILITIES).filter(
             (c) => c.startsWith('sync_') || c === 'get_config_snapshot'
         );
-        expect(host.length).toBe(34);
+        expect(host.length).toBe(35);
         for (const c of host) {
             expect(COMMAND_CAPABILITIES[c], c).toBeNull();
             expect(decideInvoke(c, new Set(KNOWN_CAPABILITIES)).allow, c).toBe(false);
