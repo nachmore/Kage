@@ -181,6 +181,10 @@ const MAX_LABEL_GAP_CHARS: usize = 8;
 /// [`TOKEN_RUN`] is not used: it matches too many ordinary ids and URLs.
 /// Run this on plain text (each string value), not on serialized JSON:
 /// the key-file rule needs real line breaks.
+///
+/// Widening each match on its own costs quadratic time when key markers
+/// repeat on many lines. For long untrusted text where only "any?"
+/// matters (a document's text), use [`has_secret_span`].
 #[allow(dead_code)] // The background agent-call engine will call it; the app doesn't yet.
 pub fn secret_spans(s: &str) -> Vec<std::ops::Range<usize>> {
     let mut spans: Vec<std::ops::Range<usize>> = SECRET_SHAPE
@@ -208,6 +212,12 @@ pub fn secret_spans(s: &str) -> Vec<std::ops::Range<usize>> {
         }
     }
     merged
+}
+
+/// Whether [`secret_spans`] would find anything in `s`, in one linear
+/// pass: every match gives a span, so this is `!secret_spans(s).is_empty()`.
+pub fn has_secret_span(s: &str) -> bool {
+    SECRET_SHAPE.is_match(s)
 }
 
 /// Whether a [`SECRET_SHAPE`] match is a label whose value follows it
@@ -1122,6 +1132,23 @@ mod tests {
             "The passing score is 70.",
         ] {
             assert!(secret_spans(s).is_empty(), "{:?}: {:?}", s, secret_spans(s));
+        }
+    }
+
+    #[test]
+    fn has_secret_span_agrees_with_secret_spans() {
+        for s in [
+            "",
+            "Meeting with Dana about MTCS at 10:00 tomorrow",
+            "Author: Dana. Keyboard: US.",
+            "wifi password: hunter2hunter2 thanks",
+            "token:",
+            "use ghp_0123456789abcdefABCDEF0123 here",
+            "fetch https://me:hunter2@store.example.com/x.json",
+            "my key:\n-----BEGIN OPENSSH PRIVATE KEY-----\nQUJDRA==\n",
+            "X: -----BEGIN\nX: -----BEGIN\n",
+        ] {
+            assert_eq!(has_secret_span(s), !secret_spans(s).is_empty(), "{s:?}");
         }
     }
 

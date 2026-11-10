@@ -40,13 +40,20 @@ pub fn key_path() -> Option<PathBuf> {
 }
 
 /// The key at `path`: read it, or make and save a new one when the file
-/// is missing or isn't exactly `KEY_BYTES` long.
+/// is missing or isn't exactly `KEY_BYTES` long. A file that is there but
+/// can't be read is an error and stays as it is: replacing it would change
+/// every ref extensions have stored, for what may be a passing failure (a
+/// scanner holding the file).
 pub fn load_or_create_key(path: &Path) -> std::io::Result<[u8; KEY_BYTES]> {
-    if let Ok(bytes) = std::fs::read(path) {
-        if let Ok(key) = <[u8; KEY_BYTES]>::try_from(bytes.as_slice()) {
-            return Ok(key);
+    match std::fs::read(path) {
+        Ok(bytes) => {
+            if let Ok(key) = <[u8; KEY_BYTES]>::try_from(bytes.as_slice()) {
+                return Ok(key);
+            }
+            log::warn!("File text: the file_ref key was malformed; making a new one");
         }
-        log::warn!("File text: the file_ref key was malformed; making a new one");
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
     }
     let key = random_key()?;
     if let Some(dir) = path.parent() {
@@ -168,6 +175,22 @@ mod tests {
         let replaced = load_or_create_key(&path).unwrap();
         assert_ne!(replaced, first);
         assert_eq!(std::fs::read(&path).unwrap(), replaced);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_key_that_cant_be_read_is_kept() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(KEY_FILE);
+        let key = load_or_create_key(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        // Root reads it anyway; there is nothing to test then.
+        if std::fs::read(&path).is_err() {
+            assert!(load_or_create_key(&path).is_err());
+        }
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), key);
     }
 
     #[test]

@@ -468,7 +468,9 @@ injects the extension's id and its manifest name.
   button, a date pick), it gives that sandbox a lease for one dialog
   within 10 seconds; the sandbox can't give itself one. In a view
   window, the page gives the lease when the window is in front and
-  `navigator.userActivation` is active. Anything else (a timer, an agent
+  `navigator.userActivation` is active. One activation gives one lease,
+  and a click on the host's own ask bar or progress chip gives none, so
+  **Not now** or **Cancel** can't open the dialog. Anything else (a timer, an agent
   tool call, a widget refresh) gets the host's ask bar, which names the
   extension and needs a click; its button ignores clicks for the first
   half second. **Not now**, Escape or 60 seconds without an answer start

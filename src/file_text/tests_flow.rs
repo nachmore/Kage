@@ -286,6 +286,39 @@ fn text_that_looks_like_a_secret_is_flagged_and_kept() {
 }
 
 #[test]
+fn the_secret_check_takes_linear_time() {
+    // A key marker on each of many header lines made the check quadratic:
+    // about a minute for a 1,000,000-character text, in Kage's own process,
+    // holding the slot, where no deadline or cancel applies.
+    let line = "X: -----BEGIN\n";
+    let text = line.repeat(150_000 / line.len());
+    let named = read::Named {
+        name: "keys.txt".into(),
+        extension: "txt".into(),
+        format: Some(Format::Text),
+    };
+    let checked = read::Checked {
+        format: Format::Text,
+        size: text.len() as u64,
+        modified_at: None,
+        placeholder: false,
+    };
+    let started = std::time::Instant::now();
+    let got = post::build(
+        &named,
+        &checked,
+        extraction(&text),
+        "00".into(),
+        "fr1_x".into(),
+        wire::MAX_CHARS,
+    )
+    .unwrap();
+    let took = started.elapsed();
+    assert_eq!(got.warnings, vec![Warning::PossibleSecret]);
+    assert!(took < Duration::from_secs(1), "took {took:?}");
+}
+
+#[test]
 fn the_result_rechecks_what_the_worker_said() {
     let named = read::Named {
         name: "a.pdf".into(),

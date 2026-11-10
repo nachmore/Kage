@@ -658,6 +658,14 @@ page. A click inside the iframe activates the page as well (activation
 propagates to ancestor frames), and script can't fake it. On an engine
 without `navigator.userActivation`, the view gets the ask bar.
 
+An activation lasts 5 seconds and the page can't use it up, so the
+broker does: after it gives a lease from one, it gives none for 5
+seconds (`USER_ACTIVATION_MS`). A click on the ask bar (**Choose
+file…**, **Not now**) or on the chip's **Cancel** activates the view
+page too, so it starts the same 5 seconds. Without this, an extension
+that asked again right after **Not now** or **Cancel** got the dialog.
+The next request in those 5 seconds gets the ask bar (or `declined`).
+
 ### 5.3 Dialogs per window
 
 The dialog guard is a pair of callbacks a window registers with its
@@ -1067,8 +1075,10 @@ units and can be larger for emoji and rare scripts. Extensions should use
   NFC`). The key is 32 random bytes in
   `<data_local_dir>/kage/file-ref.key` (owner-only, created on first use,
   replaced if malformed), resolved through `crate::paths`. If the key
-  can't be written, a random key for this run of Kage is used, so refs
-  still match within the session.
+  can't be written, or the file is there but can't be read, a random key
+  for this run of Kage is used, so refs still match within the session.
+  An unreadable key file is never replaced: that would change every ref
+  extensions stored, maybe for a passing failure.
 - Properties: stable for the same file at the same place on this machine;
   different for each extension, so two extensions can't link their
   records; meaningless on another machine; not reversible to the path.
@@ -1080,10 +1090,14 @@ units and can be larger for emoji and rare scripts. Extensions should use
 ### 5.12 Secret-shaped text
 
 After extraction, the parent runs the backup classifier's `SECRET_SHAPE`
-over the text and the title: `!sensitive::secret_spans(&text).is_empty()`
-→ add `possible_secret`. `secret_spans` is the function the agent calls design's WP-AC0
+over the text and the title: `sensitive::has_secret_span(&text)` (the
+same answer as `!secret_spans(&text).is_empty()`) → add
+`possible_secret`. `secret_spans` is the function the agent calls design's WP-AC0
 adds to `src/config_export/sensitive.rs`, before this design's contracts
-land (SYNC §23). `TOKEN_RUN` is not used: in documents it matches too many
+land (SYNC §23). It widens each match on its own, which takes quadratic
+time when a key marker repeats on many lines (about a minute for
+1,000,000 characters, in the main process). `has_secret_span` is one
+linear pass. `TOKEN_RUN` is not used: in documents it matches too many
 ordinary ids and hashes. Nothing is removed. The extension decides what to
 do (Mind Map makes the item private, §11.7). The match itself is never
 logged or returned.
