@@ -105,10 +105,10 @@ pub fn build(
             warnings.push(w);
         }
     }
-    let secret = !sensitive::secret_spans(&out.text).is_empty()
-        || title
-            .as_deref()
-            .is_some_and(|t| !sensitive::secret_spans(t).is_empty());
+    // One linear pass: widening every match (`secret_spans`) can take
+    // quadratic time on a crafted document, here in Kage's own process.
+    let secret = sensitive::has_secret_span(&out.text)
+        || title.as_deref().is_some_and(sensitive::has_secret_span);
     if secret {
         warnings.push(Warning::PossibleSecret);
     }
@@ -156,7 +156,7 @@ impl Report {
         AuditEvent::ExtensionFileRead {
             extension_id: self.extension_id.clone(),
             file_name: Some(self.name.clone())
-                .filter(|n| !n.is_empty() && sensitive::secret_spans(n).is_empty()),
+                .filter(|n| !n.is_empty() && !sensitive::has_secret_span(n)),
             format: self.format.map(|f| f.id().to_string()),
             bytes: self.bytes,
             chars: self.chars,

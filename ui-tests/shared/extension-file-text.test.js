@@ -30,6 +30,7 @@ import {
     installFileTextBroker,
     PROGRESS_CHIP_DELAY_MS,
     rpcTimer,
+    USER_ACTIVATION_MS,
 } from '../../ui/js/shared/extension-file-text.js';
 import { ExtensionManager } from '../../ui/js/shared/extension-manager.js';
 import { ExtensionSandbox } from '../../ui/js/shared/extension-sandbox-host.js';
@@ -732,6 +733,88 @@ describe('destroy, the guard and views', () => {
         pick(sb, {}, 2);
         await flush();
         expect(askBar()).not.toBeNull();
+    });
+
+    it('a click on Not now, Choose file… or Cancel opens no dialog in a view', async () => {
+        const rust = fakeRust();
+        let active = false;
+        const { emit } = broker({ activationLease: () => active });
+        const { sb, sent } = makeSandbox(rust.invoke);
+        sb.surface = 'view';
+
+        // No activation: the bar. The click on Not now activates the page.
+        const first = pick(sb);
+        await flush();
+        active = true;
+        askBar().querySelector('.kage-file-ask-dismiss').click();
+        await first;
+        // The extension asks again at once: still Not now, no dialog.
+        pick(sb, {}, 2);
+        await flush();
+        expect(rust.picks).toHaveLength(0);
+        expect(sent.at(-1)).toMatchObject({ id: 2, errorKey: 'errors.file_text.declined' });
+
+        // Choose file… opens one dialog; asking again right after it
+        // closed shows the bar.
+        await vi.advanceTimersByTimeAsync(DECLINE_COOLDOWN_MS);
+        active = false;
+        const third = pick(sb, {}, 3);
+        await flush();
+        active = true;
+        await vi.advanceTimersByTimeAsync(ASK_BAR_ARM_MS);
+        askBar().querySelector('.kage-file-ask-choose').click();
+        await flush();
+        expect(rust.picks).toHaveLength(1);
+        rust.picks[0].resolve(null);
+        await third;
+        pick(sb, {}, 4);
+        await flush();
+        expect(rust.picks).toHaveLength(1);
+        expect(askBar()).not.toBeNull();
+        askBar().querySelector('.kage-file-ask-dismiss').click();
+        await flush();
+
+        // The chip's Cancel: the next request doesn't open the dialog.
+        await vi.advanceTimersByTimeAsync(DECLINE_COOLDOWN_MS);
+        const fifth = pick(sb, {}, 5);
+        await flush();
+        expect(rust.picks).toHaveLength(2);
+        emit({ phase: 'dialog_closed', picked: true });
+        emit({ phase: 'extracting', file: 'big.pdf' });
+        await vi.advanceTimersByTimeAsync(USER_ACTIVATION_MS);
+        chip().querySelector('.kage-file-chip-cancel').click();
+        rust.picks[1].resolve(null);
+        await fifth;
+        pick(sb, {}, 6);
+        await flush();
+        expect(rust.picks).toHaveLength(2);
+        expect(askBar()).not.toBeNull();
+    });
+
+    it('one activation in a view opens one dialog', async () => {
+        const rust = fakeRust();
+        broker({ activationLease: () => true });
+        const { sb } = makeSandbox(rust.invoke);
+        sb.surface = 'view';
+        const first = pick(sb);
+        await flush();
+        expect(rust.picks).toHaveLength(1);
+        rust.picks[0].resolve(null);
+        await first;
+
+        // The user closed the dialog at once, and the activation still holds.
+        const second = pick(sb, {}, 2);
+        await flush();
+        expect(rust.picks).toHaveLength(1);
+        expect(askBar()).not.toBeNull();
+        askBar().querySelector('.kage-file-ask-dismiss').click();
+        await second;
+
+        // A later activation counts again (a click lease beats the cooldown).
+        await vi.advanceTimersByTimeAsync(USER_ACTIVATION_MS);
+        pick(sb, {}, 3);
+        await flush();
+        expect(rust.picks).toHaveLength(2);
     });
 
     it('the activation rule is for views only', async () => {

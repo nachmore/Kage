@@ -38,6 +38,13 @@ export const ASK_BAR_TIMEOUT_MS = 60_000;
 export const DECLINE_COOLDOWN_MS = 30_000;
 /** The progress chip shows once reading has taken this long (§4.4). */
 export const PROGRESS_CHIP_DELAY_MS = 400;
+/**
+ * How long a click or key press counts as a recent user activation (HTML's
+ * transient activation: 5 s in Chromium and WebKit). In a view window an
+ * activation opens one dialog. A click on the ask bar or the chip
+ * activates the view page too, so it opens none (§5.2).
+ */
+export const USER_ACTIVATION_MS = 5_000;
 
 // --- The click lease and pausable RPC timers (§5.2) ---------------------------
 
@@ -192,6 +199,8 @@ export class FileTextBroker {
         this._current = null;
         /** @type {WeakMap<object, number>} sandbox → end of its cooldown */
         this._declined = new WeakMap();
+        /** Until then, a view's user activation opens no dialog. */
+        this._activationSpentUntil = 0;
         this._listening = null;
         this._unlisten = null;
     }
@@ -210,6 +219,8 @@ export class FileTextBroker {
                 throw this._error('rate_limited', 'declined');
             }
             const answer = await this._ask(sandbox);
+            // The user's click on the bar activated the page.
+            if (answer === 'choose' || answer === 'dismiss') this._spendActivation();
             if (answer === 'dismiss' || answer === 'timeout') {
                 this._declined.set(sandbox, Date.now() + DECLINE_COOLDOWN_MS);
             }
@@ -281,11 +292,21 @@ export class FileTextBroker {
             return true;
         }
         if (sandbox.surface !== 'view' || !this._activationLease) return false;
+        if (Date.now() < this._activationSpentUntil) return false;
+        let active = false;
         try {
-            return this._activationLease() === true;
-        } catch {
-            return false;
-        }
+            active = this._activationLease() === true;
+        } catch {}
+        if (active) this._spendActivation();
+        return active;
+    }
+
+    /**
+     * The page's current user activation can't open a dialog: it was used,
+     * or it came from a click on the ask bar or the chip.
+     */
+    _spendActivation() {
+        this._activationSpentUntil = Date.now() + USER_ACTIVATION_MS;
     }
 
     /**
@@ -414,7 +435,12 @@ export class FileTextBroker {
 
     _showChip(f) {
         if (f.chip || f.done || f.abandoned || this._current !== f) return;
-        f.chip = this._ui.showChip({ onCancel: () => this._sendCancel(f) });
+        f.chip = this._ui.showChip({
+            onCancel: () => {
+                this._spendActivation();
+                this._sendCancel(f);
+            },
+        });
         f.chip.paint(f.phase, f.file);
     }
 
