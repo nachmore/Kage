@@ -1,4 +1,8 @@
 fn main() {
+    // Taken before anything else so it is no later than the timestamp
+    // Cargo records for this run. See `backdate` below.
+    let started = std::time::SystemTime::now();
+
     // Announce this build.rs run. Cargo runs build.rs exactly once per
     // invocation that needs it, so this gives us a tag in CI logs that
     // lines up 1:1 with each compile pass. (Scripts that invoke cargo
@@ -235,10 +239,10 @@ fn main() {
     // macOS overlay, which replaces the list); the calendar helper is
     // macOS-only (tauri.macos.conf.json overlay), so other targets skip it
     // entirely.
-    provision_sidecar("kage-computer-control-mcp");
-    provision_sidecar("kage-file-text");
+    provision_sidecar("kage-computer-control-mcp", started);
+    provision_sidecar("kage-file-text", started);
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
-        provision_sidecar("kage-calendar-helper");
+        provision_sidecar("kage-calendar-helper", started);
     }
 
     tauri_build::build()
@@ -261,7 +265,7 @@ fn main() {
 ///
 /// A failed sidecar build fails the main build. That's deliberate: the
 /// alternative is silently bundling a stale or missing binary.
-fn provision_sidecar(package: &str) {
+fn provision_sidecar(package: &str, started: std::time::SystemTime) {
     let triple = match std::env::var("TARGET") {
         Ok(t) if !t.is_empty() => t,
         _ => return,
@@ -292,7 +296,12 @@ fn provision_sidecar(package: &str) {
         // `cargo:` directives from THIS build script. Diagnostics (compile
         // errors, progress) go to stderr, which cargo surfaces whenever
         // the build script fails.
-        .stdout(std::process::Stdio::null());
+        .stdout(std::process::Stdio::null())
+        // `cargo clippy` sets this for its own run. Inherited, it makes the
+        // nested build compile the sidecars through clippy-driver, so the
+        // next plain build rebuilds and restages them. Clippy already
+        // checks the sidecars as workspace members.
+        .env_remove("RUSTC_WORKSPACE_WRAPPER");
     if cross {
         cmd.args(["--target", &triple]);
     }
@@ -321,19 +330,12 @@ fn provision_sidecar(package: &str) {
     let staged_dir = std::path::PathBuf::from("src-tauri/binaries");
     let staged = staged_dir.join(format!("{package}-{triple}{suffix}"));
 
-    // Only copy when the built binary is fresher than the staged one —
-    // rewriting the staged file bumps its mtime, which re-triggers both
-    // tauri-build's rerun-if-changed on it and the `cargo tauri dev`
-    // watcher (unconditional copies put the watcher in an endless rebuild
-    // loop). The size check guards against a stale non-binary at the
-    // staged path (e.g. a placeholder written by an older checkout of
-    // this script): mtime alone would call it "fresh" forever, because
-    // a warm no-op sidecar build never touches the built binary's mtime.
-    let same_size = match (std::fs::metadata(&staged), std::fs::metadata(&built)) {
-        (Ok(s), Ok(b)) => s.len() == b.len(),
-        _ => false,
-    };
-    if same_size && is_newer_than(&staged, &built) {
+    // Only copy when the staged file differs from the built one. Rewriting
+    // it unconditionally would wake the `cargo tauri dev` watcher on every
+    // build-script run. Contents, not mtimes, decide: a warm no-op sidecar
+    // build never touches the built binary, and the staged copy is
+    // backdated below, so mtimes can't tell the two apart.
+    if same_contents(&staged, &built) {
         return;
     }
     let _ = std::fs::create_dir_all(&staged_dir);
@@ -345,6 +347,7 @@ fn provision_sidecar(package: &str) {
             staged.display()
         );
     }
+    backdate(&staged, started);
     println!(
         "cargo:warning=staged sidecar at {} (from {})",
         staged.display(),
@@ -352,16 +355,35 @@ fn provision_sidecar(package: &str) {
     );
 }
 
-/// `true` if `a` exists and its mtime is >= `b`'s mtime. Used to skip
-/// unnecessary recompiles — the mtime bump from rewriting an output file
-/// is what triggers Tauri's dev watcher into an infinite rebuild loop.
-fn is_newer_than(a: &std::path::Path, b: &std::path::Path) -> bool {
+/// `true` if both files exist and hold the same bytes.
+fn same_contents(a: &std::path::Path, b: &std::path::Path) -> bool {
     let (Ok(am), Ok(bm)) = (std::fs::metadata(a), std::fs::metadata(b)) else {
         return false;
     };
-    match (am.modified(), bm.modified()) {
-        (Ok(at), Ok(bt)) => at >= bt,
+    if am.len() != bm.len() {
+        return false;
+    }
+    match (std::fs::read(a), std::fs::read(b)) {
+        (Ok(x), Ok(y)) => x == y,
         _ => false,
+    }
+}
+
+/// Set the staged copy's mtime to just before this build-script run.
+///
+/// tauri-build watches each staged sidecar with `rerun-if-changed`, and
+/// Cargo calls a watched file changed when its mtime is newer than the
+/// start of the run that last saw it. A copy written during this run
+/// would therefore re-run this script, and recompile the crate, on the
+/// next cargo command. In CI that next command is the timed test step.
+/// This run already hands the new copy to tauri-build, so dating it
+/// before the run is accurate. Failure only costs that one extra rebuild.
+fn backdate(path: &std::path::Path, started: std::time::SystemTime) {
+    let Some(when) = started.checked_sub(std::time::Duration::from_secs(2)) else {
+        return;
+    };
+    if let Ok(file) = std::fs::File::options().write(true).open(path) {
+        let _ = file.set_modified(when);
     }
 }
 
