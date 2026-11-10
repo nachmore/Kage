@@ -8,6 +8,7 @@ import { HOST_FEATURES, createStorageEvents, invokeError } from './runtime/host-
 import { createSyncApi } from './runtime/sync-api.js';
 import { createViewSurface, removeWebRtc } from './runtime/view-api.js';
 import { createFilesApi } from './runtime/files-api.js';
+import { createAgentApi } from './runtime/agent-api.js';
 import { extensionModuleOrder, rewriteExtensionModules } from '../shared/extension-modules.js';
 
 /**
@@ -202,6 +203,9 @@ function buildContext() {
     // Files the user picks, when the host offered the feature
     // (docs/design/EXTENSION_FILE_TEXT.md §3.4); else undefined.
     if (hostFeatures?.includes('files.pick_text')) context.files = createFilesApi({ invoke });
+    // Background agent calls, when the host offered the feature
+    // (docs/design/EXTENSION_AGENT_CALLS.md §3.4); else undefined.
+    if (hostFeatures?.includes('agent.background')) context.agent = createAgentApi({ invoke });
     // Likewise `context.sync`: only with `sync.records` from the host.
     if (hostFeatures?.includes('sync.records')) {
         if (!syncApi) {

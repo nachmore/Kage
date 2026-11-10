@@ -226,15 +226,13 @@ describe('extension view commands — Rust ↔ JS alignment', () => {
         expect(cmds.get('ext_view_reset_geometry')).toEqual(['extension_id', 'view_id']);
     });
 
-    it('every view-surface denylist entry names a registered command or a planned agent call', () => {
+    it('every view-surface denylist entry names a registered command', () => {
         const registry = readFileSync(path.join(repoRoot, 'src/commands/registry.rs'), 'utf8');
         const registered = new Set(
             [...registry.matchAll(/^\s*crate::[\w:]*::(\w+),\s*$/gm)].map((m) => m[1])
         );
         expect(registered.size).toBeGreaterThan(150);
         for (const cmd of VIEW_SURFACE_DENIED_COMMANDS) {
-            // EXTENSION_AGENT_CALLS §3.5 fixes these names; they register later.
-            if (/^agent_call_(reserve|ready|send|cancel|status)$/.test(cmd)) continue;
             expect(registered.has(cmd), `${cmd} isn't registered in registry.rs (typo?)`).toBe(true);
         }
     });
@@ -299,6 +297,38 @@ describe('folder sync commands — Rust ↔ JS alignment', () => {
     });
 });
 
+describe('background agent call commands — Rust ↔ JS alignment', () => {
+    const agentRs = () => parseTauriCommands(path.join(repoRoot, 'src/commands/agent_calls.rs'));
+    const EXTENSION_COMMANDS = [
+        'agent_call_cancel',
+        'agent_call_ready',
+        'agent_call_reserve',
+        'agent_call_send',
+        'agent_call_status',
+    ];
+
+    it('context.agent commands take extensionId (and args) and need agent_background', () => {
+        const cmds = agentRs();
+        for (const name of EXTENSION_COMMANDS) {
+            const expected = name === 'agent_call_status' ? ['extension_id'] : ['extension_id', 'args'];
+            expect(cmds.get(name), name).toEqual(expected);
+            expect(COMMAND_CAPABILITIES[name], `${name} needs agent_background`).toBe(
+                'agent_background'
+            );
+        }
+    });
+
+    it('every other command in src/commands/agent_calls.rs is host-only (null)', () => {
+        const cmds = agentRs();
+        expect(cmds.size, 'commands in src/commands/agent_calls.rs').toBe(9);
+        for (const name of cmds.keys()) {
+            if (EXTENSION_COMMANDS.includes(name)) continue;
+            expect(Object.hasOwn(COMMAND_CAPABILITIES, name), `${name} has no entry`).toBe(true);
+            expect(COMMAND_CAPABILITIES[name], `${name} must be null`).toBeNull();
+        }
+    });
+});
+
 describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
     // The host's IDENTITY_SCOPED_COMMANDS map lives in the sandbox-host
     // module. We re-derive it here (rather than importing the private
@@ -322,15 +352,26 @@ describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
         ext_sync_push: 'extension_id',
         ext_sync_pull: 'extension_id',
         ext_sync_ack: 'extension_id',
+        agent_call_reserve: 'extension_id',
+        agent_call_ready: 'extension_id',
+        agent_call_send: 'extension_id',
+        agent_call_cancel: 'extension_id',
+        agent_call_status: 'extension_id',
     };
 
     it('every identity-scoped command takes its id arg on the Rust side', () => {
         // If anyone renames a Rust param without updating the JS injection
         // target, this reminds them the wire-name has changed.
-        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions'));
+        const cmds = new Map([
+            ...parseTauriCommands(path.join(repoRoot, 'src/commands/extensions')),
+            ...parseTauriCommands(path.join(repoRoot, 'src/commands/agent_calls.rs')),
+        ]);
         for (const [name, rustArg] of Object.entries(IDENTITY_SCOPED)) {
             const args = cmds.get(name);
-            expect(args, `${name}: not found as a #[tauri::command] in src/commands/extensions/`).toBeDefined();
+            expect(
+                args,
+                `${name}: not found as a #[tauri::command] in src/commands/extensions/ or src/commands/agent_calls.rs`
+            ).toBeDefined();
             expect(
                 args.includes(rustArg),
                 `${name}(${args.join(', ')}) — expected param '${rustArg}'; if you renamed it, update IDENTITY_SCOPED_COMMANDS in extension-sandbox-host.js too`

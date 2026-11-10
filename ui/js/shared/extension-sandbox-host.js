@@ -31,6 +31,10 @@
  *   - The host never trusts identity claims from the sandbox. The
  *     extension id is known to the host because the host created the
  *     iframe; messages arriving on the port inherit that identity.
+ *   - Background agent calls (docs/design/EXTENSION_AGENT_CALLS.md §3.8):
+ *     the host injects the id, passes `when: 'now'` only right after a
+ *     click, refuses an oversized send, and cancels a sandbox's calls
+ *     when it goes away.
  */
 
 import { getConfig, onConfigChange } from './config-cache.js';
@@ -212,6 +216,7 @@ export const RUNTIME_SOURCE_PATHS = [
     'js/extension-sandbox/runtime/view-api.js',
     'js/extension-sandbox/runtime/files-api.js',
     'js/extension-sandbox/runtime/sync-api.js',
+    'js/extension-sandbox/runtime/agent-api.js',
     'js/extension-sandbox/runtime.js',
 ];
 
@@ -258,6 +263,9 @@ async function getSandboxRuntimeSource() {
  *   - `*_extension_config` commands take a bare `id: String`.
  *   - `ext_sync_*` commands (`context.sync`, docs/design/SYNC.md §12.6)
  *     take `extensionId`.
+ *   - `agent_call_*` commands (`context.agent`,
+ *     docs/design/EXTENSION_AGENT_CALLS.md §3.5) take `extensionId`. Rust
+ *     binds each call id to the extension that reserved it.
  */
 export const IDENTITY_SCOPED_COMMANDS = Object.freeze({
     save_extension_data: 'extensionId',
@@ -273,6 +281,11 @@ export const IDENTITY_SCOPED_COMMANDS = Object.freeze({
     ext_sync_push: 'extensionId',
     ext_sync_pull: 'extensionId',
     ext_sync_ack: 'extensionId',
+    agent_call_reserve: 'extensionId',
+    agent_call_ready: 'extensionId',
+    agent_call_send: 'extensionId',
+    agent_call_cancel: 'extensionId',
+    agent_call_status: 'extensionId',
 });
 
 /**
@@ -395,11 +408,20 @@ export const HOST_FEATURE_VIEWS = 'views';
  */
 export const HOST_FEATURE_FILE_TEXT = 'files.pick_text';
 
+/**
+ * Background agent calls (docs/design/EXTENSION_AGENT_CALLS.md §3.3):
+ * `context.agent` works here. Needs `agent_background`. Offered by the
+ * windows with long-lived extension instances: floating, chat and
+ * settings. A view window never offers it, and a view sandbox drops it.
+ */
+export const HOST_FEATURE_AGENT_BACKGROUND = 'agent.background';
+
 /** Capability each host feature requires. A feature with no entry needs none. */
 const HOST_FEATURE_CAPABILITY = Object.freeze({
     [HOST_FEATURE_DATE_PICKER]: 'calendar',
     [HOST_FEATURE_VIEWS]: 'views',
     [HOST_FEATURE_FILE_TEXT]: 'file_text',
+    [HOST_FEATURE_AGENT_BACKGROUND]: 'agent_background',
     [HOST_FEATURE_SYNC_KEYS]: 'sync',
     [HOST_FEATURE_SYNC_LISTS]: 'sync',
     [HOST_FEATURE_SYNC_RECORDS]: 'sync',
@@ -461,6 +483,105 @@ export async function installExtensionSyncEvents(listen) {
         syncEventsInstalled = false;
         console.warn('[sandbox] sync change events unavailable:', e);
         return false;
+    }
+}
+
+// --- Background agent calls (docs/design/EXTENSION_AGENT_CALLS.md §3.8) -----
+
+export const AGENT_CALL_RESERVE = 'agent_call_reserve';
+export const AGENT_CALL_READY = 'agent_call_ready';
+export const AGENT_CALL_SEND = 'agent_call_send';
+export const AGENT_CALL_CANCEL = 'agent_call_cancel';
+
+/**
+ * The largest `agent_call_send` payload the host forwards: its JSON text,
+ * in UTF-16 code units (about one per character, so text in any script
+ * counts the same). A fast fail before the IPC. Rust's limits are the
+ * real ones, and a request within them is about 36,000 characters.
+ */
+export const AGENT_SEND_MAX_JSON_CHARS = 64 * 1024;
+
+/**
+ * Call ids a sandbox tracks at most. Only 5 of an extension's calls are
+ * live at a time (4 waiting, 1 running), so an older id is long finished.
+ */
+const MAX_TRACKED_AGENT_CALLS = 64;
+
+/** Rust's answer to a send before its turn: the reservation still waits. */
+const AGENT_NOT_READY_KEY = 'errors.agent_call.not_ready';
+
+/** The call id an `agent_call_ready` / `_send` / `_cancel` names, else null. */
+export function agentCallId(args) {
+    const a = args?.args;
+    const id = a && typeof a === 'object' ? (a.call_id ?? a.callId) : undefined;
+    return typeof id === 'string' && id ? id : null;
+}
+
+/**
+ * `agent_call_reserve`'s args as the host forwards them: only `purpose`,
+ * `when` and `dedupe_key`, in a new object, so no other shape reaches
+ * serde (an array, or `when: { now: null }`, would read as `now`). `when`
+ * is `'now'` only when `now` is true (a click lease), else `'idle'`.
+ *
+ * @param {unknown} raw - the sandbox's `args`
+ * @param {boolean} now
+ */
+export function agentReserveArgs(raw, now) {
+    const a = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const out = { purpose: a.purpose, when: now === true ? 'now' : 'idle' };
+    const key = a.dedupe_key ?? a.dedupeKey;
+    if (key !== undefined && key !== null) out.dedupe_key = key;
+    return out;
+}
+
+/**
+ * Why the host refuses an `agent_call_send` before it reaches Rust, or
+ * null: its JSON is over {@link AGENT_SEND_MAX_JSON_CHARS}, or it can't
+ * be sent as JSON at all.
+ *
+ * @param {object} args - the forwarded args
+ * @returns {{kind: string, key: string, vars: object, reason: string} | null}
+ */
+export function agentSendRefusal(args) {
+    let size;
+    try {
+        size = JSON.stringify(args ?? {}).length;
+    } catch {
+        return {
+            kind: 'invalid_input',
+            key: 'errors.agent_call.field_invalid',
+            vars: { field: 'request' },
+            reason: "the request can't be sent as JSON",
+        };
+    }
+    if (size <= AGENT_SEND_MAX_JSON_CHARS) return null;
+    return {
+        kind: 'invalid_input',
+        key: 'errors.agent_call.prompt_too_large',
+        vars: { size, limit: AGENT_SEND_MAX_JSON_CHARS },
+        reason: `the request is ${size} characters of JSON (limit ${AGENT_SEND_MAX_JSON_CHARS})`,
+    };
+}
+
+/** Sandboxes that tracked agent calls, for the `pagehide` cancel. */
+const _agentCallHolders = new Set();
+let _agentPagehideInstalled = false;
+
+/**
+ * When this window's page goes away, its sandboxes can't send or read
+ * their calls any more, so cancel them. Best effort: the cancel may not
+ * arrive before the window is gone; Rust's turn and call timeouts end
+ * the calls then.
+ */
+function _ensureAgentPagehide() {
+    if (_agentPagehideInstalled || typeof window === 'undefined') return;
+    _agentPagehideInstalled = true;
+    try {
+        window.addEventListener('pagehide', () => {
+            for (const sb of [..._agentCallHolders]) sb.cancelAgentCalls();
+        });
+    } catch {
+        _agentPagehideInstalled = false;
     }
 }
 
@@ -531,6 +652,13 @@ export class ExtensionSandbox {
         this.hostFeatures = hostFeaturesFor(spec.hostFeatures, this.capabilities);
         /** `'hidden'` or `'view'` (see the file comment). */
         this.surface = spec.surface === SURFACE_VIEW ? SURFACE_VIEW : SURFACE_HIDDEN;
+        // Background agent work isn't a view's (EXTENSION_AGENT_CALLS §3.3);
+        // its commands are refused there as well.
+        if (this.surface === SURFACE_VIEW) {
+            this.hostFeatures = this.hostFeatures.filter(
+                (f) => f !== HOST_FEATURE_AGENT_BACKGROUND
+            );
+        }
         if (this.surface === SURFACE_VIEW) this._initViewSpec(spec);
         /** The host's name and icon for the extension (file dialog, ask bar). */
         this.displayName = cleanDisplayName(
@@ -543,6 +671,12 @@ export class ExtensionSandbox {
          * one file dialog within 10 s (EXTENSION_FILE_TEXT §5.2).
          */
         this._clickLease = new ClickLease();
+        /**
+         * Whether the current click may still start one `when: 'now'` agent
+         * call. Checking it doesn't use up the lease, so the same click can
+         * still open a file dialog (EXTENSION_AGENT_CALLS §3.8).
+         */
+        this._agentNowUnused = false;
         /** >0 while a file request runs: click RPC timers are paused. */
         this._gesturePauses = 0;
         /** The activity we last forwarded and haven't cleared, else null. */
@@ -597,6 +731,13 @@ export class ExtensionSandbox {
          * @type {Set<string>}
          */
         this._oauthListeners = new Set();
+
+        /**
+         * Background agent calls this extension reserved and hasn't
+         * finished with. destroy() cancels them (EXTENSION_AGENT_CALLS §3.8).
+         * @type {Set<string>}
+         */
+        this._agentCalls = new Set();
     }
 
     /**
@@ -719,13 +860,18 @@ export class ExtensionSandbox {
      * `opts.userGesture: true` marks an RPC the host sends because the user
      * clicked or pressed a key (EXTENSION_FILE_TEXT §5.2): it gives the
      * sandbox a click lease, and its timer pauses while a file request runs.
+     * The click may also start one `when: 'now'` agent call
+     * (EXTENSION_AGENT_CALLS §3.8).
      */
     async call(method, params, opts = {}) {
         if (this._destroyed) throw new Error(`sandbox '${this.extensionId}' is destroyed`);
         if (!this._ready) throw new Error(`sandbox '${this.extensionId}' not ready`);
         const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : RPC_TIMEOUT_MS;
         const gesture = opts.userGesture === true;
-        if (gesture) this._clickLease.grant();
+        if (gesture) {
+            this._clickLease.grant();
+            this._agentNowUnused = true;
+        }
         const rpcId = this._nextRpcId++;
         return new Promise((resolve, reject) => {
             // timeoutMs <= 0 means "no timeout" — used for user-gated RPCs.
@@ -923,6 +1069,12 @@ export class ExtensionSandbox {
 
         // Its ask bar goes, and a file request in flight is cancelled.
         abandonFileText(this);
+
+        // Its background agent calls end too: Tauri doesn't drop a waiting
+        // ready or send when the sandbox goes, and nobody could send or
+        // read them now.
+        this.cancelAgentCalls();
+        _agentCallHolders.delete(this);
 
         // Best-effort: ask the extension to clean up inside the sandbox
         // before we tear the iframe out from under it.
@@ -1434,17 +1586,37 @@ export class ExtensionSandbox {
         // for it, never one the sandbox sent.
         if (command === PICK_FILE_TEXT) forwardedArgs.displayName = this.displayName;
 
+        // Background agent calls (EXTENSION_AGENT_CALLS §3.8): `now` needs a
+        // click, an oversized send fails here, and a cancel ends tracking.
+        let agentNow = false;
+        if (command === AGENT_CALL_RESERVE) {
+            agentNow = this._takeAgentNow(forwardedArgs.args);
+            forwardedArgs.args = agentReserveArgs(forwardedArgs.args, agentNow);
+        } else if (command === AGENT_CALL_SEND) {
+            const refusal = agentSendRefusal(forwardedArgs);
+            if (refusal) {
+                this._refuseAgentSend(id, forwardedArgs, refusal);
+                return;
+            }
+        } else if (command === AGENT_CALL_CANCEL) {
+            this._agentCalls.delete(agentCallId(forwardedArgs));
+        }
+
         try {
             // pick_file_text and cancel_file_text go through this window's
             // file broker (the ask bar, the dialog guard, the progress chip).
             const result = await (routeFileTextInvoke(this, command, forwardedArgs) ??
                 this._rawInvoke(command, forwardedArgs));
             this._trackOauthListener(command, forwardedArgs, { result });
+            this._trackAgentCall(command, forwardedArgs, { ok: true, result });
             // Destroyed while the command ran: the port is gone.
             if (this._destroyed) return;
             this._port.postMessage({ type: 'invoke-response', id, result });
         } catch (e) {
             this._trackOauthListener(command, forwardedArgs, { error: e });
+            this._trackAgentCall(command, forwardedArgs, { ok: false, error: e });
+            // A refused reservation started no call, so the click may still start one.
+            if (agentNow) this._agentNowUnused = true;
             if (this._destroyed) return;
             // A Rust AppError arrives as `{ kind, key, message }`. Forward
             // kind + key so the extension can branch on them (e.g. an OAuth
@@ -1483,6 +1655,112 @@ export class ExtensionSandbox {
         try {
             Promise.resolve(
                 this._rawInvoke('oauth_loopback_cancel', { args: { listener_id: listenerId } })
+            ).catch(() => {});
+        } catch {}
+    }
+
+    // --- background agent calls (EXTENSION_AGENT_CALLS §3.8) -----------------
+
+    /**
+     * Whether this `agent_call_reserve` may keep `when: 'now'`: it asks for
+     * it, the sandbox holds a click lease, and that click hasn't started a
+     * `now` call yet. The lease itself stays for a file dialog. Anything
+     * else goes as `'idle'`, so a timer or an agent tool can't skip the
+     * idle gate.
+     */
+    _takeAgentNow(raw) {
+        const wants = !!raw && typeof raw === 'object' && raw.when === 'now';
+        if (!wants) return false;
+        if (this._agentNowUnused && this.hasClickLease()) {
+            this._agentNowUnused = false;
+            return true;
+        }
+        if (!this._agentNowWarned) {
+            this._agentNowWarned = true;
+            console.warn(
+                `[sandbox ${this.extensionId}] agent call with when: 'now' outside a click — sent as 'idle'`
+            );
+        }
+        return false;
+    }
+
+    /**
+     * Keep `_agentCalls` current from a finished agent_call_* invoke. A
+     * reserved call is ours until a send is answered, its turn is refused,
+     * or a cancel is sent. A failure without an AppError `kind` never
+     * reached the service (the IPC refused the args), so the host cancels
+     * that call itself: its turn would otherwise hold the agent for 10 s.
+     *
+     * @param {string} command
+     * @param {object} args - the forwarded args
+     * @param {{ok: boolean, result?: any, error?: any}} outcome
+     */
+    _trackAgentCall(command, args, outcome) {
+        if (command === AGENT_CALL_RESERVE) {
+            const callId = outcome.ok ? outcome.result?.call_id : null;
+            if (typeof callId !== 'string' || !callId) return;
+            // Reserved after destroy(): the extension will never see the id.
+            if (this._destroyed) {
+                this._cancelAgentCall(callId);
+                return;
+            }
+            if (this._agentCalls.size >= MAX_TRACKED_AGENT_CALLS) {
+                this._agentCalls.delete(this._agentCalls.values().next().value);
+            }
+            this._agentCalls.add(callId);
+            _agentCallHolders.add(this);
+            _ensureAgentPagehide();
+            return;
+        }
+        if (command !== AGENT_CALL_READY && command !== AGENT_CALL_SEND) return;
+        const callId = agentCallId(args);
+        if (!callId || !this._agentCalls.has(callId)) return;
+        if (outcome.ok) {
+            if (command === AGENT_CALL_SEND) this._agentCalls.delete(callId);
+            return;
+        }
+        if (typeof outcome.error?.kind !== 'string') {
+            this._cancelAgentCall(callId);
+        } else if (command === AGENT_CALL_SEND && outcome.error?.key === AGENT_NOT_READY_KEY) {
+            // Sent before its turn: the reservation still waits.
+            return;
+        }
+        this._agentCalls.delete(callId);
+    }
+
+    /**
+     * Refuse an `agent_call_send` here, with the `kind` and `key` Rust
+     * would use. Rust never sees it, so the host ends that call's turn.
+     */
+    _refuseAgentSend(id, args, refusal) {
+        const callId = agentCallId(args);
+        if (callId && this._agentCalls.delete(callId)) this._cancelAgentCall(callId);
+        console.warn(
+            `[sandbox ${this.extensionId}] BLOCKED invoke('agent_call_send'): ${refusal.reason}`
+        );
+        this._port.postMessage({
+            type: 'invoke-response',
+            id,
+            error: t(refusal.key, refusal.vars),
+            errorKind: refusal.kind,
+            errorKey: refusal.key,
+        });
+    }
+
+    /** Cancel every agent call this sandbox still tracks. Idempotent. */
+    cancelAgentCalls() {
+        for (const callId of this._agentCalls) this._cancelAgentCall(callId);
+        this._agentCalls.clear();
+    }
+
+    /** Fire-and-forget agent_call_cancel (idempotent; unknown ids are fine). */
+    _cancelAgentCall(callId) {
+        try {
+            Promise.resolve(
+                this._rawInvoke(AGENT_CALL_CANCEL, {
+                    extensionId: this.extensionId,
+                    args: { call_id: callId },
+                })
             ).catch(() => {});
         } catch {}
     }
