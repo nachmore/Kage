@@ -651,7 +651,10 @@ base-uri 'none'; form-action 'none'
    are `ext_view_reopen`, `ext_view_visibility`, `config_updated` (through
    `onConfigChange`), `kage:i18n-changed`, `extensions_changed`,
    `extension_data_changed` (through `installExtensionDataEvents`), and
-   window focus.
+   window focus. `ext_view_reopen` and `ext_view_visibility` are heard on
+   the window itself (`appWindow.listen`). Tauri hands an event to every
+   global listener whatever window it was sent to, so a global listener
+   would give this view another view window's params and hides.
 
 ### 8.6 Port protocol additions
 

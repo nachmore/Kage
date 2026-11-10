@@ -216,11 +216,25 @@ function harness(overrides = {}) {
         (h.listeners[event] ||= []).push(handler);
         return () => {};
     });
+    h.windowListeners = {};
+    // An event Rust sends to this window reaches its global listeners and
+    // the ones on this window.
     h.emit = (event, payload) => {
+        for (const handler of h.listeners[event] || []) handler({ event, payload });
+        for (const handler of h.windowListeners[event] || []) handler({ event, payload });
+    };
+    // One Rust sends to another window: Tauri still hands it to every
+    // global listener (target `Any`), but not to this window's own ones.
+    h.emitElsewhere = (event, payload) => {
         for (const handler of h.listeners[event] || []) handler({ event, payload });
     };
     h.appWindow = {
         label: overrides.label ?? LABEL,
+        listen: vi.fn(async (event, handler) => {
+            h.order.push(`listen:${event}`);
+            (h.windowListeners[event] ||= []).push(handler);
+            return () => {};
+        }),
         close: vi.fn(async () => {}),
         setTitle: vi.fn(async () => {}),
         isVisible: vi.fn(async () => state.visible),
@@ -628,6 +642,37 @@ describe('reopen and visibility (§6.3, §7.3)', () => {
         expect(reopens.map((c) => c.params)).toEqual([{ params: { focus: 'e1' }, source: 'chat' }]);
         // Already visible: no visibility RPC.
         expect(h.sandbox.rpcs('viewVisibility')).toHaveLength(0);
+    });
+
+    it('ignores a reopen or a visibility change sent to another view window', async () => {
+        // Rust sends ext_view_reopen and ext_view_visibility to one view
+        // window. A global listener hears the copies sent to every other
+        // view too, so another window's params (maybe another extension's)
+        // and its hide would reach this view.
+        const h = harness();
+        await h.page.start();
+        await settle();
+        h.emitElsewhere('ext_view_visibility', { visible: false });
+        h.emitElsewhere('ext_view_reopen', {
+            params: { focus: 'theirs' },
+            open_seq: 9,
+            source: 'launcher',
+        });
+        await settle();
+        expect(h.sandbox.rpcs('viewReopen')).toHaveLength(0);
+        expect(h.sandbox.rpcs('viewVisibility')).toHaveLength(0);
+        // This window's own next open still lands: the other window's
+        // sequence number didn't move this one's.
+        h.emit('ext_view_reopen', { params: { focus: 'mine' }, open_seq: 2, source: 'chat' });
+        await settle();
+        expect(h.sandbox.rpcs('viewReopen').map((c) => c.params)).toEqual([
+            { params: { focus: 'mine' }, source: 'chat' },
+        ]);
+        expect(h.appWindow.listen).toHaveBeenCalledWith('ext_view_reopen', expect.any(Function));
+        expect(h.appWindow.listen).toHaveBeenCalledWith(
+            'ext_view_visibility',
+            expect.any(Function)
+        );
     });
 
     it('reads an unknown source as launcher', async () => {

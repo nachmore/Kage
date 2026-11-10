@@ -102,9 +102,12 @@ function utf8Length(text) {
 /**
  * @typedef {object} ViewPageDeps
  * @property {(cmd: string, args?: object) => Promise<any>} invoke - raw Tauri invoke
- * @property {(event: string, handler: Function) => Promise<Function>} listen
+ * @property {(event: string, handler: Function) => Promise<Function>} listen - global
+ *   (hears events sent to any window)
  * @property {{ label: string, close(): Promise<void>, setTitle(title: string): Promise<void>,
- *   isVisible(): Promise<boolean>, onFocusChanged?(handler: Function): Promise<Function> }} appWindow
+ *   isVisible(): Promise<boolean>, listen(event: string, handler: Function): Promise<Function>,
+ *   onFocusChanged?(handler: Function): Promise<Function> }} appWindow - `listen` hears
+ *   only events sent to this window
  * @property {(key: string, vars?: object) => string} t - Kage's catalog
  * @property {() => Promise<void>} initI18n
  * @property {(root: ParentNode) => void} applyStaticTranslations
@@ -676,13 +679,25 @@ class ViewPage {
 
     async _subscribe() {
         const { listen } = this._d;
-        const subscribe = (event, handler) =>
-            Promise.resolve(listen(event, handler)).catch((e) =>
-                console.warn(`[extension-view] listen(${event}) failed:`, e)
-            );
+        const subscribe = (event, handler, on = listen) =>
+            Promise.resolve()
+                .then(() => on(event, handler))
+                .catch((e) => console.warn(`[extension-view] listen(${event}) failed:`, e));
+        // Rust sends these two to this window only. A global listen hears
+        // the copy sent to every other view window too (Tauri hands an
+        // event to each listener whose target is `Any`), which would give
+        // this view another window's params and hides. So listen on this
+        // window.
+        const appWindow = this._d.appWindow;
+        const onThisWindow = (event, handler) => {
+            if (typeof appWindow?.listen !== 'function') {
+                throw new Error('this window has no listen()');
+            }
+            return appWindow.listen(event, handler);
+        };
         await Promise.all([
-            subscribe(EVT.EXT_VIEW_REOPEN, (e) => this._onReopen(e?.payload)),
-            subscribe(EVT.EXT_VIEW_VISIBILITY, (e) => this._onVisibility(e?.payload)),
+            subscribe(EVT.EXT_VIEW_REOPEN, (e) => this._onReopen(e?.payload), onThisWindow),
+            subscribe(EVT.EXT_VIEW_VISIBILITY, (e) => this._onVisibility(e?.payload), onThisWindow),
             subscribe(EVT.EXTENSIONS_CHANGED, () => this._onExtensionsChanged()),
         ]);
         this._d.onConfigChange(() => this._onConfigChanged());
