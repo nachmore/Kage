@@ -37,6 +37,7 @@ When analytics are enabled, each event includes:
 ### Events
 - A record of which high-level features you use and how often (e.g. opening the chat window, running a shortcut, installing an extension). The recorded name identifies the feature — it does **not** include anything you typed, selected, or opened.
 - Coarse, non-identifying properties attached to some events. For example, a "message sent" event carries the source window (floating vs chat) and a size bucket (small / medium / large) — **never the message content**.
+- When an extension opens a window of its own (an extension view), the event records only where it was opened from (the launcher, chat, a card, a widget, a toolbar button, Settings or another such window) and whether the window was already open. It never says which extension, what the window shows, or what it was opened with.
 
 The complete list of features we track is visible in [`ui/js/shared/telemetry.js`](../ui/js/shared/telemetry.js) if you'd like to review it yourself.
 
