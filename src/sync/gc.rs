@@ -101,24 +101,17 @@ impl SyncEngine {
                 }
             }
         }
-        // Heads beyond the newest 3, once the third newest is 10 minutes old.
-        let mut heads: Vec<(u64, Option<i64>)> = fs
-            .list(&dev_dir)
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|e| match folder::classify(DirKind::Device, &e.name) {
-                FileClass::Head(s) => Some((s, e.modified_ms)),
-                _ => None,
-            })
-            .collect();
+        // Heads beyond the newest 3, once the third newest is 10 minutes
+        // old. Evicted ones (an iCloud stub) count and go the same way.
+        let mut heads = super::publish::own_heads(&*fs, &dev_dir);
         heads.sort_by_key(|h| std::cmp::Reverse(h.0));
         if heads.len() > KEEP_HEADS {
             let old_enough = heads[KEEP_HEADS - 1]
-                .1
+                .2
                 .is_none_or(|m| now - m >= TEMP_MAX_AGE_MS);
             if old_enough {
-                for (seq, _) in &heads[KEEP_HEADS..] {
-                    let _ = fs.remove(&dev_dir.join(folder::head_name(*seq)));
+                for (_, file, _) in &heads[KEEP_HEADS..] {
+                    let _ = fs.remove(&dev_dir.join(file));
                 }
             }
         }
@@ -141,7 +134,7 @@ impl SyncEngine {
         })?;
         let mut present = BTreeSet::new();
         for (dir, kind) in &dirs[1..] {
-            for name in super::publish::list_names(&*fs, dir, *kind) {
+            for (name, file) in super::publish::own_names(&*fs, dir, *kind) {
                 present.insert(name.clone());
                 if refs.contains(&name) {
                     unref.remove(&name);
@@ -149,7 +142,7 @@ impl SyncEngine {
                 }
                 let first = *unref.entry(name.clone()).or_insert(now);
                 if now - first >= UNREF_KEEP_MS {
-                    let _ = fs.remove(&dir.join(folder::data_name(&name)));
+                    let _ = fs.remove(&dir.join(&file));
                     unref.remove(&name);
                     // Read again if another computer still names it.
                     core.replica.tx(|tx| tx.remove_applied(&name))?;
@@ -207,8 +200,12 @@ impl SyncEngine {
             for d in devices {
                 let read = d.ingested_seq >= d.head_seq;
                 let left = d.state == "retired" && read && d.head_seq > 0;
-                let removed =
-                    d.state == "removed" && read && now - d.last_seen_ms >= REMOVED_DIR_MS;
+                // Every computer counts a removed one as gone, but only the
+                // one that removed it deletes its directory (§8.9).
+                let removed = d.state == "removed"
+                    && read
+                    && now - d.last_seen_ms >= REMOVED_DIR_MS
+                    && removed_by(tx, d.dev)? == Some(me);
                 if left || removed {
                     retired.push(d);
                 }
@@ -376,6 +373,16 @@ impl SyncEngine {
         self.rt.came_back = false;
         Ok(changed)
     }
+}
+
+/// The computer that removed `dev` from sync: the writer of its
+/// `sync.devices` `revoked` cell.
+fn removed_by(tx: &Tx<'_>, dev: DeviceId) -> anyhow::Result<Option<DeviceId>> {
+    Ok(tx.record("sync.devices", &dev.to_string())?.and_then(|r| {
+        r.cell("revoked", super::types::Scope::All)
+            .filter(|c| c.value == serde_json::Value::Bool(true))
+            .map(|c| c.stamp.dev)
+    }))
 }
 
 /// Whether every active computer that syncs `ns` has the tombstone.

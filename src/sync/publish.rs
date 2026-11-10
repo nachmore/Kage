@@ -251,8 +251,13 @@ impl SyncEngine {
                 core.layout.device_dir(core.me),
             )
         };
-        let existing_shards = list_names(&*fs, &shards_dir, DirKind::Shards);
-        let existing_blobs = list_names(&*fs, &blobs_dir, DirKind::Blobs);
+        // Evicted ones count: the cloud still has them (§8.12).
+        let existing_shards: BTreeSet<String> = own_names(&*fs, &shards_dir, DirKind::Shards)
+            .into_keys()
+            .collect();
+        let existing_blobs: BTreeSet<String> = own_names(&*fs, &blobs_dir, DirKind::Blobs)
+            .into_keys()
+            .collect();
         // Read what to write.
         let mut dirty: Vec<(String, u32, bool)> = Vec::new();
         let mut states: BTreeMap<String, NsState> = BTreeMap::new();
@@ -634,25 +639,65 @@ impl std::fmt::Display for PlanOnly {
 
 impl std::error::Error for PlanOnly {}
 
-/// The data names (without `.kage`) in a directory.
-pub(crate) fn list_names(
+fn classify_is_data(kind: DirKind, name: &str) -> bool {
+    matches!(super::folder::classify(kind, name), FileClass::Data)
+}
+
+/// This computer's own data files in `dir`: content name → the file's name
+/// on disk. An older macOS evicts iCloud files to `.<name>.icloud` stubs;
+/// Kage never needs its own files back (§8.12), so an evicted file still
+/// counts as written, and its stub is what gc removes.
+pub(crate) fn own_names(
     fs: &dyn super::fsio::SyncFs,
     dir: &std::path::Path,
     kind: DirKind,
-) -> BTreeSet<String> {
-    fs.list(dir)
-        .map(|entries| {
-            entries
-                .into_iter()
-                .filter(|e| !e.is_dir && classify_is_data(kind, &e.name))
-                .filter_map(|e| e.name.strip_suffix(".kage").map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default()
+) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    for e in fs.list(dir).unwrap_or_default() {
+        if e.is_dir {
+            continue;
+        }
+        let data = match super::folder::classify(kind, &e.name) {
+            FileClass::Data => e.name.clone(),
+            FileClass::ICloudStub(inner) if classify_is_data(kind, &inner) => inner,
+            _ => continue,
+        };
+        if let Some(stem) = data.strip_suffix(".kage") {
+            // A real file wins over a stub of the same name.
+            if data == e.name || !out.contains_key(stem) {
+                out.insert(stem.to_string(), e.name.clone());
+            }
+        }
+    }
+    out
 }
 
-fn classify_is_data(kind: DirKind, name: &str) -> bool {
-    matches!(super::folder::classify(kind, name), FileClass::Data)
+/// This computer's own heads in its directory: `seq` → the file's name on
+/// disk, evicted ones included (see [`own_names`]).
+pub(crate) fn own_heads(
+    fs: &dyn super::fsio::SyncFs,
+    dir: &std::path::Path,
+) -> Vec<(u64, String, Option<i64>)> {
+    let mut out: BTreeMap<u64, (String, Option<i64>)> = BTreeMap::new();
+    for e in fs.list(dir).unwrap_or_default() {
+        if e.is_dir {
+            continue;
+        }
+        let (seq, real) = match super::folder::classify(DirKind::Device, &e.name) {
+            FileClass::Head(s) => (s, true),
+            FileClass::ICloudStub(inner) => {
+                match super::folder::classify(DirKind::Device, &inner) {
+                    FileClass::Head(s) => (s, false),
+                    _ => continue,
+                }
+            }
+            _ => continue,
+        };
+        if real || !out.contains_key(&seq) {
+            out.insert(seq, (e.name.clone(), e.modified_ms));
+        }
+    }
+    out.into_iter().map(|(s, (n, m))| (s, n, m)).collect()
 }
 
 /// `write_once`, retrying a Windows sharing violation (OneDrive,

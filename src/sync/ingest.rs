@@ -29,6 +29,14 @@ use std::path::{Path, PathBuf};
 /// A remote stamp this far ahead of the wall clock is worth a warning.
 const CLOCK_WARN_MS: i64 = 5 * 60_000;
 
+/// Meta key: the lowest key epoch still read (§11.3).
+pub(crate) const EPOCH_FLOOR: &str = "epoch_floor";
+
+/// Meta key: the key epoch of a computer's newest head read here.
+fn head_epoch_key(dev: DeviceId) -> String {
+    format!("epoch.{dev}")
+}
+
 /// Why a file couldn't be used this time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NotYet {
@@ -102,6 +110,7 @@ impl SyncEngine {
         }
         self.rt.last_ingest_ms = Some(now);
         self.after_ingest(&changed)?;
+        self.raise_epoch_floor(now)?;
         if stats.waiting == 0 {
             if let Some(core) = self.core.as_mut() {
                 core.replica
@@ -158,7 +167,16 @@ impl SyncEngine {
                 stats.placeholders = true;
                 continue;
             }
-            let plain = match self.read_open(&path, FileKind::Head, dev, entry.modified_ms, now) {
+            let head_name = super::folder::head_name(seq);
+            let opened = self.read_open_epoch(
+                &path,
+                &head_name,
+                FileKind::Head,
+                dev,
+                entry.modified_ms,
+                now,
+            );
+            let (plain, epoch) = match opened {
                 Ok(p) => p,
                 Err(NotYet::NewerKey(e)) => {
                     stats.newer_key = Some(stats.newer_key.map_or(e, |x| x.max(e)));
@@ -198,6 +216,10 @@ impl SyncEngine {
             self.clock_check(dev, &head, now);
             let state = if head.retired { "retired" } else { "ok" };
             self.note_device(dev, &head, row.as_ref(), complete, state)?;
+            if let Some(core) = self.core.as_mut() {
+                core.replica
+                    .tx(|tx| tx.set_meta(&head_epoch_key(dev), &epoch.to_string()))?;
+            }
             break;
         }
         Ok(())
@@ -447,6 +469,22 @@ impl SyncEngine {
         modified_ms: Option<i64>,
         now: i64,
     ) -> Result<Vec<u8>, NotYet> {
+        self.read_open_epoch(path, name, kind, dev, modified_ms, now)
+            .map(|(plain, _)| plain)
+    }
+
+    /// [`Self::read_open_as`], with the key epoch the file was sealed in.
+    /// A file sealed below the epoch floor is refused as missing: every
+    /// active computer moved past that key (§11.3).
+    pub(crate) fn read_open_epoch(
+        &self,
+        path: &Path,
+        name: &str,
+        kind: FileKind,
+        dev: DeviceId,
+        modified_ms: Option<i64>,
+        now: i64,
+    ) -> Result<(Vec<u8>, u32), NotYet> {
         let core = self.core.as_ref().ok_or(NotYet::Waiting)?;
         if self.env.cloud.residency(path) == Residency::Placeholder {
             self.env.cloud.request_download(path);
@@ -461,6 +499,10 @@ impl SyncEngine {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(NotYet::Missing),
             Err(_) => return Err(NotYet::Waiting),
         };
+        let epoch = envelope::peek_epoch(&bytes);
+        if epoch.is_some_and(|e| e < core.epoch_floor) {
+            return Err(NotYet::Missing);
+        }
         let aad = Aad {
             folder_id: &core.folder_id,
             device: dev,
@@ -469,7 +511,7 @@ impl SyncEngine {
         };
         let keys = |e: u32| core.keys.get(&e).cloned();
         match envelope::open(&keys, &aad, &bytes) {
-            Ok(p) => Ok(p),
+            Ok(p) => Ok((p, epoch.unwrap_or_default())),
             Err(OpenError::UnknownEpoch(e)) => Err(NotYet::NewerKey(e)),
             Err(err) => {
                 let age = modified_ms.map_or(0, |m| now - m);
@@ -481,6 +523,43 @@ impl SyncEngine {
                 }
             }
         }
+    }
+
+    /// Stop reading the old key epochs once every active computer has
+    /// moved to this computer's epoch (§11.3 "Readers accept the old epoch
+    /// until every active computer has moved"). The floor only rises, so a
+    /// computer that comes back with the old key can't open it again; it
+    /// syncs once its user enters the new passphrase.
+    fn raise_epoch_floor(&mut self, now: i64) -> anyhow::Result<()> {
+        let Some(core) = self.core.as_mut() else {
+            return Ok(());
+        };
+        let target = core.epoch;
+        if target <= core.epoch_floor.max(1) || core.locked() {
+            return Ok(());
+        }
+        let me = core.me;
+        let moved = core.replica.tx(|tx| {
+            for d in tx.devices()? {
+                if d.dev == me || !super::gc::is_active(&d, now) {
+                    continue;
+                }
+                let e = tx
+                    .meta(&head_epoch_key(d.dev))?
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .unwrap_or(0);
+                if e < target {
+                    return Ok(false);
+                }
+            }
+            tx.set_meta(EPOCH_FLOOR, &target.to_string())?;
+            Ok(true)
+        })?;
+        if moved {
+            core.epoch_floor = target;
+            log::info!("sync: every active computer uses key epoch {target}; older keys are no longer read");
+        }
+        Ok(())
     }
 
     /// Remember what a computer's head said.
@@ -508,13 +587,19 @@ impl SyncEngine {
         row.instance = head.instance.clone();
         row.min_reader = head.min_reader;
         row.gc_floor = head.gc_floor;
-        row.state = state.to_string();
         let seen_me = head.seen.get(&me.to_string()).copied().unwrap_or(0);
         let nss: Vec<&String> = head.namespaces.keys().collect();
         let nss = serde_json::to_string(&nss)?;
         let catalog = head.catalog;
         let core = self.core.as_mut().expect("on");
         core.replica.tx(|tx| {
+            // A removed computer stays removed (§8.9), even when it
+            // published once more before it heard of it.
+            row.state = if is_revoked(tx, dev)? {
+                "removed".to_string()
+            } else {
+                state.to_string()
+            };
             tx.put_device(&row)?;
             tx.set_meta(&format!("seen.{dev}"), &seen_me.to_string())?;
             tx.set_meta(&format!("nss.{dev}"), &nss)?;
@@ -567,6 +652,20 @@ impl SyncEngine {
                             removed |= r
                                 .cell("revoked", super::types::Scope::All)
                                 .is_some_and(|c| c.value == serde_json::Value::Bool(true));
+                        }
+                    } else if ns == "sync.devices" {
+                        // Another computer was removed: no computer waits
+                        // for it as an active one any more (§8.7, §8.9).
+                        let other = super::crypto::parse_device_text(id);
+                        if let Some(dev) = other {
+                            if is_revoked(tx, dev)? {
+                                if let Some(mut row) = tx.device(dev)? {
+                                    if row.state != "removed" {
+                                        row.state = "removed".into();
+                                        tx.put_device(&row)?;
+                                    }
+                                }
+                            }
                         }
                     }
                     if ns == "sync.ns_state" {
@@ -689,6 +788,17 @@ impl SyncEngine {
         }
         Ok(Some(out))
     }
+}
+
+/// Whether `sync.devices/<dev>` says the computer was removed from sync.
+fn is_revoked(tx: &Tx<'_>, dev: DeviceId) -> anyhow::Result<bool> {
+    Ok(tx
+        .record("sync.devices", &dev.to_string())?
+        .and_then(|r| {
+            r.cell("revoked", super::types::Scope::All)
+                .map(|c| c.value == serde_json::Value::Bool(true))
+        })
+        .unwrap_or(false))
 }
 
 /// The meta key holding the `seq` of this computer's first head that

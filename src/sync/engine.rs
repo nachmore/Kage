@@ -165,6 +165,10 @@ pub(crate) struct Core {
     /// The keys of every epoch this computer can read. Empty while locked.
     pub keys: BTreeMap<u32, Keys>,
     pub epoch: u32,
+    /// Files sealed with an older epoch are refused: every active computer
+    /// has moved past it (§11.3), so only a lost computer's key, or someone
+    /// who has it, would still write with it.
+    pub epoch_floor: u32,
     /// The `seq` of this computer's newest head.
     pub my_seq: u64,
 }
@@ -315,7 +319,7 @@ pub(crate) struct CaptureOut {
 impl SyncEngine {
     /// Read `device.json`, open the replica, and finish unfinished
     /// projections.
-    pub fn open(env: EngineEnv, sources: Vec<Box<dyn Source>>) -> anyhow::Result<Self> {
+    pub fn open(mut env: EngineEnv, sources: Vec<Box<dyn Source>>) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&env.local_dir)?;
         let lock_path = env.local_dir.join(LOCK_FILE);
         let file = std::fs::OpenOptions::new()
@@ -338,6 +342,12 @@ impl SyncEngine {
             }
         }
         let prefs = DevicePrefs::load(&env.local_dir);
+        let file = super::keystore::KeyStoreKind::File;
+        if prefs.key_store.as_deref() == Some(file.wire()) && env.keys.kind() != file {
+            // The key went to the owner-only file when the OS store refused
+            // it (§15): it is found there.
+            env.keys = super::keystore::file_key_store(&env.local_dir);
+        }
         let mut engine = Self {
             env,
             sources,
@@ -2289,7 +2299,12 @@ fn capture_record(
                 continue;
             }
         }
-        if cur.is_none() && (v_local.is_null() || v_local == Value::Bool(false)) {
+        // Nothing to write for an absent value: `null`, or `false` for a
+        // set element (a removed one). A plain `false` is a value like any
+        // other and is published.
+        if cur.is_none()
+            && (v_local.is_null() || (v_local == Value::Bool(false) && split::is_union(&name)))
+        {
             cx.tx.set_projected(&key, Some((h, None, None)))?;
             continue;
         }
