@@ -46,6 +46,15 @@ The complete list of features we track is visible in [`ui/js/shared/telemetry.js
 - Kage only counts that sync is used, how many computers, and which kinds of problems happen. These counts are in coarse buckets (for example "3–5 computers").
 - Sync events never include the folder, which sync app you use, computer names, setting names or values, extension ids, or anything that was synced.
 
+### Files you choose for an extension
+- An extension with the "Files you choose" permission can ask you to pick a file. Kage reads the file you pick on your computer and gives the extension its text. Kage never tells the extension where the file is, and it reads nothing else.
+- When an extension has read a file you picked, the usage event records only the extension's id, the file's format (for example PDF), whether the read worked or why not, and the file's size, the text's length and the time it took in coarse buckets (for example "under 1 MB"). Never the file's name, its folder, its title or any of its text.
+
+What Kage keeps on your computer:
+- Nothing from the file itself. What the extension saves is its own data: on your computer, in the full backups you make (which are encrypted), and in your sync folder (encrypted) only if you use sync and the extension syncs its data.
+- The permission audit log (Settings → Tool permissions) records each read with the file's name, so you can see what your extensions read. It stays on your computer, is never sent or backed up, and you can clear it.
+- A random key, used to tell an extension "this is the same file as before" without telling it where the file is. It stays on this computer and is never sent, backed up or synced.
+
 ### Crash signal
 - If Kage panics (an unrecoverable internal error), we send a single `panic` event so we know a buggy build is in the wild.
 - The event carries only a coarse category from a fixed list (e.g. `unwrap_none`, `index_oob`, `other`) and the source location it occurred at — e.g. `src/foo.rs:42`. These are paths *inside our own source code*, not paths to your files.

@@ -204,11 +204,17 @@ with per-capability descriptions. Summary:
 
 `storage` · `clipboard` · `urls` · `launch` · `network` · `oauth` ·
 `filesystem` · `window` · `windows` · `notifications` · `calendar` ·
-`session` · `agent` · `activity` · `automation` · `tts` · `views`
+`session` · `agent` · `activity` · `automation` · `tts` · `views` ·
+`file_text`
 
 `views` maps to no command. It lets the host open the windows an
 extension's manifest declares (see "Extension views"), and Rust checks
 it again on every open and every load of a view window.
+
+`file_text` returns the text of one file the user picks in the OS
+dialog, never a path (see "Files the user picks"). It is separate from
+`filesystem`, which is discovery: paths and file details, never text.
+Users see the difference at install time.
 
 `clipboard` is read access. Writing needs no capability but only ever
 happens on a user's click, through the host: a search result's `copy`
@@ -429,6 +435,79 @@ same capability checks at the port as every other contribution point.
   position (`<local data>/kage/extension-views.json`, owner-only) is
   never in a backup and never synced.
 
+## Files the user picks
+
+An extension with `file_text` can ask the user to pick one file and get
+its text (`docs/EXTENSIONS.md` § Reading a file the user picks; design:
+`docs/design/EXTENSION_FILE_TEXT.md`). The documents are untrusted and
+can be hostile, and the extension is untrusted too. The commands are
+`pick_file_text`, `cancel_file_text` and `file_text_support`; the host
+injects the extension's id and its manifest name.
+
+- **Only the file the user picks.** No command takes a path. Rust reads
+  only what the OS dialog returned for this request: no remembered
+  grants, no folder listing, no "read again". The dialog's title is
+  Kage's string with the manifest name; the extension can't put text in
+  it. Its one filter lists the requested formats, and Rust checks the
+  picked file's extension again, because the Linux GTK dialog accepts
+  typed paths.
+- **No path comes back.** The result holds the cleaned file name, never
+  its folder. `file_ref` is a keyed hash (HMAC-SHA256) of the extension
+  id and the path, under a random key kept on this computer
+  (`<local data>/kage/file-ref.key`, owner-only, never in a backup or
+  synced). So it differs per extension, can't be turned back into the
+  path, and means nothing on another computer.
+- **A dialog needs a user action.** The dialog opens at once only after
+  a click or key press the host saw. When the host sends a sandbox an
+  RPC for a click (a result row, a card, widget, toolbar or settings
+  button, a date pick), it gives that sandbox a lease for one dialog
+  within 10 seconds; the sandbox can't give itself one. In a view
+  window, the page gives the lease when the window is in front and
+  `navigator.userActivation` is active. Anything else (a timer, an agent
+  tool call, a widget refresh) gets the host's ask bar, which names the
+  extension and needs a click; its button ignores clicks for the first
+  half second. **Not now**, Escape or 60 seconds without an answer start
+  a 30-second wait for that sandbox. A hidden window gets `no_window`,
+  and Kage never shows a window for this. One request runs at a time in
+  the whole app, with at least 3 seconds between one extension's
+  dialogs.
+- **Rust checks again.** The JS host checks the capability and the
+  arguments first. `pick_file_text` then validates the id, checks the
+  grant (`file_text` granted and the extension on) before the dialog and
+  again after it closes, and validates the arguments.
+- **Kage reads, a worker parses.** Kage's main process reads the file,
+  so the OS access the user's pick grants applies, also in protected
+  folders. Before it reads anything it checks that the pick is a regular
+  file of at most 32 MB; on Unix it opens it with `O_NONBLOCK` and checks
+  the open file again, so a FIFO swapped in can't block. The read times
+  out after 60 seconds. The text is pulled out by `kage-file-text`, a
+  separate binary found next to Kage's executable only (never on
+  `PATH`), one process per file, started with an empty environment. It
+  gets the bytes on stdin, never a path, and needs no files and no
+  network. Its parsers are pure Rust. It runs under a 768 MiB allocator
+  cap, a 30-second CPU limit and no core files on Unix, a 2 GiB
+  address-space limit, no new privileges and a death signal on Linux,
+  and its own Job Object on Windows (1 GiB, no child processes). Kage
+  kills it after 30 seconds and caps what it reads of its output. Inside
+  it, format limits stop bombs: ZIP entry count, inflated size per part
+  and in all, nesting depth, PDF pages and stream size. A crash, a hang
+  or an out-of-memory abort costs one error message, not the app.
+- **What the extension gets.** At most 1,000,000 characters, cleaned:
+  invisible tag characters and the LRO and RLO overrides removed, text
+  the document marks hidden left out. It is still untrusted. Extensions
+  must escape it in HTML (the host sanitizer is a second layer) and
+  frame it as data in prompts. Text that matches the backup's credential
+  patterns gets a `possible_secret` warning; nothing is removed, and the
+  match is never logged or returned.
+- **Kage keeps nothing from the file.** One audit entry per read (the
+  file name, unless it looks like a credential, the format, size,
+  character count and outcome) goes to the local, clearable permission
+  audit log. `app.jsonl` never gets the name,
+  the path, the title or any text. Telemetry gets the extension id, the
+  format, the outcome and coarse buckets of size, length and time.
+- **Grants don't travel.** `file_text` is granted per computer, like any
+  capability: backups never import grants, and sync never syncs them.
+
 ## Defense in depth
 
 Even with the sandbox doing most of the work, these additional
@@ -440,8 +519,9 @@ mitigations are in place:
   agent executes any ACP tool call.
 - Tool permission events (grants, denials, revokes, expiries,
   terminator-mode toggles, commands the user ran themselves from a
-  sandbox notice, and every step of a command an agent asked Kage to run
-  outside its sandbox) are recorded to
+  sandbox notice, every step of a command an agent asked Kage to run
+  outside its sandbox, and each file an extension read for the user)
+  are recorded to
   `<config_dir>/kage/permission-audit.jsonl`. The log is
   **deliberately not tamper-evident** — it lives under the user's
   config directory with normal write permissions. Use it to
@@ -956,6 +1036,9 @@ not even encrypted (docs/design/SYNC.md §11.5).
 | An extension view sends data out over the network | ⚠ Mitigated | The view's own CSP allows no remote requests and WebRTC is removed. The extension's hidden instances still have the network and share its storage. See "Known gaps". |
 | An extension floods the screen with windows | ✅ Blocked | Opening needs a user action; one window per view, 4 views per extension, 4 view windows in all (2 hidden); rate limits inside a view. |
 | An extension view calls a command bound to the launcher or chat window | ✅ Blocked | `VIEW_SURFACE_DENIED_COMMANDS`. |
+| Extension reads a file the user didn't pick | ✅ Blocked | No command takes a path; Kage reads only what the OS dialog returned for that request, and returns no path. See "Files the user picks". |
+| A crafted document crashes or hijacks Kage | ⚠ Mitigated | Pure-Rust parsers in a separate worker process with memory, CPU and time limits and no file or network access; a crash is an error message. A parser bug can still give wrong or partial text. |
+| A dialog opens without a user action | ✅ Blocked | Only after a click the host saw (one dialog per click) or a click on the host's ask bar; one request app-wide, 3 s between dialogs, 30 s after **Not now**. A hidden window never shows one. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
 | Agent output or an extension runs a shell command outside the agent's sandbox | ✅ Blocked | Only the confirm's own click runs one, once; the commands are `null` for extensions and refuse non-Kage windows. See "Commands you run yourself". |
 | An agent runs a command outside its sandbox without the user | ✅ Blocked | Only the user's answer in Kage, or a rule they made for simple commands (never for credential-touching ones or ones with hidden characters), runs it. See "Commands an agent runs outside its sandbox". |
@@ -993,7 +1076,17 @@ Future improvements being considered, none blocking:
   its view shows by writing it to storage for a hidden instance to
   send.
 - **Fine-grained capability grants** — let users approve a subset
-  of the requested capabilities instead of all-or-nothing.
+  of the requested capabilities instead of all-or-nothing. `file_text`
+  is a natural first one to make revocable on its own.
+- **A size cap on the settings `pick_file` effect.** It reads a whole
+  file of any size as text in the Settings window and hands it to the
+  extension's `onFileSelected`, with no capability: the user's pick is
+  the consent, as for `file_text`, but nothing caps the size. A small
+  fix should cap it at a few MB.
+- **A stronger sandbox for the file text worker**: seccomp on Linux, a
+  sandbox profile on macOS, an AppContainer or low-integrity token on
+  Windows. Today it relies on its resource limits, on needing no files
+  or network, and on its pure-Rust parsers.
 
 ### Widget refresh budgets (implemented)
 
