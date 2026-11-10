@@ -4589,6 +4589,10 @@
     "message": "High",
     "description": "Daily allowance choice: most requests a day"
   },
+  "settings.manager.ext.agent.allowance.option": {
+    "message": "{level} ({calls} requests a day)",
+    "description": "One option of the daily allowance select. {level} is Low, Normal or High; {calls} is that level's number of background requests a day"
+  },
   "settings.manager.ext.agent.stop.btn": {
     "message": "Stop now",
     "description": "Button that cancels the running and waiting background requests and pauses the extension for an hour"
@@ -4620,6 +4624,18 @@
   "settings.manager.ext.agent.log.sent_title": {
     "message": "What was sent, and the reply",
     "description": "Title of the read-only view of one background request's prompt and reply"
+  },
+  "settings.manager.ext.agent.log.sent_prompt": {
+    "message": "What Kage sent to your agent",
+    "description": "Heading above the exact prompt of one background request, in the read-only view"
+  },
+  "settings.manager.ext.agent.log.sent_reply": {
+    "message": "The agent's reply",
+    "description": "Heading above the agent's exact reply to one background request, in the read-only view"
+  },
+  "settings.manager.ext.agent.log.close": {
+    "message": "Close",
+    "description": "Button that closes the read-only view of one background request"
   },
   "settings.manager.ext.agent.outcome.ok": {
     "message": "Done",

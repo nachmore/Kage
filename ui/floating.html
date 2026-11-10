@@ -121,6 +121,10 @@
                     <div class="speech-wave-bar"></div>
                 </div>
             </div>
+            <!-- Background AI: while an extension's background call runs
+                 (js/floating/agent-call-indicator.js). Above the toolbar's
+                 context indicator; the toolbar itself is off by default. -->
+            <div class="agent-call-indicator" id="agentCallIndicator" hidden></div>
             <div class="floating-toolbar" id="floatingToolbar" style="display:none">
                 <div class="floating-toolbar-left">
                     <button class="floating-toolbar-btn" id="floatingAttachFileBtn" data-i18n-title="floating.attach_file_title" title="Attach file">
@@ -215,5 +219,6 @@
     <script type="module" src="js/floating/context-menu.js"></script>
     <script type="module" src="js/floating/permissions.js"></script>
     <script type="module" src="js/floating/main.js"></script>
+    <script type="module" src="js/floating/agent-call-indicator.js"></script>
 </body>
 </html>
