@@ -497,6 +497,11 @@ a new filter option, "Background AI":
 - 🌙 "{extension} sent {chars} characters to {agent} ({purpose}): {outcome}"
 - 🌙 "Background AI turned on for {extension} ({agent})" / "… turned off …"
 
+The filter shows both kinds. `{extension}` is the title of the
+extension's Settings page, or its id when it has none (the entry stores
+only the id). A call's label, if any, is the row's second line. Every
+value is escaped, and the agent's name is isolated left to right.
+
 ### 4.6 UI i18n keys
 
 All in `locales/en/messages.json`:

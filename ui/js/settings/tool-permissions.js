@@ -4,6 +4,12 @@ import { errMessage } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 import { getConfigSnapshot, saveConfig } from '../shared/config-cache.js';
+import {
+    agentOutcomeLabel,
+    cleanText,
+    extensionDisplayName,
+    formatCount,
+} from './extension-agent-access.js';
 /**
  * Agent Tools Settings Module
  * Shows tools seen during permission requests with per-tool policy toggles.
@@ -75,6 +81,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                         <option value="terminator_mode_changed">${t('settings.tool_permissions.audit.filter.terminator')}</option>
                         <option value="user_ran_command">${t('settings.tool_permissions.audit.filter.user_ran')}</option>
                         <option value="host_command">${t('settings.tool_permissions.audit.filter.host_command')}</option>
+                        <option value="background_ai">${t('settings.tool_permissions.audit.filter.background_ai')}</option>
                     </select>
                     <button id="auditLogRefreshBtn" class="reset-permissions-btn" style="background:#3a3640;">${t('settings.tool_permissions.audit.refresh')}</button>
                     <button id="auditLogClearBtn" class="reset-permissions-btn">${t('settings.tool_permissions.audit.clear')}</button>
@@ -680,7 +687,9 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         const entries = this.auditEntries || [];
         const filter = document.getElementById('auditLogFilter')?.value || 'all';
 
-        const filtered = filter === 'all' ? entries : entries.filter((e) => e.event === filter);
+        const events = AUDIT_FILTER_EVENTS[filter] || [filter];
+        const filtered =
+            filter === 'all' ? entries : entries.filter((e) => events.includes(e.event));
 
         if (filtered.length === 0) {
             list.innerHTML = `<div class="tools-empty" style="padding:14px; text-align:center; color:#938f9b;">
@@ -852,6 +861,32 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 meta = details.join(' · ');
                 break;
             }
+            case 'extension_agent_call': {
+                // A background request an extension sent to the agent
+                // (EXTENSION_AGENT_CALLS.md §4.5). Counts and ids only.
+                icon = '🌙';
+                summary = t('settings.tool_permissions.audit.summary.extension_agent_call', {
+                    extension: escapeHtml(extensionDisplayName(entry.extension_id)),
+                    chars: escapeHtml(formatCount(entry.prompt_chars)),
+                    agent: ltrHtml(entry.agent),
+                    purpose: escapeHtml(cleanText(entry.purpose, 24) || '?'),
+                    outcome: escapeHtml(agentOutcomeLabel(entry.outcome)),
+                });
+                const label = cleanText(entry.label, 80);
+                if (label) meta = escapeHtml(label);
+                break;
+            }
+            case 'extension_agent_access_changed':
+                icon = '🌙';
+                summary = entry.enabled
+                    ? t('settings.tool_permissions.audit.summary.extension_agent_access_on', {
+                          extension: escapeHtml(extensionDisplayName(entry.extension_id)),
+                          agent: ltrHtml(entry.agent),
+                      })
+                    : t('settings.tool_permissions.audit.summary.extension_agent_access_off', {
+                          extension: escapeHtml(extensionDisplayName(entry.extension_id)),
+                      });
+                break;
             default:
                 icon = '❔';
                 summary = t('settings.tool_permissions.audit.summary.unknown', {
@@ -873,6 +908,17 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             </div>
         `;
     }
+}
+
+/** Filter options that cover more than one event kind. */
+const AUDIT_FILTER_EVENTS = Object.freeze({
+    background_ai: ['extension_agent_call', 'extension_agent_access_changed'],
+});
+
+/** An agent name in an audit summary: escaped, left to right. */
+function ltrHtml(value) {
+    const text = cleanText(typeof value === 'string' ? value : '', 64) || '?';
+    return `<bdi dir="ltr">${escapeHtml(text)}</bdi>`;
 }
 
 /** `host_command` audit actions (src/permission_audit/types.rs `HostCommand`). */
