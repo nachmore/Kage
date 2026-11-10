@@ -117,6 +117,17 @@ export const KNOWN_EVENTS = Object.freeze([
     // an error code), size_bucket, chars_bucket, ms_bucket — counts only,
     // never names, titles, text or hashes.
     'extension_file_text',
+    // Background agent calls — all fired from Rust (src/agent_calls.rs;
+    // docs/design/EXTENSION_AGENT_CALLS.md §5.11). Counts only: never the
+    // text, purposes, labels or the agent's name.
+    // The host switch flipped: extension_id, enabled (0|1).
+    'extension_agent_access_changed',
+    // Once per extension with calls, at the first scheduler tick of the
+    // next local day: extension_id, calls, ok, failed, cancelled,
+    // tool_attempts, kchars_bucket ('<10'|'<50'|'<200'|'<1000'|'1000+').
+    'extension_agent_calls_daily',
+    // A breaker opened: extension_id, reason ('failures'|'tool_attempt').
+    'extension_agent_calls_paused',
 
     // Folder sync — all fired from Rust (src/sync, through src/sync_app.rs,
     // which sends only these props; docs/design/SYNC.md §16). Bucketed
