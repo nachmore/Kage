@@ -204,11 +204,17 @@ with per-capability descriptions. Summary:
 
 `storage` · `clipboard` · `urls` · `launch` · `network` · `oauth` ·
 `filesystem` · `window` · `windows` · `notifications` · `calendar` ·
-`session` · `agent` · `activity` · `automation` · `tts` · `views`
+`session` · `agent` · `activity` · `automation` · `tts` · `views` ·
+`agent_background`
 
 `views` maps to no command. It lets the host open the windows an
 extension's manifest declares (see "Extension views"), and Rust checks
 it again on every open and every load of a view window.
+
+`agent_background` maps to the five `agent_call_*` commands. Holding it
+isn't enough: nothing is sent until the user turns background AI on for
+that extension and confirms which agent gets the text (see "Background
+agent calls").
 
 `clipboard` is read access. Writing needs no capability but only ever
 happens on a user's click, through the host: a search result's `copy`
@@ -428,6 +434,123 @@ same capability checks at the port as every other contribution point.
 - **Window geometry stays on the computer.** Each view's size and
   position (`<local data>/kage/extension-views.json`, owner-only) is
   never in a backup and never synced.
+
+## Background agent calls
+
+An extension with the `agent_background` capability can ask the user's
+agent for help in the background, with no chat (`docs/EXTENSIONS.md`
+§ Background agent calls; design:
+`docs/design/EXTENSION_AGENT_CALLS.md`). The extension's text goes
+wherever the user's agent sends it, often an online service, and the
+user isn't watching. So it's off by default, and a call runs only when
+four gates hold. Rust checks them on every reserve and every send, and
+again for every waiting and running call when the config changes:
+
+1. the grant holds `agent_background` (the install prompt);
+2. the manifest declares `agentBackground`, and the call names one of
+   its purposes;
+3. the user turned background AI on for that extension on this computer;
+4. the user confirmed a dialog that names the current agent.
+
+The engine is `src/agent_calls/`, its commands and wiring
+`src/commands/agent_calls.rs`, and the throwaway sessions
+`src/ephemeral_session/`.
+
+- **Only the user turns it on.** The dialog is host DOM in Settings. It
+  opens from the host switch, or from the `agent_access` effect a
+  settings action returns after a click, for that page's own extension;
+  it never opens on its own. The four commands that show or change
+  access (`get_extension_agent_access`, `set_extension_agent_access`,
+  `stop_extension_agent_calls`, `get_extension_agent_request_detail`) are
+  `null` for extensions. Turning on needs the consent token
+  `get_extension_agent_access` returned; if the agent changed while the
+  dialog was open, it fails with `agent_changed`. Turning off clears the
+  consent, so turning on again always asks.
+- **Consent names the agent.** The token is the hex SHA-256 of the
+  active connection's id, preset, mode, spawn command or `host:port`, and
+  Ollama base URL. The model isn't part of it: a model change doesn't
+  move the text. Rust recomputes it on every reserve and send. A
+  mismatch (another connection, an edited one, or one changed by a
+  restore or sync) means `consent_stale`, and nothing runs until the user
+  confirms again. The dialog says where the agent sends text: its online
+  service (a Kiro, Claude Code or Codex preset), this computer (Ollama on
+  a loopback address), another computer (a remote agent, naming its
+  host), or that Kage can't tell. The token isn't secret, but it's never
+  shown or sent to an extension.
+- **The access is backend-owned and stays on the computer.**
+  `config.extension_agent_access` changes only through
+  `set_extension_agent_access`, uninstall and grant removal.
+  `save_config` keeps the backend's copy over a window's stale snapshot.
+  Every import, of any kind and version, keeps this machine's whole
+  (`src/config_export/consent.rs`). A settings-only backup never holds
+  it, and folder sync treats it as "This computer".
+- **Identity can't be borrowed.** The sandbox host force-injects
+  `extensionId` into all five commands. Call ids are random UUIDs bound
+  to the extension that reserved them; another extension's id behaves as
+  unknown. `agent_call_status` never returns the agent's name, the user's
+  idle state or another extension's numbers. Views can't call any of the
+  five (`VIEW_SURFACE_DENIED_COMMANDS`).
+- **No tool runs.** The framed prompt tells the agent not to use tools.
+  Every permission request on a strict session is refused with the
+  request's own `reject_once` option before any policy is read, so
+  Allow rules, trust mode, terminator mode, trusted kinds and trusted MCP
+  servers never approve one. It is audited as `Denied` and adds no row to
+  the tool list. A `tool_call` the agent starts without asking ends the
+  call at once: Kage sends `session/cancel` and forwards nothing to any
+  window. A strict id stays refused for the last 256 ended sessions, so a
+  late request never reaches the user's policy. Kage's own
+  `run_outside_sandbox` isn't auto-allowed there, and a bridge request
+  matched to a strict session is refused and audited before anything is
+  shown. Two tool attempts in a day pause the extension until midnight.
+- **The agent works in an empty folder.** The session's working
+  directory is `<local data>/kage/agent-scratch/` (owner-only on Unix),
+  so the agent loads no project files or project instructions. Kage
+  empties it before the session and checks it after. Anything found
+  there is logged as a warning (a count, never names) and removed.
+- **Nothing lands in a chat.** The prompt is muted and framed exactly as
+  shown in EXTENSIONS.md: no steering, tool steering, hidden prefix or
+  time stamp. Its reply and tool updates never reach a window. The
+  session is never pinned to a window, and its files are deleted.
+  Its id is recorded in `<local data>/kage/ephemeral-sessions.json`
+  (owner-only, at most 1,000 ids kept 30 days) as soon as it exists, so
+  every Kage session list hides it, even after a crash. The agent's own
+  records outside Kage are out of reach; the dialog says so.
+- **Kage never starts the agent for it.** With no healthy connection, a
+  call fails (`agent_unavailable`) before anything is spawned or dialled.
+- **Bounded.** One call at a time per extension and in total. A call
+  starts only while the user isn't using Kage, unless it came within
+  10 seconds of the user's click or key press on that extension (the
+  sandbox host's click lease). A user prompt stops the running call.
+  Size caps on every field, the framed prompt (32,000 characters) and the
+  reply (32,000); a timeout of at most 180 s; 20 calls an hour; a daily
+  allowance per extension (at most 150 calls and 1.5 million characters)
+  and 200 calls a day in all; a 30-minute pause after 3 failures in a
+  row; **Stop now** pauses for an hour.
+- **Credentials are safety-netted.** A request holding one of the
+  extension's own saved credentials (a `sensitive` setting, or one named
+  like a credential, 8 or more characters) is refused. Secret-shaped text
+  is replaced with `[redacted]`, using the backup classifier's shapes
+  (`sensitive::secret_spans`). Neither is the boundary: the extension
+  chooses what it sends, and the dialog says so.
+- **The reply is untrusted input.** It is size-capped, checked against
+  the extension's schema, and never run by the host. HTML an extension
+  renders from it still goes through the host sanitisers.
+- **What's recorded.** One audit entry per call that was sent
+  (`extension_agent_call`: purpose, label unless it looks like a secret,
+  the agent's name, outcome, sizes, duration, redactions) and one per
+  switch change (`extension_agent_access_changed`). Never prompt or reply
+  text. The entry is written when the call ends, so a call that Kage
+  crashed during has none: the same best-effort contract as the rest of
+  the audit log. The app log has one English line per call, with ids and
+  counts.
+  Telemetry counts calls only. The last 5 prompts and replies stay in
+  memory for **Show what was sent**, and are gone when Kage quits. The
+  `/debug` flag logs every prompt, these included (`docs/DEBUG_MODE.md`).
+
+What stays with the user: an enabled extension decides what to send from
+its own data and its other capabilities (the dialog lists the data
+capabilities it holds), up to its allowance. An agent set to run tools
+without asking can start one before Kage sees it (see "Known gaps").
 
 ## Defense in depth
 
@@ -956,6 +1079,11 @@ not even encrypted (docs/design/SYNC.md §11.5).
 | An extension view sends data out over the network | ⚠ Mitigated | The view's own CSP allows no remote requests and WebRTC is removed. The extension's hidden instances still have the network and share its storage. See "Known gaps". |
 | An extension floods the screen with windows | ✅ Blocked | Opening needs a user action; one window per view, 4 views per extension, 4 view windows in all (2 hidden); rate limits inside a view. |
 | An extension view calls a command bound to the launcher or chat window | ✅ Blocked | `VIEW_SURFACE_DENIED_COMMANDS`. |
+| An extension makes a background agent call without the user turning it on for that agent | ✅ Blocked | Four gates checked in Rust on every reserve and send; consent bound to the active connection's fingerprint; the access commands are host-only. See "Background agent calls". |
+| A background agent call runs a tool Kage was asked about | ✅ Blocked | Strict sessions refuse every permission request before any policy, Allow rules and trust modes included. |
+| A background agent call runs a tool without asking Kage | ⚠ Mitigated | Kage cancels at the first `tool_call` it sees and pauses the extension after two. See "Known gaps". |
+| A background agent call appears in a chat or session list | ✅ Blocked | Muted, never pinned, files deleted, ids hidden from every Kage session list. |
+| Background agent consent imported from a backup or sync | ✅ Blocked | Every import keeps this machine's `extension_agent_access`; sync never copies it. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
 | Agent output or an extension runs a shell command outside the agent's sandbox | ✅ Blocked | Only the confirm's own click runs one, once; the commands are `null` for extensions and refuse non-Kage windows. See "Commands you run yourself". |
 | An agent runs a command outside its sandbox without the user | ✅ Blocked | Only the user's answer in Kage, or a rule they made for simple commands (never for credential-touching ones or ones with hidden characters), runs it. See "Commands an agent runs outside its sandbox". |
@@ -992,6 +1120,15 @@ Future improvements being considered, none blocking:
   view's CSP is defence in depth: an extension can still send out what
   its view shows by writing it to storage for a hidden instance to
   send.
+- **Agents that run tools without asking the client.** An ACP session
+  can't be created without tools: the agent loads its own MCP servers and
+  built-in tools. Kage refuses every tool request on a background agent
+  call, but some agents can be set to run tools without asking. Such an
+  agent can start one, and a prompt injection in the user's content can
+  steer it to, before Kage sees the `tool_call` and cancels. Kage can't
+  read the agent's own settings. The consent dialog says so. A later
+  version may switch these sessions into an agent's read-only mode, where
+  the agent offers one.
 - **Fine-grained capability grants** — let users approve a subset
   of the requested capabilities instead of all-or-nothing.
 

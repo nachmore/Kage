@@ -70,6 +70,45 @@ All default to off. Trust mode, terminator mode and trusted commands show
 a warning in Settings when enabled; trusted MCP servers are listed there,
 each with a Revoke button (Reset revokes them all).
 
+None of them applies to a background agent call (below): no tool ever
+runs there, and the user is never asked.
+
+## Background agent calls
+
+An extension with the `agent_background` capability can ask the agent
+for help in the background, with no chat (`docs/EXTENSIONS.md`
+§ Background agent calls). Each call runs on a **strict** throwaway
+session (`src/ephemeral_session/strict.rs`). No tool may run on one,
+whatever the user's policies say:
+
+- **Every permission request is refused**, before any policy is read.
+  The handler answers with the request's own `reject_once` option (the
+  `optionId` the agent gave that kind; `"reject_once"` when it gave
+  none; never an allow option). An explicit Allow rule, trust mode,
+  terminator mode, a trusted kind and a trusted MCP server all count for
+  nothing here. No prompt is shown, no row is added to `tools`, and the
+  config isn't saved. The audit log gets a `Denied` entry with the
+  session id.
+- **A tool the agent starts without asking ends the call.** Some agents
+  can be set to run tools on their own. A `tool_call` or
+  `tool_call_update` on a strict session is forwarded to no window; Kage
+  sends `session/cancel`, and the call ends as `tool_attempted`. A call
+  counts as one attempt, however many tool requests and updates it
+  sends. Two attempts by one extension's calls in a local day pause that
+  extension until midnight.
+- **Kage's own tools don't get through either.** `run_outside_sandbox`
+  isn't auto-allowed on a strict session, and a bridge request matched to
+  one is refused (and audited) before anything is shown.
+- **A late request is still refused.** A strict id stays known for the
+  last 256 ended strict sessions, so a request that arrives after the
+  call ended never falls through to the user's policy.
+
+The audit log also records each call itself (`extension_agent_call`:
+the extension, purpose, label, agent, outcome and sizes, never the text)
+and each time the user turns background AI on or off for an extension
+(`extension_agent_access_changed`). The audit viewer's **Background AI**
+filter shows only these.
+
 ## Approvals and the agent's own sandbox
 
 Kage's policies only decide whether Kage asks before the agent runs a
@@ -154,9 +193,14 @@ The frontend never parses titles: it only offers server trust when the
   notification handler reads `effective_policy()`, returns a synthesized
   approval to ACP if it's `allow` or `deny`, and otherwise emits the
   `permission_request` Tauri event so the frontend can prompt.
+- **Strict sessions** (`src/ephemeral_session/strict.rs`) — which
+  sessions are background agent calls (`is_strict`), and
+  `note_tool_attempt`, which cancels one at its first tool and tells the
+  agent-call engine (`src/agent_calls.rs`).
 - **Audit log** (`src/permission_audit.rs`) — every grant, deny, revoke,
   expiry, and terminator-mode toggle is appended to
-  `<config_dir>/kage/permission-audit.jsonl`. Documented in
+  `<config_dir>/kage/permission-audit.jsonl`, as are background agent
+  calls and changes of their switch. Documented in
   `SECURITY_MODEL.md` as informational, not tamper-evident.
 - **Settings UI** (`ui/js/settings/tool-permissions.js`) — manages the
   toggles plus a list view of granted tools. Revoking from the list
@@ -169,14 +213,20 @@ The frontend never parses titles: it only offers server trust when the
 ## Permission flow
 
 1. Agent calls a tool; ACP sends `session/request_permission`.
-2. The notification handler resolves the tool's title and ACP kind
+2. If the request's session is strict (a background agent call), no
+   policy is read: the handler answers with the request's `reject_once`
+   option, writes a `Denied` audit entry and stops the call
+   (`route_permission` in `src/commands/messaging/notifications.rs`).
+   Steps 4–7 don't apply. See
+   [Background agent calls](#background-agent-calls).
+3. The notification handler resolves the tool's title and ACP kind
    (the request's `toolCall.kind`, else the kind from that call's earlier
    `tool_call` / `tool_call_update`). Only an explicit kind counts — ACP
    treats a missing kind as "other", and argument-sniffing is unsafe
    (kiro-cli's file-write tool sends `{"command": "create"}`). It also
    identifies the tool's MCP server, if any (see above). It then reads
    `ToolPolicy::effective_policy()` for the title.
-3. An explicit `deny` wins. Otherwise, if `trust_all` or
+4. An explicit `deny` wins. Otherwise, if `trust_all` or
    `terminator_mode` is on, the kind is in `trusted_kinds`, or the MCP
    server is in `trusted_mcp_servers`, the handler returns `allow_once`
    immediately and writes a `Granted` audit entry (with the command in
@@ -186,10 +236,10 @@ The frontend never parses titles: it only offers server trust when the
    background / ephemeral prompt sessions. The prompt doesn't bulk-approve
    queued requests from those sessions either (`backgroundSession` in the
    `permission_request` payload).
-4. If the policy resolves to `allow`, the handler returns `allow_once`
+5. If the policy resolves to `allow`, the handler returns `allow_once`
    immediately. The grant_type is preserved for the next call.
-5. If the policy resolves to `deny`, the handler returns `reject_once`.
-6. Otherwise, the handler emits `permission_request` to the frontend.
+6. If the policy resolves to `deny`, the handler returns `reject_once`.
+7. Otherwise, the handler emits `permission_request` to the frontend.
    The modal collects the user's choice and calls
    `send_permission_response`, which writes the new policy back to
    config (atomically — see P0.5 in the audit) and writes the audit
