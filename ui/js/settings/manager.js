@@ -25,6 +25,7 @@ import {
 import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
 import { SettingsModule } from './base.js';
 import { DIRTY_EVENT_TYPES, DirtyTracker, dirtySectionForEvent } from './dirty-tracker.js';
+import { renderAgentAccessPanel } from './extension-agent-access.js';
 import { renderCapabilityBadges } from './extension-capabilities.js';
 import { renderExtensionViewsBlock } from './extension-views-block.js';
 import { applyPaths, diffPaths, settingPaths, valueAt } from './field-save.js';
@@ -435,6 +436,11 @@ export class SettingsManager {
                     capabilities: module._capabilities,
                 });
                 html += `<div id="ext-content-${extId}">`;
+                // The Background AI panel (EXTENSION_AGENT_CALLS.md §4.2).
+                html += renderAgentAccessPanel(module, {
+                    invoke: this.invoke,
+                    listen: window.__TAURI__?.event?.listen,
+                });
                 html += renderExtensionViewsBlock(module);
                 html += module.renderContent ? module.renderContent() : module.render();
                 html += `</div>`;

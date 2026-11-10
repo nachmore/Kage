@@ -393,15 +393,30 @@ Contents, top to bottom:
 4. **Daily allowance**: Low / Normal / High (§5.6). Default Normal.
 5. **Stop now** button (shown while a call runs or waits): cancels them
    and pauses this extension for an hour.
-6. **Recent requests**: the last 20, newest first. Each row: time,
+6. **Recent requests**: the last 20 calls, newest first. Each row: time,
    purpose, label, outcome, characters sent, agent. Rows from this session
    have **Show what was sent**, which opens a read-only view of the exact
-   prompt and reply (escaped, monospace). Older rows say "Only requests
-   from this session can be shown."
+   prompt and reply (escaped, monospace). When some rows are older, one
+   note under the list says "Only requests from this session can be
+   shown." The switch's on and off entries are not rows here; the audit
+   viewer (§4.5) shows them.
 
 The panel is plain host DOM. Extension HTML can't reach or imitate it:
 settings info blocks are sanitised, and every command that changes access
 is host-only.
+
+As built (WP-AC6):
+- The panel sits inside the extension's content block, right before the
+  Windows block, so it dims with the rest of the page while the
+  extension is switched off.
+- The panel acts at once through host commands, never through Save. Its
+  root carries `data-sync-ui`, which the dirty tracker already skips.
+- The allowance select is locked while the consent is stale or missing.
+  Changing it then would need a fresh OK, so it waits for **Allow
+  again**. With access on, it sends `enabled: true` and no token; with
+  access off, `enabled: false`.
+- **Needs your OK** also offers **Allow again**.
+- The panel redraws on `agent_calls_activity` and `config_updated`.
 
 ### 4.3 The consent dialog
 
@@ -449,6 +464,15 @@ Copy (all `settings.manager.ext.agent.consent.*`):
 `{agent}` is the connection's display name, and the preset's display name
 in brackets when they differ.
 
+As built (WP-AC6): `settings-host-effects.js` is shared code and doesn't
+import Settings modules, so `extension-agent-access.js` registers the
+dialog with `setAgentAccessOpener()` when Settings loads it. The effect
+always uses the renderer's own extension id and ignores anything the
+effect carries. If access is already on, it does nothing. After an
+Allow it refreshes the extension's settings page, so the page can show
+the new state. Not now has the focus when the dialog opens, so Enter
+alone never allows. Only one consent dialog is open at a time.
+
 ### 4.4 Activity indicator
 
 Subtle, and only where the user already looks:
@@ -494,6 +518,9 @@ All in `locales/en/messages.json`:
   `.where.local`, `.where.remote`, `.where.unknown`, `.reason`,
   `.what`, `.reads`, `.when`, `.tools`, `.history`, `.log`, `.allow`,
   `.cancel`
+- added by WP-AC6: `settings.manager.ext.agent.allowance.option` (each
+  level with its calls a day), `.log.sent_prompt`, `.log.sent_reply` and
+  `.log.close` (the "Show what was sent" view)
 - `floating.agent_call.chip`, `floating.agent_call.waiting`,
   `floating.agent_call.stop`, `floating.agent_call.settings`
 - `tray.agent_call_tooltip`

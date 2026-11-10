@@ -40,6 +40,54 @@ async function openViewFromSettingsAction(renderer, host, setStatus) {
     if (!result.ok) setStatus(`❌ ${result.message}`);
 }
 
+/**
+ * The Background AI consent flow (docs/design/EXTENSION_AGENT_CALLS.md
+ * §4.3). Settings registers it (settings/extension-agent-access.js); in any
+ * other window it stays null and the effect does nothing.
+ */
+let agentAccessOpener = null;
+
+/**
+ * Register the function the `agent_access` effect calls. It gets
+ * `{ extensionId, catalog, fallback, name }` and resolves
+ * `{ ok, message? }`.
+ */
+export function setAgentAccessOpener(fn) {
+    agentAccessOpener = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * `agent_access` from a settings action: ask the user, in the host's own
+ * dialog, to let this page's extension use the agent in the background.
+ * Only ever for the extension the renderer was built for: the effect
+ * carries no id the host would use. It runs only after a click on the
+ * extension's button (`_runAction`), never on its own.
+ */
+async function agentAccessFromSettingsAction(renderer, ctx, setStatus) {
+    const extensionId = renderer.extensionId;
+    if (!extensionId || !agentAccessOpener) return;
+    const sandbox = renderer.sandbox;
+    const name = applyManifestI18n(
+        renderer.manifest || {},
+        sandbox?.i18nCatalog,
+        sandbox?.i18nFallback
+    ).name;
+    const result = await agentAccessOpener({
+        extensionId,
+        catalog: sandbox?.i18nCatalog,
+        fallback: sandbox?.i18nFallback,
+        name: typeof name === 'string' && !/^__MSG_.+__$/.test(name) ? name : '',
+    });
+    if (result?.ok) {
+        // The extension's page shows the new state on its next render.
+        if (!result.already) {
+            await renderer.refresh?.({ preserveStatusFor: ctx.sourceAction, status: ctx.status });
+        }
+    } else if (result?.message) {
+        setStatus(`❌ ${result.message}`);
+    }
+}
+
 export async function runSettingsHostSideEffect(renderer, host, ctx, pickFileContents) {
     if (!host || typeof host !== 'object') return;
     const setStatus = ctx.setStatus || (() => {});
@@ -148,6 +196,10 @@ export async function runSettingsHostSideEffect(renderer, host, ctx, pickFileCon
         }
         case 'open_view': {
             await openViewFromSettingsAction(renderer, host, setStatus);
+            break;
+        }
+        case 'agent_access': {
+            await agentAccessFromSettingsAction(renderer, ctx, setStatus);
             break;
         }
         default:

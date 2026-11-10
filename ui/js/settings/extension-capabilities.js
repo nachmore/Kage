@@ -19,6 +19,7 @@ const CAPABILITY_ICONS = Object.freeze({
     automation: '⚡',
     tts: '🔈',
     views: '🖼️',
+    agent_background: '🌙',
     sync: '🔄',
 });
 
