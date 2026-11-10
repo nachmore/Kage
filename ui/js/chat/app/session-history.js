@@ -92,9 +92,16 @@ export function createSessionHistoryMixin(dependencies) {
             // update) marks the session live and nothing ever completes it.
             // Ask the backend before attaching, so the window doesn't sit on
             // a typing indicator and a Stop button for a turn that isn't there.
-            if (this.streamRegistry.isStreaming(sessionId) && !(await this._turnInFlight(sessionId))) {
+            if (
+                this.streamRegistry.isStreaming(sessionId) &&
+                !(await this._turnInFlight(sessionId))
+            ) {
                 if (isStale()) return;
-                console.warn('[CHAT] No turn in flight on', sessionId, '- clearing a stale streaming mark');
+                console.warn(
+                    '[CHAT] No turn in flight on',
+                    sessionId,
+                    '- clearing a stale streaming mark'
+                );
                 this.streamRegistry.fail(sessionId);
                 this.renderSessionList();
             }
