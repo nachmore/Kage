@@ -555,6 +555,81 @@ async fn primary_catalog_lists(base_url: &str, id: &str) -> bool {
         })
 }
 
+/// Work out where installed extensions whose grant has no `origin` came
+/// from, and save it (folder sync, docs/design/SYNC.md §4.5): the first
+/// store whose catalog lists the id (the primary store first, the match
+/// `check_extension_updates` uses), else `sideload`. A store that can't be
+/// reached decides nothing: the id is tried again next time sync asks.
+pub async fn backfill_grant_origins<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    let features = app.state::<FeatureServices>();
+    let ui = app.state::<UiState>();
+    let stores: Vec<String> = {
+        let config = features.config.lock_or_recover();
+        let mut v = vec![resolve_store_url(&config, ui.dev_mode)];
+        v.extend(
+            config
+                .store_sources
+                .iter()
+                .filter(|s| s.enabled && !s.url.is_empty())
+                .map(|s| s.url.trim_end_matches('/').to_string()),
+        );
+        v
+    };
+    let client = store_client()?;
+    let mut catalogs: Vec<(String, Option<std::collections::HashSet<String>>)> = Vec::new();
+    for base in stores {
+        let ids = match extensions::validate_store_url(&base) {
+            Err(_) => Some(Default::default()),
+            Ok(()) => match client.get(format!("{base}/catalog.json")).send().await {
+                Ok(resp) => resp.json::<serde_json::Value>().await.ok().map(|c| {
+                    c.get("items")
+                        .and_then(|v| v.as_array())
+                        .map(|items| {
+                            items
+                                .iter()
+                                .filter_map(|i| i.get("id").and_then(|v| v.as_str()))
+                                .map(str::to_string)
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                }),
+                Err(_) => None,
+            },
+        };
+        catalogs.push((base, ids));
+    }
+    let mut decided: Vec<(String, String)> = Vec::new();
+    'ids: for id in ids {
+        for (base, listed) in &catalogs {
+            match listed {
+                Some(l) if l.contains(&id) => {
+                    decided.push((id, crate::sync::sources::extensions::store_origin(base)));
+                    continue 'ids;
+                }
+                Some(_) => {}
+                // Unreachable: can't tell yet.
+                None => continue 'ids,
+            }
+        }
+        decided.push((id, "sideload".to_string()));
+    }
+    if decided.is_empty() {
+        return Ok(());
+    }
+    let mut config = features.config.lock_or_recover();
+    for (id, origin) in decided {
+        if let Some(g) = config.extension_grants.get_mut(&id) {
+            g.origin.get_or_insert(origin);
+        }
+    }
+    config
+        .save()
+        .map_err(|e| format!("Failed to save config: {}", e))
+}
+
 /// Check for updates to installed extensions and optionally auto-install them.
 /// Returns { updated: N, checked: N }
 #[tauri::command]
@@ -708,7 +783,7 @@ pub async fn check_extension_updates<R: tauri::Runtime>(
 /// `commit_extension_install`, which saves the grant and emits.
 /// `mode` is `DeferUpgrade` for user-initiated installs (a prompt follows)
 /// and `Replace` for auto-updates.
-async fn store_install_inner<R: tauri::Runtime>(
+pub(super) async fn store_install_inner<R: tauri::Runtime>(
     base_url: &str,
     id: &str,
     features: &State<'_, FeatureServices>,
@@ -755,11 +830,22 @@ async fn store_install_inner<R: tauri::Runtime>(
     let installed = install_package_bytes(&bytes, mode)?;
     let item = installed.item;
 
+    // Where it came from (folder sync, docs/design/SYNC.md §4.5): the
+    // commit records it in the grant. An update of an approved item that
+    // has no origin yet learns it here.
+    let origin = crate::sync::sources::extensions::store_origin(base_url);
+    super::install::set_pending_origin(&item.manifest.id, origin.clone());
+
     // A parked upgrade leaves the live version's state alone; the commit
     // step enables it once the user approves.
     if !installed.deferred {
         let mut config = features.config.lock_or_recover();
         record_install_state(&mut config.extension_states, &item.manifest.id, mode);
+        if mode == extensions::InstallMode::Replace {
+            if let Some(g) = config.extension_grants.get_mut(&item.manifest.id) {
+                g.origin.get_or_insert(origin);
+            }
+        }
         let _ = config.save();
         drop(config);
     }

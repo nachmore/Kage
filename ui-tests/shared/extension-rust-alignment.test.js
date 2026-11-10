@@ -275,7 +275,7 @@ describe('folder sync commands — Rust ↔ JS alignment', () => {
         expect(cmds.get('get_config_snapshot')).toEqual([]);
     });
 
-    it('context.sync commands take extensionId and are null until WP-S5', () => {
+    it('context.sync commands take extensionId and need the sync capability', () => {
         const cmds = extSyncRs();
         expect([...cmds.keys()].sort()).toEqual([
             'ext_sync_ack',
@@ -294,7 +294,7 @@ describe('folder sync commands — Rust ↔ JS alignment', () => {
         expect(cmds.get('ext_sync_pull')).toEqual(['extension_id', 'max']);
         expect(cmds.get('ext_sync_ack')).toEqual(['extension_id', 'cursor']);
         for (const name of cmds.keys()) {
-            expect(COMMAND_CAPABILITIES[name], `${name} must be null`).toBeNull();
+            expect(COMMAND_CAPABILITIES[name], `${name} needs sync`).toBe('sync');
         }
     });
 });
@@ -318,6 +318,10 @@ describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
         save_extension_config: 'id',
         pick_file_text: 'extension_id',
         cancel_file_text: 'extension_id',
+        ext_sync_status: 'extension_id',
+        ext_sync_push: 'extension_id',
+        ext_sync_pull: 'extension_id',
+        ext_sync_ack: 'extension_id',
     };
 
     it('every identity-scoped command takes its id arg on the Rust side', () => {

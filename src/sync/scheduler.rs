@@ -138,6 +138,12 @@ pub fn install_global(h: SyncHandle) {
     let _ = GLOBAL.set(h);
 }
 
+/// The installed handle, for commands that have no `AppState` to reach it
+/// through (an extension's `context.sync` calls, WP-S5).
+pub fn global_handle() -> Option<SyncHandle> {
+    GLOBAL.get().cloned()
+}
+
 /// A local change happened in `source` (a config save, a steering write,
 /// extension data). A no-op until a handle is installed.
 pub fn notify(source: &'static str, origin: Origin) {

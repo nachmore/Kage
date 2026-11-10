@@ -22,16 +22,20 @@
 
 pub mod chats;
 pub mod config;
+pub mod extensions;
 pub mod lists;
 pub mod steering;
 
 use super::crypto::Keys;
 use super::engine::ConfigPort;
-use super::replica::ExtStore;
-use super::types::{Category, DefaultScope, DeviceId, Origin, Structure};
+use super::prefs::DevicePrefs;
+use super::replica::{DeviceRow, ExtStore, Projected};
+use super::types::{
+    Category, DefaultScope, DeviceId, Origin, OsKind, PinReason, Record, Structure,
+};
 use super::{ExtReply, ExtRequest};
 use crate::error::AppError;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -130,6 +134,28 @@ pub trait Source: Send {
     ) -> Option<Result<ExtReply, AppError>> {
         None
     }
+    /// Captures the source makes itself, with bases of its own, in one
+    /// transaction right before the engine reads it for a capture (WP-S5's
+    /// extension source: the per-window bases of §12.4 and §12.5). It may
+    /// also set the bases the engine's own capture then uses. Default:
+    /// nothing.
+    fn prepare(&mut self, _ctx: &mut dyn CaptureCtx, _origin: Origin) -> anyhow::Result<Prepared> {
+        Ok(Prepared::default())
+    }
+}
+
+/// What [`Source::prepare`] did, for the engine to act on.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Prepared {
+    /// Records it wrote cells or tombstones for.
+    pub written: usize,
+    /// Records to project now, because their synced value applies here
+    /// again (an extension was installed, a pin lifted). `(ns, "")` is the
+    /// whole namespace.
+    pub project: BTreeSet<(String, String)>,
+    /// Its namespaces changed: the engine asks for [`Source::specs`] again
+    /// and calls `prepare` once more, so captures find the new ones.
+    pub specs_changed: bool,
 }
 
 /// What one capture did.
@@ -158,6 +184,69 @@ pub trait CaptureCtx {
     fn store(&mut self) -> &mut dyn ExtStore;
     fn keys(&self) -> &Keys;
     fn device(&self) -> DeviceId;
+
+    // What the extension source needs besides (WP-S5, §19.4).
+
+    /// A record as the replica holds it: cells, stamps, tombstone.
+    fn record(&self, ns: &str, id: &str) -> anyhow::Result<Option<Record>>;
+    /// Every record of a namespace, tombstoned ones included.
+    fn records(&self, ns: &str) -> anyhow::Result<Vec<Record>>;
+    /// The `projected` rows of one record, by cell name: the base its next
+    /// capture uses. Reads the namespace's rows; for one field use
+    /// [`CaptureCtx::projected_field`].
+    fn projected(&self, ns: &str, id: &str) -> anyhow::Result<BTreeMap<String, Projected>>;
+    fn projected_field(&self, ns: &str, id: &str, field: &str)
+        -> anyhow::Result<Option<Projected>>;
+    fn set_projected(
+        &mut self,
+        ns: &str,
+        id: &str,
+        field: &str,
+        p: Option<Projected>,
+    ) -> anyhow::Result<()>;
+    /// A pin; field `*` pins the whole record (the engine then neither
+    /// captures nor projects it).
+    fn pin(
+        &self,
+        ns: &str,
+        id: &str,
+        field: &str,
+    ) -> anyhow::Result<Option<(serde_json::Value, PinReason)>>;
+    fn set_pin(
+        &mut self,
+        ns: &str,
+        id: &str,
+        field: &str,
+        v: Option<(serde_json::Value, PinReason)>,
+    ) -> anyhow::Result<()>;
+    fn meta(&self, k: &str) -> anyhow::Result<Option<String>>;
+    /// `None` removes the entry.
+    fn set_meta(&mut self, k: &str, v: Option<&str>) -> anyhow::Result<()>;
+    /// Write one cell at `all`, stamped now: sync's own bookkeeping, such
+    /// as an extension's origin in `sync.ns_state`.
+    fn write_cell(
+        &mut self,
+        ns: &str,
+        id: &str,
+        field: &str,
+        value: serde_json::Value,
+    ) -> anyhow::Result<()>;
+    /// The computers the replica knows.
+    fn devices(&self) -> anyhow::Result<Vec<DeviceRow>>;
+    fn prefs(&self) -> &DevicePrefs;
+    fn os(&self) -> OsKind;
+    fn now(&self) -> i64;
+    /// Sync is paused here.
+    fn paused(&self) -> bool;
+    /// When the last ingest finished.
+    fn last_sync_at(&self) -> Option<i64>;
+    /// The source wrote data key `key` of `ext` itself: once the
+    /// transaction commits, the engine emits `extension_data_changed`
+    /// (source `sync`).
+    fn data_changed(&mut self, ext: &str, key: &str);
+    /// `collection` of `ext` has new feed rows: once the transaction
+    /// commits, the engine emits `extension_sync_changes` with `reason`.
+    fn sync_changes(&mut self, ext: &str, collection: &str, reason: &'static str);
 }
 
 /// Where the host sources find their files.

@@ -650,24 +650,138 @@ impl SyncEngine {
     pub(crate) fn capture_dirty(&mut self, all: bool) -> anyhow::Result<usize> {
         let origin = self.rt.pending_origin.take().unwrap_or(Origin::User);
         let dirty = std::mem::take(&mut self.rt.dirty_sources);
+        self.refresh_specs();
         let mut n = 0;
         for si in 0..self.sources.len() {
             let id = self.sources[si].id();
-            if !all && !dirty.contains(id) {
+            // A config save also changes what the lists and the extension
+            // sources read.
+            let woken = dirty.contains(id)
+                || (dirty.contains("config") && matches!(id, "lists" | "extensions"));
+            if !all && !woken {
                 continue;
             }
             if !self.source_capturable(si) {
                 continue;
             }
+            let prepared = self.prepare_source(si, origin)?;
+            n += prepared.written;
             let state = self.sources[si].read_local()?;
-            let (written, remapped) = self.capture_state(si, &state, origin)?;
+            let (written, mut remapped) = self.capture_state(si, &state, origin)?;
             n += written;
+            remapped.extend(prepared.project);
             if !remapped.is_empty() {
-                // A matched item gets its old id back in the local file.
+                // A matched item gets its old id back in the local file;
+                // a value that applies here again is written.
                 self.project(&remapped, false)?;
             }
         }
         Ok(n)
+    }
+
+    /// Ask every source for its namespaces again: an extension installed,
+    /// granted or switched on brings its own (WP-S5).
+    pub(crate) fn refresh_specs(&mut self) {
+        let mut specs = BTreeMap::new();
+        for (i, s) in self.sources.iter().enumerate() {
+            for spec in s.specs() {
+                specs.insert(spec.ns.clone(), (i, spec));
+            }
+        }
+        self.specs = specs;
+    }
+
+    /// Run [`Source::prepare`] of source `si`, again once its namespaces
+    /// changed.
+    pub(crate) fn prepare_source(
+        &mut self,
+        si: usize,
+        origin: Origin,
+    ) -> anyhow::Result<super::sources::Prepared> {
+        let mut out = super::sources::Prepared::default();
+        for _ in 0..2 {
+            let p = self.prepare_once(si, origin)?;
+            out.written += p.written;
+            out.project.extend(p.project);
+            if !p.specs_changed {
+                break;
+            }
+            self.refresh_specs();
+            out.specs_changed = true;
+        }
+        Ok(out)
+    }
+
+    /// One [`Source::prepare`] in one transaction, then emit what it asked
+    /// for.
+    fn prepare_once(
+        &mut self,
+        si: usize,
+        origin: Origin,
+    ) -> anyhow::Result<super::sources::Prepared> {
+        if self.core_locked() {
+            return Ok(super::sources::Prepared::default());
+        }
+        let now = self.now();
+        let os = self.env.os;
+        let paused = self.prefs.paused_at(now);
+        let last_sync_at = self.rt.last_ingest_ms;
+        let specs = self.specs.clone();
+        let Some(core) = self.core.as_mut() else {
+            return Ok(super::sources::Prepared::default());
+        };
+        let Some(keys) = core.cur_keys().cloned() else {
+            return Ok(super::sources::Prepared::default());
+        };
+        let me = core.me;
+        let Core { replica, hlc, .. } = core;
+        let source = &mut self.sources[si];
+        let prefs = &self.prefs;
+        let (prepared, notes) = replica.tx(|tx| {
+            let hlc_before = hlc.last();
+            let mut ctx = ExtCtx {
+                tx,
+                hlc,
+                keys: &keys,
+                me,
+                os,
+                now,
+                specs: &specs,
+                prefs,
+                paused,
+                last_sync_at,
+                notes: ExtNotes::default(),
+            };
+            let p = source.prepare(&mut ctx, origin)?;
+            let hlc_last = ctx.hlc.last();
+            if hlc_last != hlc_before {
+                ctx.tx.set_meta("hlc_last", &hlc_last.to_string())?;
+            }
+            Ok((p, ctx.notes))
+        })?;
+        if prepared.written > 0 {
+            self.rt.first_own_ms.get_or_insert(now);
+            self.rt.last_own_ms = Some(now);
+        }
+        self.after_ext_notes(notes)?;
+        Ok(prepared)
+    }
+
+    /// Emit what an extension request or a prepare noted, and hold a bulk
+    /// delete (§8.10).
+    fn after_ext_notes(&mut self, notes: ExtNotes) -> anyhow::Result<()> {
+        for (ns, n) in &notes.tombstones {
+            self.check_outgoing_mass(ns, *n)?;
+        }
+        for (ext, keys) in &notes.data_changed {
+            let keys: Vec<String> = keys.iter().cloned().collect();
+            self.env.events.extension_data_changed(ext, &keys);
+        }
+        for ((ext, reason), colls) in &notes.sync_changes {
+            let colls: Vec<String> = colls.iter().cloned().collect();
+            self.env.events.extension_sync_changes(ext, &colls, reason);
+        }
+        Ok(())
     }
 
     /// Whether any namespace of source `si` captures here now.
@@ -742,7 +856,8 @@ impl SyncEngine {
                 .insert(id.clone(), r.as_ref());
         }
         for spec in specs {
-            if !self.ns_capturable(&spec.ns) {
+            // Collections mode: the extension pushes its records (§12.6).
+            if !self.ns_capturable(&spec.ns) || collection_of(&spec.ns).is_some() {
                 continue;
             }
             let recs = by_ns.remove(spec.ns.as_str()).unwrap_or_default();
@@ -981,12 +1096,14 @@ impl SyncEngine {
         if self.core.is_none() || self.core_locked() {
             return Ok(0);
         }
+        self.refresh_specs();
         let mut changed = changed.clone();
         changed.extend(self.refresh_guards()?);
         let changed = &changed;
+        self.feed_collections(changed)?;
         let mut by_source: BTreeMap<usize, BTreeSet<(String, String)>> = BTreeMap::new();
         for (ns, (si, _)) in &self.specs {
-            if !self.ns_capturable(ns) {
+            if !self.ns_capturable(ns) || collection_of(ns).is_some() {
                 continue;
             }
             let set: BTreeSet<(String, String)> =
@@ -1022,12 +1139,14 @@ impl SyncEngine {
         all: bool,
     ) -> anyhow::Result<usize> {
         for _attempt in 0..3 {
+            let prepared = self.prepare_source(si, Origin::User)?;
             let base = self.sources[si].read_local()?;
             // Every read is captured, so an edit made since the last look
             // is recorded before anything is written over it.
             let (_, remapped) = self.capture_state(si, &base, Origin::User)?;
             let mut changed = changed.clone();
             changed.extend(remapped.iter().cloned());
+            changed.extend(prepared.project);
             let writes = self.compute_writes(si, &base, &changed, all, &remapped)?;
             if writes.is_empty() {
                 return Ok(0);
@@ -1048,6 +1167,61 @@ impl SyncEngine {
         }
         log::warn!("sync: the local files kept changing during a projection; trying next tick");
         Ok(0)
+    }
+
+    /// Collections mode (§8.6): a changed record goes to its extension's
+    /// feed, and the extension hears of it; it pulls. Sync never touches
+    /// the extension's own files. A collection a newer schema made
+    /// read-only here isn't delivered (§12.6).
+    fn feed_collections(&mut self, changed: &BTreeSet<(String, String)>) -> anyhow::Result<()> {
+        let wanted: Vec<(String, String)> = changed
+            .iter()
+            .filter(|(ns, id)| {
+                !id.is_empty()
+                    && collection_of(ns).is_some()
+                    && self.specs.contains_key(ns)
+                    && self.ns_capturable(ns)
+            })
+            .cloned()
+            .collect();
+        if wanted.is_empty() {
+            return Ok(());
+        }
+        let schemas: BTreeMap<String, u32> = wanted
+            .iter()
+            .filter_map(|(ns, _)| Some((ns.clone(), self.specs.get(ns)?.1.schema)))
+            .collect();
+        let Some(core) = self.core.as_mut() else {
+            return Ok(());
+        };
+        let mut by_ext: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        core.replica.tx(|tx| {
+            for (ns, id) in &wanted {
+                let Some((ext, coll)) = collection_of(ns) else {
+                    continue;
+                };
+                let newer = tx
+                    .meta(&format!("schema.{ns}"))?
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .is_some_and(|seen| schemas.get(ns).is_some_and(|mine| seen > *mine));
+                if newer {
+                    continue;
+                }
+                super::replica::ExtStore::feed_push(tx, ext, coll, id)?;
+                by_ext
+                    .entry(ext.to_string())
+                    .or_default()
+                    .insert(coll.to_string());
+            }
+            Ok(())
+        })?;
+        for (ext, colls) in by_ext {
+            let colls: Vec<String> = colls.into_iter().collect();
+            self.env
+                .events
+                .extension_sync_changes(&ext, &colls, "remote");
+        }
+        Ok(())
     }
 
     /// Extension data written by keys or lists mode reaches the extension.
@@ -1427,12 +1601,21 @@ impl SyncEngine {
                 self.require_on()?;
                 self.prefs.ext_data_off.retain(|e| *e != ext);
                 if !on {
-                    self.prefs.ext_data_off.push(ext);
+                    self.prefs.ext_data_off.push(ext.clone());
                 }
                 self.save_prefs().map_err(internal)?;
+                // The user's own choice here, which a sideloaded extension
+                // needs before its data syncs; switching it on makes the
+                // extension push everything once (§12.3, §12.6).
+                if let Some(core) = self.core.as_mut() {
+                    core.replica
+                        .tx(|tx| super::sources::extensions::note_data_switch(tx, &ext, on))
+                        .map_err(internal)?;
+                }
                 if on {
                     self.rt.first_tick_done = false;
                     self.read_heads_again().map_err(internal)?;
+                    self.env.events.extension_sync_changes(&ext, &[], "enabled");
                 }
                 Ok(EngineReply::Done)
             }
@@ -1544,6 +1727,20 @@ impl SyncEngine {
         }
         let now = self.now();
         let os = self.env.os;
+        let paused = self.prefs.paused_at(now);
+        let last_sync_at = self.rt.last_ingest_ms;
+        if let super::ExtRequest::Push {
+            ext, collection, ..
+        } = &req
+        {
+            // An extension installed or granted since the last tick.
+            if !self
+                .specs
+                .contains_key(&format!("ext.{ext}.c.{collection}"))
+            {
+                self.refresh_specs();
+            }
+        }
         let specs = self.specs.clone();
         let Some(core) = self.core.as_mut() else {
             return Err(super::unavailable());
@@ -1552,7 +1749,9 @@ impl SyncEngine {
         let me = core.me;
         let Core { replica, hlc, .. } = core;
         let sources = &mut self.sources;
-        let result: anyhow::Result<Option<Result<super::ExtReply, AppError>>> = replica.tx(|tx| {
+        let prefs = &self.prefs;
+        type Answer = Option<(Result<super::ExtReply, AppError>, ExtNotes)>;
+        let result: anyhow::Result<Answer> = replica.tx(|tx| {
             for s in sources.iter_mut() {
                 let mut ctx = ExtCtx {
                     tx: &mut *tx,
@@ -1562,19 +1761,27 @@ impl SyncEngine {
                     os,
                     now,
                     specs: &specs,
+                    prefs,
+                    paused,
+                    last_sync_at,
+                    notes: ExtNotes::default(),
                 };
                 if let Some(r) = s.request(&mut ctx, &req) {
                     let hlc_last = ctx.hlc.last();
+                    let notes = std::mem::take(&mut ctx.notes);
                     tx.set_meta("hlc_last", &hlc_last.to_string())?;
-                    return Ok(Some(r));
+                    return Ok(Some((r, notes)));
                 }
             }
             Ok(None)
         });
         match result.map_err(internal)? {
-            Some(r) => {
-                self.rt.first_own_ms.get_or_insert(now);
-                self.rt.last_own_ms = Some(now);
+            Some((r, notes)) => {
+                if notes.written > 0 {
+                    self.rt.first_own_ms.get_or_insert(now);
+                    self.rt.last_own_ms = Some(now);
+                }
+                self.after_ext_notes(notes).map_err(internal)?;
                 r
             }
             None => Err(super::unavailable()),
@@ -2494,7 +2701,27 @@ pub fn key_between(a: Option<&str>, b: Option<&str>) -> String {
     String::from_utf8(out).unwrap_or_default()
 }
 
-/// The capture context handed to a source for an extension request.
+/// The extension namespace `ext.<id>.c.<collection>`'s extension and
+/// collection.
+pub(crate) fn collection_of(ns: &str) -> Option<(&str, &str)> {
+    let rest = ns.strip_prefix("ext.")?;
+    let (ext, rest) = rest.split_once('.')?;
+    let coll = rest.strip_prefix("c.")?;
+    (!ext.is_empty() && !coll.is_empty()).then_some((ext, coll))
+}
+
+/// What a capture context noted for after its transaction.
+#[derive(Default)]
+pub(crate) struct ExtNotes {
+    /// Records written.
+    pub written: usize,
+    pub tombstones: BTreeMap<String, usize>,
+    pub data_changed: BTreeMap<String, BTreeSet<String>>,
+    pub sync_changes: BTreeMap<(String, &'static str), BTreeSet<String>>,
+}
+
+/// The capture context handed to a source for an extension request or a
+/// prepare.
 struct ExtCtx<'a, 'b> {
     tx: &'a mut Tx<'b>,
     hlc: &'a mut Hlc,
@@ -2503,6 +2730,10 @@ struct ExtCtx<'a, 'b> {
     os: OsKind,
     now: i64,
     specs: &'a BTreeMap<String, (usize, NsSpec)>,
+    prefs: &'a DevicePrefs,
+    paused: bool,
+    last_sync_at: Option<i64>,
+    notes: ExtNotes,
 }
 
 impl super::sources::CaptureCtx for ExtCtx<'_, '_> {
@@ -2518,10 +2749,18 @@ impl super::sources::CaptureCtx for ExtCtx<'_, '_> {
             return Ok(super::sources::CaptureResult::Rejected("bad_collection"));
         };
         let spec = spec.clone();
+        // The record's rows, field by field: a projected row exists only
+        // for a field that has a cell or that the local copy holds.
+        let mut names: BTreeSet<String> = local
+            .map(|l| split_fields(&l.fields, &spec).into_keys().collect())
+            .unwrap_or_default();
+        if let Some(r) = self.tx.record(ns, id)? {
+            names.extend(r.cells.keys().map(|k| k.name.clone()));
+        }
         let mut proj: BTreeMap<String, Projected> = BTreeMap::new();
-        for (k, p) in self.tx.projected_in(ns)? {
-            if k.id == id {
-                proj.insert(k.field, p);
+        for name in names {
+            if let Some(p) = self.tx.projected(&LocalKey::new(ns, id, &name))? {
+                proj.insert(name, p);
             }
         }
         // An initial push stamps from the record's own time, with no floor
@@ -2556,6 +2795,12 @@ impl super::sources::CaptureCtx for ExtCtx<'_, '_> {
         if initial_stamp_ms.is_none() {
             *self.hlc = hlc;
         }
+        for (ns, n) in out.tombstones {
+            *self.notes.tombstones.entry(ns).or_default() += n;
+        }
+        if wrote {
+            self.notes.written += 1;
+        }
         Ok(if wrote {
             super::sources::CaptureResult::Written
         } else {
@@ -2587,6 +2832,119 @@ impl super::sources::CaptureCtx for ExtCtx<'_, '_> {
 
     fn device(&self) -> DeviceId {
         self.me
+    }
+
+    fn record(&self, ns: &str, id: &str) -> anyhow::Result<Option<Record>> {
+        self.tx.record(ns, id)
+    }
+
+    fn records(&self, ns: &str) -> anyhow::Result<Vec<Record>> {
+        self.tx.records(ns)
+    }
+
+    fn projected(&self, ns: &str, id: &str) -> anyhow::Result<BTreeMap<String, Projected>> {
+        let mut out = BTreeMap::new();
+        for (k, p) in self.tx.projected_in(ns)? {
+            if k.id == id {
+                out.insert(k.field, p);
+            }
+        }
+        Ok(out)
+    }
+
+    fn projected_field(
+        &self,
+        ns: &str,
+        id: &str,
+        field: &str,
+    ) -> anyhow::Result<Option<Projected>> {
+        self.tx.projected(&LocalKey::new(ns, id, field))
+    }
+
+    fn set_projected(
+        &mut self,
+        ns: &str,
+        id: &str,
+        field: &str,
+        p: Option<Projected>,
+    ) -> anyhow::Result<()> {
+        self.tx.set_projected(&LocalKey::new(ns, id, field), p)
+    }
+
+    fn pin(&self, ns: &str, id: &str, field: &str) -> anyhow::Result<Option<(Value, PinReason)>> {
+        self.tx.pin(&LocalKey::new(ns, id, field))
+    }
+
+    fn set_pin(
+        &mut self,
+        ns: &str,
+        id: &str,
+        field: &str,
+        v: Option<(Value, PinReason)>,
+    ) -> anyhow::Result<()> {
+        self.tx.set_pin(&LocalKey::new(ns, id, field), v)
+    }
+
+    fn meta(&self, k: &str) -> anyhow::Result<Option<String>> {
+        self.tx.meta(k)
+    }
+
+    fn set_meta(&mut self, k: &str, v: Option<&str>) -> anyhow::Result<()> {
+        match v {
+            Some(v) => self.tx.set_meta(k, v),
+            None => self.tx.delete_meta(k),
+        }
+    }
+
+    fn write_cell(&mut self, ns: &str, id: &str, field: &str, value: Value) -> anyhow::Result<()> {
+        super::membership::write_cell(
+            self.tx, self.keys, self.hlc, self.me, self.now, ns, id, field, value,
+        )?;
+        self.notes.written += 1;
+        Ok(())
+    }
+
+    fn devices(&self) -> anyhow::Result<Vec<super::replica::DeviceRow>> {
+        self.tx.devices()
+    }
+
+    fn prefs(&self) -> &DevicePrefs {
+        self.prefs
+    }
+
+    fn os(&self) -> OsKind {
+        self.os
+    }
+
+    fn now(&self) -> i64 {
+        self.now
+    }
+
+    fn paused(&self) -> bool {
+        self.paused
+    }
+
+    fn last_sync_at(&self) -> Option<i64> {
+        self.last_sync_at
+    }
+
+    fn data_changed(&mut self, ext: &str, key: &str) {
+        self.notes
+            .data_changed
+            .entry(ext.to_string())
+            .or_default()
+            .insert(key.to_string());
+    }
+
+    fn sync_changes(&mut self, ext: &str, collection: &str, reason: &'static str) {
+        let e = self
+            .notes
+            .sync_changes
+            .entry((ext.to_string(), reason))
+            .or_default();
+        if !collection.is_empty() {
+            e.insert(collection.to_string());
+        }
     }
 }
 

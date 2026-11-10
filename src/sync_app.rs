@@ -104,6 +104,8 @@ pub fn engine_env<R: Runtime>(
     app: &AppHandle<R>,
 ) -> anyhow::Result<(EngineEnv, Vec<Box<dyn Source>>)> {
     use crate::sync::keystore::{default_key_store, key_store_for, KeyStoreKind};
+    use crate::commands::extensions::AppExtensionHost;
+    use crate::sync::sources::extensions::{ExtensionHost, ExtensionsSource};
     use crate::sync::sources::{chats, host_sources, HostDirs};
     let features = app
         .try_state::<FeatureServices>()
@@ -135,7 +137,7 @@ pub fn engine_env<R: Runtime>(
     let history: Arc<dyn chats::ChatHistory> = Arc::new(chats::RegistryHistory(
         features.agent_session_registry.clone(),
     ));
-    let sources = host_sources(
+    let mut sources = host_sources(
         port.clone(),
         HostDirs {
             config_kage_dir: config_dir.join("kage"),
@@ -144,6 +146,14 @@ pub fn engine_env<R: Runtime>(
         os,
         Some(history),
     );
+    // Extension data (WP-S5, SYNC.md §19.4). The host installs synced store
+    // themes and works out where older installs came from.
+    let ext_host: Arc<dyn ExtensionHost> = Arc::new(AppExtensionHost { app: app.clone() });
+    sources.push(Box::new(ExtensionsSource::new(
+        port.clone(),
+        config_dir.join("kage").join("extension-data"),
+        Some(ext_host),
+    )));
     let env = EngineEnv {
         local_dir,
         os,

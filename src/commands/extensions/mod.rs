@@ -71,6 +71,13 @@ const MAX_PACKAGE_BYTES: u64 = 50 * 1024 * 1024;
 /// `_source` name the catalog gives items from the primary store.
 const PRIMARY_SOURCE_NAME: &str = "Default";
 
+/// The store URLs used when none is configured (production and dev), so
+/// folder sync can tell which store an item came from (§4.5 of
+/// docs/design/SYNC.md).
+pub fn default_store_urls() -> [&'static str; 2] {
+    [DEFAULT_STORE_URL, DEV_STORE_URL]
+}
+
 /// Resolve the store base URL: user-configured > production default > dev default.
 fn resolve_store_url(config: &crate::config::Config, dev_mode: bool) -> String {
     if let Some(ref url) = config.store_url {

@@ -1,8 +1,8 @@
 # Kage folder sync
 
 Status: being built. WP-S1, WP-S2, WP-S3 (the engine and host
-sources) and WP-S4 (the app wiring and commands) are in; the rest follow
-§20.
+sources), WP-S4 (the app wiring and commands) and WP-S5 (extension
+sync) are in; the rest follow §20.
 
 Kage syncs through a folder the user already syncs: Dropbox, iCloud Drive,
 OneDrive, Google Drive, Syncthing, a network share, or any folder. There is
@@ -2149,9 +2149,10 @@ Host semantics:
   everything. A reinstall after an uninstall gets its data back.
 - **Purged** (`reason: 'purged'`, §8.7): data sync is now off here; local
   data is untouched.
-- **Schema.** Records carry the manifest's `sync.schema`. An older
-  extension version doesn't receive newer-schema records, and a push for
-  such an id returns `newer_schema`.
+- **Schema.** A collection's shards carry the manifest's `sync.schema`
+  (§8.11). An older extension version doesn't receive a newer-schema
+  collection, and a push to it returns `newer_schema` (WP-S5 gates per
+  collection, not per record).
 - **Device tag.** `deviceTag` is `HKDF(extdev, extension id ‖ device id)[..12]`,
   as 24 lowercase hex characters (§11.3):
   stable per extension, not linkable across extensions, meaningless
@@ -3398,6 +3399,62 @@ Decisions WP-S3 made where the design was open or didn't fit the code:
   `sync.label.*`, `sync.conflicts.label.*`, `sync.review.*`,
   `sync.readme`); the other catalogs need a `scripts/translate.py` run.
 
+What WP-S5 added to these interfaces. The ones above couldn't carry the
+per-window bases of §12.4 and §12.5, the `ext_base` of §12.6, or the
+"not here" rules of §8.2 for extensions, so the extension source gets a
+capture context of its own before every capture:
+
+```rust
+// sources.rs
+trait Source {
+    // …
+    /// Runs in one transaction right before every `read_local` the engine
+    /// captures. Default: nothing.
+    fn prepare(&mut self, ctx: &mut dyn CaptureCtx, origin: Origin) -> anyhow::Result<Prepared> { … }
+}
+pub struct Prepared { pub written: usize, pub project: BTreeSet<(String, String)>, pub specs_changed: bool }
+// CaptureCtx gains: record, records, projected, projected_field, set_projected, pin, set_pin
+// (field `*` pins a whole record), meta, set_meta, write_cell (a cell at `all`, stamped now),
+// devices, prefs, os, now, paused, last_sync_at, and the notes data_changed(ext, key) and
+// sync_changes(ext, collection, reason), which the engine emits once the transaction commits.
+pub mod extensions;   // ExtensionsSource, ExtensionHost, Journal, journal(), store_origin
+```
+
+- **Engine.** `capture_dirty` and `project_source` call `prepare`
+  first. `prepare` returning `specs_changed` makes the engine ask every
+  source for its specs again (`refresh_specs`, also run before each
+  projection and for a push to an unknown collection) and call
+  `prepare` once more, so an extension installed or granted since the
+  last tick gets its namespaces. `(ns, "")` in `Prepared::project` is
+  the whole namespace.
+- **Collections mode** (`ext.<id>.c.<coll>`, `engine::collection_of`)
+  is never captured from `read_local` and never projected into files: a
+  changed record goes to the extension's feed and
+  `extension_sync_changes(ext, colls, "remote")` (§8.6). A collection
+  whose `schema.<ns>` is newer than this build's manifest isn't fed.
+  `ExtCtx::capture` looks up a record's `projected` rows field by field
+  (no namespace scan), and its tombstones count for the outgoing
+  mass-change guard. The extension source keeps the base in `ext_base`
+  and moves it into `projected` for the capture and back.
+- **A config save wakes the extension and lists sources too**: the
+  `config` hook dirties `lists` and `extensions` as well, because both
+  read `config.json`.
+- **`sync_set_extension_data`** also records the user's own switch
+  (meta `extsync.on.<id>`, which a sideloaded extension needs), clears
+  `needsInitialPush`'s meta, and on `on` emits
+  `extension_sync_changes(ext, [], "enabled")`.
+- **Status.** `SyncStatus::suggestions` and `sync_list_reviews`'
+  `suggestions` and `removals` come from the `installs` records
+  (`sources::extensions::install_reviews`).
+- **Wiring.** `sources::host_sources` stays WP-S3's four;
+  `sync_app::engine_env` appends
+  `sources::extensions::ExtensionsSource::new(port, <config>/kage/extension-data, Some(host))`,
+  where `host` is `commands::extensions::AppExtensionHost { app }` (store
+  themes, origin backfill). `scheduler::global_handle()` is how the
+  `ext_sync_*` commands reach the engine; `sync_app` calls
+  `install_global`. The window-destroyed hook in `main.rs` calls
+  `journal().forget_window(label)`.
+
 ### 19.5 Tauri commands
 
 Every command returns `Result<T, AppError>`, is registered in
@@ -3797,6 +3854,72 @@ everyone branches from it.
     without the feature or the grant.
   - An extension update that adds `sync` needs approval again.
   - `cargo clippy`, `cargo fmt --check` and the vitest files pass.
+- **What WP-S5 built** (`src/sync/sources/extensions.rs`; the engine
+  hooks are in §19.4):
+  - **Records.** `installs/<kind>:<id>`, `cfg.ext/<id>/<field>`,
+    `ext.<id>.k/<key>` and `ext.<id>.l.<key>/<element id>` (plus
+    `~rest`, the list file's other fields) each hold one field `v`.
+    Collections use the manifest's structure.
+  - **What syncs here** is decided in `prepare`, per extension: a grant
+    with a known origin, the origin cell agreeing (§12.3), the user's
+    switch for a sideload; then for data the `sync` and `storage` grant,
+    the extension switched on, its data switch on. Records that don't
+    apply here (not installed, another origin, a setting the local
+    manifest doesn't let sync, a key it doesn't list) get a whole-record
+    pin (`not_installed`, `origin_mismatch`, `this_computer`), so the
+    engine neither captures nor projects them. Lifting one projects the
+    record. An extension that stops syncing here has its keys and lists
+    `projected` rows cleared, so a reinstall starts from the synced
+    values, not from deletes. One that starts syncing (install, grant,
+    switch) projects its keys and lists, puts every record of its
+    collections in the feed with its base cleared, and needs an initial
+    push.
+  - **The journal** (`Journal`, one per app, `journal()`): the storage
+    commands note which window loaded and saved which synced key, under
+    the key's lock (`extensions::data_key_lock`, which projections take
+    too). `prepare` turns loads into `reads` and `ext_view` rows and
+    captures each save with the saving window's base. A keys-mode window
+    that saved exactly what it read gets the newer value back in the
+    file. A lists file that lost elements without a save through Kage
+    (a restart in between, an edit by hand) gets them back too.
+  - **Origins.** `store_install` and an update note `store:<hash>`,
+    `install_extension_from_path` `sideload`; `commit_extension_install`
+    writes it into the grant. Grants without one (made earlier, or by
+    the welcome screen) are resolved by `ExtensionHost::resolve_origins`
+    (`store::backfill_grant_origins`: the first store whose catalog lists
+    the id, else `sideload`); until then the extension doesn't sync.
+  - **Store themes** install through `ExtensionHost::install_store_theme`
+    (`install::install_synced_theme`) when the theme's store is one this
+    computer uses and the user hasn't excluded it.
+  - **Settings saves** (`save_extension_config`) are merged three ways
+    against the copy the window last got (`merge_extension_settings`,
+    §9.5).
+- **Decisions WP-S5 made** where the design was open or didn't fit:
+  - **Schema gating is per collection**, through the engine's
+    `schema.<ns>` (§8.11), not per record: a newer schema makes the
+    whole collection read-only on an older extension (pull skips it,
+    push answers `newer_schema`).
+  - A pushed field whose name a cell can't carry, or a `sets`/`maps`
+    field of the wrong type, is refused as `bad_collection` (`split`
+    would drop it otherwise).
+  - `sync.description` is checked against 140 characters as written;
+    the install prompt checks the resolved text.
+  - Elements a projection adds to a lists file go at the end in id
+    order within one batch (`project` sees no stamps); elements written
+    back after a stale save go in stamp order.
+  - An initial push that loses to a newer copy in the folder leaves the
+    extension's base at its own value, so pull delivers the winner and a
+    later edit made before that pull is a conflict.
+  - `needsInitialPush` ends with the first ack after it was set.
+  - A collection delete with no base kept (a rebuilt replica) deletes
+    the current record.
+  - A whole-record pin reason for "can't confirm the same origin" (a
+    sideload with its switch off, an unknown origin) is
+    `origin_mismatch` too; Settings tells them apart by the local origin.
+  - Joining reads extension data only once the extension source has
+    run: a keys or lists value set up by hand on both computers is
+    captured as this computer's edit after the join, with the other
+    value in the conflicts list.
 
 ### WP-S6 Settings → Sync, scope controls and safe saves
 

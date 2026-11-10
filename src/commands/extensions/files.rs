@@ -219,6 +219,11 @@ fn remove_extension_data_dir(extension_id: &str) -> Result<bool, String> {
 
 /// Write one data file, atomically and owner-only, then name the change
 /// for the coalescer. A failed write names nothing.
+///
+/// The write holds the key's lock (folder sync projects into the same
+/// file under it, docs/design/SYNC.md §12.4), and folder sync's journal
+/// hears of it before the lock goes, so sync never reads this file
+/// without knowing which window wrote it.
 fn write_extension_data(
     extension_id: &str,
     key: &str,
@@ -226,29 +231,48 @@ fn write_extension_data(
     window_label: &str,
 ) -> Result<Change, String> {
     let path = resolve_data_path(extension_id, key)?;
+    let lock = extensions::data_key_lock(extension_id, key);
+    let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
     crate::atomic_write::write(&path, data, crate::atomic_write::Perms::Private).map_err(|e| {
         format!(
             "Failed to save extension data '{}/{}': {}",
             extension_id, key, e
         )
     })?;
+    crate::sync::sources::extensions::journal().note_save(
+        extension_id,
+        key,
+        window_label,
+        Some(data),
+    );
     Ok(Change::from_window(key, ChangeOp::Save, window_label))
 }
 
 /// Delete one data file, then name the change for the coalescer. A key
 /// with no file is no change (`Ok(None)`); a failed delete names nothing.
+/// Holds the key's lock like [`write_extension_data`].
 fn remove_extension_data(
     extension_id: &str,
     key: &str,
     window_label: &str,
 ) -> Result<Option<Change>, String> {
     let path = resolve_data_path(extension_id, key)?;
+    let lock = extensions::data_key_lock(extension_id, key);
+    let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
     match std::fs::remove_file(&path) {
-        Ok(()) => Ok(Some(Change::from_window(
-            key,
-            ChangeOp::Delete,
-            window_label,
-        ))),
+        Ok(()) => {
+            crate::sync::sources::extensions::journal().note_save(
+                extension_id,
+                key,
+                window_label,
+                None,
+            );
+            Ok(Some(Change::from_window(
+                key,
+                ChangeOp::Delete,
+                window_label,
+            )))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(format!(
             "Failed to delete extension data '{}/{}': {}",
@@ -277,23 +301,44 @@ pub async fn save_extension_data<R: tauri::Runtime>(
 ) -> Result<(), AppError> {
     let change = write_extension_data(&extension_id, &key, &data, window.label())?;
     extension_data_events::record(&app, &extension_id, change);
+    crate::sync::notify(
+        crate::sync::sources::extensions::SOURCE_ID,
+        crate::sync::types::Origin::User,
+    );
     Ok(())
 }
 
 /// Load JSON data for an extension. Returns null if the file doesn't exist.
+///
+/// Folder sync notes what the calling window read: a later save from it
+/// is based on that (docs/design/SYNC.md §12.4, §12.5). Tauri injects
+/// `window`.
 #[tauri::command]
-pub async fn load_extension_data(
+pub async fn load_extension_data<R: tauri::Runtime>(
     extension_id: String,
     key: String,
+    window: tauri::WebviewWindow<R>,
 ) -> Result<Option<String>, AppError> {
-    let path = resolve_data_path(&extension_id, &key)?;
+    let data = read_extension_data(&extension_id, &key)?;
+    crate::sync::sources::extensions::journal().note_load(
+        &extension_id,
+        &key,
+        window.label(),
+        data.as_deref(),
+    );
+    Ok(data)
+}
+
+/// One data file's text, `None` when it doesn't exist.
+fn read_extension_data(extension_id: &str, key: &str) -> Result<Option<String>, String> {
+    let path = resolve_data_path(extension_id, key)?;
     match std::fs::read_to_string(&path) {
         Ok(data) => Ok(Some(data)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(format!(
             "Failed to load extension data '{}/{}': {}",
             extension_id, key, e
-        ))?,
+        )),
     }
 }
 
@@ -309,6 +354,10 @@ pub async fn delete_extension_data<R: tauri::Runtime>(
 ) -> Result<(), AppError> {
     if let Some(change) = remove_extension_data(&extension_id, &key, window.label())? {
         extension_data_events::record(&app, &extension_id, change);
+        crate::sync::notify(
+            crate::sync::sources::extensions::SOURCE_ID,
+            crate::sync::types::Origin::User,
+        );
     }
     Ok(())
 }
@@ -317,20 +366,13 @@ pub async fn delete_extension_data<R: tauri::Runtime>(
 mod tests {
     use super::*;
 
-    fn block_on<F: std::future::Future>(f: F) -> F::Output {
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap()
-            .block_on(f)
-    }
-
     fn save(ext: &str, key: &str, data: &str) {
         let change = write_extension_data(ext, key, data, "floating").unwrap();
         assert_eq!(change, Change::from_window(key, ChangeOp::Save, "floating"));
     }
 
     fn load(ext: &str, key: &str) -> Option<String> {
-        block_on(load_extension_data(ext.into(), key.into())).unwrap()
+        read_extension_data(ext, key).unwrap()
     }
 
     /// The extension-data root is shared with config_export's tests, whose

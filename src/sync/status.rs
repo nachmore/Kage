@@ -294,6 +294,8 @@ pub(crate) struct StatusCache {
     pub folder: Option<FolderView>,
     pub undo_join_until: Option<String>,
     pub problems: Vec<Problem>,
+    /// Installs on other computers that aren't here, and removals (§4.5).
+    pub suggestions: u32,
 }
 
 fn problem(kind: &str, params: &[(&str, String)]) -> Problem {
@@ -426,7 +428,7 @@ impl SyncEngine {
             conflicts_open: c.conflicts_open,
             held: c.held,
             reviews: c.reviews,
-            suggestions: 0,
+            suggestions: c.suggestions,
             problems: c.problems.clone(),
             key_store: self
                 .prefs
@@ -490,6 +492,9 @@ impl SyncEngine {
         let version = self.env.kage_version.clone();
         let joined = self.prefs.joined_at.clone();
         let last_pub = self.rt.last_publish_ms.unwrap_or(0);
+        let installed = self.env.config.installed();
+        let (_, local_cfg) = self.env.config.snapshot();
+        let exclusions = self.prefs.install_exclusions.clone();
         let Some(core) = self.core.as_mut() else {
             cache.problems = problems;
             self.rt.cache = cache;
@@ -574,6 +579,15 @@ impl SyncEngine {
             let holds = super::guards::holds(tx)?.len() as u32;
             cache.held = held_back + not_here;
             cache.reviews = runnable.len() as u32 + consent + holds;
+            let (suggest, remove) = super::sources::extensions::install_reviews(
+                tx,
+                &installed,
+                &local_cfg,
+                &exclusions,
+                &|_| String::new(),
+                os,
+            )?;
+            cache.suggestions = (suggest.len() + remove.len()) as u32;
             if held_back > 0 {
                 problems.push(problem("held_back", &[("count", held_back.to_string())]));
             }
@@ -1227,10 +1241,28 @@ impl SyncEngine {
         let os = self.env.os;
         let me = self.core.as_ref().map(|c| c.me);
         let my_name = self.prefs.device_name.clone().unwrap_or_default();
+        let installed = self.env.config.installed();
+        let (_, local_cfg) = self.env.config.snapshot();
+        let exclusions = self.prefs.install_exclusions.clone();
         let core = self.core.as_mut().expect("on");
         core.replica
             .tx(|tx| {
                 let mut out = Reviews::default();
+                let name_of = |d: super::types::DeviceId| {
+                    if Some(d) == me {
+                        my_name.clone()
+                    } else {
+                        names.get(&d.to_string()).cloned().unwrap_or_default()
+                    }
+                };
+                (out.suggestions, out.removals) = super::sources::extensions::install_reviews(
+                    tx,
+                    &installed,
+                    &local_cfg,
+                    &exclusions,
+                    &name_of,
+                    os,
+                )?;
                 let mut seen = BTreeSet::new();
                 for (k, _, reason) in tx.pins(None)? {
                     match reason {

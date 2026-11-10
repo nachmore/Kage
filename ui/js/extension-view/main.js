@@ -32,7 +32,14 @@ import { createViewPage } from './page.js';
  * feature to the other windows adds it here too (SYNC.md §23.2), except
  * `agent.background`: background agent work isn't a view's (§8.6).
  */
-const OFFERED_HOST_FEATURES = ['views', 'storage.change_events', 'files.pick_text'];
+const OFFERED_HOST_FEATURES = [
+    'views',
+    'storage.change_events',
+    'files.pick_text',
+    'sync.keys',
+    'sync.lists',
+    'sync.records',
+];
 
 waitForTauri(({ invoke, appWindow, listen }) => {
     // Clicked links open in the system browser, never in this window.

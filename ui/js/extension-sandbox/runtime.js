@@ -5,6 +5,7 @@
 import { formatIcu } from '../shared/icu-message.js';
 import { createSandboxedRunner } from './runtime/sandboxed-worker.js';
 import { HOST_FEATURES, createStorageEvents, invokeError } from './runtime/host-api.js';
+import { createSyncApi } from './runtime/sync-api.js';
 import { createViewSurface, removeWebRtc } from './runtime/view-api.js';
 import { createFilesApi } from './runtime/files-api.js';
 import { extensionModuleOrder, rewriteExtensionModules } from '../shared/extension-modules.js';
@@ -90,6 +91,14 @@ let viewSurface = null;
 
 /** `context.storage`: change events for every surface (§10). */
 const storageEvents = createStorageEvents({ log });
+
+/**
+ * `context.sync` (docs/design/SYNC.md §12.6), when the host offered
+ * `sync.records` (which needs the `sync` grant); else none.
+ */
+let syncApi = null;
+/** Handlers of the host's `sync-changes` port messages. */
+const syncPortHandlers = new Set();
 
 /** Provider instances loaded from the extension bundle. */
 const providers = {
@@ -193,6 +202,20 @@ function buildContext() {
     // Files the user picks, when the host offered the feature
     // (docs/design/EXTENSION_FILE_TEXT.md §3.4); else undefined.
     if (hostFeatures?.includes('files.pick_text')) context.files = createFilesApi({ invoke });
+    // Likewise `context.sync`: only with `sync.records` from the host.
+    if (hostFeatures?.includes('sync.records')) {
+        if (!syncApi) {
+            syncApi = createSyncApi({
+                invoke,
+                log,
+                onPortMessage: (fn) => {
+                    syncPortHandlers.add(fn);
+                    return () => syncPortHandlers.delete(fn);
+                },
+            });
+        }
+        context.sync = syncApi;
+    }
     return context;
 }
 
@@ -892,6 +915,10 @@ function handleHostMessage(ev) {
         case 'storage-changed':
             // Fire-and-forget hint from the host: key names only (§10).
             storageEvents.deliver(msg.changes);
+            break;
+        case 'sync-changes':
+            // Synced records changed: `context.sync.onChanges` (SYNC §12.6).
+            for (const fn of syncPortHandlers) fn(msg);
             break;
         case 'view-response':
             viewSurface?.handleResponse(msg);

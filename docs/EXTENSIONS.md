@@ -241,6 +241,7 @@ for users.
 | `automation`    | ⚡   | `emit_automation_signal`, `list_automation_signals`, `get_power_status`. |
 | `tts`           | 🔈  | `pocket_tts_test`, `pocket_tts_voices`. |
 | `views`         | 🖼️  | Show the windows the manifest declares in `contributes.views`, drawn by the extension itself. No command maps to it: it lets the host open those windows (see [Views](#views)). |
+| `sync`          | 🔄  | Folder sync of the extension's data, encrypted, to the user's other computers: the manifest `sync` block and `context.sync` (`ext_sync_status`, `ext_sync_push`, `ext_sync_pull`, `ext_sync_ack`). See [Folder sync](#folder-sync). |
 
 The authoritative command-to-capability mapping is in
 [`ui/js/shared/extension-permissions.js`](../ui/js/shared/extension-permissions.js).
@@ -477,6 +478,128 @@ Hosts that do this list `export.sensitive_data` in
 `export.plain_settings`. Older hosts ignore these fields; declaring them
 is safe there.
 
+## Folder sync
+
+With Kage sync on (Settings → Sync), Kage copies settings and data,
+encrypted, through a folder the user already syncs, so their other
+computers get them. The full design is
+[`docs/design/SYNC.md`](design/SYNC.md) §12. Credentials never sync,
+not even encrypted: whatever `sensitiveData`, `config.<field>.sensitive`
+or the [safety net](#the-safety-net) marks stays on each computer.
+
+### Settings
+
+Your settings sync without any opt-in when they are values a
+settings-only backup may copy: booleans, numbers, declared `enum`
+choices and `backup: "plain"` strings. Change that per field with
+`sync` in the `config` block:
+
+| `sync` | Meaning |
+|---|---|
+| `"shared"` | Synced, one value for all computers (use it for free-form strings that are safe to share) |
+| `"os"` | Synced, but a new value applies to this kind of computer (Mac, Windows, Linux) |
+| `"machine"` | Never leaves this computer |
+| `"never"` | Never synced |
+
+A string that looks like a key is held back on its computer whatever
+`sync` says. A computer applies a synced setting only when its own
+installed manifest still lets it sync.
+
+### Opting data in
+
+Data syncs only for an extension that asks for the `sync` capability
+and declares what syncs in a manifest `sync` block:
+
+```json
+{
+  "permissions": ["storage", "sync"],
+  "sync": {
+    "description": "__MSG_sync.description__",
+    "schema": 1,
+    "keys": ["prefs", "view-*"],
+    "lists": { "todos": { "array": "items", "id": "id", "label": "title" } },
+    "collections": {
+      "items": { "label": "title", "sets": ["tags"], "local": ["rev"] },
+      "bodies": { "whole": true, "large": true, "maxBytes": 4194304 }
+    }
+  }
+}
+```
+
+- **`keys`** (up to 32, a trailing `*` matches a prefix): each key is
+  one value, newest wins. Nothing to code: Kage syncs what
+  `save_extension_data` writes. A window that saves a key over a copy
+  it loaded before a change from another computer arrived doesn't erase
+  that change; the other value goes to the user's conflicts list. At
+  most 1 MiB per key.
+- **`lists`** (up to 16): the key's file holds a list of items with ids
+  (`array` is the field that holds it, or `""` when the file is the
+  list). Each item syncs on its own. A save deletes only the items the
+  saving window had loaded; items it never saw are written back at the
+  end, and `onChanged` tells the window to reload. At most 64 KiB per
+  item, 20,000 items and 8 MiB per file.
+- **`collections`** (up to 16): records your extension pushes and pulls
+  through `context.sync`. Your storage stays the primary copy; Kage
+  never touches it in this mode. `whole: true` makes a record one value;
+  otherwise each top-level field merges on its own, with `together`
+  groups, `sets` (merged as sets) and `maps` (merged by key). `local`
+  fields never leave the computer. `maxBytes` defaults to 64 KiB (up to
+  1 MiB, or 4 MiB with `large: true`). Changing `whole`, `together`,
+  `sets` or `maps` needs `schema` + 1; a computer with an older schema
+  then neither receives nor overwrites the collection.
+
+A malformed part of the block is ignored with a warning and the rest
+loads. A key that `sensitiveData` or the safety net matches never syncs,
+whatever the block says. An update that adds `sync` asks the user again.
+A sideloaded extension's data syncs only once the user turns its data
+switch on in Settings → Sync, on every computer, and an extension
+installed from somewhere else with the same id gets none of it.
+
+### `context.sync`
+
+Present when `context.hostFeatures` includes `sync.records` (which needs
+the `sync` grant). Feature-detect it; on older hosts it's absent.
+
+```js
+const s = context.sync;
+s.available;   // Kage sync is on and this extension's data syncs here
+await s.status();
+// → { available, paused, needsInitialPush, deviceTag, devices: [{ tag, os, lastSeenAt, thisDevice }],
+//     usedBytes, maxBytes, lastSyncAt }
+await s.push('items', [{ id: 'n1', title: 'Milk', updatedAt: Date.now() }], { deleted: ['n0'] });
+// → { accepted, unchanged, rejected: [{ id, code }], off }
+const { cursor, more, changes } = await s.pull({ max: 500 });
+// changes: [{ collection, id, record /* null = deleted */, from: { device, at } }]
+await s.ack(cursor);
+const off = s.onChanges(({ collections, reason }) => { /* pull */ });
+// reason: 'remote' | 'enabled' | 'reset' | 'purged'; debounced 500 ms
+```
+
+- **Push after your own write**, while you still hold your own
+  cross-window lock, so pushes leave in the order the writes happened.
+  Mark records "not pushed yet" in the same write, and push marked
+  records on load: re-pushing an unchanged record costs nothing.
+- **Kage tracks what you last saw.** A field equal to what you last
+  pushed or pulled wasn't changed by you, so a newer value from another
+  computer stays. A push over a stale copy becomes a conflict the user
+  can restore, never a silent overwrite.
+- **Pull is at least once.** Several windows run your extension; apply
+  changes as upserts by id, then ack. Any instance may ack.
+- **Initial push.** When `needsInitialPush` is true (first time here,
+  `reason: 'enabled'` or `'reset'`, a reinstall), push every record once
+  with `{ initial: true }`, in batches, then pull. Stamps come from each
+  record's `updatedAt` (ms or RFC 3339), so the newer copy wins.
+- **Rejected codes**: `too_large`, `bad_id` (ids match
+  `^[A-Za-z0-9_.:-]{1,128}$`), `bad_collection` (not declared, or a
+  field that doesn't fit its structure), `sensitive_field` (a field named
+  like a credential), `newer_schema`, `quota` (128 MiB per extension),
+  `rate_limited` (5,000 records a minute). A push carries at most 500
+  records and deletes and 4 MiB.
+- **`purged`**: the user removed your data from the sync folder; data
+  sync is off here, and your local data is untouched.
+- Device tags are stable per extension and computer, and mean nothing
+  outside the user's computers. Extensions never get computer names.
+
 ## Vendor libraries
 
 Some extensions need a UMD/IIFE library (e.g. mathjs) that exposes a
@@ -622,6 +745,8 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 | `storage.atomic_write` | `save_extension_data` replaces a key atomically, so a crash or force quit mid-write never leaves a truncated value (see [Your extension runs as MULTIPLE instances](#your-extension-runs-as-multiple-instances--design-for-it)). On older hosts, keep a backup copy of anything you can't afford to lose. |
 | `storage.change_events` | `context.storage.onChanged` tells this instance when your stored data changed (see [Change events](#change-events-contextstorageonchanged)). |
 | `views` | This window can open your [views](#views), and you hold the `views` capability. In a view window, `context.view` exists. Unlike the rows above, it depends on the window and on your grant. |
+| `sync.keys`, `sync.lists` | This window syncs the keys and lists the manifest's `sync` block declares, and the extension holds `sync` (see [Folder sync](#folder-sync)). |
+| `sync.records` | `context.sync` exists here: push, pull and ack of record collections (see [Folder sync](#folder-sync)). |
 
 A host with `storage.change_events` but without `views` supports views,
 and the user hasn't approved `views` for your extension yet. A host with
@@ -687,6 +812,11 @@ which loads only that view's module. Consequences:
   instance which of your keys another instance saved or deleted, so
   nobody has to poll (see
   [Change events](#change-events-contextstorageonchanged)).
+- **A synced key can change at any time, as if another window
+  wrote it.** With [folder sync](#folder-sync) on, a value from
+  another computer lands in your keys and lists, and
+  `context.storage.onChanged` reports it with `source: "sync"`.
+  Re-read before acting.
 
 Rules for anything with side effects (auth flows, credential
 refresh, write-behind caches, migrations):

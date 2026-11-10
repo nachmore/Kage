@@ -268,25 +268,36 @@ describe('decideInvoke view-surface denylist', () => {
     });
 });
 
-describe('folder sync (contracts only)', () => {
+describe('folder sync', () => {
     const all = new Set(KNOWN_CAPABILITIES);
-    const syncCommands = Object.keys(COMMAND_CAPABILITIES).filter(
-        (c) => c.startsWith('sync_') || c.startsWith('ext_sync_') || c === 'get_config_snapshot'
+    const hostOnly = Object.keys(COMMAND_CAPABILITIES).filter(
+        (c) => c.startsWith('sync_') || c === 'get_config_snapshot'
     );
+    const extSync = Object.keys(COMMAND_CAPABILITIES).filter((c) => c.startsWith('ext_sync_'));
 
-    it('registers every sync command as host-only until the sync capability lands', () => {
-        expect(syncCommands.length).toBe(39);
-        for (const cmd of syncCommands) {
+    it('keeps every sync_* command host-only', () => {
+        expect(hostOnly.length).toBe(35);
+        for (const cmd of hostOnly) {
             expect(COMMAND_CAPABILITIES[cmd], cmd).toBeNull();
             expect(decideInvoke(cmd, all).allow, cmd).toBe(false);
         }
-        expect(KNOWN_CAPABILITIES).not.toContain('sync');
     });
 
-    it('names the sync host features but never offers them yet', () => {
+    it('gates context.sync behind the sync capability', () => {
+        expect(KNOWN_CAPABILITIES).toContain('sync');
+        expect(extSync.sort()).toEqual(['ext_sync_ack', 'ext_sync_pull', 'ext_sync_push', 'ext_sync_status']);
+        for (const cmd of extSync) {
+            expect(COMMAND_CAPABILITIES[cmd], cmd).toBe('sync');
+            expect(decideInvoke(cmd, new Set(['storage'])).allow, cmd).toBe(false);
+            expect(decideInvoke(cmd, new Set(['sync'])).allow, cmd).toBe(true);
+        }
+    });
+
+    it('offers the sync host features only with the sync grant', () => {
         const offered = [HOST_FEATURE_SYNC_KEYS, HOST_FEATURE_SYNC_LISTS, HOST_FEATURE_SYNC_RECORDS];
         expect(offered).toEqual(['sync.keys', 'sync.lists', 'sync.records']);
-        expect(hostFeaturesFor(offered, ['storage', 'sync'])).toEqual([]);
+        expect(hostFeaturesFor(offered, ['storage'])).toEqual([]);
+        expect(hostFeaturesFor(offered, ['storage', 'sync'])).toEqual(offered);
     });
 });
 

@@ -480,13 +480,13 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // The config with its revision, for field-level saves (§9.5). Same
     // reasoning as `get_config` above.
     get_config_snapshot: null,
-    // `context.sync` (§12.6). Null until WP-S5 adds the `sync` capability,
-    // maps these four to it and has the sandbox host force-inject
-    // `extensionId`.
-    ext_sync_status: null,
-    ext_sync_push: null,
-    ext_sync_pull: null,
-    ext_sync_ack: null,
+    // `context.sync` (§12.6): the extension's own synced records. The
+    // sandbox host force-injects `extensionId` (IDENTITY_SCOPED_COMMANDS),
+    // so an extension only ever reaches its own.
+    ext_sync_status: 'sync',
+    ext_sync_push: 'sync',
+    ext_sync_pull: 'sync',
+    ext_sync_ack: 'sync',
 });
 
 /**
@@ -618,6 +618,12 @@ export const CAPABILITIES = Object.freeze({
         label: 'Background AI',
         description:
             'Ask your AI agent for help in the background, without a chat. Nothing is sent until you turn it on for this extension and confirm which agent gets the text.',
+    },
+    sync: {
+        icon: '🔄',
+        label: 'Sync between your computers',
+        description:
+            'Copies this extension’s data, encrypted, to your sync folder so your other computers get it. Only when Kage sync is on.',
     },
 });
 
