@@ -360,6 +360,10 @@ export class ExtensionManager {
                     // Host UI features this window offers, narrowed to what
                     // the granted capabilities allow (date picker ⇒ calendar).
                     hostFeatures: hostFeaturesFor(this._hostFeatures, capabilities),
+                    // The file dialog and the ask bar name the extension
+                    // with these (EXTENSION_FILE_TEXT §3.5, §4.3).
+                    displayName: extensionDisplay(ext, id).name,
+                    displayIcon: extensionDisplay(ext, id).icon,
                 });
                 ext.sandbox.onReformatRequest = () => this.requestReformat(id);
             } catch (e) {

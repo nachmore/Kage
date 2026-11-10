@@ -56,9 +56,22 @@ describe('main.js wiring', () => {
             .split(',')
             .map((s) => s.trim().replace(/^'|'$/g, ''))
             .filter(Boolean);
-        expect(offered).toEqual(expect.arrayContaining(['views', 'storage.change_events']));
+        expect(offered).toEqual(
+            expect.arrayContaining(['views', 'storage.change_events', 'files.pick_text'])
+        );
         expect(offered).not.toContain('agent.background');
         expect(offered).not.toContain('date-picker');
+    });
+
+    it('installs the file broker with the view rule (EXTENSION_FILE_TEXT §5.2)', () => {
+        expect(importedNames('../shared/extension-file-text.js')).toEqual([
+            'installFileTextBroker',
+            'isWindowShown',
+            'strictUserActivation',
+        ]);
+        expect(MAIN).toMatch(/installFileTextBroker\(\{[^}]*activationLease: strictUserActivation/);
+        // No dialog guard: the dialog is attached to the view window.
+        expect(MAIN).not.toMatch(/guard:/);
     });
 });
 

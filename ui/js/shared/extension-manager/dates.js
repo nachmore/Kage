@@ -123,7 +123,11 @@ export function installExtensionDateMethods(ExtensionManager) {
             const ext = this.extensions.get(id);
             let out;
             try {
-                out = await ext.sandbox.call('onDateSelected', { date: iso });
+                out = await ext.sandbox.call(
+                    'onDateSelected',
+                    { date: iso },
+                    { userGesture: true }
+                );
             } catch (e) {
                 console.warn(`onDateSelected() in '${id}' failed:`, e);
                 return null;

@@ -4036,3 +4036,109 @@ body.light-theme button.kage-date-affordance[aria-expanded="true"] {
         transform: none;
     }
 }
+
+/* ── Files an extension asks the user for (EXTENSION_FILE_TEXT §4.3, §4.4) ──
+   The ask bar and the progress chip are host DOM, outside every extension
+   iframe. They sit in the window's mount (the launcher's bubble) or in a
+   fixed layer at the top of the window. Logical properties only, so both
+   mirror in right-to-left languages. */
+.kage-file-text-layer {
+    position: fixed;
+    inset-block-start: 8px;
+    inset-inline: 8px;
+    z-index: 2147483000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+}
+.kage-file-text-layer > * {
+    pointer-events: auto;
+    max-inline-size: 100%;
+}
+.kage-file-ask,
+.kage-file-chip {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    padding-block: 6px;
+    padding-inline: 10px;
+    border: 1px solid var(--kage-border);
+    border-radius: 10px;
+    background: var(--kage-bg-elevated);
+    color: var(--kage-text);
+    font-family: var(--kage-font);
+    font-size: 12.5px;
+    line-height: 1.35;
+    text-align: start;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+body.light-theme .kage-file-ask,
+body.light-theme .kage-file-chip {
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+}
+.speech-bubble > .kage-file-ask,
+.speech-bubble > .kage-file-chip {
+    margin-block: 6px 0;
+    margin-inline: 10px;
+    box-shadow: none;
+}
+.kage-file-ask {
+    flex-wrap: wrap;
+    border-color: var(--kage-accent);
+}
+.kage-file-ask-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+.kage-file-ask-text,
+.kage-file-chip-text {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+}
+.kage-file-ask-actions {
+    display: flex;
+    gap: 6px;
+    margin-inline-start: auto;
+}
+.kage-file-ask button,
+.kage-file-chip button {
+    padding-block: 3px;
+    padding-inline: 10px;
+    border: 1px solid var(--kage-border);
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.kage-file-ask button:hover,
+.kage-file-chip button:hover:not(:disabled) {
+    background: var(--kage-term-hover);
+}
+.kage-file-ask button:focus-visible,
+.kage-file-chip button:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 1px;
+}
+.kage-file-ask .kage-file-ask-choose {
+    border-color: var(--kage-accent);
+    background: var(--kage-accent);
+    color: #fff;
+}
+.kage-file-ask .kage-file-ask-choose:hover {
+    background: var(--kage-accent-hover);
+}
+.kage-file-ask .kage-file-ask-choose[aria-disabled="true"] {
+    opacity: 0.7;
+    cursor: default;
+}
+.kage-file-chip button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}

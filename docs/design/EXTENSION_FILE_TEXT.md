@@ -137,8 +137,9 @@ in `context.hostFeatures` only for extensions that hold the capability.
 `context.files` exists only when `context.hostFeatures` includes
 `files.pick_text`. It is a thin wrapper over the commands in §3.5, in a
 new self-contained runtime part,
-`ui/js/extension-sandbox/runtime/files-api.js`, appended to
-`RUNTIME_SOURCE_PATHS`.
+`ui/js/extension-sandbox/runtime/files-api.js`, listed in
+`RUNTIME_SOURCE_PATHS` before `runtime.js`. `runtime.js` imports it and
+sets `context.files` in `buildContext` (two lines).
 
 ```js
 const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.includes(f);
@@ -164,9 +165,13 @@ if (has('files.pick_text')) {
 ```
 
 `pickText()` calls `pick_file_text` with `args: { formats, max_chars }`
-(`maxChars` becomes `max_chars`). Aborting `signal` calls
-`cancel_file_text`. It resolves `null` on cancel. `support()` calls
-`file_text_support`.
+(`maxChars` becomes `max_chars`; options left out are left out of
+`args`). Aborting `signal` calls `cancel_file_text`. It resolves `null`
+on cancel: an aborted `signal` (an already aborted one opens nothing),
+the user's **Cancel** on the progress chip, or a cancelled dialog. So
+`errors.file_text.cancelled` never reaches code that uses
+`context.files`; it does reach a raw `invoke('pick_file_text')`.
+`support()` calls `file_text_support`.
 
 Extensions may also call the commands through `context.invoke`. The
 Kage-Extensions permission check finds `invoke('…')` call sites only, so
@@ -357,7 +362,7 @@ All keys live under `errors.file_text.` in `locales/en/messages.json`.
 | `extension_disabled` | not_permitted | Rust | {extension} is turned off. |
 | `invalid_formats` | invalid_input | Rust | Unknown file type requested. Kage reads: {formats}. |
 | `invalid_max_chars` | invalid_input | Rust | The character limit must be between 1 and {max}. |
-| `busy` | rate_limited | Rust, JS host (ask bar already showing) | Kage is already reading a file. Try again when it's done. |
+| `busy` | rate_limited | Rust, JS host (an ask bar or a request already in this window) | Kage is already reading a file. Try again when it's done. |
 | `too_soon` | rate_limited | Rust | Wait a moment before choosing another file. |
 | `declined` | rate_limited | JS host | You chose "Not now". Try again in a moment. |
 | `no_window` | cancelled | JS host | Open Kage to choose a file. |
@@ -393,27 +398,38 @@ Rust-side UI strings, also in `locales/en/messages.json`:
 ### 3.9 Sandbox host changes (`ui/js/shared/extension-sandbox-host.js`)
 
 Kept small. The logic lives in a new module,
-`ui/js/shared/extension-file-text.js` (§5.1–5.3), so the host file doesn't
-grow much.
+`ui/js/shared/extension-file-text.js` (§5.1–5.3: the broker, the click
+lease, the pausable RPC timers), so the host file doesn't grow much. The
+ask bar and the chip are drawn by `ui/js/shared/extension-file-text-ui.js`,
+which keeps both files under 500 lines.
 
 - `pick_file_text` and `cancel_file_text` join `IDENTITY_SCOPED_COMMANDS`
   (`extensionId`). `pick_file_text` also gets `displayName` from the spec.
 - `call(method, params, { userGesture: true })`: sets the sandbox's click
   lease (§5.2) before posting, and marks the RPC's timer as pausable.
-- `consumeClickLease()`, `pauseGestureTimers()`, `resumeGestureTimers()`.
+- `consumeClickLease()`, `hasClickLease()` (a peek, for
+  EXTENSION_AGENT_CALLS' `when: 'now'`), `pauseGestureTimers()`,
+  `resumeGestureTimers()`.
 - `_handleInvoke`: after the capability, argument and rate checks,
   `pick_file_text` is handed to `FileTextBroker.request(this, args)`
-  instead of the raw invoke.
+  instead of the raw invoke, and `cancel_file_text` to
+  `FileTextBroker.cancel(this, args)`: it withdraws the sandbox's ask bar
+  if one is showing (the request resolves `null`, with no cooldown), else
+  it goes to Rust. Without this an aborted `signal` couldn't take back an
+  ask bar.
 - `destroy()`: if this sandbox has a request in flight, call
   `cancel_file_text` and remove its ask bar.
 - `HOST_FEATURE_FILE_TEXT = 'files.pick_text'` with its capability in
   `HOST_FEATURE_CAPABILITY`.
 - `SandboxSpec.displayName`, set by `ExtensionManager` and the settings
-  pool.
+  pool; a view's sandbox uses its `extensionName`, and without either the
+  id is used. `SandboxSpec.displayIcon` (the manifest icon) is for the ask
+  bar; `ExtensionManager` sets it too.
 
-`validateExtensionInvokeArgs` gains a branch for `pick_file_text`: `args`
-is absent or an object with only `formats` (array of 1–7 known ids, no
-duplicates) and `max_chars` (integer 1–1,000,000). Anything else is
+`validateExtensionInvokeArgs` (`ui/js/shared/extension-url-policy.js`)
+gains a branch for `pick_file_text`: `args` is absent or an object with
+only `formats` (array of 1–7 known ids, no duplicates) and `max_chars`
+(integer 1–1,000,000). `null` counts as absent for both. Anything else is
 refused before Rust sees it. Rust checks again.
 
 ### 3.10 Events
@@ -462,16 +478,27 @@ window shows a bar at the top, rendered by the host:
 > **[Not now]**
 
 - The extension's icon and name come from its manifest, via the host.
-- **Choose file…** opens the dialog. **Not now**, Escape, or 60 seconds
-  without an answer resolves the request with `null`. After **Not now**
-  the same sandbox can't ask again for 30 seconds (`declined`).
-- One bar per window. A second request while one is showing fails with
-  `busy`.
+- **Choose file…** opens the dialog. It ignores clicks for the first
+  half second, so a click aimed at something the bar pushed down, or an
+  Enter typed into the input it took focus from, can't open the dialog.
+- **Not now**, Escape, or 60 seconds without an answer resolves the
+  request with `null`. After any of the three the same sandbox can't ask
+  again for 30 seconds (`declined`); counting the timeout too stops a
+  timer from keeping the bar up for good. A click lease still opens the
+  dialog during the cooldown. An extension that withdraws its request
+  (its `signal`) starts no cooldown.
+- One bar per window. A second request while one is showing, or while
+  a request from this window runs, fails with `busy`.
 - If the window is hidden (a sandbox in a hidden chat window, or the
   launcher while it's closed), the request fails with `no_window`. Kage
   never pops a window open for this.
-- `role="alertdialog"`, focus moves to **Choose file…**, keyboard
-  reachable. Logical CSS properties, so it mirrors in RTL languages.
+- `role="alertdialog"`, focus moves to **Choose file…** and goes back
+  where it was when the bar closes, keyboard reachable. Logical CSS
+  properties, so it mirrors in RTL languages.
+- Where it shows: at the top of the launcher's bubble, in the flow (the
+  launcher grows to fit it); in the other windows, in a fixed layer at
+  the top of the window, above the page and any extension iframe. The
+  chip (§4.4) goes in the same place.
 
 ### 4.4 Progress chip
 
@@ -628,16 +655,23 @@ The dialog guard is a pair of callbacks a window registers with its
   `ui/js/floating/app/lifecycle-visibility.js` returns early while it is
   set) and hides the window. Rust opens the dialog with no parent, after
   `setup::activate_app` (as `pick_folder` does), so it gets keyboard
-  focus. `end()` shows the launcher again through its normal show path,
-  sets `_suppressBlurHideUntil = now + 1500`, and clears the flag. The
-  extension's reply (`display`, …) then shows in the launcher as usual.
+  focus. `end()` shows the launcher again through its normal show path
+  (`presentOverlayWindow`), sets `_suppressBlurHideUntil = now + 1500`,
+  and clears the flag. For those 1.5 s the focus handler also skips the
+  show-time reset (`preserve_last_response: false`), so the input and
+  results stay. The extension's reply (`display`, …) then shows in the
+  launcher as usual. The guard hides the window directly, not through
+  the blur handler's hide path, so nothing else is reset or paused.
 
   Why hide: the launcher is always on top and hides when it loses focus.
   A dialog attached to it would sit on a small input bar (a sheet on
   macOS), and a free dialog can end up under it on Windows and Linux.
 - **Chat, settings and view windows.** No-op guard. Rust attaches the
   dialog to the calling window (`set_parent`): a sheet on macOS, an owned
-  modal dialog on Windows, a transient dialog on Linux.
+  modal dialog on Windows, a transient dialog on Linux. Chat and the view
+  page install their broker (visibility from their window); Settings
+  needs no install call: a window that installs none gets a default
+  broker with this behaviour, created on the first request.
 
 Rust picks the mode from `window.label()`: `window_labels::FLOATING` and
 `INLINE_ASSIST` mean "no parent", everything else "parent".
@@ -829,7 +863,7 @@ together, so this only guards against a broken install.
 | File read | 60 s | Parent |
 | Worker stdout | `max_chars * 4 + 1 MiB` | Parent |
 | Click lease | 10 s, one dialog | JS host |
-| Ask bar | 60 s; 30 s cooldown after **Not now** | JS host |
+| Ask bar | 60 s; 30 s cooldown after **Not now**, Escape or the 60 s | JS host |
 | Requests in flight | 1 in the whole app | Rust |
 | Between dialogs | 3 s per extension | Rust |
 
@@ -2071,6 +2105,26 @@ existing tests named in §12)
 - §3.4, §3.9, §4.3, §4.4, §5.1 (JS part), §5.2, §5.3 (JS part).
 - Accept: every JS test in §12; manual steps 1, 2, 6, 7, 8 on one OS with a
   test extension.
+- Done: the broker, lease and timers in `extension-file-text.js`; the ask
+  bar and chip in a new `ui/js/shared/extension-file-text-ui.js` (to keep
+  both under 500 lines); the argument check in `extension-url-policy.js`.
+  Beyond the list: two lines in `ui/js/extension-sandbox/runtime.js`
+  (`context.files`, SYNC §23.2 lists the file), and the view page's
+  install call and `files.pick_text` in `ui/js/extension-view/main.js`.
+  `extension-permissions.js` needed no change: FT5 had added the rows.
+  Decisions beyond the first draft: `cancel_file_text` also goes through
+  the broker, so it can withdraw an ask bar (§3.9); `busy` also when a
+  request runs in this window, so the launcher's guard isn't run twice;
+  the cooldown after Escape and the timeout as well as **Not now**, and
+  the half-second arming of **Choose file…** (§4.3); `pickText` resolves
+  `null` for any cancel (§3.4); the launcher keeps its content when it
+  comes back from the dialog (§5.3); `hasClickLease()` and
+  `SandboxSpec.displayIcon` (§3.9). Tests: `extension-file-text.test.js`,
+  `extension-files-api.test.js` (the runtime part),
+  `ui-tests/floating/file-dialog-guard.test.js`, and additions to
+  `extension-sandbox-host.test.js`, `extension-permissions.test.js`,
+  `extension-rust-alignment.test.js`, `settings-renderer.test.js` and
+  `extension-view/main-wiring.test.js`. Manual steps not run yet.
 
 **WP-FT7 Settings UI** (`ui/js/settings/manager.js` (display name and
 host feature for the settings pool), `ui/js/settings/tool-permissions.js`

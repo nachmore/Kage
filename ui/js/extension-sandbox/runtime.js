@@ -6,6 +6,7 @@ import { formatIcu } from '../shared/icu-message.js';
 import { createSandboxedRunner } from './runtime/sandboxed-worker.js';
 import { HOST_FEATURES, createStorageEvents, invokeError } from './runtime/host-api.js';
 import { createViewSurface, removeWebRtc } from './runtime/view-api.js';
+import { createFilesApi } from './runtime/files-api.js';
 import { extensionModuleOrder, rewriteExtensionModules } from '../shared/extension-modules.js';
 
 /**
@@ -189,6 +190,9 @@ function buildContext() {
     // Only a view window's sandbox has `context.view`; elsewhere it's
     // undefined, so extensions can feature-detect it.
     if (viewSurface) context.view = viewSurface.api;
+    // Files the user picks, when the host offered the feature
+    // (docs/design/EXTENSION_FILE_TEXT.md §3.4); else undefined.
+    if (hostFeatures?.includes('files.pick_text')) context.files = createFilesApi({ invoke });
     return context;
 }
 

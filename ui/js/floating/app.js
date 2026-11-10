@@ -30,7 +30,11 @@ import { InputMethods } from './app/input.js';
 import { ResponseUiMethods } from './app/response-ui.js';
 import { ResultMenuMethods } from './app/result-menu.js';
 import { applyMixin } from '../shared/mixin.js';
-import { HOST_FEATURE_DATE_PICKER, HOST_FEATURE_VIEWS } from '../shared/extension-sandbox-host.js';
+import {
+    HOST_FEATURE_DATE_PICKER,
+    HOST_FEATURE_FILE_TEXT,
+    HOST_FEATURE_VIEWS,
+} from '../shared/extension-sandbox-host.js';
 import { setShellRunHost } from '../shared/shell-run-view.js';
 
 export class FloatingApp {
@@ -95,9 +99,11 @@ export class FloatingApp {
         // The floating window hosts the month-calendar date picker, so it
         // offers that feature to (calendar-capable) extensions. It opens
         // extension views too, and stays open beside one it opened
-        // (docs/design/EXTENSION_VIEWS.md §15.2, Rule A).
+        // (docs/design/EXTENSION_VIEWS.md §15.2, Rule A). Extensions can
+        // read a file the user picks here (EXTENSION_FILE_TEXT §5.3).
+        this._installFileTextBroker();
         this.extensionManager = new ExtensionManager(invoke, {
-            hostFeatures: [HOST_FEATURE_DATE_PICKER, HOST_FEATURE_VIEWS],
+            hostFeatures: [HOST_FEATURE_DATE_PICKER, HOST_FEATURE_VIEWS, HOST_FEATURE_FILE_TEXT],
             resultSource: 'launcher',
             onBeforeOpenView: () => this._armViewCompanion(),
             listen,

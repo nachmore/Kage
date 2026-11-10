@@ -3918,7 +3918,7 @@ Files listed by more than one design:
 | `ui/js/shared/extension-permissions.js` | V1, FT6, AC3, C0, S5 |
 | `ui/js/shared/extension-sandbox-host.js` | V4, FT6, AC5, C0, S5 |
 | `ui/js/shared/extension-manager.js` | V5, FT6, AC5, S5 |
-| `ui/js/extension-sandbox/runtime.js`, `runtime/host-api.js` | V4, AC5, S5 |
+| `ui/js/extension-sandbox/runtime.js`, `runtime/host-api.js` | V4, FT6 (`runtime.js`: `context.files`), AC5, S5 |
 | `ui/js/shared/settings-host-effects.js` | V5, FT6, AC6 |
 | `ui/js/shared/settings-renderer.js` | FT6, S6 |
 | `ui/js/settings/manager.js` | V5, FT7, AC6, S6 |

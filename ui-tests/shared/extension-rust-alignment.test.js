@@ -315,6 +315,8 @@ describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
         delete_extension_data: 'extension_id',
         get_extension_config: 'id',
         save_extension_config: 'id',
+        pick_file_text: 'extension_id',
+        cancel_file_text: 'extension_id',
     };
 
     it('every identity-scoped command takes its id arg on the Rust side', () => {
@@ -329,6 +331,20 @@ describe('extension storage IPC — Rust ↔ JS arg-name alignment', () => {
                 `${name}(${args.join(', ')}) — expected param '${rustArg}'; if you renamed it, update IDENTITY_SCOPED_COMMANDS in extension-sandbox-host.js too`
             ).toBe(true);
         }
+    });
+
+    it('pick_file_text takes the display name the host injects (EXTENSION_FILE_TEXT §3.5)', () => {
+        const cmds = parseTauriCommands(path.join(repoRoot, 'src/commands/extensions'));
+        expect(cmds.get('pick_file_text')).toEqual(['extension_id', 'display_name', 'args']);
+        expect(cmds.get('cancel_file_text')).toEqual(['extension_id']);
+        expect(cmds.get('file_text_support')).toEqual([]);
+        const host = readFileSync(
+            path.join(repoRoot, 'ui/js/shared/extension-sandbox-host.js'),
+            'utf8'
+        );
+        expect(host).toMatch(
+            /command === PICK_FILE_TEXT\) forwardedArgs\.displayName = this\.displayName/
+        );
     });
 
     it('host injects the calling sandbox id under each command’s wire arg name', () => {

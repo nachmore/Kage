@@ -169,7 +169,8 @@ export function installExtensionSearchMethods(ExtensionManager) {
             try {
                 // Strip the host-only stamp before sending; the extension never needs it.
                 const { _extensionId: _ignore, ...clean } = result;
-                return await ext.sandbox.call('execute', { result: clean });
+                // The user picked the row: a click lease (EXTENSION_FILE_TEXT §5.2).
+                return await ext.sandbox.call('execute', { result: clean }, { userGesture: true });
             } catch (e) {
                 console.warn(`execute() in '${id}' failed:`, e);
                 return null;

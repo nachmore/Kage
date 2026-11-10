@@ -111,6 +111,12 @@ export const KNOWN_EVENTS = Object.freeze([
     // source ('launcher'|'chat'|'formatter'|'widget'|'toolbar'|'settings'|
     // 'view') and reused (0|1) — no extension id, params or titles.
     'extension_view_opened',
+    // Fired from Rust (src/file_text/post.rs) when a file the user picked
+    // for an extension was handled (docs/design/EXTENSION_FILE_TEXT.md
+    // §5.14). Payload: extension_id, format, outcome ('ok', 'cancelled' or
+    // an error code), size_bucket, chars_bucket, ms_bucket — counts only,
+    // never names, titles, text or hashes.
+    'extension_file_text',
 ]);
 
 /**
