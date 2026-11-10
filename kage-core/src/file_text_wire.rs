@@ -92,8 +92,11 @@ pub const fn worker_stdout_cap(max_chars: u32) -> u64 {
 // --- Formats --------------------------------------------------------
 
 /// Whether this build reads the second-release formats (HTML, PPTX,
-/// RTF). WP-FT8 sets it once their parsers have landed.
-pub const READS_P1_FORMATS: bool = false;
+/// RTF). On since WP-FT8, once their parsers had landed. Turning it off
+/// again hides them from `file_text_support` and the dialog filter, and
+/// the app and the worker refuse them; extensions that ask for them
+/// still work with the other formats.
+pub const READS_P1_FORMATS: bool = true;
 
 /// A file format Kage can read. Serialises lowercase.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

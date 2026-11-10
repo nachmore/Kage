@@ -241,6 +241,7 @@ for users.
 | `automation`    | ⚡   | `emit_automation_signal`, `list_automation_signals`, `get_power_status`. |
 | `tts`           | 🔈  | `pocket_tts_test`, `pocket_tts_voices`. |
 | `views`         | 🖼️  | Show the windows the manifest declares in `contributes.views`, drawn by the extension itself. No command maps to it: it lets the host open those windows (see [Views](#views)). |
+| `file_text`     | 📄  | Ask the user to pick one file, then get its text: `context.files` (`pick_file_text`, `cancel_file_text`, `file_text_support`). Never the path, and only the file the user picks each time. Different from `filesystem`, which is discovery: paths and file details, never text. See [Reading a file the user picks](#reading-a-file-the-user-picks). |
 | `sync`          | 🔄  | Folder sync of the extension's data, encrypted, to the user's other computers: the manifest `sync` block and `context.sync` (`ext_sync_status`, `ext_sync_push`, `ext_sync_pull`, `ext_sync_ack`). See [Folder sync](#folder-sync). |
 
 The authoritative command-to-capability mapping is in
@@ -600,6 +601,325 @@ const off = s.onChanges(({ collections, reason }) => { /* pull */ });
 - Device tags are stable per extension and computer, and mean nothing
   outside the user's computers. Extensions never get computer names.
 
+## Reading a file the user picks
+
+An extension with the `file_text` capability can ask the user to pick
+one file and get its text. Kage opens the OS file dialog, reads the file
+on this computer, and pulls the text out in a separate, short-lived
+process with memory, CPU and time limits. You get the text and a little
+metadata. **You never get the path**, and you get only the file the user
+picked, this time. To read it again, the user picks it again. The full
+design is
+[`docs/design/EXTENSION_FILE_TEXT.md`](design/EXTENSION_FILE_TEXT.md).
+
+### The `file_text` capability
+
+```json
+{ "permissions": ["storage", "file_text"] }
+```
+
+The install prompt lists it as 📄 **Files you choose**: "Ask you to pick
+a file, then read its text (plain text, Markdown, PDF, Word, …). It gets
+only the file you pick, each time, never its folder or any other file."
+
+- An update that adds `file_text` runs without it until the user
+  approves it (Store → Approve). Until then `files.pick_text` is missing
+  from `context.hostFeatures` and `context.files` is `undefined`.
+- An older Kage that doesn't know `file_text` drops it from your
+  permissions with a warning and loads your extension without it.
+- There is no setting for it. Each read needs the user to pick the
+  file, so there is no standing access to turn off. To stop an extension
+  asking, the user turns it off or uninstalls it.
+
+### `context.files`
+
+`context.files` exists only when `context.hostFeatures` includes
+`files.pick_text`: the window offers it (the launcher, chat, Settings
+and view windows do) and you hold `file_text`.
+
+```js
+// permissions: file_text
+const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.includes(f);
+
+if (has('files.pick_text')) {
+    // { formats: [{ id, extensions }], max_input_bytes, max_chars, default_max_chars }
+    const support = await context.files.support();
+
+    try {
+        const file = await context.files.pickText({
+            formats: support.formats.map((f) => f.id), // optional; default: every format this Kage reads
+            maxChars: 200000,                          // optional; default 100,000; 1–1,000,000
+            signal,                                    // optional AbortSignal
+        });
+        if (!file) return; // the user cancelled, or said "Not now"
+        // file: see "What you get back"
+    } catch (err) {
+        // err.message is in the user's language. Branch on err.key,
+        // e.g. 'errors.file_text.too_large', 'errors.file_text.encrypted'.
+    }
+}
+```
+
+- `support()` lists the formats this Kage reads, with their file
+  extensions, and the limits. Pass its format ids to `pickText()` and
+  you get new formats when Kage adds them, with no code change.
+- `pickText(options)` opens the dialog (or first the
+  [ask bar](#when-the-dialog-opens)) and resolves the file's text, or
+  `null`.
+  - `formats`: 1–7 different format ids from the
+    [table below](#formats-and-how-their-text-looks); the dialog's one
+    filter lists their extensions. An id this Kage doesn't know is
+    refused.
+  - `maxChars`: a whole number from 1 to 1,000,000. Longer text is cut
+    (`truncated: true`).
+  - `signal`: aborting it takes back the ask bar or cancels the read. An
+    already aborted signal opens nothing.
+- `pickText()` resolves `null` when the user cancels the dialog, answers
+  the ask bar with **Not now** (or Escape, or lets it time out), or
+  presses **Cancel** while the file is read; when your `signal` aborts;
+  and when your extension was turned off or lost `file_text` while the
+  dialog was open.
+- An unknown or repeated format id, a `maxChars` out of range, and, for
+  a raw `invoke`, any key in `args` but `formats` and `max_chars` are
+  refused by the host before anything opens, with an error that has no
+  `kind`.
+- The Kage-Extensions permission check finds `invoke('…')` call sites
+  only. Code that uses `context.files` needs the hint comment
+  `// permissions: file_text`, as above.
+
+You can also call the commands with `context.invoke`:
+
+| Command | Args | Returns |
+|---|---|---|
+| `pick_file_text` | `{ args: { formats?, max_chars? } }` | the file's text, or `null` |
+| `cancel_file_text` | `{}` | `true` if it took back your ask bar or cancelled your read |
+| `file_text_support` | `{}` | what `support()` returns |
+
+The host fills in your extension's id and its manifest name; values you
+send for them are replaced. A raw `pick_file_text` whose read is
+cancelled rejects with `errors.file_text.cancelled` instead of resolving
+`null`.
+
+### When the dialog opens
+
+The dialog opens at once when the request follows a click or key press
+the host saw. Call `pickText()` from one of these handlers, and await it
+there:
+
+| The user… | Your handler |
+|---|---|
+| picks a result row in the launcher or chat (click or Enter) | `execute()` |
+| clicks a `data-ext-action` button in a custom result row or a formatter card | `onResultAction()` |
+| clicks a widget button | `onAction()` |
+| clicks a chat toolbar button | `onClick()` |
+| clicks a settings action, or picks a file for a `pick_file` effect | `runAction()`, `onFileSelected()` |
+| picks a day in the [date picker](#date-picker) | `onDateSelected()` |
+| clicks or presses a key in one of your [views](#views) | the view's own click or key handler |
+
+- Each such call allows **one** dialog within 10 seconds. Nothing else
+  gives one: not `match()`, `getTools()`, widget refreshes, formatters,
+  timers or the agent's tool calls.
+- While the dialog is open and the file is read, the host pauses the
+  timeout of the handler that asked, so `execute()` can await
+  `pickText()` while the user browses folders.
+- In a view, the view window must be in front and the engine must report
+  a recent click or key press in it (`navigator.userActivation`), as for
+  [`context.view`](#contextview). Where the engine can't tell, the view
+  gets the ask bar.
+- From the launcher, the launcher hides while the dialog is open and
+  comes back afterwards with its input and results as they were; your
+  reply then shows as usual. In chat, Settings and view windows the
+  dialog is attached to the window.
+- The dialog's title is Kage's: "*Your extension*: choose a file to
+  read", with the name from your manifest. You can't set it.
+
+Otherwise Kage first shows an **ask bar** at the top of the window:
+"🧠 **Mind Map** wants to read a file you choose. **[Choose file…]**
+**[Not now]**", with the icon and name from your manifest.
+
+- **Choose file…** opens the dialog. It ignores clicks for its first
+  half second, so a click aimed at something the bar pushed down can't
+  press it.
+- **Not now**, Escape, or 60 seconds without an answer resolves `null`.
+  For the next 30 seconds, requests from your extension in that window
+  that don't follow a click fail with `declined`. Taking the bar back
+  with your `signal` starts no such wait.
+- In a hidden window the request fails with `no_window`. Kage never
+  shows a window for this.
+
+Don't call `pickText()` from an agent tool: the user gets the ask bar,
+and the tool call's 60-second limit often runs out before they've
+chosen.
+
+If reading takes more than 400 ms, the window shows "Reading
+*name*… **Cancel**", or "Downloading *name*…" while a cloud drive
+fetches the file. One file is read at a time in all of Kage, and at
+least 3 seconds pass between one extension's dialogs.
+
+### What you get back
+
+```js
+{
+    name: 'Q3 plan.pdf',            // the file name only: NFC, cleaned, at most 255 characters
+    extension: 'pdf',               // lowercase, without the dot
+    format: 'pdf',                  // what the content turned out to be
+    size: 1843200,                  // bytes
+    modified_at: 1761400000000,     // ms since the epoch (UTC), or null
+    title: 'Q3 plan',               // document metadata or the first heading (≤ 200 characters), or null
+    text: '# Goals\n\n…',
+    chars: 48211,                   // Unicode code points in text
+    truncated: false,               // the document had more text than maxChars
+    total_chars: 48211,             // the whole document's length when the reader knows it, else null
+    pages: { count: 12, read: 12 }, // PDF pages or PowerPoint slides, else null
+    page_starts: [0, 3904 /* … */], // where each page read starts in text (code points), else null
+    warnings: [],
+    sha256: '9f86d081…',            // lowercase hex SHA-256 of the file's bytes
+    file_ref: 'fr1_…',              // opaque, see below
+}
+```
+
+- `chars` counts Unicode code points. JavaScript's `text.length` counts
+  UTF-16 units and can be larger for emoji and some scripts, so use
+  `chars`. `page_starts` counts code points too.
+- `sha256` is the same for the same content on any computer.
+- `file_ref` is the same for the same file at the same place, on this
+  computer, for your extension. It differs per extension and per
+  computer, can't be turned back into a path, and changes when the file
+  is renamed or moved. Use it to spot "the same file again" here, and
+  keep it out of synced data; use `sha256` across computers.
+- The field names avoid the words Kage's backup and sync treat as
+  secret (`key`, `token`, …), so you can store the object as it is.
+
+| Warning | Meaning |
+|---|---|
+| `pages_skipped` | More than 2,000 pages or 1,000 slides; the rest weren't read. |
+| `no_text` | Almost no text (for a PDF, likely a scan). `text` may be empty. |
+| `replaced_characters` | Some bytes couldn't be decoded and became U+FFFD. |
+| `legacy_encoding` | Plain text that wasn't UTF-8 or UTF-16; Kage guessed the encoding. |
+| `restricted` | The PDF asks readers not to copy its text. Kage reads it anyway: the user chose the file. |
+| `hidden_text_skipped` | Text marked hidden in the document was left out. |
+| `possible_secret` | The text or title looks like it holds a password, token or key. |
+
+### Formats and how their text looks
+
+| Id | Extensions |
+|---|---|
+| `text` | `.txt`, `.text`, `.log`, `.csv`, `.tsv` |
+| `markdown` | `.md`, `.markdown`, `.mdown`, `.mkd` |
+| `pdf` | `.pdf` |
+| `docx` | `.docx` |
+| `html` | `.html`, `.htm`, `.xhtml` |
+| `pptx` | `.pptx` |
+| `rtf` | `.rtf` |
+
+Not read: `.doc` and the other old binary Office formats, spreadsheets,
+`.odt`, `.epub`, Pages and Keynote files, images, email files, and the
+text of scanned pages (there is no OCR). A file that needs a password
+to open is refused.
+
+The text uses `\n` line breaks and light Markdown for structure: `#` to
+`###` headings, `- ` list items (two more spaces per level), and table
+cells separated by tabs, rows by line breaks.
+
+- **Text and Markdown**: as written. A Markdown title is the front
+  matter's `title:`, else the first level-1 heading.
+- **PDF**: page by page, with a blank line between pages. Columns may
+  interleave. Form field values and other annotations aren't read.
+  Title: the document's title.
+- **Word**: paragraphs separated by a blank line. Heading 1–3 and Title
+  become headings. A footnote or endnote reference becomes `[n]`, and
+  the notes follow at the end under `Notes`. Comments, headers,
+  footers, deleted tracked changes and hidden text are left out. Title:
+  the document's title, else the first heading.
+- **PowerPoint**: each visible slide starts with `## ` and its title (or
+  `## Slide N`), then its text in drawing order. Speaker notes follow
+  under `Notes:`. Hidden slides and shapes are left out. `pages` counts
+  slides.
+- **HTML**: the visible text, laid out in blocks as a browser would.
+  Scripts, styles and hidden elements are left out, and nothing is
+  fetched. Title: the `<title>`.
+- **RTF**: the body text, with headings, lists, tables and notes as for
+  Word. Title: the document's title.
+
+The full rules are in the design, §3.7.
+
+Every format gets the same clean-up: Unicode NFC, line breaks as `\n`,
+control characters, invisible tag characters and the bidi overrides
+LRO and RLO removed, trailing spaces trimmed, never more than one blank
+line in a row. Text longer than `maxChars` is cut, at a paragraph break,
+a sentence end or a space near the end where there is one.
+
+### Size and time limits
+
+| Limit | Value |
+|---|---|
+| File size | 32 MB (`max_input_bytes`). Larger files are refused before they're read. |
+| Text | 100,000 characters by default; ask for 1 to 1,000,000. |
+| PDF pages, PowerPoint slides | 2,000 pages, 1,000 slides; the rest are skipped (`pages_skipped`). |
+| Reading the file | 60 seconds, for a file a cloud drive is still downloading. |
+| Getting the text out | 30 seconds. |
+
+### Errors from `pickText()`
+
+An error's `message` is in the user's language, fine to show. Branch on
+`err.key`:
+
+| `err.key` | `err.kind` | Why |
+|---|---|---|
+| `errors.file_text.not_granted` | `not_permitted` | Your extension doesn't hold `file_text`. |
+| `errors.file_text.extension_disabled` | `not_permitted` | Your extension is turned off. |
+| `errors.file_text.invalid_formats` | `invalid_input` | None of the formats you asked for is read by this Kage. A format it knows but doesn't read yet is dropped from your list first. |
+| `errors.file_text.invalid_max_chars` | `invalid_input` | `maxChars` is out of range. |
+| `errors.file_text.busy` | `rate_limited` | Kage is reading a file already, or an ask bar is up in this window. |
+| `errors.file_text.too_soon` | `rate_limited` | Your last dialog closed less than 3 seconds ago. |
+| `errors.file_text.declined` | `rate_limited` | The user said **Not now** less than 30 seconds ago, and this request didn't follow a click. |
+| `errors.file_text.no_window` | `cancelled` | The window is hidden. |
+| `errors.file_text.unavailable` | `internal` | This copy of Kage has no file reader (a broken install). Nothing was shown. |
+| `errors.file_text.dialog_failed` | `internal` | The file dialog couldn't open. |
+| `errors.file_text.not_a_file` | `invalid_input` | The pick was a folder or a package (such as `.rtfd`), a pipe or a device. |
+| `errors.file_text.unsupported` | `invalid_input` | The file's extension isn't one of the formats you asked for. |
+| `errors.file_text.wrong_content` | `invalid_input` | The content doesn't match the extension (a PDF named `.docx`). |
+| `errors.file_text.too_large` | `invalid_input` | The file is over 32 MB. |
+| `errors.file_text.read_failed` | `internal` | The file couldn't be read. |
+| `errors.file_text.not_downloaded` | `timeout` | A cloud drive didn't finish downloading it within 60 seconds. |
+| `errors.file_text.encrypted` | `invalid_input` | The file needs a password to open. |
+| `errors.file_text.legacy_format` | `invalid_input` | An old binary Office file (`.doc` and the like). |
+| `errors.file_text.not_text` | `invalid_input` | A text file that holds binary data. |
+| `errors.file_text.malformed` | `invalid_input` | The file is damaged. |
+| `errors.file_text.too_complex` | `invalid_input` | The file ran into a safety limit (nesting, compressed size, memory). |
+| `errors.file_text.timeout` | `timeout` | Getting the text out took longer than 30 seconds. |
+| `errors.file_text.cancelled` | `cancelled` | The read was cancelled. Only a raw `invoke` sees it; `pickText()` resolves `null`. |
+| `errors.file_text.worker_failed` | `internal` | The file reader stopped unexpectedly. |
+
+`busy`, `declined` and `no_window` come from the window's host, the rest
+from Kage's backend; all of them carry `kind` and `key`.
+
+### Using the text safely
+
+- **The text is untrusted.** Escape it before you put it into HTML (the
+  host's sanitizer is a second layer, not the first). When you send it
+  to an agent, frame it as data: a document can hold instructions aimed
+  at AI. Kage removes invisible tag characters and leaves out text a
+  document marks hidden, but it can't spot white-on-white or tiny text.
+- **`possible_secret`**: keep that text away from the agent and out of
+  synced data unless the user says otherwise, for example by saving the
+  document as private and on this computer only. Nothing is removed
+  from the text, and the match itself is never logged or returned.
+- **Storage.** What you save is ordinary extension data: in encrypted
+  full backups (never in settings-only ones), and synced if you opt in
+  (a [record collection](#opting-data-in) with `large: true` holds up to
+  4 MiB per record). A full backup refuses an entry over 64 MB and more
+  than 256 MB in all, so give documents a budget. Don't list document
+  text in `sensitiveData`: it isn't a credential, and a declared file a
+  backup doesn't replace keeps all of your settings and data on this
+  computer whole ([What restoring does](#what-restoring-does)), so one
+  document would block every restore of your data.
+- **What Kage keeps.** Nothing from the file. Settings → Tool
+  permissions → Audit log records each read with the file name, on this
+  computer only, and the user can clear it. Anonymous usage data counts
+  reads in coarse buckets, with no names or text
+  ([`PRIVACY.md`](PRIVACY.md)).
+
 ## Vendor libraries
 
 Some extensions need a UMD/IIFE library (e.g. mathjs) that exposes a
@@ -688,6 +1008,9 @@ the remaining gaps.
   extension changed its stored data — see
   [Change events](#change-events-contextstorageonchanged).
 - `context.view` exists only in a view window — see [Views](#views).
+- `context.files` exists only where the window offers `files.pick_text`
+  and you hold `file_text` — see
+  [Reading a file the user picks](#reading-a-file-the-user-picks).
 - You can't write the clipboard from the sandbox (and an RPC to the
   host would arrive after the click's user activation has expired).
   On a settings page, use a [copy action](#copy-to-clipboard) instead.
@@ -747,6 +1070,7 @@ const has = (f) => Array.isArray(context.hostFeatures) && context.hostFeatures.i
 | `views` | This window can open your [views](#views), and you hold the `views` capability. In a view window, `context.view` exists. Unlike the rows above, it depends on the window and on your grant. |
 | `sync.keys`, `sync.lists` | This window syncs the keys and lists the manifest's `sync` block declares, and the extension holds `sync` (see [Folder sync](#folder-sync)). |
 | `sync.records` | `context.sync` exists here: push, pull and ack of record collections (see [Folder sync](#folder-sync)). |
+| `files.pick_text` | `context.files` exists here: this window can ask the user to pick a file and give you its text, and you hold `file_text` (see [Reading a file the user picks](#reading-a-file-the-user-picks)). Offered by the launcher, chat, Settings and view windows. |
 
 A host with `storage.change_events` but without `views` supports views,
 and the user hasn't approved `views` for your extension yet. A host with
@@ -760,16 +1084,26 @@ or show, never something to match on. When the backend returned a
 structured error, the `Error` also carries:
 
 - `err.kind` — a stable category: `timeout`, `cancelled`,
-  `connection_lost`, `rate_limited`, `internal`, …
+  `connection_lost`, `rate_limited`, `internal`, `not_permitted`,
+  `invalid_input`, …
 - `err.key` — the stable message key, e.g.
   `errors.oauth.unknown_listener`. Free-form backend errors share the
   generic key `errors.passthrough`, so for those only `kind` tells
   them apart.
 
+`not_permitted` means your extension may not do this right now: it lacks
+the grant, it's turned off, or the call needs a user action it didn't
+get. `invalid_input` means the arguments (or the file the user picked)
+were refused; calling again with the same input fails the same way.
+
 Branch on `kind` (or `key`). Errors the host raises itself (missing
-capability, forbidden command, rate limit) have no `kind`. Hosts
-without `invoke.error_kind` never set either field — see
-[OAuth loopback](#oauth-loopback) for a fallback that works on both.
+capability, forbidden command, rate limit) have no `kind`. The
+exceptions are refusals of a feature's own rules, such as the
+[file picker's](#errors-from-picktext) `busy`, `declined` and `no_window` and
+[`context.view`'s](#contextview) refusals: those carry `kind` and `key`
+like backend errors. Hosts without `invoke.error_kind` never set either
+field — see [OAuth loopback](#oauth-loopback) for a fallback that works
+on both.
 
 ### Your extension runs as MULTIPLE instances — design for it
 

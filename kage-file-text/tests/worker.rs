@@ -3,8 +3,8 @@
 //! tests rely on (EXTENSION_FILE_TEXT §5.5, §12).
 
 use kage_core::file_text_wire::{
-    write_request, Format, WorkerErrorCode, WorkerRequest, WorkerResponse, MAX_HEADER_BYTES,
-    WORKER_ALLOC_CAP_BYTES, WORKER_FLAG,
+    write_request, Format, Warning, WorkerErrorCode, WorkerRequest, WorkerResponse,
+    MAX_HEADER_BYTES, READS_P1_FORMATS, WORKER_ALLOC_CAP_BYTES, WORKER_FLAG,
 };
 use std::io::{Read, Write};
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -159,12 +159,54 @@ fn refuses_what_it_wasnt_asked_for() {
         err_code(&respond(WORKER_FLAG, &frame(&unknown, b"x"))),
         WorkerErrorCode::Unsupported
     );
-    // A second-release format this build doesn't read yet.
-    let html = WorkerRequest::new(vec![Format::Html], "html", 100);
-    assert_eq!(
-        err_code(&respond(WORKER_FLAG, &frame(&html, b"<p>x"))),
-        WorkerErrorCode::Unsupported
-    );
+}
+
+#[test]
+fn reads_html_and_rtf_with_the_p1_switch() {
+    let both = vec![Format::Html, Format::Rtf];
+    let page = b"<html><head><title>Plan</title><script>x()</script></head>\
+        <body><h1>Q3</h1><p hidden>left out</p><ul><li>Ship it</li></ul></body></html>";
+    let doc = b"{\\rtf1\\ansi\\ansicpg1252{\\fonttbl{\\f0 Helvetica;}}\
+        {\\info{\\title Notes}}\\pard\\f0 caf\\'e9\\par Second}";
+    let html = frame(&WorkerRequest::new(both.clone(), "HTM", 1000), page);
+    let rtf = frame(&WorkerRequest::new(both, "rtf", 1000), doc);
+    if !READS_P1_FORMATS {
+        for input in [html, rtf] {
+            assert_eq!(
+                err_code(&respond(WORKER_FLAG, &input)),
+                WorkerErrorCode::Unsupported
+            );
+        }
+        return;
+    }
+    match respond(WORKER_FLAG, &html) {
+        WorkerResponse::Ok {
+            format,
+            text,
+            title,
+            warnings,
+            ..
+        } => {
+            assert_eq!(format, Format::Html);
+            assert_eq!(text, "# Q3\n\n- Ship it");
+            assert_eq!(title.as_deref(), Some("Plan"));
+            assert_eq!(warnings, [Warning::HiddenTextSkipped]);
+        }
+        other => panic!("{other:?}"),
+    }
+    match respond(WORKER_FLAG, &rtf) {
+        WorkerResponse::Ok {
+            format,
+            text,
+            title,
+            ..
+        } => {
+            assert_eq!(format, Format::Rtf);
+            assert_eq!(text, "caf\u{e9}\n\nSecond");
+            assert_eq!(title.as_deref(), Some("Notes"));
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 #[test]

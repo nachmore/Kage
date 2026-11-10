@@ -290,6 +290,20 @@ fn args_default_and_validate() {
         let e = args(Some(vec![Format::Html, Format::Rtf]), None).unwrap_err();
         assert_eq!(e.key, "errors.file_text.invalid_formats");
         assert_eq!(e.params["formats"], ".txt, .md, .pdf, .docx");
+    } else {
+        assert_eq!(
+            args(Some(vec![Format::Pptx, Format::Pdf]), None).unwrap().0,
+            vec![Format::Pptx, Format::Pdf]
+        );
+        assert_eq!(
+            args(Some(Format::ALL.to_vec()), None).unwrap().0,
+            Format::ALL.to_vec()
+        );
+        let e = args(Some(vec![]), None).unwrap_err();
+        assert_eq!(
+            e.params["formats"],
+            ".txt, .md, .pdf, .docx, .html, .pptx, .rtf"
+        );
     }
 }
 
