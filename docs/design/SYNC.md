@@ -1852,6 +1852,9 @@ launch path.
   `key_store_for(kind)` reopens the store `DevicePrefs::key_store`
   recorded, so a key kept in the file is still found after an update makes
   the keychain reliable. `file_key_store` is the store §15 offers.
+  There is no separate question: when the OS store refuses the key at
+  setup, join or unlock, the engine keeps it in the file and records
+  `key_store: "file"`, so entering the passphrase always unlocks.
 - Settings → Sync → Advanced shows where the key is kept.
 
 ### 11.5 What counts as a credential

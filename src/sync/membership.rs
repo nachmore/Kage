@@ -13,7 +13,7 @@ use super::engine::{
 use super::folder::{self, Descriptor, DirKind, FileClass, Layout};
 use super::hlc::Hlc;
 use super::identity::{forget_published, new_instance, remember_instance};
-use super::keystore::StoredKey;
+use super::keystore::{self, KeyStoreKind, StoredKey};
 use super::merge::is_visible;
 use super::prefs::DevicePrefs;
 use super::replica::{OpenNote, Replica};
@@ -21,8 +21,8 @@ use super::scope;
 use super::sources::{LocalRecord, LocalState, LocalWrite, ORDER};
 use super::status::{CategoryCounts, JoinComputer, JoinPreview, SyncStatus};
 use super::types::{
-    Category, ConflictBody, ConflictKind, DeviceId, FieldKey, LocalKey, Origin, Scope, Side, Stamp,
-    READER_VERSION, SYNC_FORMAT,
+    Category, ConflictBody, ConflictKind, DeviceId, FieldKey, LocalKey, Origin, PinReason, Scope,
+    Side, Stamp, READER_VERSION, SYNC_FORMAT,
 };
 use super::{CreateReq, JoinChoice, JoinReq};
 use crate::error::{AppError, ErrorKind};
@@ -101,7 +101,7 @@ impl SyncEngine {
         let layout = Layout::resolve(&*self.env.fs, Path::new(&folder));
         let (mut replica, note) = Replica::open(&self.env.local_dir.join(REPLICA_FILE))?;
         let instance = new_instance();
-        let (hlc_last, my_seq, last_ingest, join_pending) = replica.tx(|tx| {
+        let (hlc_last, my_seq, last_ingest, join_pending, epoch_floor) = replica.tx(|tx| {
             remember_instance(tx, &instance)?;
             Ok((
                 tx.meta("hlc_last")?
@@ -113,6 +113,9 @@ impl SyncEngine {
                 tx.meta("last_complete_ingest")?
                     .and_then(|v| v.parse::<i64>().ok()),
                 tx.meta("join_pending")?.is_some(),
+                tx.meta(super::ingest::EPOCH_FLOOR)?
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .unwrap_or(0),
             ))
         })?;
         let mut keys = BTreeMap::new();
@@ -139,6 +142,7 @@ impl SyncEngine {
             hlc: Hlc::new(hlc_last),
             keys,
             epoch,
+            epoch_floor,
             my_seq,
         });
         let now = self.now();
@@ -195,9 +199,7 @@ impl SyncEngine {
             log::warn!("sync: couldn't create the sync folder: {e:#}");
             return Err(keyed(ErrorKind::InvalidInput, "errors.sync.folder_write"));
         }
-        self.env
-            .keys
-            .set(&folder_id, &StoredKey::new(1, &dek))
+        self.store_key(&folder_id, &StoredKey::new(1, &dek))
             .map_err(internal)?;
         remove_replica(&self.env.local_dir);
         self.prefs = DevicePrefs {
@@ -214,6 +216,9 @@ impl SyncEngine {
         };
         self.save_prefs().map_err(internal)?;
         self.rt = Default::default();
+        // A reset at load happened while sync was off here: there is
+        // nothing synced to put back, so it doesn't stop capture (§8.10).
+        self.rt.reset_handled = true;
         self.start_core().map_err(internal)?;
         self.rt.descriptor_recheck_at = Some(now + 10_000);
         self.tick(Wake::Manual);
@@ -249,9 +254,7 @@ impl SyncEngine {
         }
         let (epoch, dek) = unlock_from_folder(&*fs, &layout, &d.folder_id, &req.passphrase)?;
         let me = DeviceId::random();
-        self.env
-            .keys
-            .set(&d.folder_id, &StoredKey::new(epoch, &dek))
+        self.store_key(&d.folder_id, &StoredKey::new(epoch, &dek))
             .map_err(internal)?;
         remove_replica(&self.env.local_dir);
         let path = if layout.root == req.path {
@@ -276,6 +279,9 @@ impl SyncEngine {
         };
         self.save_prefs().map_err(internal)?;
         self.rt = Default::default();
+        // As for create: the user's join choice decides, not a reset at
+        // load that happened while sync was off here.
+        self.rt.reset_handled = true;
         self.start_core().map_err(internal)?;
         let now = self.now();
         self.rt.join = Some(JoinPending {
@@ -426,6 +432,15 @@ impl SyncEngine {
                                 };
                                 let (_, sc) = super::engine::eff_source(&r, name, os);
                                 let key = LocalKey::new(ns, &rid, name);
+                                if super::guards::held_back(ns, &rid, name, lv) {
+                                    // It looks like it holds a key: it stays
+                                    // here, held back (§4.3), whichever side
+                                    // wins, and never goes into the conflicts
+                                    // list, which syncs (§11.1).
+                                    tx.set_pin(&key, Some((lv.clone(), PinReason::HeldBack)))?;
+                                    tx.set_projected(&key, Some((hash(lv), None, None)))?;
+                                    continue;
+                                }
                                 if same(&c.value, lv) {
                                     tx.set_projected(&key, Some((hash(lv), Some(c.stamp), sc)))?;
                                     continue;
@@ -553,8 +568,7 @@ impl SyncEngine {
                 let _ = store.set(&format!("{folder_id}.{}", old.epoch), &old);
             }
         }
-        store
-            .set(&folder_id, &StoredKey::new(epoch, &dek))
+        self.store_key(&folder_id, &StoredKey::new(epoch, &dek))
             .map_err(internal)?;
         self.prefs.key_epoch = epoch;
         self.save_prefs().map_err(internal)?;
@@ -570,6 +584,26 @@ impl SyncEngine {
         self.rt.newer_epoch = None;
         self.tick(Wake::Manual);
         Ok(self.build_status())
+    }
+
+    /// Keep a data key in this computer's key store. When the OS store
+    /// refuses it (denied, locked, gone), the key goes to the owner-only
+    /// file instead, and `device.json` remembers that (§11.4, §15 "The file
+    /// key store is offered"), so entering the passphrase always unlocks.
+    fn store_key(&mut self, account: &str, key: &StoredKey) -> anyhow::Result<()> {
+        let e = match self.env.keys.set(account, key) {
+            Ok(()) => return Ok(()),
+            Err(e) if self.env.keys.kind() == KeyStoreKind::File => return Err(e),
+            Err(e) => e,
+        };
+        log::warn!(
+            "sync: the key store refused the sync key ({e:#}); keeping it in the owner-only file"
+        );
+        let file = keystore::file_key_store(&self.env.local_dir);
+        file.set(account, key)?;
+        self.env.keys = file;
+        self.prefs.key_store = Some(KeyStoreKind::File.wire().to_string());
+        Ok(())
     }
 
     /// Turn off sync on this computer (§13.5). Local data stays.

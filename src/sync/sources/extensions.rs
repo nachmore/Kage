@@ -1537,8 +1537,10 @@ impl ExtensionsSource {
                 };
                 let merged = ctx.merged(&ns, id)?;
                 let mut base = ctx.store().ext_base(ext, coll, id)?;
-                let gone = [hash(&Value::Null), hash(&Value::Bool(false))];
-                base.retain(|_, (_, h)| !gone.contains(h));
+                // Absent values: `null`, or `false` for a removed set
+                // element. A plain `false` field is a value.
+                let (null, no) = (hash(&Value::Null), hash(&Value::Bool(false)));
+                base.retain(|n, (_, h)| *h != null && !(*h == no && split::is_union(n)));
                 let structure = collection_structure(cd);
                 let held = match &merged {
                     Some(m) => {

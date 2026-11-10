@@ -189,6 +189,12 @@ impl SyncEngine {
         for e in entries.iter().filter(|e| !e.is_dir) {
             match folder::classify(DirKind::Device, &e.name) {
                 FileClass::Head(s) => top = top.max(s),
+                // An evicted head (older macOS) is still there (§8.12).
+                FileClass::ICloudStub(inner) => {
+                    if let FileClass::Head(s) = folder::classify(DirKind::Device, &inner) {
+                        top = top.max(s);
+                    }
+                }
                 FileClass::Duplicate { of } => dups.push((e.name.clone(), of)),
                 _ => {}
             }
@@ -338,7 +344,8 @@ impl SyncEngine {
             return Ok(false);
         }
         let dir = core.layout.shards_dir(core.me);
-        let present = super::publish::list_names(&*self.env.fs, &dir, DirKind::Shards);
+        // Evicted shards are still there: only a missing one is a rewind.
+        let present = super::publish::own_names(&*self.env.fs, &dir, DirKind::Shards);
         let listed = match self.env.fs.list(&dir) {
             Ok(_) => true,
             Err(e) => e.kind() != io::ErrorKind::NotFound,
@@ -359,7 +366,9 @@ impl SyncEngine {
         if !listed {
             return Ok(!names.is_empty());
         }
-        Ok(names.iter().any(|n| !n.is_empty() && !present.contains(n)))
+        Ok(names
+            .iter()
+            .any(|n| !n.is_empty() && !present.contains_key(n)))
     }
 
     /// The instances this computer's sync state has had.
