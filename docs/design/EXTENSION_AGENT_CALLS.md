@@ -132,17 +132,20 @@ also resolves `reason`.
 
 ### 3.3 Host feature
 
-`agent.background`. Offered by every window's `ExtensionManager`
-(floating, chat, settings). Filtered by `hostFeaturesFor` with
+`agent.background`. Offered by the windows with long-lived extension
+instances: the floating and chat windows through their `ExtensionManager`,
+and the settings window, which has its own sandbox pool and lists it in
+`SETTINGS_HOST_FEATURES` (`ui/js/settings/main.js`), so a settings button
+such as **Organize now** can start a call. Filtered by `hostFeaturesFor` with
 `HOST_FEATURE_CAPABILITY['agent.background'] = 'agent_background'`, so it
 appears in `context.hostFeatures` only for extensions that hold the
 capability. Older hosts never list it.
 
 Extension view windows ([`EXTENSION_VIEWS.md`](EXTENSION_VIEWS.md)) don't
-offer it, and their view-surface denylist refuses the five
-`agent_call_*` commands. A view is torn down 10 minutes after it is
-hidden, so background work belongs to the long-lived instances in the
-floating, chat and settings windows.
+offer it, a view sandbox drops it even if a caller offers it, and the
+view-surface denylist refuses the five `agent_call_*` commands. A view is
+torn down 10 minutes after it is hidden, so background work belongs to the
+long-lived instances in the floating, chat and settings windows.
 
 ### 3.4 Runtime API in the sandbox
 
@@ -188,14 +191,26 @@ Errors reject with the usual `invoke()` error: `message`, `kind`, `key`
 `complete()` does this:
 1. `agent_call_reserve` → `callId`.
 2. `agent_call_ready` → resolves when the turn starts.
-3. Call `build()` if it is a function. If it returns `null`, call
-   `agent_call_cancel` and resolve `null`.
+3. Call `build()` if it is a function. If it returns `null` (or
+   `undefined`), call `agent_call_cancel` and resolve `null`. If it
+   throws, or returns a request that isn't valid, call
+   `agent_call_cancel` and reject.
 4. `agent_call_send` → the result.
 5. If step 4 rejects with `errors.agent_call.cancelled_user_activity`
    and `retryOnActivity` is on, start again from step 1 once. (Waiting
    reservations are never cancelled by activity, only held back.)
-6. `signal` abort at any step → `agent_call_cancel`, reject with
-   `cancelled_by_extension`.
+6. `signal` abort at any step → `agent_call_cancel`, reject at once with
+   `kind: 'cancelled'` and `key: 'errors.agent_call.cancelled_by_extension'`.
+   A reservation that arrives after the abort is cancelled when its id
+   arrives. An already aborted signal sends nothing.
+
+Before step 1 the runtime checks the options (`purpose` a non-empty
+string, `when` `'idle'` or `'now'`, `dedupeKey` a string) and a request
+passed as an object (`instructions` a string, `label` a string if given,
+the two numbers finite). It sends the request in snake_case, with
+`maxResponseChars` and `timeoutMs` rounded and clamped to their ranges.
+A failed check rejects with a `TypeError` whose `kind` is
+`invalid_input`, and reaches neither the host nor the agent.
 
 ### 3.5 Tauri commands callable by extensions
 
@@ -334,17 +349,37 @@ catalog, as `Display` already does.
 - Add the five commands to `IDENTITY_SCOPED_COMMANDS` with `extensionId`.
 - Track outstanding call ids per sandbox in `_agentCalls` (like
   `_oauthListeners`): add on a successful `agent_call_reserve`, remove when
-  `send` settles, `ready` rejects, or `cancel` is sent.
-- `destroy()` fires `agent_call_cancel` for every tracked id.
+  `send` settles, `ready` rejects, or `cancel` is sent. Two details:
+  - A send that Rust answers `not_ready` (sent before its turn) leaves the
+    call tracked, because the reservation still waits.
+  - A `ready` or `send` that fails without an AppError `kind` never
+    reached the service (the IPC refused its args). The host cancels that
+    call itself, so its turn doesn't hold the agent for 10 s.
+  At most 64 ids are kept; only 5 can be live at once.
+- `destroy()` fires `agent_call_cancel` for every tracked id, as does the
+  window's `pagehide` (best effort: the window may be gone before the
+  cancel arrives). A reservation that resolves after `destroy()` is
+  cancelled at once.
 - Before forwarding `agent_call_send`, reject a payload whose JSON is over
-  64 KB (fast fail; Rust is authoritative).
-- Before forwarding `agent_call_reserve` with `when: 'now'`, check the
-  sandbox's click lease (the one [`EXTENSION_FILE_TEXT.md`](EXTENSION_FILE_TEXT.md)
-  §5.2 defines: set only by RPCs the host sends because of a user's
-  click or key press, 10 s). Without a lease the host rewrites `when` to
-  `'idle'`. This check doesn't consume the lease, so "Organize now" can
-  still open a file dialog in the same click. A timer or an agent tool
-  can't use `now` to skip the idle gate.
+  64 KB (fast fail; Rust is authoritative). The host counts the JSON text
+  in UTF-16 code units (65,536), not UTF-8 bytes. Rust's limits count
+  characters, so text in any script counts the same on both sides; a
+  request within Rust's limits is about 36,000 characters. The refusal is
+  `invalid_input` with `errors.agent_call.prompt_too_large` (or
+  `field_invalid` with `field: request` when the payload can't be JSON),
+  and the host cancels the call, because Rust never saw the send.
+- Before forwarding `agent_call_reserve`, rebuild its `args` as exactly
+  `{ purpose, when, dedupe_key? }`. serde would read an array, or
+  `when: { "now": null }`, as `now`. `when` is `'now'` only when the
+  sandbox asked for `'now'` and holds its click lease (the one
+  [`EXTENSION_FILE_TEXT.md`](EXTENSION_FILE_TEXT.md) §5.2 defines: set
+  only by RPCs the host sends because of a user's click or key press,
+  10 s). Anything else goes as `'idle'`. This check doesn't consume the
+  lease, so "Organize now" can still open a file dialog in the same click.
+  Each click allows one `'now'` reservation; a second one in the same
+  click goes as `'idle'`, and a reservation Rust refuses gives the click's
+  one back. A timer or an agent tool can't use `now` to skip the idle
+  gate.
 - Add `HOST_FEATURE_AGENT_BACKGROUND = 'agent.background'` with its
   capability.
 
@@ -1717,14 +1752,18 @@ files, `InstalledExtensions` reads the new manifest field, and
 `ui/js/shared/extension-manager.js`,
 `ui/js/extension-sandbox/runtime.js`,
 `ui/js/extension-sandbox/runtime/agent-api.js` (new),
-`ui-tests/shared/extension-sandbox-host*.test.js`,
+`ui-tests/shared/extension-sandbox-host*.test.js` (the bridge cases in
+the new `extension-sandbox-host-agent.test.js`),
 `ui-tests/shared/extension-rust-alignment.test.js`,
-`ui-tests/extension-sandbox/agent-api.test.js` (new))
+`ui-tests/extension-sandbox/agent-api.test.js` (new); one line in
+`ui/js/settings/main.js`, whose own sandbox pool offers the settings
+window's host features (§3.3))
 - Identity injection, call tracking and cancel on destroy, the host
   feature, `context.agent`, and the `when: 'now'` lease check (§3.8). If
   EXTENSION_FILE_TEXT's WP-FT6 hasn't merged yet, this package adds the
   click lease exactly as that design's §5.2 specifies (the `userGesture`
-  call option and the lease on the sandbox), and FT6 reuses it.
+  call option and the lease on the sandbox), and FT6 reuses it. (FT6
+  merged first, so AC5 reuses its `ClickLease`.)
 - Accept: the JS tests in §12 for these files; `npx vitest run` green.
 
 **WP-AC6 Host UI** (`ui/js/settings/extension-agent-access.js` (new),

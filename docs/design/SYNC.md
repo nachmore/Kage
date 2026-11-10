@@ -4199,6 +4199,7 @@ Files listed by more than one design:
 | `ui/js/shared/settings-host-effects.js` | V5, FT6, AC6 |
 | `ui/js/shared/settings-renderer.js` | FT6, S6 |
 | `ui/js/settings/manager.js` | V5, FT7, AC6, S6 |
+| `ui/js/settings/main.js` (the settings sandboxes' host features) | V5, AC5 (one line), S5, S6 |
 | `ui/js/settings/extension-capabilities.js` | V1, FT7, AC6, S5 |
 | `ui/js/settings/tool-permissions.js` | FT7, AC6, S6 |
 | `ui/js/floating/app.js`, `ui/js/floating/app/lifecycle-visibility.js`, `ui/js/chat/app/lifecycle.js` | V5, FT6 |
