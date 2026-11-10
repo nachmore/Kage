@@ -3152,7 +3152,9 @@ Kage doesn't tell your code when the user changes access. Call
 - `when: 'now'` skips only that wait. Kage honours it only within 10
   seconds of a click or key press it passed to your extension (a result,
   a widget or toolbar button, a settings action). Otherwise the call is
-  treated as `idle`. Use it for buttons such as "Organize now".
+  treated as `idle`. Use it for buttons such as "Organize now". One
+  click allows one `'now'` call: a second one in the same click is
+  treated as `idle`.
 - Every call also waits until the agent is connected and not compacting
   its context, and while the computer is on low battery or the power
   mode is "saving".
@@ -3196,7 +3198,8 @@ The user picks the allowance level in the panel; Normal is the default.
 A day is the user's local calendar day, and the allowance resets at
 local midnight. A call is charged for its prompt and for what came back,
 even when it was stopped. A call refused before it was sent costs
-nothing. The whole request, as JSON, may be at most 64 KB.
+nothing. The whole request, as JSON, may be at most 65,536 characters
+(its JavaScript string length, about 64 KB of plain text).
 
 ### Errors
 

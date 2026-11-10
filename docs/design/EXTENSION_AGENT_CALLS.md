@@ -1,9 +1,9 @@
 # Design: background agent calls for extensions
 
-Status: being built. WP-AC0 to WP-AC4 (contracts, engine, strict
-sessions, commands and wiring, backups) and WP-AC7 (docs) are in Kage.
-The sandbox runtime (WP-AC5) and the host UI (WP-AC6) follow §13, and
-Mind Map's side is Kage-Extensions work. The guide for extension authors
+Status: built in Kage. WP-AC0 to WP-AC7 (contracts, engine, strict
+sessions, commands and wiring, backups, the sandbox runtime, the host UI
+and the docs) are in. The manual checklist hasn't been run in a real app
+yet, and Mind Map's side is Kage-Extensions work. The guide for extension authors
 is [`docs/EXTENSIONS.md`](../EXTENSIONS.md) § Background agent calls.
 
 This document specifies a host API that lets an extension ask the user's

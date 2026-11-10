@@ -288,7 +288,8 @@ describe('telemetry', () => {
 describe('the other docs', () => {
     it('cover background agent calls', () => {
         const security = read('docs/SECURITY_MODEL.md');
-        expect(security).toMatch(/`views` ·\n`agent_background`/);
+        // The capability summary: other capabilities may come between.
+        expect(security).toMatch(/`views` ·\n(?:`\w+` · )*`agent_background`/);
         expect(section(security, 'Summary of current guarantees')).toContain(
             'A background agent call appears in a chat or session list'
         );
