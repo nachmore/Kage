@@ -55,6 +55,13 @@ What Kage keeps on your computer:
 - The permission audit log (Settings → Tool permissions) records each read with the file's name, so you can see what your extensions read. It stays on your computer, is never sent or backed up, and you can clear it.
 - A random key, used to tell an extension "this is the same file as before" without telling it where the file is. It stays on this computer and is never sent, backed up or synced.
 
+### Background AI for extensions
+- Some extensions can ask your AI agent for help in the background, with no chat. This is off for every extension until you turn it on for that extension and confirm which agent gets the text.
+- The text goes to your agent, the same one your chats use. It never goes to Kage or to Aptabase. Where it goes from there depends on your agent: the dialog says whether it's an online service, this computer or another computer.
+- Kage counts three things: when you turn background AI on or off for an extension (`extension_agent_access_changed`: the extension id and on or off); once a day, how many requests each extension made and how they ended, with the characters sent and received in a coarse bucket (`extension_agent_calls_daily`: the extension id, counts of ok, failed and cancelled requests and tool attempts, and a bucket such as "under 50,000"); and when Kage pauses an extension's requests (`extension_agent_calls_paused`: the extension id and whether it was after failures or a tool attempt).
+- These events never include the text sent or received, the extension's purposes or labels, or the agent's name.
+- On your computer, Kage keeps a log entry for each request in Settings → Tool permissions (sizes, the agent's name and the outcome, never the text), and the last five requests and replies in memory only, for **Show what was sent**.
+
 ### Crash signal
 - If Kage panics (an unrecoverable internal error), we send a single `panic` event so we know a buggy build is in the wild.
 - The event carries only a coarse category from a fixed list (e.g. `unwrap_none`, `index_oob`, `other`) and the source location it occurred at — e.g. `src/foo.rs:42`. These are paths *inside our own source code*, not paths to your files.

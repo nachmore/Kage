@@ -48,6 +48,19 @@ When debug mode is enabled, all logs are printed to the console (stdout) in addi
 - Accumulated response chunks
 - Session update events
 
+### Background agent calls are included
+
+Debug mode covers the prompts extensions send to your agent in the
+background ([background agent calls](EXTENSIONS.md#background-agent-calls)),
+like every other prompt. The full framed prompt, with the extension's
+text, is logged, and so is the start of each line the agent sends back.
+These lines go to the console and to `app.jsonl`, and they show in
+Settings → About.
+
+Without `/debug`, Kage logs one line per background call: its id, the
+extension, the purpose, the outcome, the sizes and the duration. It never
+logs the text. So read a debug log before you share it.
+
 ## Console Output Format
 
 Debug logs are printed with timestamps:
