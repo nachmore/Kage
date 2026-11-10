@@ -2345,6 +2345,10 @@
     "message": "<strong>{extension}</strong> couldn't read {file}",
     "description": "Audit row summary — an extension's read of a file the user picked failed (HTML allowed). {file} is the file name."
   },
+  "settings.tool_permissions.audit.summary.extension_file_read_unnamed": {
+    "message": "a file (name not shown)",
+    "description": "Audit row — stands in for {file} in the two file-read summaries when Kage didn't keep the file's name, because it looked like a password or key. Lowercase: it goes inside a sentence such as \"Mind Map read a file (name not shown) (pdf, 2 MB, 1,200 characters)\"."
+  },
   "settings.tool_permissions.audit.meta.session": {
     "message": "session {id}",
     "description": "Meta line — session id for the event"
