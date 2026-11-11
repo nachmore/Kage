@@ -395,6 +395,9 @@ jobs:
       # `cargo test`; xauth is listed explicitly because xvfb-run needs
       # it and --no-install-recommends shouldn't be trusted to pull it.
       - name: Install Linux system deps
+        # An apt mirror that stops answering held this step for over an
+        # hour once; fail fast instead so a re-run can pick another mirror.
+        timeout-minutes: 10
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
