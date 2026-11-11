@@ -14530,5 +14530,17 @@
     "description": "Button that closes the read-only view of one background request",
     "_machine_translated": true,
     "_source_hash": "4bee7e5d81853e2e"
+  },
+  "floating.banner.selection_needs_accessibility": {
+    "message": "선택한 텍스트가 포함되지 않았습니다. 이 버전의 Kage를 사용하려면 macOS에서 손쉬운 사용 권한을 켜야 합니다. Kage가 서명될 때까지는 업데이트할 때마다 이 권한이 꺼집니다.",
+    "description": "Launcher banner on macOS when 'include selected text' is on but Kage lacks the Accessibility permission (macOS drops it after every update of an ad-hoc signed app). Shown once per launch.",
+    "_machine_translated": true,
+    "_source_hash": "77dc903eee3e2aa4"
+  },
+  "floating.banner.action.fix_permission": {
+    "message": "해결",
+    "description": "Button on the launcher banner that opens Settings → macOS Permissions to re-grant Accessibility",
+    "_machine_translated": true,
+    "_source_hash": "7da7429422ea0be2"
   }
 }

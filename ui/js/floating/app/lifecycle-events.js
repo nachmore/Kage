@@ -10,6 +10,7 @@ import {
     setExtensionManager,
     signalMascot,
     signalMascotError,
+    t,
     updateSelection,
     WINDOW,
 } from './dependencies.js';
@@ -389,6 +390,23 @@ export const LifecycleEventsMethods = {
                 // though the rest of the UI only cares about 'completed'.
                 signalMascot('compactDone');
             }
+        });
+
+        // Selection capture is on but macOS hasn't granted this build
+        // Accessibility (ad-hoc signed builds lose it on every update), so
+        // the selected text can't be included. Say so once per run, when no
+        // other banner is up; the button opens Settings → macOS Permissions,
+        // where Repair re-lists this build.
+        this.listen(EVT.SELECTION_CAPTURE_UNAVAILABLE, () => {
+            if (this._selectionHintShown || this.banner?.visible) return;
+            this._selectionHintShown = true;
+            this.banner?.showText(
+                '🔒',
+                t('floating.banner.selection_needs_accessibility'),
+                t('floating.banner.action.fix_permission'),
+                'settings',
+                'mac-permissions'
+            );
         });
 
         // Listen for selection captured from previous window

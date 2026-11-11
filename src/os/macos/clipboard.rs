@@ -22,7 +22,21 @@ pub struct SelectionCaptureToken {
     change_count_before: Option<isize>,
 }
 
+/// Accessibility trust, checked without prompting. Posted events need it;
+/// without it they're dropped and the capture can only time out.
+pub fn selection_capture_available_impl() -> bool {
+    unsafe { accessibility_sys::AXIsProcessTrusted() }
+}
+
 pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
+    // Untrusted: the keystroke would be dropped. Skip it, and leave no
+    // change count so `finish` returns at once instead of timing out.
+    if !selection_capture_available_impl() {
+        return SelectionCaptureToken {
+            original_clipboard: None,
+            change_count_before: None,
+        };
+    }
     let original_clipboard = read_clipboard_impl();
     let change_count_before = pasteboard::change_count();
     // Deliver the copy straight to the frontmost app's event queue. The

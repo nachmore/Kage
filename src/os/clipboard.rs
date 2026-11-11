@@ -29,6 +29,15 @@ pub fn capture_selection() -> Option<String> {
     crate::os::platform::clipboard::capture_selection_impl()
 }
 
+/// Whether Kage can copy the foreground app's selection right now. On
+/// macOS that needs the Accessibility grant: without it the synthetic Cmd+C
+/// is silently dropped (and Kage's ad-hoc signed builds lose the grant on
+/// every update), so callers skip the capture and can tell the user why.
+/// Always true elsewhere.
+pub fn selection_capture_available() -> bool {
+    crate::os::platform::clipboard::selection_capture_available_impl()
+}
+
 /// Phase 1 of two-phase selection capture: send the copy keystroke to
 /// the foreground window. Must be called while the source window is
 /// still focused.

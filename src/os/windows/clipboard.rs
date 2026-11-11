@@ -438,6 +438,11 @@ pub struct SelectionCaptureToken {
 /// Phase 1: Send Ctrl+C to the foreground window and snapshot the
 /// clipboard state. Must be called while the source window is still
 /// focused.
+/// Copying the selection needs no permission here.
+pub fn selection_capture_available_impl() -> bool {
+    true
+}
+
 pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
     let (original_clipboard, seq_before) = send_copy_keystroke();
     SelectionCaptureToken {

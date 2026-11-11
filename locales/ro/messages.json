@@ -14530,5 +14530,17 @@
     "description": "Button that closes the read-only view of one background request",
     "_machine_translated": true,
     "_source_hash": "4bee7e5d81853e2e"
+  },
+  "floating.banner.selection_needs_accessibility": {
+    "message": "Textul selectat nu este inclus: macOS necesită activarea Accesibilității pentru această versiune de Kage. Permisiunea se dezactivează după fiecare actualizare, până când Kage va fi semnat.",
+    "description": "Launcher banner on macOS when 'include selected text' is on but Kage lacks the Accessibility permission (macOS drops it after every update of an ad-hoc signed app). Shown once per launch.",
+    "_machine_translated": true,
+    "_source_hash": "77dc903eee3e2aa4"
+  },
+  "floating.banner.action.fix_permission": {
+    "message": "Remediază",
+    "description": "Button on the launcher banner that opens Settings → macOS Permissions to re-grant Accessibility",
+    "_machine_translated": true,
+    "_source_hash": "7da7429422ea0be2"
   }
 }

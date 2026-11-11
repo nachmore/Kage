@@ -6309,6 +6309,14 @@
     "message": "new",
     "description": "Badge on a newly-requested capability"
   },
+  "floating.banner.selection_needs_accessibility": {
+    "message": "Your selected text isn't included: macOS needs Accessibility turned on for this version of Kage. It switches off after each update until Kage is signed.",
+    "description": "Launcher banner on macOS when 'include selected text' is on but Kage lacks the Accessibility permission (macOS drops it after every update of an ad-hoc signed app). Shown once per launch."
+  },
+  "floating.banner.action.fix_permission": {
+    "message": "Fix",
+    "description": "Button on the launcher banner that opens Settings → macOS Permissions to re-grant Accessibility"
+  },
   "floating.banner.update_available": {
     "message": "Kage v{version} is available!",
     "description": "Banner text shown when an app update is available"

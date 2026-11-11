@@ -11,6 +11,11 @@ pub struct SelectionCaptureToken {
     selection: Option<String>,
 }
 
+/// Copying the selection needs no permission here.
+pub fn selection_capture_available_impl() -> bool {
+    true
+}
+
 pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
     SelectionCaptureToken {
         selection: capture_selection_impl(),

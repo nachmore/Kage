@@ -88,6 +88,12 @@ pub const SHOW_SESSIONS: &str = "show_sessions";
 /// target window, which is the only one that acts on it.
 pub const CHAT_OPEN_SESSION: &str = "chat_open_session";
 
+/// Selection capture is on but can't run: macOS hasn't granted this build
+/// Accessibility (ad-hoc signed builds lose it on every update). Sent to
+/// the floating launcher on each show while that lasts; it says why the
+/// selected text isn't included once per run. No payload.
+pub const SELECTION_CAPTURE_UNAVAILABLE: &str = "selection_capture_unavailable";
+
 // --- Context menu ---------------------------------------------------
 
 /// A menu for the context-menu window to render (`MenuRender` payload:
@@ -235,6 +241,7 @@ mod tests {
             INLINE_ASSIST_ERROR,
             SHOW_SESSIONS,
             CHAT_OPEN_SESSION,
+            SELECTION_CAPTURE_UNAVAILABLE,
             CONTEXT_MENU_RENDER,
             CLIPBOARD_HISTORY_MODE,
             VOICE_MODE,

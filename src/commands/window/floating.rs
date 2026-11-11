@@ -234,6 +234,12 @@ pub fn toggle_floating_window<R: tauri::Runtime>(window: &WebviewWindow<R>) {
         if crate::os::clipboard::is_process_blocklisted(fg_process, &capture_blocklist) {
             info!("[selection] Skipping capture — foreground app '{fg_process}' is blocklisted");
             None
+        } else if !crate::os::clipboard::selection_capture_available() {
+            // macOS without Accessibility: the Cmd+C would be dropped and
+            // the capture would only time out. Tell the launcher so it can
+            // say why the selection isn't included.
+            note_selection_capture_unavailable(app);
+            None
         } else {
             Some(crate::os::clipboard::begin_selection_capture())
         }
@@ -570,6 +576,18 @@ pub fn center_window_on_active_monitor<R: tauri::Runtime>(window: &WebviewWindow
             height: 600,
         },
     );
+}
+
+/// Tell the floating launcher that selection capture is on but can't work
+/// (macOS Accessibility isn't granted to this build); it decides whether to
+/// say so. Logged once per run.
+fn note_selection_capture_unavailable<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static LOGGED: AtomicBool = AtomicBool::new(false);
+    if !LOGGED.swap(true, Ordering::SeqCst) {
+        info!("[selection] Skipping capture — Kage isn't trusted for Accessibility");
+    }
+    crate::event_targets::emit_to_floating(app, crate::events::SELECTION_CAPTURE_UNAVAILABLE, &());
 }
 
 #[cfg(test)]
