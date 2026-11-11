@@ -30,6 +30,9 @@ export const FILE_DIALOG_BLUR_GRACE_MS = 1500;
  */
 const COMPOSE_KEEP_MS = 1000;
 
+/** How long after a focus that found the launcher hidden to look again. */
+const FOCUS_VISIBILITY_RECHECK_MS = 300;
+
 export const LifecycleVisibilityMethods = {
     /** Is the floating window actually on screen? Errors count as visible. */
     async _isWindowVisible() {
@@ -79,7 +82,28 @@ export const LifecycleVisibilityMethods = {
             else document.documentElement.classList.remove('animations-paused');
         });
 
-        this.appWindow.listen('tauri://focus', async () => {
+        // Through the methods object, so a host that mixed in only part of
+        // this object (tests) still gets both handlers.
+        this.appWindow.listen('tauri://focus', () =>
+            LifecycleVisibilityMethods._onFocus.call(this)
+        );
+        LifecycleVisibilityMethods._installBlurListener.call(this);
+    },
+
+    /**
+     * The launcher got focus. If it's actually showing, undo what hiding
+     * paused (CSS animations, the mascot, widgets) and refresh what a show
+     * refreshes. Startup focuses the still-hidden window, so a focus alone
+     * isn't a show; but a real show can also report focus a beat before the
+     * window reports itself visible, so a focus that finds it hidden looks
+     * again once, shortly after. Missing that left the window on screen with
+     * its animations paused: the loading dots sat still while the elapsed
+     * counter kept counting.
+     *
+     * @param {{retry?: boolean}} [opts]
+     */
+    async _onFocus({ retry = true } = {}) {
+        {
             const sequence = ++this._visibilitySequence;
             this._windowFocused = true;
             const visible = await this._isWindowVisible();
@@ -92,6 +116,13 @@ export const LifecycleVisibilityMethods = {
             window._kageFloatingHidden = !visible;
             if (!visible) {
                 this.extensionManager?.setWidgetVisibility(false);
+                if (retry) {
+                    setTimeout(() => {
+                        if (sequence === this._visibilitySequence && this._windowFocused) {
+                            LifecycleVisibilityMethods._onFocus.call(this, { retry: false });
+                        }
+                    }, FOCUS_VISIBILITY_RECHECK_MS);
+                }
                 return;
             }
             // An uninstall confirmation doesn't survive the launcher being
@@ -251,8 +282,11 @@ export const LifecycleVisibilityMethods = {
             }
 
             this.updateDatetimeVisibility();
-        });
+        }
+    },
 
+    /** Hide (and pause) when the launcher loses focus, unless it should stay. */
+    _installBlurListener() {
         this.appWindow.listen('tauri://blur', async () => {
             const sequence = ++this._visibilitySequence;
             this._windowFocused = false;

@@ -55,6 +55,11 @@ export const UiStateMethods = {
     },
 
     startThinking() {
+        // A request only starts from a launcher that's on screen, so make
+        // sure nothing hiding paused is still paused (the dots would sit
+        // still; see _onFocus).
+        document.documentElement.classList.remove('animations-paused');
+        window._kageMascot?.resume?.();
         this.elements.mascotContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
         this._startElapsedTimer();

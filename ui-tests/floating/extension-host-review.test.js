@@ -216,4 +216,57 @@ describe('floating extension host review regressions', () => {
         await listeners['tauri://focus']();
         expect(app._pollOllamaStatusOnce).toHaveBeenCalledTimes(1);
     });
+
+    it('unpauses animations when a focus beat the window reporting itself visible', async () => {
+        const listeners = {};
+        let visible = false;
+        const app = {
+            _isWindowVisible: vi.fn(async () => visible),
+            _updateBannerChecked: true,
+            _refreshAppModeChip: vi.fn(async () => {}),
+            _updateToolbarVisibility: vi.fn(),
+            _restoreOverlaysAfterClipboard: vi.fn(),
+            updateDatetimeVisibility: vi.fn(),
+            windowManager: { resizeWindow: vi.fn() },
+            extensionManager: { setWidgetVisibility: vi.fn(async () => {}) },
+            appWindow: { listen: (event, callback) => { listeners[event] = callback; } },
+            invoke: vi.fn(async () => {}),
+            currentMatches: [],
+            isWaitingForResponse: true,
+            elements: { input: document.createElement('input') },
+        };
+        LifecycleVisibilityMethods.setupVisibilityTracking.call(app);
+        expect(document.documentElement.classList.contains('animations-paused')).toBe(true);
+        // The focus arrives first; the window says it's hidden.
+        await listeners['tauri://focus']();
+        expect(document.documentElement.classList.contains('animations-paused')).toBe(true);
+        // A moment later it's on screen: the re-check unpauses.
+        visible = true;
+        await vi.advanceTimersByTimeAsync(400);
+        expect(document.documentElement.classList.contains('animations-paused')).toBe(false);
+        expect(window._kageFloatingHidden).toBe(false);
+    });
+
+    it('a request starting unpauses the loading dots', () => {
+        document.documentElement.classList.add('animations-paused');
+        const resume = vi.fn();
+        window._kageMascot = { resume, signal: vi.fn() };
+        const app = {
+            ...UiStateMethods,
+            elements: {
+                mascotContainer: document.createElement('div'),
+                loadingDots: document.createElement('div'),
+            },
+            _startElapsedTimer: vi.fn(),
+            updateDatetimeVisibility: vi.fn(),
+        };
+        try {
+            app.startThinking();
+        } catch {
+            // Later UI steps need more of the window than this test builds.
+        }
+        expect(document.documentElement.classList.contains('animations-paused')).toBe(false);
+        expect(resume).toHaveBeenCalled();
+        delete window._kageMascot;
+    });
 });
