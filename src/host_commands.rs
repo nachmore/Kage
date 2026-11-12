@@ -11,12 +11,19 @@
 //! approves it in the window that owns the asking session, or a rule they
 //! made covers it, and replies with the exit code and the output's tail.
 //!
+//! Each request is a job Kage owns ([`jobs`]): one tool call waits for it
+//! at most a minute and a half, then tells the agent "pending" with the
+//! job's id, and the agent's `get_outside_sandbox_result` calls wait on
+//! it the same way — so no agent's own limit on a tool call can cut off
+//! the user's answer or the run.
+//!
 //! - [`rules`]: when a request may run without asking (hidden characters,
 //!   simple-command rules, allow-all).
 //! - [`guard`]: the credential guard no rule or switch gets past.
 //! - [`tracker`]: the agent's in-flight `run_outside_sandbox` tool calls,
 //!   to match a request to its session.
 //! - [`approvals`]: prompts waiting for the user.
+//! - [`jobs`]: the requests Kage owns, and their results.
 //! - [`server`]: the bridge listener and the request flow.
 //! - [`commands`]: the Tauri commands the prompt and Settings use.
 //!
@@ -26,6 +33,7 @@
 pub mod approvals;
 pub mod commands;
 pub mod guard;
+pub mod jobs;
 pub mod rules;
 pub mod server;
 pub mod tracker;
@@ -36,14 +44,28 @@ use std::sync::Mutex;
 /// The sidecar's tool name.
 pub const TOOL_NAME: &str = "run_outside_sandbox";
 
+/// The sidecar's tool that waits on a job `run_outside_sandbox` answered
+/// "pending" for. It only reads the job.
+pub const RESULT_TOOL_NAME: &str = "get_outside_sandbox_result";
+
 /// Whether an ACP tool call title names exactly Kage's own
 /// `run_outside_sandbox` tool: `Running: @kage-computer-control/
 /// run_outside_sandbox` (kiro-cli) or `mcp__kage-computer-control__
 /// run_outside_sandbox` (Claude Code). Same server name Kage registers in
 /// the agent's `mcp.json` (`mcp_registration::MCP_SERVER_KEY`), same tool.
 pub fn is_host_command_title(title: &str) -> bool {
-    crate::config::mcp_tool_from_title(title)
-        == Some((crate::mcp_registration::MCP_SERVER_KEY, TOOL_NAME))
+    bridge_tool_of_title(title) == Some(TOOL_NAME)
+}
+
+/// Which of Kage's two bridge tools (`run_outside_sandbox`,
+/// `get_outside_sandbox_result`) an ACP tool call title names exactly, on
+/// Kage's own server; `None` for anything else.
+pub fn bridge_tool_of_title(title: &str) -> Option<&'static str> {
+    match crate::config::mcp_tool_from_title(title)? {
+        (crate::mcp_registration::MCP_SERVER_KEY, TOOL_NAME) => Some(TOOL_NAME),
+        (crate::mcp_registration::MCP_SERVER_KEY, RESULT_TOOL_NAME) => Some(RESULT_TOOL_NAME),
+        _ => None,
+    }
 }
 
 /// Whether an ACP tool kind is what agents report for an MCP tool: absent
@@ -57,9 +79,8 @@ fn is_mcp_kind(kind: Option<&str>) -> bool {
 /// Feed one `tool_call` / `tool_call_update` to the [`tracker`].
 /// `first_title` / `first_kind` are what the call was first seen with.
 /// Returns the call's id when this update ended one of our calls
-/// (`completed`, `failed`, `cancelled`): a request still waiting for the
-/// user on it has nobody left to read its result
-/// ([`approvals::Approvals::cancel_tool_call`]).
+/// (`completed`, `failed`, `cancelled`), for
+/// [`HostCommands::tool_call_ended`].
 pub fn observe_tool_call(
     session_id: Option<&str>,
     update: &serde_json::Value,
@@ -113,6 +134,13 @@ pub struct HostCommandOptions {
     /// What runs an approved command: `None` for the user's login shell
     /// (`runner::user_shell_invocation`).
     pub shell: Option<ShellFor>,
+    /// How long a request or poll waits for its job before answering
+    /// "pending" (at most [`kage_core::host_bridge::LONG_POLL`], which the
+    /// sidecar's own wait is sized for).
+    pub long_poll: std::time::Duration,
+    /// How long a finished job's result is kept for polling (at most
+    /// [`kage_core::host_bridge::RESULT_RETENTION`]).
+    pub result_retention: std::time::Duration,
 }
 
 impl Default for HostCommandOptions {
@@ -120,15 +148,18 @@ impl Default for HostCommandOptions {
         Self {
             approval_timeout: kage_core::host_bridge::APPROVAL_TIMEOUT,
             shell: None,
+            long_poll: kage_core::host_bridge::LONG_POLL,
+            result_retention: kage_core::host_bridge::RESULT_RETENTION,
         }
     }
 }
 
-/// The bridge and its waiting prompts. Lives in
+/// The bridge, its jobs and their waiting prompts. Lives in
 /// [`crate::state::ChildProcesses`].
 #[derive(Default)]
 pub struct HostCommands {
     pub approvals: approvals::Approvals,
+    pub jobs: jobs::Jobs,
     bridge: Mutex<Option<server::BridgeHandle>>,
     /// Set by [`Self::stop`]: a start still in flight doesn't listen.
     stopped: std::sync::atomic::AtomicBool,
@@ -143,11 +174,13 @@ impl HostCommands {
     /// [`Self::new`] with other [`HostCommandOptions`] (tests).
     #[allow(dead_code)] // The end-to-end tests reach it through the library.
     pub fn with_options(mut options: HostCommandOptions) -> Self {
-        options.approval_timeout = options
-            .approval_timeout
-            .min(kage_core::host_bridge::APPROVAL_TIMEOUT);
+        use kage_core::host_bridge as hb;
+        options.approval_timeout = options.approval_timeout.min(hb::APPROVAL_TIMEOUT);
+        options.long_poll = options.long_poll.min(hb::LONG_POLL);
+        options.result_retention = options.result_retention.min(hb::RESULT_RETENTION);
         Self {
             options,
+            jobs: jobs::Jobs::with_retention(options.result_retention),
             ..Self::default()
         }
     }
@@ -157,12 +190,46 @@ impl HostCommands {
     }
 
     /// The user stopped `session_id`'s turn: its prompts are withdrawn
-    /// (the agent won't read their results).
+    /// (the agent won't read their results). A command already running
+    /// goes on (the user approved it, and its card has Stop); its result
+    /// stays for the agent to collect.
     pub fn cancel_session(&self, session_id: &str) {
         let n = self.approvals.cancel_session(session_id);
         if n > 0 {
             log::info!("Host bridge: withdrew {n} prompt(s) of a stopped turn");
         }
+    }
+
+    /// The agent disconnected (`_kage/agent_disconnected`): the prompts of
+    /// its sessions are withdrawn. Prompts Kage couldn't match to one of
+    /// its sessions (an agent outside Kage) wait on.
+    pub fn agent_disconnected(&self) {
+        let n = self.approvals.cancel_matched();
+        if n > 0 {
+            log::info!("Host bridge: withdrew {n} prompt(s) of a disconnected agent");
+        }
+    }
+
+    /// Our `run_outside_sandbox` tool call `tool_call_id` ended with ACP
+    /// `status`. Ended `completed` once the agent was given its job's id
+    /// ("pending"), that's how the call ends normally and nothing changes.
+    /// Otherwise — it ended before Kage answered, or `failed` / `cancelled`
+    /// (the agent never took the reply, even one Kage had just written) —
+    /// nobody can read the result, so a prompt still waiting on it is
+    /// withdrawn. Only the call's first end counts. Returns whether a
+    /// prompt was withdrawn.
+    pub fn tool_call_ended(&self, tool_call_id: &str, status: Option<&str>) -> bool {
+        if let Some(job) = self.jobs.for_call(tool_call_id) {
+            // Its prompt may not be up yet: it checks this before showing.
+            if !job.call_ended(status == Some("completed")) || !job.is_abandoned() {
+                return false;
+            }
+        }
+        let withdrew = self.approvals.cancel_tool_call(tool_call_id);
+        if withdrew {
+            log::info!("Host bridge: withdrew a prompt whose tool call ended");
+        }
+        withdrew
     }
 
     /// Bind the bridge and accept on its own thread. Call off the main
@@ -227,6 +294,38 @@ mod tests {
             "Running: run_outside_sandbox",
         ] {
             assert!(!is_host_command_title(other), "{other}");
+        }
+    }
+
+    #[test]
+    fn both_bridge_tools_are_named_by_exact_server_and_tool() {
+        for (title, tool) in [
+            (
+                "Running: @kage-computer-control/run_outside_sandbox",
+                TOOL_NAME,
+            ),
+            (
+                "Running: @kage-computer-control/get_outside_sandbox_result",
+                RESULT_TOOL_NAME,
+            ),
+            (
+                "mcp__kage-computer-control__get_outside_sandbox_result",
+                RESULT_TOOL_NAME,
+            ),
+        ] {
+            assert_eq!(bridge_tool_of_title(title), Some(tool), "{title}");
+        }
+        // Only `run_outside_sandbox` calls are tracked for matching.
+        assert!(!is_host_command_title(
+            "Running: @kage-computer-control/get_outside_sandbox_result"
+        ));
+        for other in [
+            "Running: @evil-mcp/get_outside_sandbox_result",
+            "Running: @kage-computer-control/get_outside_sandbox_result2",
+            "Running: @kage-computer-control/run_script",
+            "get_outside_sandbox_result",
+        ] {
+            assert_eq!(bridge_tool_of_title(other), None, "{other}");
         }
     }
 

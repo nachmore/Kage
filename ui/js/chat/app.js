@@ -53,6 +53,7 @@ import {
     showShellActivity,
 } from '../shared/shell-command-view.js';
 import { setShellRunHost } from '../shared/shell-run-view.js';
+import { clearFinishedHostCommandCards } from '../shared/host-command-view.js';
 import { renderToolSources } from '../shared/tool-call-view.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
@@ -105,6 +106,7 @@ const CHAT_APP_DEPENDENCIES = {
     buildExecCtx,
     buildRenderQueue,
     checkOnline,
+    clearFinishedHostCommandCards,
     cmdOrCtrlPressed,
     createShellActivitySlot,
     defaultExportFilename,

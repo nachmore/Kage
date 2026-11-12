@@ -93,6 +93,11 @@ pub fn setup_notification_handler(
             let _ = app_handle.emit(events::AGENT_DISCONNECTED, ());
             // A background agent call in flight ends `agent_disconnected`.
             crate::ephemeral_session::notify_disconnected();
+            // A command its sessions asked to run outside the sandbox that
+            // still waits for the user: nobody is left to read the result.
+            if let Some(procs) = app_handle.try_state::<crate::state::ChildProcesses>() {
+                procs.host_commands.agent_disconnected();
+            }
             return;
         }
 
@@ -210,9 +215,13 @@ pub fn setup_notification_handler(
                         // their commands, so a request arriving over the host
                         // bridge can be matched to this session (a strict
                         // session's too, so the bridge can refuse it). One
-                        // that ended (the agent gave up on it, or its turn
-                        // was stopped) withdraws a prompt still waiting on
-                        // it: nobody would read the result.
+                        // that ended before the agent got its job's id (it
+                        // gave up on it, or its turn was stopped; `failed` /
+                        // `cancelled` even after Kage wrote "pending")
+                        // withdraws a prompt still waiting on it: nobody
+                        // would read the result. One that ended `completed`
+                        // with "pending" is how the job's first call ends;
+                        // nothing changes.
                         {
                             let first = update
                                 .get("toolCallId")
@@ -230,7 +239,10 @@ pub fn setup_notification_handler(
                                 ended,
                                 app_handle.try_state::<crate::state::ChildProcesses>(),
                             ) {
-                                procs.host_commands.approvals.cancel_tool_call(&call_id);
+                                procs.host_commands.tool_call_ended(
+                                    &call_id,
+                                    update.get("status").and_then(|s| s.as_str()),
+                                );
                             }
                         }
                         // No tool may run on a strict session (a background
@@ -712,17 +724,20 @@ fn classify_mcp_server(
     Some(server.to_string())
 }
 
-/// Whether a permission request is for Kage's own `run_outside_sandbox`
-/// tool: an MCP call (kind absent or `other`) of the server Kage registers
+/// Whether a permission request is for one of Kage's own two bridge tools,
+/// `run_outside_sandbox` or `get_outside_sandbox_result`: an MCP call (kind
+/// absent or `other`) of the server Kage registers
 /// (`mcp_registration::MCP_SERVER_KEY`), and every title we have names
-/// exactly that tool.
+/// exactly the same one of those two tools.
 fn is_host_command_call(tool_title: &str, request_title: Option<&str>, kind: Option<&str>) -> bool {
+    let Some(tool) = crate::host_commands::bridge_tool_of_title(tool_title) else {
+        return false;
+    };
     classify_mcp_server(tool_title, request_title, kind).as_deref()
         == Some(crate::mcp_registration::MCP_SERVER_KEY)
-        && crate::host_commands::is_host_command_title(tool_title)
         && request_title
             .filter(|t| !t.is_empty() && *t != tool_title)
-            .is_none_or(crate::host_commands::is_host_command_title)
+            .is_none_or(|t| crate::host_commands::bridge_tool_of_title(t) == Some(tool))
 }
 
 /// The audit log's `args_preview` for an auto-approved request: the command
@@ -899,9 +914,10 @@ fn handle_permission_notification(
     // allowed here without a prompt: the real gate is at execution, where
     // Kage asks the user (or applies their rules) once the command reaches
     // it over the host bridge. Asking twice would only teach clicking
-    // through. Never on a strict session (no tool runs there; the strict
-    // route below refuses it), and an explicit per-tool Deny the user set
-    // still wins.
+    // through. Its `get_outside_sandbox_result` (which only reads a job
+    // the first call started) likewise. Never on a strict session (no tool
+    // runs there; the strict route below refuses it), and an explicit
+    // per-tool Deny the user set still wins.
     if !strict && is_host_command_call(&tool_title, request_title, tool_kind.as_deref()) {
         let denied = config
             .lock_or_recover()
@@ -1345,10 +1361,35 @@ mod host_command_permission_tests {
         for t in [
             "Running: @kage-computer-control/run_outside_sandbox",
             "mcp__kage-computer-control__run_outside_sandbox",
+            "Running: @kage-computer-control/get_outside_sandbox_result",
+            "mcp__kage-computer-control__get_outside_sandbox_result",
         ] {
             assert!(is_host_command_call(t, Some(t), None), "{t}");
             assert!(is_host_command_call(t, None, Some("other")), "{t}");
         }
+    }
+
+    #[test]
+    fn the_result_tool_only_on_kages_own_server_and_as_an_mcp_call() {
+        let ours = "Running: @kage-computer-control/get_outside_sandbox_result";
+        assert!(!is_host_command_call(ours, Some(ours), Some("execute")));
+        assert!(!is_host_command_call(ours, Some(ours), Some("read")));
+        assert!(!is_host_command_call(
+            "Running: @other-server/get_outside_sandbox_result",
+            None,
+            None
+        ));
+        // The two titles must name the same tool.
+        assert!(!is_host_command_call(
+            ours,
+            Some("Running: @kage-computer-control/run_outside_sandbox"),
+            None
+        ));
+        assert!(!is_host_command_call(
+            "Running: @kage-computer-control/run_outside_sandbox",
+            Some(ours),
+            None
+        ));
     }
 
     #[test]

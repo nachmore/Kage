@@ -1,6 +1,8 @@
 //! The host-command bridge's listening end, and what happens to a request:
-//! match it to the asking session, check it against the guard and the
-//! rules, ask the user when needed, run it, reply.
+//! match it to the asking session, make its job, check it against the
+//! guard and the rules, ask the user when needed, run it, and hand the
+//! result to whoever waits on the job — the connection that asked, for at
+//! most the long poll, then the agent's polls (`jobs`).
 //!
 //! Every step is written to the permission audit log (one entry per step,
 //! tied together by the request id) and counted in telemetry (counts only:
@@ -8,15 +10,17 @@
 
 use super::approvals::{Answer, PendingInfo};
 use super::guard::{self, CredentialHit};
+use super::jobs::{Job, JobsFull, Waited};
 use super::rules::{self, AskReason, Decision};
+use super::HostCommands;
 use crate::commands::system::user_shell::{self, runner};
 use crate::lock_ext::LockExt;
 use crate::permission_audit::{AuditEntry, AuditEvent};
 use crate::state::{AcpHandles, ChildProcesses, FeatureServices, UiState};
 use crate::window_labels;
 use kage_core::host_bridge::{
-    self, ApprovedBy, HostCommandRequest, HostCommandResponse, LineRead, RunSummary,
-    OUTPUT_TAIL_BYTES,
+    self, ApprovedBy, BridgeRequest, HostCommandRequest, HostCommandResponse, LineRead,
+    PollRequest, RunSummary, ONE_SHOT_VERSION, OUTPUT_TAIL_BYTES,
 };
 use kage_core::os::host_bridge::{default_endpoint, BridgeListener, BridgeStream};
 use log::{info, warn};
@@ -130,7 +134,7 @@ fn accept_loop<R: tauri::Runtime>(
 
 /// What reading a connection's request came to.
 enum Incoming {
-    Request(HostCommandRequest),
+    Request(BridgeRequest),
     /// Answer with this and close.
     Refused(HostCommandResponse),
     /// Close without answering (nothing arrived, or not in time).
@@ -163,28 +167,183 @@ fn read_request(stream: &mut BridgeStream) -> Incoming {
 }
 
 fn handle_connection<R: tauri::Runtime>(app: &tauri::AppHandle<R>, mut stream: BridgeStream) {
-    let response = match read_request(&mut stream) {
-        Incoming::Request(request) => {
-            let _ = stream.set_read_timeout(None);
-            process(app, &request, &stream)
+    let request = match read_request(&mut stream) {
+        Incoming::Request(request) => request,
+        Incoming::Refused(response) => {
+            reply(&mut stream, &response);
+            return;
         }
-        Incoming::Refused(response) => response,
         Incoming::Drop => return,
     };
-    if let Err(e) = stream
+    // The long poll counts from the request's arrival.
+    let received = Instant::now();
+    let _ = stream.set_read_timeout(None);
+    let Some(host) = app
+        .try_state::<ChildProcesses>()
+        .map(|p| p.host_commands.clone())
+    else {
+        let starting = HostCommandResponse::error("Kage is starting up; try again.");
+        reply(&mut stream, &starting.for_version(request.version()));
+        return;
+    };
+    match request {
+        BridgeRequest::OneShot(req) => one_shot(app, &host, req, stream),
+        BridgeRequest::Run(req) => start_and_wait(app, &host, req, received, stream),
+        BridgeRequest::Poll(poll) => poll_job(app, &host, &poll, received, stream),
+    }
+}
+
+/// `job`'s final result just reached whoever asked (its reply was
+/// written): its card may now say the result went back to the agent. Told
+/// once per job. Until then — the agent's turn was stopped, it
+/// disconnected or it hasn't polled yet — the card doesn't claim it.
+fn tell_delivered<R: tauri::Runtime>(app: &tauri::AppHandle<R>, job: &Job) {
+    if job.mark_delivered() {
+        emit_to(
+            app,
+            &job.window,
+            crate::events::HOST_COMMAND_UPDATE,
+            &serde_json::json!({ "requestId": &job.id, "window": &job.window, "phase": "delivered" }),
+        );
+    }
+}
+
+/// Send `response` as the reply. Whether it went.
+fn reply(stream: &mut BridgeStream, response: &HostCommandResponse) -> bool {
+    match stream
         .write_all(response.to_line().as_bytes())
         .and_then(|()| stream.flush())
     {
-        info!("Host bridge: the requester went away before the reply ({e})");
+        Ok(()) => true,
+        Err(e) => {
+            info!("Host bridge: the requester went away before the reply ({e})");
+            false
+        }
+    }
+}
+
+/// A version-1 request (a sidecar from an older Kage): the connection
+/// waits for the whole job, and is bound to it as version 1 always was —
+/// the requester going away withdraws a prompt still waiting and stops
+/// the run.
+fn one_shot<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    host: &HostCommands,
+    req: HostCommandRequest,
+    mut stream: BridgeStream,
+) {
+    let job = match start_job(app, host, req, true) {
+        Ok(job) => job,
+        Err(response) => {
+            reply(&mut stream, &response.for_version(ONE_SHOT_VERSION));
+            return;
+        }
+    };
+    match job.wait(None, || stream.peer_closed()) {
+        Waited::Finished(response) => {
+            if reply(&mut stream, &response.for_version(ONE_SHOT_VERSION)) {
+                tell_delivered(app, &job);
+            }
+        }
+        Waited::GaveUp | Waited::Pending(_) => {
+            if job.requester_left() {
+                info!(
+                    "Host command {}: the agent went away; stopping the run",
+                    job.id
+                );
+            }
+        }
+    }
+}
+
+/// A version-2 `run`: make its job, wait for it at most the long poll,
+/// then answer "pending" with the job's id. From then on the job doesn't
+/// depend on this connection or the tool call behind it.
+fn start_and_wait<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    host: &HostCommands,
+    req: HostCommandRequest,
+    received: Instant,
+    mut stream: BridgeStream,
+) {
+    let job = match start_job(app, host, req, false) {
+        Ok(job) => job,
+        Err(response) => {
+            reply(&mut stream, &response);
+            return;
+        }
+    };
+    let deadline = received + host.options().long_poll;
+    match job.wait(Some(deadline), || stream.peer_closed()) {
+        Waited::Finished(response) => {
+            if reply(&mut stream, &response.for_job(&job.id)) {
+                tell_delivered(app, &job);
+            }
+        }
+        Waited::Pending(progress) => {
+            // Marked before it's sent, so the tool call ending right after
+            // (which is how this reply ends it) can't race it.
+            job.mark_id_given();
+            if reply(
+                &mut stream,
+                &HostCommandResponse::pending(&job.id, progress),
+            ) {
+                info!(
+                    "Host command {}: not finished yet; the agent waits on the job",
+                    job.id
+                );
+            } else {
+                job.unmark_id_given();
+                job.abandon();
+            }
+        }
+        Waited::GaveUp => {
+            info!(
+                "Host command {}: the requester went away before Kage answered",
+                job.id
+            );
+            job.abandon();
+        }
+    }
+}
+
+/// A version-2 `poll`: wait on the job at most the long poll and say
+/// where it is. It only reads the job.
+fn poll_job<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    host: &HostCommands,
+    poll: &PollRequest,
+    received: Instant,
+    mut stream: BridgeStream,
+) {
+    let Some(job) = host.jobs.get(&poll.job_id) else {
+        info!("Host bridge: a poll named no job Kage holds");
+        reply(&mut stream, &HostCommandResponse::not_found(&poll.job_id));
+        return;
+    };
+    let deadline = received + host.options().long_poll;
+    match job.wait(Some(deadline), || stream.peer_closed()) {
+        Waited::Finished(response) => {
+            if reply(&mut stream, &response.for_job(&job.id)) {
+                tell_delivered(app, &job);
+            }
+        }
+        Waited::Pending(progress) => {
+            reply(
+                &mut stream,
+                &HostCommandResponse::pending(&job.id, progress),
+            );
+        }
+        Waited::GaveUp => {}
     }
 }
 
 // --- One request ---------------------------------------------------------------
 
 /// Everything known about a request once it has been matched and checked.
-struct Request<'a> {
+struct Request {
     id: String,
-    req: &'a HostCommandRequest,
+    req: HostCommandRequest,
     /// The window that shows it (the asking session's, else floating).
     window: String,
     session_id: Option<String>,
@@ -198,7 +357,7 @@ struct Request<'a> {
     hits: Vec<CredentialHit>,
 }
 
-impl Request<'_> {
+impl Request {
     fn hit_names(&self) -> Vec<String> {
         self.hits
             .iter()
@@ -395,11 +554,77 @@ fn cwd_error(e: &runner::InvalidRun) -> String {
     }
 }
 
-fn process<R: tauri::Runtime>(
+/// Check a `run` request, match it to the asking session (the rules and
+/// allow-all only ever apply through this match, made from the request
+/// itself), and make its job, which a thread of its own takes from there
+/// ([`process`]). `Err` carries the reply to a request refused before any
+/// job was made.
+fn start_job<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
-    req: &HostCommandRequest,
-    stream: &BridgeStream,
-) -> HostCommandResponse {
+    host: &HostCommands,
+    req: HostCommandRequest,
+    one_shot: bool,
+) -> Result<Arc<Job>, Box<HostCommandResponse>> {
+    let r = prepare(app, req)?;
+    let job = match host.jobs.create(
+        &r.id,
+        &r.window,
+        r.session_id.clone(),
+        r.tool_call_id.clone(),
+        one_shot,
+    ) {
+        Ok(job) => job,
+        Err(full) => {
+            warn!(
+                "Host command {}: too many waiting or running ({full:?})",
+                r.id
+            );
+            AuditStep {
+                outcome: Some("too many commands waiting or running".into()),
+                ..r.audit("refused")
+            }
+            .write();
+            r.track(app, "refused");
+            return Err(Box::new(HostCommandResponse::error(match full {
+                JobsFull::Session => {
+                    "Too many commands from this session are waiting for the user or running; \
+                     wait for one to finish."
+                }
+                JobsFull::Total => {
+                    "Too many commands are waiting for the user or running; wait for one to finish."
+                }
+            })));
+        }
+    };
+    let (thread_app, thread_job) = (app.clone(), job.clone());
+    let spawned = std::thread::Builder::new()
+        .name("host-command-job".into())
+        .spawn(move || {
+            if !thread_job.run_to_end(|| process(&thread_app, &r, &thread_job)) {
+                // A prompt it left waiting can't be answered into anything.
+                let withdrew = thread_app
+                    .try_state::<ChildProcesses>()
+                    .is_some_and(|p| p.host_commands.approvals.withdraw(&r.id));
+                if withdrew {
+                    r.close(&thread_app, "withdrawn");
+                }
+            }
+        });
+    if let Err(e) = spawned {
+        warn!("Host bridge: couldn't start a job thread: {e}");
+        job.finish(HostCommandResponse::error(
+            "Kage couldn't take the request; try again.",
+        ));
+    }
+    Ok(job)
+}
+
+/// The checks a request gets as it arrives, up to its "requested" audit
+/// entry. `Err` carries the reply to one refused.
+fn prepare<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    req: HostCommandRequest,
+) -> Result<Request, Box<HostCommandResponse>> {
     let id = new_id("hc");
     // A working directory that can't be shown as written: the user would
     // approve a different folder from the one the command runs in.
@@ -413,7 +638,7 @@ fn process<R: tauri::Runtime>(
             ..AuditStep::default()
         }
         .write();
-        return HostCommandResponse::error(why);
+        return Err(Box::new(HostCommandResponse::error(why)));
     }
     let matched =
         super::tracker::tracker().claim_waiting(&req.command, req.cwd.as_deref(), MATCH_WAIT);
@@ -435,7 +660,9 @@ fn process<R: tauri::Runtime>(
             ..AuditStep::default()
         }
         .write();
-        return HostCommandResponse::error("Tools can't run in this session.");
+        return Err(Box::new(HostCommandResponse::error(
+            "Tools can't run in this session.",
+        )));
     }
     let background = session_id
         .as_deref()
@@ -445,7 +672,7 @@ fn process<R: tauri::Runtime>(
         Some(sid) if visible_origin => window_for_session(app, sid),
         _ => window_labels::FLOATING.to_string(),
     };
-    let agent = agent_label(app, req, visible_origin);
+    let agent = agent_label(app, &req, visible_origin);
 
     let home = crate::paths::home_dir();
     let cwd = match runner::resolve_cwd(req.cwd.as_deref(), home.as_deref()) {
@@ -463,7 +690,7 @@ fn process<R: tauri::Runtime>(
                 ..AuditStep::default()
             }
             .write();
-            return HostCommandResponse::error(why);
+            return Err(Box::new(HostCommandResponse::error(why)));
         }
     };
     let hits = guard::request_hits(&req.command, &cwd);
@@ -483,8 +710,8 @@ fn process<R: tauri::Runtime>(
     info!(
         "Host command {}: requested ({} bytes, program '{}', {}matched to a session{})",
         r.id,
-        req.command.len(),
-        runner::program_label(&req.command),
+        r.req.command.len(),
+        runner::program_label(&r.req.command),
         if r.visible_origin { "" } else { "not " },
         if r.background {
             ", a background one"
@@ -500,12 +727,21 @@ fn process<R: tauri::Runtime>(
         }
         .write();
     }
+    Ok(r)
+}
 
+/// A job's own thread: the rules, the prompt and the run. Returns the
+/// job's result.
+fn process<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    r: &Request,
+    job: &Arc<Job>,
+) -> HostCommandResponse {
     let decision = match app.try_state::<FeatureServices>() {
         Some(features) => {
             let config = features.config.lock_or_recover();
             rules::decide(
-                &req.command,
+                &r.req.command,
                 !r.hits.is_empty(),
                 r.visible_origin,
                 &config.tool_permissions.host_command_rules,
@@ -536,7 +772,7 @@ fn process<R: tauri::Runtime>(
             r.track(app, "auto_all");
             (ApprovedBy::AllowAll, None)
         }
-        Decision::Ask(reason) => match ask(app, &r, reason, stream) {
+        Decision::Ask(reason) => match ask(app, r, reason, job) {
             Asked::Approved(always) => {
                 info!("Host command {}: approved by the user", r.id);
                 AuditStep {
@@ -568,10 +804,20 @@ fn process<R: tauri::Runtime>(
                 return HostCommandResponse::approval_timed_out();
             }
             Asked::Withdrawn => {
-                info!("Host command {}: the agent went away", r.id);
-                r.audit("withdrawn").write();
+                info!(
+                    "Host command {}: the agent went away before it got the job's id",
+                    r.id
+                );
+                AuditStep {
+                    outcome: Some("the tool call ended before the agent got Kage's answer".into()),
+                    ..r.audit("withdrawn")
+                }
+                .write();
                 r.track(app, "withdrawn");
-                return HostCommandResponse::error("The request was withdrawn.");
+                return HostCommandResponse::withdrawn(
+                    "The request was withdrawn: the tool call ended before the agent got Kage's \
+                     answer, so the command did not run.",
+                );
             }
             Asked::Busy => {
                 warn!("Host command {}: too many prompts waiting", r.id);
@@ -593,20 +839,37 @@ fn process<R: tauri::Runtime>(
                 }
                 .write();
                 r.track(app, "withdrawn");
-                return HostCommandResponse::error(
+                return HostCommandResponse::withdrawn(
                     "The window showing the request was closed, so the command did not run.",
                 );
             }
             Asked::Cancelled => {
-                info!("Host command {}: the agent stopped waiting", r.id);
+                info!(
+                    "Host command {}: its turn was stopped or its tool call ended",
+                    r.id
+                );
                 AuditStep {
                     outcome: Some("the agent's turn or tool call ended".into()),
                     ..r.audit("withdrawn")
                 }
                 .write();
                 r.track(app, "withdrawn");
-                return HostCommandResponse::error(
-                    "The agent stopped waiting before the user answered, so the command did not run.",
+                return HostCommandResponse::withdrawn(
+                    "The request was withdrawn before the user answered (the agent's turn was \
+                     stopped, or its tool call ended), so the command did not run.",
+                );
+            }
+            Asked::Disconnected => {
+                info!("Host command {}: the agent disconnected", r.id);
+                AuditStep {
+                    outcome: Some("the agent disconnected".into()),
+                    ..r.audit("withdrawn")
+                }
+                .write();
+                r.track(app, "withdrawn");
+                return HostCommandResponse::withdrawn(
+                    "The request was withdrawn before the user answered: the agent disconnected \
+                     from Kage, so the command did not run.",
                 );
             }
             Asked::Shutdown => {
@@ -615,7 +878,7 @@ fn process<R: tauri::Runtime>(
             }
         },
     };
-    run(app, &r, approved_by, rule, stream)
+    run(app, r, approved_by, rule, job)
 }
 
 enum Asked {
@@ -623,19 +886,23 @@ enum Asked {
     Approved(Option<String>),
     Denied,
     Expired,
+    /// Nobody can read the result: the requester went away, or its tool
+    /// call ended, before it was given the job's id.
     Withdrawn,
     Busy,
     /// The window showing the prompt closed.
     WindowClosed,
-    /// The agent stopped waiting: its turn was stopped, or its tool call
-    /// ended.
+    /// Its turn was stopped, or its tool call ended (before the agent got
+    /// the id).
     Cancelled,
+    /// The agent of the session that asked disconnected.
+    Disconnected,
     Shutdown,
 }
 
 /// The prompt a window shows for `r`, answered within `timeout`.
 fn prompt_payload(
-    r: &Request<'_>,
+    r: &Request,
     reason: AskReason,
     can_always: bool,
     timeout: Duration,
@@ -684,9 +951,9 @@ fn notify<R: tauri::Runtime>(app: &tauri::AppHandle<R>, agent: Option<&str>) {
 
 fn ask<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
-    r: &Request<'_>,
+    r: &Request,
     reason: AskReason,
-    stream: &BridgeStream,
+    job: &Job,
 ) -> Asked {
     let Some(host) = app.try_state::<ChildProcesses>() else {
         return Asked::Busy;
@@ -709,6 +976,13 @@ fn ask<R: tauri::Runtime>(
     let Some(rx) = approvals.register(&r.id, &r.window, info, payload.clone()) else {
         return Asked::Busy;
     };
+    let deadline = Instant::now() + timeout;
+    job.set_waiting(deadline);
+    // Its tool call ended (or its requester left) while it was being
+    // checked: nobody could read the result, so it isn't shown at all.
+    if job.is_abandoned() && approvals.withdraw(&r.id) {
+        return Asked::Withdrawn;
+    }
     emit_to(app, &r.window, crate::events::HOST_COMMAND_PROMPT, &payload);
     if r.window == window_labels::FLOATING {
         if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
@@ -724,7 +998,6 @@ fn ask<R: tauri::Runtime>(
     if !r.visible_origin || !in_front {
         notify(app, r.agent.as_deref());
     }
-    let deadline = Instant::now() + timeout;
     loop {
         match rx.recv_timeout(POLL) {
             Ok(Answer::RunOnce) => return Asked::Approved(None),
@@ -737,6 +1010,10 @@ fn ask<R: tauri::Runtime>(
                 r.close(app, "withdrawn");
                 return Asked::Cancelled;
             }
+            Ok(Answer::AgentDisconnected) => {
+                r.close(app, "disconnected");
+                return Asked::Disconnected;
+            }
             Ok(Answer::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                 return Asked::Shutdown
             }
@@ -748,7 +1025,7 @@ fn ask<R: tauri::Runtime>(
                         r.close(app, "expired");
                         return Asked::Expired;
                     }
-                } else if stream.peer_closed() && approvals.withdraw(&r.id) {
+                } else if job.is_abandoned() && approvals.withdraw(&r.id) {
                     r.close(app, "withdrawn");
                     return Asked::Withdrawn;
                 }
@@ -759,10 +1036,10 @@ fn ask<R: tauri::Runtime>(
 
 fn run<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
-    r: &Request<'_>,
+    r: &Request,
     approved_by: ApprovedBy,
     rule: Option<String>,
-    stream: &BridgeStream,
+    job: &Arc<Job>,
 ) -> HostCommandResponse {
     let Some(procs) = app.try_state::<ChildProcesses>() else {
         return HostCommandResponse::error("Kage is starting up; try again.");
@@ -787,6 +1064,7 @@ fn run<R: tauri::Runtime>(
         cancel: cancel.clone(),
         timeout: Duration::from_secs(r.req.timeout_seconds),
     };
+    job.set_running(cancel.clone());
     emit_to(
         app,
         &r.window,
@@ -811,14 +1089,20 @@ fn run<R: tauri::Runtime>(
 
     let inv = shell_for(app, &r.req.command);
     let (tx, rx) = mpsc::channel();
-    let (thread_app, window, thread_run_id, cwd) =
-        (app.clone(), r.window.clone(), run_id.clone(), r.cwd.clone());
+    let (thread_app, window, thread_run_id, cwd, thread_job) = (
+        app.clone(),
+        r.window.clone(),
+        run_id.clone(),
+        r.cwd.clone(),
+        job.clone(),
+    );
     let spawned = std::thread::Builder::new()
         .name("host-command-run".into())
         .spawn(move || {
             // Held for the whole run, so shutdown and Stop can find it.
             let _slot = slot;
             let report = runner::run(&inv, &cwd, &control, |text, skipped| {
+                thread_job.push_output(text);
                 emit_to(
                     &thread_app,
                     &window,
@@ -834,14 +1118,16 @@ fn run<R: tauri::Runtime>(
         warn!("Host bridge: couldn't start a run thread: {e}");
     }
 
-    // While it runs, watch the requester: if the agent has gone (its turn
-    // was stopped), nobody is left to read the result.
+    // A version-1 requester going away stops the run, as it always did
+    // (its connection was the only way back). A version-2 run doesn't
+    // depend on any connection: it ends on its own, by Stop, at its time
+    // limit, with its window, or when Kage quits.
     let mut stopping = false;
     let outcome = loop {
         match rx.recv_timeout(Duration::from_millis(500)) {
             Ok(report) => break report,
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                if !stopping && stream.peer_closed() {
+                if !stopping && job.run_should_stop() {
                     info!(
                         "Host command {}: the agent went away; stopping the run",
                         r.id
@@ -896,6 +1182,7 @@ fn run<R: tauri::Runtime>(
                 cwd: r.cwd.to_string_lossy().into_owned(),
                 approved_by,
                 rule,
+                timeout_seconds: Some(r.req.timeout_seconds),
             })
         }
         Err(error) => {
@@ -992,7 +1279,7 @@ mod tests {
         let (mut stream, client, _l) =
             connection(tmp.path(), vec![req.to_line().into_bytes()], Duration::ZERO);
         match read_request(&mut stream) {
-            Incoming::Request(got) => assert_eq!(got, req),
+            Incoming::Request(got) => assert_eq!(got, BridgeRequest::Run(req)),
             _ => panic!("not read"),
         }
         client.join().unwrap();

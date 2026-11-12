@@ -11,6 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+    clearFinishedHostCommandCards,
     disposeHostCommandUi,
     guardText,
     installHostCommandUi,
@@ -73,6 +74,8 @@ const runOnce = (card) => q(card, '.host-cmd-run-once');
 const always = (card) => q(card, '.host-cmd-always-btn');
 const deny = (card) => q(card, '.host-cmd-deny');
 const prefixInput = (card) => q(card, '.host-cmd-prefix');
+const dismiss = (card) => q(card, '.host-cmd-dismiss');
+const ids = (root) => qa(root, '.host-cmd-card').map((c) => c.dataset.requestId);
 const click = (btn, detail = 1) =>
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true, detail }));
 
@@ -395,12 +398,48 @@ describe('the run', () => {
         });
         expect(live.dataset.state).toBe('success');
         expect(q(live, '.shell-run-output').textContent).toContain('Pouring awscli');
+        // Kage holds the result until the agent's call or poll takes it:
+        // nothing claims it went back before then.
+        expect(q(live, '.shell-run-agent-text').hidden).toBe(true);
+        expect(q(live, '.shell-run-agent-text').textContent).toBe('');
+        onHostCommandUpdate({ requestId: 'hc-1', phase: 'delivered' });
+        expect(q(live, '.shell-run-agent-text').hidden).toBe(false);
         expect(q(live, '.shell-run-agent-text').textContent).toBe(
             'shared.host_command.result_returned'
         );
         // No "Tell the agent" here: the result went back as the tool's result.
         expect(q(live, '.shell-run-tell')).toBeNull();
         expect(tauri.calls.map(([c]) => c)).not.toContain('send_message_streaming');
+    });
+
+    it('says the result went back even when that news beats the end of the run', async () => {
+        fakeTauri();
+        await installHostCommandUi({ tray });
+        onHostCommandUpdate({
+            requestId: 'hc-9',
+            phase: 'started',
+            runId: 'kage-run-cccccccccccccccccccccccc',
+            approvedBy: 'rule',
+            rule: 'brew install',
+            command: 'brew install jq',
+            cwd: '/Users/me',
+            timeoutSeconds: 600,
+        });
+        const card = q(tray, '.host-cmd-card');
+        onHostCommandUpdate({ requestId: 'hc-9', phase: 'delivered' });
+        // Still running: no claim yet.
+        expect(q(card, '.shell-run-agent-text').textContent).toBe('');
+        onHostCommandUpdate({
+            requestId: 'hc-9',
+            phase: 'finished',
+            result: { outcome: 'exited', exitCode: 0, signal: null, output: 'ok\n' },
+        });
+        expect(q(card, '.shell-run-agent-text').textContent).toBe(
+            'shared.host_command.result_returned'
+        );
+        // Told twice, said once.
+        onHostCommandUpdate({ requestId: 'hc-9', phase: 'delivered' });
+        expect(qa(card, '.shell-run-agent-text')).toHaveLength(1);
     });
 
     it('Stop stops only this run', async () => {
@@ -451,5 +490,125 @@ describe('the run', () => {
         });
         expect(q(card, '.shell-run-live').dataset.state).toBe('failed');
         expect(q(card, '.shell-run-state').textContent).toBe('shared.shell.sandbox.run.timed_out');
+    });
+});
+
+/** A run that started (approved, or by a rule) for request `id`. */
+function started(id, extra = {}) {
+    onHostCommandUpdate({
+        requestId: id,
+        phase: 'started',
+        runId: `kage-run-${id.padEnd(24, '0')}`,
+        approvedBy: 'rule',
+        rule: 'brew install',
+        command: `brew install ${id}`,
+        cwd: '/Users/me',
+        timeoutSeconds: 600,
+        ...extra,
+    });
+}
+
+function finished(id) {
+    onHostCommandUpdate({
+        requestId: id,
+        phase: 'finished',
+        result: { outcome: 'exited', exitCode: 0, signal: null, output: 'ok\n' },
+    });
+}
+
+describe('finished cards', () => {
+    it('get a × only once their request is over, and the × removes them', async () => {
+        fakeTauri();
+        await installHostCommandUi({ tray });
+        const card = showHostCommandPrompt(prompt()).el;
+        // Still waiting for the user: nothing to dismiss.
+        expect(dismiss(card).hidden).toBe(true);
+        click(deny(card));
+        await flush();
+        expect(dismiss(card).hidden).toBe(false);
+        // Its last line stays until it's dismissed.
+        expect(q(card, '.host-cmd-status').textContent).toBe('shared.host_command.denied');
+        expect(dismiss(card).getAttribute('aria-label')).toBe('shared.host_command.dismiss');
+        click(dismiss(card));
+        expect(tray.contains(card)).toBe(false);
+        expect(card.isConnected).toBe(false);
+        // Gone for good: nothing puts it back.
+        rehomeHostCommandCards();
+        expect(ids(tray)).toEqual([]);
+    });
+
+    it('show the × for every way a request ends', async () => {
+        fakeTauri();
+        await installHostCommandUi({ tray });
+        for (const reason of ['expired', 'withdrawn', 'disconnected', 'busy', 'shutdown']) {
+            const card = showHostCommandPrompt(prompt({ requestId: `hc-${reason}` })).el;
+            onHostCommandUpdate({ requestId: `hc-${reason}`, phase: 'closed', reason });
+            expect(dismiss(card).hidden, reason).toBe(false);
+            expect(q(card, '.host-cmd-status').textContent).toBe(
+                `shared.host_command.${reason}`
+            );
+        }
+        // A run that ended, however it ended.
+        started('hc-ran');
+        const ran = q(tray, '[data-request-id="hc-ran"]');
+        expect(dismiss(ran).hidden).toBe(true);
+        finished('hc-ran');
+        expect(dismiss(ran).hidden).toBe(false);
+        started('hc-broke');
+        onHostCommandUpdate({ requestId: 'hc-broke', phase: 'failed', error: 'no shell' });
+        expect(dismiss(q(tray, '[data-request-id="hc-broke"]')).hidden).toBe(false);
+    });
+
+    it('go on the next prompt or reset; cards still waiting or running stay', async () => {
+        fakeTauri();
+        await installHostCommandUi({ tray });
+        showHostCommandPrompt(prompt({ requestId: 'hc-waiting' }));
+        const denied = showHostCommandPrompt(prompt({ requestId: 'hc-denied' })).el;
+        click(deny(denied));
+        await flush();
+        showHostCommandPrompt(prompt({ requestId: 'hc-expired' }));
+        onHostCommandUpdate({ requestId: 'hc-expired', phase: 'closed', reason: 'expired' });
+        started('hc-running');
+        started('hc-done');
+        finished('hc-done');
+        // Approved, its run not started yet: the agent waits on it too.
+        const approved = showHostCommandPrompt(prompt({ requestId: 'hc-approved' })).el;
+        click(runOnce(approved));
+        await flush();
+
+        expect(clearFinishedHostCommandCards()).toBe(3);
+        expect(ids(tray)).toEqual(['hc-waiting', 'hc-running', 'hc-approved']);
+
+        // The running one goes once it's over, at the next prompt.
+        expect(clearFinishedHostCommandCards()).toBe(0);
+        finished('hc-running');
+        expect(clearFinishedHostCommandCards()).toBe(1);
+        expect(ids(tray)).toEqual(['hc-waiting', 'hc-approved']);
+    });
+
+    it('go wherever the window put them', async () => {
+        fakeTauri();
+        const answer = document.createElement('div');
+        document.body.append(answer);
+        await installHostCommandUi({
+            tray,
+            place: (card) => {
+                answer.append(card);
+                return true;
+            },
+        });
+        const card = showHostCommandPrompt(prompt()).el;
+        onHostCommandUpdate({ requestId: 'hc-1', phase: 'closed', reason: 'withdrawn' });
+        expect(answer.contains(card)).toBe(true);
+        clearFinishedHostCommandCards();
+        expect(card.isConnected).toBe(false);
+    });
+
+    it('a prompt shown again after a reload is still a waiting card', async () => {
+        fakeTauri({ pending: [prompt({ requestId: 'hc-back' })] });
+        await installHostCommandUi({ tray });
+        expect(clearFinishedHostCommandCards()).toBe(0);
+        expect(ids(tray)).toEqual(['hc-back']);
+        expect(dismiss(q(tray, '.host-cmd-card')).hidden).toBe(true);
     });
 });

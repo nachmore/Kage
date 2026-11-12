@@ -179,7 +179,8 @@ export const LifecycleEventsMethods = {
                 this.handleExpandClick();
                 return;
             }
-            // Ctrl/⌘+L — clear/reset
+            // Ctrl/⌘+L — clear/reset (the tray keeps only commands still
+            // waiting for an answer or their run: resetUI)
             if (cmdOrCtrlPressed(e) && e.key === 'l') {
                 e.preventDefault();
                 this.resetUI();

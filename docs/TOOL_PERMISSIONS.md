@@ -97,8 +97,9 @@ whatever the user's policies say:
   sends. Two attempts by one extension's calls in a local day pause that
   extension until midnight.
 - **Kage's own tools don't get through either.** `run_outside_sandbox`
-  isn't auto-allowed on a strict session, and a bridge request matched to
-  one is refused (and audited) before anything is shown.
+  (and `get_outside_sandbox_result`) isn't auto-allowed on a strict
+  session, and a bridge request matched to one is refused (and audited)
+  before anything is shown.
 - **A late request is still refused.** A strict id stays known for the
   last 256 ended strict sessions, so a request that arrives after the
   call ended never falls through to the user's policy.

@@ -11,23 +11,26 @@ mod input_tools;
 mod run_outside_sandbox;
 mod tool_definitions;
 
-/// `run_outside_sandbox` calls in flight at once. Each waits for the user
-/// (up to five minutes) and then the run itself, so they run on threads of
-/// their own while the stdio loop keeps answering everything else.
+/// `run_outside_sandbox` / `get_outside_sandbox_result` calls in flight at
+/// once. Each waits on Kage (up to the bridge's long poll, 80 s), so they
+/// run on threads of their own while the stdio loop keeps answering
+/// everything else.
 const MAX_BRIDGE_CALLS: usize = 4;
 
 static BRIDGE_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-/// Whether `request` is a `tools/call` of `run_outside_sandbox`.
+/// Whether `request` is a `tools/call` of `run_outside_sandbox` or
+/// `get_outside_sandbox_result`.
 fn is_bridge_call(request: &mcp_json_rpc::JsonRpcRequest) -> bool {
     request.method == "tools/call"
-        && request.params.get("name").and_then(|n| n.as_str())
-            == Some(run_outside_sandbox::TOOL_NAME)
+        && matches!(
+            request.params.get("name").and_then(|n| n.as_str()),
+            Some(run_outside_sandbox::TOOL_NAME | run_outside_sandbox::RESULT_TOOL_NAME)
+        )
 }
 
-/// Answer a `run_outside_sandbox` call on its own thread (the reply is
-/// written when Kage answers), or at once with an error when too many are
-/// already waiting.
+/// Answer a bridge call on its own thread (the reply is written when Kage
+/// answers), or at once with an error when too many are already waiting.
 fn spawn_bridge_call(request: mcp_json_rpc::JsonRpcRequest) {
     use std::sync::atomic::Ordering;
     if BRIDGE_CALLS.fetch_add(1, Ordering::SeqCst) >= MAX_BRIDGE_CALLS {
@@ -391,5 +394,27 @@ mod tests {
         assert!(is_notification_method("notifications/roots/list_changed"));
         assert!(!is_notification_method("ping"));
         assert!(!is_notification_method("tools/call"));
+    }
+
+    fn request(line: &str) -> mcp_json_rpc::JsonRpcRequest {
+        match mcp_json_rpc::parse_request(line) {
+            mcp_json_rpc::ParseOutcome::Ok(r) => r,
+            _ => panic!("not a request: {line}"),
+        }
+    }
+
+    #[test]
+    fn both_bridge_tools_wait_on_threads_of_their_own() {
+        for tool in ["run_outside_sandbox", "get_outside_sandbox_result"] {
+            let line = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{tool}","arguments":{{}}}}}}"#
+            );
+            assert!(is_bridge_call(&request(&line)), "{tool}");
+        }
+        let other =
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_script"}}"#;
+        assert!(!is_bridge_call(&request(other)));
+        let list = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"name":"run_outside_sandbox"}}"#;
+        assert!(!is_bridge_call(&request(list)));
     }
 }

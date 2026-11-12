@@ -156,7 +156,10 @@ and the current computer-control split is the canonical example.
   Kage app after the user approves): `computer_control_mcp/src/run_outside_sandbox.rs`,
   the bridge in `kage-core/src/host_bridge.rs` + `kage-core/src/os/host_bridge.rs`,
   and `src/host_commands/`. Its calls run on their own threads so the stdio
-  loop keeps answering while one waits for the user.
+  loop keeps answering while one waits for the user. A call waits at most
+  80 s (agents cut longer ones off), then returns "pending" with a job id;
+  `get_outside_sandbox_result` waits on that job the same way until the
+  result is there.
 - Input tools never act on Kage's own windows: `kage-core/src/os/kage_target.rs`
   and `targets_kage` in `computer_control_mcp/src/input_tools.rs`. See
   docs/SECURITY_MODEL.md § "Commands an agent runs outside its sandbox".
