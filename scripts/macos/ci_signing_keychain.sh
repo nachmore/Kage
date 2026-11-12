@@ -226,6 +226,13 @@ cmd_import() {
 
 cmd_cleanup() {
     local cert="${KAGE_MACOS_SIGNING_TRUSTED_CERT:-}" keychain="${KAGE_MACOS_SIGNING_KEYCHAIN:-}"
+    # A GitHub-hosted runner is thrown away after the job, trust setting and
+    # all. Removing the admin trust setting there hung the release for an
+    # hour (security waiting on an authorization it never got), so only a
+    # self-hosted runner, which keeps its state, does it.
+    if [[ "${RUNNER_ENVIRONMENT:-}" == "github-hosted" ]]; then
+        cert=""
+    fi
     if [[ -n "$cert" && -f "$cert" ]]; then
         with_trust_settings_right sudo security remove-trusted-cert -d "$cert" \
             || warn "could not remove the admin trust setting for the signing certificate"
