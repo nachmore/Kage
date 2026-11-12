@@ -100,6 +100,7 @@ import {
     signalMascotUpdated,
 } from '../mascot-signals.js';
 import { t } from '../../shared/i18n.js';
+import { clearFinishedHostCommandCards } from '../../shared/host-command-view.js';
 
 export {
     _resetDiagramFailures,
@@ -111,6 +112,7 @@ export {
     buildExecCtx,
     buildShortcutCommandFn,
     checkOnline,
+    clearFinishedHostCommandCards,
     cmdOrCtrlPressed,
     createShellActivitySlot,
     createTaskPlanElement,

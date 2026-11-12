@@ -21,6 +21,13 @@
  * the result goes back to the agent as the tool's result, not as a chat
  * message. A card that leaves the page (a re-render, the floating
  * window's reset) while it still matters moves to the window's tray.
+ *
+ * A card whose request is over (it ran, or was denied, withdrawn or timed
+ * out) keeps its last line and gets a small × to dismiss it; the window
+ * also drops it when the user sends their next prompt or resets the
+ * launcher (`clearFinishedHostCommandCards`). A card still waiting for an
+ * answer, or for its run, stays until it's over: the agent is still
+ * waiting on that job.
  */
 
 import { errMessage } from './error-message.js';
@@ -120,6 +127,56 @@ function minutesLeft(expiresAt) {
     return Math.max(1, Math.ceil(ms / 60000));
 }
 
+/** Whether the card's request is over (nothing more will happen to it). */
+function isFinished(card) {
+    return card.phase === 'done' || card.phase === 'closed';
+}
+
+/** The × that dismisses a finished card; hidden until then. */
+function buildDismiss(card) {
+    const btn = el('button', 'host-cmd-dismiss');
+    btn.type = 'button';
+    btn.hidden = true;
+    const label = t('shared.host_command.dismiss');
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.append(icon('cross', 'shell-cmd-icon', 12));
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dismissCard(card);
+    });
+    card.dismiss = btn;
+    return btn;
+}
+
+/** Show the × once the card's request is over. */
+function syncDismiss(card) {
+    if (card.dismiss) card.dismiss.hidden = !isFinished(card);
+}
+
+/** Take a card out of the page and forget it. Only a finished one goes. */
+function dismissCard(card) {
+    if (!isFinished(card)) return false;
+    const parent = card.el.parentElement;
+    card.el.remove();
+    cards.delete(card.id);
+    if (parent?.isConnected) layoutChanged(parent);
+    return true;
+}
+
+/**
+ * Drop every card whose request is over (the user sent their next prompt,
+ * or reset the launcher). Cards still waiting for an answer or a run stay.
+ * Returns how many went.
+ */
+export function clearFinishedHostCommandCards() {
+    let n = 0;
+    for (const card of [...cards.values()]) {
+        if (dismissCard(card)) n++;
+    }
+    return n;
+}
+
 /** The card's top: title, origin notes, the agent's reason, the command and where it runs. */
 function buildHead(card, p, auto) {
     const head = el('div', 'host-cmd-head');
@@ -130,7 +187,10 @@ function buildHead(card, p, auto) {
     titleText_.textContent = titleText(p, auto);
     title.append(icon('shield', 'shell-cmd-icon', 13), titleText_);
     card.el.setAttribute('aria-labelledby', title.id);
-    head.append(title);
+    // The × sits beside the title, not in it (it isn't part of the card's name).
+    const top = el('div', 'host-cmd-top');
+    top.append(title, buildDismiss(card));
+    head.append(top);
 
     if (!p.matched || p.background) {
         const origin = el('p', 'host-cmd-origin');
@@ -192,6 +252,7 @@ function newCard(p) {
         actions: null,
         runSlot: el('div', 'shell-run-slot host-cmd-run'),
         box: null,
+        dismiss: null,
     };
     cards.set(p.requestId, card);
     return card;
@@ -373,6 +434,7 @@ function close(card, text) {
     card.actions?.remove();
     updateExpiry(card);
     setStatus(card, text, 'info');
+    syncDismiss(card);
     if (!card.el.isConnected) placeCard(card);
     layoutChanged(card.el);
 }
@@ -380,6 +442,7 @@ function close(card, text) {
 const CLOSE_REASON = Object.freeze({
     expired: () => t('shared.host_command.expired'),
     withdrawn: () => t('shared.host_command.withdrawn'),
+    disconnected: () => t('shared.host_command.disconnected'),
     busy: () => t('shared.host_command.busy'),
     shutdown: () => t('shared.host_command.shutdown'),
 });
@@ -439,12 +502,14 @@ export function onHostCommandUpdate(u) {
             if (card?.run) {
                 card.phase = 'done';
                 finishAgentRun(card.run, u.result);
+                syncDismiss(card);
             }
             break;
         case 'failed':
             if (card?.run) {
                 card.phase = 'done';
                 failAgentRun(card.run, u.error || '');
+                syncDismiss(card);
             }
             break;
         case 'closed':

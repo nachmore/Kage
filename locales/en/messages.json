@@ -8493,6 +8493,10 @@
     "message": "The agent stopped waiting for an answer.",
     "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the agent gave up (its turn was stopped) before the user answered."
   },
+  "shared.host_command.disconnected": {
+    "message": "The agent disconnected before you answered, so the command didn't run.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the agent program disconnected from Kage (it quit or crashed) while the prompt was still waiting for the user's answer."
+  },
   "shared.host_command.busy": {
     "message": "Too many commands were already running, so Kage said no.",
     "description": "Status of a command an AI agent asked Kage to run outside its sandbox, refused because several were already running."
@@ -8508,6 +8512,10 @@
   "shared.host_command.result_returned": {
     "message": "The result went back to the agent.",
     "description": "Line under a command an AI agent asked Kage to run outside its sandbox, once it ended: its exit code and output were returned to the agent."
+  },
+  "shared.host_command.dismiss": {
+    "message": "Dismiss",
+    "description": "Tooltip and accessible label of the small × button on a finished card for a command an AI agent asked Kage to run outside its sandbox (it ran, or was denied, withdrawn or timed out): removes the card."
   },
   "shared.shell.run_chip.label": {
     "message": "A command still running outside the agent's sandbox",

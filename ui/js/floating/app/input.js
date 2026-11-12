@@ -1,4 +1,5 @@
 import {
+    clearFinishedHostCommandCards,
     cmdOrCtrlPressed,
     EVT,
     errLabel,
@@ -702,7 +703,11 @@ export const InputMethods = {
         }
     },
 
-    /** Clear the previous response (text, chips, shell blocks) before a new prompt. */
+    /**
+     * Clear the previous response (text, chips, shell blocks) before a new
+     * prompt, and the tray's cards for commands outside the sandbox that are
+     * over (one still waiting for an answer or its run stays).
+     */
     async _clearResponseForNewTurn() {
         this.elements.contentArea.classList.remove('visible');
         this.toolSources = [];
@@ -712,6 +717,7 @@ export const InputMethods = {
         document.getElementById('toolSources')?.remove();
         document.getElementById('toolSourcesCompact')?.remove();
         this._removeShellActivity();
+        clearFinishedHostCommandCards();
         await this.windowManager.resetHeightForNewMessage();
         this.startThinking();
         this.updateDatetimeVisibility();

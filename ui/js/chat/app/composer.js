@@ -1,5 +1,6 @@
 export function createComposerMixin(dependencies) {
     const {
+        clearFinishedHostCommandCards,
         renderMarkdown,
         attachmentPreviewHtml,
         executeCommand,
@@ -62,6 +63,7 @@ export function createComposerMixin(dependencies) {
                 this.messages.push({ role: 'user', content: message });
 
                 // Set up for new streaming response
+                clearFinishedHostCommandCards?.();
                 this.currentStreamingContent = '';
                 this.toolSources = [];
                 this.toolUsages = [];
@@ -331,6 +333,9 @@ export function createComposerMixin(dependencies) {
         // chat window viewing the same session each toast the same completion.
         startStreaming(originatedHere = true) {
             this._turnOriginatedHere = originatedHere;
+            // The user's next prompt from here: cards for commands outside
+            // the sandbox that are over go (one still waiting stays).
+            if (originatedHere) clearFinishedHostCommandCards?.();
             this.currentStreamingContent = '';
             this.toolSources = [];
             this.toolUsages = [];

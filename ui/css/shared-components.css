@@ -3154,11 +3154,44 @@ body.light-theme .conn-edit-actions {
     flex-direction: column;
     gap: 6px;
 }
+.host-cmd-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
 .host-cmd-title {
     display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
     align-items: center;
     gap: 6px;
     color: var(--kage-term-mark);
+}
+/* The × of a card whose request is over (host-command-view.js). */
+.host-cmd-dismiss {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--kage-term-muted);
+    cursor: pointer;
+}
+.host-cmd-dismiss:hover {
+    background: var(--kage-term-hover);
+    color: var(--kage-term-text);
+}
+.host-cmd-dismiss:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: -1px;
+}
+.host-cmd-dismiss[hidden] {
+    display: none;
 }
 .host-cmd-origin,
 .host-cmd-reason,
