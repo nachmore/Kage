@@ -14542,5 +14542,17 @@
     "description": "Button on the launcher banner that opens Settings → macOS Permissions to re-grant Accessibility",
     "_machine_translated": true,
     "_source_hash": "7da7429422ea0be2"
+  },
+  "shared.host_command.disconnected": {
+    "message": "Agent đã ngắt kết nối trước khi bạn trả lời, nên lệnh không được chạy.",
+    "description": "Status of a command an AI agent asked Kage to run outside its sandbox: the agent program disconnected from Kage (it quit or crashed) while the prompt was still waiting for the user's answer.",
+    "_machine_translated": true,
+    "_source_hash": "f663cef46c8dd791"
+  },
+  "shared.host_command.dismiss": {
+    "message": "Đóng",
+    "description": "Tooltip and accessible label of the small × button on a finished card for a command an AI agent asked Kage to run outside its sandbox (it ran, or was denied, withdrawn or timed out): removes the card.",
+    "_machine_translated": true,
+    "_source_hash": "294ee870b66aba98"
   }
 }
