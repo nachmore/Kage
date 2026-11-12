@@ -536,6 +536,81 @@ fn a_running_command_reports_its_progress_to_a_poll() {
 }
 
 #[test]
+fn a_slow_command_finishes_through_polls_and_no_call_outlasts_the_long_poll() {
+    let _serial = serial();
+    // `brew install` behind a prompt the user takes a while to answer,
+    // scaled down: the real long poll is 80 s against an agent's two
+    // minutes and a `sleep 150`; here it's 1 s against a user who answers
+    // after more than one of them and a run of 4 s.
+    let long_poll = Duration::from_secs(1);
+    let bridge = Bridge::start_with(Vec::new(), options(Duration::from_secs(60), long_poll));
+    let (_dir, cwd) = temp_cwd();
+    let command = slow_command("kage-bridge-slow-started", 4);
+    agent_tool_call("hb-session-slow", "hb-call-slow", &command, &cwd);
+
+    // Every call the agent makes ends within the long poll (and the time
+    // to answer it), whatever the job is doing: well inside its budget,
+    // and well short of the run (a call that waited for it would take
+    // about 4 s).
+    let budget = long_poll + Duration::from_millis(1500);
+    let mut calls = Vec::new();
+    let mut timed = |what: &str, f: &dyn Fn() -> HostCommandResponse| {
+        let started = Instant::now();
+        let response = f();
+        let took = started.elapsed();
+        assert!(took < budget, "{what} took {took:?}: {response:?}");
+        calls.push((response.job.as_ref().map(|p| p.state), took));
+        response
+    };
+
+    let started = Instant::now();
+    let req = request(&command, &cwd);
+    let first = timed("run_outside_sandbox", &|| send(&bridge.endpoint, &req));
+    assert_eq!(first.status, ResponseStatus::Pending, "{first:?}");
+    let job_id = first.job_id.clone().expect("a job id");
+    assert_eq!(first.job.unwrap().state, JobState::WaitingForApproval);
+    // How the first call ends when it returned "pending".
+    agent_tool_call_ended(&bridge, "hb-session-slow", "hb-call-slow", "completed");
+
+    // The user hasn't answered yet: still waiting, the prompt still up.
+    let waiting = timed("a poll while waiting", &|| poll(&bridge.endpoint, &job_id));
+    assert_eq!(waiting.status, ResponseStatus::Pending, "{waiting:?}");
+    assert_eq!(waiting.job.unwrap().state, JobState::WaitingForApproval);
+    assert_eq!(bridge.prompts(), 1);
+
+    bridge.answer(&job_id, Answer::RunOnce);
+    let done = loop {
+        let r = timed("a poll", &|| poll(&bridge.endpoint, &job_id));
+        if r.status.is_final() {
+            break r;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "still pending: {r:?}"
+        );
+    };
+    assert_eq!(done.status, ResponseStatus::Ran, "{done:?}");
+    assert_eq!(done.job_id.as_deref(), Some(job_id.as_str()));
+    let run = done.run.unwrap();
+    assert_eq!(run.exit_code, Some(0), "{run:?}");
+    assert!(run.output.contains("kage-bridge-slow-started"), "{run:?}");
+    assert_eq!(run.approved_by, ApprovedBy::User);
+
+    // It took several calls, at least two of them while it ran: no single
+    // call waited for the user's answer and the run together.
+    let running = calls
+        .iter()
+        .filter(|(state, _)| *state == Some(JobState::Running))
+        .count();
+    assert!(running >= 2, "{calls:?}");
+    assert!(started.elapsed() > long_poll * 4, "{calls:?}");
+    assert_eq!(
+        audited_actions(&command),
+        ["requested", "approved", "finished"]
+    );
+}
+
+#[test]
 fn a_requester_that_leaves_before_kage_answers_withdraws_its_prompt() {
     let _serial = serial();
     let bridge = Bridge::start(Vec::new(), Duration::from_secs(60));
