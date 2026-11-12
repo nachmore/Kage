@@ -18,9 +18,11 @@ pub enum Answer {
     Deny,
     /// The window showing it closed: nobody can answer it any more.
     WindowClosed,
-    /// The agent stopped waiting for it: the user stopped its turn, or its
-    /// tool call ended (failed, timed out on the agent's side).
+    /// The agent won't read the result: the user stopped its turn, or its
+    /// tool call ended before the agent was given the job's id.
     Cancelled,
+    /// The agent of the session that asked disconnected from Kage.
+    AgentDisconnected,
     /// Kage is quitting.
     Shutdown,
 }
@@ -34,7 +36,8 @@ pub struct PendingInfo {
     /// It has no hidden characters, so it may run from Kage at all.
     pub plain: bool,
     /// The session and tool call it was matched to, if any: when that turn
-    /// is stopped or that call ends, nobody is left to read the result.
+    /// is stopped, its agent disconnects, or that call ends before the
+    /// agent got the job's id, nobody is left to read the result.
     pub session_id: Option<String>,
     pub tool_call_id: Option<String>,
 }
@@ -155,13 +158,26 @@ impl Approvals {
         self.cancel_where(|info| info.session_id.as_deref() == Some(session_id))
     }
 
-    /// Tool call `tool_call_id` ended without its request being answered
-    /// (the agent gave up on it): that request gets [`Answer::Cancelled`].
+    /// Tool call `tool_call_id` ended before the agent got its request's
+    /// job id (the agent gave up on it): that request gets
+    /// [`Answer::Cancelled`]. The caller checks the id wasn't given
+    /// (`HostCommands::tool_call_ended`).
     pub fn cancel_tool_call(&self, tool_call_id: &str) -> bool {
         self.cancel_where(|info| info.tool_call_id.as_deref() == Some(tool_call_id)) > 0
     }
 
+    /// The agent disconnected: every request matched to one of its
+    /// sessions gets [`Answer::AgentDisconnected`] (one Kage couldn't
+    /// match, from an agent outside Kage, waits on). Returns how many.
+    pub fn cancel_matched(&self) -> usize {
+        self.end_where(|info| info.session_id.is_some(), Answer::AgentDisconnected)
+    }
+
     fn cancel_where(&self, matches: impl Fn(&PendingInfo) -> bool) -> usize {
+        self.end_where(matches, Answer::Cancelled)
+    }
+
+    fn end_where(&self, matches: impl Fn(&PendingInfo) -> bool, answer: Answer) -> usize {
         let cancelled: Vec<Pending> = {
             let mut pending = self.pending.lock_or_recover();
             let ids: Vec<String> = pending
@@ -173,7 +189,7 @@ impl Approvals {
         };
         let n = cancelled.len();
         for p in cancelled {
-            let _ = p.tx.send(Answer::Cancelled);
+            let _ = p.tx.send(answer.clone());
         }
         n
     }
@@ -347,6 +363,37 @@ mod tests {
             a.answer("r1", "main", Answer::RunOnce),
             Err(AnswerError::NotPending)
         );
+    }
+
+    #[test]
+    fn a_disconnected_agent_ends_the_prompts_of_its_sessions_only() {
+        let a = Approvals::new();
+        let rx1 = a
+            .register(
+                "r1",
+                "main",
+                info_from("x", "s1", "c1"),
+                serde_json::json!({}),
+            )
+            .unwrap();
+        let rx2 = a
+            .register(
+                "r2",
+                "chat-1",
+                info_from("y", "s2", "c2"),
+                serde_json::json!({}),
+            )
+            .unwrap();
+        // From an agent outside Kage: not this agent's to end.
+        let rx3 = a
+            .register("r3", "floating", info("z"), serde_json::json!({}))
+            .unwrap();
+        assert_eq!(a.cancel_matched(), 2);
+        assert_eq!(rx1.try_recv(), Ok(Answer::AgentDisconnected));
+        assert_eq!(rx2.try_recv(), Ok(Answer::AgentDisconnected));
+        assert!(rx3.try_recv().is_err());
+        assert_eq!(a.payloads_for("floating").len(), 1);
+        assert_eq!(a.cancel_matched(), 0);
     }
 
     #[test]

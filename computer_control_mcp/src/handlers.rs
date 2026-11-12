@@ -517,6 +517,11 @@ pub(crate) fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Valu
         crate::run_outside_sandbox::TOOL_NAME => {
             crate::run_outside_sandbox::handle(id, &args, &crate::run_outside_sandbox::OsBridge)
         }
+        crate::run_outside_sandbox::RESULT_TOOL_NAME => crate::run_outside_sandbox::handle_result(
+            id,
+            &args,
+            &crate::run_outside_sandbox::OsBridge,
+        ),
         "execute_folder_plan" => {
             let root_str = args.get("root").and_then(|v| v.as_str()).unwrap_or("");
             if root_str.is_empty() {

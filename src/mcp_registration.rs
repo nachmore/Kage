@@ -12,10 +12,14 @@ use std::path::PathBuf;
 /// recognises its own `run_outside_sandbox` calls.
 pub const MCP_SERVER_KEY: &str = "kage-computer-control";
 
-/// The per-request `timeout` (ms) Kage's entry asks the agent's MCP client
-/// for. kiro-cli waits 2 minutes by default, but `run_outside_sandbox`
-/// legitimately waits for the user's answer (up to 5 minutes) and then for
-/// the command (up to 30): the bridge's own reply wait, rounded up.
+/// The `timeout` (ms) Kage writes in its entry. It was meant as a per-call
+/// limit long enough for `run_outside_sandbox` to wait for the user and
+/// the run, but kiro-cli reads it as the server's *launch* timeout and
+/// still cuts every tool call off after about two minutes. Nothing relies
+/// on it any more: the bridge answers a call within
+/// `kage_core::host_bridge::LONG_POLL` and the agent polls the job for the
+/// rest. Kept (and still raised) only so existing entries aren't
+/// rewritten.
 pub const MCP_REQUEST_TIMEOUT_MS: u64 = 40 * 60 * 1000;
 
 /// Outcome of `upsert_server_entry` — lets the caller skip a write when nothing changed.

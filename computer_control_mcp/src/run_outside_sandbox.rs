@@ -1,6 +1,7 @@
 //! `run_outside_sandbox`: ask the Kage app to run a shell command that the
 //! agent's own sandbox refused (Homebrew can't nest its sandbox inside the
-//! agent's, …).
+//! agent's, …); and `get_outside_sandbox_result`, which waits for one that
+//! wasn't finished when the first call answered.
 //!
 //! This sidecar is a child of the sandboxed agent, so it can't run the
 //! command itself: it sends the request over the host-command bridge
@@ -9,15 +10,26 @@
 //! and the agent's reason, and runs it only once they approve — or a rule
 //! they made covers it — then replies with the exit code and the output's
 //! tail, which goes back to the agent as this tool's result.
+//!
+//! Kage owns the request as a job, and no call waits on it for longer than
+//! the bridge's long poll (80 s): agents cut off a tool call that takes
+//! too long (kiro-cli after about two minutes), and the user's answer plus
+//! a `brew install` easily does. A call that ends first returns "pending"
+//! with the job's id, and the agent calls `get_outside_sandbox_result`
+//! with it until the result is there.
 
 use kage_core::host_bridge::{
-    self, HostCommandRequest, HostCommandResponse, LineRead, ResponseStatus,
-    DEFAULT_RUN_TIMEOUT_SECS, MAX_RUN_TIMEOUT_SECS, OUTPUT_TAIL_BYTES,
+    self, BridgeRequest, HostCommandRequest, HostCommandResponse, JobProgress, JobState, LineRead,
+    PollRequest, ResponseStatus, DEFAULT_RUN_TIMEOUT_SECS, MAX_RUN_TIMEOUT_SECS, OUTPUT_TAIL_BYTES,
 };
 use kage_core::mcp_json_rpc::tool_result_text;
 use std::io::Write;
 
 pub(crate) const TOOL_NAME: &str = "run_outside_sandbox";
+
+/// The tool that waits on a job `run_outside_sandbox` answered "pending"
+/// for. It only reads the job.
+pub(crate) const RESULT_TOOL_NAME: &str = "get_outside_sandbox_result";
 
 pub(crate) const DESCRIPTION: &str = "Run a shell command on the user's computer OUTSIDE your sandbox, through the Kage app. \
 Use this ONLY after your own shell tool already failed because your sandbox blocked the command \
@@ -27,7 +39,17 @@ Never use it to read, print or copy credentials or secrets (AWS or SSH keys, tok
 The user sees the exact command, its working directory and your reason, and approves every run unless they made a rule for it. \
 If they deny it, don't retry the same command unless they ask you to. \
 It runs in the user's login shell with no input (nothing interactive; sudo can't ask for a password). \
-Returns the exit code, the last 32 KiB of output and how long it took.";
+Returns the exit code, the last 32 KiB of output and how long it took. \
+This call waits at most about 80 seconds: if the user hasn't answered yet, or the command is still running, it returns \
+status \"pending\" with a job_id instead. Then call get_outside_sandbox_result with that job_id, again each time it says \
+\"pending\", until it returns the final result. Never call run_outside_sandbox again for the same command to retry or \
+to check on it: that asks the user a second time and may run it twice.";
+
+pub(crate) const RESULT_DESCRIPTION: &str = "Wait for the result of a command you asked run_outside_sandbox to run, when \
+it returned status \"pending\" with a job_id (the user hadn't answered Kage's prompt yet, or the command was still running). \
+Waits at most about 80 seconds: if it says \"pending\" again, call it again with the same job_id until you get the final \
+result (exit code and output, or denied, timed out waiting for approval, or withdrawn). It only reads the job: it never \
+starts, approves or changes a command. Kage keeps a finished result for 15 minutes.";
 
 pub(crate) fn input_schema() -> serde_json::Value {
     serde_json::json!({
@@ -57,6 +79,20 @@ pub(crate) fn input_schema() -> serde_json::Value {
     })
 }
 
+pub(crate) fn result_input_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "job_id": {
+                "type": "string",
+                "maxLength": host_bridge::MAX_JOB_ID_BYTES,
+                "description": "The job_id a \"pending\" result of run_outside_sandbox (or of this tool) gave you, exactly as given."
+            }
+        },
+        "required": ["job_id"]
+    })
+}
+
 /// Why the bridge produced no reply.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BridgeError {
@@ -73,14 +109,14 @@ pub(crate) enum BridgeError {
 
 /// How the tool reaches Kage. A trait so tests can stand in a fake.
 pub(crate) trait Bridge {
-    fn send(&self, request: &HostCommandRequest) -> Result<HostCommandResponse, BridgeError>;
+    fn send(&self, request: &BridgeRequest) -> Result<HostCommandResponse, BridgeError>;
 }
 
 /// The real bridge: the endpoint Kage computes the same way.
 pub(crate) struct OsBridge;
 
 impl Bridge for OsBridge {
-    fn send(&self, request: &HostCommandRequest) -> Result<HostCommandResponse, BridgeError> {
+    fn send(&self, request: &BridgeRequest) -> Result<HostCommandResponse, BridgeError> {
         use kage_core::os::host_bridge as transport;
         let endpoint = transport::default_endpoint().ok_or(BridgeError::NotRunning)?;
         let mut stream = transport::connect(&endpoint).map_err(|e| match e.kind() {
@@ -89,8 +125,12 @@ impl Bridge for OsBridge {
             }
             _ => BridgeError::Unreachable(e.to_string()),
         })?;
+        let wait = match request {
+            BridgeRequest::OneShot(r) => host_bridge::reply_wait(r.timeout_seconds),
+            BridgeRequest::Run(_) | BridgeRequest::Poll(_) => host_bridge::LONG_POLL_REPLY_WAIT,
+        };
         stream
-            .set_read_timeout(Some(host_bridge::reply_wait(request.timeout_seconds)))
+            .set_read_timeout(Some(wait))
             .map_err(|e| BridgeError::Unreachable(e.to_string()))?;
         stream
             .write_all(request.to_line().as_bytes())
@@ -154,6 +194,26 @@ pub(crate) fn parse_args(args: &serde_json::Value) -> Result<HostCommandRequest,
     Ok(request)
 }
 
+/// `get_outside_sandbox_result`'s argument: the `job_id` a "pending"
+/// result gave, exactly (surrounding spaces aside).
+pub(crate) fn parse_job_id(args: &serde_json::Value) -> Result<String, String> {
+    let id = match args.as_object().and_then(|o| o.get("job_id")) {
+        None | Some(serde_json::Value::Null) => {
+            return Err("Missing required parameter: job_id (from a \"pending\" result).".into())
+        }
+        Some(serde_json::Value::String(s)) => s.trim().to_string(),
+        Some(_) => return Err("`job_id` must be a string.".into()),
+    };
+    if !host_bridge::is_job_id(&id) {
+        return Err(format!(
+            "`job_id` isn't one Kage gave out (expected letters, digits and '-', at most {} characters). \
+             Pass the job_id from the \"pending\" result exactly.",
+            host_bridge::MAX_JOB_ID_BYTES
+        ));
+    }
+    Ok(id)
+}
+
 /// The program that spawned this sidecar (the agent), for the user to see
 /// when Kage can't tell which of its sessions asked.
 fn agent_label() -> Option<String> {
@@ -175,36 +235,111 @@ fn agent_label() -> Option<String> {
     }
 }
 
+/// Which tool call a reply answers, for its wording.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Call {
+    /// `run_outside_sandbox`, with its time limit.
+    Run { timeout_seconds: u64 },
+    /// `get_outside_sandbox_result` for this job.
+    Poll { job_id: String },
+}
+
+fn secs(ms: u64) -> u64 {
+    ms / 1000
+}
+
+/// "pending": where the job is, its id, and what to do next. Not an
+/// error: the agent just keeps waiting.
+fn pending_text(job_id: &str, job: Option<&JobProgress>) -> String {
+    let next = format!(
+        "Job id: {job_id}\nCall {RESULT_TOOL_NAME} with {{\"job_id\": \"{job_id}\"}} to keep waiting for the result. \
+         Don't call {TOOL_NAME} again for this command: that would ask the user again and could run it twice."
+    );
+    match job {
+        Some(p) if p.state == JobState::Running => {
+            let mut text = format!(
+                "Pending: the command is still running ({} s so far).\n{next}",
+                secs(p.running_ms.unwrap_or(p.elapsed_ms))
+            );
+            match p.output_tail.as_deref().filter(|t| !t.trim().is_empty()) {
+                Some(tail) => {
+                    text.push_str("\nLast output lines:\n");
+                    text.push_str(tail);
+                }
+                None => text.push_str("\nNo output yet."),
+            }
+            text
+        }
+        Some(p) => {
+            let left = p
+                .approval_expires_in_ms
+                .map(|ms| {
+                    format!(
+                        "; Kage stops waiting in about {} min",
+                        ms.div_ceil(60_000).max(1)
+                    )
+                })
+                .unwrap_or_default();
+            format!(
+                "Pending: Kage is still waiting for the user to approve the command (asked {} s ago{left}). \
+                 Nothing has run yet.\n{next}",
+                secs(p.elapsed_ms)
+            )
+        }
+        None => format!("Pending: the command hasn't finished.\n{next}"),
+    }
+}
+
 /// The tool result for one call: `(text, is_error)`.
 pub(crate) fn result_for(
     outcome: Result<HostCommandResponse, BridgeError>,
-    timeout_seconds: u64,
+    call: &Call,
 ) -> (String, bool) {
+    let poll_id = match call {
+        Call::Poll { job_id } => Some(job_id.as_str()),
+        Call::Run { .. } => None,
+    };
     let response = match outcome {
         Ok(r) => r,
         Err(BridgeError::NotRunning) => {
             return (
-                "Kage isn't running (or its command bridge didn't start), so nothing ran. \
-                 Ask the user to start Kage, or to run the command themselves."
-                    .into(),
+                match poll_id {
+                    None => "Kage isn't running (or its command bridge didn't start), so nothing ran. \
+                             Ask the user to start Kage, or to run the command themselves."
+                        .into(),
+                    Some(_) => "Kage isn't running (or its command bridge didn't start), so the job's \
+                                result can't be read. Ask the user whether the command ran before trying again."
+                        .into(),
+                },
                 true,
             )
         }
         Err(BridgeError::Unreachable(detail)) => {
             return (
                 format!(
-                    "Couldn't reach Kage to run the command, so nothing ran ({detail}). \
+                    "Couldn't reach Kage{} ({detail}). \
                      Your sandbox may block connecting to Kage's local bridge; ask the user \
-                     to run the command themselves."
+                     to run the command themselves.",
+                    if poll_id.is_some() {
+                        " to read the job's result"
+                    } else {
+                        " to run the command, so nothing ran"
+                    }
                 ),
                 true,
             )
         }
         Err(BridgeError::TimedOut) => {
             return (
-                "No answer from Kage in time; whether the command ran is unknown. \
-                 Ask the user before trying again."
-                    .into(),
+                match poll_id {
+                    None => "No answer from Kage in time; whether the command ran is unknown. \
+                             Ask the user before trying again."
+                        .into(),
+                    Some(id) => format!(
+                        "No answer from Kage in time. Call {RESULT_TOOL_NAME} again with \
+                         {{\"job_id\": \"{id}\"}}."
+                    ),
+                },
                 true,
             )
         }
@@ -218,6 +353,17 @@ pub(crate) fn result_for(
         }
     };
     match response.status {
+        ResponseStatus::Pending => match response.job_id.as_deref().or(poll_id) {
+            Some(id) if host_bridge::is_job_id(id) => {
+                (pending_text(id, response.job.as_ref()), false)
+            }
+            _ => (
+                "Kage said the command isn't finished but gave no job id; whether it runs is unknown. \
+                 Ask the user before trying again."
+                    .into(),
+                true,
+            ),
+        },
         ResponseStatus::Ran => {
             let Some(run) = response.run else {
                 return ("Kage said the command ran but sent no result.".into(), true);
@@ -225,10 +371,17 @@ pub(crate) fn result_for(
             let failed = run.outcome != "exited" || run.exit_code != Some(0);
             let (output, cut) = host_bridge::output_tail(&run.output, OUTPUT_TAIL_BYTES);
             let truncated = run.truncated || cut;
+            let limit = run.timeout_seconds.or(match call {
+                Call::Run { timeout_seconds } => Some(*timeout_seconds),
+                Call::Poll { .. } => None,
+            });
             let note = match run.outcome.as_str() {
-                "timed_out" => Some(format!(
-                    "The command was still running after {timeout_seconds} seconds and was stopped."
-                )),
+                "timed_out" => Some(match limit {
+                    Some(s) => {
+                        format!("The command was still running after {s} seconds and was stopped.")
+                    }
+                    None => "The command ran out of time and was stopped.".into(),
+                }),
                 "cancelled" => Some("The user stopped the command before it finished.".into()),
                 _ => None,
             };
@@ -280,9 +433,34 @@ pub(crate) fn result_for(
             ),
             true,
         ),
+        ResponseStatus::Withdrawn => (
+            format!(
+                "Withdrawn: {}",
+                response
+                    .message
+                    .unwrap_or_else(|| "the request ended before the user answered, so the command did not run.".into())
+            ),
+            true,
+        ),
+        ResponseStatus::NotFound => (
+            format!(
+                "Kage has no job {}: {} Whether the command ran is unknown; ask the user before \
+                 running it again.",
+                response.job_id.as_deref().or(poll_id).unwrap_or("with that id"),
+                response
+                    .message
+                    .unwrap_or_else(|| "it may have expired.".into())
+            ),
+            true,
+        ),
         ResponseStatus::Error | ResponseStatus::Unknown => (
             format!(
-                "Kage didn't run the command: {}",
+                "{}: {}",
+                if poll_id.is_some() {
+                    "Kage couldn't answer"
+                } else {
+                    "Kage didn't run the command"
+                },
                 response.message.unwrap_or_else(|| "no reason given".into())
             ),
             true,
@@ -290,8 +468,8 @@ pub(crate) fn result_for(
     }
 }
 
-/// Handle one `tools/call`. Blocks until Kage answers: the user's decision
-/// plus the run itself (see [`host_bridge::reply_wait`]).
+/// Handle one `run_outside_sandbox` call. Blocks until Kage answers: the
+/// final result, or "pending" with the job's id after the long poll.
 pub(crate) fn handle(
     id: &serde_json::Value,
     args: &serde_json::Value,
@@ -306,13 +484,38 @@ pub(crate) fn handle(
         request.command.len(),
         request.timeout_seconds
     );
-    let outcome = bridge.send(&request);
-    match &outcome {
+    let call = Call::Run {
+        timeout_seconds: request.timeout_seconds,
+    };
+    let outcome = bridge.send(&BridgeRequest::Run(request));
+    log_outcome(&outcome);
+    let (text, is_error) = result_for(outcome, &call);
+    tool_result_text(id, &text, is_error)
+}
+
+/// Handle one `get_outside_sandbox_result` call: wait on the job at most
+/// the long poll. It only reads the job.
+pub(crate) fn handle_result(
+    id: &serde_json::Value,
+    args: &serde_json::Value,
+    bridge: &dyn Bridge,
+) -> String {
+    let job_id = match parse_job_id(args) {
+        Ok(j) => j,
+        Err(msg) => return tool_result_text(id, &msg, true),
+    };
+    log::info!("[get_outside_sandbox_result] waiting on job {job_id}");
+    let outcome = bridge.send(&BridgeRequest::Poll(PollRequest::new(job_id.clone())));
+    log_outcome(&outcome);
+    let (text, is_error) = result_for(outcome, &Call::Poll { job_id });
+    tool_result_text(id, &text, is_error)
+}
+
+fn log_outcome(outcome: &Result<HostCommandResponse, BridgeError>) {
+    match outcome {
         Ok(r) => log::info!("[run_outside_sandbox] Kage answered: {:?}", r.status),
         Err(e) => log::warn!("[run_outside_sandbox] no answer: {e:?}"),
     }
-    let (text, is_error) = result_for(outcome, request.timeout_seconds);
-    tool_result_text(id, &text, is_error)
 }
 
 #[cfg(test)]
@@ -325,7 +528,7 @@ mod tests {
     /// Records what it was asked and answers with a canned reply.
     struct FakeBridge {
         reply: Mutex<Option<Result<HostCommandResponse, BridgeError>>>,
-        seen: Mutex<Vec<HostCommandRequest>>,
+        seen: Mutex<Vec<BridgeRequest>>,
     }
 
     impl FakeBridge {
@@ -335,10 +538,14 @@ mod tests {
                 seen: Mutex::new(Vec::new()),
             }
         }
+
+        fn sent(&self) -> Vec<BridgeRequest> {
+            self.seen.lock().unwrap().clone()
+        }
     }
 
     impl Bridge for FakeBridge {
-        fn send(&self, request: &HostCommandRequest) -> Result<HostCommandResponse, BridgeError> {
+        fn send(&self, request: &BridgeRequest) -> Result<HostCommandResponse, BridgeError> {
             self.seen.lock().unwrap().push(request.clone());
             self.reply.lock().unwrap().take().expect("one call")
         }
@@ -365,7 +572,34 @@ mod tests {
             cwd: "/Users/me".into(),
             approved_by: ApprovedBy::User,
             rule: None,
+            timeout_seconds: None,
         })
+    }
+
+    fn run_call() -> Call {
+        Call::Run {
+            timeout_seconds: 600,
+        }
+    }
+
+    fn waiting(elapsed_ms: u64) -> JobProgress {
+        JobProgress {
+            state: JobState::WaitingForApproval,
+            elapsed_ms,
+            running_ms: None,
+            output_tail: None,
+            approval_expires_in_ms: Some(220_000),
+        }
+    }
+
+    fn running(running_ms: u64, tail: &str) -> JobProgress {
+        JobProgress {
+            state: JobState::Running,
+            elapsed_ms: running_ms + 30_000,
+            running_ms: Some(running_ms),
+            output_tail: Some(tail.into()),
+            approval_expires_in_ms: None,
+        }
     }
 
     #[test]
@@ -383,6 +617,18 @@ mod tests {
         assert!(DESCRIPTION.contains("ONLY after your own shell tool already failed"));
         assert!(DESCRIPTION.contains("credentials"));
         assert!(DESCRIPTION.contains("approves every run unless they made a rule"));
+    }
+
+    #[test]
+    fn the_descriptions_say_how_to_wait_and_never_to_rerun() {
+        assert!(DESCRIPTION.contains("\"pending\" with a job_id"));
+        assert!(DESCRIPTION.contains(RESULT_TOOL_NAME));
+        assert!(DESCRIPTION.contains("Never call run_outside_sandbox again for the same command"));
+        assert!(RESULT_DESCRIPTION.contains("call it again with the same job_id"));
+        assert!(RESULT_DESCRIPTION.contains("only reads the job"));
+        let schema = result_input_schema();
+        assert_eq!(schema["required"], json!(["job_id"]));
+        assert_eq!(schema["properties"]["job_id"]["type"], json!("string"));
     }
 
     #[test]
@@ -411,16 +657,13 @@ mod tests {
             let (text, is_error) = result(&handle(&json!(1), &args, &bridge));
             assert!(is_error, "{args}");
             assert!(text.contains(needle), "{args}: {text}");
-            assert!(
-                bridge.seen.lock().unwrap().is_empty(),
-                "{args} reached the bridge"
-            );
+            assert!(bridge.sent().is_empty(), "{args} reached the bridge");
         }
     }
 
     #[test]
-    fn a_valid_call_sends_exactly_the_command() {
-        let bridge = FakeBridge::answering(Ok(ran(0, "==> Pouring awscli\n")));
+    fn a_valid_call_sends_exactly_the_command_as_a_job() {
+        let bridge = FakeBridge::answering(Ok(ran(0, "==> Pouring awscli\n").for_job("hc-1")));
         let args = json!({
             "command": "brew install awscli",
             "cwd": "~/src",
@@ -428,11 +671,15 @@ mod tests {
         });
         let (text, is_error) = result(&handle(&json!(7), &args, &bridge));
         assert!(!is_error, "{text}");
-        let sent = bridge.seen.lock().unwrap()[0].clone();
+        let sent = match bridge.sent().remove(0) {
+            BridgeRequest::Run(r) => r,
+            other => panic!("sent {other:?}"),
+        };
         assert_eq!(sent.command, "brew install awscli");
         assert_eq!(sent.cwd.as_deref(), Some("~/src"));
         assert_eq!(sent.timeout_seconds, DEFAULT_RUN_TIMEOUT_SECS);
         assert_eq!(sent.v, host_bridge::PROTOCOL_VERSION);
+        assert_eq!(sent.kind, Some(host_bridge::RequestKind::Run));
         let body: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(body["exit_code"], json!(0));
         assert_eq!(body["output"], json!("==> Pouring awscli\n"));
@@ -441,8 +688,152 @@ mod tests {
     }
 
     #[test]
+    fn an_unanswered_prompt_comes_back_pending_with_the_job_id() {
+        let bridge = FakeBridge::answering(Ok(HostCommandResponse::pending(
+            "hc-0123456789abcdef01234567",
+            waiting(80_400),
+        )));
+        let args = json!({ "command": "brew install --cask wallspace", "reason": "sandboxed" });
+        let (text, is_error) = result(&handle(&json!(1), &args, &bridge));
+        assert!(!is_error, "pending isn't a failure: {text}");
+        assert!(text.starts_with("Pending: Kage is still waiting for the user to approve"));
+        assert!(text.contains("asked 80 s ago"), "{text}");
+        assert!(text.contains("about 4 min"), "{text}");
+        assert!(text.contains("Nothing has run yet"));
+        assert!(text.contains(
+            "Call get_outside_sandbox_result with {\"job_id\": \"hc-0123456789abcdef01234567\"}"
+        ));
+        assert!(text.contains("Don't call run_outside_sandbox again"));
+    }
+
+    #[test]
+    fn a_running_command_comes_back_pending_with_its_time_and_last_lines() {
+        let (text, is_error) = result_for(
+            Ok(HostCommandResponse::pending(
+                "hc-2",
+                running(95_000, "==> Downloading\n==> Installing Cask wallspace"),
+            )),
+            &run_call(),
+        );
+        assert!(!is_error);
+        assert!(text.starts_with("Pending: the command is still running (95 s so far)."));
+        assert!(text.contains("Job id: hc-2"));
+        assert!(
+            text.ends_with("Last output lines:\n==> Downloading\n==> Installing Cask wallspace")
+        );
+
+        let (text, _) = result_for(
+            Ok(HostCommandResponse::pending("hc-2", running(3_000, ""))),
+            &run_call(),
+        );
+        assert!(text.ends_with("No output yet."), "{text}");
+    }
+
+    #[test]
+    fn a_pending_reply_without_a_usable_job_id_is_an_error() {
+        let mut resp = HostCommandResponse::pending("hc-1", waiting(1));
+        resp.job_id = None;
+        let (text, is_error) = result_for(Ok(resp.clone()), &run_call());
+        assert!(is_error);
+        assert!(text.contains("gave no job id"));
+        resp.job_id = Some("not a job id".into());
+        assert!(result_for(Ok(resp), &run_call()).1);
+    }
+
+    #[test]
+    fn the_result_tool_checks_its_job_id_before_asking_kage() {
+        for (args, needle) in [
+            (json!({}), "Missing required parameter: job_id"),
+            (json!({"job_id": 5}), "must be a string"),
+            (json!({"job_id": "  "}), "isn't one Kage gave out"),
+            (
+                json!({"job_id": "hc-1; rm -rf ~"}),
+                "isn't one Kage gave out",
+            ),
+            (json!({"job_id": "x".repeat(65)}), "isn't one Kage gave out"),
+            (json!("hc-1"), "Missing required parameter"),
+        ] {
+            let bridge = FakeBridge::answering(Err(BridgeError::NotRunning));
+            let (text, is_error) = result(&handle_result(&json!(1), &args, &bridge));
+            assert!(is_error, "{args}");
+            assert!(text.contains(needle), "{args}: {text}");
+            assert!(bridge.sent().is_empty(), "{args} reached the bridge");
+        }
+    }
+
+    #[test]
+    fn the_result_tool_polls_the_job_and_returns_its_result() {
+        let bridge =
+            FakeBridge::answering(Ok(ran(0, "🍺 wallspace was installed!\n").for_job("hc-9")));
+        let (text, is_error) = result(&handle_result(
+            &json!(3),
+            &json!({ "job_id": " hc-9 " }),
+            &bridge,
+        ));
+        assert!(!is_error, "{text}");
+        assert_eq!(
+            bridge.sent(),
+            vec![BridgeRequest::Poll(PollRequest::new("hc-9"))]
+        );
+        let body: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(body["exit_code"], json!(0));
+        assert!(body["output"].as_str().unwrap().contains("was installed"));
+
+        // Still going: pending again, naming the same job.
+        let bridge = FakeBridge::answering(Ok(HostCommandResponse::pending(
+            "hc-9",
+            running(170_000, "==> Installing"),
+        )));
+        let (text, is_error) = result(&handle_result(
+            &json!(4),
+            &json!({ "job_id": "hc-9" }),
+            &bridge,
+        ));
+        assert!(!is_error);
+        assert!(text.contains("{\"job_id\": \"hc-9\"}"), "{text}");
+    }
+
+    #[test]
+    fn a_poll_says_what_it_can_when_there_is_no_result() {
+        let poll = Call::Poll {
+            job_id: "hc-7".into(),
+        };
+        let (text, is_error) = result_for(Ok(HostCommandResponse::not_found("hc-7")), &poll);
+        assert!(is_error);
+        assert!(text.starts_with("Kage has no job hc-7:"), "{text}");
+        assert!(text.contains("15 minutes"), "{text}");
+        assert!(text.contains("ask the user before running it again"));
+
+        let (text, is_error) = result_for(Err(BridgeError::TimedOut), &poll);
+        assert!(is_error);
+        assert!(text.contains("Call get_outside_sandbox_result again with {\"job_id\": \"hc-7\"}"));
+
+        let (text, _) = result_for(Err(BridgeError::NotRunning), &poll);
+        assert!(text.contains("can't be read"), "{text}");
+
+        let (text, _) = result_for(Ok(HostCommandResponse::error("starting up")), &poll);
+        assert_eq!(text, "Kage couldn't answer: starting up");
+    }
+
+    #[test]
+    fn a_withdrawn_request_says_nothing_ran() {
+        let (text, is_error) = result_for(
+            Ok(HostCommandResponse::withdrawn(
+                "The request was withdrawn before the user answered: the agent disconnected \
+                 from Kage, so the command did not run.",
+            )),
+            &Call::Poll {
+                job_id: "hc-1".into(),
+            },
+        );
+        assert!(is_error);
+        assert!(text.starts_with("Withdrawn: "));
+        assert!(text.contains("did not run"));
+    }
+
+    #[test]
     fn a_failing_command_is_a_tool_error_with_its_output() {
-        let (text, is_error) = result_for(Ok(ran(1, "Error: no formula\n")), 600);
+        let (text, is_error) = result_for(Ok(ran(1, "Error: no formula\n")), &run_call());
         assert!(is_error);
         assert!(text.contains("no formula"));
         assert!(text.contains("\"exit_code\": 1"));
@@ -451,7 +842,7 @@ mod tests {
     #[test]
     fn long_output_is_cut_to_its_tail_and_says_so() {
         let output = format!("{}END", "x".repeat(OUTPUT_TAIL_BYTES * 2));
-        let (text, _) = result_for(Ok(ran(0, &output)), 600);
+        let (text, _) = result_for(Ok(ran(0, &output)), &run_call());
         let body: serde_json::Value = serde_json::from_str(&text).unwrap();
         let shown = body["output"].as_str().unwrap();
         assert!(shown.len() <= OUTPUT_TAIL_BYTES);
@@ -467,7 +858,7 @@ mod tests {
             run.approved_by = ApprovedBy::Rule;
             run.rule = Some("brew install".into());
         }
-        let (text, _) = result_for(Ok(resp), 600);
+        let (text, _) = result_for(Ok(resp), &run_call());
         let body: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(body["approved_by"], json!("rule"));
         assert_eq!(body["rule"], json!("brew install"));
@@ -493,7 +884,7 @@ mod tests {
             ),
         ];
         for (outcome, needle) in cases {
-            let (text, is_error) = result_for(outcome, 600);
+            let (text, is_error) = result_for(outcome, &run_call());
             assert!(is_error, "{needle}");
             assert!(text.contains(needle), "{text}");
         }
@@ -507,9 +898,26 @@ mod tests {
             run.exit_code = None;
             run.signal = Some(15);
         }
-        let (text, is_error) = result_for(Ok(resp), 90);
+        let (text, is_error) = result_for(
+            Ok(resp.clone()),
+            &Call::Run {
+                timeout_seconds: 90,
+            },
+        );
         assert!(is_error);
         assert!(text.contains("after 90 seconds"), "{text}");
+
+        // From a poll, the limit comes with the result.
+        if let Some(run) = resp.run.as_mut() {
+            run.timeout_seconds = Some(120);
+        }
+        let (text, _) = result_for(
+            Ok(resp),
+            &Call::Poll {
+                job_id: "hc-1".into(),
+            },
+        );
+        assert!(text.contains("after 120 seconds"), "{text}");
     }
 
     #[cfg(unix)]
@@ -522,6 +930,13 @@ mod tests {
             return; // another test isolated first; nothing listens there either
         }
         let req = HostCommandRequest::new("true", None, "test", 5, None);
-        assert_eq!(OsBridge.send(&req), Err(BridgeError::NotRunning));
+        assert_eq!(
+            OsBridge.send(&BridgeRequest::Run(req)),
+            Err(BridgeError::NotRunning)
+        );
+        assert_eq!(
+            OsBridge.send(&BridgeRequest::Poll(PollRequest::new("hc-1"))),
+            Err(BridgeError::NotRunning)
+        );
     }
 }
