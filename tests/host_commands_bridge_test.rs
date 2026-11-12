@@ -207,16 +207,19 @@ fn agent_tool_call(session: &str, call_id: &str, command: &str, cwd: &str) {
 
 /// The agent's MCP client reporting that call ended (`completed` once the
 /// sidecar returned "pending", `failed` when the agent gave up on it), as
-/// the notification handler hands it on.
+/// the notification handler hands it on: with the title and kind the call
+/// was first seen with, which the handler remembers per call.
 fn agent_tool_call_ended(bridge: &Bridge, session: &str, call_id: &str, status: &str) -> bool {
     let ended = kage::host_commands::observe_tool_call(
         Some(session),
         &serde_json::json!({ "toolCallId": call_id, "status": status }),
-        None,
-        None,
+        Some("Running: @kage-computer-control/run_outside_sandbox"),
+        Some("other"),
     );
     assert_eq!(ended.as_deref(), Some(call_id));
-    bridge.host_commands().tool_call_ended(call_id)
+    bridge
+        .host_commands()
+        .tool_call_ended(call_id, Some(status))
 }
 
 /// One request, sent and read the way the sidecar's `OsBridge` does.
@@ -713,6 +716,106 @@ fn a_tool_call_that_ends_before_its_id_was_given_withdraws_its_prompt() {
     let response = client.join().unwrap();
     assert_eq!(response.status, ResponseStatus::Withdrawn, "{response:?}");
     assert!(response.run.is_none());
+}
+
+#[test]
+fn a_call_the_agent_cut_off_as_kage_answered_pending_withdraws_its_prompt() {
+    let _serial = serial();
+    let bridge = Bridge::start_with(
+        Vec::new(),
+        options(Duration::from_secs(60), Duration::from_secs(1)),
+    );
+    let (dir, cwd) = temp_cwd();
+    let marker = dir.path().join("ran-cut-off");
+    let command = "echo ran > ran-cut-off";
+    agent_tool_call("hb-session-cut", "hb-call-cut", command, &cwd);
+
+    // Kage wrote "pending", but the agent's own limit cut the call off at
+    // that moment: the call ends `failed`, not `completed`, so the agent
+    // never took the reply or the id in it. Nobody can read the result.
+    let first = send(&bridge.endpoint, &request(command, &cwd));
+    assert_eq!(first.status, ResponseStatus::Pending, "{first:?}");
+    let job_id = first.job_id.expect("a job id");
+    assert_eq!(bridge.prompts(), 1);
+    assert!(
+        agent_tool_call_ended(&bridge, "hb-session-cut", "hb-call-cut", "failed"),
+        "the prompt of a call the agent never took the answer of stayed up"
+    );
+
+    let done = poll(&bridge.endpoint, &job_id);
+    assert_eq!(done.status, ResponseStatus::Withdrawn, "{done:?}");
+    assert_eq!(bridge.prompts(), 0);
+    assert!(!marker.exists(), "the command ran");
+    assert_eq!(audited_actions(command), ["requested", "withdrawn"]);
+}
+
+#[test]
+fn a_late_second_end_of_a_call_that_took_pending_changes_nothing() {
+    let _serial = serial();
+    let bridge = Bridge::start_with(
+        Vec::new(),
+        options(Duration::from_secs(60), Duration::from_secs(1)),
+    );
+    let (_dir, cwd) = temp_cwd();
+    let command = "echo kage-bridge-second-end";
+    agent_tool_call("hb-session-2end", "hb-call-2end", command, &cwd);
+    let job_id = send(&bridge.endpoint, &request(command, &cwd))
+        .job_id
+        .expect("pending");
+    assert!(!agent_tool_call_ended(
+        &bridge,
+        "hb-session-2end",
+        "hb-call-2end",
+        "completed"
+    ));
+    // An agent that reports the same call again (`cancelled`, say) once
+    // it had taken "pending": only its first end counts.
+    assert!(!agent_tool_call_ended(
+        &bridge,
+        "hb-session-2end",
+        "hb-call-2end",
+        "cancelled"
+    ));
+    std::thread::sleep(Duration::from_millis(600));
+    assert_eq!(bridge.prompts(), 1, "the prompt was withdrawn");
+    bridge.answer(&job_id, Answer::Deny);
+    let done = poll_until_final(&bridge.endpoint, &job_id, Duration::from_secs(10));
+    assert_eq!(done.status, ResponseStatus::Denied, "{done:?}");
+}
+
+#[test]
+fn two_polls_at_once_both_get_the_result() {
+    let _serial = serial();
+    let bridge = Bridge::start_with(
+        Vec::new(),
+        options(Duration::from_secs(60), Duration::from_secs(1)),
+    );
+    let (_dir, cwd) = temp_cwd();
+    let command = "echo kage-bridge-two-polls";
+    agent_tool_call("hb-session-2poll", "hb-call-2poll", command, &cwd);
+    let job_id = send(&bridge.endpoint, &request(command, &cwd))
+        .job_id
+        .expect("pending");
+    // Two polls waiting when the user answers (no poll open at all for a
+    // moment in between is the first call's own case above).
+    let pollers: Vec<_> = (0..2)
+        .map(|_| {
+            let (endpoint, id) = (bridge.endpoint.clone(), job_id.clone());
+            std::thread::spawn(move || poll_until_final(&endpoint, &id, Duration::from_secs(20)))
+        })
+        .collect();
+    std::thread::sleep(Duration::from_millis(300));
+    bridge.answer(&job_id, Answer::RunOnce);
+    for p in pollers {
+        let done = p.join().unwrap();
+        assert_eq!(done.status, ResponseStatus::Ran, "{done:?}");
+        assert!(done.run.unwrap().output.contains("kage-bridge-two-polls"));
+    }
+    // It ran once.
+    assert_eq!(
+        audited_actions(command),
+        ["requested", "approved", "finished"]
+    );
 }
 
 #[test]

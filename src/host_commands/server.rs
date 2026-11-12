@@ -566,8 +566,15 @@ fn start_job<R: tauri::Runtime>(
     let spawned = std::thread::Builder::new()
         .name("host-command-job".into())
         .spawn(move || {
-            let response = process(&thread_app, &r, &thread_job);
-            thread_job.finish(response);
+            if !thread_job.run_to_end(|| process(&thread_app, &r, &thread_job)) {
+                // A prompt it left waiting can't be answered into anything.
+                let withdrew = thread_app
+                    .try_state::<ChildProcesses>()
+                    .is_some_and(|p| p.host_commands.approvals.withdraw(&r.id));
+                if withdrew {
+                    r.close(&thread_app, "withdrawn");
+                }
+            }
         });
     if let Err(e) = spawned {
         warn!("Host bridge: couldn't start a job thread: {e}");
@@ -768,14 +775,14 @@ fn process<R: tauri::Runtime>(
                     r.id
                 );
                 AuditStep {
-                    outcome: Some("the tool call ended before Kage answered".into()),
+                    outcome: Some("the tool call ended before the agent got Kage's answer".into()),
                     ..r.audit("withdrawn")
                 }
                 .write();
                 r.track(app, "withdrawn");
                 return HostCommandResponse::withdrawn(
-                    "The request was withdrawn: the tool call ended before Kage could answer, \
-                     so the command did not run.",
+                    "The request was withdrawn: the tool call ended before the agent got Kage's \
+                     answer, so the command did not run.",
                 );
             }
             Asked::Busy => {

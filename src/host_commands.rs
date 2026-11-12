@@ -210,18 +210,20 @@ impl HostCommands {
         }
     }
 
-    /// Our `run_outside_sandbox` tool call `tool_call_id` ended. When the
-    /// agent was given its job's id ("pending"), that's how the call ends
-    /// normally and nothing changes. Otherwise the call failed or was
-    /// cancelled before Kage answered: nobody can read the result, so a
-    /// prompt still waiting on it is withdrawn. Returns whether one was.
-    pub fn tool_call_ended(&self, tool_call_id: &str) -> bool {
+    /// Our `run_outside_sandbox` tool call `tool_call_id` ended with ACP
+    /// `status`. Ended `completed` once the agent was given its job's id
+    /// ("pending"), that's how the call ends normally and nothing changes.
+    /// Otherwise — it ended before Kage answered, or `failed` / `cancelled`
+    /// (the agent never took the reply, even one Kage had just written) —
+    /// nobody can read the result, so a prompt still waiting on it is
+    /// withdrawn. Only the call's first end counts. Returns whether a
+    /// prompt was withdrawn.
+    pub fn tool_call_ended(&self, tool_call_id: &str, status: Option<&str>) -> bool {
         if let Some(job) = self.jobs.for_call(tool_call_id) {
-            if job.id_given() {
+            // Its prompt may not be up yet: it checks this before showing.
+            if !job.call_ended(status == Some("completed")) || !job.is_abandoned() {
                 return false;
             }
-            // Its prompt may not be up yet: it checks this before showing.
-            job.abandon();
         }
         let withdrew = self.approvals.cancel_tool_call(tool_call_id);
         if withdrew {

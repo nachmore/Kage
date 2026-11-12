@@ -216,10 +216,12 @@ pub fn setup_notification_handler(
                         // bridge can be matched to this session (a strict
                         // session's too, so the bridge can refuse it). One
                         // that ended before the agent got its job's id (it
-                        // gave up on it, or its turn was stopped) withdraws
-                        // a prompt still waiting on it: nobody would read
-                        // the result. One that ended with "pending" is how
-                        // the job's first call ends; nothing changes.
+                        // gave up on it, or its turn was stopped; `failed` /
+                        // `cancelled` even after Kage wrote "pending")
+                        // withdraws a prompt still waiting on it: nobody
+                        // would read the result. One that ended `completed`
+                        // with "pending" is how the job's first call ends;
+                        // nothing changes.
                         {
                             let first = update
                                 .get("toolCallId")
@@ -237,7 +239,10 @@ pub fn setup_notification_handler(
                                 ended,
                                 app_handle.try_state::<crate::state::ChildProcesses>(),
                             ) {
-                                procs.host_commands.tool_call_ended(&call_id);
+                                procs.host_commands.tool_call_ended(
+                                    &call_id,
+                                    update.get("status").and_then(|s| s.as_str()),
+                                );
                             }
                         }
                         // No tool may run on a strict session (a background

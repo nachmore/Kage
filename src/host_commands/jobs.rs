@@ -17,10 +17,14 @@
 //! agent disconnecting, its window closing, Kage quitting — and, only
 //! while the agent hasn't been given the id, its tool call ending or its
 //! requester going away ([`Job::abandon`]), since then nobody could read
-//! the result. A finished job keeps its result for [`RESULT_RETENTION`].
+//! the result. A call that ends `failed` or `cancelled` never handed the
+//! agent the reply, "pending" or not ([`Job::call_ended`]). A finished job
+//! keeps its result for [`RESULT_RETENTION`]; a job whose thread dies
+//! still ends, with an error ([`Job::run_to_end`]).
 //!
-//! Job ids are the request ids (`hc-` and 96 random bits), so an id from an
-//! earlier run of Kage never names a job of this one.
+//! Job ids are the request ids (`hc-` and 24 hex digits of a random UUID,
+//! about 90 random bits), so an id from an earlier run of Kage never names
+//! a job of this one.
 //!
 //! [`LONG_POLL`]: kage_core::host_bridge::LONG_POLL
 //! [`RESULT_RETENTION`]: kage_core::host_bridge::RESULT_RETENTION
@@ -86,6 +90,11 @@ pub struct Job {
     /// Nobody can read the result: the requester went away, or its tool
     /// call ended, before it was given the id.
     abandoned: AtomicBool,
+    /// Its tool call ended (only the first end counts).
+    call_ended: AtomicBool,
+    /// … and ended `failed` or `cancelled`: the agent didn't take the
+    /// reply, so it doesn't have the id even if Kage sent it.
+    call_failed: AtomicBool,
     /// A version-1 requester went away: its run stops too.
     requester_left: AtomicBool,
 }
@@ -125,6 +134,8 @@ impl Job {
             changed: Condvar::new(),
             id_given: AtomicBool::new(false),
             abandoned: AtomicBool::new(false),
+            call_ended: AtomicBool::new(false),
+            call_failed: AtomicBool::new(false),
             requester_left: AtomicBool::new(false),
         }
     }
@@ -288,9 +299,51 @@ impl Job {
         }
     }
 
-    /// Whether a waiting prompt should be withdrawn ([`Self::abandon`]).
+    /// Whether a waiting prompt should be withdrawn ([`Self::abandon`],
+    /// [`Self::call_ended`]).
     pub fn is_abandoned(&self) -> bool {
-        self.abandoned.load(Ordering::SeqCst) && !self.id_given()
+        self.call_failed.load(Ordering::SeqCst)
+            || (self.abandoned.load(Ordering::SeqCst) && !self.id_given())
+    }
+
+    /// Its tool call ended. `completed`: the agent took the sidecar's
+    /// reply — with "pending", that's how the first call ends, and the
+    /// agent has the id. Otherwise (`failed`, `cancelled`) it didn't take
+    /// it, so nobody has the id, whatever Kage wrote and whenever: the
+    /// agent's own limit can cut the call off just as "pending" goes out.
+    /// Only the call's first end counts; returns whether this was it.
+    pub fn call_ended(&self, completed: bool) -> bool {
+        if self.call_ended.swap(true, Ordering::SeqCst) {
+            return false;
+        }
+        if completed {
+            self.abandon();
+        } else {
+            self.call_failed.store(true, Ordering::SeqCst);
+        }
+        true
+    }
+
+    /// Run `work` (the job's own thread: the rules, the prompt, the run)
+    /// and make what it returns the job's result. Should `work` panic (a
+    /// bug), the job still ends, with an error: otherwise the agent would
+    /// poll it forever and it would hold one of its session's slots until
+    /// Kage restarts. Returns whether `work` returned normally.
+    pub fn run_to_end(&self, work: impl FnOnce() -> HostCommandResponse) -> bool {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)) {
+            Ok(response) => {
+                self.finish(response);
+                true
+            }
+            Err(_) => {
+                log::error!("Host command {}: its job failed (a bug in Kage)", self.id);
+                self.finish(HostCommandResponse::error(
+                    "Kage couldn't finish handling the request (an internal error); whether the \
+                     command ran is unknown. Ask the user before trying again.",
+                ));
+                false
+            }
+        }
     }
 
     /// A version-1 requester went away: as version 1 always did, its
@@ -524,6 +577,55 @@ mod tests {
         // Given after the fact (a reply raced the call's end): it holds.
         other.mark_id_given();
         assert!(!other.is_abandoned());
+    }
+
+    #[test]
+    fn a_call_that_ends_failed_never_gave_the_id_even_after_pending() {
+        let jobs = jobs();
+        // Ended `completed` after "pending": the agent has the id.
+        let taken = make(&jobs, "hc-1", Some("s1"));
+        taken.mark_id_given();
+        assert!(taken.call_ended(true));
+        assert!(!taken.is_abandoned());
+        // Only the call's first end counts: a later `cancelled` changes
+        // nothing.
+        assert!(!taken.call_ended(false));
+        assert!(!taken.is_abandoned());
+
+        // `failed` just as Kage wrote "pending": the agent never took it.
+        let cut = make(&jobs, "hc-2", Some("s1"));
+        cut.mark_id_given();
+        assert!(cut.call_ended(false));
+        assert!(cut.is_abandoned());
+
+        // Ended before Kage answered at all.
+        let early = make(&jobs, "hc-3", Some("s1"));
+        assert!(early.call_ended(false));
+        assert!(early.is_abandoned());
+    }
+
+    #[test]
+    fn a_job_whose_work_panics_still_ends_with_an_error() {
+        let jobs = jobs();
+        let job = make(&jobs, "hc-1", Some("s1"));
+        let worker = {
+            let job = job.clone();
+            std::thread::spawn(move || job.run_to_end(|| panic!("a bug in the request flow")))
+        };
+        assert!(!worker.join().unwrap(), "the panic was seen");
+        let result = job.result().expect("the job ended");
+        assert_eq!(result.status, ResponseStatus::Error);
+        assert!(result
+            .message
+            .unwrap()
+            .contains("whether the command ran is unknown"));
+        // A poll gets that, instead of "pending" forever.
+        assert!(matches!(job.wait(None, || false), Waited::Finished(_)));
+
+        // Normal work's result is the job's.
+        let ok = make(&jobs, "hc-2", None);
+        assert!(ok.run_to_end(|| HostCommandResponse::denied("")));
+        assert_eq!(ok.result().unwrap().status, ResponseStatus::Denied);
     }
 
     #[test]
