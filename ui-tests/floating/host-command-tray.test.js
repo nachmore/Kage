@@ -2,7 +2,7 @@
  * The launcher's tray of cards for commands an agent asked Kage to run
  * outside its sandbox: a card whose request is over goes when the user
  * sends their next prompt and on every reset of the launcher (Ctrl/⌘+L,
- * /clear, a show that clears it: `resetUI`); one still waiting for an
+ * `>clear-ux`, a show that clears it: `resetUI`); one still waiting for an
  * answer or its run stays, since the agent is still waiting on that job.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';

@@ -871,7 +871,7 @@ The trust boundary:
 - **Finished cards go away.** A card whose request is over (it ran, or
   was denied, withdrawn or timed out) keeps its last line and a × to
   dismiss it, and goes when the user sends their next prompt or the
-  launcher resets (Ctrl/⌘+L, /clear, or a show that clears it); a card
+  launcher resets (Ctrl/⌘+L, `>clear-ux`, or a show that clears it); a card
   still waiting for an answer or its run stays until it's over, in chat
   windows too.
 - **Rules are narrow.** "Always allow commands starting with …" saves a
