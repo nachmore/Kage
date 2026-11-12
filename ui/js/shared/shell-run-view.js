@@ -841,8 +841,14 @@ function renderAgentLine(run, live) {
     let text = '';
     let canTell = false;
     if (run.origin === 'agent') {
-        // An agent's run: its result goes back as the tool's result.
-        if (run.phase !== 'running') text = t('shared.host_command.result_returned');
+        // An agent's run: its result goes back as the tool's result — said
+        // only once Kage handed it over (`markAgentRunDelivered`). Kage
+        // keeps a result the agent hasn't collected (its turn was stopped,
+        // it disconnected, or it hasn't asked yet), and the card doesn't
+        // claim otherwise.
+        if (run.phase !== 'running' && run.delivered) {
+            text = t('shared.host_command.result_returned');
+        }
         if (run.phase === 'done' && run.output) {
             agentActions.append(
                 copyButton(
@@ -932,6 +938,7 @@ export function attachAgentRun({ runId, command, cwd, timeoutSeconds, card, slot
         agent: null,
         agentError: null,
         queueId: null,
+        delivered: false,
         timeoutMinutes: Number.isFinite(timeoutSeconds)
             ? Math.max(1, Math.round(timeoutSeconds / 60))
             : RUN_TIMEOUT_MINUTES,
@@ -977,6 +984,16 @@ export function failAgentRun(run, error) {
     run.phase = 'failed';
     run.error = typeof error === 'string' ? error : errMessage(error);
     endAgentRun(run);
+}
+
+/**
+ * The agent got an agent run's result (the backend's `delivered` update:
+ * the reply carrying it went out on the agent's tool call or a poll).
+ */
+export function markAgentRunDelivered(run) {
+    if (!run || run.origin !== 'agent' || run.delivered) return;
+    run.delivered = true;
+    if (run.phase !== 'running') renderRun(run);
 }
 
 // --- Runs nothing shows any more --------------------------------------------------

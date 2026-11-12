@@ -19,8 +19,11 @@
  * Once approved — or when a rule ran it without asking — the card shows
  * the run (live output, time, Stop) with the same view as "Run it here";
  * the result goes back to the agent as the tool's result, not as a chat
- * message. A card that leaves the page (a re-render, the floating
- * window's reset) while it still matters moves to the window's tray.
+ * message, and the card says so once the backend reports the agent got it
+ * (`delivered`: a stopped turn leaves an approved run going, and its
+ * result waits in Kage for a poll that may never come). A card that
+ * leaves the page (a re-render, the floating window's reset) while it
+ * still matters moves to the window's tray.
  *
  * A card whose request is over (it ran, or was denied, withdrawn or timed
  * out) keeps its last line and gets a small × to dismiss it; the window
@@ -41,6 +44,7 @@ import {
     buildRiskList,
     failAgentRun,
     finishAgentRun,
+    markAgentRunDelivered,
     onDeliberateClick,
     revealLongNote,
 } from './shell-run-view.js';
@@ -253,6 +257,7 @@ function newCard(p) {
         runSlot: el('div', 'shell-run-slot host-cmd-run'),
         box: null,
         dismiss: null,
+        delivered: false,
     };
     cards.set(p.requestId, card);
     return card;
@@ -502,6 +507,7 @@ export function onHostCommandUpdate(u) {
             if (card?.run) {
                 card.phase = 'done';
                 finishAgentRun(card.run, u.result);
+                if (card.delivered) markAgentRunDelivered(card.run);
                 syncDismiss(card);
             }
             break;
@@ -509,7 +515,15 @@ export function onHostCommandUpdate(u) {
             if (card?.run) {
                 card.phase = 'done';
                 failAgentRun(card.run, u.error || '');
+                if (card.delivered) markAgentRunDelivered(card.run);
                 syncDismiss(card);
+            }
+            break;
+        case 'delivered':
+            // The agent got the result (its tool call or a poll took it).
+            if (card) {
+                card.delivered = true;
+                if (card.run) markAgentRunDelivered(card.run);
             }
             break;
         case 'closed':

@@ -925,7 +925,9 @@ The trust boundary:
   turn leaves a run the user approved going, and its result waits. At
   most four agent runs go at once. The result goes back to the agent as
   the tool's result (of the first call, or of a poll), kept 15 minutes
-  after the job ends; no chat message is sent. A job whose handling dies
+  after the job ends; no chat message is sent. The card says the result
+  went back only once a reply carrying it was written (a `delivered`
+  update), not merely because the run ended. A job whose handling dies
   on a bug in Kage still ends, with an error, so no agent polls it
   forever.
 - **What's recorded.** The permission audit log gets a `host_command`

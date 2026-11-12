@@ -593,6 +593,82 @@ fn a_stopped_turn_withdraws_its_prompt_and_nothing_runs() {
     assert_eq!(audited_actions(command), ["requested", "withdrawn"]);
 }
 
+/// Every `host_command_update` the app emits from now on, as
+/// `(requestId, phase)`, in order.
+fn record_updates(bridge: &Bridge) -> Arc<Mutex<Vec<(String, String)>>> {
+    use tauri::Listener;
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let into = seen.clone();
+    bridge
+        .app
+        .listen_any(kage::events::HOST_COMMAND_UPDATE, move |event| {
+            let v: serde_json::Value = serde_json::from_str(event.payload()).unwrap_or_default();
+            if let (Some(id), Some(phase)) = (v["requestId"].as_str(), v["phase"].as_str()) {
+                into.lock()
+                    .unwrap()
+                    .push((id.to_string(), phase.to_string()));
+            }
+        });
+    seen
+}
+
+fn phases(seen: &Mutex<Vec<(String, String)>>, request_id: &str) -> Vec<String> {
+    seen.lock()
+        .unwrap()
+        .iter()
+        .filter(|(id, _)| id == request_id)
+        .map(|(_, phase)| phase.clone())
+        .collect()
+}
+
+#[test]
+fn the_card_hears_the_result_went_back_only_once_the_agent_took_it() {
+    let _serial = serial();
+    let bridge = Bridge::start_with(
+        Vec::new(),
+        options(Duration::from_secs(60), Duration::from_secs(1)),
+    );
+    let seen = record_updates(&bridge);
+    let (_dir, cwd) = temp_cwd();
+    let command = slow_command("kage-bridge-kept-for-later", 1);
+    agent_tool_call("hb-session-kept", "hb-call-kept", &command, &cwd);
+    let job_id = send(&bridge.endpoint, &request(&command, &cwd))
+        .job_id
+        .expect("pending");
+    agent_tool_call_ended(&bridge, "hb-session-kept", "hb-call-kept", "completed");
+    bridge.answer(&job_id, Answer::RunOnce);
+
+    // The user stops the agent's turn while the run they approved goes
+    // on: it finishes, and nobody has collected the result.
+    bridge.host_commands().cancel_session("hb-session-kept");
+    let job = bridge.host_commands().jobs.get(&job_id).expect("the job");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while job.result().is_none() {
+        assert!(Instant::now() < deadline, "the run didn't finish");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(phases(&seen, &job_id), ["started", "finished"]);
+
+    // The agent polls in a later turn: now it has the result.
+    let done = poll(&bridge.endpoint, &job_id);
+    assert_eq!(done.status, ResponseStatus::Ran, "{done:?}");
+    assert!(done
+        .run
+        .unwrap()
+        .output
+        .contains("kage-bridge-kept-for-later"));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while phases(&seen, &job_id).len() < 3 {
+        assert!(Instant::now() < deadline, "{:?}", phases(&seen, &job_id));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // Once, however often it's collected.
+    assert_eq!(poll(&bridge.endpoint, &job_id).status, ResponseStatus::Ran);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(phases(&seen, &job_id), ["started", "finished", "delivered"]);
+}
+
 #[test]
 fn a_stopped_turn_withdraws_a_job_the_agent_is_polling() {
     let _serial = serial();

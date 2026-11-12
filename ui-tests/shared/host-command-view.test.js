@@ -398,12 +398,48 @@ describe('the run', () => {
         });
         expect(live.dataset.state).toBe('success');
         expect(q(live, '.shell-run-output').textContent).toContain('Pouring awscli');
+        // Kage holds the result until the agent's call or poll takes it:
+        // nothing claims it went back before then.
+        expect(q(live, '.shell-run-agent-text').hidden).toBe(true);
+        expect(q(live, '.shell-run-agent-text').textContent).toBe('');
+        onHostCommandUpdate({ requestId: 'hc-1', phase: 'delivered' });
+        expect(q(live, '.shell-run-agent-text').hidden).toBe(false);
         expect(q(live, '.shell-run-agent-text').textContent).toBe(
             'shared.host_command.result_returned'
         );
         // No "Tell the agent" here: the result went back as the tool's result.
         expect(q(live, '.shell-run-tell')).toBeNull();
         expect(tauri.calls.map(([c]) => c)).not.toContain('send_message_streaming');
+    });
+
+    it('says the result went back even when that news beats the end of the run', async () => {
+        fakeTauri();
+        await installHostCommandUi({ tray });
+        onHostCommandUpdate({
+            requestId: 'hc-9',
+            phase: 'started',
+            runId: 'kage-run-cccccccccccccccccccccccc',
+            approvedBy: 'rule',
+            rule: 'brew install',
+            command: 'brew install jq',
+            cwd: '/Users/me',
+            timeoutSeconds: 600,
+        });
+        const card = q(tray, '.host-cmd-card');
+        onHostCommandUpdate({ requestId: 'hc-9', phase: 'delivered' });
+        // Still running: no claim yet.
+        expect(q(card, '.shell-run-agent-text').textContent).toBe('');
+        onHostCommandUpdate({
+            requestId: 'hc-9',
+            phase: 'finished',
+            result: { outcome: 'exited', exitCode: 0, signal: null, output: 'ok\n' },
+        });
+        expect(q(card, '.shell-run-agent-text').textContent).toBe(
+            'shared.host_command.result_returned'
+        );
+        // Told twice, said once.
+        onHostCommandUpdate({ requestId: 'hc-9', phase: 'delivered' });
+        expect(qa(card, '.shell-run-agent-text')).toHaveLength(1);
     });
 
     it('Stop stops only this run', async () => {

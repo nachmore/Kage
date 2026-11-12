@@ -75,6 +75,8 @@ struct State {
 /// One request Kage owns.
 pub struct Job {
     pub id: String,
+    /// The window that shows its card.
+    pub window: String,
     pub session_id: Option<String>,
     pub tool_call_id: Option<String>,
     /// A version-1 request: bound to its connection as version 1 always
@@ -97,6 +99,9 @@ pub struct Job {
     call_failed: AtomicBool,
     /// A version-1 requester went away: its run stops too.
     requester_left: AtomicBool,
+    /// Its final result reached a requester (a reply carrying it was
+    /// written): its card may say the result went back to the agent.
+    delivered: AtomicBool,
 }
 
 /// How a wait on a job ended.
@@ -116,12 +121,14 @@ fn millis(d: Duration) -> u64 {
 impl Job {
     fn new(
         id: &str,
+        window: &str,
         session_id: Option<String>,
         tool_call_id: Option<String>,
         one_shot: bool,
     ) -> Self {
         Self {
             id: id.to_string(),
+            window: window.to_string(),
             session_id,
             tool_call_id,
             one_shot,
@@ -137,6 +144,7 @@ impl Job {
             call_ended: AtomicBool::new(false),
             call_failed: AtomicBool::new(false),
             requester_left: AtomicBool::new(false),
+            delivered: AtomicBool::new(false),
         }
     }
 
@@ -274,6 +282,12 @@ impl Job {
                 return Waited::GaveUp;
             }
         }
+    }
+
+    /// A reply carrying the job's final result was written. Returns
+    /// whether this was the first (the card is told once).
+    pub fn mark_delivered(&self) -> bool {
+        self.is_finished() && !self.delivered.swap(true, Ordering::SeqCst)
     }
 
     /// Kage is about to tell the agent the job's id.
@@ -424,6 +438,7 @@ impl Jobs {
     pub fn create(
         &self,
         id: &str,
+        window: &str,
         session_id: Option<String>,
         tool_call_id: Option<String>,
         one_shot: bool,
@@ -439,7 +454,13 @@ impl Jobs {
         if jobs.len() >= MAX_JOBS && !Self::evict_oldest_finished(&mut jobs, |_| true) {
             return Err(JobsFull::Total);
         }
-        let job = Arc::new(Job::new(id, session_id.clone(), tool_call_id, one_shot));
+        let job = Arc::new(Job::new(
+            id,
+            window,
+            session_id.clone(),
+            tool_call_id,
+            one_shot,
+        ));
         jobs.push(job.clone());
         Ok(job)
     }
@@ -479,7 +500,7 @@ mod tests {
     }
 
     fn make(jobs: &Jobs, id: &str, session: Option<&str>) -> Arc<Job> {
-        jobs.create(id, session.map(str::to_string), None, false)
+        jobs.create(id, "floating", session.map(str::to_string), None, false)
             .unwrap()
     }
 
@@ -629,6 +650,16 @@ mod tests {
     }
 
     #[test]
+    fn a_result_is_delivered_once_and_only_once_there_is_one() {
+        let jobs = jobs();
+        let job = make(&jobs, "hc-1", Some("s1"));
+        assert!(!job.mark_delivered(), "nothing to deliver yet");
+        job.finish(HostCommandResponse::denied(""));
+        assert!(job.mark_delivered());
+        assert!(!job.mark_delivered(), "the card is told once");
+    }
+
+    #[test]
     fn only_a_one_shot_requester_leaving_stops_the_run() {
         let jobs = jobs();
         let v2 = make(&jobs, "hc-1", None);
@@ -638,7 +669,7 @@ mod tests {
         assert!(!cancel.load(Ordering::SeqCst));
         assert!(!v2.run_should_stop());
 
-        let v1 = jobs.create("hc-2", None, None, true).unwrap();
+        let v1 = jobs.create("hc-2", "floating", None, None, true).unwrap();
         // Left before the run started: it stops as soon as it does.
         assert!(!v1.requester_left());
         assert!(v1.run_should_stop());
@@ -653,7 +684,13 @@ mod tests {
     fn jobs_are_found_by_id_and_by_tool_call() {
         let jobs = jobs();
         let job = jobs
-            .create("hc-1", Some("s1".into()), Some("call-1".into()), false)
+            .create(
+                "hc-1",
+                "chat-1",
+                Some("s1".into()),
+                Some("call-1".into()),
+                false,
+            )
             .unwrap();
         assert!(Arc::ptr_eq(&jobs.get("hc-1").unwrap(), &job));
         assert!(Arc::ptr_eq(&jobs.for_call("call-1").unwrap(), &job));
@@ -684,15 +721,20 @@ mod tests {
             live.push(make(&jobs, &format!("hc-{i}"), Some("s1")));
         }
         assert_eq!(
-            jobs.create("hc-x", Some("s1".into()), None, false).err(),
+            jobs.create("hc-x", "floating", Some("s1".into()), None, false)
+                .err(),
             Some(JobsFull::Session)
         );
         // Another session isn't held up by it.
-        assert!(jobs.create("hc-y", Some("s2".into()), None, false).is_ok());
+        assert!(jobs
+            .create("hc-y", "floating", Some("s2".into()), None, false)
+            .is_ok());
         // A finished result of that session makes room: the oldest goes.
         live[3].finish(HostCommandResponse::denied(""));
         live[5].finish(HostCommandResponse::denied(""));
-        assert!(jobs.create("hc-x", Some("s1".into()), None, false).is_ok());
+        assert!(jobs
+            .create("hc-x", "floating", Some("s1".into()), None, false)
+            .is_ok());
         assert!(jobs.get("hc-3").is_none());
         assert!(jobs.get("hc-5").is_some());
     }
@@ -706,11 +748,14 @@ mod tests {
             live.push(make(&jobs, &format!("hc-{i}"), Some(&session)));
         }
         assert_eq!(
-            jobs.create("hc-x", Some("new".into()), None, false).err(),
+            jobs.create("hc-x", "floating", Some("new".into()), None, false)
+                .err(),
             Some(JobsFull::Total)
         );
         live[0].finish(HostCommandResponse::denied(""));
-        assert!(jobs.create("hc-x", Some("new".into()), None, false).is_ok());
+        assert!(jobs
+            .create("hc-x", "floating", Some("new".into()), None, false)
+            .is_ok());
         assert_eq!(jobs.count(), MAX_JOBS);
         assert!(jobs.get("hc-0").is_none());
     }

@@ -189,7 +189,22 @@ fn handle_connection<R: tauri::Runtime>(app: &tauri::AppHandle<R>, mut stream: B
     match request {
         BridgeRequest::OneShot(req) => one_shot(app, &host, req, stream),
         BridgeRequest::Run(req) => start_and_wait(app, &host, req, received, stream),
-        BridgeRequest::Poll(poll) => poll_job(&host, &poll, received, stream),
+        BridgeRequest::Poll(poll) => poll_job(app, &host, &poll, received, stream),
+    }
+}
+
+/// `job`'s final result just reached whoever asked (its reply was
+/// written): its card may now say the result went back to the agent. Told
+/// once per job. Until then — the agent's turn was stopped, it
+/// disconnected or it hasn't polled yet — the card doesn't claim it.
+fn tell_delivered<R: tauri::Runtime>(app: &tauri::AppHandle<R>, job: &Job) {
+    if job.mark_delivered() {
+        emit_to(
+            app,
+            &job.window,
+            crate::events::HOST_COMMAND_UPDATE,
+            &serde_json::json!({ "requestId": &job.id, "window": &job.window, "phase": "delivered" }),
+        );
     }
 }
 
@@ -226,7 +241,9 @@ fn one_shot<R: tauri::Runtime>(
     };
     match job.wait(None, || stream.peer_closed()) {
         Waited::Finished(response) => {
-            reply(&mut stream, &response.for_version(ONE_SHOT_VERSION));
+            if reply(&mut stream, &response.for_version(ONE_SHOT_VERSION)) {
+                tell_delivered(app, &job);
+            }
         }
         Waited::GaveUp | Waited::Pending(_) => {
             if job.requester_left() {
@@ -259,7 +276,9 @@ fn start_and_wait<R: tauri::Runtime>(
     let deadline = received + host.options().long_poll;
     match job.wait(Some(deadline), || stream.peer_closed()) {
         Waited::Finished(response) => {
-            reply(&mut stream, &response.for_job(&job.id));
+            if reply(&mut stream, &response.for_job(&job.id)) {
+                tell_delivered(app, &job);
+            }
         }
         Waited::Pending(progress) => {
             // Marked before it's sent, so the tool call ending right after
@@ -290,19 +309,33 @@ fn start_and_wait<R: tauri::Runtime>(
 
 /// A version-2 `poll`: wait on the job at most the long poll and say
 /// where it is. It only reads the job.
-fn poll_job(host: &HostCommands, poll: &PollRequest, received: Instant, mut stream: BridgeStream) {
+fn poll_job<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    host: &HostCommands,
+    poll: &PollRequest,
+    received: Instant,
+    mut stream: BridgeStream,
+) {
     let Some(job) = host.jobs.get(&poll.job_id) else {
         info!("Host bridge: a poll named no job Kage holds");
         reply(&mut stream, &HostCommandResponse::not_found(&poll.job_id));
         return;
     };
     let deadline = received + host.options().long_poll;
-    let response = match job.wait(Some(deadline), || stream.peer_closed()) {
-        Waited::Finished(response) => response.for_job(&job.id),
-        Waited::Pending(progress) => HostCommandResponse::pending(&job.id, progress),
-        Waited::GaveUp => return,
-    };
-    reply(&mut stream, &response);
+    match job.wait(Some(deadline), || stream.peer_closed()) {
+        Waited::Finished(response) => {
+            if reply(&mut stream, &response.for_job(&job.id)) {
+                tell_delivered(app, &job);
+            }
+        }
+        Waited::Pending(progress) => {
+            reply(
+                &mut stream,
+                &HostCommandResponse::pending(&job.id, progress),
+            );
+        }
+        Waited::GaveUp => {}
+    }
 }
 
 // --- One request ---------------------------------------------------------------
@@ -535,6 +568,7 @@ fn start_job<R: tauri::Runtime>(
     let r = prepare(app, req)?;
     let job = match host.jobs.create(
         &r.id,
+        &r.window,
         r.session_id.clone(),
         r.tool_call_id.clone(),
         one_shot,
