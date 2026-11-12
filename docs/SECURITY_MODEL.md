@@ -809,7 +809,7 @@ The trust boundary:
   out waiting for approval", "withdrawn", an error, or "pending" with the
   job's id and progress. A poll can only read a job: it can't start,
   approve or change one, and an id Kage doesn't hold (expired, or from an
-  earlier run of Kage: ids carry 96 random bits) gets "no such job". The
+  earlier run of Kage: ids carry about 90 random bits) gets "no such job". The
   bridge's peer check is the only authentication; the id isn't a secret.
   Version 1 (one request answered only once the command finished, bound
   to its connection) is still served for a sidecar from an older Kage. A
@@ -859,17 +859,21 @@ The trust boundary:
   withdrawn, and nothing runs, when the user stops its turn
   (`cancel_generation`), when the agent disconnects (for a request
   matched to one of its sessions), when its window closes, or when Kage
-  quits — and, only while the agent hasn't been given the job's id, when
-  its tool call ends or its connection closes (failed or cancelled before
-  Kage answered: nobody could read the result). A "pending" reply ends
-  the first call normally: that call ending, or its connection closing,
-  changes nothing. A command with hidden characters is
+  quits — and when nobody could read the result: its tool call ends
+  before Kage answered, or ends `failed` or `cancelled` (the agent never
+  took the reply, even a "pending" Kage had just written, as when the
+  agent's own limit cuts the call off at that moment), or its connection
+  closes before the agent was given the job's id. A "pending" reply the
+  agent took ends the first call normally (`completed`): that call
+  ending, or its connection closing, changes nothing, and only a call's
+  first end counts. A command with hidden characters is
   never run from Kage: its prompt offers Copy and Deny only.
 - **Finished cards go away.** A card whose request is over (it ran, or
   was denied, withdrawn or timed out) keeps its last line and a × to
-  dismiss it, and goes when the user sends their next prompt or resets
-  the launcher (Ctrl/⌘+L); a card still waiting for an answer or its run
-  stays until it's over, in chat windows too.
+  dismiss it, and goes when the user sends their next prompt or the
+  launcher resets (Ctrl/⌘+L, /clear, or a show that clears it); a card
+  still waiting for an answer or its run stays until it's over, in chat
+  windows too.
 - **Rules are narrow.** "Always allow commands starting with …" saves a
   rule (`config.tool_permissions.host_command_rules`) that covers only a
   *simple* command — printable ASCII, no `; & |`, no redirection, no
@@ -921,7 +925,9 @@ The trust boundary:
   turn leaves a run the user approved going, and its result waits. At
   most four agent runs go at once. The result goes back to the agent as
   the tool's result (of the first call, or of a poll), kept 15 minutes
-  after the job ends; no chat message is sent.
+  after the job ends; no chat message is sent. A job whose handling dies
+  on a bug in Kage still ends, with an error, so no agent polls it
+  forever.
 - **What's recorded.** The permission audit log gets a `host_command`
   entry per step — `requested`, `guard`, `auto_approved` (which rule, or
   allow-all), `approved` (once / always), `denied`, `expired`,
