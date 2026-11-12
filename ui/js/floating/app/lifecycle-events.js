@@ -1,5 +1,4 @@
 import {
-    clearFinishedHostCommandCards,
     cmdOrCtrlPressed,
     EVT,
     getActionsForText,
@@ -181,11 +180,10 @@ export const LifecycleEventsMethods = {
                 return;
             }
             // Ctrl/⌘+L — clear/reset (the tray keeps only commands still
-            // waiting for an answer or their run)
+            // waiting for an answer or their run: resetUI)
             if (cmdOrCtrlPressed(e) && e.key === 'l') {
                 e.preventDefault();
                 this.resetUI();
-                clearFinishedHostCommandCards();
                 this.windowManager.userSetHeight = null;
                 this.windowManager.resizeWindow();
                 return;
@@ -474,7 +472,6 @@ export const LifecycleEventsMethods = {
 
         document.addEventListener('kage-clear', () => {
             this.resetUI();
-            clearFinishedHostCommandCards();
             this.windowManager.userSetHeight = null;
             this.windowManager.resizeWindow();
         });

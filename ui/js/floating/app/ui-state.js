@@ -1,4 +1,5 @@
 import {
+    clearFinishedHostCommandCards,
     drawContextRing,
     formatBytes,
     getConfig,
@@ -45,6 +46,9 @@ export const UiStateMethods = {
         const compactEl = document.getElementById('toolSourcesCompact');
         if (compactEl) compactEl.remove();
         this._removeShellActivity();
+        // Cards for commands outside the sandbox that are over go with the
+        // rest; one still waiting for an answer or its run stays in the tray.
+        clearFinishedHostCommandCards();
         // Exit voice conversation mode on reset
         if (this.speech?.voiceMode) {
             this.speech.stopVoiceMode();
