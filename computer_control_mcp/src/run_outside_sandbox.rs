@@ -253,7 +253,9 @@ fn secs(ms: u64) -> u64 {
 fn pending_text(job_id: &str, job: Option<&JobProgress>) -> String {
     let next = format!(
         "Job id: {job_id}\nCall {RESULT_TOOL_NAME} with {{\"job_id\": \"{job_id}\"}} to keep waiting for the result. \
-         Don't call {TOOL_NAME} again for this command: that would ask the user again and could run it twice."
+         Call it right away: it waits for the result itself (up to about {} s), so don't sleep or end your turn first. \
+         Don't call {TOOL_NAME} again for this command: that would ask the user again and could run it twice.",
+        host_bridge::LONG_POLL.as_secs()
     );
     match job {
         Some(p) if p.state == JobState::Running => {
@@ -290,6 +292,15 @@ fn pending_text(job_id: &str, job: Option<&JobProgress>) -> String {
     }
 }
 
+/// What to do when a poll got no usable answer: poll again (it only
+/// reads the job), never start the command a second time.
+fn poll_again(job_id: &str) -> String {
+    format!(
+        "Call {RESULT_TOOL_NAME} again with {{\"job_id\": \"{job_id}\"}}; don't call {TOOL_NAME} \
+         again for this command. If it keeps failing, ask the user whether the command ran."
+    )
+}
+
 /// The tool result for one call: `(text, is_error)`.
 pub(crate) fn result_for(
     outcome: Result<HostCommandResponse, BridgeError>,
@@ -316,16 +327,19 @@ pub(crate) fn result_for(
         }
         Err(BridgeError::Unreachable(detail)) => {
             return (
-                format!(
-                    "Couldn't reach Kage{} ({detail}). \
-                     Your sandbox may block connecting to Kage's local bridge; ask the user \
-                     to run the command themselves.",
-                    if poll_id.is_some() {
-                        " to read the job's result"
-                    } else {
-                        " to run the command, so nothing ran"
-                    }
-                ),
+                match poll_id {
+                    None => format!(
+                        "Couldn't reach Kage to run the command, so nothing ran ({detail}). \
+                         Your sandbox may block connecting to Kage's local bridge; ask the user \
+                         to run the command themselves."
+                    ),
+                    // The run itself got through, so this is passing: a
+                    // poll only reads the job, and asking again is safe.
+                    Some(id) => format!(
+                        "Couldn't reach Kage to read the job's result ({detail}). {}",
+                        poll_again(id)
+                    ),
+                },
                 true,
             )
         }
@@ -335,19 +349,22 @@ pub(crate) fn result_for(
                     None => "No answer from Kage in time; whether the command ran is unknown. \
                              Ask the user before trying again."
                         .into(),
-                    Some(id) => format!(
-                        "No answer from Kage in time. Call {RESULT_TOOL_NAME} again with \
-                         {{\"job_id\": \"{id}\"}}."
-                    ),
+                    Some(id) => format!("No answer from Kage in time. {}", poll_again(id)),
                 },
                 true,
             )
         }
         Err(BridgeError::Protocol(detail)) => {
             return (
-                format!(
-                    "Kage's reply couldn't be read ({detail}); whether the command ran is unknown."
-                ),
+                match poll_id {
+                    None => format!(
+                        "Kage's reply couldn't be read ({detail}); whether the command ran is unknown."
+                    ),
+                    Some(id) => format!(
+                        "Kage's reply couldn't be read ({detail}). {}",
+                        poll_again(id)
+                    ),
+                },
                 true,
             )
         }
@@ -444,20 +461,24 @@ pub(crate) fn result_for(
         ),
         ResponseStatus::NotFound => (
             format!(
-                "Kage has no job {}: {} Whether the command ran is unknown; ask the user before \
+                "Kage has no job {}. {} Whether the command ran is unknown; ask the user before \
                  running it again.",
                 response.job_id.as_deref().or(poll_id).unwrap_or("with that id"),
                 response
                     .message
-                    .unwrap_or_else(|| "it may have expired.".into())
+                    .filter(|m| !m.trim().is_empty())
+                    .unwrap_or_else(|| "It may have expired.".into())
             ),
             true,
         ),
+        // From a poll this is the job's own end (the command couldn't
+        // start, too many were running, Kage is quitting …) as often as a
+        // problem with the poll, so it isn't worded as either.
         ResponseStatus::Error | ResponseStatus::Unknown => (
             format!(
                 "{}: {}",
                 if poll_id.is_some() {
-                    "Kage couldn't answer"
+                    "Kage reported an error for this job"
                 } else {
                     "Kage didn't run the command"
                 },
@@ -800,19 +821,58 @@ mod tests {
         };
         let (text, is_error) = result_for(Ok(HostCommandResponse::not_found("hc-7")), &poll);
         assert!(is_error);
-        assert!(text.starts_with("Kage has no job hc-7:"), "{text}");
-        assert!(text.contains("15 minutes"), "{text}");
-        assert!(text.contains("ask the user before running it again"));
+        assert_eq!(
+            text,
+            "Kage has no job hc-7. A job's result is kept for 15 minutes after the command ends, \
+             and none survives a restart of Kage. Whether the command ran is unknown; ask the \
+             user before running it again."
+        );
 
-        let (text, is_error) = result_for(Err(BridgeError::TimedOut), &poll);
-        assert!(is_error);
-        assert!(text.contains("Call get_outside_sandbox_result again with {\"job_id\": \"hc-7\"}"));
+        // A poll that got no usable answer: ask again (it only reads the
+        // job), never run the command a second time. The run reached Kage,
+        // so this isn't the sandbox blocking the bridge.
+        for outcome in [
+            Err(BridgeError::TimedOut),
+            Err(BridgeError::Unreachable("Resource busy".into())),
+            Err(BridgeError::Protocol(
+                "Kage closed the connection without answering".into(),
+            )),
+        ] {
+            let (text, is_error) = result_for(outcome, &poll);
+            assert!(is_error);
+            assert!(
+                text.contains("Call get_outside_sandbox_result again with {\"job_id\": \"hc-7\"}"),
+                "{text}"
+            );
+            assert!(
+                text.contains("don't call run_outside_sandbox again"),
+                "{text}"
+            );
+            assert!(!text.contains("run the command themselves"), "{text}");
+        }
 
         let (text, _) = result_for(Err(BridgeError::NotRunning), &poll);
         assert!(text.contains("can't be read"), "{text}");
 
+        // The job's own end, or a problem with the poll: worded as neither.
         let (text, _) = result_for(Ok(HostCommandResponse::error("starting up")), &poll);
-        assert_eq!(text, "Kage couldn't answer: starting up");
+        assert_eq!(text, "Kage reported an error for this job: starting up");
+    }
+
+    #[test]
+    fn a_pending_reply_says_to_poll_at_once() {
+        for job in [waiting(80_000), running(5_000, "==> Pouring")] {
+            let (text, _) = result_for(Ok(HostCommandResponse::pending("hc-3", job)), &run_call());
+            assert!(text.contains("Call it right away"), "{text}");
+            assert!(
+                text.contains("don't sleep or end your turn first"),
+                "{text}"
+            );
+        }
+        // A run call that couldn't reach Kage still says nothing ran.
+        let (text, _) = result_for(Err(BridgeError::Unreachable("denied".into())), &run_call());
+        assert!(text.contains("so nothing ran"), "{text}");
+        assert!(text.contains("run the command themselves"), "{text}");
     }
 
     #[test]

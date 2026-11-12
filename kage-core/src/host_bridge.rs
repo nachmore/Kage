@@ -567,7 +567,7 @@ impl HostCommandResponse {
             ..Self::status(
                 ResponseStatus::NotFound,
                 Some(format!(
-                    "Kage has no such job: its result is kept for {} minutes after the command \
+                    "A job's result is kept for {} minutes after the command \
                      ends, and none survives a restart of Kage.",
                     RESULT_RETENTION.as_secs() / 60
                 )),
