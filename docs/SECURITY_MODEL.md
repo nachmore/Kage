@@ -751,8 +751,20 @@ use it only after its own shell failed because of its sandbox, never for
 credentials or secrets, and that the user approves every run unless they
 made a rule. Code: `computer_control_mcp/src/run_outside_sandbox.rs`,
 `kage-core/src/host_bridge.rs` (protocol), `kage-core/src/os/host_bridge.rs`
-(transport), `src/host_commands/` (decisions), and
+(transport), `src/host_commands/` (decisions, `jobs.rs` for jobs), and
 `ui/js/shared/host-command-view.js` (prompt).
+
+Agents cut an MCP tool call off after a while of their own (kiro-cli
+after about two minutes, whatever the server's `mcp.json` entry says), and
+the user's answer plus a `brew install` easily takes longer. So Kage owns
+each request as a **job** with an id, and no call waits on it for more
+than 80 seconds: `run_outside_sandbox` returns the final result if the job
+finished by then, else "pending" with the job's id and where it is
+(waiting for approval, or running — how long, and the output's last
+lines), and the agent calls `get_outside_sandbox_result` with that id,
+80 seconds at a time, until it gets the result. Both tool descriptions
+tell the agent to keep polling and never to run the command again to
+retry.
 
 The trust boundary:
 
@@ -790,13 +802,23 @@ The trust boundary:
 - **The protocol is small and strict.** One request per connection: one
   JSON line with a version field, exactly the documented fields (unknown,
   duplicate or mistyped ones are refused), at most 64 KiB (command
-  32 KiB, reason 2 KiB, working directory 4 KiB). One reply line: the
-  outcome, exit code, duration and the output's last 32 KiB — or
-  "denied", "timed out waiting for approval", or an error. A client has
-  five seconds in all to send its request line (however slowly it
-  trickles in; on Windows the pipe read polls for data so the same limit
-  holds), else it is dropped. At most 16 connections are handled at once
-  and 8 prompts wait at once.
+  32 KiB, reason 2 KiB, working directory 4 KiB). Version 2 has two
+  kinds: `run` (a command, which starts a job) and `poll` (only a job id,
+  at most 64 letters, digits, `-` or `_`). One reply line: the outcome,
+  exit code, duration and the output's last 32 KiB — or "denied", "timed
+  out waiting for approval", "withdrawn", an error, or "pending" with the
+  job's id and progress. A poll can only read a job: it can't start,
+  approve or change one, and an id Kage doesn't hold (expired, or from an
+  earlier run of Kage: ids carry 96 random bits) gets "no such job". The
+  bridge's peer check is the only authentication; the id isn't a secret.
+  Version 1 (one request answered only once the command finished, bound
+  to its connection) is still served for a sidecar from an older Kage. A
+  client has five seconds in all to send its request line (however slowly
+  it trickles in; on Windows the pipe read polls for data so the same
+  limit holds), else it is dropped. At most 16 connections are handled at
+  once and 8 prompts wait at once; Kage holds at most 32 jobs (8 per
+  session; requests it couldn't match count as one), waiting, running or
+  finished, and makes room by dropping the oldest finished results.
 - **Kage matches the request to the session that asked.** The
   notification handler remembers the agent's in-flight
   `run_outside_sandbox` tool calls (MCP calls only: a call whose kind is
@@ -806,17 +828,21 @@ The trust boundary:
   which names the ACP session and so the window to ask in. The folder is
   part of the match because a match is what lets rules apply: a request
   from elsewhere naming a visible call's command can't get that call's
-  standing in a folder of its own choosing. A request Kage can't match —
+  standing in a folder of its own choosing. The match is made once, from
+  the `run` request itself, when its job is made; a poll needs none and
+  changes nothing. A request Kage can't match —
   an agent outside Kage, or any other process of the user — is shown in
   the floating window with a system notification naming the program that
   asked, as the sidecar reports it.
 - **The agent's tool approval is the execution prompt.** When the agent
   asks Kage to approve the MCP call itself (`Running:
   @kage-computer-control/run_outside_sandbox`,
-  `mcp__kage-computer-control__run_outside_sandbox`, MCP kind, every title
-  naming exactly that server and tool), Kage allows it without a prompt:
-  the real decision happens when the command reaches Kage, so the user
-  isn't asked twice. A per-tool Deny the user set still wins.
+  `mcp__kage-computer-control__run_outside_sandbox`, or the same for
+  `get_outside_sandbox_result`; MCP kind, every title naming exactly that
+  server and the same one of those two tools), Kage allows it without a
+  prompt: the real decision happens when the command reaches Kage, so the
+  user isn't asked twice, and the result tool only reads a job. A
+  per-tool Deny the user set still wins.
 - **The user decides, in the window that owns the session.** The prompt
   is inline (in the answer being written, or in the tray above the
   input) and reuses the "Run it here" confirm: the whole command with
@@ -829,12 +855,21 @@ The trust boundary:
   appears, so keys typed elsewhere can't answer it; Run and Always allow
   take a single click of their own (or Space), never Enter — not in the
   words field, and not on a button Tab or Shift+Tab from the composer
-  landed on. With no answer in five minutes the request is denied; if
-  the agent stops waiting first — it closes the connection, the user
-  stops its turn (`cancel_generation`), or its tool call ends (failed,
-  timed out on the agent's side) — the prompt is withdrawn and nothing
-  runs. A command with hidden characters is
+  landed on. With no answer in five minutes the request is denied. It is
+  withdrawn, and nothing runs, when the user stops its turn
+  (`cancel_generation`), when the agent disconnects (for a request
+  matched to one of its sessions), when its window closes, or when Kage
+  quits — and, only while the agent hasn't been given the job's id, when
+  its tool call ends or its connection closes (failed or cancelled before
+  Kage answered: nobody could read the result). A "pending" reply ends
+  the first call normally: that call ending, or its connection closing,
+  changes nothing. A command with hidden characters is
   never run from Kage: its prompt offers Copy and Deny only.
+- **Finished cards go away.** A card whose request is over (it ran, or
+  was denied, withdrawn or timed out) keeps its last line and a × to
+  dismiss it, and goes when the user sends their next prompt or resets
+  the launcher (Ctrl/⌘+L); a card still waiting for an answer or its run
+  stays until it's over, in chat windows too.
 - **Rules are narrow.** "Always allow commands starting with …" saves a
   rule (`config.tool_permissions.host_command_rules`) that covers only a
   *simple* command — printable ASCII, no `; & |`, no redirection, no
@@ -881,9 +916,12 @@ The trust boundary:
   process group, output capped), with the request's time limit. The run
   shows in the prompt's place with its live output, time and Stop; it is
   stopped by Stop, at its time limit, when its window closes or reloads,
-  when the agent stops waiting, and when Kage quits. At most four agent
-  runs go at once. The result goes back to the agent as the tool's
-  result; no chat message is sent.
+  and when Kage quits (and, for a version-1 request, when its connection
+  closes). It doesn't depend on any tool call or connection: a stopped
+  turn leaves a run the user approved going, and its result waits. At
+  most four agent runs go at once. The result goes back to the agent as
+  the tool's result (of the first call, or of a poll), kept 15 minutes
+  after the job ends; no chat message is sent.
 - **What's recorded.** The permission audit log gets a `host_command`
   entry per step — `requested`, `guard`, `auto_approved` (which rule, or
   allow-all), `approved` (once / always), `denied`, `expired`,
