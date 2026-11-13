@@ -1322,6 +1322,15 @@ fn apply_import_at_with_skip(
             allowlist::strip_skipped(&mut incoming, skip);
         }
     }
+    // The settings-only path (above) only merges `Include` fields; a
+    // full-backup path hands everything to `merge::host`, which does not
+    // consult FIELDS and would otherwise copy a Windows backup's
+    // `C:\...\kiro-cli.exe` acp spawn-command over this Mac's. Strip
+    // every `Leave(Private)` / `Leave(DeviceLocal)` path from the
+    // backup side so that `merge::host`'s "backup empty → keep local"
+    // rule puts this machine's value back. See
+    // `allowlist::strip_private_and_device_local`.
+    allowlist::strip_private_and_device_local(&mut incoming);
     merge::host(&mut incoming, &local_tree);
     // Numbers outside what their setting takes are this machine's.
     allowlist::keep_local_numbers_in_range(&mut incoming, &local_tree);

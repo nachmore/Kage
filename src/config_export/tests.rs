@@ -623,11 +623,30 @@ fn an_encrypted_backup_carries_everything_and_round_trips() {
     assert!(err.downcast_ref::<WrongPassphrase>().is_some());
 
     let mut b = Machine::new();
+    let before = b.config.clone();
     let summary = b.import(&bytes, Some("pw"));
     assert_eq!(summary.kind, BundleKind::Full);
-    assert_eq!(spawn(&b.config, 2), spawn(&a.config, 2));
-    assert_eq!(b.config.store_url, a.config.store_url);
-    assert_eq!(b.config.shortcuts.len(), 1);
+    // Private settings (`acp.connections`, `store_url`, `shortcuts`,
+    // `macros`, …) stay on this machine — a full-backup import never
+    // overwrites a `Leave(Private)` or `Leave(DeviceLocal)` field
+    // (`allowlist::strip_private_and_device_local`), so cross-OS restore
+    // can't drop a Windows command line into a Mac's config.
+    assert_eq!(
+        serde_json::to_value(&b.config.acp.connections).unwrap(),
+        serde_json::to_value(&before.acp.connections).unwrap()
+    );
+    assert_eq!(
+        b.config.acp.active_connection_id,
+        before.acp.active_connection_id
+    );
+    assert_eq!(b.config.store_url, before.store_url);
+    assert_eq!(b.config.shortcuts.len(), before.shortcuts.len());
+    assert_eq!(b.config.macros.len(), before.macros.len());
+    assert_eq!(b.config.internal_sites.len(), before.internal_sites.len());
+    assert_eq!(b.config.context_rules.len(), before.context_rules.len());
+    // Extension settings (an `Include(ExtensionSettings)`, handled by the
+    // extensions caller merge, not `merge::host`) and extension-data
+    // files still travel.
     assert_eq!(
         b.config.extensions["github"]["personal_token"],
         "ghp_LEAKleakLEAKleakLEAKleak"
@@ -1018,10 +1037,12 @@ fn an_earlier_leave_out_bundle_keeps_this_machines_values() {
         "local steering"
     );
     assert_eq!(summary.left_out, 7);
-    // Spotify had no settings here; the shortcut's arguments have no twin;
-    // the unknown kind is always reported.
+    // Spotify had no settings here; the unknown kind is always reported.
+    // (The shortcut's arguments placeholder is gone now that `shortcuts`
+    // — `Leave(Private)` in FIELDS — is stripped from a full backup
+    // before `merge::host` runs.)
     assert_eq!(summary.sign_in_again, vec!["Spotify".to_string()]);
-    assert_eq!(summary.reenter.len(), 2, "{:?}", summary.reenter);
+    assert_eq!(summary.reenter.len(), 1, "{:?}", summary.reenter);
 
     // Listed as left out, carried anyway (under another spelling): refused.
     let manifest = serde_json::to_vec(&json!({
@@ -3203,4 +3224,317 @@ fn skip_unknown_category_is_ignored_for_both_backup_kinds() {
         .unwrap();
     assert_eq!(plain_merged.ui.font_size, 17);
     assert_eq!(enc_merged.ui.font_size, 17);
+}
+
+// --- Full-backup strips Leave(Private) / Leave(DeviceLocal) ----------------
+//
+// Fix for cross-OS restore stomping on this machine's private state.
+// `merge::host` doesn't consult FIELDS, so
+// `allowlist::strip_private_and_device_local` blanks every
+// `Leave(Private)` / `Leave(DeviceLocal)` subtree in the backup JSON
+// before host-merge runs; the "backup empty -> keep local" rule then
+// restores this machine's value. The last test in this group iterates
+// FIELDS to prove every Leave(Private|DeviceLocal) pattern is touched —
+// a new such entry is protected automatically, with
+// `every_config_field_has_a_decision` keeping the FIELDS table complete.
+
+/// A full-backup bundle that imports cleanly without going through the
+/// settings-only path. Lets the tests drop in a hand-crafted config JSON
+/// (e.g. a Windows-shaped `spawn_command`).
+fn handmade_full(config_json: Value) -> Vec<u8> {
+    let manifest = serde_json::to_vec(&json!({
+        "format": "kage-backup",
+        "version": 3,
+        "contents": "full",
+        "exported_at": "2026-01-01T00:00:00Z",
+        "kage_version": "9.9.9",
+    }))
+    .unwrap();
+    let config = serde_json::to_vec(&config_json).unwrap();
+    zip_of(&[("manifest.json", &manifest), ("config.json", &config)])
+}
+
+#[test]
+fn full_backup_strips_leave_private_connections() {
+    let _disk = disk();
+    no_auto_steering();
+    let mut b = Machine::new();
+    b.config.acp.connections = vec![connection("kiro", "/usr/local/bin/kiro-cli acp")];
+    b.config.acp.active_connection_id = "kiro".into();
+    let before = b.config.clone();
+    // A Windows-shaped `spawn_command` restored to a Mac was the bug.
+    let bundle = handmade_full(json!({
+        "version": 1,
+        "acp": {
+            "connections": [{
+                "id": "kiro",
+                "name": "kiro agent",
+                "mode": {
+                    "type": "local",
+                    "spawn_command": "C:\\Users\\me\\.local\\bin\\kiro-cli.exe acp"
+                }
+            }],
+            "active_connection_id": "kiro"
+        }
+    }));
+    b.import(&bundle, None);
+    assert_eq!(spawn(&b.config, 0), spawn(&before, 0));
+    let serialised = serde_json::to_string(&b.config).unwrap();
+    assert!(
+        !serialised.contains("C:\\"),
+        "no Windows path survived under acp.*: {}",
+        serialised
+    );
+}
+
+#[test]
+fn full_backup_strips_leave_device_local_window_geometry() {
+    let _disk = disk();
+    no_auto_steering();
+    let mut b = Machine::new();
+    b.config.ui.chat_window_width = 1200;
+    let bundle = handmade_full(json!({
+        "version": 1,
+        "ui": { "chat_window_width": 9999 }
+    }));
+    b.import(&bundle, None);
+    assert_eq!(b.config.ui.chat_window_width, 1200);
+}
+
+#[test]
+fn full_backup_strips_leave_private_active_connection_id() {
+    let _disk = disk();
+    no_auto_steering();
+    let mut b = Machine::new();
+    b.config.acp.connections = vec![connection("mine", "/usr/local/bin/kiro-cli acp")];
+    b.config.acp.active_connection_id = "mine".into();
+    let before = b.config.clone();
+    // Backup names an id that doesn't exist here. After stripping, the
+    // local id is restored and still points at a connection the user has.
+    let bundle = handmade_full(json!({
+        "version": 1,
+        "acp": {
+            "connections": [],
+            "active_connection_id": "from-windows"
+        }
+    }));
+    b.import(&bundle, None);
+    assert_eq!(
+        b.config.acp.active_connection_id,
+        before.acp.active_connection_id
+    );
+    assert!(b
+        .config
+        .acp
+        .connections
+        .iter()
+        .any(|c| c.id == b.config.acp.active_connection_id));
+}
+
+#[test]
+fn full_backup_strips_user_steering_path_and_working_directory() {
+    let _disk = disk();
+    no_auto_steering();
+    let mut b = Machine::new();
+    let local_steering = b.config.acp.agent.user_steering_path.clone();
+    b.config.acp.agent.working_directory = Some("/Users/me/kage".into());
+    let before = b.config.clone();
+    let bundle = handmade_full(json!({
+        "version": 1,
+        "acp": { "agent": {
+            "user_steering_path": "C:\\Users\\me\\steering.md",
+            "working_directory": "C:\\Users\\me\\projects\\kage",
+            "import_login_shell_env": true,
+            "default_model": "evil-model"
+        }}
+    }));
+    b.import(&bundle, None);
+    assert_eq!(b.config.acp.agent.user_steering_path, local_steering);
+    assert_eq!(
+        b.config.acp.agent.working_directory,
+        before.acp.agent.working_directory
+    );
+    assert_eq!(
+        b.config.acp.agent.import_login_shell_env,
+        before.acp.agent.import_login_shell_env
+    );
+    assert_eq!(
+        b.config.acp.agent.default_model,
+        before.acp.agent.default_model
+    );
+}
+
+#[test]
+fn full_backup_keeps_diagnostics_and_cache_from_backup() {
+    // Negative control: strip is scoped to Private + DeviceLocal. A
+    // Diagnostics switch and a Cache stamp still travel from a full
+    // backup (sanitise clears the three update-time caches by name;
+    // this test picks `system.log_buffer_size` for Diagnostics and
+    // `telemetry.last_daily_ping` for Cache, both left untouched).
+    let _disk = disk();
+    no_auto_steering();
+    let mut b = Machine::new();
+    b.config.system.log_buffer_size = 100;
+    b.config.telemetry.last_daily_ping = None;
+    let bundle = handmade_full(json!({
+        "version": 1,
+        "system": { "log_buffer_size": 777 },
+        "telemetry": { "last_daily_ping": "2026-02-02" }
+    }));
+    b.import(&bundle, None);
+    assert_eq!(b.config.system.log_buffer_size, 777);
+    assert_eq!(
+        b.config.telemetry.last_daily_ping.as_deref(),
+        Some("2026-02-02")
+    );
+}
+
+#[test]
+fn full_backup_keeps_extension_grants_from_this_machine() {
+    // Regression guard. `extension_grants` is owned by
+    // `consent::keep_local`, which copies this machine's grants whole and
+    // uses the backup's claims only to decide whether an installed
+    // extension needs re-approval. The strip clears
+    // `extension_grants.*.origin` (DeviceLocal) from the backup side —
+    // defence in depth, since `extension_grants` is a `CALLER_MERGES`
+    // top-level key and merge::host doesn't recurse into it; `consent`
+    // then overwrites `merged.extension_grants` with this machine's whole
+    // map. The net effect: this machine's grant stays, nothing from the
+    // backup sneaks in.
+    let _disk = disk();
+    no_auto_steering();
+    let mut b = Machine::new();
+    b.config.extension_grants.insert(
+        "weather".into(),
+        crate::config::ExtensionGrant {
+            granted: vec!["network".into()],
+            approved_version: "1.0.0".into(),
+            approved_at: "2026-01-01T00:00:00Z".into(),
+            origin: None,
+        },
+    );
+    let before = b.config.extension_grants.clone();
+    let bundle = handmade_full(json!({
+        "version": 1,
+        "extension_grants": {
+            "weather": {
+                "granted": ["network", "storage"],
+                "approved_version": "1.0.0",
+                "approved_at": "2026-01-01T00:00:00Z",
+                "origin": "C:\\\\attacker\\\\weather"
+            }
+        }
+    }));
+    b.import(&bundle, None);
+    assert_eq!(b.config.extension_grants, before);
+}
+
+#[test]
+fn every_leave_private_or_device_local_field_is_covered() {
+    // Iterate FIELDS and confirm `strip_private_and_device_local` walks
+    // each `Leave(Private)` / `Leave(DeviceLocal)` pattern. Paired with
+    // `every_config_field_has_a_decision`, this invariant catches a new
+    // field slipping through the net.
+    use crate::config_export::allowlist::{Rule, FIELDS};
+    let mut tree = json!({});
+    // Seed every Leave(Private|DeviceLocal) pattern with a sentinel so
+    // the strip has something concrete to remove. Patterns ending in `*`
+    // need an entry under some id.
+    for (pattern, rule) in FIELDS {
+        if !matches!(
+            rule,
+            Rule::Leave(allowlist::Why::Private) | Rule::Leave(allowlist::Why::DeviceLocal)
+        ) {
+            continue;
+        }
+        let mut parts: Vec<&str> = pattern.split('.').collect();
+        for p in parts.iter_mut() {
+            if *p == "*" {
+                *p = "someid";
+            }
+        }
+        let mut cur = &mut tree;
+        for seg in &parts[..parts.len() - 1] {
+            cur = cur
+                .as_object_mut()
+                .unwrap()
+                .entry((*seg).to_string())
+                .or_insert_with(|| Value::Object(Default::default()));
+        }
+        cur.as_object_mut()
+            .unwrap()
+            .insert((*parts.last().unwrap()).to_string(), json!("sentinel"));
+    }
+    allowlist::strip_private_and_device_local(&mut tree);
+    // Walk the tree and assert no sentinel remains anywhere.
+    fn walk_for_leaves(v: &Value, out: &mut Vec<String>, path: &mut Vec<String>) {
+        match v {
+            Value::Object(o) => {
+                for (k, vv) in o {
+                    path.push(k.clone());
+                    walk_for_leaves(vv, out, path);
+                    path.pop();
+                }
+            }
+            Value::Array(a) => {
+                for (i, vv) in a.iter().enumerate() {
+                    path.push(i.to_string());
+                    walk_for_leaves(vv, out, path);
+                    path.pop();
+                }
+            }
+            Value::String(s) if s == "sentinel" => out.push(path.join(".")),
+            _ => {}
+        }
+    }
+    let mut leftover = Vec::new();
+    walk_for_leaves(&tree, &mut leftover, &mut Vec::new());
+    assert!(
+        leftover.is_empty(),
+        "strip_private_and_device_local left behind Leave(Private|DeviceLocal) \
+         fields: {:?}. Add the pattern to the strip or confirm it still belongs \
+         in FIELDS.",
+        leftover
+    );
+}
+
+#[test]
+fn settings_only_import_is_unchanged_by_the_strip() {
+    // Regression guard: the fix must not touch the settings-only path.
+    // `allowlist::merge` iterates only `Include` patterns, so a hand-made
+    // settings-only backup that names a `Leave(Private)` field (an
+    // attempt at an attack) still can't reach it, with or without the
+    // new strip.
+    let _disk = disk();
+    no_auto_steering();
+    let mut b = Machine::new();
+    b.config.acp.connections = vec![connection("mine", "/usr/local/bin/kiro-cli acp")];
+    b.config.acp.active_connection_id = "mine".into();
+    b.config.ui.theme = "dark".into();
+    let before = b.config.clone();
+    let manifest = serde_json::to_vec(&json!({
+        "format": "kage-backup", "version": 3, "contents": "settings_only",
+        "exported_at": "2026-01-01T00:00:00Z", "kage_version": "9.9.9"
+    }))
+    .unwrap();
+    let config = serde_json::to_vec(&json!({
+        "version": 1,
+        "ui": { "theme": "light" },
+        "acp": {
+            "connections": [{
+                "id": "mine",
+                "name": "mine agent",
+                "mode": { "type": "local", "spawn_command": "C:\\attacker\\agent.exe" }
+            }],
+            "active_connection_id": "mine"
+        }
+    }))
+    .unwrap();
+    let bundle = zip_of(&[("manifest.json", &manifest), ("config.json", &config)]);
+    b.import(&bundle, None);
+    // Settings-only path (allowlist::merge, Include only) still cannot
+    // reach acp.connections — this is the pre-fix behaviour.
+    assert_eq!(spawn(&b.config, 0), spawn(&before, 0));
+    // Include fields (ui.theme) travel as before.
+    assert_eq!(b.config.ui.theme, "light");
 }
