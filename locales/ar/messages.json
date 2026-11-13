@@ -14554,5 +14554,95 @@
     "description": "Tooltip and accessible label of the small × button on a finished card for a command an AI agent asked Kage to run outside its sandbox (it ran, or was denied, withdrawn or timed out): removes the card.",
     "_machine_translated": true,
     "_source_hash": "294ee870b66aba98"
+  },
+  "settings.about.import.advanced.title": {
+    "message": "خيارات متقدمة",
+    "description": "Label of the collapsible section with per-category toggles in the Import dialog",
+    "_machine_translated": true,
+    "_source_hash": "4d5fc85b5740e7a7"
+  },
+  "settings.about.import.advanced.description": {
+    "message": "يتم استيراد كل شيء افتراضيًا. ألغِ تحديد أي فئة لإبقائها على هذا الجهاز.",
+    "description": "Introductory line in the Advanced section of the Import dialog",
+    "_machine_translated": true,
+    "_source_hash": "5699801bb5350c60"
+  },
+  "settings.about.import.advanced.not_in_backup": {
+    "message": "غير موجود في هذه النسخة الاحتياطية",
+    "description": "Note shown beside a category checkbox when the backup carries nothing for it",
+    "_machine_translated": true,
+    "_source_hash": "746fd88a060580d6"
+  },
+  "settings.about.import.confirm.title": {
+    "message": "هل تريد استيراد هذه النسخة الاحتياطية؟",
+    "description": "Heading of the confirm card before applying a backup",
+    "_machine_translated": true,
+    "_source_hash": "12f31ea926689ced"
+  },
+  "settings.about.import.confirm.ok": {
+    "message": "استيراد",
+    "description": "Button that commits the import",
+    "_machine_translated": true,
+    "_source_hash": "4e9ba1412c9a80a7"
+  },
+  "settings.about.import.confirm.cancel": {
+    "message": "إلغاء",
+    "description": "Button that dismisses the confirm card without importing",
+    "_machine_translated": true,
+    "_source_hash": "4340d8c499dd554d"
+  },
+  "settings.about.import.category.hotkeys": {
+    "message": "اختصارات لوحة المفاتيح",
+    "description": "Import category: hotkeys",
+    "_machine_translated": true,
+    "_source_hash": "aea1eab081428e7d"
+  },
+  "settings.about.import.category.appearance": {
+    "message": "المظهر والنوافذ",
+    "description": "Import category: appearance, windows, speech",
+    "_machine_translated": true,
+    "_source_hash": "4461a0f3b3fcb311"
+  },
+  "settings.about.import.category.notifications": {
+    "message": "الإشعارات والتكامل",
+    "description": "Import category: notifications, system integration, telemetry",
+    "_machine_translated": true,
+    "_source_hash": "68670cd392389242"
+  },
+  "settings.about.import.category.quick_actions": {
+    "message": "الأوامر السريعة",
+    "description": "Import category: quick commands switch",
+    "_machine_translated": true,
+    "_source_hash": "7854a20d354af278"
+  },
+  "settings.about.import.category.automations": {
+    "message": "الأتمتة",
+    "description": "Import category: automations and automation power settings",
+    "_machine_translated": true,
+    "_source_hash": "7de6fc7ace3f62ec"
+  },
+  "settings.about.import.category.updates": {
+    "message": "التحديثات",
+    "description": "Import category: update channel and auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "e7d0bc99d265667b"
+  },
+  "settings.about.import.category.agents": {
+    "message": "الوكلاء",
+    "description": "Import category: ACP agent preferences",
+    "_machine_translated": true,
+    "_source_hash": "21fce4f62837e9a3"
+  },
+  "settings.about.import.category.tool_permissions": {
+    "message": "أذونات الأدوات",
+    "description": "Import category: tool-permission rules (trust always stays local)",
+    "_machine_translated": true,
+    "_source_hash": "0f06c6bd3e35c5e2"
+  },
+  "settings.about.import.category.extensions": {
+    "message": "الإضافات",
+    "description": "Import category: extension settings, states, and grants",
+    "_machine_translated": true,
+    "_source_hash": "ebd00362e92e7b15"
   }
 }
