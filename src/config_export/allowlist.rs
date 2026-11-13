@@ -1009,6 +1009,35 @@ pub fn strip_skipped(incoming: &mut Value, skip: &std::collections::HashSet<Stri
     }
 }
 
+/// For a full-backup import: strip every leaf under FIELDS patterns tagged
+/// `Leave(Private)` or `Leave(DeviceLocal)`. Called before [`merge::host`],
+/// so merge-host sees "empty" and keeps this machine's value for each one
+/// — fixing cross-OS leaks (a Windows backup's `acp.connections` holds a
+/// `C:\...\kiro-cli.exe` command line that merge-host would otherwise copy
+/// over this Mac's command). `Leave(Diagnostics)` and `Leave(Cache)` are
+/// user-chosen knobs or stale timestamps — carrying them is the backup's
+/// job, so they are not touched. `Leave(Permissions)` is handled outside
+/// `merge::host` (tool_permissions by `keep_local_tool_rules`;
+/// `extension_grants.*.origin` is itself tagged `Leave(DeviceLocal)` and
+/// is cleared here; `extension_agent_access` by its own call site in
+/// [`config_export::apply_import_at_with_skip`]).
+///
+/// Idempotent with [`strip_skipped`]: that one only touches `Include`
+/// patterns, this one only touches `Leave(Private|DeviceLocal)`, so the
+/// two sets of patterns are disjoint.
+///
+/// Adding a new `Leave(Private)` or `Leave(DeviceLocal)` entry to
+/// [`FIELDS`] protects it on the full-backup import path automatically;
+/// the `every_config_field_has_a_decision` gate is what keeps the FIELDS
+/// table complete.
+pub fn strip_private_and_device_local(incoming: &mut Value) {
+    for (pattern, rule) in FIELDS {
+        if matches!(rule, Leave(Private) | Leave(DeviceLocal)) {
+            strip_pattern(incoming, pattern);
+        }
+    }
+}
+
 /// Delete every leaf under `pattern` (with `*` as any map key) in `tree`.
 fn strip_pattern(tree: &mut Value, pattern: &str) {
     let parts: Vec<&str> = pattern.split('.').collect();
