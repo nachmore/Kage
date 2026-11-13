@@ -1152,6 +1152,19 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
         crate::events::CONFIG_UPDATED,
         crate::commands::i18n::ConfigUpdatedI18n::current(),
     );
+    // After a full backup — but NOT settings-only, which can't carry
+    // extension-data secrets — tell chat/floating to force-remount every
+    // loaded extension sandbox so the sandboxes drop any pre-import state
+    // (spotify "no creds" cache, calendar `_events`, …) even when the
+    // extension version and capability set did not change. Emitted
+    // strictly after CONFIG_UPDATED so the ordinary onConfigChange pass
+    // has invalidated the config cache by the time listeners re-read it.
+    if summary.kind == crate::config_export::BundleKind::Full {
+        let _ = app.emit(
+            crate::events::CONFIG_IMPORTED,
+            serde_json::json!({ "kind": "full" }),
+        );
+    }
     // The import is committed: the open instances of each extension whose
     // data it wrote re-read everything (EXTENSION_VIEWS §20).
     for id in &data_extensions {

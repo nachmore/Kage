@@ -151,6 +151,18 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
         }
     });
 
+    // Full-backup import: force-remount every loaded extension sandbox so
+    // pre-import state is dropped. This runs independently of
+    // onConfigChange — that handler has already fired and done its cheap
+    // same-version+same-caps pass; this does the full unload+load even
+    // when neither changed. Settings-only imports do NOT emit this event.
+    listen(EVT.CONFIG_IMPORTED, async () => {
+        if (app?.extensionManager) {
+            await app.extensionManager.reload({ force: true });
+            app.renderExtensionToolbarButtons();
+        }
+    });
+
     app = new ChatApp(invoke, appWindow, listen);
     window._chatApp = app; // Expose for permission modal flush
     // Commands the agent asks Kage to run outside its sandbox: inline in

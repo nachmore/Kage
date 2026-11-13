@@ -847,27 +847,40 @@ export class ExtensionManager {
      * (the roster is read fresh at the start of each run, so one rerun
      * captures everything that changed during the previous one).
      */
-    async reload() {
+    async reload(opts) {
+        const force = !!opts?.force;
         if (this._reloadInFlight) {
             // A reload is running; remember that state changed again and
             // return the in-flight promise. One trailing rerun suffices.
+            //
+            // If a force request arrives while a non-force reload is in
+            // flight, remember the force bit on the pending trailing run
+            // too — otherwise the trailing run would hit the fast-path
+            // (same version + same caps) and the force request would be
+            // silently dropped. Highest-force-seen wins.
             this._reloadPending = true;
+            if (force) this._reloadForcePending = true;
             return this._reloadInFlight;
         }
+        this._reloadForcePending = force;
         this._reloadInFlight = (async () => {
             try {
                 do {
                     this._reloadPending = false;
-                    await this._reloadOnce();
+                    const forceNow = this._reloadForcePending;
+                    this._reloadForcePending = false;
+                    await this._reloadOnce({ force: forceNow });
                 } while (this._reloadPending);
             } finally {
                 this._reloadInFlight = null;
+                this._reloadForcePending = false;
             }
         })();
         return this._reloadInFlight;
     }
 
-    async _reloadOnce() {
+    async _reloadOnce(opts) {
+        const force = !!opts?.force;
         try {
             this._configCache = await this.invoke('get_config');
         } catch {
@@ -903,12 +916,18 @@ export class ExtensionManager {
                         existing.capabilities,
                         this._computeGrantedCapabilities(item.manifest).capabilities
                     );
-                    if (sameVersion && sameCaps) continue;
-                    console.log(
-                        sameVersion
-                            ? `ExtensionManager: capabilities changed for '${item.manifest.id}', reloading`
-                            : `ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`
-                    );
+                    if (!force && sameVersion && sameCaps) continue;
+                    if (force && sameVersion && sameCaps) {
+                        console.log(
+                            `ExtensionManager: forcing reload of '${item.manifest.id}' after import`
+                        );
+                    } else {
+                        console.log(
+                            sameVersion
+                                ? `ExtensionManager: capabilities changed for '${item.manifest.id}', reloading`
+                                : `ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`
+                        );
+                    }
                     this._unloadExtension(item.manifest.id);
                 }
                 try {
