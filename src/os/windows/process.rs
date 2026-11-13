@@ -51,47 +51,45 @@ where
     Ok(())
 }
 
-/// Find `msedgewebview2.exe` processes whose command line points at the
-/// given user data folder, and kill them. Returns the number killed.
+/// Kill the WebView2 processes pinned to our user data folder whose
+/// host Kage is gone. Returns the number of process trees killed.
 ///
 /// Used by `startup::ensure_webview_directory_writable` (via the
-/// platform-agnostic `os::cleanup_stale_processes`) to clean up
-/// orphan WebView2 host processes left behind by a previous kage that
-/// didn't shut down cleanly. WebView2 enforces single-writer semantics
-/// on its user data directory; an orphan child holding the lock makes
-/// the next launch fail to render the floating window at all.
+/// platform-agnostic `os::cleanup_stale_processes`). WebView2 shares
+/// one browser process per user data folder: a new Kage asks the
+/// runtime for a webview and the runtime hands the request to the
+/// browser process already serving that folder. When a previous Kage
+/// died and left its browser process behind (hung, or kept alive after
+/// an update released the kill-on-close job), every webview the new
+/// Kage creates fails with `0x800700AA` ("The requested resource is in
+/// use"): no window ever appears, while the tray and hotkeys still
+/// register.
 ///
-/// # How it finds them
+/// # What counts as an orphan
 ///
-/// 1. `CreateToolhelp32Snapshot` enumerates every process by name.
-/// 2. For each `msedgewebview2.exe`, `OpenProcess(PROCESS_QUERY_LIMITED_
-///    INFORMATION | PROCESS_VM_READ)` gets a handle.
-/// 3. `NtQueryInformationProcess(ProcessBasicInformation)` returns the
-///    PEB base address.
-/// 4. `ReadProcessMemory` walks PEB → ProcessParameters → CommandLine
-///    (a UNICODE_STRING with a buffer pointer + length in the remote
-///    address space).
-/// 5. A second `ReadProcessMemory` pulls the command-line bytes.
-/// 6. We compare the lowercased command line against the lowercased
-///    user-data-dir path. Any match gets `kill_process_impl`'d.
+/// A browser process (no `--type=` argument) is the one WebView2
+/// launches for its host app, so its parent is the host. It's orphaned
+/// when that parent is gone: not running, a different program than the
+/// `--webview-exe-name=` it was launched for, or started after the
+/// browser process (the PID was reused). A child process (`--type=`
+/// renderer, GPU, crashpad, …) is orphaned when its browser process is
+/// no longer running; the children of an orphaned browser go with it.
 ///
-/// # Safety / fallibility
+/// A webview of a Kage that's still running is never touched, so a
+/// second launch (which runs this before the single-instance plugin
+/// hands off to the first) leaves the first one alone.
 ///
-/// `NtQueryInformationProcess` and the PEB layout are documented as
-/// "reserved" by Microsoft, but the offsets we use (PEB
-/// → ProcessParameters → CommandLine) are stable across every
-/// supported Windows version and are what Process Explorer / sysinfo /
-/// htop-equivalent tools also rely on. If a future Windows ever
-/// changes the layout, our match silently returns false (no spurious
-/// kills) and the caller surfaces the "frontend not ready" warning as
-/// before.
+/// # How it reads command lines
 ///
-/// We deliberately tolerate every kind of failure (handle open denied,
-/// remote read truncated, processes that died mid-enumeration, etc.) —
-/// this is a best-effort cleanup and any error just means "skip this
-/// PID and move on."
+/// `CreateToolhelp32Snapshot` lists every process with its parent; each
+/// `msedgewebview2.exe`'s command line is read from its PEB
+/// (`NtQueryInformationProcess` → PEB → ProcessParameters →
+/// CommandLine). The PEB layout is documented as reserved but stable
+/// and is what Process Explorer relies on; if it ever changes, the read
+/// fails and nothing is killed. Every failure (access denied, a process
+/// that died mid-scan) just skips that process.
 pub fn cleanup_stale_processes_impl(user_data_dir: &std::path::Path) -> usize {
-    let pids = match enumerate_processes_by_name("msedgewebview2.exe") {
+    let procs = match snapshot_processes() {
         Ok(v) => v,
         Err(e) => {
             warn!(
@@ -101,55 +99,172 @@ pub fn cleanup_stale_processes_impl(user_data_dir: &std::path::Path) -> usize {
             return 0;
         }
     };
+    let by_pid: std::collections::HashMap<u32, &ProcessEntry> =
+        procs.iter().map(|p| (p.pid, p)).collect();
 
-    let mut matches: Vec<u32> = Vec::new();
-    for pid in pids {
-        match read_process_command_line(pid) {
-            Ok(cmdline) => {
-                if cmdline_matches_kage_webview(&cmdline, user_data_dir) {
-                    matches.push(pid);
-                }
-            }
-            Err(_) => {
-                // Common: PID died between enumeration and OpenProcess,
-                // or we don't have rights. Skip silently — we're only
-                // interested in processes we CAN read, and orphans we
-                // spawned ourselves are by definition readable by us.
-            }
-        }
-    }
-
-    if matches.is_empty() {
+    let webviews: Vec<WebviewProcess> = procs
+        .iter()
+        .filter(|p| p.exe.eq_ignore_ascii_case("msedgewebview2.exe"))
+        .filter_map(|p| {
+            let cmdline = read_process_command_line(p.pid).ok()?;
+            cmdline_matches_kage_webview(&cmdline, user_data_dir)
+                .then(|| WebviewProcess::from_cmdline(p.pid, p.parent, &cmdline))
+        })
+        .collect();
+    if webviews.is_empty() {
         return 0;
     }
 
-    log::warn!(
-        "Found {} orphan kage-WebView2 process(es): {:?} — killing",
-        matches.len(),
-        matches
-    );
+    let roots = orphaned_webview_roots(&webviews, |browser| host_is_alive(browser, &by_pid));
+    if roots.is_empty() {
+        return 0;
+    }
 
+    warn!(
+        "Found {} orphan Kage WebView2 process tree(s) (roots {:?}) whose host is gone — killing",
+        roots.len(),
+        roots
+    );
     let mut killed = 0;
-    for pid in matches {
+    for &pid in &roots {
+        // `taskkill /T` takes the renderer/GPU children with it.
         if kill_process_impl(pid) {
             killed += 1;
         }
     }
+    // The runtime only starts a fresh browser process for the folder
+    // once the old one is fully gone.
+    for &pid in &roots {
+        wait_for_process_exit(pid, 2_000);
+    }
     killed
 }
 
-/// Enumerate every process whose image name (case-insensitive)
-/// matches `name`. Returns the list of PIDs. Used by
-/// `cleanup_stale_processes_impl`.
-fn enumerate_processes_by_name(name: &str) -> Result<Vec<u32>> {
+/// One row of a process snapshot.
+struct ProcessEntry {
+    pid: u32,
+    parent: u32,
+    exe: String,
+}
+
+/// A `msedgewebview2.exe` pinned to our user data folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WebviewProcess {
+    pid: u32,
+    parent: u32,
+    /// No `--type=`: the browser process, whose parent is the host app.
+    is_browser: bool,
+    /// `--webview-exe-name=`: the host app's image name.
+    host_exe: Option<String>,
+}
+
+impl WebviewProcess {
+    fn from_cmdline(pid: u32, parent: u32, cmdline: &str) -> Self {
+        let host_exe = cmdline
+            .split_whitespace()
+            .find_map(|arg| arg.strip_prefix("--webview-exe-name="))
+            .map(|s| s.trim_matches('"').to_string())
+            .filter(|s| !s.is_empty());
+        Self {
+            pid,
+            parent,
+            is_browser: !cmdline.contains("--type="),
+            host_exe,
+        }
+    }
+}
+
+/// The PIDs to tree-kill so every orphaned webview process goes:
+/// browsers whose host is gone, plus children whose browser is no
+/// longer running. Children of an orphaned browser aren't listed — the
+/// tree kill of their browser takes them.
+fn orphaned_webview_roots(
+    procs: &[WebviewProcess],
+    host_alive: impl Fn(&WebviewProcess) -> bool,
+) -> Vec<u32> {
+    let pids: std::collections::HashSet<u32> = procs.iter().map(|p| p.pid).collect();
+    procs
+        .iter()
+        .filter(|p| {
+            if p.is_browser {
+                !host_alive(p)
+            } else {
+                !pids.contains(&p.parent)
+            }
+        })
+        .map(|p| p.pid)
+        .collect()
+}
+
+/// Is the browser process's parent still the app that launched it?
+fn host_is_alive(
+    browser: &WebviewProcess,
+    by_pid: &std::collections::HashMap<u32, &ProcessEntry>,
+) -> bool {
+    let Some(host) = by_pid.get(&browser.parent) else {
+        return false;
+    };
+    if let Some(expected) = &browser.host_exe {
+        if !host.exe.eq_ignore_ascii_case(expected) {
+            return false;
+        }
+    }
+    // A reused PID belongs to a process started after the browser.
+    match (
+        process_creation_time(host.pid),
+        process_creation_time(browser.pid),
+    ) {
+        (Some(host_t), Some(browser_t)) => host_t <= browser_t,
+        // Can't tell: treat it as alive and never kill on a guess.
+        _ => true,
+    }
+}
+
+/// The process's creation time in FILETIME ticks, if readable.
+fn process_creation_time(pid: u32) -> Option<u64> {
+    use windows::Win32::Foundation::{CloseHandle, FILETIME};
+    use windows::Win32::System::Threading::{
+        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    // SAFETY: a handle we open and close here; the out-params are locals.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut created = FILETIME::default();
+        let mut exited = FILETIME::default();
+        let mut kernel = FILETIME::default();
+        let mut user = FILETIME::default();
+        let ok = GetProcessTimes(handle, &mut created, &mut exited, &mut kernel, &mut user);
+        let _ = CloseHandle(handle);
+        ok.ok()?;
+        Some(((created.dwHighDateTime as u64) << 32) | created.dwLowDateTime as u64)
+    }
+}
+
+/// Wait up to `timeout_ms` for `pid` to exit. Returns at once when it
+/// already has (or can't be opened).
+fn wait_for_process_exit(pid: u32, timeout_ms: u32) {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+    };
+    // SAFETY: a handle we open and close here.
+    unsafe {
+        if let Ok(handle) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
+            let _ = WaitForSingleObject(handle, timeout_ms);
+            let _ = CloseHandle(handle);
+        }
+    }
+}
+
+/// Every running process with its parent PID and image name.
+fn snapshot_processes() -> Result<Vec<ProcessEntry>> {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
         TH32CS_SNAPPROCESS,
     };
 
-    let target = name.to_ascii_lowercase();
-    let mut pids: Vec<u32> = Vec::new();
+    let mut procs: Vec<ProcessEntry> = Vec::new();
 
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
@@ -160,17 +275,17 @@ fn enumerate_processes_by_name(name: &str) -> Result<Vec<u32>> {
 
         if Process32FirstW(snapshot, &mut entry).is_ok() {
             loop {
-                // szExeFile is a fixed-size [u16; 260] null-terminated UTF-16
-                // string. Read until first null, lowercase, compare.
+                // szExeFile is a fixed-size [u16; 260] null-terminated UTF-16 string.
                 let len = entry
                     .szExeFile
                     .iter()
                     .position(|&c| c == 0)
                     .unwrap_or(entry.szExeFile.len());
-                let exe = String::from_utf16_lossy(&entry.szExeFile[..len]).to_ascii_lowercase();
-                if exe == target {
-                    pids.push(entry.th32ProcessID);
-                }
+                procs.push(ProcessEntry {
+                    pid: entry.th32ProcessID,
+                    parent: entry.th32ParentProcessID,
+                    exe: String::from_utf16_lossy(&entry.szExeFile[..len]),
+                });
                 if Process32NextW(snapshot, &mut entry).is_err() {
                     break;
                 }
@@ -179,7 +294,7 @@ fn enumerate_processes_by_name(name: &str) -> Result<Vec<u32>> {
         let _ = CloseHandle(snapshot);
     }
 
-    Ok(pids)
+    Ok(procs)
 }
 
 /// Read the command line of a foreign process via PEB walk.
@@ -477,6 +592,58 @@ mod tests {
     //! Windows processes.
 
     use super::cmdline_matches_kage_webview;
+
+    use super::{orphaned_webview_roots, WebviewProcess};
+
+    const BROWSER: &str = r#""C:\EdgeWebView\msedgewebview2.exe" --embedded-browser-webview=1 --webview-exe-name=kage.exe --user-data-dir="C:\x\EBWebView" --noerrdialogs"#;
+    const RENDERER: &str =
+        r#""C:\EdgeWebView\msedgewebview2.exe" --type=renderer --user-data-dir="C:\x\EBWebView""#;
+
+    #[test]
+    fn webview_process_reads_role_and_host_from_its_command_line() {
+        let b = WebviewProcess::from_cmdline(10, 1, BROWSER);
+        assert!(b.is_browser);
+        assert_eq!(b.host_exe.as_deref(), Some("kage.exe"));
+        let r = WebviewProcess::from_cmdline(11, 10, RENDERER);
+        assert!(!r.is_browser);
+        assert_eq!(r.host_exe, None);
+    }
+
+    #[test]
+    fn a_live_hosts_webviews_are_left_alone() {
+        let procs = vec![
+            WebviewProcess::from_cmdline(10, 1, BROWSER),
+            WebviewProcess::from_cmdline(11, 10, RENDERER),
+        ];
+        assert!(orphaned_webview_roots(&procs, |_| true).is_empty());
+    }
+
+    #[test]
+    fn a_dead_hosts_browser_is_the_only_root_to_kill() {
+        // The renderer goes with its browser's tree kill.
+        let procs = vec![
+            WebviewProcess::from_cmdline(10, 1, BROWSER),
+            WebviewProcess::from_cmdline(11, 10, RENDERER),
+        ];
+        assert_eq!(orphaned_webview_roots(&procs, |_| false), vec![10]);
+    }
+
+    #[test]
+    fn a_child_whose_browser_is_gone_is_killed() {
+        let procs = vec![WebviewProcess::from_cmdline(11, 10, RENDERER)];
+        assert_eq!(orphaned_webview_roots(&procs, |_| true), vec![11]);
+    }
+
+    #[test]
+    fn only_the_dead_hosts_tree_goes_when_two_hosts_share_the_folder() {
+        let procs = vec![
+            WebviewProcess::from_cmdline(10, 1, BROWSER),
+            WebviewProcess::from_cmdline(11, 10, RENDERER),
+            WebviewProcess::from_cmdline(20, 2, BROWSER),
+            WebviewProcess::from_cmdline(21, 20, RENDERER),
+        ];
+        assert_eq!(orphaned_webview_roots(&procs, |b| b.parent == 1), vec![20]);
+    }
     use std::path::PathBuf;
 
     #[test]

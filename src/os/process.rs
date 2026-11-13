@@ -55,11 +55,12 @@ pub fn release_kill_on_exit_job() {
 /// Best-effort: clean up stale processes that could prevent the next
 /// launch from succeeding. Returns the number killed.
 ///
-/// Currently implemented for Windows only, where it kills orphan
-/// `msedgewebview2.exe` children whose command line points at the
-/// given WebView2 user-data folder. WebView2 enforces single-writer
-/// semantics on that folder; an orphan child holding the lock makes
-/// the next launch fail to render a webview at all.
+/// Currently implemented for Windows only, where it kills the
+/// `msedgewebview2.exe` process trees pinned to the given WebView2
+/// user-data folder whose host app is no longer running. WebView2
+/// routes every new webview for a folder to the browser process
+/// already serving it, so a leftover one makes every webview of the
+/// next launch fail. A running host's webviews are never touched.
 ///
 /// `marker_dir` is passed through to platform code so per-platform
 /// implementations can match against the relevant resource (the

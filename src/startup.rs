@@ -236,79 +236,36 @@ where
     config
 }
 
-/// Make sure the WebView2 user data directory is writable before we
-/// hand control to Tauri. If the directory is locked by leftover child
-/// processes from a previous kage instance (forced kill, OS shutdown
-/// during runtime), this:
+/// Before Tauri creates any webview, kill WebView2 processes a previous
+/// Kage left pinned to our user data folder.
 ///
-///   1. Polls briefly to see if the lock releases on its own
-///      (handles the "we just exited and a child is still tearing
-///      down" case — usually <500ms).
-///   2. If still locked, kills any `msedgewebview2.exe` processes
-///      whose command line points at our EBWebView folder.
-///   3. Polls once more for the release. If still locked, logs and
-///      continues — there's nothing else we can usefully do, but the
-///      Tauri-level "frontend never became ready" timeout will then
-///      surface a clear error to the user.
+/// WebView2 hands every new webview for a folder to the browser process
+/// already serving it. If a previous Kage died and its browser process
+/// lived on (hung, or kept alive after an update released the
+/// kill-on-close job), every webview this launch creates fails with
+/// `0x800700AA` "The requested resource is in use": the tray and
+/// hotkeys come up, but no window ever shows.
 ///
-/// Always runs on launch — not just `--restart`. Most launches will
-/// see step 1 succeed in <100ms (if the dir even exists). The expensive
-/// path (PowerShell enumeration) is only reached after the polite wait
-/// fails. Replaces the old `wait_for_previous_instance_if_restart`
-/// which only handled the updater path.
+/// Runs on every launch. The check is the processes themselves —
+/// `os::cleanup_stale_processes` kills only the trees whose host app is
+/// gone, so a running Kage (this may be a second launch about to hand
+/// off to it) keeps its webviews. A file-creation probe can't detect
+/// this: the folder stays writable while the stale browser process owns
+/// it, which is how an orphan from days earlier went unnoticed.
 pub fn ensure_webview_directory_writable() {
     let Some(webview_dir) = webview_user_data_dir() else {
         return;
     };
-
-    // Phase 1: brief polite wait. 1 second total at 100ms cadence.
-    // First-launch dir-doesn't-exist case returns immediately.
-    match wait_for_webview_release(
-        &webview_dir,
-        10,
-        std::time::Duration::from_millis(100),
-        std::thread::sleep,
-    ) {
-        WebviewWaitResult::NotPresent | WebviewWaitResult::Released { .. } => return,
-        WebviewWaitResult::TimedOut { waited_ms } => {
-            log::warn!(
-                "WebView2 user data folder still locked after {}ms — looking for orphan processes",
-                waited_ms
-            );
-        }
-    }
-
-    // Phase 2: kill orphan WebView2 children that are pinned to our dir.
-    let killed = crate::os::cleanup_stale_processes(&webview_dir);
-    if killed == 0 {
-        log::warn!(
-            "No matching orphan WebView2 processes found — lock may be held by something else; continuing"
-        );
+    if !webview_dir.exists() {
         return;
     }
-
-    // Phase 3: brief wait for the lock to actually release after the
-    // kill. WebView2 children take a moment to fully release file
-    // handles even after the process exits.
-    match wait_for_webview_release(
-        &webview_dir,
-        20,
-        std::time::Duration::from_millis(100),
-        std::thread::sleep,
-    ) {
-        WebviewWaitResult::NotPresent | WebviewWaitResult::Released { waited_ms: _ } => {
-            log::info!(
-                "WebView2 user data folder released after killing {} orphan(s)",
-                killed
-            );
-        }
-        WebviewWaitResult::TimedOut { waited_ms } => {
-            log::warn!(
-                "WebView2 user data folder still locked after killing {} orphan(s) and waiting {}ms — continuing anyway",
-                killed,
-                waited_ms
-            );
-        }
+    let killed = crate::os::cleanup_stale_processes(&webview_dir);
+    if killed > 0 {
+        log::info!(
+            "Killed {} orphan WebView2 process tree(s) holding {:?}",
+            killed,
+            webview_dir
+        );
     }
 }
 
@@ -320,10 +277,9 @@ pub fn ensure_webview_directory_writable() {
 /// (`wait_for_webview_release`) is above; this wraps it with the
 /// real filesystem and sleep.
 ///
-/// **Deprecated** by `ensure_webview_directory_writable` which runs
-/// on every launch and also handles orphan-kill, but kept for now
-/// for the explicit "we just got restarted by the updater" code path
-/// where we want a longer wait before escalating to kill.
+/// `ensure_webview_directory_writable`, which runs right after this,
+/// is what clears a previous instance's leftover webview processes;
+/// this only gives a just-exited instance a moment to tear down.
 pub fn wait_for_previous_instance_if_restart(is_restart: bool) {
     if !is_restart {
         return;
