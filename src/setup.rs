@@ -693,13 +693,20 @@ pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi)
     }
 
     // On macOS: update activation policy (exclude the closing window since
-    // is_visible() may not reflect the hide yet), then hide the app to
-    // deactivate and return focus to the previous application.
+    // is_visible() may not reflect the hide yet). Hide the app only when
+    // no other user-facing window will be visible after this close —
+    // closing one chat window while others are open must not hide the
+    // whole app (NSApp.hide hides every window Kage owns).
     #[cfg(target_os = "macos")]
     {
         let closing_label = window.label().to_string();
-        update_activation_policy_excluding(window.app_handle(), Some(&closing_label));
-        hide_macos_app();
+        let app = window.app_handle();
+        update_activation_policy_excluding(app, Some(&closing_label));
+        let others = visible_user_window_labels(app);
+        let others_slice: Vec<&str> = others.iter().map(String::as_str).collect();
+        if should_hide_app_on_close(&closing_label, &others_slice) {
+            hide_macos_app();
+        }
     }
 }
 
@@ -727,22 +734,33 @@ fn close_view_window(window: &tauri::Window, api: &tauri::CloseRequestApi) {
     #[cfg(target_os = "macos")]
     {
         update_activation_policy_excluding(app, Some(&label));
-        // Closing a view leaves the user in an open chat or settings
-        // window; only with none left does the app hide.
-        let others: Vec<String> = app
-            .webview_windows()
-            .iter()
-            .filter(|(l, w)| {
-                (is_real_window_label(l) || is_session_host_label(l))
-                    && w.is_visible().unwrap_or(false)
-            })
-            .map(|(l, _)| l.clone())
-            .collect();
-        let others: Vec<&str> = others.iter().map(String::as_str).collect();
-        if should_hide_app_on_close(&label, &others) {
+        // Only hide the app with no other user-facing window left — a
+        // visible chat or settings keeps it on.
+        let others = visible_user_window_labels(app);
+        let others_slice: Vec<&str> = others.iter().map(String::as_str).collect();
+        if should_hide_app_on_close(&label, &others_slice) {
             hide_macos_app();
         }
     }
+}
+
+/// Labels of every user-facing window currently visible: real windows
+/// (`is_real_window_label`) and per-conversation chat windows
+/// (`is_session_host_label`). Used by both close paths so one rule
+/// decides whether `hide_macos_app()` runs after a close. May include
+/// the window being closed, since `is_visible()` can lag the hide call;
+/// [`should_hide_app_on_close`] treats a solo closing label as "none
+/// left".
+#[cfg(target_os = "macos")]
+fn visible_user_window_labels<R: tauri::Runtime>(app: &AppHandle<R>) -> Vec<String> {
+    app.webview_windows()
+        .iter()
+        .filter(|(l, w)| {
+            (is_real_window_label(l) || is_session_host_label(l))
+                && w.is_visible().unwrap_or(false)
+        })
+        .map(|(l, _)| l.clone())
+        .collect()
 }
 
 /// Windows that count as "real" for the macOS activation policy (Dock and
@@ -760,15 +778,20 @@ pub fn is_real_window_label(label: &str) -> bool {
 }
 
 /// The macOS close rule as a pure function: closing a window hides the
-/// whole app (returning focus to the previous app), except that closing a
-/// view window does so only when no other real window is still visible.
-/// `visible_real_windows` may include the closing window itself.
+/// whole app (returning focus to the previous app) only when no other
+/// user-facing window remains visible. `visible_user_windows` names the
+/// windows that count for the user — any `is_real_window_label` (chat
+/// `main`, settings, store, welcome, extension views) and any
+/// `is_session_host_label` (per-conversation chat windows). It may
+/// include the closing window itself, since `is_visible()` can lag the
+/// hide call; the predicate treats a solo closing label as "none left".
+///
+/// One rule for every close path: closing a chat with other chats open
+/// keeps the app on, closing settings with a chat visible keeps the app
+/// on, and closing the last window hides the app the way it has.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub fn should_hide_app_on_close(closing: &str, visible_real_windows: &[&str]) -> bool {
-    if !window_labels::is_ext_view_label(closing) {
-        return true;
-    }
-    visible_real_windows.iter().all(|l| *l == closing)
+pub fn should_hide_app_on_close(closing: &str, visible_user_windows: &[&str]) -> bool {
+    visible_user_windows.iter().all(|l| *l == closing)
 }
 
 /// Make Kage the active app (macOS `activateIgnoringOtherApps`), e.g. before
@@ -1032,21 +1055,52 @@ mod tests {
     }
 
     #[test]
-    fn closing_a_view_hides_the_app_only_when_nothing_else_is_open() {
+    fn closing_a_window_hides_the_app_only_when_nothing_else_is_open() {
         let view = "ext-view:mindmap:explorer";
+        // Last visible user window of any kind → hide.
         assert!(should_hide_app_on_close(view, &[]));
         assert!(should_hide_app_on_close(view, &[view]));
+        assert!(should_hide_app_on_close(window_labels::SETTINGS, &[]));
+        assert!(should_hide_app_on_close(window_labels::MAIN, &[]));
+
+        // Views: another real window keeps it on, so does a chat peer.
         assert!(!should_hide_app_on_close(
             view,
             &[view, window_labels::MAIN]
         ));
         assert!(!should_hide_app_on_close(view, &[window_labels::SETTINGS]));
         assert!(!should_hide_app_on_close(view, &["ext-view:mindmap:board"]));
-        // Every other window keeps today's rule: always hide the app.
-        assert!(should_hide_app_on_close(
+
+        // The unified rule: closing a chat window with another chat
+        // open keeps the app visible (the old "always hide" rule would
+        // have hidden them all — the bug this test fixes).
+        let chat_a = "chat-11111111-1111-1111-1111-111111111111";
+        let chat_b = "chat-22222222-2222-2222-2222-222222222222";
+        assert!(!should_hide_app_on_close(chat_a, &[chat_a, chat_b]));
+        assert!(!should_hide_app_on_close(chat_a, &[chat_b]));
+        assert!(!should_hide_app_on_close(chat_a, &[window_labels::MAIN]));
+        // Last chat window → hide.
+        assert!(should_hide_app_on_close(chat_a, &[chat_a]));
+        assert!(should_hide_app_on_close(chat_a, &[]));
+
+        // Settings with a chat visible keeps the app on under the new
+        // rule (previously it would have hidden every window).
+        assert!(!should_hide_app_on_close(
+            window_labels::SETTINGS,
+            &[chat_a]
+        ));
+        assert!(!should_hide_app_on_close(
             window_labels::SETTINGS,
             &[window_labels::MAIN]
         ));
-        assert!(should_hide_app_on_close(window_labels::MAIN, &[]));
+
+        // Inline-assist is an overlay, not user-facing: closing it with
+        // a chat visible keeps the chat open (the predicate never sees
+        // inline-assist in visible_user_windows because the walk filters
+        // it out).
+        assert!(!should_hide_app_on_close(
+            window_labels::INLINE_ASSIST,
+            &[window_labels::MAIN]
+        ));
     }
 }
