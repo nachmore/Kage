@@ -3279,10 +3279,13 @@ fn full_backup_strips_leave_private_connections() {
     }));
     b.import(&bundle, None);
     assert_eq!(spawn(&b.config, 0), spawn(&before, 0));
+    // Nothing of the backup's command survives anywhere. Named exactly,
+    // not "any `C:\`": on a Windows host this machine's own paths are
+    // Windows-shaped, and keeping those is the point of the fix.
     let serialised = serde_json::to_string(&b.config).unwrap();
     assert!(
-        !serialised.contains("C:\\"),
-        "no Windows path survived under acp.*: {}",
+        !serialised.contains("kiro-cli.exe"),
+        "the backup's command survived: {}",
         serialised
     );
 }
