@@ -491,12 +491,14 @@ export function installAboutBackupMethods(AboutSettingsModule) {
         },
 
         /**
-         * Import flow: pick a file, confirm the overwrite, then import. A
-         * name ending in `.enc` asks for the passphrase first. Any other
-         * file is tried without one; the backend recognises an encrypted
-         * file by its contents and asks for the passphrase, so a backup
-         * renamed to `.kage` still opens. A wrong passphrase asks again
-         * until it works, another error occurs, or the user cancels.
+         * Import flow: pick a file, inspect it, show a confirm card with
+         * Advanced per-category toggles, then import. A `.enc`-named file
+         * asks for the passphrase up front; a file without that
+         * extension is inspected without one first, and the backend
+         * recognises an encrypted envelope by its magic bytes and
+         * surfaces as `kind: "encrypted"` so the UI prompts. A wrong
+         * passphrase asks again until it works, another error occurs,
+         * or the user cancels.
          */
         async _runBackupImportOnce() {
             const invoke = window.__TAURI__.core.invoke;
@@ -526,24 +528,56 @@ export function installAboutBackupMethods(AboutSettingsModule) {
             }
             if (!chosen || typeof chosen !== 'string') return;
 
-            // Confirm before replacing the local settings.
-            try {
-                const { ask } = window.__TAURI__.dialog || {};
-                if (typeof ask === 'function') {
-                    const ok = await ask(t('settings.about.dialog.import.message'), {
-                        title: t('settings.about.dialog.import.title'),
-                        kind: 'warning',
-                    });
-                    if (!ok) return;
-                }
-            } catch {}
-
             // A `.enc` name is a strong hint: ask before the first try.
             let passphrase = null;
             if (/\.enc$/i.test(chosen)) {
                 passphrase = await this._promptForPassphrase();
                 if (passphrase === null) return; // cancelled
             }
+
+            // Peek inside the backup: what kind, and which categories
+            // carry content. If encrypted and no passphrase yet, ask
+            // once and retry.
+            let inspection;
+            for (;;) {
+                try {
+                    inspection = await invoke('inspect_backup', {
+                        path: chosen,
+                        passphrase,
+                    });
+                } catch (e) {
+                    const wrong = e?.key === IMPORT_WRONG_PASSPHRASE_KEY;
+                    if (wrong || e?.key === IMPORT_PASSPHRASE_REQUIRED_KEY) {
+                        passphrase = await this._promptForPassphrase({ retry: wrong });
+                        if (passphrase === null) return;
+                        continue;
+                    }
+                    this._setBackupStatus(
+                        t('settings.about.import.failed', {
+                            message: this._formatError(e),
+                        }),
+                        'error'
+                    );
+                    return;
+                }
+                if (
+                    inspection?.kind === 'encrypted' &&
+                    (!Array.isArray(inspection.categoriesPresent) ||
+                        inspection.categoriesPresent.length === 0) &&
+                    !passphrase
+                ) {
+                    passphrase = await this._promptForPassphrase();
+                    if (passphrase === null) return;
+                    continue;
+                }
+                break;
+            }
+
+            // Show the confirm card. The user may untick categories (all
+            // on by default); on cancel, nothing is imported.
+            const decision = await this._showImportConfirmCard(inspection);
+            if (!decision) return;
+            const { skipCategories } = decision;
 
             this._setBackupStatus(t('settings.about.import.importing'));
             let summary;
@@ -552,6 +586,7 @@ export function installAboutBackupMethods(AboutSettingsModule) {
                     summary = await invoke('import_config_bundle', {
                         path: chosen,
                         passphrase,
+                        skipCategories,
                     });
                     break;
                 } catch (e) {
@@ -598,6 +633,116 @@ export function installAboutBackupMethods(AboutSettingsModule) {
             } catch {
                 // Non-fatal — user can restart manually.
             }
+        },
+
+        /**
+         * Show the Import confirm card: a modal with per-category
+         * checkboxes behind a collapsed `<details>` "Advanced" section
+         * (everything ticked by default). A category whose id is not in
+         * `inspection.categoriesPresent` is rendered disabled with a
+         * "not in this backup" note. Resolves `{ skipCategories: [ids] }`
+         * on Import, or `null` on Cancel.
+         */
+        async _showImportConfirmCard(inspection) {
+            const invoke = window.__TAURI__.core.invoke;
+            let categories = [];
+            try {
+                categories = (await invoke('get_import_categories')) || [];
+            } catch (e) {
+                console.warn('[Settings] get_import_categories failed:', e);
+            }
+            const present = new Set(
+                Array.isArray(inspection?.categoriesPresent) ? inspection.categoriesPresent : []
+            );
+            return new Promise((resolve) => {
+                const returnFocus = document.activeElement;
+                const overlay = document.createElement('div');
+                overlay.className = 'backup-passphrase-overlay';
+                overlay.dataset.testid = 'importConfirmCard';
+                overlay.innerHTML = `
+                <div class="backup-passphrase-box" role="dialog" aria-modal="true" aria-labelledby="importConfirmTitle" aria-describedby="importConfirmDesc" style="min-width:360px;max-width:520px;">
+                    <div class="backup-passphrase-title" id="importConfirmTitle"></div>
+                    <div class="backup-passphrase-desc" id="importConfirmDesc"></div>
+                    <details class="backup-import-advanced" id="importAdvanced">
+                        <summary id="importAdvancedSummary"></summary>
+                        <p class="setting-description" id="importAdvancedDesc"></p>
+                        <ul class="backup-import-category-list" id="importCategoryList"></ul>
+                    </details>
+                    <div class="backup-passphrase-actions">
+                        <button class="setting-button backup-passphrase-cancel" type="button"></button>
+                        <button class="setting-button backup-passphrase-ok" type="button"></button>
+                    </div>
+                </div>
+            `;
+                overlay.querySelector('#importConfirmTitle').textContent = t(
+                    'settings.about.import.confirm.title'
+                );
+                overlay.querySelector('#importConfirmDesc').textContent = t(
+                    'settings.about.dialog.import.message'
+                );
+                overlay.querySelector('#importAdvancedSummary').textContent = t(
+                    'settings.about.import.advanced.title'
+                );
+                overlay.querySelector('#importAdvancedDesc').textContent = t(
+                    'settings.about.import.advanced.description'
+                );
+                const list = overlay.querySelector('#importCategoryList');
+                for (const cat of categories) {
+                    const li = document.createElement('li');
+                    li.className = 'backup-import-category';
+                    li.dataset.categoryId = cat.id;
+                    const label = document.createElement('label');
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.checked = true;
+                    cb.dataset.categoryId = cat.id;
+                    const name = document.createElement('span');
+                    name.textContent =
+                        (cat.label_key && t(cat.label_key)) || cat.en_label || cat.id;
+                    label.appendChild(cb);
+                    label.appendChild(document.createTextNode(' '));
+                    label.appendChild(name);
+                    li.appendChild(label);
+                    if (!present.has(cat.id)) {
+                        cb.disabled = true;
+                        cb.checked = false;
+                        li.dataset.disabled = 'true';
+                        const note = document.createElement('span');
+                        note.className = 'setting-description';
+                        note.textContent = ` — ${t('settings.about.import.advanced.not_in_backup')}`;
+                        li.appendChild(note);
+                    }
+                    list.appendChild(li);
+                }
+                const cancelBtn = overlay.querySelector('.backup-passphrase-cancel');
+                const okBtn = overlay.querySelector('.backup-passphrase-ok');
+                cancelBtn.textContent = t('settings.about.import.confirm.cancel');
+                okBtn.textContent = t('settings.about.import.confirm.ok');
+                document.body.appendChild(overlay);
+                const onKeydown = (e) => {
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        close(null);
+                    }
+                };
+                const close = (value) => {
+                    document.removeEventListener('keydown', onKeydown, true);
+                    overlay.remove();
+                    if (returnFocus && typeof returnFocus.focus === 'function') returnFocus.focus();
+                    resolve(value);
+                };
+                document.addEventListener('keydown', onKeydown, true);
+                cancelBtn.addEventListener('click', () => close(null));
+                okBtn.addEventListener('click', () => {
+                    const skipCategories = Array.from(
+                        list.querySelectorAll('input[type="checkbox"]')
+                    )
+                        .filter((cb) => !cb.disabled && !cb.checked)
+                        .map((cb) => cb.dataset.categoryId);
+                    close({ skipCategories });
+                });
+                setTimeout(() => okBtn.focus(), 0);
+            });
         },
 
         /**

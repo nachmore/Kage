@@ -313,19 +313,51 @@ describe('backup import', () => {
         throw { kind: 'invalid_input', key: 'errors.config.import_wrong_passphrase', message: 'wrong' };
     };
 
+    /** Categories a real build would send; a stable subset for tests. */
+    const DEFAULT_CATEGORIES = [
+        { id: 'hotkeys', label_key: 'settings.about.import.category.hotkeys', en_label: 'Hotkeys' },
+        { id: 'appearance', label_key: 'settings.about.import.category.appearance', en_label: 'Appearance and windows' },
+        { id: 'updates', label_key: 'settings.about.import.category.updates', en_label: 'Updates' },
+        { id: 'extensions', label_key: 'settings.about.import.category.extensions', en_label: 'Extensions' },
+    ];
+
     /** Mount with `file` as the open dialog's answer and `handler` for the import. */
-    function mountImport(file, handler) {
-        const ctx = mount({ import_config_bundle: handler, restart_app: () => null });
+    function mountImport(file, handler, overrides = {}) {
+        const defaultInspect = ({ path, passphrase }) => {
+            const encrypted = /\.enc$/i.test(path);
+            if (encrypted && !passphrase) {
+                return { kind: 'encrypted', categoriesPresent: [] };
+            }
+            return {
+                kind: encrypted ? 'encrypted' : 'plain',
+                categoriesPresent: ['hotkeys', 'appearance', 'updates'],
+            };
+        };
+        const ctx = mount({
+            import_config_bundle: handler,
+            inspect_backup: defaultInspect,
+            get_import_categories: () => DEFAULT_CATEGORIES,
+            restart_app: () => null,
+            ...overrides,
+        });
         window.__TAURI__.dialog.open.mockResolvedValue(file);
         return { ...ctx, ask: window.__TAURI__.dialog.ask };
     }
 
     const imports = (invoke) => calls(invoke, 'import_config_bundle').map(([, args]) => args);
     const overlay = () => document.querySelector('.backup-passphrase-overlay');
+    const confirmCard = () =>
+        document.querySelector('[data-testid="importConfirmCard"]');
+    const passphrasePrompt = () => {
+        for (const o of document.querySelectorAll('.backup-passphrase-overlay')) {
+            if (!o.matches('[data-testid="importConfirmCard"]')) return o;
+        }
+        return null;
+    };
 
     /** Wait for the passphrase prompt; answer it (null = Cancel). Returns its body text. */
     async function answerPrompt(value) {
-        const box = await waitFor(overlay, 'the passphrase prompt');
+        const box = await waitFor(passphrasePrompt, 'the passphrase prompt');
         const body = box.querySelector('#backupUnlockDesc').textContent;
         if (value === null) {
             box.querySelector('.backup-passphrase-cancel').click();
@@ -336,73 +368,107 @@ describe('backup import', () => {
         return body;
     }
 
+    /** Wait for the confirm card; click Import (or Cancel). */
+    async function answerConfirm(action = 'ok') {
+        const card = await waitFor(confirmCard, 'the import confirm card');
+        if (action === 'cancel') {
+            card.querySelector('.backup-passphrase-cancel').click();
+        } else {
+            card.querySelector('.backup-passphrase-ok').click();
+        }
+    }
+
     const imported = () => waitFor(() => status().startsWith('✓ Restored'), 'the import summary');
 
     it('asks for the passphrase when a .kage file turns out to be encrypted', async () => {
-        const { invoke, ask } = mountImport('/tmp/backup.kage', ({ passphrase }) =>
-            passphrase === null ? required() : SUMMARY
+        // The .kage file is actually encrypted: the first inspect peeks
+        // without a passphrase (encrypted magic → kind=encrypted, no
+        // categories), the prompt then collects the passphrase.
+        const { invoke } = mountImport(
+            '/tmp/backup.kage',
+            ({ passphrase }) => (passphrase === null ? required() : SUMMARY),
+            {
+                inspect_backup: ({ passphrase }) => ({
+                    kind: 'encrypted',
+                    categoriesPresent: passphrase ? ['appearance'] : [],
+                }),
+            }
         );
         $('backupImportBtn').click();
         expect(await answerPrompt('pw')).toBe(msg('settings.about.backup.unlock.description'));
+        await answerConfirm();
         await imported();
         expect(imports(invoke)).toEqual([
-            { path: '/tmp/backup.kage', passphrase: null },
-            { path: '/tmp/backup.kage', passphrase: 'pw' },
+            { path: '/tmp/backup.kage', passphrase: 'pw', skipCategories: [] },
         ]);
-        expect(ask.mock.calls[0][0]).toBe(msg('settings.about.dialog.import.message'));
     });
 
     it('a plain .kage file imports without a prompt', async () => {
         const { invoke } = mountImport('/tmp/backup.kage', () => SUMMARY);
         $('backupImportBtn').click();
+        await answerConfirm();
         await imported();
-        expect(overlay()).toBeNull();
-        expect(imports(invoke)).toEqual([{ path: '/tmp/backup.kage', passphrase: null }]);
+        expect(passphrasePrompt()).toBeNull();
+        expect(imports(invoke)).toEqual([
+            { path: '/tmp/backup.kage', passphrase: null, skipCategories: [] },
+        ]);
     });
 
-    it('a .enc file asks for the passphrase after the overwrite check, before importing', async () => {
-        const { invoke, ask } = mountImport('/tmp/backup.kage.enc', () => SUMMARY);
+    it('a .enc file asks for the passphrase before the confirm card', async () => {
+        const { invoke } = mountImport('/tmp/backup.kage.enc', () => SUMMARY);
         $('backupImportBtn').click();
-        await waitFor(overlay, 'the passphrase prompt');
-        expect(ask).toHaveBeenCalledTimes(1);
+        await waitFor(passphrasePrompt, 'the passphrase prompt');
+        expect(confirmCard()).toBeNull();
         expect(imports(invoke)).toEqual([]);
         await answerPrompt('pw');
+        await answerConfirm();
         await imported();
-        expect(imports(invoke)).toEqual([{ path: '/tmp/backup.kage.enc', passphrase: 'pw' }]);
+        expect(imports(invoke)).toEqual([
+            { path: '/tmp/backup.kage.enc', passphrase: 'pw', skipCategories: [] },
+        ]);
     });
 
-    it('declining the overwrite check stops before any prompt or import', async () => {
-        const { invoke, ask } = mountImport('/tmp/backup.kage.enc', () => SUMMARY);
-        ask.mockResolvedValue(false);
+    it('declining the confirm card stops before any import', async () => {
+        const { invoke } = mountImport('/tmp/backup.kage', () => SUMMARY);
         $('backupImportBtn').click();
+        await answerConfirm('cancel');
         await flush();
-        await flush();
-        expect(overlay()).toBeNull();
+        expect(confirmCard()).toBeNull();
         expect(imports(invoke)).toEqual([]);
     });
 
-    it('a wrong passphrase asks again, saying it did not work', async () => {
-        const { invoke } = mountImport('/tmp/backup.kage.enc', ({ passphrase }) =>
-            passphrase === 'right' ? SUMMARY : wrong()
-        );
+    it('a wrong passphrase during inspect asks again, saying it did not work', async () => {
+        let tries = 0;
+        const { invoke } = mountImport('/tmp/backup.kage.enc', () => SUMMARY, {
+            inspect_backup: ({ passphrase }) => {
+                tries++;
+                if (passphrase === 'right') {
+                    return { kind: 'encrypted', categoriesPresent: ['appearance'] };
+                }
+                throw { kind: 'invalid_input', key: 'errors.config.import_wrong_passphrase', message: 'wrong' };
+            },
+        });
         $('backupImportBtn').click();
         expect(await answerPrompt('nope')).toBe(msg('settings.about.backup.unlock.description'));
         expect(await answerPrompt('right')).toBe(msg('settings.about.backup.unlock.wrong'));
+        await answerConfirm();
         await imported();
-        expect(imports(invoke).map((a) => a.passphrase)).toEqual(['nope', 'right']);
+        expect(tries).toBe(2);
+        expect(imports(invoke).map((a) => a.passphrase)).toEqual(['right']);
     });
 
-    it('Cancel at the re-prompt stops quietly without another import', async () => {
-        const { invoke } = mountImport('/tmp/backup.kage', ({ passphrase }) =>
-            passphrase === null ? required() : wrong()
-        );
+    it('Cancel at the re-prompt stops quietly without an import', async () => {
+        const { invoke } = mountImport('/tmp/backup.kage.enc', () => SUMMARY, {
+            inspect_backup: () => {
+                throw { kind: 'invalid_input', key: 'errors.config.import_wrong_passphrase', message: 'wrong' };
+            },
+        });
         $('backupImportBtn').click();
         await answerPrompt('nope');
         expect(await answerPrompt(null)).toBe(msg('settings.about.backup.unlock.wrong'));
         await waitFor(() => !$('backupImportBtn').hasAttribute('aria-busy'), 'the import to end');
-        expect(imports(invoke).map((a) => a.passphrase)).toEqual([null, 'nope']);
-        expect(overlay()).toBeNull();
-        expect(status()).toBe('');
+        expect(imports(invoke)).toEqual([]);
+        expect(confirmCard()).toBeNull();
     });
 
     it('Cancel at the first prompt of a .enc file imports nothing', async () => {
@@ -418,10 +484,68 @@ describe('backup import', () => {
             throw { kind: 'internal', key: 'errors.config.import_build_failed', message: 'bad zip' };
         });
         $('backupImportBtn').click();
+        await answerConfirm();
         await waitFor(() => status().startsWith('Import failed'), 'the failure');
         expect(status()).toBe('Import failed: bad zip');
-        expect(overlay()).toBeNull();
+        expect(passphrasePrompt()).toBeNull();
         expect(imports(invoke)).toHaveLength(1);
+    });
+
+    // --- Per-category toggles (ITEM 3) ---------------------------------
+
+    it('the confirm card renders every category as a checkbox, Advanced collapsed by default', async () => {
+        mountImport('/tmp/backup.kage', () => SUMMARY);
+        $('backupImportBtn').click();
+        const card = await waitFor(confirmCard, 'the confirm card');
+        const details = card.querySelector('details#importAdvanced');
+        expect(details).toBeTruthy();
+        expect(details.open).toBe(false);
+        const checkboxes = card.querySelectorAll(
+            '#importCategoryList input[type="checkbox"]'
+        );
+        expect(checkboxes.length).toBe(DEFAULT_CATEGORIES.length);
+        for (const cb of checkboxes) {
+            // Enabled categories are ticked by default; disabled ones
+            // (not in this backup) are unticked and inert — unticking
+            // them doesn't send a skip either way.
+            expect(cb.checked).toBe(!cb.disabled);
+        }
+    });
+
+    it('a category not in the backup renders disabled and is not sent', async () => {
+        const { invoke } = mountImport('/tmp/backup.kage', () => SUMMARY);
+        $('backupImportBtn').click();
+        const card = await waitFor(confirmCard, 'the confirm card');
+        const extensionsItem = card.querySelector('[data-category-id="extensions"]');
+        expect(extensionsItem).toBeTruthy();
+        expect(extensionsItem.dataset.disabled).toBe('true');
+        const extensionsCb = extensionsItem.querySelector(
+            'input[type="checkbox"]'
+        );
+        expect(extensionsCb.disabled).toBe(true);
+        expect(extensionsCb.checked).toBe(false);
+        expect(extensionsItem.textContent).toContain(
+            msg('settings.about.import.advanced.not_in_backup')
+        );
+        await answerConfirm();
+        await imported();
+        // Only user-unticked (not disabled) ids go into skipCategories;
+        // 'extensions' is disabled so it stays out of the array.
+        const [args] = imports(invoke);
+        expect(args.skipCategories).toEqual([]);
+    });
+
+    it('unticked boxes become skipCategories in the import call', async () => {
+        const { invoke } = mountImport('/tmp/backup.kage', () => SUMMARY);
+        $('backupImportBtn').click();
+        const card = await waitFor(confirmCard, 'the confirm card');
+        card.querySelector('input[data-category-id="hotkeys"]').click();
+        card.querySelector('input[data-category-id="updates"]').click();
+        await answerConfirm();
+        await imported();
+        const [args] = imports(invoke);
+        // Order-independent assertion.
+        expect(new Set(args.skipCategories)).toEqual(new Set(['hotkeys', 'updates']));
     });
 
     it('a double click opens one file dialog', async () => {

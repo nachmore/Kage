@@ -353,6 +353,13 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     preview_config_export: null,
     export_config_bundle: null,
     import_config_bundle: null,
+    // Lists the backup import categories (Hotkeys, Appearance, …)
+    // the user can untick in the Import dialog. Host chrome only.
+    get_import_categories: null,
+    // Dry-run peek inside a backup to decide which category toggles to
+    // show in the Import dialog. Host chrome only — reads a user-picked
+    // file and may hold a passphrase.
+    inspect_backup: null,
     // Generic "write text to a user-picked path". Backs the chat
     // markdown export and any future save-as flows. Off-limits to
     // extensions because it can write anywhere (path comes from a

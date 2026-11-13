@@ -756,8 +756,7 @@ fn visible_user_window_labels<R: tauri::Runtime>(app: &AppHandle<R>) -> Vec<Stri
     app.webview_windows()
         .iter()
         .filter(|(l, w)| {
-            (is_real_window_label(l) || is_session_host_label(l))
-                && w.is_visible().unwrap_or(false)
+            (is_real_window_label(l) || is_session_host_label(l)) && w.is_visible().unwrap_or(false)
         })
         .map(|(l, _)| l.clone())
         .collect()

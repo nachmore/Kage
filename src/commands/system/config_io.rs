@@ -800,6 +800,110 @@ fn megabytes(bytes: u64) -> String {
     (bytes / (1024 * 1024)).to_string()
 }
 
+/// Every import category, in the order the Import dialog's Advanced
+/// section shows them. The frontend asks for this list once and renders
+/// one checkbox per entry; the entry's `id` is what it sends back to
+/// `import_config_bundle` in `skip_categories` when the user unticks it.
+#[tauri::command]
+pub async fn get_import_categories() -> Result<Vec<ImportCategoryDto>, AppError> {
+    Ok(crate::config_export::allowlist::categories()
+        .iter()
+        .map(|c| ImportCategoryDto {
+            id: c.id.to_string(),
+            label_key: c.label_key.to_string(),
+            en_label: c.en_label.to_string(),
+        })
+        .collect())
+}
+
+/// Over-the-wire shape of [`crate::config_export::allowlist::ImportCategory`].
+#[derive(serde::Serialize)]
+pub struct ImportCategoryDto {
+    pub id: String,
+    pub label_key: String,
+    pub en_label: String,
+}
+
+/// Over-the-wire shape of the `inspect_backup` result: whether the file
+/// is encrypted (so the Import UI knows to ask for a passphrase up
+/// front) and which import categories carry content in this backup.
+#[derive(serde::Serialize)]
+pub struct InspectBackupDto {
+    pub kind: &'static str,
+    #[serde(rename = "categoriesPresent")]
+    pub categories_present: Vec<String>,
+}
+
+/// Peek at a backup to decide what the Import dialog shows the user:
+/// `kind` says whether the file is encrypted (so the UI prompts for a
+/// passphrase up front), and `categoriesPresent` names the categories
+/// with content so the UI can render missing ones disabled. A dry run —
+/// nothing on disk changes, and the passphrase is never logged.
+#[tauri::command]
+pub async fn inspect_backup(
+    path: String,
+    passphrase: Option<String>,
+    features: State<'_, FeatureServices>,
+) -> Result<InspectBackupDto, AppError> {
+    let states = features.config.lock_or_recover().extension_states.clone();
+    let bytes =
+        crate::config_export::read_backup_file(std::path::Path::new(&path)).map_err(|e| {
+            if e.downcast_ref::<crate::config_export::BackupTooLarge>()
+                .is_some()
+            {
+                import_error(e)
+            } else {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.config.import_read_failed",
+                    &[("path", &path), ("message", &e.to_string())],
+                )
+            }
+        })?;
+    let kind: &'static str = if crate::config_export::is_encrypted(&bytes) {
+        "encrypted"
+    } else {
+        "plain"
+    };
+    // No passphrase for an encrypted file: can't peek inside, name the
+    // kind only.
+    if kind == "encrypted" && passphrase.as_deref().filter(|p| !p.is_empty()).is_none() {
+        return Ok(InspectBackupDto {
+            kind,
+            categories_present: Vec::new(),
+        });
+    }
+    let pw = passphrase.clone();
+    let categories =
+        tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, AppError> {
+            let prepared =
+                crate::config_export::prepare_import(bytes, pw.as_deref()).map_err(import_error)?;
+            let items = installed_items(&states);
+            let rules = crate::config_export::sensitive::Rules::new(&items);
+            Ok(
+                crate::config_export::allowlist::categories_present(prepared.config(), &rules)
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+            )
+        })
+        .await
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.config.import_task_failed",
+                &[("message", &e.to_string())],
+            )
+        })??;
+    // Belt-and-braces: a non-empty value above went through
+    // `prepare_import` and never into the log stream; drop it here too.
+    drop(passphrase);
+    Ok(InspectBackupDto {
+        kind,
+        categories_present: categories,
+    })
+}
+
 /// The AppError for a failed `config_export::prepare_import` /
 /// `apply_import`. A backup that would write outside Kage's folders, or is
 /// too large, gets its own message (nothing was written), and so do the
@@ -898,6 +1002,7 @@ struct ImportOutcome {
 pub async fn import_config_bundle<R: tauri::Runtime>(
     path: String,
     passphrase: Option<String>,
+    skip_categories: Option<Vec<String>>,
     features: State<'_, FeatureServices>,
     acp: State<'_, AcpHandles>,
     app: tauri::AppHandle<R>,
@@ -938,6 +1043,8 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
     // saved, the backup is merged and its files written: a save made
     // meanwhile (a permission decision, a setting) can't be lost, and if
     // saving fails the files are put back.
+    let skip_set: Option<std::collections::HashSet<String>> =
+        skip_categories.map(|v| v.into_iter().collect());
     let outcome =
         tauri::async_runtime::spawn_blocking(move || -> Result<ImportOutcome, AppError> {
             let items = installed_items(&states);
@@ -947,7 +1054,7 @@ pub async fn import_config_bundle<R: tauri::Runtime>(
             let mut state_config = config.lock_or_recover();
             let local = state_config.clone();
             let (mut new_config, summary, mut files) =
-                crate::config_export::apply_import(prepared, &local, &items)
+                crate::config_export::apply_import(prepared, &local, &items, skip_set.as_ref())
                     .map_err(import_error)?
                     .into_parts();
             // Grants are this machine's whole, and no extension is switched on

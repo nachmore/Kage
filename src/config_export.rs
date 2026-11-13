@@ -876,6 +876,21 @@ pub struct PreparedImport {
     files: Vec<IncomingFile>,
 }
 
+impl PreparedImport {
+    /// Read-only view of the parsed `config.json`, for callers that peek
+    /// at a backup without applying it (`inspect_backup`).
+    pub fn config(&self) -> &serde_json::Value {
+        &self.config
+    }
+}
+
+/// Whether `bytes` begins with the encrypted-envelope magic, so the
+/// Import UI can prompt for a passphrase up front for a `.enc`-looking
+/// file. Cheap: a prefix check.
+pub fn is_encrypted(bytes: &[u8]) -> bool {
+    bytes.starts_with(ENCRYPTED_MAGIC)
+}
+
 /// Decrypt (when the bytes start with the encrypted envelope's magic,
 /// whatever the file was called), unpack and check a backup: the input is
 /// capped before it's decrypted, entry names are validated before an entry
@@ -1110,8 +1125,15 @@ pub fn apply_import(
     prepared: PreparedImport,
     local: &Config,
     installed: &[InstalledItem],
+    skip_categories: Option<&std::collections::HashSet<String>>,
 ) -> Result<AppliedImport> {
-    apply_import_at(prepared, local, installed, extension_data_root())
+    apply_import_at_with_skip(
+        prepared,
+        local,
+        installed,
+        extension_data_root(),
+        skip_categories,
+    )
 }
 
 /// Finish or undo an import a previous run of Kage left midway (killed,
@@ -1133,11 +1155,25 @@ fn steering_has_text(body: &[u8]) -> bool {
     !rest.is_empty() && rest != sensitive::PLACEHOLDER
 }
 
+/// Legacy entry used by tests that don't exercise the category toggle:
+/// forwards to [`apply_import_at_with_skip`] with no categories skipped,
+/// i.e. the pre-feature behaviour.
+#[cfg(test)]
 fn apply_import_at(
     p: PreparedImport,
     local: &Config,
     installed: &[InstalledItem],
     ext_root: Option<PathBuf>,
+) -> Result<AppliedImport> {
+    apply_import_at_with_skip(p, local, installed, ext_root, None)
+}
+
+fn apply_import_at_with_skip(
+    p: PreparedImport,
+    local: &Config,
+    installed: &[InstalledItem],
+    ext_root: Option<PathBuf>,
+    skip_categories: Option<&std::collections::HashSet<String>>,
 ) -> Result<AppliedImport> {
     let lock = journal::ImportLock::acquire()?.ok_or(ImportUnfinished)?;
     journal::recover_locked(&lock).map_err(|e| {
@@ -1159,7 +1195,8 @@ fn apply_import_at(
         let data = local_data(ext_root.as_deref())?;
         let keep_whole =
             keeping_a_credential(&data, &HashSet::new(), local_exts, None, &rules, false);
-        let (merged, settings, kept) = allowlist::merge(local, &p.config, &rules, &keep_whole)?;
+        let (merged, settings, kept) =
+            allowlist::merge(local, &p.config, &rules, &keep_whole, skip_categories)?;
         let mut merged = sanitise_imported_config(merged, local);
         let needs_approval = consent::keep_local(&mut merged, local, &claims, installed);
         merged.version = crate::config_migrations::CURRENT_VERSION;
@@ -1275,6 +1312,16 @@ fn apply_import_at(
 
     // --- Kage's settings and extension settings.
     let mut incoming = p.config;
+    // Categories the user unticked are left on this machine, as if the
+    // backup had no match. For a full backup the setting-level merge
+    // happens in `merge::host`, which keeps local values wherever the
+    // backup's are empty — so blanking those entries first produces the
+    // same outcome `allowlist::merge` gives a settings-only backup.
+    if let Some(skip) = skip_categories {
+        if !skip.is_empty() {
+            allowlist::strip_skipped(&mut incoming, skip);
+        }
+    }
     merge::host(&mut incoming, &local_tree);
     // Numbers outside what their setting takes are this machine's.
     allowlist::keep_local_numbers_in_range(&mut incoming, &local_tree);

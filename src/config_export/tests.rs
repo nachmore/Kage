@@ -143,6 +143,30 @@ impl Machine {
         assert_eq!(self.config.acp.agent.user_steering_path, steering);
         summary
     }
+
+    /// Try an import, leaving every field in the given category ids on
+    /// this machine (as if the user unticked those boxes in the Import
+    /// dialog's Advanced section).
+    fn try_import_skipping(
+        &self,
+        bytes: &[u8],
+        passphrase: Option<&str>,
+        skip: &[&str],
+    ) -> Result<(Config, ImportSummary)> {
+        let prepared = prepare_import(bytes, passphrase)?;
+        let skip_set: std::collections::HashSet<String> =
+            skip.iter().map(|s| s.to_string()).collect();
+        let (config, summary, files) = super::apply_import_at_with_skip(
+            prepared,
+            &self.config,
+            &installed(),
+            Some(self.root.path().to_path_buf()),
+            Some(&skip_set),
+        )?
+        .into_parts();
+        files.finish()?;
+        Ok((config, summary))
+    }
 }
 
 fn connection(id: &str, command: &str) -> AgentConnection {
@@ -3098,4 +3122,85 @@ fn a_recovery_retry_never_puts_back_or_removes_a_config_saved_since() {
         std::fs::remove_file(p).unwrap();
     }
     std::fs::remove_file(&config_path).unwrap();
+}
+
+// --- Import categories ---------------------------------------------------
+//
+// The Import dialog's Advanced section lets the user untick a category,
+// so that bucket of settings is left on this machine as if the backup
+// had carried no value for it. These tests cover both backup types
+// (settings-only and full) and confirm the pre-feature behaviour is
+// what you get without any skip at all.
+
+#[test]
+fn settings_only_import_honours_skip_appearance() {
+    use crate::config_export::allowlist::CATEGORY_APPEARANCE;
+    let mut a = Machine::new();
+    a.config.ui.font_size = 18;
+    a.config.ui.show_time = false;
+    a.config.ui.floating_window_opacity = 0.42;
+    let bytes = a.export(ExportMode::SettingsOnly, None).unwrap();
+
+    let mut b = Machine::new();
+    b.config.ui.font_size = 13;
+    b.config.ui.show_time = true;
+    b.config.ui.floating_window_opacity = 1.0;
+    let local = b.config.clone();
+
+    let (merged, _) = b
+        .try_import_skipping(&bytes, None, &[CATEGORY_APPEARANCE])
+        .expect("skip-appearance import");
+    assert_eq!(merged.ui.font_size, local.ui.font_size);
+    assert_eq!(merged.ui.show_time, local.ui.show_time);
+    assert_eq!(
+        merged.ui.floating_window_opacity,
+        local.ui.floating_window_opacity
+    );
+}
+
+#[test]
+fn encrypted_full_import_honours_skip_hotkeys() {
+    use crate::config_export::allowlist::CATEGORY_HOTKEYS;
+    let mut a = Machine::new();
+    a.config.hotkey = crate::config::HotkeyConfig {
+        modifiers: vec!["Ctrl".into()],
+        key: "A".into(),
+    };
+    let bytes = a
+        .export(ExportMode::Encrypted, Some("hunter22"))
+        .expect("encrypted export");
+
+    let mut b = Machine::new();
+    let local_hotkey = crate::config::HotkeyConfig {
+        modifiers: vec!["Ctrl".into(), "Shift".into()],
+        key: "B".into(),
+    };
+    b.config.hotkey = local_hotkey.clone();
+
+    let (merged, _) = b
+        .try_import_skipping(&bytes, Some("hunter22"), &[CATEGORY_HOTKEYS])
+        .expect("skip-hotkeys import");
+    // Local hotkey is kept — not the backup's.
+    assert_eq!(merged.hotkey.modifiers, local_hotkey.modifiers);
+    assert_eq!(merged.hotkey.key, local_hotkey.key);
+}
+
+#[test]
+fn skip_unknown_category_is_ignored_for_both_backup_kinds() {
+    let mut a = Machine::new();
+    a.config.ui.font_size = 17;
+    let plain = a.export(ExportMode::SettingsOnly, None).unwrap();
+    let encrypted = a
+        .export(ExportMode::Encrypted, Some("p"))
+        .expect("encrypted export");
+
+    let b = Machine::new();
+    let (plain_merged, _) = b
+        .try_import_skipping(&plain, None, &["definitely_not_a_category"])
+        .unwrap();
+    let (enc_merged, _) = b
+        .try_import_skipping(&encrypted, Some("p"), &["definitely_not_a_category"])
+        .unwrap();
+    assert_eq!(plain_merged.ui.font_size, 17);
+    assert_eq!(enc_merged.ui.font_size, 17);
 }

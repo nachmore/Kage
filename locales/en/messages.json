@@ -5741,6 +5741,66 @@
     "message": "Importing…",
     "description": "Status while a backup is being imported"
   },
+  "settings.about.import.advanced.title": {
+    "message": "Advanced",
+    "description": "Label of the collapsible section with per-category toggles in the Import dialog"
+  },
+  "settings.about.import.advanced.description": {
+    "message": "Everything is imported by default. Untick a category to leave it on this machine.",
+    "description": "Introductory line in the Advanced section of the Import dialog"
+  },
+  "settings.about.import.advanced.not_in_backup": {
+    "message": "not in this backup",
+    "description": "Note shown beside a category checkbox when the backup carries nothing for it"
+  },
+  "settings.about.import.confirm.title": {
+    "message": "Import this backup?",
+    "description": "Heading of the confirm card before applying a backup"
+  },
+  "settings.about.import.confirm.ok": {
+    "message": "Import",
+    "description": "Button that commits the import"
+  },
+  "settings.about.import.confirm.cancel": {
+    "message": "Cancel",
+    "description": "Button that dismisses the confirm card without importing"
+  },
+  "settings.about.import.category.hotkeys": {
+    "message": "Hotkeys",
+    "description": "Import category: hotkeys"
+  },
+  "settings.about.import.category.appearance": {
+    "message": "Appearance and windows",
+    "description": "Import category: appearance, windows, speech"
+  },
+  "settings.about.import.category.notifications": {
+    "message": "Notifications and integration",
+    "description": "Import category: notifications, system integration, telemetry"
+  },
+  "settings.about.import.category.quick_actions": {
+    "message": "Quick commands",
+    "description": "Import category: quick commands switch"
+  },
+  "settings.about.import.category.automations": {
+    "message": "Automations",
+    "description": "Import category: automations and automation power settings"
+  },
+  "settings.about.import.category.updates": {
+    "message": "Updates",
+    "description": "Import category: update channel and auto-update settings"
+  },
+  "settings.about.import.category.agents": {
+    "message": "Agents",
+    "description": "Import category: ACP agent preferences"
+  },
+  "settings.about.import.category.tool_permissions": {
+    "message": "Tool permissions",
+    "description": "Import category: tool-permission rules (trust always stays local)"
+  },
+  "settings.about.import.category.extensions": {
+    "message": "Extensions",
+    "description": "Import category: extension settings, states, and grants"
+  },
   "settings.about.import.failed": {
     "message": "Import failed: {message}",
     "description": "Status when a backup import fails"

@@ -170,6 +170,141 @@ use Rule::{Include, Leave};
 use Shape::*;
 use Why::*;
 
+// --- Import categories --------------------------------------------------
+//
+// A backup can be imported in whole or in part. The Advanced section of
+// the Import dialog lets the user untick a category — Hotkeys, Agents,
+// Updates — and that category's fields are left on this machine as if
+// the backup had carried no value for them (see [`merge`]).
+//
+// Every `Include` entry in [`FIELDS`] belongs to exactly one category,
+// except [`Shape::SchemaVersion`] which is schema machinery, not a user
+// setting. [`every_include_field_has_a_category`] enforces this. The
+// [`Shape::ExtensionSettings`] "extensions" pattern is in the Extensions
+// category — the same category covers `extension_states.*` and the
+// `extension_grants.*` tree.
+//
+// Tool permissions are listed as their own category for user clarity,
+// but the FIELDS table has no Include entries for them (merging rules
+// lives outside [`merge`], and category-wide tool trust stays this
+// machine's — one can't import tool trust across machines).
+
+/// A user-visible bucket of related import settings.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ImportCategory {
+    /// Stable identifier the UI sends back to the backend.
+    pub id: &'static str,
+    /// i18n key for the display label.
+    pub label_key: &'static str,
+    /// English fallback label (used in tests and when a translation is
+    /// missing — the UI resolves `label_key` first).
+    pub en_label: &'static str,
+}
+
+pub const CATEGORY_HOTKEYS: &str = "hotkeys";
+pub const CATEGORY_APPEARANCE: &str = "appearance";
+pub const CATEGORY_NOTIFICATIONS: &str = "notifications";
+pub const CATEGORY_UPDATES: &str = "updates";
+pub const CATEGORY_AGENTS: &str = "agents";
+pub const CATEGORY_QUICK_ACTIONS: &str = "quick_actions";
+pub const CATEGORY_AUTOMATIONS: &str = "automations";
+pub const CATEGORY_EXTENSIONS: &str = "extensions";
+pub const CATEGORY_TOOL_PERMISSIONS: &str = "tool_permissions";
+
+const CATEGORIES: &[ImportCategory] = &[
+    ImportCategory {
+        id: CATEGORY_HOTKEYS,
+        label_key: "settings.about.import.category.hotkeys",
+        en_label: "Hotkeys",
+    },
+    ImportCategory {
+        id: CATEGORY_APPEARANCE,
+        label_key: "settings.about.import.category.appearance",
+        en_label: "Appearance and windows",
+    },
+    ImportCategory {
+        id: CATEGORY_NOTIFICATIONS,
+        label_key: "settings.about.import.category.notifications",
+        en_label: "Notifications and integration",
+    },
+    ImportCategory {
+        id: CATEGORY_QUICK_ACTIONS,
+        label_key: "settings.about.import.category.quick_actions",
+        en_label: "Quick commands",
+    },
+    ImportCategory {
+        id: CATEGORY_AUTOMATIONS,
+        label_key: "settings.about.import.category.automations",
+        en_label: "Automations",
+    },
+    ImportCategory {
+        id: CATEGORY_UPDATES,
+        label_key: "settings.about.import.category.updates",
+        en_label: "Updates",
+    },
+    ImportCategory {
+        id: CATEGORY_AGENTS,
+        label_key: "settings.about.import.category.agents",
+        en_label: "Agents",
+    },
+    ImportCategory {
+        id: CATEGORY_TOOL_PERMISSIONS,
+        label_key: "settings.about.import.category.tool_permissions",
+        en_label: "Tool permissions",
+    },
+    ImportCategory {
+        id: CATEGORY_EXTENSIONS,
+        label_key: "settings.about.import.category.extensions",
+        en_label: "Extensions",
+    },
+];
+
+/// Every import category, in the order the UI shows them.
+pub fn categories() -> &'static [ImportCategory] {
+    CATEGORIES
+}
+
+/// Which category a [`FIELDS`] pattern belongs to. `None` for `version`
+/// (schema machinery, not a user setting) — nothing else returns `None`,
+/// a test pins that.
+pub fn category_for_pattern(pattern: &str) -> Option<&'static str> {
+    if pattern == "version" {
+        return None;
+    }
+    if pattern == "hotkey"
+        || pattern == "clipboard_hotkey"
+        || pattern == "inline_assist_hotkey"
+        || pattern == "voice_hotkey"
+    {
+        return Some(CATEGORY_HOTKEYS);
+    }
+    if pattern.starts_with("acp.") {
+        return Some(CATEGORY_AGENTS);
+    }
+    if pattern.starts_with("ui.") || pattern.starts_with("pocket_tts.") {
+        return Some(CATEGORY_APPEARANCE);
+    }
+    if pattern.starts_with("system.") || pattern.starts_with("telemetry.") {
+        return Some(CATEGORY_NOTIFICATIONS);
+    }
+    if pattern.starts_with("updates.") || pattern == "auto_update_extensions" {
+        return Some(CATEGORY_UPDATES);
+    }
+    if pattern.starts_with("quick_actions.") {
+        return Some(CATEGORY_QUICK_ACTIONS);
+    }
+    if pattern.starts_with("automation_power.") {
+        return Some(CATEGORY_AUTOMATIONS);
+    }
+    if pattern == "extensions"
+        || pattern.starts_with("extension_states")
+        || pattern.starts_with("extension_grants")
+    {
+        return Some(CATEGORY_EXTENSIONS);
+    }
+    None
+}
+
 /// Every field of [`Config`], by dotted path (`*` is any map key, which
 /// must be a valid extension id), and what a settings-only backup does with
 /// it. A rule covers everything under its path. Keep in the order of the
@@ -797,6 +932,116 @@ pub fn keep_local_numbers_in_range(tree: &mut Value, local: &Value) {
 }
 
 /// Remove the value at `path` in `tree`, if it's there.
+/// Which [`categories()`] have anything in `incoming` (a backup's
+/// `config.json`): a category is "present" when any of its [`FIELDS`]
+/// `Include` patterns matches a non-empty value in `incoming`. For the
+/// Extensions category, the `extensions`/`extension_states`/
+/// `extension_grants` top-level maps count as present when non-empty
+/// even if the FIELDS pattern (`extensions`) has no inner matches —
+/// a backup that only switches an extension on still "has extensions".
+pub fn categories_present(incoming: &Value, rules: &Rules) -> Vec<&'static str> {
+    let ctx = Ctx {
+        rules,
+        side: Side::Import,
+    };
+    let mut present = std::collections::BTreeSet::<&'static str>::new();
+    for (pattern, rule) in FIELDS {
+        let Include(_shape) = rule else {
+            continue;
+        };
+        let Some(cat) = category_for_pattern(pattern) else {
+            continue;
+        };
+        if present.contains(cat) {
+            continue;
+        }
+        // The pattern matches any non-empty leaf.
+        for (_path, v) in matching(incoming, pattern, &ctx) {
+            if !is_empty(v) {
+                present.insert(cat);
+                break;
+            }
+        }
+    }
+    // Extensions category also counts non-empty `extension_states` /
+    // `extension_grants` maps, which the FIELDS Include patterns alone
+    // don't catch when a backup has only a states map.
+    if !present.contains(CATEGORY_EXTENSIONS) {
+        for key in ["extensions", "extension_states", "extension_grants"] {
+            if incoming
+                .get(key)
+                .and_then(Value::as_object)
+                .is_some_and(|m| !m.is_empty())
+            {
+                present.insert(CATEGORY_EXTENSIONS);
+                break;
+            }
+        }
+    }
+    present.into_iter().collect()
+}
+
+/// For a full-backup import: strip values under paths whose
+/// [`category_for_pattern`] is in `skip`. Called before [`merge::host`],
+/// so merge-host sees "empty" and keeps this machine's value — the same
+/// outcome [`merge`] gives a settings-only backup. Extensions and tool
+/// permissions are the caller's: strip the top-level `extensions` map
+/// here (and `extension_states`, which is a map), but grants and tool
+/// trust are handled by their own paths and are untouched.
+pub fn strip_skipped(incoming: &mut Value, skip: &std::collections::HashSet<String>) {
+    if skip.is_empty() {
+        return;
+    }
+    for (pattern, rule) in FIELDS {
+        let Include(shape) = rule else {
+            continue;
+        };
+        if matches!(shape, SchemaVersion) {
+            continue;
+        }
+        let Some(cat) = category_for_pattern(pattern) else {
+            continue;
+        };
+        if !skip.contains(cat) {
+            continue;
+        }
+        strip_pattern(incoming, pattern);
+    }
+}
+
+/// Delete every leaf under `pattern` (with `*` as any map key) in `tree`.
+fn strip_pattern(tree: &mut Value, pattern: &str) {
+    let parts: Vec<&str> = pattern.split('.').collect();
+    strip_walk(tree, &parts);
+}
+
+fn strip_walk(tree: &mut Value, parts: &[&str]) {
+    let Some((head, rest)) = parts.split_first() else {
+        return;
+    };
+    if rest.is_empty() {
+        if *head == "*" {
+            if let Some(obj) = tree.as_object_mut() {
+                obj.clear();
+            }
+        } else if let Some(obj) = tree.as_object_mut() {
+            obj.remove(*head);
+        }
+        return;
+    }
+    if *head == "*" {
+        if let Some(obj) = tree.as_object_mut() {
+            for v in obj.values_mut() {
+                strip_walk(v, rest);
+            }
+        }
+        return;
+    }
+    if let Some(child) = tree.get_mut(*head) {
+        strip_walk(child, rest);
+    }
+}
+
 fn remove(tree: &mut Value, path: &[String]) {
     let Some((last, parents)) = path.split_last() else {
         return;
@@ -849,6 +1094,7 @@ pub fn merge(
     incoming: &Value,
     rules: &Rules,
     keep_whole: &std::collections::BTreeSet<String>,
+    skip_categories: Option<&std::collections::HashSet<String>>,
 ) -> anyhow::Result<(Config, usize, Vec<String>)> {
     let ctx = Ctx {
         rules,
@@ -857,6 +1103,8 @@ pub fn merge(
     let mut tree = serde_json::to_value(local)?;
     let mut settings = 0usize;
     let mut kept: Vec<String> = Vec::new();
+    let skip_category =
+        |id: &str| -> bool { skip_categories.map(|set| set.contains(id)).unwrap_or(false) };
     for (pattern, rule) in FIELDS {
         let Include(shape) = rule else {
             continue;
@@ -868,6 +1116,13 @@ pub fn merge(
         // backup (see `super::consent`).
         if pattern.starts_with("extension_grants.") {
             continue;
+        }
+        // An entry whose category the user unticked is left on this
+        // machine, as if the backup had no match (default: all on).
+        if let Some(cat) = category_for_pattern(pattern) {
+            if skip_category(cat) {
+                continue;
+            }
         }
         let mut ids = 0usize;
         for (path, v) in matching(incoming, pattern, &ctx) {
@@ -887,7 +1142,13 @@ pub fn merge(
             settings += 1;
         }
     }
-    if let Some(exts) = incoming.get("extensions").and_then(Value::as_object) {
+    // Per-extension settings (the "extensions" bucket) ride on the
+    // Extensions category: untick it and no extension setting is taken.
+    if let Some(exts) = incoming
+        .get("extensions")
+        .and_then(Value::as_object)
+        .filter(|_| !skip_category(CATEGORY_EXTENSIONS))
+    {
         for (id, saved) in exts.iter().take(MAX_IMPORTED_IDS) {
             let Some(obj) = saved.as_object() else {
                 continue;
@@ -1303,7 +1564,8 @@ mod tests {
             "pocket_tts": { "temp": 0.5, "eos_threshold": 3.0 },
             "automation_power": { "battery_multiplier": 0.0, "low_battery_multiplier": 1e9 }
         });
-        let (merged, settings, _) = merge(&local, &incoming, &rules, &Default::default()).unwrap();
+        let (merged, settings, _) =
+            merge(&local, &incoming, &rules, &Default::default(), None).unwrap();
         assert_eq!(settings, 1, "only the in-range temp");
         assert_eq!(merged.pocket_tts.temp, 0.5);
         assert_eq!(
@@ -1405,6 +1667,7 @@ mod tests {
                 &json!({ "version": 1, "hotkey": hotkey, "voice_hotkey": hotkey }),
                 &rules,
                 &Default::default(),
+                None,
             )
             .unwrap();
             assert_eq!(merged.hotkey.modifiers, local.hotkey.modifiers, "{}", why);
@@ -1420,6 +1683,7 @@ mod tests {
                      "clipboard_hotkey": { "modifiers": ["CmdOrCtrl"], "key": "F13" } }),
             &rules,
             &Default::default(),
+            None,
         )
         .unwrap();
         assert_eq!(settings, 2);
@@ -1462,5 +1726,253 @@ mod tests {
         keep_local_unregistrable_hotkeys(&mut full, &local);
         assert_eq!(full.hotkey.modifiers, local.hotkey.modifiers);
         assert!(full.voice_hotkey.is_none());
+    }
+
+    // --- Import categories ------------------------------------------
+
+    #[test]
+    fn every_include_field_has_a_category() {
+        for (pattern, rule) in FIELDS {
+            let Include(shape) = rule else { continue };
+            // `version` is schema machinery, not a user category; the
+            // merge skips it already (`SchemaVersion` branch).
+            if matches!(shape, SchemaVersion) {
+                continue;
+            }
+            let cat = category_for_pattern(pattern);
+            assert!(
+                cat.is_some(),
+                "FIELDS pattern {:?} has no import category — add it to \
+                 config_export::allowlist::category_for_pattern.",
+                pattern
+            );
+            let id = cat.unwrap();
+            assert!(
+                categories().iter().any(|c| c.id == id),
+                "pattern {:?} maps to category {:?} that isn't in \
+                 CATEGORIES — add it to allowlist::CATEGORIES.",
+                pattern,
+                id,
+            );
+        }
+    }
+
+    #[test]
+    fn category_ids_are_stable_and_unique() {
+        let ids: Vec<&str> = categories().iter().map(|c| c.id).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ids.len(), "duplicate category id: {ids:?}");
+        // The ids this build commits to — a rename would break the UI
+        // (the frontend sends these back to skip_categories) and any
+        // Settings backup a user already took.
+        for id in [
+            CATEGORY_HOTKEYS,
+            CATEGORY_APPEARANCE,
+            CATEGORY_NOTIFICATIONS,
+            CATEGORY_QUICK_ACTIONS,
+            CATEGORY_AUTOMATIONS,
+            CATEGORY_UPDATES,
+            CATEGORY_AGENTS,
+            CATEGORY_TOOL_PERMISSIONS,
+            CATEGORY_EXTENSIONS,
+        ] {
+            assert!(ids.contains(&id), "missing stable id: {id}");
+        }
+    }
+
+    /// A settings-only backup that ticks every allowlisted field. Used
+    /// to drive the merge-level category-skip tests.
+    fn full_settings_backup() -> Value {
+        let rules = weather_rules();
+        let only = extract(
+            &complete_config(),
+            &rules,
+            &ExtensionNames(Default::default()),
+        );
+        only.tree
+    }
+
+    #[test]
+    fn skip_appearance_leaves_local_appearance() {
+        let rules = weather_rules();
+        let backup = full_settings_backup();
+        // Local differs from backup on every field so we can tell apart.
+        let mut local = Config::default();
+        local.ui.font_size = 13;
+        local.ui.show_time = false;
+        local.ui.floating_window_opacity = 0.42;
+        let base_font = local.ui.font_size;
+        let base_show_time = local.ui.show_time;
+        let base_opacity = local.ui.floating_window_opacity;
+
+        // Baseline: no skip — the backup's values win.
+        let (full, _, _) = merge(
+            &local,
+            &backup,
+            &rules,
+            &std::collections::BTreeSet::new(),
+            None,
+        )
+        .unwrap();
+        assert_ne!(full.ui.font_size, base_font);
+
+        // With Appearance unticked, every ui.* / pocket_tts.* value is
+        // kept on this machine.
+        let skip: std::collections::HashSet<String> =
+            [CATEGORY_APPEARANCE.to_string()].into_iter().collect();
+        let (merged, _, _) = merge(
+            &local,
+            &backup,
+            &rules,
+            &std::collections::BTreeSet::new(),
+            Some(&skip),
+        )
+        .unwrap();
+        assert_eq!(merged.ui.font_size, base_font);
+        assert_eq!(merged.ui.show_time, base_show_time);
+        assert_eq!(merged.ui.floating_window_opacity, base_opacity);
+    }
+
+    #[test]
+    fn skip_hotkeys_leaves_every_local_hotkey() {
+        let rules = weather_rules();
+        let backup = full_settings_backup();
+        let mut local = Config::default();
+        let local_hk = crate::config::HotkeyConfig {
+            modifiers: vec!["Ctrl".into(), "Shift".into()],
+            key: "P".into(),
+        };
+        local.hotkey = local_hk.clone();
+
+        let skip: std::collections::HashSet<String> =
+            [CATEGORY_HOTKEYS.to_string()].into_iter().collect();
+        let (merged, _, _) = merge(
+            &local,
+            &backup,
+            &rules,
+            &std::collections::BTreeSet::new(),
+            Some(&skip),
+        )
+        .unwrap();
+        assert_eq!(merged.hotkey.modifiers, local_hk.modifiers);
+        assert_eq!(merged.hotkey.key, local_hk.key);
+    }
+
+    #[test]
+    fn skip_extensions_leaves_local_extensions_and_states() {
+        let rules = weather_rules();
+        let backup = full_settings_backup();
+        let mut local = Config::default();
+        local
+            .extensions
+            .insert("weather".into(), json!({ "units": "imperial" }));
+        local.extension_states.insert("weather".into(), false);
+
+        let skip: std::collections::HashSet<String> =
+            [CATEGORY_EXTENSIONS.to_string()].into_iter().collect();
+        let (merged, _, _) = merge(
+            &local,
+            &backup,
+            &rules,
+            &std::collections::BTreeSet::new(),
+            Some(&skip),
+        )
+        .unwrap();
+        assert_eq!(
+            merged.extensions.get("weather"),
+            Some(&json!({ "units": "imperial" }))
+        );
+        assert_eq!(merged.extension_states.get("weather"), Some(&false));
+    }
+
+    #[test]
+    fn skip_unknown_category_is_ignored() {
+        let rules = weather_rules();
+        let backup = full_settings_backup();
+        let local = Config::default();
+        let skip: std::collections::HashSet<String> = ["definitely_not_a_category".to_string()]
+            .into_iter()
+            .collect();
+        // Same outcome as no skip at all — the merge accepts fields.
+        let (with_skip, _, _) = merge(
+            &local,
+            &backup,
+            &rules,
+            &std::collections::BTreeSet::new(),
+            Some(&skip),
+        )
+        .unwrap();
+        let (baseline, _, _) = merge(
+            &local,
+            &backup,
+            &rules,
+            &std::collections::BTreeSet::new(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(with_skip.ui.font_size, baseline.ui.font_size);
+    }
+
+    #[test]
+    fn categories_present_reports_what_the_backup_carries() {
+        let rules = weather_rules();
+        // An empty settings-only shell: version only, no categories.
+        let empty = json!({
+            "version": crate::config_migrations::CURRENT_VERSION
+        });
+        assert!(categories_present(&empty, &rules).is_empty());
+
+        // A backup carrying only a hotkey and an update channel: just
+        // the Hotkeys and Updates categories are present.
+        let partial = json!({
+            "version": crate::config_migrations::CURRENT_VERSION,
+            "hotkey": { "modifiers": ["Ctrl"], "key": "K" },
+            "updates": { "channel": "stable" }
+        });
+        let found = categories_present(&partial, &rules);
+        assert!(found.contains(&CATEGORY_HOTKEYS));
+        assert!(found.contains(&CATEGORY_UPDATES));
+        assert!(!found.contains(&CATEGORY_APPEARANCE));
+        assert!(!found.contains(&CATEGORY_EXTENSIONS));
+
+        // An extension-states-only backup counts for Extensions even
+        // though no inner FIELDS pattern inside `extensions` matched.
+        let states_only = json!({
+            "version": crate::config_migrations::CURRENT_VERSION,
+            "extension_states": { "weather": true }
+        });
+        let found = categories_present(&states_only, &rules);
+        assert!(found.contains(&CATEGORY_EXTENSIONS));
+    }
+
+    #[test]
+    fn strip_skipped_blanks_out_patterns_in_skipped_categories() {
+        let mut tree = json!({
+            "ui": { "font_size": 14, "show_time": true, "theme": "dark" },
+            "hotkey": { "modifiers": ["Ctrl"], "key": "K" },
+            "updates": { "channel": "stable", "auto_check": true },
+            "extensions": { "weather": { "units": "metric" } },
+        });
+        let skip: std::collections::HashSet<String> = [
+            CATEGORY_APPEARANCE.to_string(),
+            CATEGORY_HOTKEYS.to_string(),
+        ]
+        .into_iter()
+        .collect();
+        strip_skipped(&mut tree, &skip);
+        // Appearance stripped → ui is empty.
+        assert!(tree
+            .get("ui")
+            .and_then(Value::as_object)
+            .unwrap()
+            .is_empty());
+        // Hotkeys stripped → `hotkey` is gone.
+        assert!(tree.get("hotkey").is_none());
+        // Updates kept.
+        assert_eq!(tree["updates"]["channel"], json!("stable"));
+        // Extensions kept.
+        assert_eq!(tree["extensions"]["weather"]["units"], json!("metric"));
     }
 }

@@ -148,6 +148,8 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::preview_config_export,
         crate::commands::export_config_bundle,
         crate::commands::import_config_bundle,
+        crate::commands::get_import_categories,
+        crate::commands::inspect_backup,
         crate::commands::write_text_file,
         crate::commands::get_recent_crash,
         crate::commands::dismiss_recent_crash,

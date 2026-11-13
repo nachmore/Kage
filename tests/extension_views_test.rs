@@ -586,7 +586,7 @@ fn a_full_backup_never_carries_view_geometry() {
         .expect("full backup");
     let prepared =
         config_export::prepare_import(bundle, Some("a passphrase")).expect("bundle reads back");
-    let (_config, summary, files) = config_export::apply_import(prepared, &config, &[])
+    let (_config, summary, files) = config_export::apply_import(prepared, &config, &[], None)
         .expect("bundle applies")
         .into_parts();
     files.rollback();
