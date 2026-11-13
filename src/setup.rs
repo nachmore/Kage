@@ -744,46 +744,46 @@ fn close_view_window(window: &tauri::Window, api: &tauri::CloseRequestApi) {
     }
 }
 
-/// Labels of every user-facing window currently visible: real windows
-/// (`is_real_window_label`) and per-conversation chat windows
-/// (`is_session_host_label`). Used by both close paths so one rule
-/// decides whether `hide_macos_app()` runs after a close. May include
-/// the window being closed, since `is_visible()` can lag the hide call;
-/// [`should_hide_app_on_close`] treats a solo closing label as "none
-/// left".
+/// Labels of every user-facing window currently visible — the set
+/// [`is_real_window_label`] names (chat `main` and every `chat-<uuid>`
+/// peer, settings, store, welcome, extension views). Used by both close
+/// paths so one rule decides whether `hide_macos_app()` runs after a
+/// close. May include the window being closed, since `is_visible()` can
+/// lag the hide call; [`should_hide_app_on_close`] treats a solo closing
+/// label as "none left".
 #[cfg(target_os = "macos")]
 fn visible_user_window_labels<R: tauri::Runtime>(app: &AppHandle<R>) -> Vec<String> {
     app.webview_windows()
         .iter()
-        .filter(|(l, w)| {
-            (is_real_window_label(l) || is_session_host_label(l)) && w.is_visible().unwrap_or(false)
-        })
+        .filter(|(l, w)| is_real_window_label(l) && w.is_visible().unwrap_or(false))
         .map(|(l, _)| l.clone())
         .collect()
 }
 
 /// Windows that count as "real" for the macOS activation policy (Dock and
-/// ⌘Tab): chat sessions, settings, store, welcome, and extension views.
-/// The floating launcher, inline assist and context menu are overlays.
+/// ⌘Tab): chat sessions (the legacy `main` and every `chat-<uuid>` peer),
+/// settings, store, welcome, and extension views. The floating launcher,
+/// inline assist and context menu are overlays and don't put the app in
+/// the Dock. The close rule's walk ([`visible_user_window_labels`]) and
+/// `update_activation_policy_excluding` agree on this set, so that
+/// closing `main` with a peer still open leaves the Dock icon on.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn is_real_window_label(label: &str) -> bool {
     matches!(
         label,
-        window_labels::MAIN
-            | window_labels::SETTINGS
-            | window_labels::STORE
-            | window_labels::WELCOME
-    ) || window_labels::is_ext_view_label(label)
+        window_labels::SETTINGS | window_labels::STORE | window_labels::WELCOME
+    ) || window_labels::is_session_host_label(label)
+        || window_labels::is_ext_view_label(label)
 }
 
 /// The macOS close rule as a pure function: closing a window hides the
 /// whole app (returning focus to the previous app) only when no other
 /// user-facing window remains visible. `visible_user_windows` names the
-/// windows that count for the user — any `is_real_window_label` (chat
-/// `main`, settings, store, welcome, extension views) and any
-/// `is_session_host_label` (per-conversation chat windows). It may
-/// include the closing window itself, since `is_visible()` can lag the
-/// hide call; the predicate treats a solo closing label as "none left".
+/// windows that count — the set [`is_real_window_label`] names (chat
+/// `main` and every `chat-<uuid>` peer, settings, store, welcome,
+/// extension views). It may include the closing window itself, since
+/// `is_visible()` can lag the hide call; the predicate treats a solo
+/// closing label as "none left".
 ///
 /// One rule for every close path: closing a chat with other chats open
 /// keeps the app on, closing settings with a chat visible keeps the app
@@ -1051,6 +1051,28 @@ mod tests {
         ] {
             assert!(!is_real_window_label(label), "{label}");
         }
+    }
+
+    /// A chat peer window is a user-facing conversation, same as the
+    /// legacy `main`-labelled one — the macOS activation policy walk
+    /// keys on [`is_real_window_label`], so a peer must count. Without
+    /// this, closing `main` with a peer still open leaves the peer on
+    /// screen but drops the app to Accessory: the Dock icon and ⌘Tab
+    /// handle disappear. The ITEM 2 fix made "one chat visible after a
+    /// close" a routine state, so the two walks (close rule and
+    /// activation policy) must agree on which windows count.
+    #[test]
+    fn chat_peer_windows_count_as_real_for_the_dock() {
+        let chat_a = "chat-11111111-1111-1111-1111-111111111111";
+        let chat_b = "chat-22222222-2222-2222-2222-222222222222";
+        assert!(is_real_window_label(chat_a));
+        assert!(is_real_window_label(chat_b));
+        assert!(is_real_window_label(window_labels::MAIN));
+        // Overlays stay out: a visible launcher doesn't put the app in
+        // the Dock, and inline-assist / context-menu are overlays too.
+        assert!(!is_real_window_label(window_labels::FLOATING));
+        assert!(!is_real_window_label(window_labels::INLINE_ASSIST));
+        assert!(!is_real_window_label(window_labels::CONTEXT_MENU));
     }
 
     #[test]
