@@ -195,9 +195,21 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             info!("System tray menu item clicked: {}", event.id().as_ref());
             match event.id().as_ref() {
                 "show" => {
-                    if let Some(window) = app_handle_inner.get_webview_window(window_labels::MAIN) {
-                        let _ = window.show();
-                        let _ = window.set_focus();
+                    // Show opens the floating launcher — the user's entry
+                    // point to Kage. When it's already visible, raise and
+                    // focus it; otherwise present it the way the global
+                    // hotkey does (first-run gate, cursor placement, overlay
+                    // present).
+                    if let Some(floating) =
+                        app_handle_inner.get_webview_window(window_labels::FLOATING)
+                    {
+                        if floating.is_visible().unwrap_or(false) {
+                            if let Err(e) = crate::overlay_windows::present(&floating) {
+                                log::warn!("Tray show: present(floating) failed: {}", e);
+                            }
+                        } else {
+                            crate::commands::window::show_floating_at_mouse(&floating);
+                        }
                     }
                     crate::setup::update_activation_policy(app_handle_inner);
                 }
