@@ -119,6 +119,17 @@ export const LifecycleInitMethods = {
             await this.extensionManager.reload();
         });
 
+        // Full-backup import: force-remount every loaded extension sandbox
+        // so pre-import state (spotify "no creds" cache, calendar `_events`,
+        // …) is dropped even when version + caps are unchanged. Independent
+        // of onConfigChange so ordering is deterministic: the config_updated
+        // pass runs first and does its cheap fast-path pass, then this
+        // force-reload runs. Settings-only imports do NOT emit this event.
+        this.listen(EVT.CONFIG_IMPORTED, async () => {
+            console.log('Full backup imported, force-reloading extensions...');
+            await this.extensionManager.reload({ force: true });
+        });
+
         this.listen('slash_commands_available', async () => {
             console.log('Slash commands updated, reloading...');
             await loadSlashCommands(this.invoke);

@@ -7,6 +7,10 @@
 export const EVT = {
     // Config / app state
     CONFIG_UPDATED: 'config_updated',
+    // Emitted only after a *full-backup* import, strictly after CONFIG_UPDATED.
+    // Chat / floating listen and force-remount all loaded extension sandboxes
+    // (regular config_updated keeps the fast-path).
+    CONFIG_IMPORTED: 'config_imported',
     EXTENSIONS_CHANGED: 'extensions_changed',
 
     // Updater

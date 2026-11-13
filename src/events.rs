@@ -21,6 +21,20 @@
 /// theme + hotkeys + cached config from this signal.
 pub const CONFIG_UPDATED: &str = "config_updated";
 
+/// A **full** backup was just imported. Fires strictly AFTER
+/// `CONFIG_UPDATED` so the ordinary onConfigChange handler has already
+/// invalidated caches by the time listeners run. Emitted ONLY by
+/// `import_config_bundle` and only when the imported bundle is a full
+/// backup (never for settings-only imports, never for regular saves,
+/// never for sync-applied changes).
+///
+/// Listeners (chat + floating): force-remount every loaded extension
+/// sandbox so stale pre-import state (spotify's "no creds" cache,
+/// calendar's `_events` cache, …) is reset even when the version and
+/// capability set did not change. Keeping this as a dedicated event
+/// lets regular `config_updated` traffic keep hitting the fast-path.
+pub const CONFIG_IMPORTED: &str = "config_imported";
+
 /// Extension list / config / install state changed. Settings page
 /// re-renders; floating window invalidates its cached store list.
 pub const EXTENSIONS_CHANGED: &str = "extensions_changed";
@@ -227,6 +241,7 @@ mod tests {
     fn all_event_names_are_snake_case() {
         let all = [
             CONFIG_UPDATED,
+            CONFIG_IMPORTED,
             EXTENSIONS_CHANGED,
             UPDATE_AVAILABLE,
             SHOW_FLOATING_BANNER,
