@@ -1857,6 +1857,10 @@
     "message": "Delete this connection",
     "description": "Tooltip on the delete icon button"
   },
+  "settings.connection.row.delete_disabled_title": {
+    "message": "Add a different agent before deleting the active one.",
+    "description": "Tooltip and aria-label on the delete icon button when it is disabled because the connection is the active one or the only saved connection"
+  },
   "settings.connection.detected.add_btn": {
     "message": "Add",
     "description": "Button on detected-agent row: adopt as a saved connection"

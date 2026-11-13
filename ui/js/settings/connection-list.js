@@ -139,14 +139,12 @@ class ConnectionListMethods {
                             title="${t('settings.connection.row.duplicate_title')}" aria-label="${t('settings.connection.row.duplicate_title')}">
                         ${ICON_DUPLICATE}
                     </button>
-                    ${
-                        canDelete
-                            ? `<button type="button" class="conn-icon-btn conn-delete-btn" data-id="${escape(c.id)}"
-                                    title="${t('settings.connection.row.delete_title')}" aria-label="${t('settings.connection.row.delete_title')}">
-                                ${ICON_DELETE}
-                            </button>`
-                            : ''
-                    }
+                    <button type="button" class="conn-icon-btn conn-delete-btn" data-id="${escape(c.id)}"
+                            title="${canDelete ? t('settings.connection.row.delete_title') : t('settings.connection.row.delete_disabled_title')}"
+                            aria-label="${canDelete ? t('settings.connection.row.delete_title') : t('settings.connection.row.delete_disabled_title')}"
+                            ${canDelete ? '' : 'disabled aria-disabled="true" tabindex="-1"'}>
+                        ${ICON_DELETE}
+                    </button>
                 </div>
             </div>`;
     }
@@ -261,6 +259,11 @@ class ConnectionListMethods {
         });
         document.querySelectorAll('.conn-delete-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
+                // Guard: disabled buttons can still fire click in some
+                // engines (Firefox dispatches click on Space when a
+                // focused button is not disabled at keydown time, and
+                // user scripts can force .click() either way).
+                if (btn.disabled) return;
                 this._deleteConnection(btn.getAttribute('data-id'));
             });
         });

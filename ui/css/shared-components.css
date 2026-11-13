@@ -2370,6 +2370,23 @@ body.light-theme .conn-icon-btn:hover {
     color: #ff8a8a;
     border-color: rgba(255, 138, 138, 0.4);
 }
+/* Disabled icon buttons (currently only used on the active-connection's
+   delete button): dim and show a not-allowed cursor, but keep
+   pointer-events on so the title tooltip still appears on hover. The
+   :hover rules above are overridden so the row doesn't suggest the
+   action is available. */
+.conn-icon-btn[disabled],
+.conn-icon-btn[disabled]:hover {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: transparent;
+    color: var(--kage-text-secondary, #938f9b);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+body.light-theme .conn-icon-btn[disabled],
+body.light-theme .conn-icon-btn[disabled]:hover {
+    border-color: rgba(0, 0, 0, 0.15);
+}
 .conn-active-dot {
     display: inline-block;
     width: 8px;
