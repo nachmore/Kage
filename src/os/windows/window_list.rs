@@ -101,11 +101,7 @@ fn is_app_window(hwnd: isize) -> bool {
         if ex_style & WS_EX_TOOLWINDOW != 0 {
             return false;
         }
-        let owner = GetWindow(hwnd, GW_OWNER);
-        if owner != 0 {
-            return false;
-        }
-        true
+        GetWindow(hwnd, GW_OWNER) == 0
     }
 }
 

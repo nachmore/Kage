@@ -93,9 +93,13 @@ jobs:
           rustup --version || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           rustup self update || true
 
-      - name: Install Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain (1.99.1)
+        # Pinned: Cargo 1.100's new build-dir layout breaks tauri-build 2.5's
+        # sidecar copy (it lands in target/<profile>/build/). Unpin once the
+        # tauri stack is on tauri-build >= 2.7.4.
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.1
           components: rustfmt, clippy
 
       # Cache target/ and ~/.cargo/registry keyed on Cargo.lock — turns a
@@ -414,9 +418,13 @@ jobs:
             xvfb \
             xauth
 
-      - name: Install Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain (1.99.1)
+        # Pinned: Cargo 1.100's new build-dir layout breaks tauri-build 2.5's
+        # sidecar copy (it lands in target/<profile>/build/). Unpin once the
+        # tauri stack is on tauri-build >= 2.7.4.
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.1
           components: clippy
 
       # Shards by OS automatically, so this never collides with the
