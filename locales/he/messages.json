@@ -14650,5 +14650,47 @@
     "description": "Tooltip and aria-label on the delete icon button when it is disabled because the connection is the active one or the only saved connection",
     "_machine_translated": true,
     "_source_hash": "150f76ad41ad51da"
+  },
+  "errors.connection.reconnect_busy": {
+    "message": "הסוכן עדיין עובד על משהו. יש להמתין עד שיסיים, או לעצור אותו, ואז לנסות שוב ללחוץ על \"התחברות מחדש\".",
+    "description": "The user clicked Reconnect while the agent was running a turn (in this or another window, or a background task); restarting it would cut that work off, so Kage did not restart it.",
+    "_machine_translated": true,
+    "_source_hash": "c4035fdaf4385190"
+  },
+  "errors.agent.unreachable_after_restart": {
+    "message": "Kage הפעיל מחדש את הסוכן וניסה שוב, אבל הפעולה עדיין נכשלה. בדרך כלל זו בעיית התחברות לחשבון או בעיית רשת. יש לוודא שהתחברת לסוכן ושיש חיבור לאינטרנט, ואז ללחוץ על \"התחברות מחדש\".",
+    "description": "Shown after Kage automatically restarted the agent backend and the same prompt failed again with no output. The agent is not Kiro, or Kage can't tell which agent it is.",
+    "_machine_translated": true,
+    "_source_hash": "a72e2fee346b68d8"
+  },
+  "errors.agent.unreachable_after_restart_kiro": {
+    "message": "Kage הפעיל מחדש את Kiro וניסה שוב, אבל הפעולה עדיין נכשלה. כנראה שהתנתקת מ-Kiro, או שאין חיבור לאינטרנט. כדי להתחבר, יש להריץ את {command} בטרמינל, ואז ללחוץ על \"התחברות מחדש\".",
+    "description": "Same as errors.agent.unreachable_after_restart, for the Kiro agent. {command} is a terminal command (kiro-cli login); keep it verbatim, do not translate it.",
+    "_machine_translated": true,
+    "_source_hash": "71e53879488ac4a9"
+  },
+  "errors.agent.auth_required": {
+    "message": "הסוכן דורש ממך להתחבר. יש להתחבר באמצעות הכלי של הסוכן עצמו, ואז ללחוץ על \"התחברות מחדש\".",
+    "description": "The agent backend answered with the ACP 'authentication required' error (-32000).",
+    "_machine_translated": true,
+    "_source_hash": "17022fa54a0de79a"
+  },
+  "errors.agent.auth_required_kiro": {
+    "message": "Kiro דורש ממך להתחבר. יש להריץ את {command} בטרמינל, ואז ללחוץ על \"התחברות מחדש\".",
+    "description": "The Kiro agent answered with the ACP 'authentication required' error. {command} is a terminal command (kiro-cli login); keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "9b2bcda374c41fd2"
+  },
+  "shared.streaming.error_details": {
+    "message": "פרטים: {detail}",
+    "description": "Second line under an agent error, with the agent's raw error text for troubleshooting. {detail} is the agent's own text, not translated.",
+    "_machine_translated": true,
+    "_source_hash": "6283f8d754649c6b"
+  },
+  "chat.error.btn.reconnecting": {
+    "message": "מתחבר מחדש…",
+    "description": "Label on the Reconnect button while Kage restarts the agent and reloads the session.",
+    "_machine_translated": true,
+    "_source_hash": "4e1f30fa07996bea"
   }
 }

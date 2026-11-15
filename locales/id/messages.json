@@ -14650,5 +14650,47 @@
     "description": "Tooltip and aria-label on the delete icon button when it is disabled because the connection is the active one or the only saved connection",
     "_machine_translated": true,
     "_source_hash": "150f76ad41ad51da"
+  },
+  "errors.connection.reconnect_busy": {
+    "message": "Agen masih mengerjakan sesuatu. Tunggu hingga selesai, atau hentikan, lalu coba Hubungkan ulang lagi.",
+    "description": "The user clicked Reconnect while the agent was running a turn (in this or another window, or a background task); restarting it would cut that work off, so Kage did not restart it.",
+    "_machine_translated": true,
+    "_source_hash": "c4035fdaf4385190"
+  },
+  "errors.agent.unreachable_after_restart": {
+    "message": "Kage telah memulai ulang agen dan mencoba lagi, tetapi masih gagal. Ini biasanya disebabkan oleh masalah masuk akun atau jaringan. Pastikan Anda sudah masuk ke agen dan terhubung ke internet, lalu klik Hubungkan ulang.",
+    "description": "Shown after Kage automatically restarted the agent backend and the same prompt failed again with no output. The agent is not Kiro, or Kage can't tell which agent it is.",
+    "_machine_translated": true,
+    "_source_hash": "a72e2fee346b68d8"
+  },
+  "errors.agent.unreachable_after_restart_kiro": {
+    "message": "Kage telah memulai ulang Kiro dan mencoba lagi, tetapi masih gagal. Kemungkinan Anda telah keluar dari Kiro, atau sedang offline. Untuk masuk, jalankan {command} di terminal, lalu klik Hubungkan ulang.",
+    "description": "Same as errors.agent.unreachable_after_restart, for the Kiro agent. {command} is a terminal command (kiro-cli login); keep it verbatim, do not translate it.",
+    "_machine_translated": true,
+    "_source_hash": "71e53879488ac4a9"
+  },
+  "errors.agent.auth_required": {
+    "message": "Agen Anda meminta Anda untuk masuk. Masuk menggunakan alat milik agen tersebut, lalu klik Hubungkan ulang.",
+    "description": "The agent backend answered with the ACP 'authentication required' error (-32000).",
+    "_machine_translated": true,
+    "_source_hash": "17022fa54a0de79a"
+  },
+  "errors.agent.auth_required_kiro": {
+    "message": "Kiro meminta Anda untuk masuk. Jalankan {command} di terminal, lalu klik Hubungkan ulang.",
+    "description": "The Kiro agent answered with the ACP 'authentication required' error. {command} is a terminal command (kiro-cli login); keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "9b2bcda374c41fd2"
+  },
+  "shared.streaming.error_details": {
+    "message": "Detail: {detail}",
+    "description": "Second line under an agent error, with the agent's raw error text for troubleshooting. {detail} is the agent's own text, not translated.",
+    "_machine_translated": true,
+    "_source_hash": "6283f8d754649c6b"
+  },
+  "chat.error.btn.reconnecting": {
+    "message": "Menghubungkan ulang…",
+    "description": "Label on the Reconnect button while Kage restarts the agent and reloads the session.",
+    "_machine_translated": true,
+    "_source_hash": "4e1f30fa07996bea"
   }
 }

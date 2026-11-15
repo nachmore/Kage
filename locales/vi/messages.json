@@ -14650,5 +14650,47 @@
     "description": "Tooltip and aria-label on the delete icon button when it is disabled because the connection is the active one or the only saved connection",
     "_machine_translated": true,
     "_source_hash": "150f76ad41ad51da"
+  },
+  "errors.connection.reconnect_busy": {
+    "message": "Tác tử vẫn đang xử lý một việc. Hãy đợi tác tử hoàn tất hoặc dừng nó, rồi thử Kết nối lại.",
+    "description": "The user clicked Reconnect while the agent was running a turn (in this or another window, or a background task); restarting it would cut that work off, so Kage did not restart it.",
+    "_machine_translated": true,
+    "_source_hash": "c4035fdaf4385190"
+  },
+  "errors.agent.unreachable_after_restart": {
+    "message": "Kage đã khởi động lại tác tử và thử lại, nhưng vẫn không thành công. Đây thường là sự cố đăng nhập hoặc mạng. Hãy kiểm tra xem bạn đã đăng nhập vào tác tử và có kết nối mạng chưa, rồi nhấp vào Kết nối lại.",
+    "description": "Shown after Kage automatically restarted the agent backend and the same prompt failed again with no output. The agent is not Kiro, or Kage can't tell which agent it is.",
+    "_machine_translated": true,
+    "_source_hash": "a72e2fee346b68d8"
+  },
+  "errors.agent.unreachable_after_restart_kiro": {
+    "message": "Kage đã khởi động lại Kiro và thử lại, nhưng vẫn không thành công. Có thể bạn đã bị đăng xuất khỏi Kiro hoặc đang ngoại tuyến. Để đăng nhập, hãy chạy {command} trong terminal, rồi nhấp vào Kết nối lại.",
+    "description": "Same as errors.agent.unreachable_after_restart, for the Kiro agent. {command} is a terminal command (kiro-cli login); keep it verbatim, do not translate it.",
+    "_machine_translated": true,
+    "_source_hash": "71e53879488ac4a9"
+  },
+  "errors.agent.auth_required": {
+    "message": "Tác tử yêu cầu bạn đăng nhập. Hãy đăng nhập bằng công cụ riêng của tác tử, rồi nhấp vào Kết nối lại.",
+    "description": "The agent backend answered with the ACP 'authentication required' error (-32000).",
+    "_machine_translated": true,
+    "_source_hash": "17022fa54a0de79a"
+  },
+  "errors.agent.auth_required_kiro": {
+    "message": "Kiro yêu cầu bạn đăng nhập. Hãy chạy {command} trong terminal, rồi nhấp vào Kết nối lại.",
+    "description": "The Kiro agent answered with the ACP 'authentication required' error. {command} is a terminal command (kiro-cli login); keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "9b2bcda374c41fd2"
+  },
+  "shared.streaming.error_details": {
+    "message": "Chi tiết: {detail}",
+    "description": "Second line under an agent error, with the agent's raw error text for troubleshooting. {detail} is the agent's own text, not translated.",
+    "_machine_translated": true,
+    "_source_hash": "6283f8d754649c6b"
+  },
+  "chat.error.btn.reconnecting": {
+    "message": "Đang kết nối lại…",
+    "description": "Label on the Reconnect button while Kage restarts the agent and reloads the session.",
+    "_machine_translated": true,
+    "_source_hash": "4e1f30fa07996bea"
   }
 }

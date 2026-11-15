@@ -14650,5 +14650,47 @@
     "description": "Tooltip and aria-label on the delete icon button when it is disabled because the connection is the active one or the only saved connection",
     "_machine_translated": true,
     "_source_hash": "150f76ad41ad51da"
+  },
+  "errors.connection.reconnect_busy": {
+    "message": "代理程式仍在處理工作。請等待它完成或將其停止，然後再試一次「重新連線」。",
+    "description": "The user clicked Reconnect while the agent was running a turn (in this or another window, or a background task); restarting it would cut that work off, so Kage did not restart it.",
+    "_machine_translated": true,
+    "_source_hash": "c4035fdaf4385190"
+  },
+  "errors.agent.unreachable_after_restart": {
+    "message": "Kage 已重新啟動代理程式並再試一次，但仍然失敗。這通常是登入或網路問題。請確認您已登入代理程式且網路連線正常，然後按一下「重新連線」。",
+    "description": "Shown after Kage automatically restarted the agent backend and the same prompt failed again with no output. The agent is not Kiro, or Kage can't tell which agent it is.",
+    "_machine_translated": true,
+    "_source_hash": "a72e2fee346b68d8"
+  },
+  "errors.agent.unreachable_after_restart_kiro": {
+    "message": "Kage 已重新啟動 Kiro 並再試一次，但仍然失敗。您可能已登出 Kiro，或目前處於離線狀態。若要登入，請在終端機中執行 {command}，然後按一下「重新連線」。",
+    "description": "Same as errors.agent.unreachable_after_restart, for the Kiro agent. {command} is a terminal command (kiro-cli login); keep it verbatim, do not translate it.",
+    "_machine_translated": true,
+    "_source_hash": "71e53879488ac4a9"
+  },
+  "errors.agent.auth_required": {
+    "message": "您的代理程式需要您登入。請使用代理程式本身的工具登入，然後按一下「重新連線」。",
+    "description": "The agent backend answered with the ACP 'authentication required' error (-32000).",
+    "_machine_translated": true,
+    "_source_hash": "17022fa54a0de79a"
+  },
+  "errors.agent.auth_required_kiro": {
+    "message": "Kiro 需要您登入。請在終端機中執行 {command}，然後按一下「重新連線」。",
+    "description": "The Kiro agent answered with the ACP 'authentication required' error. {command} is a terminal command (kiro-cli login); keep it verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "9b2bcda374c41fd2"
+  },
+  "shared.streaming.error_details": {
+    "message": "詳細資料：{detail}",
+    "description": "Second line under an agent error, with the agent's raw error text for troubleshooting. {detail} is the agent's own text, not translated.",
+    "_machine_translated": true,
+    "_source_hash": "6283f8d754649c6b"
+  },
+  "chat.error.btn.reconnecting": {
+    "message": "正在重新連線…",
+    "description": "Label on the Reconnect button while Kage restarts the agent and reloads the session.",
+    "_machine_translated": true,
+    "_source_hash": "4e1f30fa07996bea"
   }
 }
