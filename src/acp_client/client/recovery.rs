@@ -32,8 +32,11 @@ impl AcpClient {
         self.clear_compaction_gate();
     }
 
-    /// Tear down and rebuild the agent connection, with coalescing and retry.
-    pub(crate) fn restart_connection(&self) -> Result<()> {
+    /// Tear down and rebuild the agent connection, with coalescing and retry:
+    /// force-disconnect, respawn (Local) or redial (Remote), `initialize`.
+    /// A caller arriving within `RESTART_COOLDOWN_MS` of a restart that
+    /// succeeded, while the connection is healthy, shares that restart.
+    pub fn restart_connection(&self) -> Result<()> {
         let mut last_ok = self.restart_guard.lock_or_recover();
         if should_coalesce_restart(
             last_ok.map(|when| when.elapsed()),
@@ -44,6 +47,9 @@ impl AcpClient {
         }
 
         info!("Restarting ACP connection");
+        // The teardown bumps the transport generation, so the old reader
+        // exits as superseded and never reports the disconnect itself.
+        self.notify_agent_restarting();
         self.force_disconnect();
         let mut last_err: Option<anyhow::Error> = None;
         for attempt in 0..RESTART_MAX_ATTEMPTS {
@@ -67,8 +73,35 @@ impl AcpClient {
             }
         }
 
+        // Nothing is connected now, and no reader is left to say so.
+        self.notify_agent_lost("restart_failed");
         Err(last_err
             .unwrap_or_else(|| anyhow::anyhow!("restart_connection failed with no recorded error")))
+    }
+
+    /// Tell the notification handler the agent process is about to be torn
+    /// down for a restart (`_kage/agent_restarting`): requests it made of
+    /// the user (permission prompts, outside-sandbox commands) die with it
+    /// and must be withdrawn, not answered to the new process. Windows keep
+    /// their "connected" state: the restart brings it back.
+    fn notify_agent_restarting(&self) {
+        self.transport
+            .dispatch_synthetic_notification(serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "_kage/agent_restarting",
+                "params": {},
+            }));
+    }
+
+    /// Report a connection the restart left down, as the reader does when
+    /// the stream closes (`_kage/agent_disconnected`).
+    fn notify_agent_lost(&self, reason: &str) {
+        self.transport
+            .dispatch_synthetic_notification(serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "_kage/agent_disconnected",
+                "params": { "reason": reason },
+            }));
     }
 
     fn try_connect_and_initialize(&self) -> Result<()> {

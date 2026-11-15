@@ -12,7 +12,6 @@ import {
     extractSuggestedActions,
     markOnline,
     MessageStreamController,
-    offlineMessage,
     renderMarkdown,
     sendAppNotification,
     t,
@@ -340,22 +339,7 @@ export class FloatingApp {
                     /* ignore */
                 }
             },
-            onError: async (event, online) => {
-                if (!this.isWaitingForResponse) return;
-                this.isWaitingForResponse = false;
-                this._finishShellActivity();
-                this.computerControlActive = false;
-                this._noBlurTools.clear();
-                this.elements.floatingStopBtn.style.display = 'none';
-                this.updateDatetimeVisibility();
-                _resetDiagramFailures();
-                if (!online) this.showError(offlineMessage());
-                else
-                    this.showError(
-                        t('floating.error.error_with_payload', { payload: event.payload }),
-                        { reconnect: true }
-                    );
-            },
+            onError: (event, online) => this._onMessageError(event, online),
             onSessionReset: (_event, msg) => {
                 this.isWaitingForResponse = false;
                 this._finishShellActivity();

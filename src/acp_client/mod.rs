@@ -8,6 +8,7 @@
 mod client;
 mod session;
 pub mod transport;
+pub mod turn_progress;
 pub mod types;
 
 // Re-export public types so callers can still use `crate::acp_client::AcpRequest` etc.
@@ -113,6 +114,32 @@ pub struct AcpClient {
     /// run) may hold context this run never saw; see
     /// [`HiddenPrefix::text_for`]. Never pruned, like `prompt_locks`.
     created_sessions: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// What each open `session/prompt` turn has done so far (streamed
+    /// output, tool calls, requests of the client, rate limit, cancel).
+    /// Opened and closed under the session's prompt lock, counted on the
+    /// reader thread. The recovery ladder only resends a turn that did
+    /// nothing. See `turn_progress`.
+    turn_progress: turn_progress::TurnProgressMap,
+    /// When an automatic restart last failed to fix a prompt (the prompt
+    /// failed again on the fresh agent). While it is recent, a failing
+    /// prompt skips the restart: the loop guard. Cleared by any prompt that
+    /// succeeds and by an explicit Reconnect. See `latch_active`.
+    unreachable_latch: Arc<Mutex<Option<std::time::Instant>>>,
+    /// How many times the user has stopped each session (`cancel_session`),
+    /// whether or not a turn was open. The recovery ladder reads it before
+    /// and after a restart: a Stop pressed while no turn is open (between a
+    /// failed attempt and its resend) still keeps the prompt from going out
+    /// again. Never pruned, like `prompt_locks`.
+    cancel_epochs: Arc<Mutex<HashMap<String, u64>>>,
+}
+
+/// How long after an automatic restart failed to fix a prompt Kage keeps
+/// from restarting the agent again for the same kind of failure.
+const UNREACHABLE_LATCH: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Whether a latch set `since` ago still holds.
+fn latch_active(since: Option<std::time::Duration>) -> bool {
+    since.is_some_and(|d| d < UNREACHABLE_LATCH)
 }
 
 #[cfg(test)]
@@ -164,7 +191,7 @@ pub trait HiddenPrefix {
 
 impl AcpClient {
     pub fn new(mode: AcpConnectionMode) -> Self {
-        Self {
+        let client = Self {
             transport: AcpTransport::new(mode),
             initialized: Arc::new(Mutex::new(false)),
             streaming_accumulators: Arc::new(Mutex::new(HashMap::new())),
@@ -177,7 +204,106 @@ impl AcpClient {
             prompt_locks: Arc::new(Mutex::new(HashMap::new())),
             restart_guard: Arc::new(Mutex::new(None)),
             created_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
-        }
+            turn_progress: Arc::new(Mutex::new(HashMap::new())),
+            unreachable_latch: Arc::new(Mutex::new(None)),
+            cancel_epochs: Arc::new(Mutex::new(HashMap::new())),
+        };
+        // Counted on the reader thread whether or not a UI handler is
+        // installed (integration tests, early startup).
+        let progress = client.turn_progress.clone();
+        let loading = client.loading_sessions.clone();
+        client
+            .transport
+            .set_notification_observer(move |msg| turn_progress::observe(&progress, &loading, msg));
+        client
+    }
+
+    // --- Per-turn progress and the restart loop guard ---
+
+    /// Open a turn on `session_id`. Called under its prompt lock.
+    fn begin_turn_progress(&self, session_id: &str) {
+        turn_progress::begin(&self.turn_progress, session_id);
+    }
+
+    /// Close the turn on `session_id` and return what it did. Called under
+    /// its prompt lock.
+    fn take_turn_progress(&self, session_id: &str) -> turn_progress::TurnProgress {
+        turn_progress::take(&self.turn_progress, session_id)
+    }
+
+    /// The user stopped the turn on `session_id`: it must not be resent.
+    pub(crate) fn mark_turn_cancel_requested(&self, session_id: &str) {
+        turn_progress::mark_cancel_requested(&self.turn_progress, session_id);
+    }
+
+    /// The user stopped `session_id`: count it, whether or not a turn is
+    /// open (see `cancel_epochs`).
+    pub(crate) fn note_cancel(&self, session_id: &str) {
+        *self
+            .cancel_epochs
+            .lock_or_recover()
+            .entry(session_id.to_string())
+            .or_default() += 1;
+    }
+
+    /// How many times the user has stopped `session_id` this run.
+    pub(crate) fn cancel_epoch(&self, session_id: &str) -> u64 {
+        self.cancel_epochs
+            .lock_or_recover()
+            .get(session_id)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Whether the agent is doing anything a restart would cut off, apart
+    /// from `except`'s turn (`None`: anything at all): a user turn in any
+    /// window, any open `session/prompt` (background agent calls,
+    /// inline-assist, steering, titles), a background prompt, or a running
+    /// agent job (an automation plan, which is idle between its steps).
+    /// The same things that hold back a silent update
+    /// (`updater::is_agent_busy`).
+    pub fn agent_work_in_flight(&self, except: Option<&str>) -> bool {
+        self.agent_work_in_flight_here(except) || crate::updater::has_active_agent_jobs()
+    }
+
+    /// Whether restarting the agent now would cut off work it is doing: it
+    /// is up (a dead agent has nothing left to lose) and has any work in
+    /// flight, the asking window's own turn included. A Reconnect then
+    /// waits rather than kill a turn whose recovery would resend it.
+    pub fn restart_would_interrupt_work(&self) -> bool {
+        self.is_healthy() && self.agent_work_in_flight(None)
+    }
+
+    /// `agent_work_in_flight` without the process-wide agent jobs.
+    fn agent_work_in_flight_here(&self, except: Option<&str>) -> bool {
+        let other = |k: &String| except != Some(k.as_str());
+        self.in_flight_prompts.lock_or_recover().keys().any(other)
+            || self.turn_progress.lock_or_recover().keys().any(other)
+            || self
+                .background_prompt_sessions
+                .lock_or_recover()
+                .iter()
+                .any(other)
+    }
+
+    /// Forget a failed automatic restart: the next failing prompt may
+    /// restart the agent again.
+    pub fn clear_unreachable_latch(&self) {
+        *self.unreachable_latch.lock_or_recover() = None;
+    }
+
+    /// An automatic restart just failed to fix a prompt.
+    fn set_unreachable_latch(&self) {
+        *self.unreachable_latch.lock_or_recover() = Some(std::time::Instant::now());
+    }
+
+    /// How long ago the latch was set, while it still holds.
+    fn unreachable_latch_age(&self) -> Option<std::time::Duration> {
+        let age = self
+            .unreachable_latch
+            .lock_or_recover()
+            .map(|t| t.elapsed());
+        age.filter(|_| latch_active(age))
     }
 
     /// Note that this run created `session_id` (`session/new`).
@@ -495,10 +621,24 @@ impl AcpClient {
     /// prompt's partial stream, because it can't reset until it owns the
     /// slot.
     pub fn send_prompt(&self, session_id: &str, params: serde_json::Value) -> Result<AcpResponse> {
+        self.send_prompt_tracked(session_id, params)
+            .map(|(response, _)| response)
+    }
+
+    /// `send_prompt`, also returning what the turn did before its reply
+    /// (see `turn_progress`). The turn is opened and closed under the lock.
+    fn send_prompt_tracked(
+        &self,
+        session_id: &str,
+        params: serde_json::Value,
+    ) -> Result<(AcpResponse, turn_progress::TurnProgress)> {
         let lock = self.prompt_lock_for(session_id);
         let _guard = lock.lock_or_recover();
         self.reset_session_accumulator(session_id);
-        self.transport.send_prompt_request("session/prompt", params)
+        self.begin_turn_progress(session_id);
+        let response = self.transport.send_prompt_request("session/prompt", params);
+        let progress = self.take_turn_progress(session_id);
+        response.map(|r| (r, progress))
     }
 
     /// `send_prompt` for a user prompt that may carry `prefix`'s hidden
@@ -511,25 +651,41 @@ impl AcpClient {
     /// another window, or an identical one from the same window) chooses
     /// knowing what this one delivered, and never picks a block, or no
     /// block, against a state an earlier prompt is about to change.
+    #[cfg(test)]
     fn send_prompt_with_prefix(
         &self,
         session_id: &str,
         prefix: &dyn HiddenPrefix,
         build: &dyn Fn(Option<&str>) -> serde_json::Value,
     ) -> Result<AcpResponse> {
+        self.send_prompt_with_prefix_tracked(session_id, prefix, build)
+            .map(|(response, _)| response)
+    }
+
+    /// `send_prompt_with_prefix`, also returning what the turn did before
+    /// its reply (see `send_prompt_tracked`).
+    fn send_prompt_with_prefix_tracked(
+        &self,
+        session_id: &str,
+        prefix: &dyn HiddenPrefix,
+        build: &dyn Fn(Option<&str>) -> serde_json::Value,
+    ) -> Result<(AcpResponse, turn_progress::TurnProgress)> {
         let lock = self.prompt_lock_for(session_id);
         let _guard = lock.lock_or_recover();
         let text = prefix.text_for(session_id, self.created_this_run(session_id));
         let params = build(text.as_deref());
         self.reset_session_accumulator(session_id);
+        self.begin_turn_progress(session_id);
         let carried = text.is_some();
-        let response =
-            self.transport
-                .send_prompt_request_observed("session/prompt", params, &|| {
-                    if carried {
-                        prefix.written(session_id);
-                    }
-                })?;
+        let sent = self
+            .transport
+            .send_prompt_request_observed("session/prompt", params, &|| {
+                if carried {
+                    prefix.written(session_id);
+                }
+            });
+        let progress = self.take_turn_progress(session_id);
+        let response = sent?;
         // An error reply, or a turn cut short by a Stop, may not be in the
         // agent's history: the block stays pending.
         let stop_reason = response
@@ -540,7 +696,7 @@ impl AcpClient {
         if carried && response.error.is_none() && stop_reason != Some("cancelled") {
             prefix.completed(session_id);
         }
-        Ok(response)
+        Ok((response, progress))
     }
 
     /// Like `send_prompt`, but the reply is muted: still accumulated, but
@@ -564,8 +720,12 @@ impl AcpClient {
         // first chunks would be hidden.
         let _guard = lock.lock_or_recover();
         self.reset_session_accumulator(session_id);
+        // Open (and close) a turn here too, so a cancel or a count meant
+        // for this hidden prompt can't land on the next user turn.
+        self.begin_turn_progress(session_id);
         let _bg = BackgroundPromptGuard::new(&self.background_prompt_sessions, session_id);
         let response = self.transport.send_prompt_request("session/prompt", params);
+        self.take_turn_progress(session_id);
         if !keep_reply {
             self.reset_session_accumulator(session_id);
         }
@@ -602,10 +762,11 @@ impl AcpClient {
         // Reset under the lock, mirroring `send_prompt` — only now that we
         // own the slot is it safe to clear the bucket.
         self.reset_session_accumulator(session_id);
+        self.begin_turn_progress(session_id);
         let _bg = BackgroundPromptGuard::new(&self.background_prompt_sessions, session_id);
-        self.transport
-            .send_prompt_request("session/prompt", params)
-            .map(Some)
+        let response = self.transport.send_prompt_request("session/prompt", params);
+        self.take_turn_progress(session_id);
+        response.map(Some)
     }
 }
 
@@ -656,6 +817,116 @@ mod tests {
         assert!(client.is_turn_in_flight("s1"));
         client.clear_in_flight_prompt("s1");
         assert!(!client.is_turn_in_flight("s1"));
+    }
+
+    #[test]
+    fn unreachable_latch_window() {
+        use std::time::Duration;
+        assert!(latch_active(Some(Duration::from_secs(10))));
+        assert!(!latch_active(Some(Duration::from_secs(61))));
+        assert!(!latch_active(None));
+    }
+
+    #[test]
+    fn unreachable_latch_sets_and_clears() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        assert!(client.unreachable_latch_age().is_none());
+        client.set_unreachable_latch();
+        assert!(client.unreachable_latch_age().is_some());
+        client.clear_unreachable_latch();
+        assert!(client.unreachable_latch_age().is_none());
+    }
+
+    #[test]
+    fn agent_work_in_flight_ignores_only_the_named_session() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        assert!(!client.agent_work_in_flight_here(Some("s1")));
+        assert!(!client.agent_work_in_flight_here(None));
+        client.set_in_flight_prompt("s2", "hello");
+        assert!(client.agent_work_in_flight_here(Some("s1")));
+        assert!(!client.agent_work_in_flight_here(Some("s2")));
+        assert!(client.agent_work_in_flight_here(None));
+        client.clear_in_flight_prompt("s2");
+        assert!(!client.agent_work_in_flight_here(Some("s1")));
+    }
+
+    #[test]
+    fn agent_work_in_flight_counts_background_and_open_prompts() {
+        // A background agent call or inline-assist prompt sets no
+        // in-flight user prompt, but a restart would still cut it off.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        client.begin_turn_progress("scratch");
+        assert!(client.agent_work_in_flight_here(Some("s1")));
+        assert!(!client.agent_work_in_flight_here(Some("scratch")));
+        client.take_turn_progress("scratch");
+        assert!(!client.agent_work_in_flight_here(Some("s1")));
+
+        {
+            let _bg = BackgroundPromptGuard::new(&client.background_prompt_sessions, "titler");
+            assert!(client.agent_work_in_flight_here(Some("s1")));
+            assert!(client.agent_work_in_flight_here(None));
+        }
+        assert!(!client.agent_work_in_flight_here(None));
+    }
+
+    #[test]
+    fn agent_work_in_flight_counts_agent_jobs() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let _job = crate::updater::AgentJobGuard::acquire();
+        assert!(client.agent_work_in_flight(Some("s1")));
+        assert!(client.agent_work_in_flight(None));
+    }
+
+    #[test]
+    fn cancel_epoch_counts_stops_with_no_open_turn() {
+        // A Stop between a failed attempt and its resend finds no open
+        // turn; the epoch still moves, so the ladder can see it.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        assert_eq!(client.cancel_epoch("s1"), 0);
+        let _ = client.cancel_session("s1");
+        assert_eq!(client.cancel_epoch("s1"), 1);
+        let _ = client.cancel_session("s1");
+        assert_eq!(client.cancel_epoch("s1"), 2);
+        assert_eq!(client.cancel_epoch("s2"), 0);
+    }
+
+    #[test]
+    fn cancel_session_marks_open_turn_cancel_requested() {
+        // No transport: the session/cancel write fails, but the turn is
+        // marked first, so a failure that follows a Stop is never resent.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        client.begin_turn_progress("s1");
+        assert!(client.cancel_session("s1").is_err());
+        assert!(client.take_turn_progress("s1").cancel_requested);
+        // No open turn: nothing is opened by a cancel.
+        let _ = client.cancel_session("s2");
+        assert_eq!(
+            client.take_turn_progress("s2"),
+            turn_progress::TurnProgress::default()
+        );
+    }
+
+    #[test]
+    fn failed_prompt_write_closes_its_turn() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        assert!(client
+            .send_prompt_tracked("s1", serde_json::json!({}))
+            .is_err());
+        assert!(!client.turn_progress.lock_or_recover().contains_key("s1"));
     }
 
     #[test]

@@ -630,6 +630,16 @@ body {
     gap: 12px;
     flex-shrink: 0;
 }
+.chat-error-text {
+    min-width: 0;
+}
+/* The agent's raw error text under the message, for troubleshooting. */
+.chat-error .error-detail {
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.8;
+    overflow-wrap: anywhere;
+}
 .chat-error-actions {
     display: flex;
     gap: 6px;

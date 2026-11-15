@@ -33,6 +33,12 @@ impl AcpClient {
     /// Cancel the prompt currently in flight for one session.
     pub fn cancel_session(&self, session_id: &str) -> Result<()> {
         info!("Sending session/cancel for session {}", session_id);
+        // Before the write, so it holds even if the write fails: whatever
+        // this turn ends with, it must not be resent automatically.
+        self.mark_turn_cancel_requested(session_id);
+        // And when no turn is open (a recovery restart in progress), so
+        // the ladder doesn't resend it.
+        self.note_cancel(session_id);
         self.send_notification(
             "session/cancel",
             serde_json::json!({ "sessionId": session_id }),

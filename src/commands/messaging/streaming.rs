@@ -125,7 +125,12 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
 
         if let Err(e) = send_result {
             let error_str = format!("{}", e);
-            let is_image_error = had_attachments
+            // A sign-in demand, or the agent still failing after an
+            // automatic restart: say so, and keep the image heuristic below
+            // from restarting a second time and dropping the session.
+            let for_user = prompt_error_for_user(&e, &config.lock_or_recover());
+            let is_image_error = for_user.is_none()
+                && had_attachments
                 && (error_str.contains("Internal error")
                     || error_str.contains("image")
                     || error_str.contains("unsupported")
@@ -163,6 +168,12 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
                         "oldSessionId": &session_id,
                         "newSessionId": new_session_id,
                     }),
+                );
+            } else if let Some((app_err, detail)) = for_user {
+                crate::event_targets::emit_to_self(
+                    &window,
+                    events::MESSAGE_ERROR,
+                    &prompt_error_payload(&app_err, &detail, &session_id),
                 );
             } else {
                 crate::event_targets::emit_to_self(
@@ -269,28 +280,197 @@ pub async fn check_connection(acp: State<'_, AcpHandles>) -> Result<bool, AppErr
     Ok(acp.client.is_connected())
 }
 
+/// What `reconnect_acp` did.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconnectOutcome {
+    /// The agent was restarted and answered `initialize`.
+    pub reconnected: bool,
+    /// The window's session after the reconnect, if it has one.
+    pub session_id: Option<String>,
+    /// That session was loaded on the restarted agent. False: the next
+    /// prompt's recovery ladder reloads or replaces it.
+    pub session_reloaded: bool,
+}
+
+/// Reconnect: restart the agent (even one that looks alive: a live but
+/// wedged agent is exactly when the user clicks this), then reload the
+/// window's session on it. The window resends its failed prompt itself.
+/// Refused while a live agent has work in flight (any window's turn, a
+/// background call, an automation).
 #[tauri::command]
-pub async fn reconnect_acp(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
-    // connect() is a synchronous handshake (Remote mode: up to 6 attempts
-    // × 5s plus sleeps) — keep it off the Tokio workers.
+pub async fn reconnect_acp<R: tauri::Runtime>(
+    session_id: Option<String>,
+    acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
+    window: WebviewWindow<R>,
+    app: tauri::AppHandle<R>,
+) -> Result<ReconnectOutcome, AppError> {
     let client = acp.client.clone();
-    async_runtime::spawn_blocking(move || client.connect())
-        .await
-        .map_err(|e| {
-            AppError::keyed(
+    let available_models = acp.available_models.clone();
+    let config = features.config.clone();
+    let session_cache = features.session_cache.clone();
+    let window_sessions = ui.window_sessions.clone();
+    let label = window.label().to_string();
+
+    // The restart is a synchronous respawn + handshake (Remote mode: up to
+    // 6 dial attempts × 5 s plus sleeps) — keep it off the Tokio workers.
+    async_runtime::spawn_blocking(move || -> Result<ReconnectOutcome, AppError> {
+        // A stale Reconnect (an old error still on screen) must not kill a
+        // live agent mid-turn: the killed turn would lose its connection
+        // and the recovery ladder would resend it, repeating its tools.
+        if client.restart_would_interrupt_work() {
+            info!(
+                "Reconnect requested by {}: not restarting, the agent has work in flight",
+                label
+            );
+            return Err(AppError::keyed(
+                ErrorKind::ConnectionLost,
+                "errors.connection.reconnect_busy",
+                &[],
+            ));
+        }
+        info!("Reconnect requested by {}: restarting the agent", label);
+        client.clear_unreachable_latch();
+        if let Err(e) = client.restart_connection() {
+            if crate::acp_client::types::is_auth_required(&e) {
+                return Err(auth_required_error(&config.lock_or_recover()));
+            }
+            return Err(AppError::keyed(
                 ErrorKind::ConnectionLost,
                 "errors.connection.reconnect_failed",
                 &[("reason", &e.to_string())],
-            )
-        })?
-        .map_err(|e| {
+            ));
+        }
+
+        let session_id = session_id
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| window_sessions.lock_or_recover().get(&label).cloned());
+        let Some(id) = session_id else {
+            info!(
+                "Reconnect for {}: agent restarted, no session to reload",
+                label
+            );
+            return Ok(ReconnectOutcome {
+                reconnected: true,
+                session_id: None,
+                session_reloaded: false,
+            });
+        };
+        match crate::commands::sessions::switch_acp_session_blocking(
+            Some(id.clone()),
+            client,
+            available_models,
+            config,
+            session_cache,
+            window_sessions,
+            label.clone(),
+            app,
+        ) {
+            Ok(loaded) => {
+                info!("Reconnect for {}: reloaded session {}", label, loaded);
+                Ok(ReconnectOutcome {
+                    reconnected: true,
+                    session_id: Some(loaded),
+                    session_reloaded: true,
+                })
+            }
+            Err(e) if matches!(e.kind, ErrorKind::AuthRequired) => Err(e),
+            Err(e) => {
+                warn!(
+                    "Reconnect for {}: agent restarted but session {} did not reload: {}",
+                    label, id, e
+                );
+                Ok(ReconnectOutcome {
+                    reconnected: true,
+                    session_id: Some(id),
+                    session_reloaded: false,
+                })
+            }
+        }
+    })
+    .await
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::ConnectionLost,
+            "errors.connection.reconnect_failed",
+            &[("reason", &e.to_string())],
+        )
+    })?
+}
+
+/// Whether the active connection is a Local Kiro agent, so a sign-in hint
+/// can name its command. A Remote connection's agent runs on a machine Kage
+/// can't name.
+fn is_local_kiro(cfg: &crate::config::Config) -> bool {
+    crate::agent_presets::explicit_kind(cfg) == Some(crate::agent_presets::AgentKind::Kiro)
+        && matches!(cfg.acp.active_mode(), crate::config::AcpMode::Local { .. })
+}
+
+/// The command that signs in to Kiro.
+const KIRO_LOGIN_COMMAND: &str = "kiro-cli login";
+
+/// "Your agent needs you to sign in", naming `kiro-cli login` for a Local
+/// Kiro connection.
+pub(crate) fn auth_required_error(cfg: &crate::config::Config) -> AppError {
+    if is_local_kiro(cfg) {
+        AppError::keyed(
+            ErrorKind::AuthRequired,
+            "errors.agent.auth_required_kiro",
+            &[("command", KIRO_LOGIN_COMMAND)],
+        )
+    } else {
+        AppError::keyed(ErrorKind::AuthRequired, "errors.agent.auth_required", &[])
+    }
+}
+
+/// What to tell the user about a failed prompt, when the recovery ladder
+/// gave it a meaning: the agent wants a sign-in (ACP `-32000`, from the
+/// prompt or from the restart's `initialize` / `session/*`), or it still
+/// failed after an automatic restart. The second value is the agent's raw
+/// text, shown as a details line. `None`: show the error as it is.
+fn prompt_error_for_user(
+    e: &anyhow::Error,
+    cfg: &crate::config::Config,
+) -> Option<(AppError, String)> {
+    use crate::acp_client::types::{AgentRpcError, PromptRecoveryError, ACP_AUTH_REQUIRED};
+    if let Some(PromptRecoveryError::AgentUnreachable { detail }) =
+        e.downcast_ref::<PromptRecoveryError>()
+    {
+        let err = if is_local_kiro(cfg) {
             AppError::keyed(
-                ErrorKind::ConnectionLost,
-                "errors.connection.reconnect_failed",
-                &[("reason", &e.to_string())],
+                ErrorKind::AgentUnreachable,
+                "errors.agent.unreachable_after_restart_kiro",
+                &[("command", KIRO_LOGIN_COMMAND)],
             )
-        })?;
-    Ok(true)
+        } else {
+            AppError::keyed(
+                ErrorKind::AgentUnreachable,
+                "errors.agent.unreachable_after_restart",
+                &[],
+            )
+        };
+        return Some((err, detail.clone()));
+    }
+    let rpc = e.downcast_ref::<AgentRpcError>()?;
+    if rpc.code != ACP_AUTH_REQUIRED {
+        return None;
+    }
+    Some((auth_required_error(cfg), e.to_string()))
+}
+
+/// The MESSAGE_ERROR payload for an error `prompt_error_for_user` gave a
+/// meaning to: `{ kind, key, message, detail, sessionId }`, `message` in the
+/// active locale. Every other MESSAGE_ERROR stays a plain string.
+fn prompt_error_payload(err: &AppError, detail: &str, session_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "kind": err.kind,
+        "key": err.key,
+        "message": err.localised_message(),
+        "detail": detail,
+        "sessionId": session_id,
+    })
 }
 
 #[tauri::command]
@@ -438,11 +618,19 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
                 super::notifications::flush_session_chunks(app, &client, &session_id);
             }
             if let Err(e) = result {
-                crate::event_targets::emit_to_self(
-                    &window,
-                    events::MESSAGE_ERROR,
-                    &format!("Failed to send: {}", e),
-                );
+                let for_user = prompt_error_for_user(&e, &config.lock_or_recover());
+                match for_user {
+                    Some((app_err, detail)) => crate::event_targets::emit_to_self(
+                        &window,
+                        events::MESSAGE_ERROR,
+                        &prompt_error_payload(&app_err, &detail, &session_id),
+                    ),
+                    None => crate::event_targets::emit_to_self(
+                        &window,
+                        events::MESSAGE_ERROR,
+                        &format!("Failed to send: {}", e),
+                    ),
+                }
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
                 }
@@ -555,6 +743,131 @@ impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
                     .note_delivered(session_id, steering, *write);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod prompt_error_tests {
+    use super::{prompt_error_for_user, prompt_error_payload};
+    use crate::acp_client::types::{AcpError, AgentRpcError, PromptRecoveryError};
+    use crate::config::{AcpMode, AgentConnection, Config};
+
+    fn config(preset_id: Option<&str>, mode: AcpMode) -> Config {
+        let mut cfg = Config::default();
+        cfg.acp.connections = vec![AgentConnection {
+            id: "c".to_string(),
+            name: "C".to_string(),
+            preset_id: preset_id.map(str::to_string),
+            mode,
+            sessions_directory: None,
+            ollama_settings: None,
+        }];
+        cfg.acp.active_connection_id = "c".to_string();
+        cfg
+    }
+
+    fn local(cmd: &str) -> AcpMode {
+        AcpMode::Local {
+            spawn_command: cmd.to_string(),
+        }
+    }
+
+    fn kiro_local() -> Config {
+        config(Some("kiro"), local("kiro-cli acp"))
+    }
+
+    fn unreachable(detail: &str) -> anyhow::Error {
+        anyhow::Error::new(PromptRecoveryError::AgentUnreachable {
+            detail: detail.to_string(),
+        })
+    }
+
+    fn auth_required() -> anyhow::Error {
+        let reply = AcpError {
+            code: -32000,
+            message: "Authentication required".to_string(),
+            data: None,
+        };
+        anyhow::Error::new(AgentRpcError::from_reply(
+            "session/prompt",
+            &reply,
+            "ACP error: Authentication required".to_string(),
+        ))
+    }
+
+    const RAW: &str = "ACP error: Internal error — Encountered an error in the response stream: An unknown error occurred: dispatch failure";
+
+    #[test]
+    fn unreachable_on_local_kiro_names_the_login_command() {
+        crate::i18n::init(Some("en"));
+        let (err, detail) = prompt_error_for_user(&unreachable(RAW), &kiro_local()).unwrap();
+        assert_eq!(err.key, "errors.agent.unreachable_after_restart_kiro");
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["kind"], "agent_unreachable");
+        assert!(err.localised_message().contains("kiro-cli login"));
+        assert_eq!(detail, RAW);
+    }
+
+    #[test]
+    fn unreachable_on_other_agents_is_generic() {
+        crate::i18n::init(Some("en"));
+        let codex = config(Some("codex"), local("npx @zed-industries/codex-acp"));
+        let (err, _) = prompt_error_for_user(&unreachable(RAW), &codex).unwrap();
+        assert_eq!(err.key, "errors.agent.unreachable_after_restart");
+        assert!(!err.localised_message().contains("kiro-cli"));
+        // A Remote Kiro: Kage can't tell which machine needs the login.
+        let remote_kiro = config(
+            Some("kiro"),
+            AcpMode::Remote {
+                host: "10.0.0.2".to_string(),
+                port: 8765,
+                timeout_ms: 30000,
+            },
+        );
+        let (err, _) = prompt_error_for_user(&unreachable(RAW), &remote_kiro).unwrap();
+        assert_eq!(err.key, "errors.agent.unreachable_after_restart");
+    }
+
+    #[test]
+    fn auth_required_asks_for_a_sign_in() {
+        crate::i18n::init(Some("en"));
+        let (err, detail) = prompt_error_for_user(&auth_required(), &kiro_local()).unwrap();
+        assert_eq!(err.key, "errors.agent.auth_required_kiro");
+        assert_eq!(serde_json::to_value(&err).unwrap()["kind"], "auth_required");
+        assert!(err.localised_message().contains("kiro-cli login"));
+        assert_eq!(detail, "ACP error: Authentication required");
+        let claude = config(Some("claude-code"), local("claude-agent-acp"));
+        let (err, _) = prompt_error_for_user(&auth_required(), &claude).unwrap();
+        assert_eq!(err.key, "errors.agent.auth_required");
+    }
+
+    #[test]
+    fn other_errors_are_left_alone() {
+        crate::i18n::init(Some("en"));
+        assert!(prompt_error_for_user(&anyhow::anyhow!("Timeout"), &kiro_local()).is_none());
+        let internal = AcpError {
+            code: -32603,
+            message: "Internal error".to_string(),
+            data: None,
+        };
+        let typed = anyhow::Error::new(AgentRpcError::from_reply(
+            "session/prompt",
+            &internal,
+            "ACP error: Internal error".to_string(),
+        ));
+        assert!(prompt_error_for_user(&typed, &kiro_local()).is_none());
+    }
+
+    #[test]
+    fn payload_carries_kind_key_message_detail_and_session() {
+        crate::i18n::init(Some("en"));
+        let (err, detail) = prompt_error_for_user(&unreachable(RAW), &kiro_local()).unwrap();
+        let json = prompt_error_payload(&err, &detail, "s1");
+        assert_eq!(json["kind"], "agent_unreachable");
+        assert_eq!(json["key"], "errors.agent.unreachable_after_restart_kiro");
+        assert!(json["message"].as_str().unwrap().contains("kiro-cli login"));
+        assert_eq!(json["detail"], RAW);
+        assert_eq!(json["sessionId"], "s1");
     }
 }
 

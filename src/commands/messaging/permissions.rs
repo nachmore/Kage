@@ -14,15 +14,27 @@ pub async fn send_permission_response<R: tauri::Runtime>(
 ) -> Result<(), AppError> {
     info!("Permission response: {}={}", tool_title, option_id);
 
-    acp.client
-        .send_permission_response(&request_id, &option_id)
-        .map_err(|e| {
-            AppError::keyed(
-                ErrorKind::ConnectionLost,
-                "errors.permission.response_failed",
-                &[("reason", &e.to_string())],
-            )
-        })?;
+    // Claim the request first. One that isn't pending was answered
+    // elsewhere, or died with an agent that was restarted; its id may now
+    // belong to an unrelated request of the new process, so nothing is
+    // written. The modal closes either way.
+    let Some((key, entry)) = claim_pending_permission(&acp.pending_permissions, &request_id) else {
+        info!("Permission response for a request that is no longer pending; not sent");
+        crate::event_targets::emit_permission_audience(
+            &app,
+            events::PERMISSION_DISMISSED,
+            &serde_json::json!({ "requestId": request_id }),
+        );
+        return Ok(());
+    };
+    if let Err(e) = acp.client.send_permission_response(&request_id, &option_id) {
+        acp.pending_permissions.lock_or_recover().insert(key, entry);
+        return Err(AppError::keyed(
+            ErrorKind::ConnectionLost,
+            "errors.permission.response_failed",
+            &[("reason", &e.to_string())],
+        ));
+    }
 
     if option_id == "allow_always" {
         // Mutate under the lock, clone a snapshot, save OUTSIDE the lock.
@@ -84,10 +96,6 @@ pub async fn send_permission_response<R: tauri::Runtime>(
     };
     crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(audit_event));
 
-    if let Ok(mut pending) = acp.pending_permissions.lock() {
-        pending.remove(&crate::state::permission_key(&request_id));
-    }
-
     // Tell the permission audience (chat hosts + floating + settings) to
     // close their modal for THIS request. Windows with a different
     // pending request keep theirs open — the payload carries the
@@ -99,6 +107,17 @@ pub async fn send_permission_response<R: tauri::Runtime>(
     );
 
     Ok(())
+}
+
+/// Take `request_id` out of the pending requests, if it is still there:
+/// only then may it be answered.
+fn claim_pending_permission(
+    pending: &std::sync::Mutex<std::collections::HashMap<String, crate::state::PendingPermission>>,
+    request_id: &serde_json::Value,
+) -> Option<(String, crate::state::PendingPermission)> {
+    let key = crate::state::permission_key(request_id);
+    let entry = pending.lock_or_recover().remove(&key)?;
+    Some((key, entry))
 }
 
 /// Approve those of the given pending requests that the policy allows now.
@@ -598,4 +617,53 @@ pub async fn check_extension_tool_permission(
     }
 
     Ok(policy_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    fn pending_with(
+        ids: &[serde_json::Value],
+    ) -> Mutex<HashMap<String, crate::state::PendingPermission>> {
+        let mut map = HashMap::new();
+        for id in ids {
+            map.insert(
+                crate::state::permission_key(id),
+                crate::state::PendingPermission {
+                    request_id: id.clone(),
+                    ..Default::default()
+                },
+            );
+        }
+        Mutex::new(map)
+    }
+
+    #[test]
+    fn claim_takes_a_pending_request_once() {
+        let pending = pending_with(&[serde_json::json!(7)]);
+        let (key, entry) = claim_pending_permission(&pending, &serde_json::json!(7))
+            .expect("a pending request is claimed");
+        assert_eq!(key, crate::state::permission_key(&serde_json::json!(7)));
+        assert_eq!(entry.request_id, serde_json::json!(7));
+        assert!(claim_pending_permission(&pending, &serde_json::json!(7)).is_none());
+    }
+
+    #[test]
+    fn claim_refuses_a_request_withdrawn_by_a_restart() {
+        // A restart withdraws every pending request; a modal answered
+        // afterwards must not write its old id to the new process, which
+        // may be using that id for an unrelated request.
+        let pending = pending_with(&[serde_json::json!(3), serde_json::json!("r")]);
+        let mut withdrawn = super::super::notifications::take_pending_permission_ids(&pending);
+        withdrawn.sort_by_key(|v| v.to_string());
+        assert_eq!(
+            withdrawn,
+            vec![serde_json::json!("r"), serde_json::json!(3)]
+        );
+        assert!(claim_pending_permission(&pending, &serde_json::json!(3)).is_none());
+        assert!(claim_pending_permission(&pending, &serde_json::json!("r")).is_none());
+    }
 }

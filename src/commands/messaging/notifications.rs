@@ -6,6 +6,21 @@ use super::*;
 mod slash_commands;
 use slash_commands::parse_standard_acp_commands;
 
+/// Empty the pending permission requests and return their ids: the agent
+/// that asked is gone, so none of them may be answered.
+pub(super) fn take_pending_permission_ids(
+    pending: &std::sync::Mutex<std::collections::HashMap<String, crate::state::PendingPermission>>,
+) -> Vec<serde_json::Value> {
+    let drained: Vec<_> = pending.lock_or_recover().drain().collect();
+    if !drained.is_empty() {
+        info!(
+            "Agent restarting: withdrew {} pending permission request(s)",
+            drained.len()
+        );
+    }
+    drained.into_iter().map(|(_, p)| p.request_id).collect()
+}
+
 /// The handler dispatches all ACP notifications to the appropriate Tauri events.
 pub fn setup_notification_handler(
     client: std::sync::Arc<crate::acp_client::AcpClient>,
@@ -89,6 +104,27 @@ pub fn setup_notification_handler(
         // Synthetic: the reader thread saw the agent's stream close (EOF or
         // error). Broadcast so every window can drop its "connected" state
         // immediately rather than looking healthy until the next send fails.
+        // Synthetic: `restart_connection` is about to kill a live agent
+        // (its reader exits as superseded, so no `_kage/agent_disconnected`
+        // follows). Withdraw what the dying process asked of the user, so
+        // nothing answers it to the new process, which numbers its
+        // requests afresh. No AGENT_DISCONNECTED: the restart reconnects,
+        // and a failed one reports it itself.
+        if method == "_kage/agent_restarting" {
+            crate::ephemeral_session::notify_disconnected();
+            if let Some(procs) = app_handle.try_state::<crate::state::ChildProcesses>() {
+                procs.host_commands.agent_disconnected();
+            }
+            for request_id in take_pending_permission_ids(&pending_perm) {
+                crate::event_targets::emit_permission_audience(
+                    &app_handle,
+                    events::PERMISSION_DISMISSED,
+                    &serde_json::json!({ "requestId": request_id }),
+                );
+            }
+            return;
+        }
+
         if method == "_kage/agent_disconnected" {
             let _ = app_handle.emit(events::AGENT_DISCONNECTED, ());
             // A background agent call in flight ends `agent_disconnected`.

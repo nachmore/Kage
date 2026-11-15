@@ -84,6 +84,7 @@ export function createComposerMixin(dependencies) {
                         source: 'chat',
                         length: messageLengthBucket(message),
                     });
+                    this._recordTurn(this.activeSessionId, message, null);
                     await this.invoke('send_message_streaming', {
                         sessionId: this.activeSessionId,
                         message,
@@ -218,10 +219,52 @@ export function createComposerMixin(dependencies) {
                     length: messageLengthBucket(message),
                     attachments: attachments?.length || 0,
                 });
+                this._recordTurn(this.activeSessionId, message, attachments);
                 await this.invoke('send_message_streaming', {
                     sessionId: this.activeSessionId,
                     message,
                     attachments,
+                });
+                this.isConnected = true;
+                this.updateConnectionStatus();
+            } catch (error) {
+                this._abortStreamingSend(error);
+            }
+        }
+
+        /**
+         * Remember the prompt going out, for Reconnect to resend if it fails
+         * before any output. `seq` ties it to this send: a newer one
+         * replaces it.
+         */
+        _recordTurn(sessionId, message, attachments) {
+            this._sendSeq = (this._sendSeq || 0) + 1;
+            this._lastTurn = { sessionId, message, attachments, seq: this._sendSeq };
+        }
+
+        /**
+         * Recovery moved the session `oldId` to `newId`: so did the last
+         * turn, if it was on it.
+         */
+        _followTurnSession(oldId, newId) {
+            if (oldId && newId && this._lastTurn?.sessionId === oldId) {
+                this._lastTurn = { ...this._lastTurn, sessionId: newId };
+            }
+        }
+
+        /**
+         * Resend a turn that failed before any output, after Reconnect. The
+         * user's bubble is already in the transcript, so none is added, and
+         * the composer (draft, attachments) is left alone.
+         */
+        async _resendTurn(turn) {
+            this.startStreaming();
+            this._recordTurn(this.activeSessionId, turn.message, turn.attachments);
+            try {
+                await this.invoke('send_message_streaming', {
+                    sessionId: this.activeSessionId,
+                    message: turn.message,
+                    attachments: turn.attachments,
                 });
                 this.isConnected = true;
                 this.updateConnectionStatus();
@@ -276,6 +319,7 @@ export function createComposerMixin(dependencies) {
                     source: 'shell_run',
                     length: messageLengthBucket(message),
                 });
+                this._recordTurn(sessionId, message, null);
                 await this.invoke('send_message_streaming', {
                     sessionId,
                     message,
@@ -336,6 +380,14 @@ export function createComposerMixin(dependencies) {
             // The user's next prompt from here: cards for commands outside
             // the sandbox that are over go (one still waiting stays).
             if (originatedHere) clearFinishedHostCommandCards?.();
+            // An earlier failure's error box goes with a new prompt: its
+            // Reconnect would restart the agent under this one.
+            if (
+                originatedHere &&
+                this.elements.errorContainer?.querySelector('#errorReconnectBtn')
+            ) {
+                this.elements.errorContainer.innerHTML = '';
+            }
             this.currentStreamingContent = '';
             this.toolSources = [];
             this.toolUsages = [];

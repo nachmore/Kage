@@ -61,3 +61,19 @@ export function errKind(e) {
 export function errLabel(label, e) {
     return `${label}: ${errMessage(e)}`;
 }
+
+// Rate-limit wording in a `message_error` payload. Most emitters format
+// their own text, so there is usually no `kind` to switch on.
+const RATE_LIMIT_RE = /rate[\s_-]?limit|too many requests|\b429\b|quota exceeded/i;
+
+/**
+ * Whether a `message_error` payload (a string, or `{ kind, message }`) is a
+ * rate limit. The floating mascot poses on it, and a rate-limited prompt is
+ * never resent on Reconnect.
+ */
+export function isRateLimitPayload(payload) {
+    const isObj = payload !== null && typeof payload === 'object';
+    const kind = isObj ? payload.kind : null;
+    const text = typeof payload === 'string' ? payload : isObj ? payload.message || '' : '';
+    return kind === 'rate_limited' || RATE_LIMIT_RE.test(text);
+}

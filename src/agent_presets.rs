@@ -257,24 +257,26 @@ pub fn detect_from_command(spawn_command: &str) -> Option<AgentKind> {
     None
 }
 
+/// The agent kind the *active* connection names: its preset id, else (for
+/// a Local connection) its spawn command. `None` when neither says, e.g. a
+/// hand-rolled Remote connection: Kage can't tell what's on the other end.
+pub fn explicit_kind(config: &crate::config::Config) -> Option<AgentKind> {
+    let conn = config.acp.active_connection()?;
+    // Prefer an explicit preset id stored on the active connection.
+    if let Some(kind) = conn.preset_id.as_deref().and_then(AgentKind::from_id) {
+        return Some(kind);
+    }
+    if let crate::config::AcpMode::Local { ref spawn_command } = conn.mode {
+        return detect_from_command(spawn_command);
+    }
+    None
+}
+
 /// Detect the agent kind from the app config — looks at the *active*
 /// connection. Returns Kiro as the safe default (it owns the dot-dir
 /// path resolvers below).
 pub fn detect(config: &crate::config::Config) -> AgentKind {
-    // Prefer an explicit preset id stored on the active connection.
-    if let Some(conn) = config.acp.active_connection() {
-        if let Some(ref preset_id) = conn.preset_id {
-            if let Some(kind) = AgentKind::from_id(preset_id) {
-                return kind;
-            }
-        }
-        if let crate::config::AcpMode::Local { ref spawn_command } = conn.mode {
-            if let Some(kind) = detect_from_command(spawn_command) {
-                return kind;
-            }
-        }
-    }
-    AgentKind::Kiro
+    explicit_kind(config).unwrap_or(AgentKind::Kiro)
 }
 
 /// Resolve the MCP json path, respecting the user's explicit override.
@@ -382,6 +384,59 @@ mod tests {
             Some(AgentKind::ClaudeCode)
         );
         assert_eq!(detect_from_command("some-other-thing"), None);
+    }
+
+    fn config_with(preset_id: Option<&str>, mode: crate::config::AcpMode) -> crate::config::Config {
+        let mut cfg = crate::config::Config::default();
+        cfg.acp.connections = vec![crate::config::AgentConnection {
+            id: "c".to_string(),
+            name: "C".to_string(),
+            preset_id: preset_id.map(str::to_string),
+            mode,
+            sessions_directory: None,
+            ollama_settings: None,
+        }];
+        cfg.acp.active_connection_id = "c".to_string();
+        cfg
+    }
+
+    fn remote() -> crate::config::AcpMode {
+        crate::config::AcpMode::Remote {
+            host: "127.0.0.1".to_string(),
+            port: 8765,
+            timeout_ms: 30000,
+        }
+    }
+
+    fn local(cmd: &str) -> crate::config::AcpMode {
+        crate::config::AcpMode::Local {
+            spawn_command: cmd.to_string(),
+        }
+    }
+
+    #[test]
+    fn explicit_kind_reads_the_active_connection() {
+        assert_eq!(explicit_kind(&config_with(None, remote())), None);
+        assert_eq!(
+            explicit_kind(&config_with(Some("kiro"), remote())),
+            Some(AgentKind::Kiro)
+        );
+        assert_eq!(
+            explicit_kind(&config_with(None, local("kiro-cli acp"))),
+            Some(AgentKind::Kiro)
+        );
+        assert_eq!(
+            explicit_kind(&config_with(Some("claude-code"), local("kiro-cli acp"))),
+            Some(AgentKind::ClaudeCode),
+            "the preset id wins over the command"
+        );
+        assert_eq!(explicit_kind(&config_with(None, local("my-agent"))), None);
+        // detect() still falls back to Kiro.
+        assert_eq!(detect(&config_with(None, remote())), AgentKind::Kiro);
+        assert_eq!(
+            detect(&config_with(None, local("npx @zed-industries/codex-acp"))),
+            AgentKind::Codex
+        );
     }
 
     #[test]

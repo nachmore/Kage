@@ -5,6 +5,7 @@
 use super::*;
 
 mod acp;
+pub(crate) use acp::switch_acp_session_blocking;
 
 /// Parse the JSONL file into a list of SessionMessages
 fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {

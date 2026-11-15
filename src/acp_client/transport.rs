@@ -22,6 +22,10 @@ use crate::process_manager::ProcessManager;
 /// using std mpsc avoids dragging tokio into the sync transport layer.
 type ResponseInbox = mpsc::SyncSender<AcpResponse>;
 
+/// See `AcpTransport::notification_observer`.
+pub(crate) type NotificationObserver =
+    Arc<Mutex<Option<Arc<dyn Fn(&serde_json::Value) + Send + Sync>>>>;
+
 enum ReaderSource {
     Pipe(BufReader<ChildStdout>),
     Tcp(BufReader<TcpStream>),
@@ -65,6 +69,10 @@ pub struct AcpTransport {
     generation: Arc<AtomicU64>,
     /// Notification handler called by the background reader thread
     notification_handler: NotificationHandler,
+    /// Runs on the reader thread for every inbound message with a method,
+    /// before `notification_handler`, whether or not a handler is
+    /// installed. `AcpClient` counts each turn's progress with it.
+    notification_observer: NotificationObserver,
     /// Serialises `connect()` (and the teardown half of `set_mode`). Without
     /// it, two callers that both saw `is_connected() == false` — the
     /// launch-time session init racing a window's first send — would both
@@ -103,6 +111,7 @@ impl AcpTransport {
             pending: Arc::new(Mutex::new(HashMap::new())),
             generation: Arc::new(AtomicU64::new(0)),
             notification_handler: Arc::new(Mutex::new(None)),
+            notification_observer: Arc::new(Mutex::new(None)),
             connect_lock: Mutex::new(()),
             connect_attempts: AtomicU64::new(0),
             last_connect_error: Mutex::new(None),
@@ -146,6 +155,15 @@ impl AcpTransport {
     ) {
         let mut h = self.notification_handler.lock_or_recover();
         *h = Some(Arc::new(handler));
+    }
+
+    /// Install the observer that sees every inbound message with a method
+    /// ahead of the notification handler (see `notification_observer`).
+    pub(crate) fn set_notification_observer<F>(&self, observer: F)
+    where
+        F: Fn(&serde_json::Value) + Send + Sync + 'static,
+    {
+        *self.notification_observer.lock_or_recover() = Some(Arc::new(observer));
     }
 
     /// Feed a synthetic notification through the registered handler, exactly
@@ -404,6 +422,7 @@ impl AcpTransport {
         let generation = self.generation.clone();
         let is_current = move || generation.load(Ordering::SeqCst) == my_generation;
         let notification_handler = self.notification_handler.clone();
+        let notification_observer = self.notification_observer.clone();
         let debug_mode = self.debug_mode.clone();
         let connected = self.connected.clone();
         let last_activity = self.last_activity.clone();
@@ -533,6 +552,13 @@ impl AcpTransport {
                                 .unwrap_or("<unknown>")
                         );
                     }
+                    // Count it towards its turn first. The reader handles
+                    // lines in order, so by the time a turn's reply is
+                    // routed above, every update ahead of it is counted.
+                    let observer_arc = notification_observer.lock_or_recover().as_ref().cloned();
+                    if let Some(observe) = observer_arc {
+                        observe(&val);
+                    }
                     // Clone the handler Arc out and drop the mutex guard BEFORE
                     // invoking. Holding the lock across the callback would cause
                     // deadlocks whenever the callback re-acquires a lock that
@@ -647,7 +673,7 @@ impl AcpTransport {
         }
         on_written();
 
-        if idle_watchdog {
+        let result = if idle_watchdog {
             self.recv_with_idle_watchdog(id, method, &rx, debug)
         } else {
             // Per-request timeout, not a global idle timer: an unrelated chatty
@@ -670,7 +696,11 @@ impl AcpTransport {
                     anyhow::bail!("Connection lost while waiting for response")
                 }
             }
+        };
+        if let Ok(response) = &result {
+            log_agent_error_reply(method, id, response);
         }
+        result
     }
 
     /// Wait for a prompt response, extending the deadline for as long as the
@@ -827,5 +857,146 @@ impl AcpTransport {
         if let Some(child) = child {
             ProcessManager::terminate_child(child);
         }
+    }
+}
+
+/// Longest stretch of the agent's own error text a log line carries.
+const ERROR_LOG_MAX_CHARS: usize = 300;
+
+/// At most `max` chars of `s`, cut on a char boundary, with `…` when cut.
+fn truncate_chars(s: &str, max: usize) -> String {
+    match s.char_indices().nth(max) {
+        Some((end, _)) => format!("{}…", &s[..end]),
+        None => s.to_string(),
+    }
+}
+
+/// The JSON type name of `v`, for summarising a non-string `data`.
+fn json_type(v: &serde_json::Value) -> &'static str {
+    match v {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "bool",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
+/// The log line for a JSON-RPC error reply, if `r` is one. Only the agent's
+/// own `message` and string `data` go in (capped), never the request's
+/// params, so no prompt text can reach the log.
+fn agent_error_reply_line(method: &str, id: u64, r: &AcpResponse) -> Option<String> {
+    let e = r.error.as_ref()?;
+    let data = match &e.data {
+        Some(serde_json::Value::String(s)) => {
+            format!(" data={}", truncate_chars(s, ERROR_LOG_MAX_CHARS))
+        }
+        Some(other) => format!(
+            " data=<{} json, {} bytes>",
+            json_type(other),
+            other.to_string().len()
+        ),
+        None => String::new(),
+    };
+    Some(format!(
+        "Agent returned an error for {} id={}: code={} message={}{}",
+        method,
+        id,
+        e.code,
+        truncate_chars(&e.message, ERROR_LOG_MAX_CHARS),
+        data
+    ))
+}
+
+/// Log every JSON-RPC error reply the agent sends (Kage used to drop them
+/// silently, which hid why prompts were failing).
+fn log_agent_error_reply(method: &str, id: u64, r: &AcpResponse) {
+    if let Some(line) = agent_error_reply_line(method, id, r) {
+        warn!("{}", line);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::acp_client::types::AcpError;
+
+    fn reply(error: Option<AcpError>) -> AcpResponse {
+        AcpResponse {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(3),
+            result: None,
+            error,
+        }
+    }
+
+    #[test]
+    fn error_reply_line_matches_the_incident_shape() {
+        let r = reply(Some(AcpError {
+            code: -32603,
+            message: "Internal error".to_string(),
+            data: Some(serde_json::json!(
+                "Encountered an error in the response stream: An unknown error occurred: dispatch failure"
+            )),
+        }));
+        assert_eq!(
+            agent_error_reply_line("session/prompt", 3, &r).unwrap(),
+            "Agent returned an error for session/prompt id=3: code=-32603 message=Internal error data=Encountered an error in the response stream: An unknown error occurred: dispatch failure"
+        );
+    }
+
+    #[test]
+    fn error_reply_line_truncates_on_a_char_boundary() {
+        // 3-byte chars, so a byte cut at 300 would land mid-char.
+        let long = "、".repeat(400);
+        let r = reply(Some(AcpError {
+            code: -32603,
+            message: "é".repeat(350),
+            data: Some(serde_json::json!(long)),
+        }));
+        let line = agent_error_reply_line("session/prompt", 1, &r).unwrap();
+        let data = line.split(" data=").nth(1).unwrap();
+        assert_eq!(
+            data.chars().count(),
+            ERROR_LOG_MAX_CHARS + 1,
+            "300 chars and …"
+        );
+        assert!(data.ends_with('…'));
+        let message = line
+            .split(" message=")
+            .nth(1)
+            .unwrap()
+            .split(" data=")
+            .next()
+            .unwrap();
+        assert_eq!(message.chars().count(), ERROR_LOG_MAX_CHARS + 1);
+        assert_eq!(truncate_chars("short", 300), "short");
+    }
+
+    #[test]
+    fn error_reply_line_summarises_non_string_data() {
+        let data = serde_json::json!({ "secret": "prompt text" });
+        let size = data.to_string().len();
+        let r = reply(Some(AcpError {
+            code: -32602,
+            message: "Invalid params".to_string(),
+            data: Some(data),
+        }));
+        let line = agent_error_reply_line("session/new", 2, &r).unwrap();
+        assert!(
+            line.ends_with(&format!(" data=<object json, {size} bytes>")),
+            "{line}"
+        );
+        assert!(!line.contains("prompt text"));
+        let no_data = reply(Some(AcpError {
+            code: -32601,
+            message: "Method not found".to_string(),
+            data: None,
+        }));
+        assert!(agent_error_reply_line("x", 1, &no_data)
+            .unwrap()
+            .ends_with("message=Method not found"));
+        assert!(agent_error_reply_line("x", 1, &reply(None)).is_none());
     }
 }

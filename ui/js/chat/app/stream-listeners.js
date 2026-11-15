@@ -152,6 +152,7 @@ export function createStreamListenersMixin(dependencies) {
                 // this just avoids a stale badge on the dead id).
                 if (oldId) this.streamRegistry.fail(oldId);
                 if (newId) this.streamRegistry.begin(newId);
+                this._followTurnSession(oldId, newId);
                 const ours =
                     oldId && (oldId === this.currentAcpSessionId || oldId === this.activeSessionId);
                 if (!ours || !newId) return;
@@ -304,6 +305,9 @@ export function createStreamListenersMixin(dependencies) {
                 const message = event.payload;
                 if (message) {
                     this.addUserMessage(message);
+                    // The backend sends it (open_chat_with_message) and a
+                    // failure comes back here, so Reconnect can resend it.
+                    this._recordTurn(this.activeSessionId, message, null);
                     this.startStreaming();
                 }
             });

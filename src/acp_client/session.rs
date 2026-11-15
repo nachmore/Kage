@@ -7,7 +7,11 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use super::types::format_acp_error;
+use super::turn_progress::TurnProgress;
+use super::types::{
+    format_acp_error, is_auth_required, AgentRpcError, PromptRecoveryError, ACP_AUTH_REQUIRED,
+    JSONRPC_INTERNAL_ERROR,
+};
 use super::AcpClient;
 use crate::lock_ext::LockExt;
 
@@ -60,10 +64,6 @@ fn resolve_cwd(cwd: Option<String>) -> String {
     })
 }
 
-/// Bail with `"<context>: <message>"`, appending ` — <detail>` when the
-/// error carries a string `data` field. Used by the prompt/sub-agent paths
-/// where we want the raw detail string rather than `format_acp_error`'s
-/// `(code: N)` rendering.
 /// Whether a prompt's text is a slash command for the agent (`/usage`,
 /// `/mcp:server:prompt`, ...). Agents recognise one by the prompt's first
 /// text block, and some need it to be the only one, so it goes out exactly
@@ -73,13 +73,134 @@ fn is_slash_command(content: &str) -> bool {
     content.trim_start().starts_with('/')
 }
 
-fn bail_acp_error(context: &str, error: &super::types::AcpError) -> anyhow::Error {
+/// A `session/prompt` error reply as `"<context>: <message>"`, with
+/// ` — <detail>` appended when the error carries a string `data` field (the
+/// raw detail string rather than `format_acp_error`'s `(code: N)`
+/// rendering). Typed as an [`AgentRpcError`] carrying `progress`, so the
+/// recovery ladder can decide on the code.
+fn bail_acp_error(
+    context: &str,
+    error: &super::types::AcpError,
+    progress: TurnProgress,
+) -> anyhow::Error {
     let detail = error.data.as_ref().and_then(|d| d.as_str()).unwrap_or("");
-    if detail.is_empty() {
-        anyhow::anyhow!("{}: {}", context, error.message)
+    let rendered = if detail.is_empty() {
+        format!("{}: {}", context, error.message)
     } else {
-        anyhow::anyhow!("{}: {} — {}", context, error.message, detail)
+        format!("{}: {} — {}", context, error.message, detail)
+    };
+    let mut typed = AgentRpcError::from_reply("session/prompt", error, rendered);
+    typed.progress = progress;
+    anyhow::Error::new(typed)
+}
+
+/// A non-prompt error reply (`initialize`, `session/new`, `session/load`)
+/// as `"<context>: <format_acp_error>"`, typed.
+fn rpc_error(method: &'static str, context: &str, error: &super::types::AcpError) -> anyhow::Error {
+    let rendered = format!("{}: {}", context, format_acp_error(error));
+    anyhow::Error::new(AgentRpcError::from_reply(method, error, rendered))
+}
+
+/// How a failed user prompt is handled. See [`classify_prompt_failure`].
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum PromptFailure {
+    /// The connection broke or timed out: restart, reload, resend (and a
+    /// fresh session as the last resort).
+    Transport,
+    /// The session's history can't be used: restart on a fresh session.
+    Corrupted,
+    /// The agent failed internally before the turn did anything: restart
+    /// once, reload, resend once.
+    AgentInternal,
+    /// The agent wants the user to sign in. Never restarts.
+    AuthRequired,
+    /// Show it as it is.
+    Surface,
+}
+
+/// Agent error text that names a cause a restart can't fix, or one the user
+/// has to act on. Matched case-insensitively on the message and detail of a
+/// `-32603` reply.
+const NO_RESTART_TEXT: &[&str] = &[
+    "rate limit",
+    "ratelimit",
+    "throttl",
+    "too many requests",
+    "quota",
+    "429",
+    // The agent's per-session exclusivity; see `AcpClient::prompt_locks`.
+    "prompt already in progress",
+    "context window",
+    "context length",
+    "too long",
+    "too large",
+    "token limit",
+    "maximum context",
+    "model not",
+    "model is not",
+    "unknown model",
+    "not available",
+    "not supported",
+    "unsupported",
+    "image",
+    "cancel",
+    "permission denied",
+    "access denied",
+    "invalid",
+];
+
+/// Decide what to do with a failed user prompt. In order:
+/// 1. ACP "authentication required" (`-32000`): sign in, never restart.
+/// 2. The legacy transport/corruption texts (`is_recoverable_error`).
+/// 3. Anything that isn't an agent reply, or isn't `-32603`: surface it.
+/// 4. A `-32603` whose text names a cause a restart can't fix: surface it.
+/// 5. A prompt with attachments: the image-error handler owns those.
+/// 6. A turn that streamed, ran a tool, asked the client for something,
+///    was rate limited or stopped: surface it (a resend could repeat work).
+/// 7. Otherwise: an internal agent failure before any work, worth one
+///    restart (the incident: kiro-cli lost its token, "dispatch failure").
+fn classify_prompt_failure(err: &anyhow::Error, had_attachments: bool) -> PromptFailure {
+    let typed = err.downcast_ref::<AgentRpcError>();
+    if typed.is_some_and(|e| e.code == ACP_AUTH_REQUIRED) {
+        return PromptFailure::AuthRequired;
     }
+    let text = format!("{}", err);
+    if AcpClient::is_recoverable_error(&text) {
+        return if AcpClient::is_corrupted_session(&text) {
+            PromptFailure::Corrupted
+        } else {
+            PromptFailure::Transport
+        };
+    }
+    let Some(rpc) = typed else {
+        return PromptFailure::Surface;
+    };
+    if rpc.code != JSONRPC_INTERNAL_ERROR {
+        return PromptFailure::Surface;
+    }
+    let haystack =
+        format!("{} {}", rpc.message, rpc.detail.as_deref().unwrap_or("")).to_lowercase();
+    if NO_RESTART_TEXT.iter().any(|t| haystack.contains(t)) {
+        return PromptFailure::Surface;
+    }
+    if had_attachments {
+        return PromptFailure::Surface;
+    }
+    let p = rpc.progress;
+    if p.made_progress() || p.cancel_requested || p.rate_limited {
+        return PromptFailure::Surface;
+    }
+    PromptFailure::AgentInternal
+}
+
+/// The agent's error code, if `err` is an agent reply.
+fn rpc_code(err: &anyhow::Error) -> Option<i32> {
+    err.downcast_ref::<AgentRpcError>().map(|e| e.code)
+}
+
+/// The end of the ladder, as the error a caller maps to "still failing".
+fn agent_unreachable(detail: String) -> anyhow::Error {
+    anyhow::Error::new(PromptRecoveryError::AgentUnreachable { detail })
 }
 
 impl AcpClient {
@@ -104,7 +225,7 @@ impl AcpClient {
             }),
         )?;
         if let Some(error) = response.error {
-            anyhow::bail!("Initialize failed: {}", format_acp_error(&error));
+            return Err(rpc_error("initialize", "Initialize failed", &error));
         }
 
         info!("ACP initialized successfully");
@@ -132,7 +253,7 @@ impl AcpClient {
             serde_json::json!({ "cwd": cwd, "mcpServers": [] }),
         )?;
         if let Some(error) = response.error {
-            anyhow::bail!("Session creation failed: {}", format_acp_error(&error));
+            return Err(rpc_error("session/new", "Session creation failed", &error));
         }
 
         let result = response
@@ -207,7 +328,7 @@ impl AcpClient {
             }),
         )?;
         if let Some(error) = response.error {
-            anyhow::bail!("Session load failed: {}", format_acp_error(&error));
+            return Err(rpc_error("session/load", "Session load failed", &error));
         }
 
         let mut models_list = Vec::new();
@@ -371,16 +492,21 @@ impl AcpClient {
                 "prompt": prompt
             })
         };
-        let response = match (muted, hidden) {
-            (None, Some(h)) => self.send_prompt_with_prefix(session_id, h, &build)?,
-            (None, None) => self.send_prompt(session_id, build(None))?,
-            (Some(keep_reply), _) => self.send_prompt_muted(session_id, build(None), keep_reply)?,
+        let (response, progress) = match (muted, hidden) {
+            (None, Some(h)) => self.send_prompt_with_prefix_tracked(session_id, h, &build)?,
+            (None, None) => self.send_prompt_tracked(session_id, build(None))?,
+            (Some(keep_reply), _) => (
+                self.send_prompt_muted(session_id, build(None), keep_reply)?,
+                TurnProgress::default(),
+            ),
         };
 
         if let Some(error) = response.error {
-            return Err(bail_acp_error("ACP error", &error));
+            return Err(bail_acp_error("ACP error", &error, progress));
         }
 
+        // The agent answers again: a later failure may restart it.
+        self.clear_unreachable_latch();
         info!("Prompt completed");
         Ok(())
     }
@@ -408,7 +534,12 @@ impl AcpClient {
 
     /// Send a chat message with automatic recovery on timeout/disconnect.
     ///
-    /// Strategy: try normally → restart + reload session → restart + fresh session.
+    /// Strategy (see `classify_prompt_failure`): a broken connection goes
+    /// try normally → restart + reload session → restart + fresh session.
+    /// An internal agent error before the turn did anything goes try
+    /// normally → restart + reload + resend once, then
+    /// `PromptRecoveryError::AgentUnreachable`. Sign-in demands and
+    /// everything else are returned as they are.
     /// Returns the session id that was actually used to send — same as the
     /// input on success or transient-failure recovery, but on
     /// "session corrupted" / "fresh session" recovery the returned id is the
@@ -424,41 +555,136 @@ impl AcpClient {
         hidden: Option<&dyn super::HiddenPrefix>,
     ) -> Result<String> {
         let att_ref = attachments.as_deref();
+        let had_attachments = att_ref.is_some_and(|a| !a.is_empty());
         let send = |id: &str| self.send_chat_prompt(id, &content, att_ref, None, hidden);
+        // A Stop from here on keeps the prompt from being resent, even one
+        // pressed while no turn is open (mid-restart).
+        let epoch = self.cancel_epoch(&session_id);
+        let original = session_id.clone();
+        let stopped = |id: &str| self.stopped_during_recovery(&original, epoch, id);
 
         // --- Attempt 1: normal send ---
-        match send(&session_id) {
+        let first_err = match send(&session_id) {
             Ok(()) => return Ok(session_id),
-            Err(e) => {
-                let err_str = format!("{}", e);
-                if Self::is_recoverable_error(&err_str) {
-                    warn!("Prompt failed ({}), attempting recovery…", err_str);
-                    if Self::is_corrupted_session(&err_str) {
-                        warn!("Session corrupted — skipping reload, creating fresh session");
-                        let new_id = self.restart_with_fresh_session()?;
-                        // The fresh session's steering reply accumulated under
-                        // new_id; drop it so the resend renders clean, then tell
-                        // live windows to adopt new_id before the resend streams.
-                        self.reset_session_accumulator(&new_id);
-                        self.notify_session_migrated(&session_id, &new_id);
-                        send(&new_id)?;
-                        return Ok(new_id);
-                    }
-                } else {
-                    return Err(e);
+            Err(e) => e,
+        };
+        match classify_prompt_failure(&first_err, had_attachments) {
+            PromptFailure::AuthRequired => return Err(first_err),
+            PromptFailure::Surface => {
+                if rpc_code(&first_err) == Some(JSONRPC_INTERNAL_ERROR) {
+                    let progress = first_err
+                        .downcast_ref::<AgentRpcError>()
+                        .map(|e| e.progress)
+                        .unwrap_or_default();
+                    info!(
+                        "Prompt on {} failed ({:?}, progress {:?}); not restarting",
+                        session_id,
+                        PromptFailure::Surface,
+                        progress
+                    );
+                }
+                return Err(first_err);
+            }
+            PromptFailure::AgentInternal => {
+                return self.restart_reload_resend_once(&session_id, &send, &stopped, first_err);
+            }
+            PromptFailure::Corrupted => {
+                warn!("Prompt failed ({}), attempting recovery…", first_err);
+                if stopped(&session_id) {
+                    return Ok(session_id);
+                }
+                warn!("Session corrupted — skipping reload, creating fresh session");
+                let new_id = self.restart_with_fresh_session()?;
+                // The fresh session's steering reply accumulated under
+                // new_id; drop it so the resend renders clean, then tell
+                // live windows to adopt new_id before the resend streams.
+                self.reset_session_accumulator(&new_id);
+                self.notify_session_migrated(&session_id, &new_id);
+                if stopped(&new_id) {
+                    return Ok(new_id);
+                }
+                send(&new_id)?;
+                return Ok(new_id);
+            }
+            PromptFailure::Transport => {
+                warn!("Prompt failed ({}), attempting recovery…", first_err);
+                if stopped(&session_id) {
+                    return Ok(session_id);
                 }
             }
         }
 
         // --- Attempt 2: restart + reload session + resend ---
         self.restart_connection()?;
+        let session_id = self.reload_or_replace_session(&session_id)?;
+        if stopped(&session_id) {
+            return Ok(session_id);
+        }
 
-        let original_id = session_id.clone();
-        let session_id = match self.load_existing_session(&session_id, None) {
+        match send(&session_id) {
+            Ok(()) => return Ok(session_id),
+            Err(e) => match classify_prompt_failure(&e, had_attachments) {
+                PromptFailure::Transport | PromptFailure::Corrupted => {
+                    warn!(
+                        "Prompt failed again after session reload ({}), trying fresh session…",
+                        e
+                    );
+                }
+                // A fresh process failed internally on the reloaded
+                // session: a fresh session won't fix a sign-in or service
+                // outage and would drop the conversation.
+                PromptFailure::AgentInternal => {
+                    warn!(
+                        "Prompt on {} failed again after the automatic restart; reporting agent unreachable",
+                        session_id
+                    );
+                    self.set_unreachable_latch();
+                    return Err(agent_unreachable(e.to_string()));
+                }
+                PromptFailure::AuthRequired | PromptFailure::Surface => return Err(e),
+            },
+        }
+
+        // --- Attempt 3: restart + brand-new session + resend (last chance) ---
+        let new_id = self.restart_with_fresh_session()?;
+        self.reset_session_accumulator(&new_id);
+        self.notify_session_migrated(&session_id, &new_id);
+        if stopped(&new_id) {
+            return Ok(new_id);
+        }
+        send(&new_id)?;
+        Ok(new_id)
+    }
+
+    /// Whether the user stopped the prompt since the ladder began: on the
+    /// session it was sent on (`epoch` was its count then), or on
+    /// `current`, a fresh session recovery moved it to (fresh, so any Stop
+    /// on it is this prompt's). The caller then ends the turn as a Stop
+    /// would, without resending: `Ok`, so no error offers a resend either.
+    fn stopped_during_recovery(&self, original: &str, epoch: u64, current: &str) -> bool {
+        let stopped = self.cancel_epoch(original) != epoch
+            || (current != original && self.cancel_epoch(current) != 0);
+        if stopped {
+            info!(
+                "Prompt on {} was stopped during recovery; not resending it",
+                current
+            );
+        }
+        stopped
+    }
+
+    /// After a restart, get `session_id` back on the agent: reload it, or,
+    /// when the agent can't load it, replace it with a fresh session (built-in
+    /// steering primed, windows told to adopt it). Returns the id to send on.
+    /// A sign-in demand from `session/load` is returned, not papered over
+    /// with a fresh session that would fail the same way.
+    fn reload_or_replace_session(&self, session_id: &str) -> Result<String> {
+        match self.load_existing_session(session_id, None) {
             Ok(_) => {
                 info!("Session {} reloaded successfully", session_id);
-                session_id
+                Ok(session_id.to_string())
             }
+            Err(e) if is_auth_required(&e) => Err(e),
             Err(e) => {
                 warn!("Could not reload session {}: {}", session_id, e);
                 info!("Creating fresh session for retry");
@@ -468,32 +694,85 @@ impl AcpClient {
                 // fresh id before the resend streams under it. Reloading onto
                 // the same id needs neither (the id didn't change).
                 self.reset_session_accumulator(&new_id);
-                self.notify_session_migrated(&original_id, &new_id);
-                new_id
-            }
-        };
-
-        match send(&session_id) {
-            Ok(()) => return Ok(session_id),
-            Err(e) => {
-                let err_str = format!("{}", e);
-                if Self::is_recoverable_error(&err_str) {
-                    warn!(
-                        "Prompt failed again after session reload ({}), trying fresh session…",
-                        err_str
-                    );
-                } else {
-                    return Err(e);
-                }
+                self.notify_session_migrated(session_id, &new_id);
+                Ok(new_id)
             }
         }
+    }
 
-        // --- Attempt 3: restart + brand-new session + resend (last chance) ---
-        let new_id = self.restart_with_fresh_session()?;
-        self.reset_session_accumulator(&new_id);
-        self.notify_session_migrated(&session_id, &new_id);
-        send(&new_id)?;
-        Ok(new_id)
+    /// The agent failed internally before the turn did anything (the
+    /// incident: kiro-cli lost its token and answers every prompt with
+    /// "dispatch failure"). Restart it once, reload the session, resend
+    /// once. No fresh session and no third attempt: neither fixes a sign-in
+    /// or service outage, and a fresh session drops the conversation (so a
+    /// session that won't reload is reported, not replaced).
+    ///
+    /// Not while the agent is doing anything else (another window's turn,
+    /// a background agent call, an automation: the restart would cut it
+    /// off), nor while the loop guard holds (a restart failed to fix this
+    /// within the last minute), nor once the user has stopped the prompt.
+    fn restart_reload_resend_once(
+        &self,
+        session_id: &str,
+        send: &dyn Fn(&str) -> Result<()>,
+        stopped: &dyn Fn(&str) -> bool,
+        first_err: anyhow::Error,
+    ) -> Result<String> {
+        if self.agent_work_in_flight(Some(session_id)) {
+            warn!(
+                "Not restarting the agent for {}: it has other work in flight",
+                session_id
+            );
+            return Err(first_err);
+        }
+        if let Some(age) = self.unreachable_latch_age() {
+            info!(
+                "Skipping automatic agent restart: it failed the same way after a restart {}s ago",
+                age.as_secs()
+            );
+            return Err(agent_unreachable(first_err.to_string()));
+        }
+        if stopped(session_id) {
+            return Ok(session_id.to_string());
+        }
+        warn!(
+            "Prompt on {} failed with agent error {} and no output this turn; restarting the agent once",
+            session_id,
+            rpc_code(&first_err).unwrap_or(JSONRPC_INTERNAL_ERROR)
+        );
+        self.restart_connection()?;
+        match self.load_existing_session(session_id, None) {
+            Ok(_) => info!("Session {} reloaded successfully", session_id),
+            Err(e) if is_auth_required(&e) => return Err(e),
+            Err(e) => {
+                warn!(
+                    "Session {} did not reload after the automatic restart; reporting agent unreachable: {}",
+                    session_id, e
+                );
+                self.set_unreachable_latch();
+                return Err(agent_unreachable(e.to_string()));
+            }
+        }
+        if stopped(session_id) {
+            return Ok(session_id.to_string());
+        }
+        match send(session_id) {
+            Ok(()) => {
+                self.clear_unreachable_latch();
+                Ok(session_id.to_string())
+            }
+            Err(e2) => match classify_prompt_failure(&e2, false) {
+                PromptFailure::AgentInternal | PromptFailure::Transport => {
+                    warn!(
+                        "Prompt on {} failed again after the automatic restart; reporting agent unreachable",
+                        session_id
+                    );
+                    self.set_unreachable_latch();
+                    Err(agent_unreachable(e2.to_string()))
+                }
+                _ => Err(e2),
+            },
+        }
     }
 
     // --- Error classification ---
@@ -560,7 +839,11 @@ impl AcpClient {
         )?;
 
         if let Some(error) = response.error {
-            return Err(bail_acp_error("Sub-agent error", &error));
+            return Err(bail_acp_error(
+                "Sub-agent error",
+                &error,
+                TurnProgress::default(),
+            ));
         }
 
         // Get the accumulated response from the sub-agent and clear its
@@ -573,7 +856,11 @@ impl AcpClient {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_slash_command, AcpClient, LoadReplayGuard};
+    use super::{
+        bail_acp_error, classify_prompt_failure, is_slash_command, rpc_error, AcpClient,
+        AgentRpcError, LoadReplayGuard, PromptFailure, TurnProgress,
+    };
+    use crate::acp_client::types::AcpError;
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
@@ -652,6 +939,254 @@ mod tests {
     fn unrelated_errors_are_not_recoverable() {
         let err = "ACP error: model declined to respond";
         assert!(!AcpClient::is_recoverable_error(err));
+    }
+
+    const INCIDENT_DETAIL: &str =
+        "Encountered an error in the response stream: An unknown error occurred: dispatch failure";
+
+    fn acp_error(code: i32, message: &str, data: Option<&str>) -> AcpError {
+        AcpError {
+            code,
+            message: message.to_string(),
+            data: data.map(|d| serde_json::json!(d)),
+        }
+    }
+
+    /// A `session/prompt` error reply as `send_chat_prompt` returns it.
+    fn prompt_err(code: i32, message: &str, data: Option<&str>, p: TurnProgress) -> anyhow::Error {
+        bail_acp_error("ACP error", &acp_error(code, message, data), p)
+    }
+
+    fn incident(p: TurnProgress) -> anyhow::Error {
+        prompt_err(-32603, "Internal error", Some(INCIDENT_DETAIL), p)
+    }
+
+    #[test]
+    fn classify_incident_dispatch_failure_is_agent_internal() {
+        let e = incident(TurnProgress::default());
+        assert_eq!(
+            classify_prompt_failure(&e, false),
+            PromptFailure::AgentInternal
+        );
+    }
+
+    #[test]
+    fn classify_internal_error_after_streamed_text_is_surfaced() {
+        let p = TurnProgress {
+            updates: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            classify_prompt_failure(&incident(p), false),
+            PromptFailure::Surface
+        );
+    }
+
+    #[test]
+    fn classify_internal_error_after_tool_call_is_surfaced() {
+        let p = TurnProgress {
+            tool_calls: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            classify_prompt_failure(&incident(p), false),
+            PromptFailure::Surface
+        );
+    }
+
+    #[test]
+    fn classify_internal_error_after_permission_request_is_surfaced() {
+        let p = TurnProgress {
+            permission_requests: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            classify_prompt_failure(&incident(p), false),
+            PromptFailure::Surface
+        );
+    }
+
+    #[test]
+    fn classify_internal_error_after_cancel_is_surfaced() {
+        let p = TurnProgress {
+            cancel_requested: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            classify_prompt_failure(&incident(p), false),
+            PromptFailure::Surface
+        );
+    }
+
+    #[test]
+    fn classify_internal_error_after_rate_limit_notification_is_surfaced() {
+        let p = TurnProgress {
+            rate_limited: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            classify_prompt_failure(&incident(p), false),
+            PromptFailure::Surface
+        );
+    }
+
+    #[test]
+    fn classify_excluded_internal_errors_are_surfaced() {
+        for (message, data) in [
+            ("Internal error", Some("Prompt already in progress")),
+            ("Rate limit exceeded", None),
+            ("Internal error", Some("ThrottlingException: slow down")),
+            (
+                "Internal error",
+                Some("Input is too long for requested model"),
+            ),
+            ("context window exceeded", None),
+            ("Internal error", Some("Model claude-x is not available")),
+        ] {
+            let e = prompt_err(-32603, message, data, TurnProgress::default());
+            assert_eq!(
+                classify_prompt_failure(&e, false),
+                PromptFailure::Surface,
+                "{message} / {data:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_non_internal_codes_are_surfaced() {
+        for (code, message) in [
+            (-32602, "Invalid params"),
+            (-32601, "Method not found"),
+            (-32700, "Parse error"),
+            (-32600, "Request failed"),
+            (-31999, "Vendor failure"),
+        ] {
+            let e = prompt_err(code, message, None, TurnProgress::default());
+            assert_eq!(
+                classify_prompt_failure(&e, false),
+                PromptFailure::Surface,
+                "{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_auth_required_never_restarts() {
+        let e = prompt_err(
+            -32000,
+            "Authentication required",
+            None,
+            TurnProgress::default(),
+        );
+        assert_eq!(
+            classify_prompt_failure(&e, false),
+            PromptFailure::AuthRequired
+        );
+        // Checked before any text match.
+        let e = prompt_err(
+            -32000,
+            "Internal error",
+            Some("Connection lost while waiting"),
+            TurnProgress::default(),
+        );
+        assert_eq!(
+            classify_prompt_failure(&e, true),
+            PromptFailure::AuthRequired
+        );
+        // From session/load or initialize as well.
+        let e = rpc_error(
+            "initialize",
+            "Initialize failed",
+            &acp_error(-32000, "Authentication required", None),
+        );
+        assert_eq!(
+            classify_prompt_failure(&e, false),
+            PromptFailure::AuthRequired
+        );
+    }
+
+    #[test]
+    fn classify_attachments_leave_image_path_alone() {
+        let e = incident(TurnProgress::default());
+        assert_eq!(classify_prompt_failure(&e, true), PromptFailure::Surface);
+    }
+
+    #[test]
+    fn classify_legacy_transport_strings_unchanged() {
+        for text in [
+            "Timeout waiting for response to session/prompt",
+            "Connection lost while waiting for response",
+        ] {
+            assert_eq!(
+                classify_prompt_failure(&anyhow::anyhow!(text), false),
+                PromptFailure::Transport,
+                "{text}"
+            );
+        }
+        assert_eq!(
+            classify_prompt_failure(
+                &anyhow::anyhow!("ACP error: invalid conversation history"),
+                false
+            ),
+            PromptFailure::Corrupted
+        );
+        let typed = prompt_err(
+            -32603,
+            "Internal error",
+            Some("No session found with id abc"),
+            TurnProgress::default(),
+        );
+        assert_eq!(
+            classify_prompt_failure(&typed, false),
+            PromptFailure::Transport
+        );
+        // An untyped error that matches nothing is surfaced.
+        assert_eq!(
+            classify_prompt_failure(&anyhow::anyhow!("something else"), false),
+            PromptFailure::Surface
+        );
+    }
+
+    #[test]
+    fn agent_rpc_error_display_matches_legacy_text() {
+        let with = incident(TurnProgress::default());
+        assert_eq!(
+            with.to_string(),
+            format!("ACP error: Internal error — {INCIDENT_DETAIL}")
+        );
+        let without = prompt_err(-32603, "Internal error", None, TurnProgress::default());
+        assert_eq!(without.to_string(), "ACP error: Internal error");
+        // Non-string data is not a detail on the prompt path.
+        let mut e = acp_error(-32603, "Internal error", None);
+        e.data = Some(serde_json::json!({ "x": 1 }));
+        assert_eq!(
+            bail_acp_error("ACP error", &e, TurnProgress::default()).to_string(),
+            "ACP error: Internal error"
+        );
+        // The non-prompt methods keep format_acp_error's rendering.
+        let load = rpc_error(
+            "session/load",
+            "Session load failed",
+            &acp_error(-32602, "Invalid params", None),
+        );
+        assert_eq!(
+            load.to_string(),
+            "Session load failed: Invalid params (code: -32602)"
+        );
+
+        // The code survives `?`.
+        fn fails() -> anyhow::Result<()> {
+            Err(incident(TurnProgress::default()))
+        }
+        fn outer() -> anyhow::Result<()> {
+            fails()?;
+            Ok(())
+        }
+        let err = outer().unwrap_err();
+        let typed = err.downcast_ref::<AgentRpcError>().unwrap();
+        assert_eq!(typed.code, -32603);
+        assert_eq!(typed.method, "session/prompt");
+        assert_eq!(typed.detail.as_deref(), Some(INCIDENT_DETAIL));
     }
 
     #[test]

@@ -93,6 +93,7 @@ import { BannerController } from '../banner.js';
 import {
     createToolActivityTracker,
     initMascotPointerSignals,
+    isRateLimitPayload,
     setHostTimerHint,
     signalMascot,
     signalMascotError,
@@ -141,6 +142,7 @@ export {
     hideExtensionBar,
     initMascotPointerSignals,
     isClipboardTrigger,
+    isRateLimitPayload,
     isUpdateCommandRunning,
     loadFrecency,
     loadSlashCommands,
