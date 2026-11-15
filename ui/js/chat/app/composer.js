@@ -243,6 +243,16 @@ export function createComposerMixin(dependencies) {
         }
 
         /**
+         * Recovery moved the session `oldId` to `newId`: so did the last
+         * turn, if it was on it.
+         */
+        _followTurnSession(oldId, newId) {
+            if (oldId && newId && this._lastTurn?.sessionId === oldId) {
+                this._lastTurn = { ...this._lastTurn, sessionId: newId };
+            }
+        }
+
+        /**
          * Resend a turn that failed before any output, after Reconnect. The
          * user's bubble is already in the transcript, so none is added, and
          * the composer (draft, attachments) is left alone.
@@ -370,6 +380,14 @@ export function createComposerMixin(dependencies) {
             // The user's next prompt from here: cards for commands outside
             // the sandbox that are over go (one still waiting stays).
             if (originatedHere) clearFinishedHostCommandCards?.();
+            // An earlier failure's error box goes with a new prompt: its
+            // Reconnect would restart the agent under this one.
+            if (
+                originatedHere &&
+                this.elements.errorContainer?.querySelector('#errorReconnectBtn')
+            ) {
+                this.elements.errorContainer.innerHTML = '';
+            }
             this.currentStreamingContent = '';
             this.toolSources = [];
             this.toolUsages = [];

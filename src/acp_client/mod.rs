@@ -125,6 +125,12 @@ pub struct AcpClient {
     /// prompt skips the restart: the loop guard. Cleared by any prompt that
     /// succeeds and by an explicit Reconnect. See `latch_active`.
     unreachable_latch: Arc<Mutex<Option<std::time::Instant>>>,
+    /// How many times the user has stopped each session (`cancel_session`),
+    /// whether or not a turn was open. The recovery ladder reads it before
+    /// and after a restart: a Stop pressed while no turn is open (between a
+    /// failed attempt and its resend) still keeps the prompt from going out
+    /// again. Never pruned, like `prompt_locks`.
+    cancel_epochs: Arc<Mutex<HashMap<String, u64>>>,
 }
 
 /// How long after an automatic restart failed to fix a prompt Kage keeps
@@ -200,6 +206,7 @@ impl AcpClient {
             created_sessions: Arc::new(Mutex::new(std::collections::HashSet::new())),
             turn_progress: Arc::new(Mutex::new(HashMap::new())),
             unreachable_latch: Arc::new(Mutex::new(None)),
+            cancel_epochs: Arc::new(Mutex::new(HashMap::new())),
         };
         // Counted on the reader thread whether or not a UI handler is
         // installed (integration tests, early startup).
@@ -229,13 +236,54 @@ impl AcpClient {
         turn_progress::mark_cancel_requested(&self.turn_progress, session_id);
     }
 
-    /// Whether a *user* turn other than `session_id`'s is in flight (any
-    /// window). Restarting the shared agent would cut it off.
-    pub fn other_user_turn_in_flight(&self, session_id: &str) -> bool {
-        self.in_flight_prompts
+    /// The user stopped `session_id`: count it, whether or not a turn is
+    /// open (see `cancel_epochs`).
+    pub(crate) fn note_cancel(&self, session_id: &str) {
+        *self
+            .cancel_epochs
             .lock_or_recover()
-            .keys()
-            .any(|k| k != session_id)
+            .entry(session_id.to_string())
+            .or_default() += 1;
+    }
+
+    /// How many times the user has stopped `session_id` this run.
+    pub(crate) fn cancel_epoch(&self, session_id: &str) -> u64 {
+        self.cancel_epochs
+            .lock_or_recover()
+            .get(session_id)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Whether the agent is doing anything a restart would cut off, apart
+    /// from `except`'s turn (`None`: anything at all): a user turn in any
+    /// window, any open `session/prompt` (background agent calls,
+    /// inline-assist, steering, titles), a background prompt, or a running
+    /// agent job (an automation plan, which is idle between its steps).
+    /// The same things that hold back a silent update
+    /// (`updater::is_agent_busy`).
+    pub fn agent_work_in_flight(&self, except: Option<&str>) -> bool {
+        self.agent_work_in_flight_here(except) || crate::updater::has_active_agent_jobs()
+    }
+
+    /// Whether restarting the agent now would cut off work it is doing: it
+    /// is up (a dead agent has nothing left to lose) and has any work in
+    /// flight, the asking window's own turn included. A Reconnect then
+    /// waits rather than kill a turn whose recovery would resend it.
+    pub fn restart_would_interrupt_work(&self) -> bool {
+        self.is_healthy() && self.agent_work_in_flight(None)
+    }
+
+    /// `agent_work_in_flight` without the process-wide agent jobs.
+    fn agent_work_in_flight_here(&self, except: Option<&str>) -> bool {
+        let other = |k: &String| except != Some(k.as_str());
+        self.in_flight_prompts.lock_or_recover().keys().any(other)
+            || self.turn_progress.lock_or_recover().keys().any(other)
+            || self
+                .background_prompt_sessions
+                .lock_or_recover()
+                .iter()
+                .any(other)
     }
 
     /// Forget a failed automatic restart: the next failing prompt may
@@ -792,16 +840,64 @@ mod tests {
     }
 
     #[test]
-    fn other_user_turn_in_flight_ignores_own_session() {
+    fn agent_work_in_flight_ignores_only_the_named_session() {
         let client = AcpClient::new(AcpConnectionMode::Local {
             spawn_command: "true".to_string(),
         });
-        assert!(!client.other_user_turn_in_flight("s1"));
+        assert!(!client.agent_work_in_flight_here(Some("s1")));
+        assert!(!client.agent_work_in_flight_here(None));
         client.set_in_flight_prompt("s2", "hello");
-        assert!(client.other_user_turn_in_flight("s1"));
-        assert!(!client.other_user_turn_in_flight("s2"));
+        assert!(client.agent_work_in_flight_here(Some("s1")));
+        assert!(!client.agent_work_in_flight_here(Some("s2")));
+        assert!(client.agent_work_in_flight_here(None));
         client.clear_in_flight_prompt("s2");
-        assert!(!client.other_user_turn_in_flight("s1"));
+        assert!(!client.agent_work_in_flight_here(Some("s1")));
+    }
+
+    #[test]
+    fn agent_work_in_flight_counts_background_and_open_prompts() {
+        // A background agent call or inline-assist prompt sets no
+        // in-flight user prompt, but a restart would still cut it off.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        client.begin_turn_progress("scratch");
+        assert!(client.agent_work_in_flight_here(Some("s1")));
+        assert!(!client.agent_work_in_flight_here(Some("scratch")));
+        client.take_turn_progress("scratch");
+        assert!(!client.agent_work_in_flight_here(Some("s1")));
+
+        {
+            let _bg = BackgroundPromptGuard::new(&client.background_prompt_sessions, "titler");
+            assert!(client.agent_work_in_flight_here(Some("s1")));
+            assert!(client.agent_work_in_flight_here(None));
+        }
+        assert!(!client.agent_work_in_flight_here(None));
+    }
+
+    #[test]
+    fn agent_work_in_flight_counts_agent_jobs() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let _job = crate::updater::AgentJobGuard::acquire();
+        assert!(client.agent_work_in_flight(Some("s1")));
+        assert!(client.agent_work_in_flight(None));
+    }
+
+    #[test]
+    fn cancel_epoch_counts_stops_with_no_open_turn() {
+        // A Stop between a failed attempt and its resend finds no open
+        // turn; the epoch still moves, so the ladder can see it.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        assert_eq!(client.cancel_epoch("s1"), 0);
+        let _ = client.cancel_session("s1");
+        assert_eq!(client.cancel_epoch("s1"), 1);
+        let _ = client.cancel_session("s1");
+        assert_eq!(client.cancel_epoch("s1"), 2);
+        assert_eq!(client.cancel_epoch("s2"), 0);
     }
 
     #[test]

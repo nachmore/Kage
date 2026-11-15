@@ -13,6 +13,10 @@
     "message": "Failed to reconnect: {reason}",
     "description": "Reconnect attempt to the agent backend failed"
   },
+  "errors.connection.reconnect_busy": {
+    "message": "The agent is still working on something. Wait for it to finish, or stop it, then try Reconnect again.",
+    "description": "The user clicked Reconnect while the agent was running a turn (in this or another window, or a background task); restarting it would cut that work off, so Kage did not restart it."
+  },
   "errors.session.load_failed": {
     "message": "Could not load session: {reason}",
     "description": "Resuming a stored session against the agent backend failed"

@@ -151,6 +151,52 @@ describe('chat Reconnect after a failed prompt', () => {
         expect(sends(invoke)).toHaveLength(1);
     });
 
+    it('does not resend into the session the user switched to while the turn failed', async () => {
+        const { app, invoke } = makeApp();
+        app.elements.chatInput.value = 'hello';
+        await app.sendMessage();
+        // Switched before the error arrived (the ladder took its time).
+        app.activeSessionId = 's2';
+        await fail(app, INCIDENT);
+
+        clickReconnect();
+        await flush();
+
+        expect(invoke).toHaveBeenCalledWith('reconnect_acp', { sessionId: 's2' });
+        expect(sends(invoke)).toHaveLength(1);
+    });
+
+    it('follows a mid-turn session migration and resends to the new id', async () => {
+        const { app, invoke, listeners } = makeApp();
+        app.appWindow = { listen: vi.fn(async () => () => {}) };
+        app.setupStreamingListeners();
+        app.elements.chatInput.value = 'hello';
+        await app.sendMessage();
+        listeners.session_migrated({ payload: { oldSessionId: 's1', newSessionId: 's7' } });
+        // As the MESSAGE_ERROR listener does: the shown session's stream ends.
+        app.streamRegistry.fail(app.activeSessionId);
+        await fail(app, INCIDENT);
+
+        clickReconnect();
+        await flush();
+
+        expect(invoke).toHaveBeenCalledWith('reconnect_acp', { sessionId: 's7' });
+        expect(sends(invoke)).toHaveLength(2);
+        expect(sends(invoke)[1][1].sessionId).toBe('s7');
+    });
+
+    it('a new prompt clears the old error and its Reconnect', async () => {
+        const { app } = makeApp();
+        await sendAndFail(app);
+        expect(document.getElementById('errorReconnectBtn')).not.toBeNull();
+
+        app.elements.chatInput.value = 'next';
+        await app.sendMessage();
+
+        expect(document.getElementById('errorReconnectBtn')).toBeNull();
+        expect(app.elements.errorContainer.innerHTML).toBe('');
+    });
+
     it('does not resend once a newer prompt went out', async () => {
         const { app, invoke } = makeApp();
         await sendAndFail(app);

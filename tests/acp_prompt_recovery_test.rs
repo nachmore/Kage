@@ -31,6 +31,10 @@ enum Prompt {
     ToolCallThenFailure,
     /// `-32000`.
     AuthRequired,
+    /// Prompts succeed, but `session/load` answers `-32603`.
+    LoadFails,
+    /// Prompts succeed, and `session/load` takes 600 ms.
+    SlowLoad,
 }
 
 struct MockAgent {
@@ -115,7 +119,9 @@ fn serve(
                     "code": -32603, "message": "Internal error", "data": INCIDENT_DETAIL
                 });
                 match behaviour {
-                    Prompt::Ok => json!({ "result": { "stopReason": "end_turn" } }),
+                    Prompt::Ok | Prompt::LoadFails | Prompt::SlowLoad => {
+                        json!({ "result": { "stopReason": "end_turn" } })
+                    }
                     Prompt::DispatchFailure => json!({ "error": internal }),
                     Prompt::ChunkThenFailure => {
                         lines.push(json!({
@@ -143,6 +149,13 @@ fn serve(
                 }
             }
             "session/new" => json!({ "result": { "sessionId": "NEW" } }),
+            "session/load" if matches!(behaviour, Prompt::LoadFails) => json!({
+                "error": { "code": -32603, "message": "Internal error", "data": "session store unavailable" }
+            }),
+            "session/load" if matches!(behaviour, Prompt::SlowLoad) => {
+                std::thread::sleep(std::time::Duration::from_millis(600));
+                json!({ "result": {} })
+            }
             _ => json!({ "result": {} }),
         };
         let mut reply = reply;
@@ -171,11 +184,37 @@ fn send(client: &AcpClient) -> anyhow::Result<String> {
     client.send_chat_streaming_with_recovery("S1".to_string(), "hello".to_string(), None, None)
 }
 
+/// Record the methods of every notification the client hands its handler.
+fn record_notifications(client: &AcpClient) -> Arc<Mutex<Vec<Value>>> {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = seen.clone();
+    client.set_notification_handler(move |n| sink.lock().unwrap().push(n));
+    seen
+}
+
+fn methods(seen: &Arc<Mutex<Vec<Value>>>) -> Vec<String> {
+    seen.lock()
+        .unwrap()
+        .iter()
+        .filter_map(|n| n["method"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// Wait until the agent has had `n` requests of `method`.
+fn wait_for(agent: &MockAgent, method: &str, n: usize) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while agent.count(method) < n {
+        assert!(std::time::Instant::now() < deadline, "no {method} arrived");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
 #[test]
 fn internal_error_with_no_output_restarts_reloads_and_resends_once() {
     isolate_user_dirs();
     let agent = MockAgent::start(vec![Prompt::DispatchFailure, Prompt::Ok]);
     let client = agent.client();
+    let seen = record_notifications(&client);
 
     let id = send(&client).expect("recovered by the restart");
 
@@ -184,6 +223,158 @@ fn internal_error_with_no_output_restarts_reloads_and_resends_once() {
     assert_eq!(agent.connections(), 2);
     assert_eq!(agent.count("session/load"), 1);
     assert_eq!(agent.count("session/new"), 0);
+    // The old reader exits as superseded and reports nothing, so the
+    // restart says it is tearing a live agent down (its pending prompts
+    // to the user are withdrawn) and, having reconnected, nothing more.
+    let methods = methods(&seen);
+    assert_eq!(
+        methods
+            .iter()
+            .filter(|m| *m == "_kage/agent_restarting")
+            .count(),
+        1,
+        "{methods:?}"
+    );
+    assert!(
+        !methods.iter().any(|m| m == "_kage/agent_disconnected"),
+        "{methods:?}"
+    );
+}
+
+#[test]
+fn a_session_that_wont_reload_after_the_restart_is_reported_not_replaced() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::DispatchFailure, Prompt::LoadFails]);
+    let client = agent.client();
+    let seen = record_notifications(&client);
+
+    let err = send(&client).unwrap_err();
+
+    match err.downcast_ref::<PromptRecoveryError>() {
+        Some(PromptRecoveryError::AgentUnreachable { detail }) => {
+            assert!(detail.contains("session store unavailable"), "{detail}")
+        }
+        None => panic!("expected AgentUnreachable, got {err}"),
+    }
+    assert_eq!(agent.count("session/load"), 1);
+    assert_eq!(agent.count("session/new"), 0, "no fresh session");
+    assert_eq!(
+        agent.count("session/prompt"),
+        1,
+        "not resent without its context"
+    );
+    assert!(
+        !methods(&seen).iter().any(|m| m == "_kage/session_migrated"),
+        "no window is moved to an empty session"
+    );
+}
+
+#[test]
+fn a_stop_pressed_during_the_automatic_restart_is_not_resent() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::DispatchFailure, Prompt::SlowLoad]);
+    let client = Arc::new(agent.client());
+
+    let sender = {
+        let client = client.clone();
+        std::thread::spawn(move || send(&client))
+    };
+    // Attempt 1 has failed and the restart is reloading the session: no
+    // turn is open, so only the per-session stop count can catch this.
+    wait_for(&agent, "session/load", 1);
+    let _ = client.cancel_session("S1");
+
+    let id = sender
+        .join()
+        .unwrap()
+        .expect("a stopped turn ends as a Stop does");
+    assert_eq!(id, "S1");
+    assert_eq!(
+        agent.count("session/prompt"),
+        1,
+        "the stopped prompt was resent"
+    );
+}
+
+#[test]
+fn a_stop_pressed_during_the_transport_restart_is_not_resent() {
+    isolate_user_dirs();
+    // Connection 0 drops the prompt (the agent died mid-turn); the restart
+    // reconnects and reloads slowly, and the user stops meanwhile.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let prompts = Arc::new(AtomicUsize::new(0));
+    let loads = Arc::new(AtomicUsize::new(0));
+    {
+        let (prompts, loads) = (prompts.clone(), loads.clone());
+        std::thread::spawn(move || {
+            for (index, stream) in listener.incoming().enumerate() {
+                let Ok(stream) = stream else { return };
+                let (prompts, loads) = (prompts.clone(), loads.clone());
+                std::thread::spawn(move || {
+                    let mut writer = stream.try_clone().unwrap();
+                    for line in BufReader::new(stream).lines() {
+                        let Ok(line) = line else { return };
+                        let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+                            continue;
+                        };
+                        if msg.get("id").is_none() {
+                            continue;
+                        }
+                        let reply = match msg["method"].as_str().unwrap_or("") {
+                            "session/prompt" => {
+                                prompts.fetch_add(1, Ordering::SeqCst);
+                                if index == 0 {
+                                    return; // closes the connection
+                                }
+                                json!({ "stopReason": "end_turn" })
+                            }
+                            "session/load" => {
+                                loads.fetch_add(1, Ordering::SeqCst);
+                                std::thread::sleep(std::time::Duration::from_millis(600));
+                                json!({})
+                            }
+                            _ => json!({}),
+                        };
+                        let reply = json!({ "jsonrpc": "2.0", "id": msg["id"], "result": reply });
+                        if writeln!(writer, "{reply}").is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+    }
+    let client = Arc::new(AcpClient::new(AcpConnectionMode::Remote {
+        host: "127.0.0.1".to_string(),
+        port,
+    }));
+    client.connect().expect("connect to the mock agent");
+
+    let sender = {
+        let client = client.clone();
+        std::thread::spawn(move || send(&client))
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while loads.load(Ordering::SeqCst) < 1 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "no session/load arrived"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let _ = client.cancel_session("S1");
+
+    let id = sender
+        .join()
+        .unwrap()
+        .expect("a stopped turn ends as a Stop does");
+    assert_eq!(id, "S1");
+    assert_eq!(
+        prompts.load(Ordering::SeqCst),
+        1,
+        "the stopped prompt was resent"
+    );
 }
 
 #[test]
@@ -281,4 +472,44 @@ fn another_windows_turn_in_flight_blocks_the_restart() {
     assert_eq!(err.downcast_ref::<AgentRpcError>().unwrap().code, -32603);
     assert_eq!(agent.count("session/prompt"), 1);
     assert_eq!(agent.connections(), 1);
+}
+
+#[test]
+fn a_background_prompt_in_flight_blocks_the_restart() {
+    // An automation's or inline-assist's prompt sets no in-flight user
+    // prompt; the restart would still kill it mid-work.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::DispatchFailure, Prompt::Ok]);
+    let client = agent.client();
+    client
+        .background_prompt_sessions
+        .lock()
+        .unwrap()
+        .insert("SCRATCH".to_string());
+
+    let err = send(&client).unwrap_err();
+
+    assert_eq!(err.downcast_ref::<AgentRpcError>().unwrap().code, -32603);
+    assert_eq!(agent.count("session/prompt"), 1);
+    assert_eq!(agent.connections(), 1);
+}
+
+#[test]
+fn a_restart_would_interrupt_any_turn_on_a_live_agent() {
+    // Reconnect's guard: any turn counts, the asking window's own included
+    // (a stale Reconnect clicked while its next prompt runs).
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::Ok]);
+    let client = agent.client();
+    assert!(!client.restart_would_interrupt_work());
+
+    client.set_in_flight_prompt("S1", "a prompt running its tools");
+    assert!(client.restart_would_interrupt_work());
+    client.clear_in_flight_prompt("S1");
+    assert!(!client.restart_would_interrupt_work());
+
+    // A dead agent has nothing left to cut off: Reconnect goes ahead.
+    client.set_in_flight_prompt("S1", "a prompt on a dead agent");
+    client.disconnect();
+    assert!(!client.restart_would_interrupt_work());
 }

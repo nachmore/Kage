@@ -296,6 +296,8 @@ pub struct ReconnectOutcome {
 /// Reconnect: restart the agent (even one that looks alive: a live but
 /// wedged agent is exactly when the user clicks this), then reload the
 /// window's session on it. The window resends its failed prompt itself.
+/// Refused while a live agent has work in flight (any window's turn, a
+/// background call, an automation).
 #[tauri::command]
 pub async fn reconnect_acp<R: tauri::Runtime>(
     session_id: Option<String>,
@@ -315,6 +317,20 @@ pub async fn reconnect_acp<R: tauri::Runtime>(
     // The restart is a synchronous respawn + handshake (Remote mode: up to
     // 6 dial attempts × 5 s plus sleeps) — keep it off the Tokio workers.
     async_runtime::spawn_blocking(move || -> Result<ReconnectOutcome, AppError> {
+        // A stale Reconnect (an old error still on screen) must not kill a
+        // live agent mid-turn: the killed turn would lose its connection
+        // and the recovery ladder would resend it, repeating its tools.
+        if client.restart_would_interrupt_work() {
+            info!(
+                "Reconnect requested by {}: not restarting, the agent has work in flight",
+                label
+            );
+            return Err(AppError::keyed(
+                ErrorKind::ConnectionLost,
+                "errors.connection.reconnect_busy",
+                &[],
+            ));
+        }
         info!("Reconnect requested by {}: restarting the agent", label);
         client.clear_unreachable_latch();
         if let Err(e) = client.restart_connection() {

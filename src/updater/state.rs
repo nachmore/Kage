@@ -126,7 +126,7 @@ impl Drop for AgentJobGuard {
     }
 }
 
-pub(super) fn has_active_agent_jobs() -> bool {
+pub(crate) fn has_active_agent_jobs() -> bool {
     ACTIVE_AGENT_JOBS.load(Ordering::SeqCst) > 0
 }
 

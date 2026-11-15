@@ -152,6 +152,7 @@ export function createStreamListenersMixin(dependencies) {
                 // this just avoids a stale badge on the dead id).
                 if (oldId) this.streamRegistry.fail(oldId);
                 if (newId) this.streamRegistry.begin(newId);
+                this._followTurnSession(oldId, newId);
                 const ours =
                     oldId && (oldId === this.currentAcpSessionId || oldId === this.activeSessionId);
                 if (!ours || !newId) return;

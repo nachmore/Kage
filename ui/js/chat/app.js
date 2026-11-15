@@ -483,10 +483,12 @@ export class ChatApp {
                 if (!online) app.showError(offlineMessage());
                 else {
                     const p = event.payload;
-                    // The current id: a migration may have moved the session.
+                    // The session the turn went to (kept up to date across
+                    // a migration by session_migrated), not the one shown
+                    // now: the user may have switched while it was failing.
                     const retryTurn =
                         !hadOutput && !isRateLimitPayload(p) && app._lastTurn
-                            ? { ...app._lastTurn, sessionId: app.activeSessionId }
+                            ? { ...app._lastTurn }
                             : null;
                     const text =
                         typeof p === 'string'

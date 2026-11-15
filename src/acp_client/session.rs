@@ -557,6 +557,11 @@ impl AcpClient {
         let att_ref = attachments.as_deref();
         let had_attachments = att_ref.is_some_and(|a| !a.is_empty());
         let send = |id: &str| self.send_chat_prompt(id, &content, att_ref, None, hidden);
+        // A Stop from here on keeps the prompt from being resent, even one
+        // pressed while no turn is open (mid-restart).
+        let epoch = self.cancel_epoch(&session_id);
+        let original = session_id.clone();
+        let stopped = |id: &str| self.stopped_during_recovery(&original, epoch, id);
 
         // --- Attempt 1: normal send ---
         let first_err = match send(&session_id) {
@@ -581,10 +586,13 @@ impl AcpClient {
                 return Err(first_err);
             }
             PromptFailure::AgentInternal => {
-                return self.restart_reload_resend_once(&session_id, &send, first_err);
+                return self.restart_reload_resend_once(&session_id, &send, &stopped, first_err);
             }
             PromptFailure::Corrupted => {
                 warn!("Prompt failed ({}), attempting recovery…", first_err);
+                if stopped(&session_id) {
+                    return Ok(session_id);
+                }
                 warn!("Session corrupted — skipping reload, creating fresh session");
                 let new_id = self.restart_with_fresh_session()?;
                 // The fresh session's steering reply accumulated under
@@ -592,17 +600,26 @@ impl AcpClient {
                 // live windows to adopt new_id before the resend streams.
                 self.reset_session_accumulator(&new_id);
                 self.notify_session_migrated(&session_id, &new_id);
+                if stopped(&new_id) {
+                    return Ok(new_id);
+                }
                 send(&new_id)?;
                 return Ok(new_id);
             }
             PromptFailure::Transport => {
                 warn!("Prompt failed ({}), attempting recovery…", first_err);
+                if stopped(&session_id) {
+                    return Ok(session_id);
+                }
             }
         }
 
         // --- Attempt 2: restart + reload session + resend ---
         self.restart_connection()?;
         let session_id = self.reload_or_replace_session(&session_id)?;
+        if stopped(&session_id) {
+            return Ok(session_id);
+        }
 
         match send(&session_id) {
             Ok(()) => return Ok(session_id),
@@ -632,8 +649,28 @@ impl AcpClient {
         let new_id = self.restart_with_fresh_session()?;
         self.reset_session_accumulator(&new_id);
         self.notify_session_migrated(&session_id, &new_id);
+        if stopped(&new_id) {
+            return Ok(new_id);
+        }
         send(&new_id)?;
         Ok(new_id)
+    }
+
+    /// Whether the user stopped the prompt since the ladder began: on the
+    /// session it was sent on (`epoch` was its count then), or on
+    /// `current`, a fresh session recovery moved it to (fresh, so any Stop
+    /// on it is this prompt's). The caller then ends the turn as a Stop
+    /// would, without resending: `Ok`, so no error offers a resend either.
+    fn stopped_during_recovery(&self, original: &str, epoch: u64, current: &str) -> bool {
+        let stopped = self.cancel_epoch(original) != epoch
+            || (current != original && self.cancel_epoch(current) != 0);
+        if stopped {
+            info!(
+                "Prompt on {} was stopped during recovery; not resending it",
+                current
+            );
+        }
+        stopped
     }
 
     /// After a restart, get `session_id` back on the agent: reload it, or,
@@ -667,20 +704,23 @@ impl AcpClient {
     /// incident: kiro-cli lost its token and answers every prompt with
     /// "dispatch failure"). Restart it once, reload the session, resend
     /// once. No fresh session and no third attempt: neither fixes a sign-in
-    /// or service outage, and a fresh session drops the conversation.
+    /// or service outage, and a fresh session drops the conversation (so a
+    /// session that won't reload is reported, not replaced).
     ///
-    /// Not when another window's user turn is in flight (the restart would
-    /// cut it off), nor while the loop guard holds (a restart failed to fix
-    /// this within the last minute).
+    /// Not while the agent is doing anything else (another window's turn,
+    /// a background agent call, an automation: the restart would cut it
+    /// off), nor while the loop guard holds (a restart failed to fix this
+    /// within the last minute), nor once the user has stopped the prompt.
     fn restart_reload_resend_once(
         &self,
         session_id: &str,
         send: &dyn Fn(&str) -> Result<()>,
+        stopped: &dyn Fn(&str) -> bool,
         first_err: anyhow::Error,
     ) -> Result<String> {
-        if self.other_user_turn_in_flight(session_id) {
+        if self.agent_work_in_flight(Some(session_id)) {
             warn!(
-                "Not restarting the agent for {}: another session has a turn in flight",
+                "Not restarting the agent for {}: it has other work in flight",
                 session_id
             );
             return Err(first_err);
@@ -692,23 +732,40 @@ impl AcpClient {
             );
             return Err(agent_unreachable(first_err.to_string()));
         }
+        if stopped(session_id) {
+            return Ok(session_id.to_string());
+        }
         warn!(
             "Prompt on {} failed with agent error {} and no output this turn; restarting the agent once",
             session_id,
             rpc_code(&first_err).unwrap_or(JSONRPC_INTERNAL_ERROR)
         );
         self.restart_connection()?;
-        let id = self.reload_or_replace_session(session_id)?;
-        match send(&id) {
+        match self.load_existing_session(session_id, None) {
+            Ok(_) => info!("Session {} reloaded successfully", session_id),
+            Err(e) if is_auth_required(&e) => return Err(e),
+            Err(e) => {
+                warn!(
+                    "Session {} did not reload after the automatic restart; reporting agent unreachable: {}",
+                    session_id, e
+                );
+                self.set_unreachable_latch();
+                return Err(agent_unreachable(e.to_string()));
+            }
+        }
+        if stopped(session_id) {
+            return Ok(session_id.to_string());
+        }
+        match send(session_id) {
             Ok(()) => {
                 self.clear_unreachable_latch();
-                Ok(id)
+                Ok(session_id.to_string())
             }
             Err(e2) => match classify_prompt_failure(&e2, false) {
                 PromptFailure::AgentInternal | PromptFailure::Transport => {
                     warn!(
                         "Prompt on {} failed again after the automatic restart; reporting agent unreachable",
-                        id
+                        session_id
                     );
                     self.set_unreachable_latch();
                     Err(agent_unreachable(e2.to_string()))
