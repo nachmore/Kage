@@ -117,6 +117,22 @@
     "message": "Agent error ({code}): {reason}",
     "description": "JSON-RPC protocol error from the agent backend with numeric code"
   },
+  "errors.agent.unreachable_after_restart": {
+    "message": "Kage restarted the agent and tried again, but it still failed. This is usually a sign-in or network problem. Check that you're signed in to your agent and online, then click Reconnect.",
+    "description": "Shown after Kage automatically restarted the agent backend and the same prompt failed again with no output. The agent is not Kiro, or Kage can't tell which agent it is."
+  },
+  "errors.agent.unreachable_after_restart_kiro": {
+    "message": "Kage restarted Kiro and tried again, but it still failed. You're probably signed out of Kiro, or offline. To sign in, run {command} in a terminal, then click Reconnect.",
+    "description": "Same as errors.agent.unreachable_after_restart, for the Kiro agent. {command} is a terminal command (kiro-cli login); keep it verbatim, do not translate it."
+  },
+  "errors.agent.auth_required": {
+    "message": "Your agent needs you to sign in. Sign in with the agent's own tool, then click Reconnect.",
+    "description": "The agent backend answered with the ACP 'authentication required' error (-32000)."
+  },
+  "errors.agent.auth_required_kiro": {
+    "message": "Kiro needs you to sign in. Run {command} in a terminal, then click Reconnect.",
+    "description": "The Kiro agent answered with the ACP 'authentication required' error. {command} is a terminal command (kiro-cli login); keep it verbatim."
+  },
   "errors.macro.connect_failed": {
     "message": "Step {step}: could not connect to the agent: {reason}",
     "description": "Macro automation step failed to establish an ACP connection"
@@ -4905,6 +4921,10 @@
     "message": "Extension tool: {label}",
     "description": "Tooltip on the streaming-source chip showing which extension tool produced output"
   },
+  "shared.streaming.error_details": {
+    "message": "Details: {detail}",
+    "description": "Second line under an agent error, with the agent's raw error text for troubleshooting. {detail} is the agent's own text, not translated."
+  },
   "shared.shell.chip_label": {
     "message": "shell",
     "description": "Label of the chip under an agent response that groups the shell commands the agent ran (like the agent's 'shell' tool name). Clicking it lists the commands. Keep short; lowercase is fine."
@@ -6744,6 +6764,10 @@
   "chat.error.btn.reconnect": {
     "message": "Reconnect",
     "description": "Button label to retry connecting"
+  },
+  "chat.error.btn.reconnecting": {
+    "message": "Reconnecting…",
+    "description": "Label on the Reconnect button while Kage restarts the agent and reloads the session."
   },
   "chat.error.btn.dismiss": {
     "message": "Dismiss",

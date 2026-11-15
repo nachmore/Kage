@@ -304,6 +304,9 @@ export function createStreamListenersMixin(dependencies) {
                 const message = event.payload;
                 if (message) {
                     this.addUserMessage(message);
+                    // The backend sends it (open_chat_with_message) and a
+                    // failure comes back here, so Reconnect can resend it.
+                    this._recordTurn(this.activeSessionId, message, null);
                     this.startStreaming();
                 }
             });

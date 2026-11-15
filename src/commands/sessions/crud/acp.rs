@@ -40,8 +40,12 @@ pub async fn switch_acp_session<R: tauri::Runtime>(
     })?
 }
 
+/// The body of `switch_acp_session`, for a blocking thread. Also used by
+/// `reconnect_acp` to reload the window's session on a restarted agent:
+/// it loads with the cwd recorded for the session, refreshes the model
+/// list, re-pins the window and updates its title.
 #[allow(clippy::too_many_arguments)] // Mirrors the Tauri command's state params.
-fn switch_acp_session_blocking<R: tauri::Runtime>(
+pub(crate) fn switch_acp_session_blocking<R: tauri::Runtime>(
     session_id: Option<String>,
     client_guard: std::sync::Arc<crate::acp_client::AcpClient>,
     available_models: std::sync::Arc<std::sync::Mutex<Vec<crate::state::AcpModel>>>,
@@ -111,6 +115,9 @@ fn load_existing_session<R: tauri::Runtime>(
             })
     };
     let (loaded_id, models_json) = client.load_existing_session(id, cwd).map_err(|e| {
+        if crate::acp_client::types::is_auth_required(&e) {
+            return crate::commands::messaging::auth_required_error(&config.lock_or_recover());
+        }
         AppError::keyed(
             ErrorKind::Internal,
             "errors.session.load_failed",

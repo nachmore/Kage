@@ -32,8 +32,11 @@ impl AcpClient {
         self.clear_compaction_gate();
     }
 
-    /// Tear down and rebuild the agent connection, with coalescing and retry.
-    pub(crate) fn restart_connection(&self) -> Result<()> {
+    /// Tear down and rebuild the agent connection, with coalescing and retry:
+    /// force-disconnect, respawn (Local) or redial (Remote), `initialize`.
+    /// A caller arriving within `RESTART_COOLDOWN_MS` of a restart that
+    /// succeeded, while the connection is healthy, shares that restart.
+    pub fn restart_connection(&self) -> Result<()> {
         let mut last_ok = self.restart_guard.lock_or_recover();
         if should_coalesce_restart(
             last_ok.map(|when| when.elapsed()),

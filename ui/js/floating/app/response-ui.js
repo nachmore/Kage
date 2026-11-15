@@ -1,11 +1,16 @@
 import {
+    _resetDiagramFailures,
     attachSourceClickHandler,
     createShellActivitySlot,
+    errLabel,
+    errMessage,
     escapeHtml,
     finishShellActivity,
     getActionsForText,
     getConfig,
     handOffShellActivity,
+    isRateLimitPayload,
+    offlineMessage,
     pruneShellActivity,
     renderMarkdown,
     renderSourceBubblesHtml,
@@ -16,6 +21,7 @@ import {
     signalMascotRecovered,
     syncToolSources,
     t,
+    WINDOW,
 } from './dependencies.js';
 
 export const ResponseUiMethods = {
@@ -306,6 +312,40 @@ export const ResponseUiMethods = {
         this.windowManager.resizeWindow();
     },
 
+    /**
+     * The turn failed (MESSAGE_ERROR). The payload is a string, or for a
+     * sign-in demand / "still failing after a restart" an AppError-shaped
+     * `{ kind, message, detail }`.
+     */
+    async _onMessageError(event, online) {
+        if (!this.isWaitingForResponse) return;
+        this.isWaitingForResponse = false;
+        this._finishShellActivity();
+        this.computerControlActive = false;
+        this._noBlurTools.clear();
+        this.elements.floatingStopBtn.style.display = 'none';
+        this.updateDatetimeVisibility();
+        _resetDiagramFailures();
+        // Read before showError, which overwrites currentResponse.
+        const hadOutput = !!this.currentResponse?.trim() || this.toolUsages?.length > 0;
+        if (!online) {
+            this.showError(offlineMessage());
+            return;
+        }
+        const payload = event.payload;
+        // Reconnect may resend this turn only if nothing of it got through
+        // (nothing to repeat) and it wasn't a rate limit.
+        const retryTurn =
+            !hadOutput && !isRateLimitPayload(payload) && this._lastTurn
+                ? { ...this._lastTurn }
+                : null;
+        const text =
+            typeof payload === 'string'
+                ? t('floating.error.error_with_payload', { payload })
+                : errMessage(payload);
+        this.showError(text, { reconnect: true, retryTurn, detail: payload?.detail });
+    },
+
     showError(message, opts = {}) {
         this.stopThinking();
         this.currentResponse = message;
@@ -320,32 +360,78 @@ export const ResponseUiMethods = {
         msgSpan.textContent = message;
         this.elements.responseText.appendChild(msgSpan);
 
+        // The agent's own text, for troubleshooting (not translated).
+        if (opts.detail) {
+            const detail = document.createElement('div');
+            detail.className = 'error-detail';
+            detail.dir = 'ltr';
+            detail.textContent = t('shared.streaming.error_details', { detail: opts.detail });
+            this.elements.responseText.appendChild(detail);
+        }
+
         if (opts.reconnect) {
             const btn = document.createElement('button');
             btn.className = 'floating-error-reconnect';
             btn.textContent = t('chat.error.btn.reconnect');
-            btn.addEventListener('click', async () => {
-                btn.disabled = true;
-                try {
-                    const success = await this.invoke('reconnect_acp');
-                    if (success) {
-                        // The agent is back — drop the error/limit pose.
-                        signalMascotRecovered();
-                        this.elements.responseText.textContent = '';
-                        this.elements.contentArea.classList.remove('visible');
-                        this.elements.expandBtn.classList.remove('visible');
-                        this.windowManager.resizeWindow();
-                        return;
-                    }
-                } catch (e) {
-                    console.log('Reconnect failed:', e);
-                }
-                btn.disabled = false;
-            });
+            btn.addEventListener('click', () => this._reconnectFromError(btn, opts.retryTurn));
             this.elements.responseText.appendChild(document.createElement('br'));
             this.elements.responseText.appendChild(btn);
         }
 
+        this.windowManager.resizeWindow();
+    },
+
+    /**
+     * Reconnect clicked under an error: restart the agent and reload this
+     * window's session, then resend the failed turn when nothing of it got
+     * through and nothing was sent since (`retryTurn`, see onError).
+     */
+    async _reconnectFromError(btn, retryTurn) {
+        btn.disabled = true;
+        btn.textContent = t('chat.error.btn.reconnecting');
+        let outcome;
+        try {
+            outcome = await this.invoke('reconnect_acp', {
+                sessionId: this.floatingSessionId ?? null,
+            });
+        } catch (e) {
+            console.log('Reconnect failed:', e);
+            btn.textContent = t('chat.error.btn.reconnect');
+            btn.disabled = false;
+            let failure = this.elements.responseText.querySelector('.error-reconnect-failed');
+            if (!failure) {
+                failure = document.createElement('div');
+                failure.className = 'error-reconnect-failed';
+                btn.before(failure);
+            }
+            failure.textContent = errLabel(t('chat.error.reconnect_failed_label'), e);
+            this.windowManager.resizeWindow();
+            return;
+        }
+        // The session may have moved (the reload made a fresh one): the
+        // resend below goes to whichever id the window holds now.
+        const sid = outcome?.sessionId;
+        if (sid && sid !== this.floatingSessionId) {
+            console.log('[floating] adopting reconnect session id:', sid);
+            this.floatingSessionId = sid;
+            this.invoke('set_window_session', {
+                label: WINDOW.FLOATING,
+                sessionId: sid,
+            }).catch(() => {});
+        }
+        // The agent is back — drop the error/limit pose.
+        signalMascotRecovered();
+        if (
+            retryTurn &&
+            retryTurn.generation === this._promptGeneration &&
+            this.canSendAgentPrompt(this.floatingSessionId)
+        ) {
+            await this._resendTurn(retryTurn);
+            return;
+        }
+        this.elements.responseText.textContent = '';
+        this.elements.contentArea.classList.remove('visible');
+        this.elements.expandBtn.classList.remove('visible');
         this.windowManager.resizeWindow();
     },
 

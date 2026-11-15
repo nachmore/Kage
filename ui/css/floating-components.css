@@ -693,6 +693,14 @@ body.dark-theme button.datetime-date[aria-expanded="true"] {
     border-radius: 6px;
 }
 
+/* The agent's raw error text under an error, for troubleshooting. */
+.response-text .error-detail {
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.75;
+    overflow-wrap: anywhere;
+}
+
 /* Reconnect button shown in the floating window on a connection error. */
 .floating-error-reconnect {
     margin-top: 8px;

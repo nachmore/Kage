@@ -75,6 +75,12 @@ pub enum ErrorKind {
     NeedsConfirmation,
     /// Image/attachment not supported by current model
     ImageUnsupported,
+    /// Kage restarted the agent and the prompt still failed the same way
+    /// (usually signed out, or offline).
+    AgentUnreachable,
+    /// The agent answered with ACP "authentication required": the user has
+    /// to sign in with the agent's own tool.
+    AuthRequired,
     /// Lock acquisition failed (internal)
     LockError,
     /// Serialization/deserialization failure
@@ -290,6 +296,18 @@ mod tests {
             (ErrorKind::SyncUnavailable, "sync_unavailable"),
             (ErrorKind::QuotaExceeded, "quota_exceeded"),
             (ErrorKind::NeedsConfirmation, "needs_confirmation"),
+        ] {
+            let json = serde_json::to_value(AppError::new(kind, "x")).unwrap();
+            assert_eq!(json["kind"], wire);
+        }
+    }
+
+    #[test]
+    fn agent_kinds_have_stable_wire_names() {
+        crate::i18n::init(Some("en"));
+        for (kind, wire) in [
+            (ErrorKind::AgentUnreachable, "agent_unreachable"),
+            (ErrorKind::AuthRequired, "auth_required"),
         ] {
             let json = serde_json::to_value(AppError::new(kind, "x")).unwrap();
             assert_eq!(json["kind"], wire);

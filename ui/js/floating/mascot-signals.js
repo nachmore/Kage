@@ -9,6 +9,8 @@
  * safe to send.
  */
 
+import { isRateLimitPayload } from '../shared/error-message.js';
+
 /**
  * Send one engine signal. Swallows everything: a mascot that throws must
  * never break the event handler it was called from.
@@ -157,19 +159,17 @@ export function setHostTimerHint(running) {
 
 // ── agent errors ───────────────────────────────────────────────────────────
 
-// `message_error` arrives as a plain string: every Rust emitter formats its
-// own text (see src/commands/messaging/*.rs), so unlike a command rejection
-// there is no AppError `kind` to switch on. Match the rate-limit wording
-// instead — and still honour a `{kind, message}` shape in case a future
-// emitter starts forwarding the struct.
-const RATE_LIMIT_RE = /rate[\s_-]?limit|too many requests|\b429\b|quota exceeded/i;
+// `message_error` mostly arrives as a plain string: Rust emitters format
+// their own text (see src/commands/messaging/*.rs), so there is usually no
+// AppError `kind` to switch on. `isRateLimitPayload` matches the rate-limit
+// wording, and honours the `{kind, message}` shape the sign-in and "still
+// failing after a restart" errors use (both signal the generic `error`).
+// Shared with the chat window, so it lives in shared/error-message.js.
+export { isRateLimitPayload };
 
 /** Route a `message_error` payload to `rateLimit` or the generic `error`. */
 export function signalMascotError(payload) {
-    const isObj = payload !== null && typeof payload === 'object';
-    const kind = isObj ? payload.kind : null;
-    const text = typeof payload === 'string' ? payload : isObj ? payload.message || '' : '';
-    signalMascot(kind === 'rate_limited' || RATE_LIMIT_RE.test(text) ? 'rateLimit' : 'error');
+    signalMascot(isRateLimitPayload(payload) ? 'rateLimit' : 'error');
 }
 
 /**

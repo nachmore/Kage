@@ -28,7 +28,7 @@ import { WINDOW, isChatLabel } from '../shared/window-labels.js';
 import { applyMixin } from '../shared/mixin.js';
 import { getWindowSessionOrNull } from '../shared/session-resolve.js';
 import { SessionStreamRegistry, STREAM } from '../shared/session-streams.js';
-import { errLabel } from '../shared/error-message.js';
+import { errLabel, errMessage, isRateLimitPayload } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { submitSelection, loadSelection } from '../shared/slash-selection.js';
 import { mascotHTML } from '../shared/mascot.js';
@@ -468,6 +468,10 @@ export class ChatApp {
             },
             onError: async (event, online) => {
                 app.hideTypingIndicator();
+                // Before the streaming bubble goes: did any of the turn get
+                // through? Reconnect resends it only if nothing did.
+                const hadOutput =
+                    !!app.currentStreamingContent?.trim() || app.toolUsages?.length > 0;
                 if (app.currentStreamingMessage) {
                     app.currentStreamingMessage.remove();
                     app.currentStreamingMessage = null;
@@ -477,7 +481,19 @@ export class ChatApp {
                 app.elements.chatInput.focus();
                 _resetDiagramFailures();
                 if (!online) app.showError(offlineMessage());
-                else app.showError(t('chat.error.error_with_payload', { payload: event.payload }));
+                else {
+                    const p = event.payload;
+                    // The current id: a migration may have moved the session.
+                    const retryTurn =
+                        !hadOutput && !isRateLimitPayload(p) && app._lastTurn
+                            ? { ...app._lastTurn, sessionId: app.activeSessionId }
+                            : null;
+                    const text =
+                        typeof p === 'string'
+                            ? t('chat.error.error_with_payload', { payload: p })
+                            : errMessage(p);
+                    app.showError(text, { retryTurn, detail: p?.detail });
+                }
                 app.isConnected = online;
                 app.updateConnectionStatus();
             },

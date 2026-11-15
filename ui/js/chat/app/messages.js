@@ -419,10 +419,20 @@ export function createMessagesMixin(dependencies) {
             }
         }
 
-        showError(message) {
+        /**
+         * Show an error with Reconnect and Dismiss. `opts.detail` adds the
+         * agent's raw text as a second line; `opts.retryTurn` (onError) is
+         * the failed turn, resent after a Reconnect when it still applies.
+         */
+        showError(message, opts = {}) {
+            const detail = opts.detail
+                ? `<div class="error-detail" dir="ltr">${escapeHtml(
+                      t('shared.streaming.error_details', { detail: opts.detail })
+                  )}</div>`
+                : '';
             this.elements.errorContainer.innerHTML = `
             <div class="chat-error">
-                <span>${escapeHtml(message)}</span>
+                <div class="chat-error-text"><span>${escapeHtml(message)}</span>${detail}</div>
                 <div class="chat-error-actions">
                     <button class="chat-error-btn reconnect" id="errorReconnectBtn">${t('chat.error.btn.reconnect')}</button>
                     <button class="chat-error-btn dismiss" id="errorDismissBtn">${t('chat.error.btn.dismiss')}</button>
@@ -434,18 +444,47 @@ export function createMessagesMixin(dependencies) {
                 this.elements.errorContainer.innerHTML = '';
             });
 
-            document.getElementById('errorReconnectBtn')?.addEventListener('click', async () => {
+            const reconnectBtn = document.getElementById('errorReconnectBtn');
+            reconnectBtn?.addEventListener('click', async () => {
+                reconnectBtn.disabled = true;
+                reconnectBtn.textContent = t('chat.error.btn.reconnecting');
+                let outcome;
                 try {
-                    const success = await this.invoke('reconnect_acp');
-                    if (success) {
-                        this.isConnected = true;
-                        this.updateConnectionStatus();
-                        this.elements.errorContainer.innerHTML = '';
-                    } else {
-                        this.showError(t('chat.error.reconnect_failed'));
-                    }
+                    outcome = await this.invoke('reconnect_acp', {
+                        sessionId: this.activeSessionId ?? null,
+                    });
                 } catch (e) {
                     this.showError(errLabel(t('chat.error.reconnect_failed_label'), e));
+                    return;
+                }
+                if (!outcome?.reconnected) {
+                    this.showError(t('chat.error.reconnect_failed'));
+                    return;
+                }
+                this.isConnected = true;
+                this.updateConnectionStatus();
+                this.elements.errorContainer.innerHTML = '';
+                // The session the window shows now (the user may have moved
+                // on while the agent restarted), before adopting a new id.
+                const shown = this.activeSessionId;
+                const sid = outcome.sessionId;
+                if (sid && sid !== this.activeSessionId) {
+                    console.log('[chat] adopting reconnect session id:', sid);
+                    this.activeSessionId = sid;
+                    this.currentAcpSessionId = sid;
+                    this.invoke('set_window_session', {
+                        label: this.windowLabel,
+                        sessionId: sid,
+                    }).catch(() => {});
+                }
+                const turn = opts.retryTurn;
+                if (
+                    turn &&
+                    turn.seq === this._sendSeq &&
+                    turn.sessionId === shown &&
+                    this.canSendAgentPrompt(this.activeSessionId)
+                ) {
+                    await this._resendTurn(turn);
                 }
             });
         }

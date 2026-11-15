@@ -106,6 +106,14 @@ export const InputMethods = {
 
     /** send_message_streaming, tracked so the next turn can wait for it. */
     async _sendTrackedTurn(args) {
+        // What Reconnect resends if this turn fails before any output: the
+        // final text (screen-context and app-mode prefixes included) and the
+        // attachments as content blocks. `generation` ties it to this turn.
+        this._lastTurn = {
+            message: args.message,
+            attachments: args.attachments ?? null,
+            generation: this._promptGeneration,
+        };
         await this._ensureTurnTracking();
         const sid = args.sessionId ?? null;
         this._pendingTurns.push(sid);
@@ -782,6 +790,30 @@ export const InputMethods = {
             this.stopThinking();
             this.showError(errLabel(t('floating.error.error_label'), error));
             throw error;
+        }
+    },
+
+    /**
+     * Resend a turn that failed before any output, after Reconnect. Not a
+     * new message: no floating_message_sent (the chat window already shows
+     * the bubble), no telemetry, and the input box is left alone so a draft
+     * typed meanwhile stays.
+     */
+    async _resendTurn(turn) {
+        await this._clearResponseForNewTurn();
+        if (!(await this._awaitPriorTurnsSettled())) return;
+        await this._startResponseTurn();
+        try {
+            await this._sendTrackedTurn({
+                sessionId: this.floatingSessionId,
+                message: turn.message,
+                attachments: turn.attachments,
+            });
+        } catch (error) {
+            console.error('Error resending the turn:', error);
+            this.isWaitingForResponse = false;
+            this.stopThinking();
+            this.showError(errLabel(t('floating.error.error_label'), error));
         }
     },
 
