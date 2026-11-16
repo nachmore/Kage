@@ -148,6 +148,7 @@ const CHAT_APP_DEPENDENCIES = {
     isChatLabel,
     isErrorForOtherTurn,
     isOnline,
+    isResendablePayload,
     loadFrecency,
     loadSelection,
     loadSlashCommands,

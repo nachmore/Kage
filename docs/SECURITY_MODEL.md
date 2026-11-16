@@ -872,10 +872,15 @@ sign-in method from its arrow-key menu (`ui/js/shared/agent-sign-in.js`,
   the exit code and session id), English app-log lines with the window,
   outcome, exit code and duration only, and, with analytics on, an
   `agent_sign_in` event with where it ran and an exit-code bucket.
-- **Afterwards.** On a clean exit Kage restarts the agent and sends the
-  failed message again, once, only into the session it failed in (or
-  the one the restart replaced it with). On any other ending nothing is
-  restarted or resent.
+- **Afterwards.** On a clean exit Kage restarts the agent and may send the
+  failed message again, by the same rules as the error's Reconnect: only
+  the turn whose id the error names (`turnId`), only when the backend
+  marked that error resendable (nothing of the turn got through), only
+  while the window still shows the session it failed in (or the one the
+  restart replaced it with) and has sent nothing since, at most once, and
+  as a new turn with its own id. If the user moved to another session
+  meanwhile, the window keeps that one and nothing is resent. On any
+  other ending nothing is restarted or resent.
 - **Open in Terminal (macOS).** Hands the same `<path> login` (quoted as
   one shell word) to Terminal.app the way "Run in Terminal" does; it's
   audited as `via: terminal`, `outcome: opened`.

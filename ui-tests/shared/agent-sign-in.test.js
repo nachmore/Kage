@@ -30,6 +30,7 @@ const {
     SIGN_IN_KINDS,
 } = await import('../../ui/js/shared/agent-sign-in.js');
 const { _setTerminalFactoryForTests } = await import('../../ui/js/shared/terminal-view.js');
+const { isResendablePayload } = await import('../../ui/js/shared/error-message.js');
 
 const flush = async (n = 6) => {
     for (let i = 0; i < n; i++) await new Promise((r) => setTimeout(r, 0));
@@ -543,8 +544,54 @@ describe('the run', () => {
         await openPanel(tauri, host);
         tauri.starts[0].resolve({ outcome: 'exited', exitCode: 0 });
         await flush();
-        expect(host.adoptSession).not.toHaveBeenCalled();
+        // Same id, still told: the restart pinned the window to it, and the
+        // window keeps the session it shows if that is another one.
+        expect(host.adoptSession).toHaveBeenCalledWith('s1', 's1');
+        expect(host.adoptSession.mock.invocationCallOrder[0]).toBeLessThan(
+            host.canResend.mock.invocationCallOrder[0]
+        );
         expect(host.resend).toHaveBeenCalledWith('s1');
+    });
+
+    describe('the resend follows the turn-id rules (the window decides)', () => {
+        // A host that decides as the floating and chat windows do: only the
+        // failed turn `t1` the error names, only when the error says it may
+        // go again, at most once.
+        function turnHost(payload) {
+            let resent = false;
+            return makeHost({
+                canResend: vi.fn(() => !resent && isResendablePayload(payload, 't1')),
+                resend: vi.fn(async () => {
+                    resent = true;
+                    return 'sent';
+                }),
+            });
+        }
+        const OWN = { ...PAYLOAD, turnId: 't1', resendable: true };
+
+        for (const [name, payload, expected] of [
+            ['its own resendable turn is resent', OWN, 1],
+            ["another turn's error resends nothing", { ...OWN, turnId: 't0' }, 0],
+            ['a payload not marked resendable resends nothing', { ...OWN, resendable: false }, 0],
+            ['a payload naming no turn resends nothing', { ...PAYLOAD, resendable: true }, 0],
+        ]) {
+            it(name, async () => {
+                const tauri = fakeTauri();
+                const host = turnHost(payload);
+                await openPanel(tauri, host, payload);
+                tauri.starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+                await flush();
+                expect(tauri.named('reconnect_acp')).toEqual([
+                    ['reconnect_acp', { sessionId: 's1' }],
+                ]);
+                expect(host.resend).toHaveBeenCalledTimes(expected);
+                expect(status(host)).toBe(
+                    expected
+                        ? 'shared.agent_sign_in.status.done'
+                        : 'shared.agent_sign_in.status.ready'
+                );
+            });
+        }
     });
 
     it('a conversation not reopened: the message goes to the new one, and says so', async () => {

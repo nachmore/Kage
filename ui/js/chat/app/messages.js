@@ -55,6 +55,7 @@ export function createMessagesMixin(dependencies) {
         splitPromptContext,
         mountSignInAction,
         isAgentSignInActive,
+        isResendablePayload,
         presentOverlayWindow,
         sendAppNotification,
         WINDOW,
@@ -465,7 +466,8 @@ export function createMessagesMixin(dependencies) {
                 const moved = () => this.activeSessionId !== startedOn;
                 // A failed attempt's error keeps the failed turn, so the
                 // next Reconnect can still resend it.
-                const keep = { retryTurn: opts.retryTurn };
+                // (and, for a signed-out agent, its Sign in).
+                const keep = { retryTurn: opts.retryTurn, signIn: opts.signIn };
                 let outcome;
                 try {
                     outcome = await this.invoke('reconnect_acp', { sessionId: startedOn });
@@ -510,7 +512,7 @@ export function createMessagesMixin(dependencies) {
                 mountSignInAction?.(
                     actions,
                     opts.signIn,
-                    this._agentSignInHost(opts.retryTurn ?? null)
+                    this._agentSignInHost(opts.signIn, opts.retryTurn ?? null)
                 )?.catch((e) => console.warn('[chat] sign-in action unavailable:', e));
             }
         }
@@ -544,13 +546,19 @@ export function createMessagesMixin(dependencies) {
 
         /**
          * The chat window's side of the agent sign-in for one error: the run
-         * lives in #agentSignInSlot, outside #errorContainer. `retryTurn` is
-         * that error's failed turn (see _canResendTurn); the sign-in resends
-         * only it, under the same rules as Reconnect.
+         * lives in #agentSignInSlot, outside #errorContainer. `payload` is
+         * that error and `retryTurn` its failed turn (onError): the sign-in
+         * resends only that turn, by Reconnect's rules — the error names it
+         * (`turnId`) and says it may go again (isResendablePayload), the
+         * window still shows its session and sent nothing since
+         * (_canResendTurn) — and at most once. The resend records a turn
+         * of its own, with a fresh id (_resendTurn).
          */
-        _agentSignInHost(retryTurn) {
-            // The session the window showed when the restart answered.
-            let shown = null;
+        _agentSignInHost(payload, retryTurn) {
+            // The session the window showed when the restart answered,
+            // before adopting a reloaded id; undefined until one answers.
+            let shown;
+            let resent = false;
             return {
                 slot: () => document.getElementById('agentSignInSlot'),
                 rows: 16,
@@ -578,20 +586,32 @@ export function createMessagesMixin(dependencies) {
                         console.warn('[chat] after sign-in:', e);
                     }
                 },
-                // The restart moved the failed session `from` to `sid`:
-                // follow it only while the window still shows `from`.
+                // The restart pinned the window to `sid` (the failed
+                // session `from`, reloaded): follow it only while the window
+                // still shows `from`; else keep the session shown now.
                 adoptSession: (sid, from) => {
-                    shown = this.activeSessionId;
-                    if (from && from !== this.activeSessionId) return;
+                    shown = this.activeSessionId ?? null;
+                    if (from && from !== shown) {
+                        console.log('[chat] sign-in finished after the window moved to', shown);
+                        this._repinWindowSession();
+                        return;
+                    }
                     this._adoptReconnectSession(sid);
                 },
                 canResend: (sid) => {
-                    const before = shown ?? this.activeSessionId;
-                    shown = null;
-                    if (sid !== this.activeSessionId) return false;
-                    return this._canResendTurn(retryTurn, before);
+                    const before = shown === undefined ? (this.activeSessionId ?? null) : shown;
+                    shown = undefined;
+                    return (
+                        !resent &&
+                        !!retryTurn &&
+                        sid === this.activeSessionId &&
+                        isResendablePayload(payload, retryTurn.turnId) &&
+                        this._canResendTurn(retryTurn, before)
+                    );
                 },
                 resend: async () => {
+                    if (resent) return 'none';
+                    resent = true;
                     await this._resendTurn(retryTurn, { throwOnError: true });
                     return 'sent';
                 },

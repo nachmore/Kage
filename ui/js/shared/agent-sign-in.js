@@ -20,11 +20,16 @@
  *   - `invoke` (optional; else window.__TAURI__.core.invoke);
  *   - `layoutChanged()`, `onActiveChange(active)`,
  *     `onEnded({ state, outcome, agent })`,
- *     `adoptSession(sid, failedSid)` (the restart moved the failed session),
+ *     `adoptSession(sid, failedSid)` (after every restart that came back:
+ *     the backend pinned the window to `sid`, the failed session `failedSid`
+ *     as reloaded; the window follows it while it still shows `failedSid`,
+ *     else keeps the session it shows),
  *     `canResend(sid)`, `resend(sid)` → 'sent' | 'none', `clearError()`.
- *     The window decides what to resend: only the failed turn, and only
- *     when none of it got through and it wasn't a rate limit — the same
- *     rule as its Reconnect button.
+ *     The window decides what to resend, by the same rules as its
+ *     Reconnect button: only the failed turn the error names (`turnId`),
+ *     only when the error says it may be sent again (isResendablePayload),
+ *     only while the window still shows its session and nothing was sent
+ *     since, and at most once; the resend goes out as a turn of its own.
  *
  * SIGN_IN_KINDS are the serialized names of ErrorKind::AuthRequired /
  * AgentUnreachable (src/error.rs).
@@ -535,7 +540,8 @@ function createSession({ slot, payload, host, ctx }) {
             return;
         }
         const sid = r.sessionId || sessionId;
-        if (sid && sid !== sessionId) host?.adoptSession?.(sid, sessionId);
+        // Even with the same id: the restart pinned the window to it.
+        if (sid) host?.adoptSession?.(sid, sessionId);
         if (!sid || !host?.canResend?.(sid)) {
             setStatus('success', t('shared.agent_sign_in.status.ready'));
             setActions([]);

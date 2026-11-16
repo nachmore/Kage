@@ -446,7 +446,7 @@ export const ResponseUiMethods = {
             mountSignInAction(
                 actions,
                 opts.signIn,
-                this._agentSignInHost(opts.retryTurn ?? null)
+                this._agentSignInHost(opts.signIn, opts.retryTurn ?? null)
             ).catch((e) => console.warn('[floating] sign-in action unavailable:', e));
         }
 
@@ -489,12 +489,7 @@ export const ResponseUiMethods = {
                 '[floating] reconnect finished after the window moved to',
                 this.floatingSessionId
             );
-            if (this.floatingSessionId) {
-                this.invoke('set_window_session', {
-                    label: WINDOW.FLOATING,
-                    sessionId: this.floatingSessionId,
-                }).catch(() => {});
-            }
+            this._repinFloatingSession();
         } else {
             // The reload made a fresh session: the resend below goes to it.
             this._adoptReconnectSession(sid);
@@ -523,6 +518,15 @@ export const ResponseUiMethods = {
         }
         failure.textContent = text;
         this.windowManager.resizeWindow();
+    },
+
+    /** Pin the window back to the session it holds (reconnect_acp pinned it to another). */
+    _repinFloatingSession() {
+        if (!this.floatingSessionId) return;
+        this.invoke('set_window_session', {
+            label: WINDOW.FLOATING,
+            sessionId: this.floatingSessionId,
+        }).catch(() => {});
     },
 
     /** Take the session id `reconnect_acp` answered with, if it moved. */
@@ -556,10 +560,18 @@ export const ResponseUiMethods = {
      * The floating window's side of the agent sign-in (shared/agent-sign-in.js)
      * for one error. The run lives in #agentSignInSlot, outside the response,
      * so a new turn or reset keeps it; hiding the window never stops it.
-     * `retryTurn` is that error's failed turn: the sign-in resends only it,
-     * under the same rules as Reconnect (_canResendTurn).
+     * `payload` is that error and `retryTurn` its failed turn (see
+     * _onMessageError): the sign-in resends only that turn, by Reconnect's
+     * rules — the error names it (`turnId`) and says it may go again
+     * (isResendablePayload), the window still holds its session and sent
+     * nothing since (_canResendTurn) — and at most once. The resend mints
+     * a turn id of its own (_sendTrackedTurn).
      */
-    _agentSignInHost(retryTurn) {
+    _agentSignInHost(payload, retryTurn) {
+        // The session the window held when the restart answered, before
+        // adopting a reloaded id; undefined until a restart answers.
+        let shownOn;
+        let resent = false;
         return {
             slot: () => document.getElementById('agentSignInSlot'),
             rows: 10,
@@ -572,15 +584,36 @@ export const ResponseUiMethods = {
                 if (active) this._armSignInBlurSuppression();
             },
             onEnded: ({ state, outcome, agent }) => this._onAgentSignInEnded(state, outcome, agent),
-            // The restart moved the failed session `from` to `sid`: follow
-            // it only while the window still holds `from`.
+            // The restart pinned the window to `sid` (the failed session
+            // `from`, reloaded): follow it only while the window still
+            // holds `from`; else keep the session it holds now.
             adoptSession: (sid, from) => {
-                if (from && from !== this.floatingSessionId) return;
+                shownOn = this.floatingSessionId ?? null;
+                if (from && from !== shownOn) {
+                    console.log('[floating] sign-in finished after the window moved to', shownOn);
+                    this._repinFloatingSession();
+                    return;
+                }
                 this._adoptReconnectSession(sid);
             },
-            canResend: (sid) => sid === this.floatingSessionId && this._canResendTurn(retryTurn),
-            resend: async () =>
-                (await this._resendTurn(retryTurn, { throwOnError: true })) ? 'sent' : 'none',
+            canResend: (sid) => {
+                const before = shownOn === undefined ? (this.floatingSessionId ?? null) : shownOn;
+                shownOn = undefined;
+                return (
+                    !resent &&
+                    !!retryTurn &&
+                    sid === this.floatingSessionId &&
+                    isResendablePayload(payload, retryTurn.turnId) &&
+                    this._canResendTurn(retryTurn, before)
+                );
+            },
+            resend: async () => {
+                if (resent) return 'none';
+                resent = true;
+                return (await this._resendTurn(retryTurn, { throwOnError: true }))
+                    ? 'sent'
+                    : 'none';
+            },
             // The resend's new turn already replaced the error.
             clearError: () => {},
         };

@@ -4,9 +4,12 @@
  * lives in #agentSignInSlot, outside #errorContainer, so a later error or a
  * session switch can't remove it while it's going; a clean exit resends the
  * failed turn once, with its attachments and no second user bubble, under
- * Reconnect's rules (only the turn whose error was clicked, and not when any
- * of it got through, it was a rate limit or a newer prompt went out); any
- * other ending sends nothing; and the window comes back when it ends.
+ * Reconnect's rules (only the turn whose error was clicked and names it by
+ * `turnId`, only when the backend says it may go again, not when any of it
+ * got through, it was a rate limit, a newer prompt went out or the user
+ * moved to another session, at most once, and as a turn with an id of its
+ * own); any other ending sends nothing; and the window comes back when it
+ * ends.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { marked } from 'marked';
@@ -34,6 +37,9 @@ const CTX = {
     timeoutMinutes: 15,
 };
 const SIGNED_OUT = { kind: 'auth_required', message: 'Signed out', sessionId: 's1' };
+
+/** `p` as the backend reports the window's last turn: named, and resendable. */
+const own = (app, p = SIGNED_OUT) => ({ ...p, turnId: app._lastTurn?.turnId, resendable: true });
 
 let terms;
 function fakeTerminal(opts) {
@@ -205,16 +211,28 @@ describe('chat: after the run', () => {
     it('a clean exit resends the failed turn once, without a second bubble', async () => {
         const { app, appWindow, starts, named } = setup();
         const attachments = [{ name: 'a.png', data: 'x' }];
-        app._recordTurn('s1', 'hello agent', attachments);
+        const failedId = app._recordTurn('s1', 'hello agent', attachments);
         const addUserMessage = vi.spyOn(app, 'addUserMessage');
-        await failTurn(app, SIGNED_OUT);
+        await failTurn(app, own(app));
         await clickSignIn();
         starts[0].resolve({ outcome: 'exited', exitCode: 0 });
         await flush();
         expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's1' }]]);
-        expect(named('send_message_streaming')).toEqual([
-            ['send_message_streaming', { sessionId: 's1', message: 'hello agent', attachments }],
+        const sent = named('send_message_streaming');
+        expect(sent).toEqual([
+            [
+                'send_message_streaming',
+                {
+                    sessionId: 's1',
+                    message: 'hello agent',
+                    attachments,
+                    turnId: expect.any(String),
+                },
+            ],
         ]);
+        // A turn of its own: the failed one's late errors aren't its.
+        expect(sent[0][1].turnId).not.toBe(failedId);
+        expect(app._lastTurn.turnId).toBe(sent[0][1].turnId);
         expect(addUserMessage).not.toHaveBeenCalled();
         // The error went; the window came back to show it.
         expect(document.getElementById('errorContainer').innerHTML).toBe('');
@@ -230,7 +248,7 @@ describe('chat: after the run', () => {
             _resetAgentSignInForTests();
             const { app, starts, named } = setup();
             app._recordTurn('s1', 'hello agent', null);
-            await failTurn(app, SIGNED_OUT);
+            await failTurn(app, own(app));
             await clickSignIn();
             starts[0].resolve(report);
             await flush();
@@ -274,7 +292,7 @@ describe('chat: what a sign-in resends', () => {
         const { app, starts, named } = setup();
         app._recordTurn('s1', 'write the file', null);
         app.currentStreamingContent = 'Writing the file now…';
-        await failTurn(app, UNREACHABLE);
+        await failTurn(app, own(app, UNREACHABLE));
         await signInCleanly(starts);
         expect(named('reconnect_acp').length).toBe(1);
         expect(sends(named)).toEqual([]);
@@ -284,7 +302,7 @@ describe('chat: what a sign-in resends', () => {
         const { app, starts, named } = setup();
         app._recordTurn('s1', 'run it', null);
         app.toolUsages = [{ id: 't1', title: 'shell' }];
-        await failTurn(app, UNREACHABLE);
+        await failTurn(app, own(app, UNREACHABLE));
         await signInCleanly(starts);
         expect(sends(named)).toEqual([]);
     });
@@ -292,7 +310,7 @@ describe('chat: what a sign-in resends', () => {
     it('not a rate-limited turn', async () => {
         const { app, starts, named } = setup();
         app._recordTurn('s1', 'hello agent', null);
-        await failTurn(app, { ...UNREACHABLE, message: 'Rate limit exceeded' });
+        await failTurn(app, own(app, { ...UNREACHABLE, message: 'Rate limit exceeded' }));
         await signInCleanly(starts);
         expect(sends(named)).toEqual([]);
     });
@@ -300,7 +318,7 @@ describe('chat: what a sign-in resends', () => {
     it('not once a newer prompt went out', async () => {
         const { app, starts, named } = setup();
         app._recordTurn('s1', 'hello agent', null);
-        await failTurn(app, SIGNED_OUT);
+        await failTurn(app, own(app));
         app._recordTurn('s1', 'a newer prompt', null);
         await signInCleanly(starts);
         expect(sends(named)).toEqual([]);
@@ -312,20 +330,122 @@ describe('chat: what a sign-in resends', () => {
         await failTurn(app, 'Error: dispatch failure');
         // "Run it here" hands a command's result back to the agent.
         await app.sendAgentPrompt('s1', 'shell result B');
-        await failTurn(app, SIGNED_OUT);
+        await failTurn(app, own(app));
         await signInCleanly(starts);
         expect(sends(named)).toEqual(['shell result B', 'shell result B']);
     });
 
-    it('not into a session the user switched to', async () => {
+    it('not into a session the user switched to; the window stays pinned there', async () => {
         const { app, starts, named } = setup();
         app._recordTurn('s1', 'hello agent', null);
-        await failTurn(app, SIGNED_OUT);
+        await failTurn(app, own(app));
         await clickSignIn();
         app.activeSessionId = 's9';
         starts[0].resolve({ outcome: 'exited', exitCode: 0 });
         await flush();
+        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's1' }]]);
         expect(sends(named)).toEqual([]);
         expect(app.activeSessionId).toBe('s9');
+        // reconnect_acp pinned the window to s1; it goes back to s9.
+        expect(named('set_window_session').at(-1)).toEqual([
+            'set_window_session',
+            { label: app.windowLabel, sessionId: 's9' },
+        ]);
+    });
+});
+
+describe('chat: a sign-in resend under turn ids', () => {
+    it('resends its own resendable turn once, then never again', async () => {
+        const { app, starts, named } = setup();
+        app._recordTurn('s1', 'hello agent', null);
+        const payload = own(app);
+        const retryTurn = { ...app._lastTurn };
+        await failTurn(app, payload);
+        await signInCleanly(starts);
+        expect(sends(named)).toEqual(['hello agent']);
+        // The same error's sign-in (or its Reconnect) can't send it twice.
+        const host = app._agentSignInHost(payload, retryTurn);
+        host.adoptSession('s1', 's1');
+        expect(host.canResend('s1')).toBe(false);
+        // A host that did send it once refuses the second time.
+        app.isWaitingForResponse = false;
+        app._recordTurn('s1', 'again', null);
+        const p2 = own(app);
+        await failTurn(app, p2);
+        const h2 = app._agentSignInHost(p2, { ...app._lastTurn });
+        h2.adoptSession('s1', 's1');
+        expect(h2.canResend('s1')).toBe(true);
+        expect(await h2.resend('s1')).toBe('sent');
+        expect(h2.canResend('s1')).toBe(false);
+        expect(await h2.resend('s1')).toBe('none');
+        expect(sends(named)).toEqual(['hello agent', 'again']);
+    });
+
+    it("not for another turn's error", async () => {
+        const { app, named } = setup();
+        app._recordTurn('s1', 'hello agent', null);
+        const other = { ...own(app), turnId: 'turn-earlier' };
+        // The turn running now goes on: no error box, no Sign in.
+        await failTurn(app, other);
+        expect(document.querySelector('.agent-sign-in-btn')).toBeNull();
+        expect(app.isWaitingForResponse).toBe(true);
+        // And the sign-in's own gate refuses it for the window's last turn.
+        app.isWaitingForResponse = false;
+        const host = app._agentSignInHost(other, { ...app._lastTurn });
+        host.adoptSession('s1', 's1');
+        expect(host.canResend('s1')).toBe(false);
+        expect(sends(named)).toEqual([]);
+    });
+
+    it('with nothing in flight, another turn\'s error gets Sign in but resends nothing', async () => {
+        const { app, starts, named } = setup();
+        app._recordTurn('s1', 'hello agent', null);
+        app.isWaitingForResponse = false;
+        await app.messageStreamController.host.onError(
+            { payload: { ...own(app), turnId: 'turn-earlier' } },
+            true
+        );
+        await flush();
+        await signInCleanly(starts);
+        expect(named('reconnect_acp').length).toBe(1);
+        expect(sends(named)).toEqual([]);
+    });
+
+    it('not for a payload the backend did not mark resendable', async () => {
+        const { app, starts, named } = setup();
+        app._recordTurn('s1', 'hello agent', null);
+        await failTurn(app, { ...own(app), resendable: false });
+        await signInCleanly(starts);
+        expect(named('reconnect_acp').length).toBe(1);
+        expect(sends(named)).toEqual([]);
+        expect(document.querySelector('.agent-sign-in-status').textContent).toBe(
+            'shared.agent_sign_in.status.ready'
+        );
+    });
+
+    it('not for a payload that names no turn', async () => {
+        const { app, starts, named } = setup();
+        app._recordTurn('s1', 'hello agent', null);
+        await failTurn(app, { ...SIGNED_OUT, resendable: true });
+        await signInCleanly(starts);
+        expect(named('reconnect_acp').length).toBe(1);
+        expect(sends(named)).toEqual([]);
+    });
+
+    it('a failed Reconnect keeps Sign in, and the turn for it', async () => {
+        const { app, starts, named } = setup();
+        app._recordTurn('s1', 'hello agent', null);
+        await failTurn(app, own(app));
+        const realInvoke = app.invoke;
+        app.invoke = vi.fn(async (cmd, args) => {
+            if (cmd === 'reconnect_acp') throw new Error('still down');
+            return realInvoke(cmd, args);
+        });
+        document.getElementById('errorReconnectBtn').click();
+        await flush();
+        app.invoke = realInvoke;
+        expect(document.querySelector('#errorContainer .agent-sign-in-btn')).toBeTruthy();
+        await signInCleanly(starts);
+        expect(sends(named)).toEqual(['hello agent']);
     });
 });
