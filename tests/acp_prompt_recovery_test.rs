@@ -1624,6 +1624,19 @@ fn record_event(app: &tauri::App<tauri::test::MockRuntime>, event: &str) -> Arc<
     seen
 }
 
+/// Wait until `seen` (from [`record_event`]) holds `n` events.
+fn wait_for_events(seen: &Arc<Mutex<Vec<Value>>>, n: usize) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while seen.lock().unwrap().len() < n {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "only {} event(s)",
+            seen.lock().unwrap().len()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
 /// Wait until `agent` has had `n` requests of `method`.
 fn wait_for_count(agent: &MockAgent, method: &str, n: usize) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -1653,6 +1666,7 @@ fn open_in_chat_tells_main_the_session_its_prompt_is_sent_on() {
     )
     .expect("the command itself answers at once");
 
+    wait_for_events(&announced, 1);
     assert_eq!(
         *announced.lock().unwrap(),
         vec![json!({ "message": "explain this", "turnId": "assist-turn-1", "sessionId": "S1" })]
@@ -1679,11 +1693,15 @@ fn open_in_chat_with_no_session_tells_main_none_and_then_the_one_made() {
     )
     .expect("the command itself answers at once");
 
+    wait_for_events(&announced, 1);
     assert_eq!(
         *announced.lock().unwrap(),
         vec![json!({ "message": "explain this", "turnId": "assist-turn-1", "sessionId": null })]
     );
     wait_for_count(&agent, "session/prompt", 1);
     assert_eq!(agent.params("session/prompt")[0]["sessionId"], "NEW");
+    // Emitted before the prompt goes out, but a listener may hear it a
+    // moment after the agent has the prompt (a busy runner did).
+    wait_for_events(&made, 1);
     assert_eq!(*made.lock().unwrap(), vec![json!({ "sessionId": "NEW" })]);
 }
