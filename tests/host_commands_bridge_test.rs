@@ -173,6 +173,22 @@ impl Bridge {
             .expect("the prompt is waiting");
     }
 
+    /// Wait for every prompt in the floating window to be gone. A tool
+    /// call that ends `failed` withdraws its prompt one of two ways: the
+    /// notification handler (`tool_call_ended`) or the prompt's own wait
+    /// loop, which sees the job abandoned on its next tick. Either may win,
+    /// so tests check the prompt went, not which path took it.
+    fn wait_for_no_prompts(&self) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while self.prompts() > 0 {
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        true
+    }
+
     fn prompts(&self) -> usize {
         self.host_commands().approvals.payloads_for(FLOATING).len()
     }
@@ -857,12 +873,11 @@ fn a_tool_call_that_ends_before_its_id_was_given_withdraws_its_prompt() {
     // The agent gave up on the call (its own limit, say) before Kage
     // answered "pending": the notification handler hands the ended call
     // on.
-    assert!(agent_tool_call_ended(
-        &bridge,
-        "hb-session-end",
-        "hb-call-end",
-        "failed"
-    ));
+    agent_tool_call_ended(&bridge, "hb-session-end", "hb-call-end", "failed");
+    assert!(
+        bridge.wait_for_no_prompts(),
+        "the prompt of a call the agent gave up on stayed up"
+    );
 
     let response = client.join().unwrap();
     assert_eq!(response.status, ResponseStatus::Withdrawn, "{response:?}");
@@ -888,8 +903,9 @@ fn a_call_the_agent_cut_off_as_kage_answered_pending_withdraws_its_prompt() {
     assert_eq!(first.status, ResponseStatus::Pending, "{first:?}");
     let job_id = first.job_id.expect("a job id");
     assert_eq!(bridge.prompts(), 1);
+    agent_tool_call_ended(&bridge, "hb-session-cut", "hb-call-cut", "failed");
     assert!(
-        agent_tool_call_ended(&bridge, "hb-session-cut", "hb-call-cut", "failed"),
+        bridge.wait_for_no_prompts(),
         "the prompt of a call the agent never took the answer of stayed up"
     );
 
