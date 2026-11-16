@@ -42,6 +42,7 @@ pub fn coalesce_window() -> Duration {
 /// asserts several writes share one batch sets a long one, so a slow,
 /// loaded machine's writes still land inside it.
 #[doc(hidden)]
+#[allow(dead_code)] // called only from tests/, through the library target
 pub fn set_coalesce_window(window: Duration) {
     WINDOW_MS.store(
         u64::try_from(window.as_millis()).unwrap_or(u64::MAX),
