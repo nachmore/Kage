@@ -152,6 +152,65 @@ mod tests {
         assert_eq!(url_for_log(&long), "https://example.com");
     }
 
+    /// The body of `fn <name>` in `src`, up to the next top-level item.
+    fn fn_body<'a>(src: &'a str, name: &str) -> &'a str {
+        let start = src
+            .find(&format!("fn {name}("))
+            .unwrap_or_else(|| panic!("fn {name} not found"));
+        let rest = &src[start..];
+        let end = ["\nfn ", "\npub fn ", "\nunsafe fn ", "\n/// ", "\n#["]
+            .iter()
+            .filter_map(|m| rest[1..].find(m).map(|i| i + 1))
+            .min()
+            .unwrap_or(rest.len());
+        &rest[..end]
+    }
+
+    /// Windows: a browser Kage starts with `ShellExecuteExW` is Kage's
+    /// child and joins its `KILL_ON_JOB_CLOSE` Job Object, so quitting Kage
+    /// or a crash would close it. `open_url` must hand the URL to
+    /// Explorer's desktop first and open it in-process only as the
+    /// fallback. The Windows code doesn't build here, so this reads it.
+    #[test]
+    fn windows_open_url_hands_the_url_to_the_desktop_shell_first() {
+        let src = include_str!("windows/shell.rs");
+        let open = fn_body(src, "open_url_impl");
+        let desktop = open
+            .find("open_url_via_desktop_shell(url)")
+            .expect("open_url_impl must try the desktop shell");
+        let fallback = open
+            .find("open_url_in_process(url)")
+            .expect("open_url_impl keeps the in-process fallback");
+        assert!(desktop < fallback, "desktop shell first:\n{open}");
+        assert!(
+            !open.contains("ShellExecuteExW("),
+            "open_url_impl must not call ShellExecuteExW directly:\n{open}"
+        );
+        // Logs carry `url_for_log` only, never the URL itself.
+        assert!(open.contains("url_for_log(url)"), "{open}");
+        assert!(
+            !open.contains("{url}") && !open.contains(", url)"),
+            "{open}"
+        );
+
+        // ShellExecute runs in Explorer, reached through the desktop window.
+        let execute = fn_body(src, "desktop_shell_execute");
+        for step in [
+            "SWC_DESKTOP",
+            "SID_STopLevelBrowser",
+            "SVGIO_BACKGROUND",
+            "IShellDispatch2",
+            "shell.ShellExecute(",
+        ] {
+            assert!(execute.contains(step), "missing {step}:\n{execute}");
+        }
+        assert!(!execute.contains("ShellExecuteExW"), "{execute}");
+
+        // The only in-process ShellExecuteExW is the fallback.
+        assert_eq!(src.matches("ShellExecuteExW(&mut").count(), 1);
+        assert!(fn_body(src, "open_url_in_process").contains("ShellExecuteExW(&mut"));
+    }
+
     use super::{system_command, system_command_candidates};
 
     #[test]

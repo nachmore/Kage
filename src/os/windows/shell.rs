@@ -5,14 +5,139 @@ use std::process::Command;
 
 use super::process::spawn_detached_impl;
 
+/// Open `url` in the default browser, started by Explorer rather than by
+/// Kage.
+///
+/// Kage runs inside a `KILL_ON_JOB_CLOSE` Job Object
+/// (`install_kill_on_exit_job_impl`), and a process Kage starts joins it
+/// unless it breaks away. `ShellExecuteExW` has no way to ask for that: it
+/// runs `CreateProcess` in our process, so a browser that wasn't already
+/// running would become Kage's child, join the job and be killed, with
+/// every tab, when Kage quits or crashes. So the URL goes to the desktop's
+/// own shell (Explorer's `IShellDispatch2::ShellExecute`, reached through
+/// the desktop window in `IShellWindows`): Explorer runs the association
+/// and the browser is Explorer's child, outside our job, just as if the
+/// user had opened the link from the Start menu. It also runs on
+/// Explorer's thread, which pumps messages, so a browser's `ddeexec`
+/// handler gets its one DDE conversation (see `open_url_in_process`).
+///
+/// Only when there's no Explorer desktop to ask (another shell, a service
+/// session) does Kage open the URL itself, accepting that a browser started
+/// that way shares our job.
+///
+/// Not `rundll32 url.dll,FileProtocolHandler` with
+/// `CREATE_BREAKAWAY_FROM_JOB`: endpoint protection flags that command line
+/// as a known way to run code (and it runs `ShellExecute` with no message
+/// pump, so the double-tab below comes back). Not `explorer.exe <url>`:
+/// Explorer's command line splits on commas.
 pub fn open_url_impl(url: &str) -> Result<()> {
+    let shown = crate::os::shell::url_for_log(url);
+    match open_url_via_desktop_shell(url) {
+        Ok(()) => {
+            log::info!("[open_url] handed to the desktop shell: {shown}");
+            Ok(())
+        }
+        Err(e) => {
+            log::warn!(
+                "[open_url] the desktop shell could not take {shown} ({e:#}); \
+                 opening it from Kage, so a browser this starts shares Kage's Job Object"
+            );
+            open_url_in_process(url)
+        }
+    }
+}
+
+/// Ask Explorer's desktop to run `url` through its shell. COM is used on a
+/// thread of its own, in a single-threaded apartment, so the caller's
+/// apartment (a Tokio worker's, often none) doesn't matter.
+fn open_url_via_desktop_shell(url: &str) -> Result<()> {
+    use windows::Win32::System::Com::{
+        CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+    };
+
+    // The browser is no longer started by Kage, the foreground process, so
+    // it wouldn't be allowed to come to the front. Pass our right on (it
+    // lapses at the next input) or the page opens behind Kage.
+    let _ = unsafe {
+        windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(
+            windows::Win32::UI::WindowsAndMessaging::ASFW_ANY,
+        )
+    };
+
+    let url = url.to_owned();
+    std::thread::Builder::new()
+        .name("open-url-desktop-shell".into())
+        .spawn(move || {
+            // SAFETY: balanced below when it succeeds; every COM object
+            // `desktop_shell_execute` creates is dropped before it returns.
+            let init =
+                unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) };
+            if init.is_err() {
+                return Err(anyhow::anyhow!("CoInitializeEx failed: {init:?}"));
+            }
+            let result = unsafe { desktop_shell_execute(&url) };
+            unsafe { CoUninitialize() };
+            result.context("desktop shell")
+        })
+        .context("could not start the desktop shell thread")?
+        .join()
+        .map_err(|_| anyhow::anyhow!("the desktop shell thread panicked"))?
+}
+
+/// Raymond Chen's "launch a program as the desktop's child" sequence:
+/// desktop window → top-level browser → its active view → the view's
+/// background `IShellFolderViewDual` → `Application` (`IShellDispatch2`)
+/// → `ShellExecute`, which runs in Explorer's process.
+///
+/// # Safety
+/// The calling thread must have initialised COM.
+unsafe fn desktop_shell_execute(url: &str) -> windows::core::Result<()> {
+    use std::mem::ManuallyDrop;
+    use windows::core::{Interface, BSTR};
+    use windows::Win32::System::Com::{CoCreateInstance, IServiceProvider, CLSCTX_ALL};
+    use windows::Win32::System::Variant::{VARIANT, VT_BSTR, VT_I4};
+    use windows::Win32::UI::Shell::{
+        IShellBrowser, IShellDispatch2, IShellFolderViewDual, IShellView, IShellWindows,
+        SID_STopLevelBrowser, ShellWindows, CSIDL_DESKTOP, SVGIO_BACKGROUND, SWC_DESKTOP,
+        SWFO_NEEDDISPATCH,
+    };
+
+    unsafe {
+        let windows: IShellWindows = CoCreateInstance(&ShellWindows, None, CLSCTX_ALL)?;
+
+        let mut desktop = VARIANT::default();
+        (*desktop.Anonymous.Anonymous).vt = VT_I4;
+        (*desktop.Anonymous.Anonymous).Anonymous.lVal = CSIDL_DESKTOP as i32;
+        let empty = VARIANT::default();
+        let mut hwnd = 0i32;
+        let found =
+            windows.FindWindowSW(&desktop, &empty, SWC_DESKTOP, &mut hwnd, SWFO_NEEDDISPATCH)?;
+
+        let provider: IServiceProvider = found.cast()?;
+        let browser: IShellBrowser = provider.QueryService(&SID_STopLevelBrowser)?;
+        let view: IShellView = browser.QueryActiveShellView()?;
+        let folder_view: IShellFolderViewDual = view.GetItemObject(SVGIO_BACKGROUND)?;
+        let shell: IShellDispatch2 = folder_view.Application()?.cast()?;
+
+        // No arguments: an empty BSTR is a null pointer, so nothing to free.
+        let mut no_args = VARIANT::default();
+        (*no_args.Anonymous.Anonymous).vt = VT_BSTR;
+        (*no_args.Anonymous.Anonymous).Anonymous.bstrVal = ManuallyDrop::new(BSTR::new());
+
+        shell.ShellExecute(&BSTR::from(url), &no_args, &empty, &empty, &empty)
+    }
+}
+
+/// `ShellExecuteExW` from Kage's own process: the fallback for when there's
+/// no Explorer desktop. A browser it starts is Kage's child and joins the
+/// Job Object.
+fn open_url_in_process(url: &str) -> Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
     use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-    // Open the URL through the shell's default-browser association — the OS
-    // owns browser selection, we don't hand-roll detection.
+    // The OS owns browser selection, we don't hand-roll detection.
     //
     // The catch: when the default browser registers a `ddeexec` handler (e.g.
     // Firefox: `firefox.exe -osint -url "%1"` + a `shell\open\ddeexec` key)
@@ -22,19 +147,13 @@ pub fn open_url_impl(url: &str) -> Result<()> {
     // ALSO runs the fallback `open` command. The browser receives the URL
     // twice → two tabs. This is why both plain ShellExecuteW and `cmd /c
     // start` doubled: both consult the association and trigger the ddeexec
-    // race. Our logs proved every layer of our own code fired exactly once.
+    // race.
     //
     // SEE_MASK_NOASYNC (aka SEE_MASK_FLAG_DDEWAIT) tells the shell to finish
     // the DDE conversation before returning instead of racing it with the
     // fallback launch — the documented flag for callers that don't run a
-    // message loop. That collapses the double-open back to a single tab while
-    // leaving browser choice entirely to the OS. ShellExecuteExW is required
-    // because plain ShellExecuteW exposes no fMask.
-    log::info!(
-        "[open_url] ShellExecuteExW (NOASYNC): {}",
-        crate::os::shell::url_for_log(url)
-    );
-
+    // message loop. ShellExecuteExW is required because plain ShellExecuteW
+    // exposes no fMask.
     let mut verb: Vec<u16> = "open".encode_utf16().collect();
     verb.push(0);
     let mut file: Vec<u16> = std::ffi::OsStr::new(url).encode_wide().collect();

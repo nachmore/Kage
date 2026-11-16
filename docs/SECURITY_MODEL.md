@@ -782,9 +782,21 @@ sign-in method from its arrow-key menu (`ui/js/shared/agent-sign-in.js`,
     kiro-cli's `is_remote()` is then true (`util/system_info/mod.rs`),
     so `login` takes the device flow and only prints the URL and a code
     (`cli/user.rs`, `try_device_authorization`), starting nothing. The
-    user clicks the link in the terminal and Kage opens it from its own
-    process (`open_user_terminal_link`, the same `open_url` as every
-    other Kage link).
+    user clicks the link in the terminal and Kage opens it
+    (`open_user_terminal_link`, the same `open_url` as every other Kage
+    link).
+
+  Quitting Kage or a crash doesn't close the browser either. On Windows,
+  Kage sits in a kill-on-close Job Object, and a browser started by
+  Kage's own `ShellExecuteExW` would be its child, join that job and die
+  with Kage. So `open_url` hands every URL to Explorer's desktop
+  (`IShellDispatch2::ShellExecute` on the `IShellWindows` desktop,
+  `src/os/windows/shell.rs`): Explorer starts the browser, as its own
+  child, outside the job. Only when no Explorer desktop answers (another
+  shell, a service session) does Kage open the URL itself, and log that
+  it did. On macOS and Linux a URL Kage opens is started by
+  LaunchServices or `xdg-open`, and nothing kills Kage's children when
+  it exits.
 
   With no browser among the login's descendants, the cleanup after it
   stays: once it exits and its output is drained, what is left of its

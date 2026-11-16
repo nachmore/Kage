@@ -193,6 +193,11 @@ windows = { version = "0.62", features = [
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_System_Com",
+    # VARIANT for IShellWindows / IShellDispatch2: open_url hands a URL to
+    # Explorer's desktop so the browser isn't in Kage's Job Object (see
+    # os/windows/shell.rs).
+    "Win32_System_Ole",
+    "Win32_System_Variant",
     # ISpellCheckerFactory / ISpellChecker: spelling suggestions for the
     # launcher's right-click menu (see os/windows/spell_check.rs).
     "Win32_Globalization",
