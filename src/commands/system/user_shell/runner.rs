@@ -459,45 +459,76 @@ pub struct RunControl {
 }
 
 /// Makes "a Stop was accepted" exclusive with "the program was launched"
-/// and with "the run's outcome was decided":
+/// and with "the run's outcome was decided", without ever making a Stop
+/// wait on the launch:
 ///
-/// - [`Self::launch`] runs the launch only if no Stop came first, and no
-///   Stop can be accepted while it runs.
+/// - [`Self::launch`] launches only if no Stop was accepted first. While it
+///   launches, [`Self::stop`] answers "not yet" (`false`) instead of waiting
+///   (a spawn can stall on a slow disk or network mount, and Stop is called
+///   under the run registry's lock); the caller asks again, and a Stop
+///   accepted after the launch kills what it launched.
 /// - [`Self::settle`] decides the outcome: after it, no Stop is accepted, so
 ///   a Stop the caller was told was accepted is always reflected in the
 ///   report (and the audit).
-/// - [`Self::stop`] accepts a Stop unless the run already settled.
+/// - [`Self::force_stop`] (window closed, shutdown) sets the stop whatever
+///   the launch is doing.
 ///
-/// A run nobody settles (the plain runner) accepts every Stop, as before.
+/// The lock is only ever held briefly, never across I/O. A run nobody
+/// launches or settles through it (the plain runner) accepts every Stop,
+/// as before.
 #[derive(Debug, Default)]
 pub struct StopGate {
-    settled: std::sync::Mutex<bool>,
+    state: std::sync::Mutex<GateState>,
+}
+
+#[derive(Debug, Default)]
+struct GateState {
+    launching: bool,
+    settled: bool,
 }
 
 impl StopGate {
-    /// Run `launch` unless a Stop was already accepted (`None` then).
-    pub fn launch<T>(&self, cancel: &AtomicBool, launch: impl FnOnce() -> T) -> Option<T> {
-        let _held = self.settled.lock().unwrap_or_else(|e| e.into_inner());
-        if cancel.load(Ordering::SeqCst) {
-            return None;
-        }
-        Some(launch())
+    fn lock(&self) -> std::sync::MutexGuard<'_, GateState> {
+        self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Accept a Stop: set `cancel` and say so, unless the run settled.
+    /// Run `launch` unless a Stop was already accepted (`None` then).
+    pub fn launch<T>(&self, cancel: &AtomicBool, launch: impl FnOnce() -> T) -> Option<T> {
+        {
+            let mut state = self.lock();
+            if cancel.load(Ordering::SeqCst) {
+                return None;
+            }
+            state.launching = true;
+        }
+        let launched = launch();
+        self.lock().launching = false;
+        Some(launched)
+    }
+
+    /// Accept a Stop: set `cancel` and say so. Not while the run launches
+    /// (ask again) and not once it settled.
     pub fn stop(&self, cancel: &AtomicBool) -> bool {
-        let settled = self.settled.lock().unwrap_or_else(|e| e.into_inner());
-        if *settled {
+        let state = self.lock();
+        if state.settled || state.launching {
             return false;
         }
         cancel.store(true, Ordering::SeqCst);
         true
     }
 
+    /// Stop it whatever the launch is doing (unless it already settled):
+    /// the window that shows it closed, or Kage is quitting.
+    pub fn force_stop(&self, cancel: &AtomicBool) {
+        if !self.lock().settled {
+            cancel.store(true, Ordering::SeqCst);
+        }
+    }
+
     /// Decide: from now on no Stop is accepted. Returns whether one was.
     pub fn settle(&self, cancel: &AtomicBool) -> bool {
-        let mut settled = self.settled.lock().unwrap_or_else(|e| e.into_inner());
-        *settled = true;
+        let mut state = self.lock();
+        state.settled = true;
         cancel.load(Ordering::SeqCst)
     }
 }

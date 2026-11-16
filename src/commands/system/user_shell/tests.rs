@@ -847,3 +847,40 @@ fn slot_release_never_closes_the_terminal_under_the_registry_locks() {
     dropper.join().unwrap();
     assert_eq!(got, Ok(true), "a new run waited on the terminal closing");
 }
+
+/// A terminal launch stuck in spawn (a slow mount) holds up neither the
+/// Stop of another run, nor a Stop of its own, nor shutdown.
+#[test]
+fn a_stalled_launch_never_blocks_stops_or_shutdown() {
+    let runs = Arc::new(UserShellRuns::new());
+    let term = runs
+        .begin_terminal("floating", "kage-term-stall", 1)
+        .unwrap();
+    let other = runs.begin("main", "plain-run").unwrap();
+    let ctl = term.control(Duration::from_secs(60));
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let (in_launch_tx, in_launch_rx) = std::sync::mpsc::channel::<()>();
+    let launcher = std::thread::spawn(move || {
+        ctl.stop_gate.launch(&ctl.cancel, || {
+            in_launch_tx.send(()).unwrap();
+            let _ = release_rx.recv_timeout(Duration::from_secs(10));
+        })
+    });
+    in_launch_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+
+    let t0 = Instant::now();
+    assert!(runs.cancel("main", "plain-run"), "another run's Stop");
+    assert!(
+        !runs.cancel("floating", "kage-term-stall"),
+        "not yet: still launching"
+    );
+    assert!(runs.cancel_window("floating"), "window closed");
+    assert!(term.cancel_flag().load(Ordering::SeqCst));
+    runs.cancel_all_and_wait(Duration::from_millis(10));
+    assert!(t0.elapsed() < Duration::from_secs(1), "{:?}", t0.elapsed());
+
+    release_tx.send(()).unwrap();
+    launcher.join().unwrap();
+    drop(other);
+    drop(term);
+}

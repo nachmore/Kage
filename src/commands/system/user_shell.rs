@@ -363,7 +363,7 @@ impl UserShellRuns {
         let active = self.active.lock_or_recover();
         let mut any = false;
         for run in active.values().filter(|run| run.window == label) {
-            run.gate.stop(&run.cancel);
+            run.gate.force_stop(&run.cancel);
             any = true;
         }
         any
@@ -387,7 +387,7 @@ impl UserShellRuns {
             }
             info!("Stopping {} user shell run(s) on shutdown", active.len());
             for run in active.values() {
-                run.gate.stop(&run.cancel);
+                run.gate.force_stop(&run.cancel);
             }
         }
         let deadline = Instant::now() + max;

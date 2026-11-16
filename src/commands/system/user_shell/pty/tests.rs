@@ -325,8 +325,9 @@ fn a_stop_seen_before_the_report_beats_a_clean_exit() {
     );
 }
 
-/// The stop gate: a Stop accepted before the launch launches nothing; none
-/// lands while the launch runs; none is accepted once the run settled.
+/// The stop gate: a Stop accepted before the launch launches nothing; one
+/// asked for during the launch is "not yet" and never waits on it; none is
+/// accepted once the run settled.
 #[test]
 fn the_stop_gate_orders_stop_against_launch_and_settle() {
     let gate = StopGate::default();
@@ -334,19 +335,29 @@ fn the_stop_gate_orders_stop_against_launch_and_settle() {
     assert!(gate.stop(&cancel));
     assert_eq!(gate.launch(&cancel, || "launched"), None);
 
-    // A Stop arriving mid-launch waits for it, then is accepted.
+    // A launch that stalls (a slow mount): Stop answers at once, "not yet",
+    // and is accepted once the launch is done.
     let gate = Arc::new(StopGate::default());
     let cancel = Arc::new(AtomicBool::new(false));
-    let (tx, rx) = mpsc::channel();
     let launched = gate.launch(&cancel, || {
-        let (g, c, tx) = (gate.clone(), cancel.clone(), tx.clone());
-        std::thread::spawn(move || tx.send(g.stop(&c)).unwrap());
-        // The Stop can't be accepted while the launch holds the gate.
-        assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+        let (g, c) = (gate.clone(), cancel.clone());
+        let t0 = Instant::now();
+        let answer = std::thread::spawn(move || g.stop(&c)).join().unwrap();
+        assert!(!answer, "not accepted mid-launch");
+        assert!(
+            t0.elapsed() < Duration::from_millis(500),
+            "Stop waited on the launch"
+        );
+        assert!(!cancel.load(Ordering::SeqCst));
+        // Closing the window or quitting stops it anyway, without waiting.
+        let (g, c) = (gate.clone(), cancel.clone());
+        std::thread::spawn(move || g.force_stop(&c)).join().unwrap();
+        assert!(cancel.load(Ordering::SeqCst));
+        cancel.store(false, Ordering::SeqCst);
         "launched"
     });
     assert_eq!(launched, Some("launched"));
-    assert!(rx.recv_timeout(Duration::from_secs(2)).unwrap());
+    assert!(gate.stop(&cancel));
     assert!(cancel.load(Ordering::SeqCst));
 
     // Settled: what it reports is final, and later Stops are refused.
@@ -354,6 +365,7 @@ fn the_stop_gate_orders_stop_against_launch_and_settle() {
     let cancel = AtomicBool::new(false);
     assert!(!gate.settle(&cancel));
     assert!(!gate.stop(&cancel));
+    gate.force_stop(&cancel);
     assert!(!cancel.load(Ordering::SeqCst));
     let gate = StopGate::default();
     assert!(gate.stop(&cancel));
