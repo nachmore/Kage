@@ -340,8 +340,9 @@ export function createComposerMixin(dependencies) {
          * `turnId`), and that turn was recorded on the session the window
          * shows (or on none while it shows none). The backend can name
          * another one for it: open-in-chat prompts on main's backend pin,
-         * which a refused selection leaves on the session main showed
-         * before. Such an error is never dropped as another session's.
+         * which is still the session main showed before while a selection
+         * is being refused (_onSessionSwitchFailed then moves it). Such an
+         * error is never dropped as another session's.
          */
         _errorIsForShownTurn(payload) {
             const turnId = errorTurnId(payload);

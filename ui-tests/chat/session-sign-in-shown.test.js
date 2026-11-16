@@ -11,6 +11,12 @@
  *   - a session the sign-in sets up is painted only while the window still
  *     shows it: a late load_session reply for a session the user left
  *     paints nothing (transcript, header, sidebar highlight).
+ *   - a refused selection moves the backend's pin to the session shown, so
+ *     open in chat prompts there (for any refusal, not only a signed-out
+ *     one) and its reply shows; a signed-out refusal of that prompt names
+ *     the session shown and still gets Sign in, which sets it up and sends
+ *     the turn there once; and a sign-in or Reconnect already under way
+ *     for the selection's own refusal sends that turn once it is up.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { marked } from 'marked';
@@ -67,7 +73,7 @@ function fakeTerminal(opts) {
  * the last one repeats. `loads`: load_session's answer per session id (a
  * function is called), else an empty transcript.
  */
-function setup({ switches, loads = {} }) {
+function setup({ switches, loads = {}, pins: initialPins = {} }) {
     vi.stubGlobal(
         'fetch',
         vi.fn(async () => ({ text: async () => '<svg xmlns="http://www.w3.org/2000/svg"/>' }))
@@ -81,10 +87,18 @@ function setup({ switches, loads = {} }) {
         <button id="sendBtn"></button>`;
     const calls = [];
     const starts = [];
+    // The backend's window → session pins (set_window_session, a switch
+    // that worked), which get_window_session reads.
+    const pins = { ...initialPins };
     let switchAt = 0;
     const invoke = vi.fn(async (cmd, args) => {
         calls.push([cmd, args]);
         if (cmd === 'agent_sign_in_context') return CTX;
+        if (cmd === 'get_window_session') return pins[args?.label] ?? null;
+        if (cmd === 'set_window_session') {
+            pins[args.label] = args.sessionId;
+            return null;
+        }
         if (cmd === 'start_agent_sign_in') {
             return new Promise((resolve, reject) => starts.push({ args, resolve, reject }));
         }
@@ -93,9 +107,12 @@ function setup({ switches, loads = {} }) {
         }
         if (cmd === 'switch_acp_session') {
             const answer = switches[Math.min(switchAt++, switches.length - 1)];
-            if (typeof answer === 'function') return answer(args);
-            if (typeof answer === 'string' && answer.startsWith('s-')) return answer;
-            throw answer;
+            const id = typeof answer === 'function' ? await answer(args) : answer;
+            if (typeof id === 'string' && id.startsWith('s-')) {
+                pins.main = id;
+                return id;
+            }
+            throw id;
         }
         if (cmd === 'load_session') {
             const answer = loads[args?.sessionId];
@@ -145,7 +162,7 @@ function setup({ switches, loads = {} }) {
     app.sessions = [];
     app.isWaitingForResponse = false;
     const named = (name) => calls.filter(([c]) => c === name);
-    return { app, starts, named, listeners };
+    return { app, starts, named, listeners, pins };
 }
 
 const signInBtn = () => document.querySelector('#errorContainer .agent-sign-in-btn');
@@ -350,5 +367,184 @@ describe('chat: a late paint of a session the window no longer shows', () => {
         await flush(20);
         expect(app.elements.messagesArea.textContent).toBe('B transcript');
         expect(app.elements.chatHeaderTitle.textContent).toBe('Chat B');
+    });
+});
+
+describe("chat: a refused selection moves the backend's pin to the session shown", () => {
+    const LOCKED = 'Session is active in another process (PID 4242)';
+    const sendsOf = (named) => named('send_message_streaming').map(([, a]) => a);
+
+    /**
+     * Inline assist's open in chat, as the backend runs it: it reads main's
+     * pin (get_window_session), announces the prompt (initial_message) and
+     * prompts on that pin. Resolves to the session it prompted on.
+     */
+    async function openInChat(app, listeners, message, turnId) {
+        const sessionId = await app.invoke('get_window_session', { label: 'main' });
+        listeners.initial_message({ payload: { message, turnId } });
+        return sessionId;
+    }
+
+    it('a selection refused for another reason: open in chat prompts on the session shown, and its reply shows', async () => {
+        const { app, listeners, named, pins } = setup({
+            switches: [LOCKED],
+            pins: { main: 's-a' },
+        });
+        app.windowLabel = 'main';
+        app.activeSessionId = 's-a';
+        app.currentAcpSessionId = 's-a';
+        app.handleMessageChunk = vi.fn();
+        app.handleMessageComplete = vi.fn(() => {
+            app.isWaitingForResponse = false;
+        });
+        app.setupStreamingListeners();
+        await app.selectSession('s-b');
+        await flush();
+        expect(app.activeSessionId).toBe('s-b');
+        expect(pins.main).toBe('s-b');
+
+        const on = await openInChat(app, listeners, 'explain this', 'assist-turn-1');
+        expect(on).toBe('s-b');
+        expect(app.isWaitingForResponse).toBe(true);
+        // The reply streams on the session the backend prompted on.
+        listeners.message_chunk({ payload: { sessionId: on, text: 'Sure.' } });
+        expect(app.handleMessageChunk).toHaveBeenCalledTimes(1);
+        // open_chat_with_message focused main: its refresh reads the pin.
+        await app.loadCurrentSessionId();
+        listeners.message_complete({ payload: { sessionId: on, oldSessionId: on } });
+        await flush();
+
+        expect(app.handleMessageComplete).toHaveBeenCalledTimes(1);
+        expect(app.isWaitingForResponse).toBe(false);
+        expect(app.activeSessionId).toBe('s-b');
+        expect(named('set_window_session').map(([, a]) => a.sessionId)).not.toContain('s-a');
+        expect(sendsOf(named)).toEqual([]);
+    });
+
+    it('a signed-out refusal of it names the session shown: Sign in sets that one up and sends the turn there once', async () => {
+        const { app, starts, listeners, named, pins } = setup({
+            switches: [SIGNED_OUT, 's-b'],
+            pins: { main: 's-a' },
+        });
+        app.windowLabel = 'main';
+        app.activeSessionId = 's-a';
+        app.currentAcpSessionId = 's-a';
+        app.setupStreamingListeners();
+        await app.selectSession('s-b');
+        await flush();
+        expect(pins.main).toBe('s-b');
+
+        const on = await openInChat(app, listeners, 'explain this', 'assist-turn-1');
+        await listeners.message_error({
+            payload: {
+                ...SIGNED_OUT,
+                detail: null,
+                sessionId: on,
+                resendable: true,
+                turnId: 'assist-turn-1',
+            },
+        });
+        await flush(20);
+        expect(app.isWaitingForResponse).toBe(false);
+        expect(signInBtn()).toBeTruthy();
+
+        await signInCleanly(starts);
+        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's-b' }]]);
+        expect(named('switch_acp_session').map(([, a]) => a.sessionId)).toEqual(['s-b', 's-b']);
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-b', 'explain this'],
+        ]);
+        expect(app.activeSessionId).toBe('s-b');
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+    });
+
+    it("a sign-in already running for the selection's own refusal sends open in chat's turn once it sets the session up", async () => {
+        const { app, starts, listeners, named } = setup({
+            switches: [SIGNED_OUT, 's-b'],
+            pins: { main: 's-a' },
+        });
+        app.windowLabel = 'main';
+        app.activeSessionId = 's-a';
+        app.currentAcpSessionId = 's-a';
+        app.setupStreamingListeners();
+        await app.selectSession('s-b');
+        await flush();
+        // Sign in under the selection's own error: kiro-cli login runs.
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+
+        // Meanwhile inline assist's open in chat is refused too, and its
+        // error replaces the selection's.
+        const on = await openInChat(app, listeners, 'explain this', 'assist-turn-1');
+        await listeners.message_error({
+            payload: {
+                ...SIGNED_OUT,
+                detail: null,
+                sessionId: on,
+                resendable: true,
+                turnId: 'assist-turn-1',
+            },
+        });
+        await flush(20);
+        expect(document.querySelector('#errorContainer').textContent).toContain(
+            'Kiro needs you to sign in'
+        );
+
+        // The login ends: the running sign-in sets up s-b and sends the turn.
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(app.activeSessionId).toBe('s-b');
+        expect(app.currentAcpSessionId).toBe('s-b');
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-b', 'explain this'],
+        ]);
+        expect(sendsOf(named)[0].turnId).not.toBe('assist-turn-1');
+        expect(document.querySelector('#errorContainer').textContent).toBe('');
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+        await flush(10);
+        expect(sendsOf(named).length).toBe(1);
+    });
+
+    it("a Reconnect already under way for the selection's refusal sends that turn too, once", async () => {
+        const { app, listeners, named } = setup({
+            switches: [SIGNED_OUT, 's-b'],
+            pins: { main: 's-a' },
+        });
+        app.windowLabel = 'main';
+        app.activeSessionId = 's-a';
+        app.currentAcpSessionId = 's-a';
+        app.setupStreamingListeners();
+        await app.selectSession('s-b');
+        await flush();
+        const orig = app.invoke.getMockImplementation();
+        let restarted;
+        app.invoke.mockImplementation(async (cmd, args) => {
+            if (cmd === 'reconnect_acp') {
+                await orig(cmd, args);
+                return new Promise((resolve) => (restarted = resolve));
+            }
+            return orig(cmd, args);
+        });
+        document.getElementById('errorReconnectBtn').click();
+        await flush();
+
+        const on = await openInChat(app, listeners, 'explain this', 'assist-turn-1');
+        await listeners.message_error({
+            payload: {
+                ...SIGNED_OUT,
+                detail: null,
+                sessionId: on,
+                resendable: true,
+                turnId: 'assist-turn-1',
+            },
+        });
+        await flush(20);
+        restarted({ reconnected: true, sessionId: 's-b', sessionReloaded: false });
+        await flush(20);
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-b', 'explain this'],
+        ]);
+        expect(document.querySelector('#errorContainer').textContent).toBe('');
     });
 });

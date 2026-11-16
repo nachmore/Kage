@@ -7,7 +7,9 @@
  * (`switch_acp_session`) and only then sends the message that was waiting
  * on the bootstrap, exactly once, with a turn id of its own. A bootstrap
  * that still fails shows the error again, with Sign in, and sends nothing;
- * a send or a different draft since means nothing is sent; a plain-string
+ * any edit to the input since (an `input` event, or a write that fires
+ * none: dictation, Ctrl+L) means nothing is sent; a send made meanwhile
+ * that failed again is the one waiting, and the one sent; a plain-string
  * bootstrap error gets no Sign in.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -277,7 +279,7 @@ describe('floating: a signed-out agent refusing the bootstrap', () => {
         expect(status()).toBe('shared.agent_sign_in.status.ready');
     });
 
-    it('sends nothing when the user sent something else meanwhile', async () => {
+    it('a send made meanwhile is the one waiting: it goes once, the first one not', async () => {
         const { app, starts, sends, named } = setup({ bootstraps: [SIGNED_OUT] });
         await failedBootstrapThenSend(app, SIGNED_OUT);
         signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
@@ -297,9 +299,10 @@ describe('floating: a signed-out agent refusing the bootstrap', () => {
         starts[0].resolve({ outcome: 'exited', exitCode: 0 });
         await flush(20);
         expect(app.floatingSessionId).toBe('s-new');
-        // Neither the first message nor the second one went out by itself.
-        expect(sends()).toEqual([]);
-        expect(status()).toBe('shared.agent_sign_in.status.ready');
+        // The second send failed again and is the one waiting now: it goes
+        // out once; the first one, which it replaced, does not.
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-new', 'second']]);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
     });
 
     it('with no send waiting, just bootstraps and shows ready', async () => {
@@ -515,7 +518,7 @@ describe('floating: one bootstrap at a time after a failed one', () => {
         expect(status()).toBe('shared.agent_sign_in.status.done');
     });
 
-    it('a Reconnect that sends nothing clears the error, though a send redrew it meanwhile', async () => {
+    it('a Reconnect sends the send that redrew its error meanwhile, once', async () => {
         const { app, sends } = setup({ bootstraps: [SIGNED_OUT] });
         await failedBootstrapThenSend(app, SIGNED_OUT);
         const restart = deferred();
@@ -537,8 +540,8 @@ describe('floating: one bootstrap at a time after a failed one', () => {
         ctl.pending[0].resolve('s-a');
         await flush(20);
         expect(app.floatingSessionId).toBe('s-a');
-        // Something was sent since the first message: neither goes.
-        expect(sends()).toEqual([]);
+        // The newer send is the one waiting: it goes, once; the first not.
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-a', 'second']]);
         expect(document.querySelector('#responseText').textContent).not.toContain(
             'floating.error.agent_unavailable'
         );
@@ -549,9 +552,8 @@ describe('floating: one bootstrap at a time after a failed one', () => {
         await failedBootstrapThenSend(app, SIGNED_OUT);
         const restart = deferred();
         controlBootstraps(app, () => restart.promise);
-        const waiting = app._bootstrapWaitingSend;
-        const first = app._reconnectBootstrap(document.createElement('button'), waiting);
-        await app._reconnectBootstrap(document.createElement('button'), waiting);
+        const first = app._reconnectBootstrap(document.createElement('button'));
+        await app._reconnectBootstrap(document.createElement('button'));
         expect(named('reconnect_acp').length).toBe(1);
         restart.resolve({ reconnected: false });
         await first;
@@ -761,5 +763,120 @@ describe('floating: the launch bootstrap keeps its typed error', () => {
         expect(app.bootstrappingSession).toBe(false);
         expect(sends()).toEqual([]);
         invalidateConfig();
+    });
+});
+
+describe('floating: a write to the input that fires no `input` event is an edit too', () => {
+    /**
+     * A fake Web Speech recognizer: `SpeechController.start()` builds one,
+     * and `say(text, isFinal)` delivers a result the way the browser does.
+     */
+    function fakeRecognition() {
+        const made = [];
+        class FakeRecognition {
+            constructor() {
+                made.push(this);
+            }
+            start() {}
+            stop() {
+                this.onend?.();
+            }
+        }
+        window.SpeechRecognition = FakeRecognition;
+        return {
+            say(text, isFinal = true) {
+                const rec = made[made.length - 1];
+                const result = Object.assign([{ transcript: text }], { isFinal });
+                rec.onresult({ resultIndex: 0, results: [result] });
+            },
+        };
+    }
+
+    afterEach(() => {
+        delete window.SpeechRecognition;
+    });
+
+    it('voice dictation during the sign-in: nothing is sent, and the dictated draft stays', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        app.setupSpeech();
+        // No auto-submit on silence: the transcript stays in the input.
+        app.speech.silenceTimeout = 0;
+        const mic = fakeRecognition();
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+
+        // While kiro-cli login runs: the user dictates a replacement, then
+        // stops the mic before it is sent.
+        app.speech.start();
+        mic.say('a dictated question');
+        app.speech.stop();
+        expect(app.elements.input.value).toBe('a dictated question');
+
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(app.floatingSessionId).toBe('s-new');
+        expect(sends()).toEqual([]);
+        expect(app.elements.input.value).toBe('a dictated question');
+        expect(status()).toBe('shared.agent_sign_in.status.ready');
+    });
+
+    it('Ctrl+L (resetUI) during the sign-in: the old message is not sent', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        app.resetUI();
+        expect(app.elements.input.value).toBe('');
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(app.floatingSessionId).toBe('s-new');
+        expect(sends()).toEqual([]);
+    });
+
+    it('Enter empties the input after the send it left waiting: still sent after the sign-in', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        app.attachmentManager = new AttachmentManager();
+        app.shortcuts = [];
+        app._getExecCtx = () => ({});
+        app.clearSuggestions = vi.fn(async () => {});
+        app._setBootstrapFailure(SIGNED_OUT);
+        typeInto(app, 'hello agent');
+        await app.handleEnterKey();
+        await wait(250);
+        await flush();
+        expect(signInBtn()).toBeTruthy();
+        // The Enter path emptied the input itself, as it does after a send.
+        expect(app.elements.input.value).toBe('');
+        await signInCleanly(starts);
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-new', 'hello agent']]);
+    });
+});
+
+describe('floating: the send waiting when the sign-in ends is the one sent', () => {
+    it('Enter again during the login (its retry refused too): that send goes once after it', async () => {
+        const { app, starts, sends, named } = setup({ bootstraps: [SIGNED_OUT] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        // Past the debounce: the send retries the bootstrap, which is
+        // refused again and redraws the error for it.
+        app._lastBootstrapRetryAt = 0;
+        await app.sendChatMessage('hello agent');
+        await wait(250);
+        await flush();
+        expect(named('switch_acp_session').length).toBe(2);
+        expect(signInBtn()).toBeTruthy();
+        const orig = app.invoke.getMockImplementation();
+        app.invoke.mockImplementation(async (cmd, args) =>
+            cmd === 'switch_acp_session' ? 's-new' : orig(cmd, args)
+        );
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(app.floatingSessionId).toBe('s-new');
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-new', 'hello agent']]);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+        // Its own Sign in / Reconnect have nothing left to send.
+        expect(app._bootstrapWaitingSend).toBeNull();
     });
 });

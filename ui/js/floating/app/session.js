@@ -278,8 +278,10 @@ export const SessionMethods = {
     /**
      * Show the failed bootstrap's error, `waiting` being the send it held up
      * (or null). A signed-out agent's error also gets Sign in and Reconnect:
-     * either restarts the agent, sets up a session and then sends `waiting`
-     * once (`_sendWaitingAfterBootstrap`). Any other error is shown as text.
+     * either restarts the agent, sets up a session and then sends the send
+     * waiting when it ends once (`_sendWaitingAfterBootstrap`): `waiting`,
+     * or a newer send that failed again meanwhile and redrew this error.
+     * Any other error is shown as text.
      */
     _showBootstrapError(waiting = null) {
         this._bootstrapWaitingSend = waiting;
@@ -290,9 +292,9 @@ export const SessionMethods = {
         } else {
             this.showError(text, {
                 reconnect: true,
-                onReconnect: (btn) => this._reconnectBootstrap(btn, waiting),
+                onReconnect: (btn) => this._reconnectBootstrap(btn),
                 signIn: failure,
-                signInHost: this._bootstrapSignInHost(waiting),
+                signInHost: this._bootstrapSignInHost(),
             });
         }
         // Its first line: still on screen while nothing newer replaced it.
@@ -396,16 +398,24 @@ export const SessionMethods = {
     /**
      * The sign-in under a failed bootstrap's error: as a prompt's
      * (`_agentSignInHost`), except that after the restart it sets up the
-     * window's session (`establishSession`) and then sends the message that
-     * was waiting, at most once.
+     * window's session (`establishSession`) and then sends the message
+     * waiting then (`_bootstrapWaitingSend`), at most once.
      */
-    _bootstrapSignInHost(waiting) {
+    _bootstrapSignInHost() {
         const base = this._agentSignInHost(this.sessionBootstrapFailure, null);
         let resent = false;
+        // The send waiting when the sign-in ends, not when its button was
+        // drawn: a send made during the login that failed again is waiting
+        // now (_showBootstrapError redrew the error for it), and it is the
+        // one the user wants sent.
+        let waiting = null;
         return {
             ...base,
             establishSession: (outcome) => this._bootstrapAfterRestart(outcome),
-            canResend: (sid) => !resent && this._canSendWaitingAfterBootstrap(waiting, sid),
+            canResend: (sid) => {
+                waiting = this._bootstrapWaitingSend;
+                return !resent && this._canSendWaitingAfterBootstrap(waiting, sid);
+            },
             resend: async () => {
                 if (resent) return 'none';
                 resent = true;
@@ -418,10 +428,11 @@ export const SessionMethods = {
 
     /**
      * Reconnect under a failed bootstrap's error: restart the agent, set up
-     * a session, then send the message that was waiting (as the sign-in
-     * does). A failed attempt leaves the button for the next one.
+     * a session, then send the message waiting then (as the sign-in does:
+     * a send made meanwhile that failed again is the one waiting). A failed
+     * attempt leaves the button for the next one.
      */
-    async _reconnectBootstrap(btn, waiting) {
+    async _reconnectBootstrap(btn) {
         // One Reconnect at a time (a redrawn error has a new button).
         if (this._bootstrapReconnecting) return;
         this._bootstrapReconnecting = true;
@@ -454,6 +465,7 @@ export const SessionMethods = {
             this._bootstrapReconnecting = false;
         }
         // The bootstrap took its error off the screen (_clearShownBootstrapError).
+        const waiting = this._bootstrapWaitingSend;
         if (this._canSendWaitingAfterBootstrap(waiting, sid)) {
             await this._sendWaitingAfterBootstrap(waiting);
         }

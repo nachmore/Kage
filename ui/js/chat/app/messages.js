@@ -512,12 +512,16 @@ export function createMessagesMixin(dependencies) {
                     // then send the turn the setup failed for, if any
                     // (_showUnsentTurnError), by the rules above.
                     const sid = await opts.establishSession(outcome).catch(() => null);
-                    const turn = opts.retryTurn;
+                    // A turn whose own error replaced this one meanwhile
+                    // (open in chat, refused for this very setup) waits on
+                    // it too.
+                    const turn = opts.retryTurn ?? this._unsentTurnFor(startedOn);
                     if (
                         sid &&
                         sid === this.activeSessionId &&
                         this._canResendTurn(turn, startedOn)
                     ) {
+                        if (turn !== opts.retryTurn) this._clearUnsentTurnError(turn);
                         await this._resendTurn(turn);
                     }
                     return;
@@ -587,14 +591,18 @@ export function createMessagesMixin(dependencies) {
          *     backend had pinned (a New Chat the window couldn't set up): a
          *     new one, as the window shows a new chat;
          *   - the window shows a session it failed to set up (its switch
-         *     was refused, so the backend never pinned it) and the error
-         *     names none, or names the session the backend still has
-         *     pinned (the one the window showed before): that session,
-         *     switched to again (_retryShownSessionForTurn), which moves
-         *     the pin to it. This error replaced its own setup error, so
-         *     this sets it up too.
+         *     was refused; _onSessionSwitchFailed pinned the window to it)
+         *     and the error names it, or none, or the session the backend
+         *     had pinned before (the one the window showed before, should
+         *     the prompt have gone out before that pin moved): that
+         *     session, switched to again (_retryShownSessionForTurn), which
+         *     sets it up and pins it. This error replaced its own setup
+         *     error, so this sets it up too.
          * Only when `turn` was recorded on the session the window shows;
-         * it is only ever sent there. Returns false, showing nothing, for
+         * it is only ever sent there. The turn is remembered as the one
+         * waiting (`_unsentTurn`): a sign-in already running for the shown
+         * session's setup error sends it once it has set the session up
+         * (_sessionSetupSignInHost). Returns false, showing nothing, for
          * any other error.
          */
         _showUnsentTurnError(text, payload, turn) {
@@ -603,7 +611,8 @@ export function createMessagesMixin(dependencies) {
             const shown = this.activeSessionId ?? null;
             if ((turn.sessionId ?? null) !== shown) return false;
             const named = errorSessionId(payload);
-            if (shown !== null && named !== null) {
+            const shownNotSetUp = shown !== null && this._setupFailedSessionId === shown;
+            if (shown !== null && named !== null && !(shownNotSetUp && named === shown)) {
                 // The error names the shown session (an id the turn had): it
                 // was set up, and its own rules (onError's retryTurn) resend
                 // the turn.
@@ -623,7 +632,31 @@ export function createMessagesMixin(dependencies) {
                         ? this._establishSessionForTurn(outcome, text, payload, retryTurn)
                         : this._retryShownSessionForTurn(shown, outcome, text, payload, retryTurn),
             });
+            this._unsentTurn = {
+                turn: retryTurn,
+                sessionId: shown,
+                box: this.elements.errorContainer.querySelector('.chat-error'),
+            };
             return true;
+        }
+
+        /**
+         * The unsent turn (_showUnsentTurnError) waiting on `sessionId`'s
+         * setup, if any: a sign-in or Reconnect for that session's own setup
+         * error sends it once the session is up, by Reconnect's rules.
+         */
+        _unsentTurnFor(sessionId) {
+            const waiting = this._unsentTurn;
+            if (!waiting || (waiting.sessionId ?? null) !== (sessionId ?? null)) return null;
+            return waiting.turn;
+        }
+
+        /** Take the unsent `turn`'s error off the screen, if it is still there. */
+        _clearUnsentTurnError(turn) {
+            const waiting = this._unsentTurn;
+            if (waiting?.turn !== turn) return;
+            this._unsentTurn = null;
+            if (waiting.box?.isConnected) this.elements.errorContainer.innerHTML = '';
         }
 
         /**
@@ -687,13 +720,17 @@ export function createMessagesMixin(dependencies) {
          * the restart it sets up the session the window wanted (`retry`),
          * unless the window has moved on to another session since; then it
          * keeps that one. `retryTurn`: the turn the setup failed for, if
-         * any (else nothing was waiting): sent on the session set up, by
-         * Reconnect's rules, at most once.
+         * any: sent on the session set up, by Reconnect's rules, at most
+         * once. With none, the turn waiting on that setup when the sign-in
+         * ends (_unsentTurnFor: open in chat's prompt, refused for it while
+         * the login ran, whose error replaced this one) is the one sent.
          */
         _sessionSetupSignInHost(payload, retry, ownActions = null, retryTurn = null) {
             const base = this._agentSignInHost(payload, retryTurn, ownActions);
             const wanted = payload?.sessionId ?? null;
             let resent = false;
+            // The turn canResend settled on.
+            let turn = null;
             return {
                 ...base,
                 establishSession: async (outcome) => {
@@ -711,16 +748,25 @@ export function createMessagesMixin(dependencies) {
                     }
                     return retry(outcome);
                 },
-                canResend: (sid) =>
-                    !resent &&
-                    !!retryTurn &&
-                    !!sid &&
-                    sid === this.activeSessionId &&
-                    this._canResendTurn(retryTurn, wanted),
+                canResend: (sid) => {
+                    turn = retryTurn ?? this._unsentTurnFor(wanted);
+                    return (
+                        !resent &&
+                        !!turn &&
+                        !!sid &&
+                        sid === this.activeSessionId &&
+                        this._canResendTurn(turn, wanted)
+                    );
+                },
                 resend: async () => {
                     if (resent) return 'none';
                     resent = true;
-                    return base.resend();
+                    if (turn === retryTurn) return base.resend();
+                    // The waiting turn's error goes; the resend's own, if it
+                    // fails fast, stays.
+                    this._clearUnsentTurnError(turn);
+                    await this._resendTurn(turn, { throwOnError: true });
+                    return 'sent';
                 },
             };
         }
