@@ -303,6 +303,11 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     // Re-refresh sessions + current session every time the window becomes visible
     appWindow.listen('tauri://focus', async () => {
         if (app) {
+            // The auto-select below acts only while nothing changed the
+            // view during these awaits (see "View generation" in
+            // app/session-history.js); loadCurrentSessionId and
+            // loadSessions guard their own answers.
+            const viewGen = app._viewGen;
             await app.loadFloatingSessionId();
             await app.loadCurrentSessionId();
             await app.loadSessions();
@@ -313,7 +318,12 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
             // A New Chat in flight nulls `activeSessionId` on purpose;
             // auto-selecting here would supersede it and re-pin the old one.
-            if (!app._newSessionPending && !app.activeSessionId && app.currentAcpSessionId) {
+            if (
+                app._viewIs(viewGen) &&
+                !app._viewChangePending() &&
+                !app.activeSessionId &&
+                app.currentAcpSessionId
+            ) {
                 const exists = app.sessions.find((s) => s.session_id === app.currentAcpSessionId);
                 if (exists) {
                     await app.selectSession(app.currentAcpSessionId);

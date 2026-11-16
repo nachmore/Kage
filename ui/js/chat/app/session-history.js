@@ -25,11 +25,24 @@ export function createSessionHistoryMixin(dependencies) {
             const sameSession = sessionId === this.activeSessionId;
             if (sameSession && !force) return;
 
-            // Overlapping selections resolve their IPCs in any order; the
-            // token lets a superseded one bail instead of painting its
-            // transcript / adopting its id over the newer selection.
-            const gen = this._nextSelectGen();
-            const isStale = () => gen !== this._selectGen || this.activeSessionId !== sessionId;
+            // A view change: whatever was in flight for the old view (a
+            // selection, a New Chat, a paint, a pin read) is superseded, and
+            // this one is in turn superseded by the next event that changes
+            // what the window shows or starts a turn in it.
+            const gen = this._beginViewChange();
+            try {
+                await this._runSelection(sessionId, gen, { sameSession, emptyIfNew });
+            } finally {
+                this._endViewChange(gen);
+            }
+        }
+
+        /** selectSession's transcript, stream attach and switch, under `gen`. */
+        async _runSelection(sessionId, gen, { sameSession, emptyIfNew }) {
+            // Overlapping view changes resolve their IPCs in any order: a
+            // superseded one bails instead of painting its transcript,
+            // pinning or adopting its id over the newer one.
+            const isStale = () => !this._viewIs(gen) || this.activeSessionId !== sessionId;
 
             // Switching AWAY from a mid-stream session: detach the viewport
             // without touching the turn. The agent keeps working; the
@@ -51,11 +64,8 @@ export function createSessionHistoryMixin(dependencies) {
 
             this.activeSessionId = sessionId;
             if (!sameSession) {
-                // The old pin is no longer ours: without this, the old
-                // session's MESSAGE_COMPLETE still matches `currentAcpSessionId`
-                // and its recovery-adoption branch hijacks `activeSessionId`
-                // mid-switch (making this selection stale with the input left
-                // on "connecting"). Re-set once the new session is pinned.
+                // The old pin is no longer ours. Re-set once the new session
+                // is pinned (_onSessionSwitched).
                 this.currentAcpSessionId = null;
             }
             // Entering the session consumes its unread badge (if any).
@@ -118,10 +128,7 @@ export function createSessionHistoryMixin(dependencies) {
             // the text streamed so far from the backend accumulator.
             if (this.streamRegistry.isStreaming(sessionId)) {
                 this.currentAcpSessionId = sessionId;
-                this.invoke('set_window_session', {
-                    label: this.windowLabel,
-                    sessionId,
-                }).catch(() => {});
+                this._pinWindow(sessionId);
                 // History renders in rAF batches; attaching before the last
                 // batch lands would bury the live bubble mid-transcript.
                 await rendered;
@@ -139,48 +146,30 @@ export function createSessionHistoryMixin(dependencies) {
             // Forced re-render of the already-active session: don't churn
             // switch_acp_session if the backend is already pinned for this
             // view (`currentAcpSessionId` is nulled on every transition and
-            // only re-set once a pin lands) or the original selection's
-            // switch is still in flight (it will finish the job). If the
-            // original bailed before switching (superseded by this forced
-            // call), fall through and switch.
-            if (
-                sameSession &&
-                (this.currentAcpSessionId || this._pendingSwitchSessionId === sessionId)
-            ) {
-                return;
-            }
+            // only re-set once a pin lands). A switch to it still in flight
+            // is shared (_switchAcpSession): this selection, which
+            // superseded the one that started it, applies its result.
+            if (sameSession && this.currentAcpSessionId) return;
 
             // Show connecting state in the input
             this.elements.chatInput.disabled = true;
             this.elements.chatInput.placeholder = t('chat.placeholder.connecting');
             this.elements.sendBtn.disabled = true;
 
-            // The switch result is judged by its own token, not the render
-            // token: a forced same-session re-render bumps `_selectGen` but
-            // relies on this in-flight switch to re-enable the input.
-            this._switchGen = (this._switchGen || 0) + 1;
-            const switchGen = this._switchGen;
-            this._pendingSwitchSessionId = sessionId;
-            const switchStale = () => {
-                if (switchGen !== this._switchGen) return true;
-                this._pendingSwitchSessionId = null;
-                return this.activeSessionId !== sessionId;
-            };
-
-            // Switch ACP session in parallel
             try {
-                const adoptedId = await this.invoke('switch_acp_session', { sessionId });
-                if (switchStale()) {
-                    // The backend pinned this window to `adoptedId`; a newer
-                    // selection may already have pinned the right one.
-                    this._repinWindowSession();
+                const adoptedId = await this._switchAcpSession(sessionId);
+                if (isStale()) {
+                    // The backend pinned this window to `adoptedId`; the
+                    // window shows another session now.
+                    this._supersededPin(adoptedId);
                     return;
                 }
                 console.log('ACP session switched to:', adoptedId);
                 this._onSessionSwitched(adoptedId);
             } catch (error) {
-                // A stale failure must not lock the input of the newer session.
-                if (switchStale()) return;
+                // A superseded failure must not lock the input of the newer
+                // view, nor show its error there.
+                if (isStale()) return;
                 console.error('Failed to switch ACP session:', error);
                 this._onSessionSwitchFailed(sessionId, error);
             }
@@ -206,14 +195,20 @@ export function createSessionHistoryMixin(dependencies) {
          * The backend keeps the window pinned to the session it had (a
          * refused switch pins nothing), one that is set up, and the window
          * never pins `sessionId` while it isn't (`_setupFailedSessionId`,
-         * _repinWindowSession), nor takes the pin as its own session while
-         * it shows `sessionId` (loadCurrentSessionId): a prompt the backend sends for the window on
-         * its pin (inline assist's open in chat) must not go to a session
-         * the agent never loaded. That prompt names the session it went to
-         * (initial_message), and the window shows it.
+         * _repinWindowSession), nor holds any session as its own while it
+         * shows `sessionId`: `currentAcpSessionId` goes back to null (an
+         * older id a focus refresh read meanwhile included), and
+         * loadCurrentSessionId doesn't read the pin into it. A prompt the
+         * backend sends for the window on its pin (inline assist's open in
+         * chat) must not go to a session the agent never loaded. That
+         * prompt names the session it went to (initial_message), and the
+         * window shows it.
          */
         _onSessionSwitchFailed(sessionId, error) {
-            if (this.activeSessionId === sessionId) this._setupFailedSessionId = sessionId;
+            if (this.activeSessionId === sessionId) {
+                this._setupFailedSessionId = sessionId;
+                this.currentAcpSessionId = null;
+            }
             const msg = this.formatError(error);
             const isLocked =
                 msg.includes('active in another process') || msg.includes('Session is active');
@@ -249,19 +244,19 @@ export function createSessionHistoryMixin(dependencies) {
                 this._onSessionSwitched(this.activeSessionId);
                 return this.activeSessionId;
             }
+            const gen = this._viewGen;
+            const moved = () => !this._viewIs(gen) || this.activeSessionId !== sessionId;
             try {
-                const id = await this.invoke('switch_acp_session', { sessionId });
-                if (this.activeSessionId !== sessionId) {
-                    this._repinWindowSession();
+                const id = await this._switchAcpSession(sessionId);
+                if (moved()) {
+                    this._supersededPin(id);
                     return null;
                 }
                 this._onSessionSwitched(id);
                 return id;
             } catch (error) {
                 console.error('Failed to switch ACP session again:', error);
-                if (this.activeSessionId === sessionId) {
-                    this._onSessionSwitchFailed(sessionId, error);
-                }
+                if (!moved()) this._onSessionSwitchFailed(sessionId, error);
                 throw error;
             }
         }
@@ -347,24 +342,136 @@ export function createSessionHistoryMixin(dependencies) {
             }
         }
 
-        /** Bump and return the selection token (see selectSession). */
-        _nextSelectGen() {
-            this._selectGen = (this._selectGen || 0) + 1;
-            return this._selectGen;
+        // ── View generation ──
+        //
+        // `_viewGen` is bumped by every event that changes what the window
+        // shows or starts a turn in it: a selection, New Chat, the
+        // bootstrap, the current session's paint, open in chat
+        // (initial_message, initial_message_session), the floating mirror's
+        // turn, a local send (startStreaming), a migration or recovery the
+        // window adopts, and the sign-in's own session changes. Every async
+        // continuation that writes `activeSessionId` / `currentAcpSessionId`,
+        // pins the window, paints a transcript or header, or reads the
+        // backend pin captures it before its await and applies its result
+        // only while it is unchanged; a superseded result changes nothing
+        // (_supersededPin pins the window back to what it shows).
+
+        /** Bump the view generation (see above) and return it. */
+        _bumpViewGen() {
+            this._viewGen = (this._viewGen || 0) + 1;
+            return this._viewGen;
+        }
+
+        /** Whether nothing changed the view since `gen` was taken. */
+        _viewIs(gen) {
+            return (gen || 0) === (this._viewGen || 0);
+        }
+
+        /**
+         * A view change with async work to come (a selection, New Chat,
+         * the bootstrap, the current session's paint): bumps the
+         * generation, and until _endViewChange (or the next bump) it is
+         * pending: sendMessage refuses (the change would paint over the
+         * turn), the backend pin isn't read, and open in chat or a floating
+         * turn supersedes it (_showTurnSession) instead of landing in it.
+         */
+        _beginViewChange() {
+            const gen = this._bumpViewGen();
+            this._viewPending = gen;
+            return gen;
+        }
+
+        /** The view change `gen` (_beginViewChange) is done. */
+        _endViewChange(gen) {
+            if (this._viewPending === gen) this._viewPending = null;
+        }
+
+        /** Whether the latest view change still has async work under way. */
+        _viewChangePending() {
+            return this._viewPending != null && this._viewIs(this._viewPending);
+        }
+
+        /**
+         * Track `promise`, a change of the backend's window → session pin
+         * (switch_acp_session, set_window_session), so a pin read that
+         * overlaps it is discarded (loadCurrentSessionId).
+         */
+        _pinChange(promise) {
+            this._pinsInFlight = (this._pinsInFlight || 0) + 1;
+            this._pinGen = (this._pinGen || 0) + 1;
+            const settle = () => {
+                this._pinsInFlight--;
+            };
+            return Promise.resolve(promise).then(
+                (value) => {
+                    settle();
+                    return value;
+                },
+                (error) => {
+                    settle();
+                    throw error;
+                }
+            );
+        }
+
+        /** Whether no pin change is in flight (see _pinChange). */
+        _pinsSettled() {
+            return !this._pinsInFlight;
+        }
+
+        /**
+         * `switch_acp_session` to `sessionId` (null: a new session), which
+         * pins the window to the session it answers with. A switch to the
+         * session the latest one in flight is for is shared, not sent again:
+         * a forced re-render of a session whose selection it superseded
+         * applies that switch's result.
+         */
+        _switchAcpSession(sessionId) {
+            const latest = this._pendingSwitch;
+            if (sessionId && latest?.sessionId === sessionId) return latest.promise;
+            const promise = this._pinChange(this.invoke('switch_acp_session', { sessionId }));
+            const entry = { sessionId, promise };
+            this._pendingSwitch = entry;
+            const clear = () => {
+                if (this._pendingSwitch === entry) this._pendingSwitch = null;
+            };
+            promise.then(clear, clear);
+            return promise;
+        }
+
+        /** Pin the backend window → session map to `sessionId`. */
+        _pinWindow(sessionId) {
+            this._pinChange(
+                this.invoke('set_window_session', {
+                    label: this.windowLabel,
+                    sessionId,
+                })
+            ).catch(() => {});
+        }
+
+        /**
+         * A superseded switch landed: the backend pinned the window to
+         * `landedId`. Where that is not what the window shows, pin it back
+         * (_repinWindowSession).
+         */
+        _supersededPin(landedId) {
+            if (landedId !== this.activeSessionId) this._repinWindowSession();
         }
 
         /**
          * Re-pin the backend window→session map to the current view, unless
          * the window's switch to it was refused (_onSessionSwitchFailed):
          * the backend then keeps the session it has pinned, which is set up.
+         * Nor while the latest switch is for that session: it pins the
+         * window when it lands, and if it is refused the pin must stay on
+         * the session that is set up.
          */
         _repinWindowSession() {
-            if (!this.activeSessionId) return;
-            if (this.activeSessionId === this._setupFailedSessionId) return;
-            this.invoke('set_window_session', {
-                label: this.windowLabel,
-                sessionId: this.activeSessionId,
-            }).catch(() => {});
+            const sid = this.activeSessionId;
+            if (!sid) return;
+            if (sid === this._setupFailedSessionId) return;
+            if (this._pendingSwitch?.sessionId === sid) return;
+            this._pinWindow(sid);
         }
 
         /**
@@ -396,6 +503,9 @@ export function createSessionHistoryMixin(dependencies) {
          * the last rAF batch has landed (or the render is superseded).
          */
         displaySession(sessionData) {
+            // Callers check their view generation before painting (their
+            // load_session answer may be superseded); the batches below
+            // check it too.
             // Cancel any previous in-flight batch render before clearing the
             // area, so its remaining batches can't append into this view.
             this._cancelDisplaySessionRender();
@@ -466,7 +576,17 @@ export function createSessionHistoryMixin(dependencies) {
             };
             this._displaySessionFinish = finish;
 
+            // A view change since (a selection, New Chat, a turn starting:
+            // _showTurnSession and startStreaming finish a render they keep
+            // first) stops the batches: the rest, and the header and chips
+            // at the end, are no longer this view's.
+            const gen = this._viewGen;
             const renderBatch = () => {
+                if (!this._viewIs(gen)) {
+                    this._displaySessionRafId = null;
+                    settle();
+                    return;
+                }
                 const end = Math.min(idx + BATCH_SIZE, renderQueue.length);
                 for (; idx < end; idx++) {
                     this._renderQueueItem(renderQueue[idx]);

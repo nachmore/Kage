@@ -85,16 +85,16 @@ export function createStreamListenersMixin(dependencies) {
                 // Broadcast event — any chat window pinned to ANY session
                 // hears it. Filter by sessionId (the active session, post
                 // any in-flight recovery) OR oldSessionId (the session id
-                // we issued the send against). Either match means this
-                // complete belongs to us; otherwise it's a background
-                // session finishing — flip its badge to unread.
+                // we issued the send against) naming the session this
+                // window shows (_isShownSessionId: `activeSessionId`, or an
+                // earlier id of the turn still running on it), never the pin
+                // (`currentAcpSessionId` may name a session the window left).
+                // Either match means this complete belongs to us; otherwise
+                // it's a background session finishing — flip its badge to
+                // unread.
                 const newId = event?.payload?.sessionId;
                 const oldId = event?.payload?.oldSessionId;
-                const ours =
-                    (newId &&
-                        (newId === this.activeSessionId || newId === this.currentAcpSessionId)) ||
-                    (oldId &&
-                        (oldId === this.activeSessionId || oldId === this.currentAcpSessionId));
+                const ours = this._isShownSessionId(newId) || this._isShownSessionId(oldId);
                 if (!ours) {
                     for (const sid of [newId, oldId]) {
                         if (sid) this.streamRegistry.complete(sid, { viewing: false });
@@ -114,12 +114,10 @@ export function createStreamListenersMixin(dependencies) {
                 // it up so subsequent sends/cancels target it.
                 if (newId && newId !== this.activeSessionId) {
                     console.log('[chat] adopting recovery session id:', newId);
+                    this._bumpViewGen();
                     this.activeSessionId = newId;
                     this.currentAcpSessionId = newId;
-                    this.invoke('set_window_session', {
-                        label: this.windowLabel,
-                        sessionId: newId,
-                    }).catch(() => {});
+                    this._pinWindow(newId);
                 }
                 this.handleMessageComplete();
             });
@@ -192,7 +190,8 @@ export function createStreamListenersMixin(dependencies) {
                 // the recovered response streams under the new id shortly. Adopt it
                 // without tearing down the waiting UI (unlike session_reset), and
                 // drop the accumulated steering-reply text so the resend renders
-                // clean. Match either pinned id, mirroring message_complete.
+                // clean. Ours when it names the session shown, as for
+                // message_complete (never the possibly stale pin).
                 const oldId = event?.payload?.oldSessionId;
                 const newId = event?.payload?.newSessionId;
                 // Move the stream's registry entry to the new id — the turn
@@ -200,20 +199,17 @@ export function createStreamListenersMixin(dependencies) {
                 // this just avoids a stale badge on the dead id).
                 if (oldId) this.streamRegistry.fail(oldId);
                 if (newId) this.streamRegistry.begin(newId);
+                const ours = this._isShownSessionId(oldId);
                 this._followTurnSession(oldId, newId);
-                const ours =
-                    oldId && (oldId === this.currentAcpSessionId || oldId === this.activeSessionId);
                 if (!ours || !newId) return;
                 console.log('[chat] session migrated mid-turn:', oldId, '→', newId);
+                this._bumpViewGen();
                 this.activeSessionId = newId;
                 this.currentAcpSessionId = newId;
                 // Drop the fresh session's steering-reply text so the resend
                 // renders clean. Matches the stream controller's accumulator field.
                 this.currentStreamingContent = '';
-                this.invoke('set_window_session', {
-                    label: this.windowLabel,
-                    sessionId: newId,
-                }).catch(() => {});
+                this._pinWindow(newId);
             });
             this.listen('session_reset', (event) => {
                 // session_reset is broadcast to all windows; only adopt the
@@ -225,12 +221,10 @@ export function createStreamListenersMixin(dependencies) {
                 const ours = oldId && oldId === this.currentAcpSessionId;
                 if (!ours) return;
                 if (newId) {
+                    this._bumpViewGen();
                     this.activeSessionId = newId;
                     this.currentAcpSessionId = newId;
-                    this.invoke('set_window_session', {
-                        label: this.windowLabel,
-                        sessionId: newId,
-                    }).catch(() => {});
+                    this._pinWindow(newId);
                 }
                 this.handleSessionReset(event);
             });
@@ -256,6 +250,7 @@ export function createStreamListenersMixin(dependencies) {
                 if (kind === 'renamed' && title) {
                     animateTitleSwap(this.elements.chatHeaderTitle, title, source === 'ai');
                 } else if (kind === 'deleted') {
+                    this._bumpViewGen();
                     this.activeSessionId = null;
                     this.currentAcpSessionId = null;
                     this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.deleted')}</div>`;
@@ -281,6 +276,18 @@ export function createStreamListenersMixin(dependencies) {
                 // badged in the sidebar via SESSION_ACTIVITY instead.
                 if (!this.activeSessionId || !this.floatingSessionId) return;
                 if (this.activeSessionId !== this.floatingSessionId) return;
+                const sid = this.activeSessionId;
+                if (this._viewChangePending()) {
+                    // The session's transcript (or its switch) is still on
+                    // its way: painted after this, it would erase the prompt
+                    // and detach the reply. The turn takes the view instead
+                    // (its late answer changes nothing), and the window is
+                    // pinned to the session the turn runs on.
+                    this._showTurnSession(sid);
+                    this._pinWindow(sid);
+                }
+                // A turn starting in the window: a view change
+                // (startStreaming bumps the generation).
                 this.addUserMessage(message);
                 // Passive mirror of the floating window's send — the floating
                 // window owns the completion notification, so don't double it.
@@ -356,10 +363,13 @@ export function createStreamListenersMixin(dependencies) {
                 // announced by initial_message_session), and its failure
                 // comes back here naming the turn, so Reconnect can resend
                 // it. The turn is recorded on that session, and the window
-                // shows it when it shows another one (or is still painting
-                // one), so the prompt and its reply render where they went.
-                // A bare string (older backend) names no turn, whose errors
-                // are never resent, and no session: the one shown.
+                // shows it when it shows another one (or a view change, a
+                // selection, New Chat or paint, is still under way: it is
+                // superseded), so the prompt and its reply render where
+                // they went. Starting the turn is a view change of its own
+                // (startStreaming). A bare string (older backend) names no
+                // turn, whose errors are never resent, and no session: the
+                // one shown.
                 const p = event.payload;
                 const message = typeof p === 'string' ? p : p?.message;
                 const turnId = typeof p?.turnId === 'string' && p.turnId ? p.turnId : null;
@@ -367,7 +377,7 @@ export function createStreamListenersMixin(dependencies) {
                 const sid =
                     p && typeof p === 'object' && 'sessionId' in p ? p.sessionId || null : shown;
                 if (message) {
-                    if (sid !== shown || this._paintPending) this._showTurnSession(sid);
+                    if (sid !== shown || this._viewChangePending()) this._showTurnSession(sid);
                     this.addUserMessage(message);
                     this._recordTurn(sid, message, null, turnId);
                     this.startStreaming();
@@ -460,8 +470,13 @@ export function createStreamListenersMixin(dependencies) {
          * a window that already loaded everything still sees the change.
          */
         async _reloadSessionsAfterChange() {
+            // Not applied over a view change since it was asked for (see
+            // loadSessions): asked again instead.
+            const gen = this._viewGen;
             try {
-                this.sessions = await this.invoke('list_sessions', {});
+                const sessions = await this.invoke('list_sessions', {});
+                if (!this._viewIs(gen)) return this._reloadSessionsAfterChange();
+                this.sessions = sessions;
                 this._sessionsFullyLoaded = true;
                 if (this._seenSessionIds.size === 0) {
                     for (const s of this.sessions) this._seenSessionIds.add(s.session_id);
