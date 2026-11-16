@@ -443,9 +443,11 @@ jobs:
         run: cargo test --workspace --no-run
 
       - name: cargo test
-        # Same 5-minute backstop as build-test — this step is pure test
-        # execution now that the binaries are prebuilt.
-        timeout-minutes: 5
+        # Same 10-minute backstop as build-test — this step is pure test
+        # execution now that the binaries are prebuilt. Execution alone
+        # passed 5 minutes on a busy runner (all suites green), so the
+        # backstop matches the other OSes.
+        timeout-minutes: 10
         run: xvfb-run -a cargo test --workspace
 
   # ----- Auto-publish dev release on green CI ---------------------
