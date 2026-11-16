@@ -743,6 +743,27 @@ describe('chat MESSAGE_ERROR is matched to its turn by turnId', () => {
         expect(app.streamRegistry.isStreaming('s1')).toBe(true);
     });
 
+    it("inline assist's new session keeps its turn: switched back, the turn's own error ends it", async () => {
+        const { app, listeners } = setupWithListeners();
+        app._listenForInitialMessageSession();
+        // Main had no session: open_chat_with_message sends A, then the
+        // window adopts the session the backend created for it.
+        app.activeSessionId = null;
+        app.currentAcpSessionId = null;
+        listeners.initial_message({ payload: { message: 'A', turnId: 'turn-a' } });
+        listeners.initial_message_session({ payload: { sessionId: 's1' } });
+        app.streamRegistry.begin('s1');
+        await sendElsewhereThenSwitchBack(app, listeners);
+
+        await listeners.message_error({ payload: promptFailure('s1', true, 'turn-a') });
+        listeners.session_activity({ payload: { sessionId: 's1', kind: 'failed' } });
+        await flush();
+
+        expect(app.isWaitingForResponse).toBe(false);
+        expect(app.currentStreamingMessage).toBeNull();
+        expect(app.streamRegistry.isStreaming('s1')).toBe(false);
+    });
+
     it("an error naming another turn's id is never resent", async () => {
         const { app, invoke } = makeApp();
         await sendAndFail(app, promptFailure('s1', true, 'some-other-turn'));

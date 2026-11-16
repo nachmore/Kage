@@ -269,6 +269,27 @@ export function createComposerMixin(dependencies) {
         }
 
         /**
+         * The window adopted `sessionId` for a turn it recorded with no
+         * session (open_chat_with_message created the session because the
+         * window had none): that turn is now on it, so its error can end
+         * the stream shown there (see _errorEndsShownStream).
+         */
+        _adoptTurnSession(sessionId) {
+            const turn = this._lastTurn;
+            if (!sessionId || !turn || turn.sessionId) return;
+            this._lastTurn = {
+                ...turn,
+                sessionId,
+                sessionIds: [...(turn.sessionIds || []), sessionId],
+            };
+            if (turn.turnId) {
+                if (!this._turnOnSession) this._turnOnSession = new Map();
+                if (!this._turnOnSession.has(sessionId))
+                    this._turnOnSession.set(sessionId, turn.turnId);
+            }
+        }
+
+        /**
          * Recovery moved the session `oldId` to `newId`: so did the last
          * turn, if it was on it.
          */

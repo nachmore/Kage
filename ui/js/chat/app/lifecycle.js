@@ -154,6 +154,9 @@ export function createLifecycleMixin(dependencies) {
                 if (!sid || sid === this.activeSessionId) return;
                 this.activeSessionId = sid;
                 this.currentAcpSessionId = sid;
+                // The turn initial_message recorded before the session
+                // existed is on this session now.
+                this._adoptTurnSession?.(sid);
                 const existing = this.sessions.find((s) => s.session_id === sid);
                 if (!existing) {
                     const now = new Date().toISOString();
