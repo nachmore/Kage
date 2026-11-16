@@ -335,18 +335,34 @@ describe('chat: an open-in-chat prompt a signed-out agent refused to set up for'
         turnId: 'assist-turn-1',
     });
 
-    /** Main (on `shown`) gets inline assist's prompt, which fails unsent. */
-    async function openedAndRefused({ switches = ['s-new'], shown = null } = {}) {
-        const ctx = setup({ switches });
+    /**
+     * Main (on `shown`) gets inline assist's prompt, which fails unsent;
+     * the error names `named` (main's session as the backend had it pinned).
+     * `failedSelect`: main first selected that session and could not set
+     * it up (so the backend never pinned it).
+     */
+    async function openedAndRefused({
+        switches = ['s-new'],
+        shown = null,
+        named,
+        failedSelect = null,
+        reconnect = null,
+    } = {}) {
+        const ctx = setup({ switches, reconnect });
         const { app, listeners } = ctx;
         app.activeSessionId = shown;
         app.currentAcpSessionId = shown;
+        if (failedSelect) {
+            await app.selectSession(failedSelect);
+            await flush();
+        }
         app.setupStreamingListeners();
         app._listenForInitialMessageSession();
         listeners.initial_message({
             payload: { message: 'explain this', turnId: 'assist-turn-1' },
         });
-        await app.messageStreamController.host.onError({ payload: unsent(shown) }, true);
+        const payload = unsent(named === undefined ? shown : named);
+        await app.messageStreamController.host.onError({ payload }, true);
         await flush();
         return ctx;
     }
@@ -429,5 +445,106 @@ describe('chat: an open-in-chat prompt a signed-out agent refused to set up for'
         expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
             ['s-1', 'explain this'],
         ]);
+    });
+
+    // Main shows a session it failed to set up (the switch was refused, so
+    // the backend never pinned it): the error names no session, but the
+    // prompt's bubble sits in that session.
+    const onUnsetSession = (extra = {}) =>
+        openedAndRefused({
+            switches: [SIGNED_OUT, 's-2'],
+            shown: 's-1',
+            failedSelect: 's-2',
+            named: null,
+            ...extra,
+        });
+
+    it('on a session main failed to set up: after the sign-in it sets that session up and sends the prompt there, once', async () => {
+        const { app, starts, named } = await onUnsetSession();
+        expect(app.activeSessionId).toBe('s-2');
+        expect(signInBtn()).toBeTruthy();
+        await signInCleanly(starts);
+
+        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's-2' }]]);
+        expect(named('switch_acp_session')).toEqual([
+            ['switch_acp_session', { sessionId: 's-2' }],
+            ['switch_acp_session', { sessionId: 's-2' }],
+        ]);
+        expect(app.activeSessionId).toBe('s-2');
+        expect(app.currentAcpSessionId).toBe('s-2');
+        expect(app.elements.chatInput.disabled).toBe(false);
+        const sends = sendsOf(named);
+        expect(sends.map((a) => [a.sessionId, a.message])).toEqual([['s-2', 'explain this']]);
+        expect(sends[0].turnId).not.toBe('assist-turn-1');
+        expect(userBubbles().length).toBe(1);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+        await flush(10);
+        expect(sendsOf(named).length).toBe(1);
+    });
+
+    it('on a session main failed to set up: Reconnect does the same, once', async () => {
+        const { app, named } = await onUnsetSession();
+        document.getElementById('errorReconnectBtn').click();
+        await flush(20);
+        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's-2' }]]);
+        expect(app.currentAcpSessionId).toBe('s-2');
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-2', 'explain this'],
+        ]);
+        document.getElementById('errorReconnectBtn')?.click();
+        await flush(20);
+        expect(sendsOf(named).length).toBe(1);
+    });
+
+    it('on a session main failed to set up: still refused shows the error again with Sign in, then works once', async () => {
+        const { app, starts, named } = await onUnsetSession({ switches: [SIGNED_OUT] });
+        await signInCleanly(starts);
+        expect(sendsOf(named)).toEqual([]);
+        expect(app.activeSessionId).toBe('s-2');
+        expect(app.elements.chatInput.disabled).toBe(true);
+        expect(signInBtn()).toBeTruthy();
+        expect(status()).toBe('shared.agent_sign_in.status.restart_failed');
+
+        const orig = app.invoke.getMockImplementation();
+        app.invoke.mockImplementation(async (cmd, args) =>
+            cmd === 'switch_acp_session' ? 's-2' : orig(cmd, args)
+        );
+        await signInCleanly(starts);
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-2', 'explain this'],
+        ]);
+    });
+
+    it('on a session main failed to set up: nothing is sent after the user moved away', async () => {
+        const { app, starts, named } = await onUnsetSession();
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        app.activeSessionId = 's-9';
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(named('switch_acp_session').length).toBe(1);
+        expect(app.activeSessionId).toBe('s-9');
+        expect(sendsOf(named)).toEqual([]);
+        expect(status()).toBe('shared.agent_sign_in.status.ready');
+    });
+
+    // The mirror: the backend has main pinned to a session, main shows
+    // none (a New Chat it could not set up). The error names the pinned
+    // session; main still sets up a session of its own and sends there.
+    it('main showing no session while the backend has one pinned: after the sign-in it makes one and sends there, once', async () => {
+        const { app, starts, named } = await openedAndRefused({
+            shown: null,
+            named: 's-1',
+            reconnect: { reconnected: true, sessionId: 's-1', sessionReloaded: true },
+        });
+        expect(signInBtn()).toBeTruthy();
+        await signInCleanly(starts);
+        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: null }]]);
+        expect(named('switch_acp_session')).toEqual([['switch_acp_session', { sessionId: null }]]);
+        expect(app.activeSessionId).toBe('s-new');
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-new', 'explain this'],
+        ]);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
     });
 });

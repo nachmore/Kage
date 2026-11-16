@@ -574,45 +574,83 @@ export function createMessagesMixin(dependencies) {
         /**
          * open_chat_with_message never sent `turn` (the window's last turn,
          * which `payload` names) because a signed-out agent refused to set
-         * up for it, and the window had no session: `payload` is
-         * `auth_required`, names no session and is `resendable` (nothing of
-         * it went out). Shown as `text` with Sign in and Reconnect, which
-         * set up the window's session on the restarted agent
-         * (_establishSessionForTurn) and then send `turn` there by
-         * Reconnect's rules: nothing was sent since, the window still has
-         * no other session, at most once. Returns false, showing nothing,
-         * for any other error.
+         * up for it: `payload` is `auth_required` and `resendable` (nothing
+         * of it went out). That happens when the backend had no session set
+         * up for the window, which is so in three cases, all shown as `text`
+         * with Sign in and Reconnect that set up the window's session on
+         * the restarted agent and then send `turn` there by Reconnect's
+         * rules (nothing was sent since, the window still shows that
+         * session, at most once):
+         *   - the window has no session and the error names none: the one
+         *     the restart reloaded, else a new one (_establishSessionForTurn);
+         *   - the window has no session but the error names the one the
+         *     backend had pinned (a New Chat the window couldn't set up): a
+         *     new one, as the window shows a new chat;
+         *   - the window shows a session it failed to set up (its switch
+         *     was refused, so the backend never pinned it) and the error
+         *     names none: that session, switched to again
+         *     (_retryShownSessionForTurn). This error replaced its own
+         *     setup error, so this sets it up too.
+         * Only when `turn` was recorded on the session the window shows.
+         * Returns false, showing nothing, for any other error.
          */
         _showUnsentTurnError(text, payload, turn) {
             if (!canOfferSignIn?.(payload) || payload?.resendable !== true) return false;
-            if (errorSessionId(payload) !== null || (this.activeSessionId ?? null) !== null) {
-                return false;
-            }
-            if (!turn || turn.sessionId || errorTurnId(payload) !== turn.turnId) return false;
+            if (!turn || errorTurnId(payload) !== turn.turnId) return false;
+            const shown = this.activeSessionId ?? null;
+            if ((turn.sessionId ?? null) !== shown) return false;
+            // A shown session the error names was set up: its own rules
+            // (onError's retryTurn) resend the turn.
+            if (shown !== null && errorSessionId(payload) !== null) return false;
             const retryTurn = { ...turn };
             this.showError(text, {
                 detail: payload?.detail,
-                signIn: payload,
+                // The restart reloads the session the window shows, if any.
+                signIn: { ...payload, sessionId: shown },
                 retryTurn,
                 establishSession: (outcome) =>
-                    this._establishSessionForTurn(outcome, text, payload, retryTurn),
+                    shown === null
+                        ? this._establishSessionForTurn(outcome, text, payload, retryTurn)
+                        : this._retryShownSessionForTurn(shown, outcome, text, payload, retryTurn),
             });
             return true;
         }
 
         /**
-         * After the restart under `_showUnsentTurnError`: set up the window's
-         * session (the one the restart reloaded, else a new one) and show
-         * it as the one open_chat_with_message would have made. Resolves to
-         * its id, or null when the window took a session of its own
-         * meanwhile; a failure shows the error again (with Sign in while it
-         * still applies) and rejects.
+         * After the restart under `_showUnsentTurnError`, for a window that
+         * shows `sessionId` but never got it set up: switch to it again
+         * (_retrySessionSwitch). Resolves to its id, or null when the
+         * window moved on; a failure shows the error again (with Sign in
+         * and the unsent turn while it still applies) and rejects.
+         */
+        async _retryShownSessionForTurn(sessionId, outcome, text, payload, turn) {
+            try {
+                return await this._retrySessionSwitch(sessionId, outcome);
+            } catch (error) {
+                if (this.activeSessionId === sessionId && canOfferSignIn?.(error)) {
+                    this._showUnsentTurnError(text, payload, turn);
+                }
+                throw error;
+            }
+        }
+
+        /**
+         * After the restart under `_showUnsentTurnError`, for a window with
+         * no session: set one up and show it as the one
+         * open_chat_with_message would have made. That is the session the
+         * restart reloaded when the error named none (the backend pinned
+         * one since), else a new one: a session the error names is one
+         * the window had already left for a new chat. Resolves to its id,
+         * or null when the window took a session of its own meanwhile; a
+         * failure shows the error again (with Sign in while it still
+         * applies) and rejects.
          */
         async _establishSessionForTurn(outcome, text, payload, turn) {
+            const reuse = errorSessionId(payload) === null;
             let id;
             try {
                 id =
-                    outcome?.sessionReloaded && outcome.sessionId
+                    reuse && outcome?.sessionReloaded && outcome.sessionId
                         ? outcome.sessionId
                         : await this.invoke('switch_acp_session', { sessionId: null });
             } catch (error) {
