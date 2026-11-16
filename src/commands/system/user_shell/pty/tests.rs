@@ -52,8 +52,16 @@ fn run_collect(
         },
         |json| {
             let (seq, data) = parse(&json);
+            let io = handle.get().expect("on_started ran first");
+            // Windows: portable-pty opens the pseudo console with
+            // PSEUDOCONSOLE_INHERIT_CURSOR, so conhost asks where the cursor
+            // is (DSR, ESC[6n) and runs nothing until it hears back. In Kage
+            // xterm.js answers; here the test is the terminal.
+            if cfg!(windows) && data.contains("\x1b[6n") {
+                let _ = io.write(b"\x1b[1;1R");
+            }
             out.push_str(&data);
-            handle.get().expect("on_started ran first").ack(seq);
+            io.ack(seq);
         },
     )
     .expect("terminal run");
