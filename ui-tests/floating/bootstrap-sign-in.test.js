@@ -484,7 +484,7 @@ describe('floating: one bootstrap at a time after a failed one', () => {
         );
     });
 
-    it("a send queued on the sign-in's bootstrap, then a draft typed and erased: nothing is sent", async () => {
+    it("a send queued on the sign-in's bootstrap goes out once, whatever the user types next", async () => {
         const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT] });
         await failedBootstrapThenSend(app, SIGNED_OUT);
         const ctl = controlBootstraps(app, () => RESTARTED);
@@ -503,7 +503,23 @@ describe('floating: one bootstrap at a time after a failed one', () => {
         await flush(20);
         expect(app.floatingSessionId).toBe('s-a');
         expect(app.bootstrappingSession).toBe(false);
-        expect(sends()).toEqual([]);
+        // The user pressed Enter on 'second'; the draft after it is their
+        // next message, not a change of mind.
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-a', 'second']]);
+    });
+
+    it('a send queued behind the launch spinner goes out though the user keeps typing', async () => {
+        const { app, sends } = setup({ bootstraps: [] });
+        app.bootstrappingSession = true;
+        app.floatingSessionId = null;
+        typeInto(app, 'hello');
+        await app.sendChatMessage('hello');
+        typeInto(app, 'next thought');
+        app.floatingSessionId = 's-launch';
+        app.bootstrappingSession = false;
+        await wait(250);
+        await flush(20);
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-launch', 'hello']]);
     });
 
     it("a send queued on the sign-in's bootstrap with no edit since goes out once", async () => {

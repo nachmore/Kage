@@ -229,10 +229,9 @@ export const SessionMethods = {
 
     /**
      * After bootstrap completes (or fails), flush a queued send. Called
-     * from `_waitForBootstrapAndSend`. On success, replays what was
-     * submitted (`_captureSubmission`, never the live composer) unless the
-     * user edited the input since (_inputEditedSince: they are writing
-     * something else); on failure, surfaces the error.
+     * from `_waitForBootstrapAndSend`. On success, sends what was
+     * submitted (`_captureSubmission`, never the live composer); on failure,
+     * surfaces the error.
      */
     _flushPendingSend() {
         const pending = this._pendingSend;
@@ -247,10 +246,10 @@ export const SessionMethods = {
             this._showBootstrapError(this._waitingSendEntry(pending));
             return;
         }
-        if (this._inputEditedSince(pending)) {
-            console.log('[floating] the input was edited since the queued send; not sending it');
-            return;
-        }
+        // A queued send is one the user pressed Enter on while the agent
+        // spun up: it goes out whatever they type next (as any send does).
+        // Only the replay of a send whose bootstrap had failed and shown an
+        // error is cancelled by an edit (_canSendWaitingAfterBootstrap).
         if (!this.floatingSessionId) {
             this.showError(t('floating.error.no_session'));
             return;
