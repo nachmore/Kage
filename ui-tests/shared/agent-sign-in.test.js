@@ -50,9 +50,15 @@ function fakeTerminal(opts) {
         rows: opts.rows,
         options: {},
         dataHandler: null,
-        open: vi.fn(),
+        open: vi.fn((el) => {
+            // Stands in for xterm's hidden textarea, which takes the keys.
+            const ta = document.createElement('textarea');
+            el.append(ta);
+            term.textarea = ta;
+        }),
         write: vi.fn(),
-        focus: vi.fn(),
+        focus: vi.fn(() => term.textarea?.focus()),
+        blur: vi.fn(() => term.textarea?.blur()),
         dispose: vi.fn(),
         loadAddon: vi.fn(),
         onData(handler) {
@@ -75,7 +81,7 @@ function deferred() {
 }
 
 /** A Tauri stand-in: records invokes; each start resolves when the test says. */
-function fakeTauri({ ctx = CTX, reconnect = true } = {}) {
+function fakeTauri({ ctx = CTX, reconnect = true, stopAnswers = [] } = {}) {
     const calls = [];
     const starts = [];
     const channels = [];
@@ -101,7 +107,9 @@ function fakeTauri({ ctx = CTX, reconnect = true } = {}) {
                     ? Promise.reject(state.reconnect)
                     : Promise.resolve(state.reconnect);
             case 'stop_user_terminal':
-                return Promise.resolve(true);
+                // `stopAnswers` first (false: the backend has no such run
+                // yet), then true.
+                return Promise.resolve(stopAnswers.length ? stopAnswers.shift() : true);
             default:
                 return Promise.resolve(null);
         }
@@ -356,6 +364,97 @@ describe('the run', () => {
         expect(tauri.starts[1].args.runId).toMatch(/^kage-term-[0-9a-f]{24}$/);
     });
 
+    it('Stop before the start call (xterm still loading) never starts it', async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        const btn = await mountSignInAction(actionsRow(), PAYLOAD, host);
+        click(btn);
+        // Same tick: startRun is waiting on ensureXterm.
+        const stop = host.slot.querySelector('.agent-sign-in-stop');
+        click(stop);
+        expect(status(host)).toBe('shared.agent_sign_in.status.stopping');
+        await flush();
+        expect(tauri.starts.length).toBe(0);
+        expect(tauri.named('stop_user_terminal').length).toBe(0);
+        expect(status(host)).toBe('shared.agent_sign_in.status.stopped');
+        expect(stop.hidden).toBe(true);
+        expect(isAgentSignInActive()).toBe(false);
+        expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-again'))).toBe(true);
+        expect(host.onEnded).toHaveBeenCalledWith(
+            expect.objectContaining({ state: 'stopped', outcome: 'cancelled' })
+        );
+    });
+
+    it('Stop before the backend claims the run keeps asking until it takes', async () => {
+        const tauri = fakeTauri({ stopAnswers: [false, false] });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        const runId = tauri.starts[0].args.runId;
+        const stop = host.slot.querySelector('.agent-sign-in-stop');
+        click(stop);
+        await flush();
+        expect(tauri.named('stop_user_terminal').length).toBe(1);
+        expect(stop.disabled).toBe(true);
+        expect(status(host)).toBe('shared.agent_sign_in.status.stopping');
+        await new Promise((r) => setTimeout(r, 500));
+        expect(tauri.named('stop_user_terminal')).toEqual([
+            ['stop_user_terminal', { runId }],
+            ['stop_user_terminal', { runId }],
+            ['stop_user_terminal', { runId }],
+        ]);
+        // Output arriving meanwhile doesn't turn "Stopping…" back.
+        tauri.channels[0].onmessage({ data: 'Select a login method' });
+        expect(status(host)).toBe('shared.agent_sign_in.status.stopping');
+        tauri.starts[0].resolve({ runId, outcome: 'cancelled', exitCode: null, signal: 'Terminated' });
+        await flush();
+        expect(status(host)).toBe('shared.agent_sign_in.status.stopped');
+        expect(tauri.named('stop_user_terminal').length).toBe(3);
+    });
+
+    it('Stop stops asking once the run ends on its own', async () => {
+        const tauri = fakeTauri({ stopAnswers: Array(50).fill(false) });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        click(host.slot.querySelector('.agent-sign-in-stop'));
+        await flush();
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 1, signal: null });
+        await flush();
+        const asked = tauri.named('stop_user_terminal').length;
+        await new Promise((r) => setTimeout(r, 450));
+        expect(tauri.named('stop_user_terminal').length).toBe(asked);
+        expect(status(host)).toBe('shared.agent_sign_in.status.failed_exit {"code":1}');
+    });
+
+    it('a failed run hands the keyboard from the terminal to Sign in again', async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        await openPanel(tauri, host);
+        expect(document.activeElement).toBe(terms[0].textarea);
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 1, signal: null });
+        await flush();
+        expect(document.activeElement.classList.contains('agent-sign-in-again')).toBe(true);
+        // Esc reaches the window again.
+        const windowKeys = vi.fn();
+        document.addEventListener('keydown', windowKeys);
+        terms[0].textarea.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+        );
+        document.removeEventListener('keydown', windowKeys);
+        expect(windowKeys).toHaveBeenCalledTimes(1);
+    });
+
+    it('a run that ends while the user is elsewhere leaves focus alone', async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        await openPanel(tauri, host);
+        const other = document.createElement('input');
+        document.body.append(other);
+        other.focus();
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 1, signal: null });
+        await flush();
+        expect(document.activeElement).toBe(other);
+    });
+
     it('exit 0: restarts, adopts the new session, resends once, clears the error', async () => {
         const tauri = fakeTauri({
             reconnect: { reconnected: true, sessionId: 's2', sessionReloaded: true },
@@ -365,7 +464,7 @@ describe('the run', () => {
         tauri.starts[0].resolve({ outcome: 'exited', exitCode: 0, signal: null, durationMs: 9 });
         await flush();
         expect(tauri.named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's1' }]]);
-        expect(host.adoptSession).toHaveBeenCalledWith('s2');
+        expect(host.adoptSession).toHaveBeenCalledWith('s2', 's1');
         expect(host.resend).toHaveBeenCalledTimes(1);
         expect(host.resend).toHaveBeenCalledWith('s2');
         expect(status(host)).toBe('shared.agent_sign_in.status.done');
@@ -379,7 +478,7 @@ describe('the run', () => {
         expect(host.onActiveChange).toHaveBeenLastCalledWith(false);
     });
 
-    it('exit 0 with a boolean reconnect (main today) resends into the same session', async () => {
+    it('exit 0 with a bare boolean reconnect answer resends into the same session', async () => {
         const tauri = fakeTauri({ reconnect: true });
         const host = makeHost();
         await openPanel(tauri, host);
@@ -550,7 +649,7 @@ describe('the run', () => {
 });
 
 describe('normalizeReconnect', () => {
-    it('maps the boolean of today and passes the contract object through', () => {
+    it('maps a bare boolean and passes ReconnectOutcome through', () => {
         expect(normalizeReconnect(true, 's1')).toEqual({
             reconnected: true,
             sessionId: 's1',

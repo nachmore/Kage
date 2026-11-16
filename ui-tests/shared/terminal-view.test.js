@@ -1,6 +1,7 @@
 /**
  * The xterm.js view (shared/terminal-view.js): loaded lazily, once; LTR and
- * labelled; keys typed into it never reach the window's own shortcuts;
+ * labelled; keys typed into it never reach the window's own shortcuts
+ * while it takes input, and once input is off it lets go of the keyboard;
  * its colours follow theme changes; input can be switched off.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,9 +28,14 @@ function fakeTerminal(opts) {
             term.textarea = ta;
         }),
         write: vi.fn(),
-        focus: vi.fn(),
+        focus: vi.fn(() => term.textarea?.focus()),
+        blur: vi.fn(() => term.textarea?.blur()),
         dispose: vi.fn(),
         loadAddon: vi.fn(),
+        keyHandler: null,
+        attachCustomKeyEventHandler(fn) {
+            term.keyHandler = fn;
+        },
         onData(handler) {
             term.dataHandler = handler;
             return { dispose() {} };
@@ -151,5 +157,45 @@ describe('createTerminalView', () => {
         view.write('late');
         expect(terms[0].write).toHaveBeenCalledTimes(1);
         expect(box.children.length).toBe(0);
+    });
+
+    it('with input off it gives the keyboard back: focus, Esc and Tab', () => {
+        const box = document.createElement('div');
+        document.body.append(box);
+        const view = createTerminalView(box, {});
+        const windowKeys = vi.fn();
+        document.addEventListener('keydown', windowKeys);
+        try {
+            view.focus();
+            expect(document.activeElement).toBe(terms[0].textarea);
+            const esc = () =>
+                terms[0].textarea.dispatchEvent(
+                    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+                );
+            esc();
+            expect(windowKeys).not.toHaveBeenCalled();
+            // xterm handles keys (and so swallows Tab) only while input is on.
+            expect(terms[0].keyHandler(new KeyboardEvent('keydown', { key: 'Tab' }))).toBe(true);
+
+            view.setInputEnabled(false);
+            expect(terms[0].blur).toHaveBeenCalled();
+            expect(box.contains(document.activeElement)).toBe(false);
+            expect(terms[0].keyHandler(new KeyboardEvent('keydown', { key: 'Tab' }))).toBe(false);
+            esc();
+            expect(windowKeys).toHaveBeenCalledTimes(1);
+        } finally {
+            document.removeEventListener('keydown', windowKeys);
+        }
+    });
+
+    it('switching input off while focus is elsewhere leaves focus alone', () => {
+        const box = document.createElement('div');
+        const other = document.createElement('input');
+        document.body.append(box, other);
+        const view = createTerminalView(box, {});
+        other.focus();
+        view.setInputEnabled(false);
+        expect(terms[0].blur).not.toHaveBeenCalled();
+        expect(document.activeElement).toBe(other);
     });
 });

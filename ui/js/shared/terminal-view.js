@@ -9,7 +9,9 @@
  *
  * Keys typed into the terminal stay in it: they don't bubble to the
  * window's own shortcuts (Esc hiding the floating window, ⌘, for Settings),
- * because the program needs them (Esc, arrows, Ctrl+C).
+ * because the program needs them (Esc, arrows, Ctrl+C). Once input is off
+ * (the program ended) the terminal lets go: keys reach the window again,
+ * xterm no longer swallows Tab, and it gives up the keyboard focus.
  */
 
 const XTERM_DIR = 'vendor/lib/xterm/';
@@ -146,12 +148,17 @@ export function createTerminalView(container, opts = {}) {
     }
 
     term.open(container);
+    // false: xterm leaves the key alone (no preventDefault), so with input
+    // off Tab moves focus and Esc reaches the window as usual.
+    term.attachCustomKeyEventHandler?.(() => inputEnabled && !disposed);
     const dataSub = term.onData?.((text) => {
         if (inputEnabled && !disposed) onData?.(text);
     });
 
     // Keys meant for the program never reach the window's shortcuts.
-    const stopKeys = (e) => e.stopPropagation();
+    const stopKeys = (e) => {
+        if (inputEnabled && !disposed) e.stopPropagation();
+    };
     container.addEventListener('keydown', stopKeys);
     container.addEventListener('keyup', stopKeys);
 
@@ -212,6 +219,15 @@ export function createTerminalView(container, opts = {}) {
                 if (!inputEnabled) term.options.cursorBlink = false;
             } catch {
                 /* ignore */
+            }
+            // Nothing left to type into: don't keep the keyboard.
+            if (!inputEnabled && container.contains(document.activeElement)) {
+                try {
+                    term.blur?.();
+                } catch {
+                    /* ignore */
+                }
+                if (container.contains(document.activeElement)) document.activeElement.blur?.();
             }
         },
         fit,

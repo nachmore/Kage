@@ -19,11 +19,15 @@
  *     hint line), `buttonClass` (the window's error-button class);
  *   - `invoke` (optional; else window.__TAURI__.core.invoke);
  *   - `layoutChanged()`, `onActiveChange(active)`,
- *     `onEnded({ state, outcome, agent })`, `adoptSession(sid)`,
+ *     `onEnded({ state, outcome, agent })`,
+ *     `adoptSession(sid, failedSid)` (the restart moved the failed session),
  *     `canResend(sid)`, `resend(sid)` → 'sent' | 'none', `clearError()`.
+ *     The window decides what to resend: only the failed turn, and only
+ *     when none of it got through and it wasn't a rate limit — the same
+ *     rule as its Reconnect button.
  *
- * MERGE: SIGN_IN_KINDS must equal the serialized names of
- * ErrorKind::AuthRequired / AgentUnreachable (src/error.rs).
+ * SIGN_IN_KINDS are the serialized names of ErrorKind::AuthRequired /
+ * AgentUnreachable (src/error.rs).
  */
 
 import { errMessage } from './error-message.js';
@@ -40,6 +44,13 @@ const CONTEXT_TTL_MS = 30_000;
 const RUNNING_AFTER_MS = 1000;
 /** Terminal line height in px (CSS: 12px font). */
 const LINE_PX = 17;
+/**
+ * Stop pressed before the backend has claimed the run (xterm still
+ * loading, or the start call in flight): ask again this often, until the
+ * run is stopped or ends, for at most STOP_RETRY_LIMIT tries.
+ */
+const STOP_RETRY_MS = 200;
+const STOP_RETRY_LIMIT = 100;
 
 let ctxCache = null;
 /** The window's sign-in, from the click until its last status. */
@@ -72,9 +83,9 @@ export function _resetAgentSignInForTests() {
 }
 
 /**
- * `reconnect_acp`'s answer as `{ reconnected, sessionId, sessionReloaded }`.
- * Today it's a boolean (the session isn't reloaded or replaced); the
- * agent-recovery branch returns the object.
+ * `reconnect_acp`'s answer (`ReconnectOutcome`) as `{ reconnected,
+ * sessionId, sessionReloaded }`. A bare boolean (what it returned before it
+ * reloaded the session) still reads as "same session".
  */
 export function normalizeReconnect(result, fallbackSid) {
     const sid = fallbackSid ?? null;
@@ -231,6 +242,12 @@ function createSession({ slot, payload, host, ctx }) {
         runId: null,
         done: null,
         resolveDone: null,
+        // The current run reached a final status.
+        settled: false,
+        // start_agent_sign_in has been called for the current run.
+        startCalled: false,
+        // Stop was pressed for this run id and hasn't taken yet.
+        stopRequested: null,
     };
 
     const layout = () => host?.layoutChanged?.();
@@ -255,6 +272,21 @@ function createSession({ slot, payload, host, ctx }) {
         actions.textContent = '';
         for (const btn of list) actions.append(btn);
         actions.hidden = list.length === 0;
+    }
+
+    /**
+     * A final status after the terminal had the keyboard: hand it to the
+     * first action (Sign in again, …) so Tab and Esc work without a mouse.
+     */
+    function moveFocusToActions(hadFocus) {
+        if (!hadFocus) return;
+        const first = actions.querySelector('button');
+        if (first) first.focus();
+        else if (panel.contains(document.activeElement)) document.activeElement.blur?.();
+    }
+
+    function focusInPanel() {
+        return panel.contains(document.activeElement);
     }
 
     function disposeView() {
@@ -372,7 +404,7 @@ function createSession({ slot, payload, host, ctx }) {
             return;
         }
         const sid = r.sessionId || sessionId;
-        if (sid && sid !== sessionId) host?.adoptSession?.(sid);
+        if (sid && sid !== sessionId) host?.adoptSession?.(sid, sessionId);
         if (!sid || !host?.canResend?.(sid)) {
             setStatus('success', t('shared.agent_sign_in.status.ready'));
             setActions([]);
@@ -411,6 +443,8 @@ function createSession({ slot, payload, host, ctx }) {
 
     /** The run ended with `report` (`outcome`, `exitCode`, `signal`). */
     function ended(report) {
+        session.settled = true;
+        const hadFocus = focusInPanel();
         session.view?.setInputEnabled(false);
         stopBtn.hidden = true;
         const outcome = report?.outcome || null;
@@ -443,11 +477,14 @@ function createSession({ slot, payload, host, ctx }) {
             );
         }
         setActions(failureActions());
+        moveFocusToActions(hadFocus);
         host?.onEnded?.({ state, outcome, agent });
         finish(state);
     }
 
     function startFailed(error) {
+        session.settled = true;
+        const hadFocus = focusInPanel();
         session.view?.setInputEnabled(false);
         stopBtn.hidden = true;
         if (!session.view) termEl.hidden = true;
@@ -459,19 +496,37 @@ function createSession({ slot, payload, host, ctx }) {
         if (ctx?.terminal) list.push(terminalButton());
         list.push(closeButton());
         setActions(list);
+        moveFocusToActions(hadFocus);
         host?.onEnded?.({ state: 'start_failed', outcome: null, agent });
         finish('start_failed');
     }
 
+    /**
+     * Stop. `stop_user_terminal` answers false while the backend hasn't
+     * claimed the run yet; the request is remembered (`stopRequested`, read
+     * before the start call) and asked again until it takes or the run ends.
+     */
     onClick(stopBtn, async () => {
         const runId = session.runId;
-        if (!runId) return;
+        if (!runId || session.settled) return;
         stopBtn.disabled = true;
+        session.stopRequested = runId;
         setStatus('running', t('shared.agent_sign_in.status.stopping'));
+        // Not started yet: startRun sees stopRequested and never starts it.
+        if (!session.startCalled) return;
+        const stillThisRun = () =>
+            session.runId === runId && !session.settled && session.stopRequested === runId;
         try {
-            await invoke('stop_user_terminal', { runId });
+            for (let tries = 0; stillThisRun(); tries++) {
+                if (await invoke('stop_user_terminal', { runId })) return;
+                if (tries + 1 >= STOP_RETRY_LIMIT) break;
+                await new Promise((r) => setTimeout(r, STOP_RETRY_MS));
+            }
         } catch (e) {
             console.warn('[sign-in] stop failed:', errMessage(e));
+        }
+        if (stillThisRun()) {
+            session.stopRequested = null;
             stopBtn.disabled = false;
         }
     });
@@ -489,6 +544,9 @@ function createSession({ slot, payload, host, ctx }) {
         setStatus('running', t('shared.agent_sign_in.status.starting', { command }));
         const runId = newRunId();
         session.runId = runId;
+        session.settled = false;
+        session.startCalled = false;
+        session.stopRequested = null;
 
         if (!invoke || !(await ensureXterm())) {
             startFailed(new Error('The terminal view could not be loaded'));
@@ -535,9 +593,15 @@ function createSession({ slot, payload, host, ctx }) {
                 markRunning();
             }
         };
+        // Stop was pressed while xterm loaded: nothing was started.
+        if (session.stopRequested === runId) {
+            ended({ outcome: 'cancelled', exitCode: null, signal: null });
+            return done;
+        }
         const runningTimer = setTimeout(markRunning, RUNNING_AFTER_MS);
         const { cols, rows: termRows } = view.size();
         let report;
+        session.startCalled = true;
         try {
             report = await invoke('start_agent_sign_in', {
                 runId,
