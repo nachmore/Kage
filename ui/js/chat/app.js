@@ -472,7 +472,22 @@ export class ChatApp {
                     /* ignore */
                 }
             },
-            onError: async (event, online) => {
+            // What the window shows as an error arrives (see
+            // MessageStreamController.handleError): its latest send and
+            // the session on screen.
+            errorContext: () => ({ sendSeq: app._sendSeq, sessionId: app.activeSessionId }),
+            onError: async (event, online, context) => {
+                // The user sent another prompt, or moved to another session,
+                // while the online probe ran: the error is about a turn no
+                // longer on screen. Its session's stream already ended (the
+                // MESSAGE_ERROR listener); the turn now shown goes on.
+                if (
+                    context &&
+                    (context.sendSeq !== app._sendSeq || context.sessionId !== app.activeSessionId)
+                ) {
+                    console.log('[chat] message_error for a turn no longer shown; ignoring it');
+                    return;
+                }
                 app.hideTypingIndicator();
                 // Before the streaming bubble goes: did any of the turn show
                 // here? An extra veto on top of the backend's `resendable`

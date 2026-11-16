@@ -45,6 +45,15 @@ enum Prompt {
     /// The first prompt fails with `-32603` after 300 ms; later prompts on
     /// the same connection succeed after 500 ms.
     SlowFailThenSlowOk,
+    /// A `session/request_permission` request, then the connection closes
+    /// (the agent acted on the answer and crashed before replying).
+    PermissionThenConnectionCloses,
+    /// A `tool_call` update, then `-32603` "panicked" (a corrupted
+    /// session, after the turn already ran a tool).
+    ToolCallThenPanic,
+    /// The first prompt is never answered; the second closes the
+    /// connection (the agent crashed with two turns running).
+    HangThenCloseOnSecond,
 }
 
 struct MockAgent {
@@ -193,7 +202,37 @@ fn serve(
                         json!({ "error": internal })
                     }
                     Prompt::ConnectionCloses => return,
+                    Prompt::PermissionThenConnectionCloses => {
+                        let request = json!({
+                            "jsonrpc": "2.0", "id": "perm-1",
+                            "method": "session/request_permission",
+                            "params": { "sessionId": sid, "toolCall": {
+                                "toolCallId": "t1", "title": "rm -rf build/"
+                            }, "options": [] }
+                        });
+                        let _ = writeln!(writer, "{request}");
+                        return;
+                    }
+                    Prompt::ToolCallThenPanic => {
+                        lines.push(json!({
+                            "jsonrpc": "2.0", "method": "session/update",
+                            "params": { "sessionId": sid, "update": {
+                                "sessionUpdate": "tool_call", "toolCallId": "t1",
+                                "title": "Delete build/", "status": "in_progress"
+                            } }
+                        }));
+                        json!({ "error": {
+                            "code": -32603, "message": "Internal error",
+                            "data": "thread 'tokio-runtime-worker' panicked at src/agent.rs:42"
+                        } })
+                    }
                     Prompt::Hang => continue,
+                    Prompt::HangThenCloseOnSecond => {
+                        if prompts_here == 1 {
+                            continue;
+                        }
+                        return;
+                    }
                     Prompt::SlowFailThenSlowOk => {
                         if prompts_here == 1 {
                             std::thread::sleep(std::time::Duration::from_millis(300));
@@ -917,4 +956,283 @@ fn the_automatic_restart_waits_for_a_turn_queued_on_the_same_session() {
         "the agent was restarted under B's turn"
     );
     assert_eq!(agent.count("session/prompt"), 2, "B's prompt was resent");
+}
+
+// --- Recovery never resends a turn that already did something ---
+
+#[test]
+fn a_dropped_connection_after_a_permission_request_is_not_resent() {
+    // The agent asked to run `rm -rf build/`, the user allowed it, it ran,
+    // and the agent crashed before replying. Resending would run it again.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::PermissionThenConnectionCloses, Prompt::Ok]);
+    let client = agent.client();
+
+    let r = report(&client, "S1");
+
+    assert!(r.result.is_err(), "the turn is reported failed");
+    assert!(!r.resendable);
+    assert_eq!(
+        agent.count("session/prompt"),
+        1,
+        "the backend resent a turn that had asked for permission"
+    );
+}
+
+#[test]
+fn a_corrupted_session_after_a_tool_call_is_not_resent_on_a_fresh_one() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::ToolCallThenPanic, Prompt::Ok]);
+    let client = agent.client();
+
+    let r = report(&client, "S1");
+
+    assert!(r.result.is_err(), "the turn is reported failed");
+    assert!(!r.resendable);
+    assert_eq!(r.session_id, "S1", "moved to a fresh session anyway");
+    assert_eq!(
+        agent.count("session/prompt"),
+        1,
+        "the backend resent a turn that had run a tool"
+    );
+    assert_eq!(agent.count("session/new"), 0);
+}
+
+// --- No recovery restart cuts off another window's turn ---
+
+/// `(connection, sessionId)` of every `session/prompt`.
+type PromptLog = Arc<Mutex<Vec<(usize, String)>>>;
+
+/// A mock whose first connection runs turn "B" for 1.5 s (a tool call
+/// first) and fails turn "A" after 300 ms with `a_error`; later
+/// connections answer every prompt at once. Returns the port and the
+/// `(connection, sessionId)` of every `session/prompt`.
+fn start_two_turn_agent(a_error: Value) -> (u16, PromptLog, Arc<AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let prompts: PromptLog = Arc::new(Mutex::new(Vec::new()));
+    let connections = Arc::new(AtomicUsize::new(0));
+    {
+        let (prompts, connections) = (prompts.clone(), connections.clone());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { return };
+                let index = connections.fetch_add(1, Ordering::SeqCst);
+                let (prompts, a_error) = (prompts.clone(), a_error.clone());
+                std::thread::spawn(move || {
+                    let writer = Arc::new(Mutex::new(stream.try_clone().unwrap()));
+                    let write = |w: &Arc<Mutex<std::net::TcpStream>>, v: Value| {
+                        let _ = writeln!(w.lock().unwrap(), "{v}");
+                    };
+                    for line in BufReader::new(stream).lines() {
+                        let Ok(line) = line else { return };
+                        let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+                            continue;
+                        };
+                        if msg.get("id").is_none() {
+                            continue;
+                        }
+                        let id = msg["id"].clone();
+                        let method = msg["method"].as_str().unwrap_or("").to_string();
+                        let sid = msg["params"]["sessionId"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string();
+                        if method == "session/prompt" {
+                            prompts.lock().unwrap().push((index, sid.clone()));
+                        }
+                        let reply = match (method.as_str(), index, sid.as_str()) {
+                            ("session/prompt", 0, "B") => {
+                                write(
+                                    &writer,
+                                    json!({
+                                        "jsonrpc": "2.0", "method": "session/update",
+                                        "params": { "sessionId": "B", "update": {
+                                            "sessionUpdate": "tool_call", "toolCallId": "t1",
+                                            "title": "Delete build/", "status": "in_progress"
+                                        } }
+                                    }),
+                                );
+                                let w = writer.clone();
+                                std::thread::spawn(move || {
+                                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                                    write(
+                                        &w,
+                                        json!({ "jsonrpc": "2.0", "id": id,
+                                        "result": { "stopReason": "end_turn" } }),
+                                    );
+                                });
+                                continue;
+                            }
+                            ("session/prompt", 0, "A") => {
+                                let (w, e) = (writer.clone(), a_error.clone());
+                                std::thread::spawn(move || {
+                                    std::thread::sleep(std::time::Duration::from_millis(300));
+                                    write(&w, json!({ "jsonrpc": "2.0", "id": id, "error": e }));
+                                });
+                                continue;
+                            }
+                            ("session/prompt", _, _) => json!({ "stopReason": "end_turn" }),
+                            ("session/new", _, _) => json!({ "sessionId": "NEW" }),
+                            _ => json!({}),
+                        };
+                        write(
+                            &writer,
+                            json!({ "jsonrpc": "2.0", "id": id, "result": reply }),
+                        );
+                    }
+                });
+            }
+        });
+    }
+    (port, prompts, connections)
+}
+
+/// Turn B runs on connection 0; turn A fails with `a_error` meanwhile.
+/// Returns A's report, B's result, every prompt and the connection count.
+fn run_two_turns(
+    a_error: Value,
+) -> (
+    kage::acp_client::PromptReport,
+    anyhow::Result<String>,
+    Vec<(usize, String)>,
+    usize,
+) {
+    isolate_user_dirs();
+    let (port, prompts, connections) = start_two_turn_agent(a_error);
+    let client = Arc::new(AcpClient::new(AcpConnectionMode::Remote {
+        host: "127.0.0.1".to_string(),
+        port,
+    }));
+    client.connect().expect("connect to the mock agent");
+
+    let b = {
+        let client = client.clone();
+        std::thread::spawn(move || {
+            client.send_chat_streaming_with_recovery(
+                "B".to_string(),
+                "window B".to_string(),
+                None,
+                None,
+            )
+        })
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while prompts.lock().unwrap().is_empty() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "B never reached the agent"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let a = report(&client, "A");
+    let b = b.join().unwrap();
+    let prompts = prompts.lock().unwrap().clone();
+    (a, b, prompts, connections.load(Ordering::SeqCst))
+}
+
+fn prompts_on(prompts: &[(usize, String)], session: &str) -> usize {
+    prompts.iter().filter(|(_, s)| s == session).count()
+}
+
+#[test]
+fn a_corrupted_session_restart_waits_for_another_windows_turn() {
+    let (a, b, prompts, connections) = run_two_turns(json!({
+        "code": -32603, "message": "Internal error",
+        "data": "thread 'tokio-runtime-worker' panicked at src/agent.rs:42"
+    }));
+
+    assert!(a.result.is_err(), "A is reported failed, not recovered");
+    b.expect("B's turn completed on the agent it started on");
+    assert_eq!(connections, 1, "the agent was restarted under B's turn");
+    assert_eq!(prompts_on(&prompts, "B"), 1, "B's prompt was sent twice");
+}
+
+#[test]
+fn a_transport_restart_waits_for_another_windows_turn() {
+    // A's request timed out on a live agent (the agent never answered it):
+    // restarting would cut B off mid-tool.
+    let (a, b, prompts, connections) = run_two_turns(json!({
+        "code": -32603, "message": "Internal error",
+        "data": "Timeout waiting for response from the model"
+    }));
+
+    assert!(a.result.is_err(), "A is reported failed, not recovered");
+    b.expect("B's turn completed on the agent it started on");
+    assert_eq!(connections, 1, "the agent was restarted under B's turn");
+    assert_eq!(prompts_on(&prompts, "B"), 1, "B's prompt was sent twice");
+}
+
+#[test]
+fn a_fresh_session_restart_for_an_image_error_waits_for_another_windows_turn() {
+    // The image-error reset in `send_message_streaming`: a prompt with an
+    // attachment failed; another window's turn is still running.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::Hang, Prompt::Ok]);
+    let client = Arc::new(agent.client());
+    {
+        let client = client.clone();
+        std::thread::spawn(move || {
+            client.send_chat_streaming_with_recovery("B".to_string(), "b".to_string(), None, None)
+        });
+    }
+    wait_for(&agent, "session/prompt", 1);
+
+    let fresh = client
+        .restart_with_fresh_session_if_idle(Some("S1"))
+        .expect("no restart attempted");
+
+    assert_eq!(fresh, None, "a fresh session was made by restarting");
+    assert_eq!(
+        agent.connections(),
+        1,
+        "the agent was restarted under B's turn"
+    );
+}
+
+#[test]
+fn a_fresh_session_restart_for_an_image_error_goes_ahead_when_idle() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::Ok]);
+    let client = agent.client();
+
+    let fresh = client
+        .restart_with_fresh_session_if_idle(Some("S1"))
+        .expect("restart");
+
+    assert_eq!(fresh.as_deref(), Some("NEW"));
+    assert_eq!(agent.connections(), 2);
+}
+
+#[test]
+fn two_turns_cut_off_by_a_crash_share_one_restart() {
+    // Both turns were on a connection that died before either did
+    // anything: each one's recovery restarts or shares the restart, and
+    // both are resent once on the new agent.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::HangThenCloseOnSecond, Prompt::Ok]);
+    let client = Arc::new(agent.client());
+    let turn = |session: &'static str| {
+        let client = client.clone();
+        std::thread::spawn(move || {
+            client.send_chat_streaming_with_recovery(
+                session.to_string(),
+                "x".to_string(),
+                None,
+                None,
+            )
+        })
+    };
+    let a = turn("A");
+    wait_for(&agent, "session/prompt", 1);
+    let b = turn("B");
+
+    a.join().unwrap().expect("A recovered");
+    b.join().unwrap().expect("B recovered");
+    assert_eq!(agent.count_on(0, "session/prompt"), 2);
+    assert_eq!(
+        agent.count("session/prompt"),
+        4,
+        "each turn resent exactly once"
+    );
 }

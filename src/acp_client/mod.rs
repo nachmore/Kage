@@ -426,16 +426,37 @@ impl AcpClient {
         Ok(RestartIfIdle::Restarted)
     }
 
-    /// The recovery ladder's restart for its turn (admitted as `own`):
-    /// unless anything else is in flight, by the same one-step check and
-    /// teardown as `restart_if_idle`.
-    fn restart_unless_other_work(&self, own: u64) -> Result<RestartIfIdle> {
+    /// The recovery ladder's restart for its turn (admitted as `own`, its
+    /// latest attempt sent at `sent_at`), by the same one-step check and
+    /// teardown as `restart_if_idle`. A live agent is restarted only when
+    /// nothing else is in flight; a dead one always is (whatever ran on it
+    /// is gone already). If another turn's recovery has already replaced
+    /// the connection this one was sent on, the turn shares that restart:
+    /// `Restarted`, with no second teardown under the other turn.
+    fn restart_unless_other_work(
+        &self,
+        own: u64,
+        sent_at: Option<std::time::Instant>,
+    ) -> Result<RestartIfIdle> {
         let _gate = self.admission.lock_or_recover();
-        if self.agent_work_in_flight(Some(own)) {
-            return Ok(RestartIfIdle::Busy);
+        if self.is_healthy() {
+            if sent_at.is_some_and(|t| self.restarted_since(t)) {
+                log::info!("Recovery shares a restart made since its prompt was sent");
+                return Ok(RestartIfIdle::Restarted);
+            }
+            if self.agent_work_in_flight(Some(own)) {
+                return Ok(RestartIfIdle::Busy);
+            }
         }
         self.restart_connection()?;
         Ok(RestartIfIdle::Restarted)
+    }
+
+    /// Whether a restart succeeded after `t`.
+    fn restarted_since(&self, t: std::time::Instant) -> bool {
+        self.restart_guard
+            .lock_or_recover()
+            .is_some_and(|last_ok| last_ok > t)
     }
 
     /// Run `hook` inside `restart_if_idle`, after its idle check and before

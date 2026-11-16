@@ -313,11 +313,36 @@ export const ResponseUiMethods = {
     },
 
     /**
+     * The turn on screen as a MESSAGE_ERROR arrives (see
+     * MessageStreamController.handleError): `_promptGeneration` moves on
+     * with every response turn, and the session with a new chat.
+     */
+    _errorContext() {
+        return {
+            generation: this._promptGeneration,
+            sessionId: this.floatingSessionId ?? null,
+        };
+    },
+
+    /**
      * The turn failed (MESSAGE_ERROR). The payload is a string, or for a
      * sign-in demand / "still failing after a restart" an AppError-shaped
-     * `{ kind, message, detail }`.
+     * `{ kind, message, detail }`. `context` is `_errorContext()` from
+     * when the error arrived.
      */
-    async _onMessageError(event, online) {
+    async _onMessageError(event, online, context) {
+        // A newer turn started while the online probe ran (a follow-up held
+        // until this turn settled), or the window moved to another session:
+        // the error is about a turn no longer on screen. It must not end the
+        // new one, nor make it the turn Reconnect resends.
+        if (
+            context &&
+            (context.generation !== this._promptGeneration ||
+                context.sessionId !== (this.floatingSessionId ?? null))
+        ) {
+            console.log('[floating] message_error for a turn no longer shown; ignoring it');
+            return;
+        }
         if (!this.isWaitingForResponse) return;
         const payload = event.payload;
         // A turn on a session this window has since left (and maybe sent a

@@ -140,24 +140,34 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
                     || error_str.contains("unsupported")
                     || error_str.contains("response stream"));
 
-            if is_image_error {
-                // The ACP connection is likely stuck after an image error.
-                // An image error corrupts the conversation, so we always
-                // want a *fresh* session — route through the same
-                // restart-and-reset primitive the recovery ladder uses so
-                // there's exactly one respawn path to reason about. The
-                // originating window adopts the new id; other windows'
-                // sessions are unaffected — they'll reconnect lazily on
-                // their next send.
+            // The ACP connection is likely stuck after an image error, and
+            // an image error corrupts the conversation, so we want a
+            // *fresh* session. Not by cutting off another window's turn,
+            // though: its recovery would resend work it may have done.
+            // This turn is over, so its own prompt no longer counts as
+            // work. `Some(new id, or None if the reset failed)` once reset.
+            let reset = if is_image_error {
                 info!("Image-related error detected — resetting ACP connection and session");
-                let new_session_id = match client.restart_with_fresh_session(Some(&session_id)) {
-                    Ok(id) => Some(id),
-                    Err(e) => {
-                        error!("Failed to reset connection after image error: {}", e);
+                client.clear_in_flight_prompt(&session_id);
+                match client.restart_with_fresh_session_if_idle(Some(&session_id)) {
+                    Ok(Some(id)) => Some(Some(id)),
+                    Ok(None) => {
+                        warn!(
+                            "Not resetting the agent after the image error on {}: it has other work in flight",
+                            session_id
+                        );
                         None
                     }
-                };
+                    Err(e) => {
+                        error!("Failed to reset connection after image error: {}", e);
+                        Some(None)
+                    }
+                }
+            } else {
+                None
+            };
 
+            if let Some(new_session_id) = reset {
                 // Tell every streaming-aware window; any window pinned
                 // to the dead `oldSessionId` adopts `newSessionId`. Per-
                 // window emit was correct in the single-session world but
