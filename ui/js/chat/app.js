@@ -63,6 +63,7 @@ import {
 import { setShellRunHost } from '../shared/shell-run-view.js';
 import { clearFinishedHostCommandCards } from '../shared/host-command-view.js';
 import {
+    canOfferSignIn,
     clearAgentSignInSlot,
     isAgentSignInActive,
     mountSignInAction,
@@ -148,6 +149,7 @@ const CHAT_APP_DEPENDENCIES = {
     handleEnterAction,
     handlePasteEvent,
     initMarkdown,
+    canOfferSignIn,
     clearAgentSignInSlot,
     isAgentSignInActive,
     isChatLabel,

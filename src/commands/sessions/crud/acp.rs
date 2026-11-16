@@ -1,6 +1,7 @@
 //! ACP session adoption and creation.
 
 use super::super::*;
+use crate::commands::messaging::session_setup_error;
 
 /// Adopt or create a session for the calling window.
 pub async fn switch_acp_session<R: tauri::Runtime>(
@@ -59,11 +60,14 @@ pub(crate) fn switch_acp_session_blocking<R: tauri::Runtime>(
         info!("Connection not healthy, restarting for session switch...");
         if let Err(e) = client_guard.restart_connection() {
             error!("Connection restart failed: {}", e);
-            return Err(AppError::keyed(
-                ErrorKind::ConnectionLost,
-                "errors.session.connect_failed",
-                &[("reason", &e.to_string())],
-            ));
+            // A signed-out agent refuses the restart's `initialize`.
+            return Err(session_setup_error(&e, &config, "Agent restart", |e| {
+                AppError::keyed(
+                    ErrorKind::ConnectionLost,
+                    "errors.session.connect_failed",
+                    &[("reason", &e.to_string())],
+                )
+            }));
         }
     }
 
@@ -115,14 +119,13 @@ fn load_existing_session<R: tauri::Runtime>(
             })
     };
     let (loaded_id, models_json) = client.load_existing_session(id, cwd).map_err(|e| {
-        if crate::acp_client::types::is_auth_required(&e) {
-            return crate::commands::messaging::auth_required_error(&config.lock_or_recover());
-        }
-        AppError::keyed(
-            ErrorKind::Internal,
-            "errors.session.load_failed",
-            &[("reason", &e.to_string())],
-        )
+        session_setup_error(&e, &config, "Session load", |e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.load_failed",
+                &[("reason", &e.to_string())],
+            )
+        })
     })?;
     crate::telemetry::track(
         &app,
@@ -149,9 +152,13 @@ fn create_session<R: tauri::Runtime>(
 ) -> Result<String, AppError> {
     info!("Creating new session");
     let cwd = config.lock_or_recover().acp.agent.working_directory.clone();
-    let (session_id, models_json) = client
-        .create_session(cwd)
-        .map_err(|e| format!("Failed to create session: {}", e))?;
+    // A signed-out agent refuses `session/new` (or the `initialize` before
+    // it) with `-32000`: the window gets `auth_required` and offers Sign in.
+    let (session_id, models_json) = client.create_session(cwd).map_err(|e| {
+        session_setup_error(&e, &config, "Session creation", |e| {
+            AppError::from(format!("Failed to create session: {}", e))
+        })
+    })?;
     crate::telemetry::track(
         &app,
         "session_created",

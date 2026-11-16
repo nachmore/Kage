@@ -375,14 +375,13 @@ pub async fn reconnect_acp<R: tauri::Runtime>(
                 // The user asked for a fresh start: the next failing prompt
                 // may restart the agent again.
                 client.clear_unreachable_latch();
-                if crate::acp_client::types::is_auth_required(&e) {
-                    return Err(auth_required_error(&config.lock_or_recover()));
-                }
-                return Err(AppError::keyed(
-                    ErrorKind::ConnectionLost,
-                    "errors.connection.reconnect_failed",
-                    &[("reason", &e.to_string())],
-                ));
+                return Err(session_setup_error(&e, &config, "Reconnect", |e| {
+                    AppError::keyed(
+                        ErrorKind::ConnectionLost,
+                        "errors.connection.reconnect_failed",
+                        &[("reason", &e.to_string())],
+                    )
+                }));
             }
         }
 
@@ -467,6 +466,40 @@ pub(crate) fn auth_required_error(cfg: &crate::config::Config) -> AppError {
     }
 }
 
+/// The sign-in error for `e` when it is the agent's ACP "authentication
+/// required" (`-32000`) answer, to `initialize`, `session/new`,
+/// `session/load` or a prompt, with the agent's own text; `None` for any
+/// other error. The one place that rule lives: prompt failures
+/// (`prompt_error_for_user`) and the commands that set up a session
+/// (`session_setup_error`) both use it.
+pub(crate) fn auth_required_for_user(
+    e: &anyhow::Error,
+    cfg: &crate::config::Config,
+) -> Option<(AppError, String)> {
+    crate::acp_client::types::is_auth_required(e).then(|| (auth_required_error(cfg), e.to_string()))
+}
+
+/// What a command that sets up a session for a window (create, load, the
+/// connect or restart before either) returns for `e`: the sign-in error when
+/// the agent wants one, so the window can offer Sign in; else
+/// `otherwise(e)`, as before. `AppError` has no details field, so the
+/// agent's own text is logged (English) instead: the localized message
+/// stands on its own.
+pub(crate) fn session_setup_error(
+    e: &anyhow::Error,
+    config: &std::sync::Mutex<crate::config::Config>,
+    what: &str,
+    otherwise: impl FnOnce(&anyhow::Error) -> AppError,
+) -> AppError {
+    match auth_required_for_user(e, &config.lock_or_recover()) {
+        Some((err, detail)) => {
+            warn!("{} refused: the agent wants a sign-in: {}", what, detail);
+            err
+        }
+        None => otherwise(e),
+    }
+}
+
 /// What to tell the user about a failed prompt, when the recovery ladder
 /// gave it a meaning: the agent wants a sign-in (ACP `-32000`, from the
 /// prompt or from the restart's `initialize` / `session/*`), or it still
@@ -476,7 +509,7 @@ fn prompt_error_for_user(
     e: &anyhow::Error,
     cfg: &crate::config::Config,
 ) -> Option<(AppError, String)> {
-    use crate::acp_client::types::{AgentRpcError, PromptRecoveryError, ACP_AUTH_REQUIRED};
+    use crate::acp_client::types::PromptRecoveryError;
     if let Some(PromptRecoveryError::AgentUnreachable { detail }) =
         e.downcast_ref::<PromptRecoveryError>()
     {
@@ -495,11 +528,7 @@ fn prompt_error_for_user(
         };
         return Some((err, detail.clone()));
     }
-    let rpc = e.downcast_ref::<AgentRpcError>()?;
-    if rpc.code != ACP_AUTH_REQUIRED {
-        return None;
-    }
-    Some((auth_required_error(cfg), e.to_string()))
+    auth_required_for_user(e, cfg)
 }
 
 /// The MESSAGE_ERROR payload for a user prompt that failed:
@@ -560,7 +589,16 @@ fn unsent_prompt_payload(
     session_id: Option<&str>,
     turn_id: Option<&str>,
 ) -> serde_json::Value {
-    let err = AppError::raw(kind, message);
+    unsent_error_payload(AppError::raw(kind, message), session_id, turn_id)
+}
+
+/// `unsent_prompt_payload` for an error that already has its kind and
+/// message (a signed-out agent's `auth_required`, which gets Sign in).
+fn unsent_error_payload(
+    err: AppError,
+    session_id: Option<&str>,
+    turn_id: Option<&str>,
+) -> serde_json::Value {
     serde_json::json!({
         "kind": err.kind,
         "key": err.key,
@@ -718,19 +756,22 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
             // Resolve a real session — the main window may not have pinned
             // one yet (inline-assist's "inform" mode can fire before main
             // was ever opened). Must happen after connect so create works.
-            let session_id = match resolve_or_create_session(&client, session_id) {
+            let session_id = match resolve_or_create_session(&client, &config, session_id) {
                 Ok(id) => id,
                 Err(e) => {
-                    crate::event_targets::emit_to_self(
-                        &window,
-                        events::MESSAGE_ERROR,
-                        &unsent_prompt_payload(
+                    // A signed-out agent: the error as it is, so main
+                    // offers Sign in.
+                    let payload = if matches!(e.kind, ErrorKind::AuthRequired) {
+                        unsent_error_payload(e, None, Some(&turn_id))
+                    } else {
+                        unsent_prompt_payload(
                             plain_prompt_error_kind(&e.to_string()),
                             format!("Failed to send: {}", e),
                             None,
                             Some(&turn_id),
-                        ),
-                    );
+                        )
+                    };
+                    crate::event_targets::emit_to_self(&window, events::MESSAGE_ERROR, &payload);
                     return;
                 }
             };
@@ -941,7 +982,8 @@ impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
 #[cfg(test)]
 mod prompt_error_tests {
     use super::{
-        connect_failed_payload, failed_prompt_payload, prompt_error_for_user, unsent_prompt_payload,
+        auth_required_error, connect_failed_payload, failed_prompt_payload, prompt_error_for_user,
+        session_setup_error, unsent_error_payload, unsent_prompt_payload,
     };
     use crate::acp_client::types::{AcpError, AgentRpcError, PromptRecoveryError};
     use crate::config::{AcpMode, AgentConnection, Config};
@@ -1104,6 +1146,66 @@ mod prompt_error_tests {
         );
         assert_eq!(json["sessionId"], serde_json::Value::Null);
         assert_eq!(json["turnId"], serde_json::Value::Null);
+        assert_eq!(json["resendable"], false);
+    }
+
+    fn session_new_auth_required() -> anyhow::Error {
+        let reply = AcpError {
+            code: -32000,
+            message: "Authentication required. Not logged in.".to_string(),
+            data: None,
+        };
+        anyhow::Error::new(AgentRpcError::from_reply(
+            "session/new",
+            &reply,
+            "Session creation failed: Authentication required. Not logged in. (code: -32000)"
+                .to_string(),
+        ))
+    }
+
+    #[test]
+    fn a_session_setup_refused_for_a_sign_in_is_auth_required_and_names_kiros_command() {
+        crate::i18n::init(Some("en"));
+        let cfg = std::sync::Mutex::new(kiro_local());
+        let err = session_setup_error(
+            &session_new_auth_required(),
+            &cfg,
+            "Session creation",
+            |_| panic!("a sign-in demand fell through to the plain error"),
+        );
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["kind"], "auth_required");
+        assert_eq!(json["key"], "errors.agent.auth_required_kiro");
+        assert!(json["message"].as_str().unwrap().contains("kiro-cli login"));
+        // The same rule as a refused prompt's.
+        let (prompt_err, detail) =
+            prompt_error_for_user(&session_new_auth_required(), &kiro_local()).unwrap();
+        assert_eq!(prompt_err.key, err.key);
+        assert!(detail.contains("Not logged in"));
+    }
+
+    #[test]
+    fn any_other_session_setup_failure_keeps_its_own_error() {
+        let cfg = std::sync::Mutex::new(kiro_local());
+        let err = session_setup_error(
+            &anyhow::anyhow!("connection refused"),
+            &cfg,
+            "Session creation",
+            |e| crate::error::AppError::from(format!("Failed to create session: {}", e)),
+        );
+        assert_eq!(err.key, "errors.passthrough");
+        assert!(err
+            .to_string()
+            .contains("Failed to create session: connection refused"));
+    }
+
+    #[test]
+    fn an_unsent_prompt_whose_session_was_refused_for_a_sign_in_carries_auth_required() {
+        crate::i18n::init(Some("en"));
+        let json = unsent_error_payload(auth_required_error(&kiro_local()), None, Some("turn-1"));
+        assert_eq!(json["kind"], "auth_required");
+        assert_eq!(json["key"], "errors.agent.auth_required_kiro");
+        assert_eq!(json["turnId"], "turn-1");
         assert_eq!(json["resendable"], false);
     }
 }

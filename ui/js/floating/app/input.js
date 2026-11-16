@@ -565,6 +565,9 @@ export const InputMethods = {
     },
 
     async sendChatMessage(message, options = {}) {
+        // A new send: the one a failed bootstrap left waiting is no longer
+        // what the user wants sent (a sign-in's own send clears it first).
+        this._bootstrapWaitingSend = null;
         // If bootstrap is still running, show a "Spinning up agent…"
         // placeholder and queue the send. The bootstrap path will
         // call _flushPendingSend() once the session arrives.

@@ -54,6 +54,7 @@ export function createMessagesMixin(dependencies) {
         formatErrorShared,
         splitPromptContext,
         mountSignInAction,
+        canOfferSignIn,
         clearAgentSignInSlot,
         isResendablePayload,
         presentOverlayWindow,
@@ -467,7 +468,11 @@ export function createMessagesMixin(dependencies) {
                 // A failed attempt's error keeps the failed turn, so the
                 // next Reconnect can still resend it.
                 // (and, for a signed-out agent, its Sign in).
-                const keep = { retryTurn: opts.retryTurn, signIn: opts.signIn };
+                const keep = {
+                    retryTurn: opts.retryTurn,
+                    signIn: opts.signIn,
+                    establishSession: opts.establishSession,
+                };
                 let outcome;
                 try {
                     outcome = await this.invoke('reconnect_acp', { sessionId: startedOn });
@@ -499,6 +504,12 @@ export function createMessagesMixin(dependencies) {
                 // Only this error's box: a newer one (or a new prompt that
                 // cleared it) stays.
                 if (reconnectBtn.isConnected) this.elements.errorContainer.innerHTML = '';
+                if (opts.establishSession) {
+                    // The window's session never got set up: set it up on
+                    // the restarted agent (a failure shows its own error).
+                    await opts.establishSession(outcome).catch(() => {});
+                    return;
+                }
                 const shown = startedOn;
                 this._adoptReconnectSession(outcome.sessionId);
                 const turn = opts.retryTurn;
@@ -509,12 +520,70 @@ export function createMessagesMixin(dependencies) {
 
             if (opts.signIn) {
                 const actions = this.elements.errorContainer.querySelector('.chat-error-actions');
-                mountSignInAction?.(
-                    actions,
-                    opts.signIn,
-                    this._agentSignInHost(opts.signIn, opts.retryTurn ?? null, actions)
-                )?.catch((e) => console.warn('[chat] sign-in action unavailable:', e));
+                const host = opts.establishSession
+                    ? this._sessionSetupSignInHost(opts.signIn, opts.establishSession, actions)
+                    : this._agentSignInHost(opts.signIn, opts.retryTurn ?? null, actions);
+                mountSignInAction?.(actions, opts.signIn, host)?.catch((e) =>
+                    console.warn('[chat] sign-in action unavailable:', e)
+                );
             }
+        }
+
+        /**
+         * Show `error`, a failure to set up this window's session
+         * (`switch_acp_session` for a selection, a New Chat or the window's
+         * first session), as `text`. A signed-out agent's error also gets
+         * Sign in (shared/agent-sign-in.js), and both it and Reconnect then
+         * set the session up again on the restarted agent with
+         * `retry(outcome)` (`outcome`: reconnect_acp's answer), which
+         * resolves to the session id or rejects having shown its own error.
+         * `sessionId` is the session the window shows meanwhile (the one
+         * the restart reloads). With `onlyIfSignIn`, any other error shows
+         * nothing (the caller's old behaviour). Returns whether it showed.
+         */
+        _showSessionSetupError(text, error, { sessionId = null, retry, onlyIfSignIn = false }) {
+            if (!canOfferSignIn?.(error)) {
+                if (onlyIfSignIn) return false;
+                this.showError(text);
+                return true;
+            }
+            this.showError(text, {
+                signIn: { ...error, sessionId },
+                establishSession: retry,
+            });
+            return true;
+        }
+
+        /**
+         * The sign-in under a session-setup error (`_showSessionSetupError`):
+         * as a prompt's (`_agentSignInHost`) but nothing was waiting to be
+         * sent. After the restart it sets up the session the window wanted
+         * (`retry`), unless the window has moved on to another session
+         * since; then it keeps that one.
+         */
+        _sessionSetupSignInHost(payload, retry, ownActions = null) {
+            const base = this._agentSignInHost(payload, null, ownActions);
+            const wanted = payload?.sessionId ?? null;
+            return {
+                ...base,
+                establishSession: async (outcome) => {
+                    if ((this.activeSessionId ?? null) !== wanted) {
+                        console.log(
+                            '[chat] sign-in finished after the window moved to',
+                            this.activeSessionId
+                        );
+                        this._repinWindowSession();
+                        return null;
+                    }
+                    // This error's box goes; a failure shows a new one.
+                    if (!ownActions || ownActions.isConnected) {
+                        this.elements.errorContainer.innerHTML = '';
+                    }
+                    return retry(outcome);
+                },
+                canResend: () => false,
+                resend: async () => 'none',
+            };
         }
 
         /** Take the session id `reconnect_acp` answered with, if it moved. */

@@ -53,11 +53,26 @@ export function createSessionStateMixin(dependencies) {
          *   to create one explicitly. This avoids the "spawn 3 sessions
          *   on launch" race the eager-create version produced.
          */
-        async _bootstrapChatPeerSession() {
+        async _bootstrapChatPeerSession({ throwOnError = false } = {}) {
             if (this.currentAcpSessionId) return; // already bootstrapped
             // A New Chat clicked during init nulls the pin on purpose and
             // will adopt its own session; bootstrapping here would race it.
             if (this._newSessionPending) return;
+
+            // A signed-out agent refused the session: say so, with Sign in,
+            // which bootstraps again after it. Any other failure stays in
+            // the console, as before.
+            const failed = (e) => {
+                this._showSessionSetupError?.(this.formatError?.(e) ?? String(e), e, {
+                    sessionId: this.activeSessionId ?? null,
+                    retry: async () => {
+                        await this._bootstrapChatPeerSession({ throwOnError: true });
+                        return this.currentAcpSessionId ?? null;
+                    },
+                    onlyIfSignIn: true,
+                });
+                if (throwOnError) throw e;
+            };
 
             const isPeer = isChatLabel(this.windowLabel);
             if (isPeer) {
@@ -72,6 +87,7 @@ export function createSessionStateMixin(dependencies) {
                     console.log(`[CHAT] Bootstrapped ${this.windowLabel} -> ${adoptedId}`);
                 } catch (e) {
                     console.error('[CHAT] Failed to bootstrap peer:', e);
+                    failed(e);
                 }
                 return;
             }
@@ -93,6 +109,7 @@ export function createSessionStateMixin(dependencies) {
                 console.log(`[CHAT] main adopted floating's session: ${adoptedId}`);
             } catch (e) {
                 console.error('[CHAT] Failed to adopt floating session:', e);
+                failed(e);
             }
         }
 
