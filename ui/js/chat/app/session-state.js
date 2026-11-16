@@ -54,10 +54,13 @@ export function createSessionStateMixin(dependencies) {
          *   on launch" race the eager-create version produced.
          */
         async _bootstrapChatPeerSession({ throwOnError = false } = {}) {
-            if (this.currentAcpSessionId) return; // already bootstrapped
+            if (this.currentAcpSessionId) return null; // already bootstrapped
             // A New Chat clicked during init nulls the pin on purpose and
             // will adopt its own session; bootstrapping here would race it.
-            if (this._newSessionPending) return;
+            if (this._newSessionPending) return null;
+            // What the window shows now: if this changes while the switch
+            // below is in flight, the user moved and their choice wins.
+            const startedOn = this.currentAcpSessionId ?? this.activeSessionId ?? null;
 
             // A signed-out agent refused the session: say so, with Sign in,
             // which bootstraps again after it and then draws the session as
@@ -68,13 +71,16 @@ export function createSessionStateMixin(dependencies) {
                 this._showSessionSetupError?.(this.formatError?.(e) ?? String(e), e, {
                     sessionId: this.activeSessionId ?? null,
                     retry: async () => {
-                        await this._bootstrapChatPeerSession({ throwOnError: true });
-                        const id = this.currentAcpSessionId ?? null;
-                        if (id) {
+                        const adopted = await this._bootstrapChatPeerSession({
+                            throwOnError: true,
+                        });
+                        // Draw only the session this bootstrap adopted: if the
+                        // user picked one meanwhile, that one stays shown.
+                        if (adopted) {
                             await this._showCurrentSession();
                             await this.checkConnection();
                         }
-                        return id;
+                        return this.currentAcpSessionId ?? null;
                     },
                     onlyIfSignIn: true,
                 });
@@ -89,14 +95,16 @@ export function createSessionStateMixin(dependencies) {
                     const adoptedId = await this.invoke('switch_acp_session', {
                         sessionId: resumeId || null,
                     });
+                    if (this._movedDuringBootstrap(startedOn)) return null;
                     this.currentAcpSessionId = adoptedId;
                     this.activeSessionId = adoptedId;
                     console.log(`[CHAT] Bootstrapped ${this.windowLabel} -> ${adoptedId}`);
+                    return adoptedId;
                 } catch (e) {
                     console.error('[CHAT] Failed to bootstrap peer:', e);
                     failed(e);
                 }
-                return;
+                return null;
             }
 
             // main — adopt floating's session so the user sees their
@@ -105,19 +113,36 @@ export function createSessionStateMixin(dependencies) {
             const floatingId = await getWindowSessionOrNull(this.invoke, WINDOW.FLOATING);
             if (!floatingId) {
                 console.log('[CHAT] main bootstrap: no floating session yet, leaving empty');
-                return;
+                return null;
             }
             try {
                 const adoptedId = await this.invoke('switch_acp_session', {
                     sessionId: floatingId,
                 });
+                if (this._movedDuringBootstrap(startedOn)) return null;
                 this.currentAcpSessionId = adoptedId;
                 this.activeSessionId = adoptedId;
                 console.log(`[CHAT] main adopted floating's session: ${adoptedId}`);
+                return adoptedId;
             } catch (e) {
                 console.error('[CHAT] Failed to adopt floating session:', e);
                 failed(e);
             }
+            return null;
+        }
+
+        /**
+         * The user picked a session (or New Chat) while a bootstrap's
+         * switch_acp_session was in flight: keep what they picked, and pin
+         * the window back to it, since the bootstrap's switch may have
+         * landed on the backend after theirs.
+         */
+        _movedDuringBootstrap(startedOn) {
+            const now = this.currentAcpSessionId ?? this.activeSessionId ?? null;
+            if (now === startedOn && !this._newSessionPending) return false;
+            console.log('[CHAT] bootstrap finished after the window moved to', now);
+            this._repinWindowSession?.();
+            return true;
         }
 
         async loadUserInfo() {

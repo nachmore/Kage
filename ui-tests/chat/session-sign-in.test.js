@@ -87,6 +87,8 @@ function setup({ switches, reconnect = null }) {
         }
         if (cmd === 'switch_acp_session') {
             const answer = switches[Math.min(switchAt++, switches.length - 1)];
+            // A function: an answer the test hands out when it chooses.
+            if (typeof answer === 'function') return answer();
             if (typeof answer === 'string' && answer.startsWith('s-')) return answer;
             throw answer;
         }
@@ -309,6 +311,26 @@ describe("chat: the window's first session a signed-out agent refuses", () => {
         expect(app.elements.chatHeaderTitle.textContent).toBe('chat.session.current_title');
         expect(named('send_message_streaming')).toEqual([]);
         expect(status()).toBe('shared.agent_sign_in.status.ready');
+    });
+
+    it('a session the user picks while the sign-in sets one up stays shown', async () => {
+        let release;
+        const held = () => new Promise((resolve) => (release = () => resolve('s-new')));
+        const { app, starts, named } = await peerWithFailedBootstrap([SIGNED_OUT, held]);
+        app._repinWindowSession = vi.fn();
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        starts[starts.length - 1].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        // The bootstrap's switch is in flight; the user picks another chat.
+        app.activeSessionId = 's-old';
+        app.currentAcpSessionId = 's-old';
+        release();
+        await flush(20);
+        expect(app.activeSessionId).toBe('s-old');
+        expect(app.currentAcpSessionId).toBe('s-old');
+        expect(app._repinWindowSession).toHaveBeenCalled();
+        expect(named('load_session')).toEqual([]);
     });
 
     it('still refused after the sign-in: the error again, nothing drawn', async () => {
