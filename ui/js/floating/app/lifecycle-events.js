@@ -133,6 +133,7 @@ export const LifecycleEventsMethods = {
 
     setupEventListeners() {
         this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
+        this._watchInputEdits();
         this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
         this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
         this.elements.floatingStopBtn.addEventListener('click', () => this.stopGenerating());

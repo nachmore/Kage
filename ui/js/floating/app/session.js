@@ -59,9 +59,13 @@ export const SessionMethods = {
 
             if (!willPreload) {
                 console.log('[floating] start_session_on_launch=false, creating session now');
-                const id = await this.invoke('switch_acp_session', { sessionId: null });
-                this.floatingSessionId = id;
-                this.bootstrappingSession = false;
+                try {
+                    await this._runBootstrap();
+                } catch (e) {
+                    // Remembered (the error object: Sign in reads its
+                    // `kind`) by _runBootstrap for a send waiting on it.
+                    console.error('[floating] launch session/new failed:', e);
+                }
                 return;
             }
 
@@ -84,21 +88,18 @@ export const SessionMethods = {
             // error rather than a silent hang.
             console.warn(`[floating] setup reported pin failure: ${winner.reason}`);
             try {
-                const id = await this.invoke('switch_acp_session', { sessionId: null });
-                this.floatingSessionId = id;
+                const id = await this._runBootstrap();
                 console.log(`[floating] recovered with own session: ${id}`);
             } catch (e) {
+                // Remembered by _runBootstrap, as above.
                 console.error('[floating] recovery session/new also failed:', e);
-                this._setBootstrapFailure(e);
-            } finally {
-                this.bootstrappingSession = false;
             }
         } catch (e) {
             console.error('[floating] failed to adopt session:', e);
-            this.floatingSessionId = null;
-            this.sessionBootstrapError = String(e);
-            this.sessionBootstrapFailure = null;
-            this.bootstrappingSession = false;
+            // The error itself, as every bootstrap keeps it: its text is
+            // shown, and a signed-out agent's gets Sign in and Reconnect.
+            this._setBootstrapFailure(e);
+            this._settleBootstrapping();
         } finally {
             if (typeof unlistenPinned === 'function') unlistenPinned();
             if (typeof unlistenFailed === 'function') unlistenFailed();
@@ -123,17 +124,17 @@ export const SessionMethods = {
      * retry to settle, then `_flushPendingSend` either replays the send (on
      * success) or re-shows the error (on repeat failure).
      */
-    _retryBootstrapAndSend(message, options) {
+    _retryBootstrapAndSend(submission) {
         const now = Date.now();
         if (now - this._lastBootstrapRetryAt < BOOTSTRAP_RETRY_DEBOUNCE_MS) {
             // Too soon since the last attempt — a retry is likely still in
             // flight or only just failed. Surface the error rather than
             // kicking off another reconnect.
-            this._showBootstrapError(this._waitingSendEntry(message, options));
+            this._showBootstrapError(this._waitingSendEntry(submission));
             return;
         }
         this._lastBootstrapRetryAt = now;
-        this._pendingSend = { message, options };
+        this._pendingSend = submission;
         this._showBootstrapSpinner();
         // Gate BEFORE starting the async retry so the poller waits on it.
         this.bootstrappingSession = true;
@@ -228,8 +229,9 @@ export const SessionMethods = {
 
     /**
      * After bootstrap completes (or fails), flush a queued send. Called
-     * from `_waitForBootstrapAndSend`. On success, replays the original
-     * `sendChatMessage`; on failure, surfaces the error.
+     * from `_waitForBootstrapAndSend`. On success, replays what was
+     * submitted (`_captureSubmission`, never the live composer); on
+     * failure, surfaces the error.
      */
     _flushPendingSend() {
         const pending = this._pendingSend;
@@ -241,16 +243,16 @@ export const SessionMethods = {
             this.elements.responseText.innerHTML = '';
         }
         if (this.sessionBootstrapError) {
-            this._showBootstrapError(this._waitingSendEntry(pending.message, pending.options));
+            this._showBootstrapError(this._waitingSendEntry(pending));
             return;
         }
         if (!this.floatingSessionId) {
             this.showError(t('floating.error.no_session'));
             return;
         }
-        // Re-enter sendChatMessage; the bootstrap-guard at the top
+        // Re-enter the send path; the bootstrap-guard at the top
         // will pass through now.
-        this.sendChatMessage(pending.message, pending.options);
+        this._sendSubmission(pending, true);
     },
 
     /** Remember a failed bootstrap: its text, and the error itself (Sign in reads its `kind`). */
@@ -265,9 +267,12 @@ export const SessionMethods = {
         this.sessionBootstrapFailure = null;
     },
 
-    /** A send held up by a failed bootstrap, as `_showBootstrapError` remembers it. */
-    _waitingSendEntry(message, options) {
-        return { message, options, generation: this._promptGeneration };
+    /**
+     * A send held up by a failed bootstrap, as `_showBootstrapError`
+     * remembers it: what was submitted (`_captureSubmission`).
+     */
+    _waitingSendEntry(submission) {
+        return { submission, generation: this._promptGeneration };
     },
 
     /**
@@ -366,21 +371,25 @@ export const SessionMethods = {
     /**
      * Whether `waiting` (the send a failed bootstrap held up) may go out now
      * on `sid`: it is still the one waiting (no send since), no prompt went
-     * out since, the input holds nothing else, and the window can send.
+     * out since, the user hasn't edited the input since it was submitted
+     * (any edit, even back to the same text or to nothing: they are
+     * writing something else), and the window can send.
      */
     _canSendWaitingAfterBootstrap(waiting, sid) {
         if (!waiting || this._bootstrapWaitingSend !== waiting) return false;
         if (waiting.generation !== this._promptGeneration) return false;
-        const typed = this.elements.input?.value?.trim() ?? '';
-        if (typed && typed !== String(waiting.message ?? '').trim()) return false;
+        if (this._inputEditedSince(waiting.submission)) return false;
         return !!sid && sid === this.floatingSessionId && this.canSendAgentPrompt(sid);
     },
 
-    /** Send `waiting` through the normal send path (a turn id of its own), once. */
+    /**
+     * Send `waiting` once, as it was submitted, through the normal send path
+     * (a turn id of its own). Files attached since stay in the composer.
+     */
     async _sendWaitingAfterBootstrap(waiting) {
         if (this._bootstrapWaitingSend !== waiting) return false;
         this._bootstrapWaitingSend = null;
-        await this.sendChatMessage(waiting.message, waiting.options);
+        await this._sendSubmission(waiting.submission, true);
         return true;
     },
 

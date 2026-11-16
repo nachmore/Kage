@@ -335,6 +335,25 @@ export function createComposerMixin(dependencies) {
         }
 
         /**
+         * Whether a `message_error` is the error of the turn on screen,
+         * whatever session it names: it names this window's last turn (its
+         * `turnId`), and that turn was recorded on the session the window
+         * shows (or on none while it shows none). The backend can name
+         * another one for it: open-in-chat prompts on main's backend pin,
+         * which a refused selection leaves on the session main showed
+         * before. Such an error is never dropped as another session's.
+         */
+        _errorIsForShownTurn(payload) {
+            const turnId = errorTurnId(payload);
+            const turn = this._lastTurn;
+            return (
+                !!turnId &&
+                turnId === turn?.turnId &&
+                (turn.sessionId ?? null) === (this.activeSessionId ?? null)
+            );
+        }
+
+        /**
          * Whether a `message_error` naming a turn other than the window's
          * last one is the error of the stream on screen, so it ends that
          * stream (never with a resend: the turn isn't the last one). That

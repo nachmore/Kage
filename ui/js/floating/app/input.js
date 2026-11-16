@@ -260,6 +260,7 @@ export const InputMethods = {
                     this._tabCycleActive = true;
                 }
                 const pick = this.currentMatches[this._tabCycleIndex];
+                this._noteInputEdited();
                 if (pick.type === 'command') {
                     this.elements.input.value = '>' + pick.name + ' ';
                 } else if (pick.type === 'slash') {
@@ -280,6 +281,7 @@ export const InputMethods = {
             const { isLastRow } = caretVisualRowInfo(ta);
             if (isLastRow && this._historyIndex >= 0 && this.currentMatches.length === 0) {
                 event.preventDefault();
+                this._noteInputEdited();
                 this._historyIndex--;
                 if (this._historyIndex < 0) {
                     // Back to the original input
@@ -317,6 +319,7 @@ export const InputMethods = {
                 const canRecall = inputVal.trim() === '' || this._historyIndex >= 0;
                 if (canRecall && this._historyIndex < this._messageHistory.length - 1) {
                     event.preventDefault();
+                    this._noteInputEdited();
                     if (this._historyIndex < 0) {
                         this._historySaved = inputVal; // stash whatever was typed
                     }
@@ -558,6 +561,24 @@ export const InputMethods = {
         await this._applyEnterActionResult(actionResult);
     },
 
+    /**
+     * Count the user's edits to the input: typing, pasting or dropping
+     * text, cutting, deleting (each fires the input's own `input` event),
+     * and a Tab completion or a history recall (which set it without one).
+     * A send a failed bootstrap left waiting goes out after a sign-in only
+     * while there was none since it was submitted
+     * (_canSendWaitingAfterBootstrap), even when the text ends up the same
+     * or empty. Attaching a file or an image is not an edit: it stays in
+     * the composer for the next send.
+     */
+    _watchInputEdits() {
+        this.elements.input?.addEventListener('input', () => this._noteInputEdited());
+    },
+
+    _noteInputEdited() {
+        this._inputEdits = (this._inputEdits || 0) + 1;
+    },
+
     _clearInput() {
         this.elements.input.value = '';
         this.elements.input.style.height = 'auto';
@@ -565,6 +586,71 @@ export const InputMethods = {
     },
 
     async sendChatMessage(message, options = {}) {
+        return this._sendSubmission(this._captureSubmission(message, options));
+    },
+
+    /**
+     * What a send submits, taken the moment the user sends: the text, the
+     * attachments (as content blocks, plus the composer's own items so a
+     * replay takes only those out of it), the selected text when "use
+     * selection" is on, the App Mode steering, and the send's options.
+     * `inputEdits` is the input's edit count then (_noteInputEdited). A send
+     * held up by a bootstrap is replayed from this, never from the live
+     * composer, so nothing attached or typed since goes with it.
+     */
+    _captureSubmission(message, options = {}) {
+        const manager = this.attachmentManager;
+        const useSelection =
+            !options.skipSelection && document.getElementById('useSelectionCheckbox')?.checked;
+        return {
+            message,
+            options,
+            attachments: manager.toContentBlocks(),
+            attachmentItems: Array.isArray(manager.attachments) ? [...manager.attachments] : [],
+            selection: useSelection && this.lastSelection?.trim() ? this.lastSelection : null,
+            lastSelection: this.lastSelection ?? null,
+            appModeSteering: this._appModeMatch?.steering_payload || null,
+            inputEdits: this._inputEdits || 0,
+        };
+    },
+
+    /** Whether the user edited the input since `submission` was taken. */
+    _inputEditedSince(submission) {
+        return (this._inputEdits || 0) !== submission.inputEdits;
+    },
+
+    /**
+     * The composer after `submission` went out. A send the user just made
+     * empties it. A replay (`replay`: it was held up by a bootstrap) takes
+     * out only what it sent: the attachments it carried, and the text while
+     * the user hasn't edited it since; anything newer stays for their next
+     * send.
+     */
+    _clearSubmittedComposer(submission, replay) {
+        const manager = this.attachmentManager;
+        if (!replay) {
+            manager.clear();
+        } else if (typeof manager.removeAt === 'function' && Array.isArray(manager.attachments)) {
+            for (const item of submission.attachmentItems) {
+                const at = manager.attachments.indexOf(item);
+                if (at >= 0) manager.removeAt(at);
+            }
+        }
+        if (replay && this._inputEditedSince(submission)) return;
+        this.elements.input.value = '';
+        this.elements.input.style.height = 'auto';
+        this.elements.appSuggestions.classList.remove('visible');
+        this.currentMatches = [];
+        this.selectedIndex = -1;
+    },
+
+    /**
+     * Send `submission` (_captureSubmission). `replay`: it is a send that
+     * waited on a bootstrap, going out now.
+     */
+    async _sendSubmission(submission, replay = false) {
+        const { options } = submission;
+        let message = submission.message;
         // A new send: the one a failed bootstrap left waiting is no longer
         // what the user wants sent (a sign-in's own send clears it first).
         this._bootstrapWaitingSend = null;
@@ -573,7 +659,7 @@ export const InputMethods = {
         // call _flushPendingSend() once the session arrives.
         if (this.bootstrappingSession) {
             this._showBootstrapSpinner();
-            this._pendingSend = { message, options };
+            this._pendingSend = submission;
             this._waitForBootstrapAndSend();
             return;
         }
@@ -582,7 +668,7 @@ export const InputMethods = {
         // launch left floating permanently dead), retry the bootstrap. It's
         // debounced so rapid sends can't cascade into repeated reconnects.
         if (this.sessionBootstrapError) {
-            this._retryBootstrapAndSend(message, options);
+            this._retryBootstrapAndSend(submission);
             return;
         }
 
@@ -610,8 +696,10 @@ export const InputMethods = {
             this.automationPlanController.reset();
             this.extensionToolController.reset();
             // Reset UI for the new response
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
+            if (!replay || !this._inputEditedSince(submission)) {
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
+            }
             this.currentResponse = '';
             this.elements.responseText.textContent = '';
             this.elements.contentArea.classList.add('visible');
@@ -639,30 +727,26 @@ export const InputMethods = {
             return;
         }
 
-        const attachments = this.attachmentManager.toContentBlocks();
-        this.attachmentManager.clear();
+        const attachments = submission.attachments;
 
-        // Include selected text as context if checkbox is checked
-        const useSelection =
-            !options.skipSelection && document.getElementById('useSelectionCheckbox')?.checked;
-        if (useSelection && this.lastSelection?.trim()) {
-            message = `The following text is currently selected in my active window:\n\`\`\`\n${this.lastSelection.trim()}\n\`\`\`\n\n${message}`;
+        // Include selected text as context if checkbox was checked
+        if (submission.selection?.trim()) {
+            message = `The following text is currently selected in my active window:\n\`\`\`\n${submission.selection.trim()}\n\`\`\`\n\n${message}`;
         }
-        // Hide selection indicator after use
-        const indicator = document.getElementById('selectionIndicator');
-        if (indicator) indicator.style.display = 'none';
-        this._setSelectionPreview(null);
+        // Hide selection indicator after use (a replay leaves a selection
+        // captured since for the user's next send)
+        if (!replay || this.lastSelection === submission.lastSelection) {
+            const indicator = document.getElementById('selectionIndicator');
+            if (indicator) indicator.style.display = 'none';
+            this._setSelectionPreview(null);
+            this.lastSelection = null;
+        }
         const quickActionsContainer = document.getElementById('quickActionsContainer');
         if (quickActionsContainer) quickActionsContainer.style.display = 'none';
         const responseActionsContainer = document.getElementById('responseActionsContainer');
         if (responseActionsContainer) responseActionsContainer.style.display = 'none';
-        this.lastSelection = null;
 
-        this.elements.input.value = '';
-        this.elements.input.style.height = 'auto';
-        this.elements.appSuggestions.classList.remove('visible');
-        this.currentMatches = [];
-        this.selectedIndex = -1;
+        this._clearSubmittedComposer(submission, replay);
 
         // Dismiss any pending permission request blocking OUR session so
         // it isn't stalled waiting for a response. Scoped by session id —
@@ -746,11 +830,12 @@ export const InputMethods = {
                 }
 
                 // App Mode steering — _appModeMatch was set by
-                // _refreshAppModeChip when the user summoned. Click-
-                // dismiss clears it without touching config; we just
-                // skip the splice in that case.
-                if (this._appModeMatch?.steering_payload) {
-                    message = `${this._appModeMatch.steering_payload}\n${message}`;
+                // _refreshAppModeChip when the user summoned, and taken
+                // with the submission when they sent. Click-dismiss
+                // clears it without touching config; we just skip the
+                // splice in that case.
+                if (submission.appModeSteering) {
+                    message = `${submission.appModeSteering}\n${message}`;
                 }
 
                 // Notify the chat window so it can show the user bubble

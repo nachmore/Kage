@@ -588,20 +588,30 @@ export function createMessagesMixin(dependencies) {
          *     new one, as the window shows a new chat;
          *   - the window shows a session it failed to set up (its switch
          *     was refused, so the backend never pinned it) and the error
-         *     names none: that session, switched to again
-         *     (_retryShownSessionForTurn). This error replaced its own
-         *     setup error, so this sets it up too.
-         * Only when `turn` was recorded on the session the window shows.
-         * Returns false, showing nothing, for any other error.
+         *     names none, or names the session the backend still has
+         *     pinned (the one the window showed before): that session,
+         *     switched to again (_retryShownSessionForTurn), which moves
+         *     the pin to it. This error replaced its own setup error, so
+         *     this sets it up too.
+         * Only when `turn` was recorded on the session the window shows;
+         * it is only ever sent there. Returns false, showing nothing, for
+         * any other error.
          */
         _showUnsentTurnError(text, payload, turn) {
             if (!canOfferSignIn?.(payload) || payload?.resendable !== true) return false;
             if (!turn || errorTurnId(payload) !== turn.turnId) return false;
             const shown = this.activeSessionId ?? null;
             if ((turn.sessionId ?? null) !== shown) return false;
-            // A shown session the error names was set up: its own rules
-            // (onError's retryTurn) resend the turn.
-            if (shown !== null && errorSessionId(payload) !== null) return false;
+            const named = errorSessionId(payload);
+            if (shown !== null && named !== null) {
+                // The error names the shown session (an id the turn had): it
+                // was set up, and its own rules (onError's retryTurn) resend
+                // the turn.
+                if (this._turnWasOn(turn, named)) return false;
+                // Another session: only a setup refusal (open-in-chat ran on
+                // the backend's pin) names one the turn was never on.
+                if (payload?.kind !== 'auth_required') return false;
+            }
             const retryTurn = { ...turn };
             this.showError(text, {
                 detail: payload?.detail,

@@ -14,6 +14,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { marked } from 'marked';
 import { _resetAgentSignInForTests } from '../../ui/js/shared/agent-sign-in.js';
 import { _setTerminalFactoryForTests } from '../../ui/js/shared/terminal-view.js';
+import { AttachmentManager } from '../../ui/js/shared/attachments.js';
+import { invalidateConfig } from '../../ui/js/shared/config-cache.js';
 
 vi.mock('../../ui/js/shared/network.js', async (importOriginal) => ({
     ...(await importOriginal()),
@@ -137,6 +139,8 @@ function setup({ bootstraps }) {
     app._refreshContextUsage = vi.fn();
     app.floatingSessionId = null;
     app.isWaitingForResponse = false;
+    // What setupEventListeners wires on the input: its edits are counted.
+    app._watchInputEdits?.();
     const named = (name) => calls.filter(([c]) => c === name);
     const sends = () => named('send_message_streaming').map(([, a]) => a);
     return { app, starts, named, sends };
@@ -156,6 +160,12 @@ async function failedBootstrapThenSend(app, error, message = 'hello agent') {
 }
 
 const signInBtn = () => document.querySelector('#responseText .agent-sign-in-btn');
+
+/** The user edits the input: its value changes and it fires `input`. */
+function typeInto(app, value) {
+    app.elements.input.value = value;
+    app.elements.input.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 async function signInCleanly(starts) {
     signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
@@ -260,7 +270,7 @@ describe('floating: a signed-out agent refusing the bootstrap', () => {
     it('sends nothing when the user typed something else meanwhile', async () => {
         const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
         await failedBootstrapThenSend(app, SIGNED_OUT);
-        app.elements.input.value = 'something else';
+        typeInto(app, 'something else');
         await signInCleanly(starts);
         expect(app.floatingSessionId).toBe('s-new');
         expect(sends()).toEqual([]);
@@ -322,7 +332,7 @@ describe('floating: a signed-out agent refusing the bootstrap', () => {
     it('a sign-in after the user typed something else clears the old error too', async () => {
         const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
         await failedBootstrapThenSend(app, SIGNED_OUT);
-        app.elements.input.value = 'something else';
+        typeInto(app, 'something else');
         await signInCleanly(starts);
         expect(sends()).toEqual([]);
         expect(document.querySelector('#responseText').textContent).not.toContain(
@@ -545,5 +555,211 @@ describe('floating: one bootstrap at a time after a failed one', () => {
         expect(named('reconnect_acp').length).toBe(1);
         restart.resolve({ reconnected: false });
         await first;
+    });
+});
+
+describe('floating: the waiting send is what was submitted', () => {
+    const withRealAttachments = (app) => {
+        app.attachmentManager = new AttachmentManager();
+        return app.attachmentManager;
+    };
+
+    it('a file attached during the sign-in is not sent with the waiting message; it stays in the composer', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        const attachments = withRealAttachments(app);
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        // kiro-cli login runs; the user attaches a file for their next send.
+        attachments.addFile('/tmp/later.txt', 'later.txt', 'text/plain');
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+
+        expect(sends()).toEqual([
+            {
+                sessionId: 's-new',
+                message: 'hello agent',
+                attachments: null,
+                turnId: expect.any(String),
+            },
+        ]);
+        expect(attachments.attachments.map((a) => a.name)).toEqual(['later.txt']);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+    });
+
+    it('sends the attachments that were submitted, not ones added since; those stay', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        const attachments = withRealAttachments(app);
+        attachments.addFile('/tmp/first.txt', 'first.txt', 'text/plain');
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        attachments.addFile('/tmp/later.txt', 'later.txt', 'text/plain');
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+
+        expect(sends().map((a) => [a.message, a.attachments?.map((b) => b.name)])).toEqual([
+            ['hello agent', ['first.txt']],
+        ]);
+        expect(attachments.attachments.map((a) => a.name)).toEqual(['later.txt']);
+    });
+
+    it('Reconnect sends the submitted snapshot too', async () => {
+        const { app, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        const attachments = withRealAttachments(app);
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        attachments.addFile('/tmp/later.txt', 'later.txt', 'text/plain');
+        document
+            .querySelector('#responseText .floating-error-reconnect:not(.agent-sign-in-btn)')
+            .click();
+        await flush(20);
+        expect(sends().map((a) => [a.message, a.attachments])).toEqual([['hello agent', null]]);
+        expect(attachments.attachments.map((a) => a.name)).toEqual(['later.txt']);
+    });
+
+    it('a send queued while the bootstrap runs goes out as submitted', async () => {
+        const { app, sends } = setup({ bootstraps: ['s-new'] });
+        const attachments = withRealAttachments(app);
+        app.bootstrappingSession = true;
+        app.elements.input.value = 'queued';
+        await app.sendChatMessage('queued');
+        attachments.addFile('/tmp/later.txt', 'later.txt', 'text/plain');
+        app.floatingSessionId = 's-new';
+        app.bootstrappingSession = false;
+        await wait(250);
+        await flush(20);
+        expect(sends().map((a) => [a.sessionId, a.message, a.attachments])).toEqual([
+            ['s-new', 'queued', null],
+        ]);
+        expect(attachments.attachments.map((a) => a.name)).toEqual(['later.txt']);
+    });
+});
+
+describe('floating: an edit to the input cancels the waiting send', () => {
+    it('a draft typed and then erased: nothing is sent, the sign-in ends ready', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        typeInto(app, 'a different question');
+        typeInto(app, '');
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(app.floatingSessionId).toBe('s-new');
+        expect(sends()).toEqual([]);
+        expect(status()).toBe('shared.agent_sign_in.status.ready');
+    });
+
+    it('an edit back to the very same text: nothing is sent', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        typeInto(app, 'hello agen');
+        typeInto(app, 'hello agent');
+        await signInCleanly(starts);
+        expect(sends()).toEqual([]);
+        expect(status()).toBe('shared.agent_sign_in.status.ready');
+        expect(app.elements.input.value).toBe('hello agent');
+    });
+
+    it('a paste: nothing is sent', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        // A text paste, as the browser reports it: the value grows and
+        // the input fires `input` (insertFromPaste).
+        app.elements.input.value += ' and more';
+        app.elements.input.dispatchEvent(
+            new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' })
+        );
+        await signInCleanly(starts);
+        expect(sends()).toEqual([]);
+    });
+
+    it('Reconnect after an edit sends nothing either', async () => {
+        const { app, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        typeInto(app, '');
+        document
+            .querySelector('#responseText .floating-error-reconnect:not(.agent-sign-in-btn)')
+            .click();
+        await flush(20);
+        expect(app.floatingSessionId).toBe('s-new');
+        expect(sends()).toEqual([]);
+    });
+
+    it('no edit: the waiting message still goes, once, and the input empties', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        await signInCleanly(starts);
+        expect(sends().map((a) => a.message)).toEqual(['hello agent']);
+        expect(app.elements.input.value).toBe('');
+    });
+});
+
+describe('floating: the launch bootstrap keeps its typed error', () => {
+    it('start_session_on_launch=false: a send queued on the pending bootstrap gets Sign in and Reconnect', async () => {
+        invalidateConfig();
+        const { app, starts, named, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        const orig = app.invoke.getMockImplementation();
+        let refuse;
+        let first = true;
+        app.invoke.mockImplementation(async (cmd, args) => {
+            if (cmd === 'get_config') return { acp: { agent: { start_session_on_launch: false } } };
+            if (cmd === 'switch_acp_session' && first) {
+                first = false;
+                orig(cmd, args).catch(() => {}); // recorded in `calls`
+                return new Promise((_, reject) => (refuse = reject));
+            }
+            return orig(cmd, args);
+        });
+        const adopting = app._adoptFloatingSession();
+        await flush();
+        expect(app.bootstrappingSession).toBe(true);
+        app.elements.input.value = 'hello agent';
+        await app.sendChatMessage('hello agent');
+        refuse(SIGNED_OUT);
+        await adopting;
+        await wait(250);
+        await flush();
+
+        const text = document.querySelector('#responseText').textContent;
+        expect(text).toContain('floating.error.agent_unavailable');
+        expect(text).not.toContain('[object Object]');
+        expect(app.sessionBootstrapFailure).toEqual(SIGNED_OUT);
+        expect(signInBtn()).toBeTruthy();
+        expect(
+            document.querySelector(
+                '#responseText .floating-error-reconnect:not(.agent-sign-in-btn)'
+            )
+        ).toBeTruthy();
+        expect(sends()).toEqual([]);
+
+        // And the sign-in sends the waiting message once.
+        await signInCleanly(starts);
+        expect(named('reconnect_acp').length).toBe(1);
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-new', 'hello agent']]);
+        invalidateConfig();
+    });
+
+    it('the launch pin failing, then its own session/new refused: Sign in too', async () => {
+        invalidateConfig();
+        const { app, sends } = setup({ bootstraps: [SIGNED_OUT] });
+        const handlers = {};
+        app.listen = vi.fn(async (evt, cb) => {
+            handlers[evt] = cb;
+            return () => {};
+        });
+        const adopting = app._adoptFloatingSession();
+        await flush();
+        app.elements.input.value = 'hello agent';
+        await app.sendChatMessage('hello agent');
+        handlers.session_pin_failed({ payload: { label: 'floating', reason: 'auth' } });
+        await adopting;
+        await wait(250);
+        await flush();
+        expect(app.sessionBootstrapFailure).toEqual(SIGNED_OUT);
+        expect(signInBtn()).toBeTruthy();
+        expect(app.bootstrappingSession).toBe(false);
+        expect(sends()).toEqual([]);
+        invalidateConfig();
     });
 });

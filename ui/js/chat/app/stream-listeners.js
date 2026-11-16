@@ -142,7 +142,9 @@ export function createStreamListenersMixin(dependencies) {
                 // nothing in flight it still shows, with no resend. The
                 // exception is the stream on screen after the user switched
                 // back to a session: its turn is not the last one sent, but
-                // its error ends it (_errorEndsShownStream), unresent.
+                // its error ends it (_errorEndsShownStream), unresent. And
+                // an error naming the last turn, recorded on the session
+                // shown, is that turn's whatever session it names.
                 const named = errorSessionId(event?.payload);
                 if (isErrorForOtherTurn(event?.payload, this._lastTurn?.turnId)) {
                     if (this._errorEndsShownStream(event?.payload)) {
@@ -160,7 +162,13 @@ export function createStreamListenersMixin(dependencies) {
                     if (!this.isWaitingForResponse) this.handleMessageError(event);
                     return;
                 }
-                if (named && !this._errorIsForShownSession(named)) {
+                // The turn on screen's own error (its turn id) ends it,
+                // whatever session it names (_errorIsForShownTurn).
+                if (
+                    named &&
+                    !this._errorIsForShownSession(named) &&
+                    !this._errorIsForShownTurn(event?.payload)
+                ) {
                     console.log('[chat] message_error for a session not shown:', named);
                     this.streamRegistry.fail(named);
                     this.renderSessionList();
