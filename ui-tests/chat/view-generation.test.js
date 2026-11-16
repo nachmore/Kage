@@ -585,3 +585,65 @@ describe('a superseded result changes nothing', () => {
         expect(pins.main).toBe('s-c');
     });
 });
+
+describe('W: a send or a pin while a selection is under way', () => {
+    it("Enter during a selection's history load keeps the draft (nothing sent, nothing cleared)", async () => {
+        const { app, hold, named } = shownOnA();
+        const load = hold('load_session', (a) => a?.sessionId === 's-b');
+        const selecting = app.selectSession('s-b');
+        await flush();
+        app.elements.chatInput.value = 'my draft';
+        await app.handleEnterKey();
+        await flush();
+        expect(named('send_message_streaming')).toEqual([]);
+        expect(app.elements.chatInput.value).toBe('my draft');
+        load.resolve({ messages: [] });
+        await selecting;
+    });
+
+    it('a text file read finishing after the user moved to another session sends nothing there', async () => {
+        const { app, hold, named } = shownOnA();
+        let finishRead;
+        const file = { name: 'notes.txt', text: () => new Promise((r) => (finishRead = r)) };
+        app._pendingFiles = [file];
+        app.elements.chatInput.value = 'summarise this';
+        const sending = app.sendMessage();
+        await flush();
+        // The read is under way; the user picks B.
+        const load = hold('load_session', (a) => a?.sessionId === 's-b');
+        const selecting = app.selectSession('s-b');
+        await flush();
+        finishRead('file body');
+        await sending;
+        await flush();
+        expect(named('send_message_streaming')).toEqual([]);
+        // The draft and the file are kept for the user to send again.
+        expect(app.elements.chatInput.value).toBe('summarise this');
+        expect(app._pendingFiles).toEqual([file]);
+        load.resolve({ messages: [] });
+        await selecting;
+    });
+
+    it("a superseded switch landing while the next selection loads never pins a session that isn't set up", async () => {
+        const { app, pins, hold, named } = shownOnA();
+        const switchB = hold('switch_acp_session', (a) => a?.sessionId === 's-b');
+        const toB = app.selectSession('s-b');
+        await flush();
+        // C's history load is under way when B's (superseded) switch lands.
+        const loadC = hold('load_session', (a) => a?.sessionId === 's-c');
+        const switchC = hold('switch_acp_session', (a) => a?.sessionId === 's-c');
+        const toC = app.selectSession('s-c');
+        await flush();
+        switchB.resolve('s-b');
+        await flush();
+        expect(named('set_window_session').map(([, a]) => a.sessionId)).not.toContain('s-c');
+        loadC.resolve({ messages: [] });
+        await flush();
+        // C's own switch is refused: the backend stays pinned to a session
+        // that is set up, never to C.
+        switchC.reject({ kind: 'internal', message: LOCKED });
+        await Promise.allSettled([toB, toC]);
+        await flush();
+        expect(pins.main).not.toBe('s-c');
+    });
+});

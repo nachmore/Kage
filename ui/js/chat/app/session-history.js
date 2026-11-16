@@ -471,6 +471,11 @@ export function createSessionHistoryMixin(dependencies) {
             if (!sid) return;
             if (sid === this._setupFailedSessionId) return;
             if (this._pendingSwitch?.sessionId === sid) return;
+            // A view change still under way (a selection loading its
+            // history, before its own switch has even started) pins the
+            // window itself when it lands; pinning now could pin a session
+            // whose switch is then refused.
+            if (this._viewChangePending()) return;
             this._pinWindow(sid);
         }
 

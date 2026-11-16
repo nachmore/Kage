@@ -110,10 +110,15 @@ export function createComposerMixin(dependencies) {
             this.clearSuggestions();
             this.hideSuggestionChips();
 
-            // Read pending file contents and prepend to message
+            // Read pending file contents and prepend to message. The reads
+            // are async: if the view changes meanwhile (the user picks
+            // another session), nothing is sent there and the draft and
+            // files stay for the user to send again.
             if (hasPendingFiles) {
+                const readGen = this._viewGen;
+                const files = this._pendingFiles;
                 const fileParts = [];
-                for (const file of this._pendingFiles) {
+                for (const file of files) {
                     try {
                         const text = await file.text();
                         const truncated =
@@ -126,6 +131,10 @@ export function createComposerMixin(dependencies) {
                     } catch (e) {
                         fileParts.push(`Could not read \`${file.name}\`: ${e.message}`);
                     }
+                }
+                if (!this._viewIs(readGen) || this._viewChangePending()) {
+                    console.log('[chat] the view changed while files were read; not sending');
+                    return;
                 }
                 this._pendingFiles = [];
                 const fileBlock = fileParts.join('\n\n');

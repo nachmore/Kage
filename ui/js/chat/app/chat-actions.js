@@ -366,6 +366,9 @@ export function createChatActionsMixin(dependencies) {
                 this.stopGenerating();
             }
 
+            // A send refused because a view change is still under way (a
+            // selection's history load, New Chat): the draft stays.
+            let refused = false;
             const result = await handleEnterAction({
                 message,
                 suggestions: this.currentSuggestions,
@@ -373,13 +376,17 @@ export function createChatActionsMixin(dependencies) {
                 shortcuts: this.shortcuts,
                 ctx: this._getExecCtx(),
                 onSend: (msg) => {
+                    if (this._viewChangePending?.()) {
+                        refused = true;
+                        return;
+                    }
                     this.elements.chatInput.value = msg;
                     this.sendMessage();
                 },
             });
 
             // Same verdicts as the floating window's _applyEnterActionResult.
-            if (!result.handled) return;
+            if (!result.handled || refused) return;
             // onReplaceInput already filled the input (and its `input` event
             // re-runs the search): e.g. todos' "Delete x?" question, math's
             // answer, keyword completions. Clearing it here undid that.
