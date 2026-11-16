@@ -89,16 +89,58 @@ export function errorSessionId(payload) {
 }
 
 /**
- * Whether the backend says the failed turn may be sent again: its turn
- * progress shows nothing got through (no text, tool call, permission
- * request, fs/terminal request or cancel). Only `resendable === true` on a
- * payload that names its session counts; a plain string never does, and
- * a rate limit never is.
+ * The turn a `message_error` payload is about: the `turnId` the window sent
+ * the prompt with (`newTurnId`), echoed by the backend. Only the object
+ * form carries one; a plain string, or an object without it, gives null.
  */
-export function isResendablePayload(payload) {
+export function errorTurnId(payload) {
+    const isObj = payload !== null && typeof payload === 'object';
+    const id = isObj ? payload.turnId : null;
+    return typeof id === 'string' && id ? id : null;
+}
+
+/**
+ * Whether `payload` is about another turn than `turnId`: it names a turn,
+ * and not that one. Such an error must neither end the turn on screen nor
+ * become the turn Reconnect resends. A payload naming no turn says nothing
+ * either way (false).
+ */
+export function isErrorForOtherTurn(payload, turnId) {
+    const named = errorTurnId(payload);
+    return named !== null && named !== turnId;
+}
+
+/**
+ * Whether the backend says the failed turn `turnId` may be sent again: the
+ * error names that very turn, and says how it ended rules out that the
+ * agent did anything (it answered with an error, or never got the prompt)
+ * and that nothing got through (no text, tool call, permission request,
+ * fs/terminal request or cancel). Only `resendable === true` on a payload
+ * that names its session and this turn counts; a plain string never does,
+ * nor does an object without a turn id, and a rate limit never is.
+ */
+export function isResendablePayload(payload, turnId) {
     return (
+        typeof turnId === 'string' &&
+        turnId !== '' &&
+        errorTurnId(payload) === turnId &&
         errorSessionId(payload) !== null &&
         payload.resendable === true &&
         !isRateLimitPayload(payload)
     );
+}
+
+let _turnCounter = 0;
+
+/**
+ * A fresh id for one prompt a window sends (`turnId` of
+ * send_message_streaming): its MESSAGE_ERROR echoes it, so an error is
+ * matched to the turn it is about, never to a newer one on the same
+ * session.
+ */
+export function newTurnId() {
+    const c = globalThis.crypto;
+    if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+    _turnCounter += 1;
+    return `turn-${Date.now().toString(36)}-${_turnCounter}-${Math.random().toString(36).slice(2)}`;
 }

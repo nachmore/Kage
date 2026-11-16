@@ -60,9 +60,10 @@ function setup() {
     const listeners = {};
     const appWindow = { listen: vi.fn((evt, fn) => { listeners[evt] = fn; }) };
     // The backend approves every queued candidate it's asked about unless
-    // a test says otherwise (it re-decides each against the policy).
+    // a test says otherwise (it re-decides each against the policy), and
+    // names those it approved by their permission tokens.
     const invoke = vi.fn(async (cmd, args) =>
-        cmd === 'approve_permissions_if_allowed' ? args.requestIds : undefined
+        cmd === 'approve_permissions_if_allowed' ? args.permissionTokens : undefined
     );
     const handler = createPermissionHandler(invoke, appWindow);
     handler.init();
@@ -97,12 +98,95 @@ describe('Permission tokens (a restarted agent reuses request ids)', () => {
         expect(invoke).not.toHaveBeenCalledWith('send_permission_response', expect.anything());
     });
 
-    it('a dismissal without a token still matches by id', async () => {
+    // R3: an id alone can name another process's request.
+    it('a dismissal without a token closes nothing', async () => {
         const { request, listeners } = setup();
         await request(5);
+        await request(6); // queued
         listeners.permission_dismissed({ payload: { requestId: 5 } });
+        listeners.permission_dismissed({ payload: { requestId: 6 } });
         await tick();
+        expect(el('permissionModal').style.display).toBe('flex');
+        expect(el('permissionToolTitle').textContent).toBe('Running: cmd 5');
+        // Its own dismissal still closes it, and the queued one shows.
+        listeners.permission_dismissed({ payload: { requestId: 5, permissionToken: 'tok-5' } });
+        await tick(200);
+        expect(el('permissionToolTitle').textContent).toBe('Running: cmd 6');
+    });
+
+    it('a dismissal naming only a token removes the queued request with it', async () => {
+        const { request, listeners } = setup();
+        await request(5);
+        await request(6); // queued
+        listeners.permission_dismissed({ payload: { requestId: 6, permissionToken: 'tok-6' } });
+        listeners.permission_dismissed({ payload: { requestId: 5, permissionToken: 'tok-5' } });
+        await tick(200);
         expect(el('permissionModal').style.display).toBe('none');
+    });
+
+    it('a broadcast dismissal (no id, no token) still drops everything', async () => {
+        const { request, listeners } = setup();
+        await request(5);
+        await request(6);
+        listeners.permission_dismissed({ payload: {} });
+        await tick(200);
+        expect(el('permissionModal').style.display).toBe('none');
+    });
+
+    // R3: a restart replaced queued request 2 while the category approval
+    // was in flight; the new request 2 has its own token and must stay.
+    it('a category approval never drops a new request that took an approved id', async () => {
+        const { request, listeners, invoke } = setup();
+        let approve;
+        invoke.mockImplementation(async (cmd) => {
+            if (cmd === 'approve_permissions_if_allowed') {
+                return new Promise((r) => {
+                    approve = r;
+                });
+            }
+        });
+        await request(1, { kind: 'execute' });
+        await request(2, { kind: 'execute', token: 'old-2' }); // queued
+        el('permissionTrustCommands').click();
+        el('permissionTrustConfirmBtn').click();
+        await tick();
+        expect(invoke).toHaveBeenCalledWith('approve_permissions_if_allowed', {
+            requestIds: [2],
+            permissionTokens: ['old-2'],
+        });
+
+        // Meanwhile the agent restarts: the old request 2 is withdrawn, and
+        // the new process asks its own request 2.
+        listeners.permission_dismissed({ payload: { requestId: 2, permissionToken: 'old-2' } });
+        await request(2, { kind: 'edit', title: 'Editing new.rs', token: 'new-2' });
+
+        // The backend approved the old request 2 (what it returns names it).
+        approve(['old-2']);
+        await tick(250);
+        await tick(200);
+
+        // Request 1 was answered; the new request 2 is asked, not dropped.
+        const answered = invoke.mock.calls
+            .filter(([cmd]) => cmd === 'send_permission_response')
+            .map(([, a]) => [a.requestId, a.permissionToken]);
+        expect(answered).toEqual([[1, 'tok-1']]);
+        expect(el('permissionModal').style.display).toBe('flex');
+        expect(el('permissionToolTitle').textContent).toBe('Editing new.rs');
+    });
+
+    it('an approval result naming ids, not tokens, removes nothing', async () => {
+        const { request, invoke } = setup();
+        invoke.mockImplementation(async (cmd, args) =>
+            cmd === 'approve_permissions_if_allowed' ? args.requestIds : undefined
+        );
+        await request(1, { kind: 'execute' });
+        await request(2, { kind: 'execute', title: 'Running: cmd two' }); // queued
+        el('permissionTrustCommands').click();
+        el('permissionTrustConfirmBtn').click();
+        await tick(250);
+        await tick(200);
+        expect(el('permissionModal').style.display).toBe('flex');
+        expect(el('permissionToolTitle').textContent).toBe('Running: cmd two');
     });
 
     it('the answer carries the token the request came with', async () => {

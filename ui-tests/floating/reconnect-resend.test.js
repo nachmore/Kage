@@ -25,7 +25,7 @@ const IMAGE = { type: 'image', mimeType: 'image/png', data: 'AAAA' };
  * only when its turn progress shows nothing got through (no text, tool,
  * permission request, fs/terminal request or cancel).
  */
-function promptFailure(sessionId = 's1', resendable = true) {
+function promptFailure(sessionId = 's1', resendable = true, turnId = undefined) {
     return {
         kind: 'agent_unreachable',
         key: 'errors.agent.unreachable_after_restart_kiro',
@@ -33,7 +33,18 @@ function promptFailure(sessionId = 's1', resendable = true) {
         detail: INCIDENT,
         sessionId,
         resendable,
+        turnId,
     };
+}
+
+/** The turn id the latest send_message_streaming carried. */
+function lastTurnId(app) {
+    return sends(app).at(-1)?.[1]?.turnId;
+}
+
+/** `promptFailure` for the turn `app` sent last. */
+function ownFailure(app, sessionId = 's1', resendable = true) {
+    return promptFailure(sessionId, resendable, lastTurnId(app));
 }
 
 beforeAll(async () => {
@@ -107,14 +118,18 @@ async function flush() {
     for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
 }
 
-/** Send a turn the way handleInput does, then fail it with `payload`. */
+/**
+ * Send a turn the way handleInput does, then fail it with `payload`, or
+ * with `payload(app)` when it is a function (to name the turn just sent).
+ */
 async function sendAndFail(app, listeners, payload, { output = '' } = {}) {
     await app._startResponseTurn();
     await app._sendTrackedTurn({ sessionId: 's1', message: 'hello', attachments: [IMAGE] });
     app.currentResponse = output;
     // The backend's terminal events for the failed turn.
     listeners[EVT.SESSION_ACTIVITY]({ payload: { sessionId: 's1', kind: 'failed' } });
-    await app._onMessageError({ payload }, true);
+    const p = typeof payload === 'function' ? payload(app) : payload;
+    await app._onMessageError({ payload: p }, true);
     await flush();
 }
 
@@ -129,7 +144,7 @@ function reconnectBtn() {
 describe('floating Reconnect after a failed prompt', () => {
     it('reconnects, then resends the same turn without a new message', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, promptFailure());
+        await sendAndFail(app, listeners, (a) => ownFailure(a));
         app.elements.input.value = 'a draft';
         emit.mockClear();
 
@@ -142,7 +157,10 @@ describe('floating Reconnect after a failed prompt', () => {
             sessionId: 's1',
             message: 'hello',
             attachments: [IMAGE],
+            turnId: expect.any(String),
         });
+        // The resend is a turn of its own.
+        expect(sends(app)[1][1].turnId).not.toBe(sends(app)[0][1].turnId);
         const order = app.invoke.mock.calls.map(([cmd]) => cmd);
         expect(order.lastIndexOf('reconnect_acp')).toBeLessThan(
             order.lastIndexOf('send_message_streaming')
@@ -154,7 +172,7 @@ describe('floating Reconnect after a failed prompt', () => {
 
     it('only reconnects when part of the turn already showed', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, promptFailure(), { output: 'Partial answer' });
+        await sendAndFail(app, listeners, (a) => ownFailure(a), { output: 'Partial answer' });
 
         reconnectBtn().click();
         await flush();
@@ -167,7 +185,7 @@ describe('floating Reconnect after a failed prompt', () => {
 
     it('does not resend once a newer prompt went out', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, promptFailure());
+        await sendAndFail(app, listeners, (a) => ownFailure(a));
         app._promptGeneration++;
 
         reconnectBtn().click();
@@ -224,7 +242,7 @@ describe('floating Reconnect after a failed prompt', () => {
         const { app, listeners } = makeApp({
             reconnect: async () => ({ reconnected: true, sessionId: 's2', sessionReloaded: false }),
         });
-        await sendAndFail(app, listeners, promptFailure());
+        await sendAndFail(app, listeners, (a) => ownFailure(a));
 
         reconnectBtn().click();
         await flush();
@@ -240,11 +258,11 @@ describe('floating Reconnect after a failed prompt', () => {
 
     it('never resends a rate-limited prompt', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, {
-            ...promptFailure(),
+        await sendAndFail(app, listeners, (a) => ({
+            ...ownFailure(a),
             kind: 'rate_limited',
             message: 'Rate limit exceeded. Please wait a moment.',
-        });
+        }));
 
         reconnectBtn().click();
         await flush();
@@ -257,7 +275,7 @@ describe('floating Reconnect after a failed prompt', () => {
     // the user approved, an fs/terminal request), so it says not resendable.
     it('does not resend when the backend says part of the turn got through', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, promptFailure('s1', false));
+        await sendAndFail(app, listeners, (a) => ownFailure(a, 's1', false));
 
         reconnectBtn().click();
         await flush();
@@ -279,8 +297,10 @@ describe('floating Reconnect after a failed prompt', () => {
 
     it('does not resend when the payload does not say it is resendable', async () => {
         const { app, listeners } = makeApp();
-        const { resendable: _omitted, ...noFlag } = promptFailure();
-        await sendAndFail(app, listeners, noFlag);
+        await sendAndFail(app, listeners, (a) => {
+            const { resendable: _omitted, ...noFlag } = ownFailure(a);
+            return noFlag;
+        });
 
         reconnectBtn().click();
         await flush();
@@ -293,12 +313,13 @@ describe('floating Reconnect after a failed prompt', () => {
         const { app } = makeApp();
         await app._startResponseTurn();
         await app._sendTrackedTurn({ sessionId: 's1', message: 'A', attachments: null });
+        const turnA = lastTurnId(app);
         app.floatingSessionId = 's2';
         await app._startResponseTurn();
         await app._sendTrackedTurn({ sessionId: 's2', message: 'B', attachments: null });
 
         // A's error arrives before B has any output.
-        await app._onMessageError({ payload: promptFailure('s1') }, true);
+        await app._onMessageError({ payload: promptFailure('s1', true, turnA) }, true);
         await flush();
 
         expect(app.isWaitingForResponse).toBe(true);
@@ -314,7 +335,7 @@ describe('floating Reconnect after a failed prompt', () => {
         app._followTurnSession('s1', 's7');
         app.floatingSessionId = 's7';
         listeners[EVT.SESSION_ACTIVITY]({ payload: { sessionId: 's1', kind: 'failed' } });
-        await app._onMessageError({ payload: promptFailure('s1') }, true);
+        await app._onMessageError({ payload: ownFailure(app, 's1') }, true);
         await flush();
         expect(app.isWaitingForResponse).toBe(false);
 
@@ -334,7 +355,7 @@ describe('floating Reconnect after a failed prompt', () => {
                     finish = r;
                 }),
         });
-        await sendAndFail(app, listeners, promptFailure());
+        await sendAndFail(app, listeners, (a) => ownFailure(a));
         reconnectBtn().click();
         await flush();
         app.floatingSessionId = 's2';
@@ -363,7 +384,7 @@ describe('floating Reconnect after a failed prompt', () => {
                 return { reconnected: true, sessionId: 's1', sessionReloaded: true };
             },
         });
-        await sendAndFail(app, listeners, promptFailure());
+        await sendAndFail(app, listeners, (a) => ownFailure(a));
 
         reconnectBtn().click();
         await flush();
@@ -385,7 +406,7 @@ describe('floating Reconnect after a failed prompt', () => {
                     : { reconnected: true, sessionId: 's1', sessionReloaded: true };
             },
         });
-        await sendAndFail(app, listeners, promptFailure());
+        await sendAndFail(app, listeners, (a) => ownFailure(a));
 
         reconnectBtn().click();
         await flush();
@@ -395,5 +416,61 @@ describe('floating Reconnect after a failed prompt', () => {
         reconnectBtn().click();
         await flush();
         expect(sends(app)).toHaveLength(2);
+    });
+});
+
+// R2: an error belongs to the turn its `turnId` names, never to whatever
+// turn is on the same session now.
+describe('floating MESSAGE_ERROR is matched to its turn by turnId', () => {
+    async function send(app, message) {
+        await app._startResponseTurn();
+        await app._sendTrackedTurn({ sessionId: 's1', message, attachments: null });
+    }
+
+    it("A's late error while B runs on the same session neither ends B nor resends it", async () => {
+        const { app } = makeApp();
+        await send(app, 'A');
+        const turnA = lastTurnId(app);
+        // The user stops A (its backend recovery goes on) and sends B.
+        app.isWaitingForResponse = false;
+        await send(app, 'B');
+
+        await app._onMessageError({ payload: promptFailure('s1', true, turnA) }, true);
+        await flush();
+
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(reconnectBtn()).toBeNull();
+        expect(sends(app).map(([, a]) => a.message)).toEqual(['A', 'B']);
+    });
+
+    it('every send carries a fresh turn id', async () => {
+        const { app } = makeApp();
+        await send(app, 'A');
+        app.isWaitingForResponse = false;
+        await send(app, 'B');
+        const [a, b] = sends(app).map(([, args]) => args.turnId);
+        expect(typeof a).toBe('string');
+        expect(a).not.toBe('');
+        expect(b).not.toBe(a);
+    });
+
+    it('an error without a turn id is never resent', async () => {
+        const { app, listeners } = makeApp();
+        await sendAndFail(app, listeners, promptFailure('s1', true, undefined));
+
+        reconnectBtn().click();
+        await flush();
+
+        expect(sends(app)).toHaveLength(1);
+    });
+
+    it("an error naming another turn's id is never resent", async () => {
+        const { app, listeners } = makeApp();
+        await sendAndFail(app, listeners, promptFailure('s1', true, 'some-other-turn'));
+
+        reconnectBtn()?.click();
+        await flush();
+
+        expect(sends(app)).toHaveLength(1);
     });
 });

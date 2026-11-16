@@ -13,6 +13,7 @@ import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { initLinkHandler } from './shared/link-handler.js';
 import { interceptConsole } from './shared/kage-log.js';
 import { escapeHtml } from './shared/tool-utils.js';
+import { newTurnId } from './shared/error-message.js';
 
 // Mirror console.warn/error + uncaught errors into the app log — this
 // window previously logged only to the WebView console, so failures
@@ -121,7 +122,7 @@ console.log(
             const message = selectedText.trim()
                 ? `The following text is currently selected:\n\`\`\`\n${selectedText.trim()}\n\`\`\``
                 : '';
-            await invoke('open_chat_with_message', { sessionId, message });
+            await invoke('open_chat_with_message', { sessionId, message, turnId: newTurnId() });
         } catch (e) {
             console.error('Failed to open chat:', e);
         }
@@ -325,7 +326,11 @@ console.log(
             await appWindow.hide();
             try {
                 const sessionId = await getWindowSessionOrNull(invoke, WINDOW.MAIN);
-                await invoke('open_chat_with_message', { sessionId, message: prompt });
+                await invoke('open_chat_with_message', {
+                    sessionId,
+                    message: prompt,
+                    turnId: newTurnId(),
+                });
             } catch (e) {
                 console.error('Failed to open chat:', e);
             }
@@ -391,7 +396,11 @@ console.log(
             await appWindow.hide();
             try {
                 const sessionId = await getWindowSessionOrNull(invoke, WINDOW.MAIN);
-                await invoke('open_chat_with_message', { sessionId, message: prompt });
+                await invoke('open_chat_with_message', {
+                    sessionId,
+                    message: prompt,
+                    turnId: newTurnId(),
+                });
             } catch (e) {
                 console.error('Failed to open chat:', e);
             }

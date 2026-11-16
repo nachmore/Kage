@@ -201,11 +201,18 @@ pub struct PromptReport {
     /// recovery moved the turn to (windows adopted it from
     /// `session_migrated`).
     pub session_id: String,
-    /// Whether the turn may be sent again as it is: none of its attempts
+    /// Whether the turn may be sent again as it is: every attempt is known
+    /// to have left the agent untouched (the agent answered it with an
+    /// error, or it never went out: `outcome` is settled), and none of them
     /// streamed text, a thought or a plan, ran or updated a tool, asked for
     /// permission or made an `fs/*` / `terminal/*` request, was rate
-    /// limited or stopped. A resend can then repeat nothing.
+    /// limited or stopped. A resend can then repeat nothing. Never after a
+    /// timeout or a connection lost after the write: the agent may have
+    /// run it, or still be running it.
     pub resendable: bool,
+    /// How the turn's attempts ended, together (see
+    /// [`turn_progress::PromptOutcome`]).
+    pub outcome: turn_progress::PromptOutcome,
 }
 
 /// How long after an automatic restart failed to fix a prompt Kage keeps
@@ -465,6 +472,14 @@ impl AcpClient {
     #[allow(dead_code)] // Integration tests only.
     pub fn set_restart_idle_check_hook(&self, hook: Option<IdleCheckHook>) {
         *self.restart_idle_check_hook.lock_or_recover() = hook.map(Arc::from);
+    }
+
+    /// Test hook: how long a `session/prompt` may go with no inbound
+    /// activity before it times out (`None`: the default, two minutes).
+    #[doc(hidden)]
+    #[allow(dead_code)] // Integration tests only.
+    pub fn set_prompt_idle_timeout(&self, timeout: Option<std::time::Duration>) {
+        self.transport.set_prompt_idle_timeout(timeout);
     }
 
     // --- Session working directories ---
@@ -1044,6 +1059,49 @@ mod tests {
         assert!(client.unreachable_latch_age().is_some());
         client.clear_unreachable_latch();
         assert!(client.unreachable_latch_age().is_none());
+    }
+
+    #[test]
+    fn a_prompt_with_no_connection_to_go_out_on_was_never_sent() {
+        // The one transport failure that says what the agent did with the
+        // prompt: nothing, it never had it. Its text is unchanged, so the
+        // recovery classification still sees "No write handle".
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let err = client
+            .transport
+            .send_prompt_request("session/prompt", serde_json::json!({ "sessionId": "s1" }))
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<types::RequestNotSent>().is_some(),
+            "{err}"
+        );
+        assert_eq!(err.to_string(), "No write handle available");
+    }
+
+    #[test]
+    fn a_write_that_fails_part_way_is_not_known_unsent() {
+        // The agent may have read the whole line before the newline failed.
+        struct Accepts(usize);
+        impl std::io::Write for Accepts {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                if self.0 == 0 {
+                    return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+                }
+                let n = buf.len().min(self.0);
+                self.0 -= n;
+                Ok(n)
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let err = transport::write_line_counted(&mut Accepts(0), "{}").unwrap_err();
+        assert!(err.downcast_ref::<types::RequestNotSent>().is_some());
+        let err = transport::write_line_counted(&mut Accepts(2), "{}").unwrap_err();
+        assert!(err.downcast_ref::<types::RequestNotSent>().is_none());
+        assert!(transport::write_line_counted(&mut Accepts(3), "{}").is_ok());
     }
 
     #[test]

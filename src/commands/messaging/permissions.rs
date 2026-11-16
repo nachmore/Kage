@@ -205,7 +205,10 @@ fn claim_pending_permission(
 /// handler enforces, rather than taken on the prompt's word: a tool the
 /// user set to Deny after the request was queued stays denied, and a
 /// background session's request stays outside category trust. Returns the
-/// ids approved; the rest stay pending for the user to answer.
+/// permission tokens of those approved (never their JSON-RPC ids: a
+/// restarted agent reuses ids, so the prompt removes approved requests by
+/// token, and a new request that took an approved one's id stays); the
+/// rest stay pending for the user to answer.
 ///
 /// `permission_tokens[i]` is the token the prompt got with
 /// `request_ids[i]`; a request is approved only if it matches, and was
@@ -217,7 +220,7 @@ pub async fn approve_permissions_if_allowed<R: tauri::Runtime>(
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     app: tauri::AppHandle<R>,
-) -> Result<Vec<serde_json::Value>, AppError> {
+) -> Result<Vec<String>, AppError> {
     let tokens = permission_tokens.unwrap_or_default();
     let generation = acp.client.connection_generation();
     // Never hold the pending map and the config lock at the same time.
@@ -301,7 +304,7 @@ pub async fn approve_permissions_if_allowed<R: tauri::Runtime>(
                 Some(&entry.token),
             ),
         );
-        approved.push(entry.request_id);
+        approved.push(entry.token);
     }
     Ok(approved)
 }

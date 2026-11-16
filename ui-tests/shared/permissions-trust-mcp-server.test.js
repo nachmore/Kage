@@ -89,9 +89,10 @@ function setup() {
     const listeners = {};
     const appWindow = { listen: vi.fn((evt, fn) => { listeners[evt] = fn; }) };
     // The backend approves every queued candidate it's asked about unless
-    // a test says otherwise (it re-decides each against the policy).
+    // a test says otherwise (it re-decides each against the policy), and
+    // names those it approved by their permission tokens.
     const invoke = vi.fn(async (cmd, args) =>
-        cmd === 'approve_permissions_if_allowed' ? args.requestIds : undefined
+        cmd === 'approve_permissions_if_allowed' ? args.permissionTokens : undefined
     );
     const handler = createPermissionHandler(invoke, appWindow);
     handler.init();
@@ -113,6 +114,7 @@ function setup() {
                 toolKind: kind,
                 mcpServer: server,
                 backgroundSession: background,
+                permissionToken: `tok-${id}`,
             },
         });
     };

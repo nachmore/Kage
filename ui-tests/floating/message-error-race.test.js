@@ -30,7 +30,7 @@ function deferred() {
     return { promise, resolve };
 }
 
-function promptFailure(sessionId = 's1') {
+function promptFailure(sessionId = 's1', turnId = undefined) {
     return {
         kind: 'agent_unreachable',
         key: 'errors.agent.unreachable_after_restart_kiro',
@@ -38,7 +38,14 @@ function promptFailure(sessionId = 's1') {
         detail: 'dispatch failure',
         sessionId,
         resendable: true,
+        turnId,
     };
+}
+
+/** The turn id the latest send_message_streaming carried. */
+function lastTurnId(app) {
+    return app.invoke.mock.calls.filter(([cmd]) => cmd === 'send_message_streaming').at(-1)?.[1]
+        ?.turnId;
 }
 
 beforeAll(async () => {
@@ -131,6 +138,7 @@ describe('floating MESSAGE_ERROR handled after a newer turn started', () => {
     it('neither tears down nor resends the newer turn', async () => {
         const { app, listeners } = makeApp();
         await userSends(app, 'A');
+        const turnA = lastTurnId(app);
         // A is recovering; the user sends C, which is held behind it (and
         // handleInput drops A's waiting state as it cancels A).
         app.isWaitingForResponse = false;
@@ -140,7 +148,7 @@ describe('floating MESSAGE_ERROR handled after a newer turn started', () => {
 
         // A's terminal events: MESSAGE_ERROR (handled after the probe),
         // then SESSION_ACTIVITY failed, which releases C.
-        const handled = app.handleMessageError({ payload: promptFailure() });
+        const handled = app.handleMessageError({ payload: promptFailure('s1', turnA) });
         listeners[EVT.SESSION_ACTIVITY]({ payload: { sessionId: 's1', kind: 'failed' } });
         await c;
         await flush();
@@ -165,7 +173,7 @@ describe('floating MESSAGE_ERROR handled after a newer turn started', () => {
         const { app, listeners } = makeApp();
         await userSends(app, 'A');
 
-        const handled = app.handleMessageError({ payload: promptFailure() });
+        const handled = app.handleMessageError({ payload: promptFailure('s1', lastTurnId(app)) });
         listeners[EVT.SESSION_ACTIVITY]({ payload: { sessionId: 's1', kind: 'failed' } });
         probe.resolve(true);
         await handled;

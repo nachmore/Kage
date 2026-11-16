@@ -8,6 +8,7 @@
 //! fresh connection the mock can answer differently. Ephemeral port,
 //! test-only, bound to 127.0.0.1.
 
+use kage::acp_client::turn_progress::PromptOutcome;
 use kage::acp_client::types::{AgentRpcError, PromptRecoveryError};
 use kage::acp_client::{AcpClient, AcpConnectionMode};
 use serde_json::{json, Value};
@@ -802,6 +803,11 @@ fn a_turn_that_did_nothing_before_still_failing_is_resendable() {
 
     assert!(r.result.is_err());
     assert!(r.resendable);
+    assert_eq!(
+        r.outcome,
+        PromptOutcome::Answered,
+        "the agent answered both"
+    );
     assert_eq!(r.session_id, "S1");
 }
 
@@ -1235,4 +1241,62 @@ fn two_turns_cut_off_by_a_crash_share_one_restart() {
         4,
         "each turn resent exactly once"
     );
+}
+
+// --- A failure whose outcome is unknown is never resendable ---
+
+#[test]
+fn a_timed_out_turn_whose_restart_was_refused_is_not_resendable() {
+    // Turn A gets no reply and no activity at all: the agent may still be
+    // running it (its tool call can come later, after A's progress record
+    // is gone). A background prompt that went out after A keeps the
+    // recovery from restarting. Reconnect must not resend A once the
+    // background prompt is done: that ran A's action twice.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::Hang, Prompt::Ok]);
+    let client = Arc::new(agent.client());
+    client.set_prompt_idle_timeout(Some(std::time::Duration::from_millis(1600)));
+
+    let a = {
+        let client = client.clone();
+        std::thread::spawn(move || report(&client, "S1"))
+    };
+    wait_for(&agent, "session/prompt", 1);
+    std::thread::sleep(std::time::Duration::from_millis(700));
+    {
+        let client = client.clone();
+        std::thread::spawn(move || client.send_chat_streaming_background("BG", "steer", false));
+    }
+    wait_for(&agent, "session/prompt", 2);
+
+    let r = a.join().unwrap();
+
+    assert!(r.result.is_err(), "A is reported failed");
+    assert_eq!(
+        agent.connections(),
+        1,
+        "restarted under the background prompt"
+    );
+    assert_eq!(agent.count("session/prompt"), 2, "A was resent");
+    assert!(
+        !r.resendable,
+        "a turn that timed out on a live agent was resendable"
+    );
+    assert_eq!(r.outcome, PromptOutcome::Unknown);
+}
+
+#[test]
+fn a_dropped_connection_whose_resend_got_an_agent_error_is_not_resendable() {
+    // The first attempt was cut off after it was written: whatever the
+    // agent did with it is unknown, even though the resend was answered
+    // with an error and nothing showed.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::ConnectionCloses, Prompt::AuthRequired]);
+    let client = agent.client();
+
+    let r = report(&client, "S1");
+
+    assert!(r.result.is_err());
+    assert_eq!(agent.count("session/prompt"), 2, "resent once by recovery");
+    assert!(!r.resendable, "an unknown first attempt was resendable");
 }

@@ -12,6 +12,9 @@ export function createComposerMixin(dependencies) {
         SpeechController,
         trackEvent,
         messageLengthBucket,
+        newTurnId,
+        errorSessionId,
+        errorTurnId,
     } = dependencies;
     return class {
         setupSpeech() {
@@ -84,11 +87,12 @@ export function createComposerMixin(dependencies) {
                         source: 'chat',
                         length: messageLengthBucket(message),
                     });
-                    this._recordTurn(this.activeSessionId, message, null);
+                    const turnId = this._recordTurn(this.activeSessionId, message, null);
                     await this.invoke('send_message_streaming', {
                         sessionId: this.activeSessionId,
                         message,
                         attachments: null,
+                        turnId,
                     });
                 } catch (e) {
                     this.handleMessageError({ payload: errLabel(t('chat.error.error_label'), e) });
@@ -219,11 +223,12 @@ export function createComposerMixin(dependencies) {
                     length: messageLengthBucket(message),
                     attachments: attachments?.length || 0,
                 });
-                this._recordTurn(this.activeSessionId, message, attachments);
+                const turnId = this._recordTurn(this.activeSessionId, message, attachments);
                 await this.invoke('send_message_streaming', {
                     sessionId: this.activeSessionId,
                     message,
                     attachments,
+                    turnId,
                 });
                 this.isConnected = true;
                 this.updateConnectionStatus();
@@ -235,9 +240,13 @@ export function createComposerMixin(dependencies) {
         /**
          * Remember the prompt going out, for Reconnect to resend if it fails
          * before any output. `seq` ties it to this send: a newer one
-         * replaces it.
+         * replaces it. Returns the turn's id, which goes with the send
+         * (`turnId`) and comes back on its MESSAGE_ERROR: an error is this
+         * turn's only when it names this id. `turnId` given: a turn the
+         * backend started and named (open_chat_with_message); `null`: one
+         * it named nothing, whose errors are then never this turn's.
          */
-        _recordTurn(sessionId, message, attachments) {
+        _recordTurn(sessionId, message, attachments, turnId = newTurnId()) {
             this._sendSeq = (this._sendSeq || 0) + 1;
             this._lastTurn = {
                 sessionId,
@@ -247,7 +256,16 @@ export function createComposerMixin(dependencies) {
                 message,
                 attachments,
                 seq: this._sendSeq,
+                turnId,
             };
+            // The latest turn this window sent on each session: after the
+            // user switches back to a session, the stream shown there is
+            // that turn's (see _errorEndsShownStream).
+            if (sessionId) {
+                if (!this._turnOnSession) this._turnOnSession = new Map();
+                this._turnOnSession.set(sessionId, turnId);
+            }
+            return turnId;
         }
 
         /**
@@ -255,6 +273,11 @@ export function createComposerMixin(dependencies) {
          * turn, if it was on it.
          */
         _followTurnSession(oldId, newId) {
+            if (oldId && newId && this._turnOnSession?.has(oldId)) {
+                if (!this._turnOnSession.has(newId)) {
+                    this._turnOnSession.set(newId, this._turnOnSession.get(oldId));
+                }
+            }
             const turn = this._lastTurn;
             if (oldId && newId && turn?.sessionId === oldId) {
                 this._lastTurn = {
@@ -289,18 +312,43 @@ export function createComposerMixin(dependencies) {
         }
 
         /**
+         * Whether a `message_error` naming a turn other than the window's
+         * last one is the error of the stream on screen, so it ends that
+         * stream (never with a resend: the turn isn't the last one). That
+         * is so when the user sent the last turn on another session and
+         * then switched back here, reattaching to a turn still running:
+         * the error names the shown session and the latest turn this
+         * window sent on it. An earlier turn's late error on that session
+         * (stopped, then another prompt went out there) names an older
+         * id and leaves the stream alone.
+         */
+        _errorEndsShownStream(payload) {
+            const turnId = errorTurnId(payload);
+            const sessionId = errorSessionId(payload);
+            if (!turnId || !sessionId || !this.activeSessionId) return false;
+            if (sessionId !== this.activeSessionId && sessionId !== this.currentAcpSessionId) {
+                return false;
+            }
+            // The last turn runs on the shown session: the stream there is its.
+            if (this._turnWasOn(this._lastTurn, this.activeSessionId)) return false;
+            return this._turnOnSession?.get(sessionId) === turnId;
+        }
+
+        /**
          * Resend a turn that failed before any output, after Reconnect. The
          * user's bubble is already in the transcript, so none is added, and
          * the composer (draft, attachments) is left alone.
          */
         async _resendTurn(turn) {
             this.startStreaming();
-            this._recordTurn(this.activeSessionId, turn.message, turn.attachments);
+            // A turn of its own: the failed one's late errors aren't its.
+            const turnId = this._recordTurn(this.activeSessionId, turn.message, turn.attachments);
             try {
                 await this.invoke('send_message_streaming', {
                     sessionId: this.activeSessionId,
                     message: turn.message,
                     attachments: turn.attachments,
+                    turnId,
                 });
                 this.isConnected = true;
                 this.updateConnectionStatus();
@@ -355,11 +403,12 @@ export function createComposerMixin(dependencies) {
                     source: 'shell_run',
                     length: messageLengthBucket(message),
                 });
-                this._recordTurn(sessionId, message, null);
+                const turnId = this._recordTurn(sessionId, message, null);
                 await this.invoke('send_message_streaming', {
                     sessionId,
                     message,
                     attachments: null,
+                    turnId,
                 });
                 this.isConnected = true;
                 this.updateConnectionStatus();

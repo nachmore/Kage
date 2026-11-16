@@ -32,7 +32,10 @@ import {
     errLabel,
     errMessage,
     errorSessionId,
+    errorTurnId,
+    isErrorForOtherTurn,
     isResendablePayload,
+    newTurnId,
 } from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { submitSelection, loadSelection } from '../shared/slash-selection.js';
@@ -118,6 +121,7 @@ const CHAT_APP_DEPENDENCIES = {
     drawContextRing,
     errLabel,
     errorSessionId,
+    errorTurnId,
     escapeHtml,
     EVT,
     executeCommand,
@@ -139,12 +143,14 @@ const CHAT_APP_DEPENDENCIES = {
     handlePasteEvent,
     initMarkdown,
     isChatLabel,
+    isErrorForOtherTurn,
     isOnline,
     loadFrecency,
     loadSelection,
     loadSlashCommands,
     mascotHTML,
     messageLengthBucket,
+    newTurnId,
     offlineMessage,
     onNetworkChange,
     orderSessionsForSidebar,
@@ -488,6 +494,20 @@ export class ChatApp {
                     console.log('[chat] message_error for a turn no longer shown; ignoring it');
                     return;
                 }
+                // An earlier turn's error (it names another turn id) never
+                // ends a turn that is running now.
+                // Unless it is the error of the stream on screen: a turn
+                // this window sent earlier on the shown session, reattached
+                // after the user switched back to it (it ends, unresent).
+                const forOtherTurn = isErrorForOtherTurn(event?.payload, app._lastTurn?.turnId);
+                if (
+                    forOtherTurn &&
+                    app.isWaitingForResponse &&
+                    !app._errorEndsShownStream(event?.payload)
+                ) {
+                    console.log('[chat] message_error for an earlier turn; ignoring it');
+                    return;
+                }
                 app.hideTypingIndicator();
                 // Before the streaming bubble goes: did any of the turn show
                 // here? An extra veto on top of the backend's `resendable`
@@ -507,13 +527,15 @@ export class ChatApp {
                 else {
                     const p = event.payload;
                     // Reconnect may resend the window's last turn only when
-                    // the backend says nothing of it got through and the
-                    // error is about that turn's session (any id it had
-                    // across a migration). A plain string is never resent.
+                    // the error names that very turn (its `turnId`), the
+                    // backend says nothing of it got through, and the error
+                    // is about that turn's session (any id it had across a
+                    // migration). A plain string, or an error naming no
+                    // turn or another one, is never resent.
                     const turn = app._lastTurn;
                     const retryTurn =
                         !hadOutput &&
-                        isResendablePayload(p) &&
+                        isResendablePayload(p, turn?.turnId) &&
                         app._turnWasOn(turn, errorSessionId(p))
                             ? { ...turn }
                             : null;

@@ -19,7 +19,7 @@ const INCIDENT =
  * only when its turn progress shows nothing got through (no text, tool,
  * permission request, fs/terminal request or cancel).
  */
-function promptFailure(sessionId = 's1', resendable = true) {
+function promptFailure(sessionId = 's1', resendable = true, turnId = undefined) {
     return {
         kind: 'agent_unreachable',
         key: 'errors.agent.unreachable_after_restart_kiro',
@@ -27,7 +27,13 @@ function promptFailure(sessionId = 's1', resendable = true) {
         detail: INCIDENT,
         sessionId,
         resendable,
+        turnId,
     };
+}
+
+/** The turn id the latest send_message_streaming carried. */
+function lastTurnId(invoke) {
+    return sends(invoke).at(-1)?.[1]?.turnId;
 }
 
 let ChatApp;
@@ -106,10 +112,11 @@ async function fail(app, payload) {
     await app.messageStreamController.host.onError({ payload }, true);
 }
 
-async function sendAndFail(app, payload = promptFailure()) {
+/** Send "hello", then fail it: by default with an error naming its turn. */
+async function sendAndFail(app, payload) {
     app.elements.chatInput.value = 'hello';
     await app.sendMessage();
-    await fail(app, payload);
+    await fail(app, payload ?? promptFailure('s1', true, lastTurnId(app.invoke)));
 }
 
 function clickReconnect() {
@@ -132,7 +139,10 @@ describe('chat Reconnect after a failed prompt', () => {
             sessionId: 's1',
             message: 'hello',
             attachments: null,
+            turnId: expect.any(String),
         });
+        // The resend is a turn of its own.
+        expect(sends(invoke)[1][1].turnId).not.toBe(sends(invoke)[0][1].turnId);
         expect(userBubbles(app)).toHaveLength(1);
         expect(app.messages.filter((m) => m.role === 'user')).toHaveLength(1);
         // Only the new streaming placeholder was added.
@@ -147,7 +157,7 @@ describe('chat Reconnect after a failed prompt', () => {
         app.elements.chatInput.value = 'hello';
         await app.sendMessage();
         app.currentStreamingContent = 'Partial answer';
-        await fail(app, promptFailure());
+        await fail(app, promptFailure('s1', true, lastTurnId(invoke)));
 
         clickReconnect();
         await flush();
@@ -174,7 +184,7 @@ describe('chat Reconnect after a failed prompt', () => {
         await app.sendMessage();
         // Switched before the error arrived (the ladder took its time).
         app.activeSessionId = 's2';
-        await fail(app, promptFailure());
+        await fail(app, promptFailure('s1', true, lastTurnId(invoke)));
 
         clickReconnect();
         await flush();
@@ -192,7 +202,7 @@ describe('chat Reconnect after a failed prompt', () => {
         listeners.session_migrated({ payload: { oldSessionId: 's1', newSessionId: 's7' } });
         // As the MESSAGE_ERROR listener does: the shown session's stream ends.
         app.streamRegistry.fail(app.activeSessionId);
-        await fail(app, promptFailure());
+        await fail(app, promptFailure('s1', true, lastTurnId(invoke)));
 
         clickReconnect();
         await flush();
@@ -229,8 +239,11 @@ describe('chat Reconnect after a failed prompt', () => {
         const { app, invoke, listeners } = makeApp();
         app.appWindow = { listen: vi.fn(async () => () => {}) };
         app.setupStreamingListeners();
-        listeners.initial_message({ payload: 'from inline assist' });
-        await fail(app, promptFailure());
+        // The backend names the turn it sent for this window.
+        listeners.initial_message({
+            payload: { message: 'from inline assist', turnId: 'assist-turn-1' },
+        });
+        await fail(app, promptFailure('s1', true, 'assist-turn-1'));
 
         clickReconnect();
         await flush();
@@ -240,7 +253,23 @@ describe('chat Reconnect after a failed prompt', () => {
             sessionId: 's1',
             message: 'from inline assist',
             attachments: null,
+            turnId: expect.any(String),
         });
+        expect(userBubbles(app)).toHaveLength(1);
+    });
+
+    it('never resends an open_chat_with_message prompt whose turn has no id', async () => {
+        const { app, invoke, listeners } = makeApp();
+        app.appWindow = { listen: vi.fn(async () => () => {}) };
+        app.setupStreamingListeners();
+        // The old payload: the message alone.
+        listeners.initial_message({ payload: 'from inline assist' });
+        await fail(app, promptFailure());
+
+        clickReconnect();
+        await flush();
+
+        expect(sends(invoke)).toHaveLength(0);
         expect(userBubbles(app)).toHaveLength(1);
     });
 
@@ -294,8 +323,10 @@ describe('chat Reconnect after a failed prompt', () => {
 
     it('never resends a rate-limited prompt', async () => {
         const { app, invoke } = makeApp();
-        await sendAndFail(app, {
-            ...promptFailure(),
+        app.elements.chatInput.value = 'hello';
+        await app.sendMessage();
+        await fail(app, {
+            ...promptFailure('s1', true, lastTurnId(invoke)),
             kind: 'rate_limited',
             message: 'Rate limit exceeded. Please wait a moment.',
         });
@@ -321,8 +352,10 @@ describe('chat Reconnect after a failed prompt', () => {
 
     it('does not resend when the payload does not say it is resendable', async () => {
         const { app, invoke } = makeApp();
-        const { resendable: _omitted, ...noFlag } = promptFailure();
-        await sendAndFail(app, noFlag);
+        app.elements.chatInput.value = 'hello';
+        await app.sendMessage();
+        const { resendable: _omitted, ...noFlag } = promptFailure('s1', true, lastTurnId(invoke));
+        await fail(app, noFlag);
         clickReconnect();
         await flush();
         expect(sends(invoke)).toHaveLength(1);
@@ -341,7 +374,9 @@ describe('chat Reconnect after a failed prompt', () => {
 
     it('does not resend a turn on another session than the error names', async () => {
         const { app, invoke } = makeApp();
-        await sendAndFail(app, promptFailure('s5'));
+        app.elements.chatInput.value = 'hello';
+        await app.sendMessage();
+        await fail(app, promptFailure('s5', true, lastTurnId(invoke)));
 
         clickReconnect();
         await flush();
@@ -356,6 +391,7 @@ describe('chat Reconnect after a failed prompt', () => {
         app.setupStreamingListeners();
         app.elements.chatInput.value = 'A';
         await app.sendMessage();
+        const turnA = lastTurnId(invoke);
         // Switch away from the live turn, as selectSession does.
         app.hideTypingIndicator();
         app.currentStreamingMessage = null;
@@ -371,7 +407,7 @@ describe('chat Reconnect after a failed prompt', () => {
         app.streamRegistry.begin('s2');
 
         // A's error arrives before B has any output.
-        await listeners.message_error({ payload: promptFailure('s1') });
+        await listeners.message_error({ payload: promptFailure('s1', true, turnA) });
         await flush();
 
         expect(app.isWaitingForResponse).toBe(true);
@@ -414,7 +450,7 @@ describe('chat Reconnect after a failed prompt', () => {
         app.elements.chatInput.value = 'hello';
         await app.sendMessage();
 
-        await listeners.message_error({ payload: promptFailure('s1') });
+        await listeners.message_error({ payload: promptFailure('s1', true, lastTurnId(invoke)) });
         await flush();
         expect(app.isWaitingForResponse).toBe(false);
 
@@ -447,7 +483,7 @@ describe('chat Reconnect after a failed prompt', () => {
         await app.sendMessage();
         listeners.session_migrated({ payload: { oldSessionId: 's1', newSessionId: 's7' } });
 
-        await listeners.message_error({ payload: promptFailure('s1') });
+        await listeners.message_error({ payload: promptFailure('s1', true, lastTurnId(invoke)) });
         await flush();
         expect(app.isWaitingForResponse).toBe(false);
 
@@ -551,5 +587,171 @@ describe('chat Reconnect after a failed prompt', () => {
         await flush();
 
         expect(sends(invoke)).toHaveLength(2);
+    });
+});
+
+// R2: an error belongs to the turn its `turnId` names, never to whatever
+// turn is on the same session now.
+describe('chat MESSAGE_ERROR is matched to its turn by turnId', () => {
+    function setupWithListeners() {
+        const made = makeApp();
+        made.app.appWindow = { listen: vi.fn(async () => () => {}) };
+        made.app.setupStreamingListeners();
+        return made;
+    }
+
+    async function send(app, text) {
+        app.elements.chatInput.value = text;
+        await app.sendMessage();
+    }
+
+    it("A's late error after B succeeded on the same session never resends B", async () => {
+        const { app, invoke, listeners } = setupWithListeners();
+        await send(app, 'A');
+        const turnA = lastTurnId(invoke);
+        // The user stops A (its backend recovery goes on) and sends B.
+        app.stopGenerating();
+        await send(app, 'B');
+        // B succeeds.
+        await listeners.message_complete({ payload: { sessionId: 's1', oldSessionId: 's1' } });
+        await flush();
+        expect(app.isWaitingForResponse).toBe(false);
+
+        // Then A's failure arrives, naming A's turn.
+        await listeners.message_error({ payload: promptFailure('s1', true, turnA) });
+        await flush();
+        document.getElementById('errorReconnectBtn')?.click();
+        await flush();
+
+        expect(sends(invoke).map(([, a]) => a.message)).toEqual(['A', 'B']);
+    });
+
+    it("A's late error while B streams on the same session leaves B alone", async () => {
+        const { app, invoke, listeners } = setupWithListeners();
+        await send(app, 'A');
+        const turnA = lastTurnId(invoke);
+        app.stopGenerating();
+        await send(app, 'B');
+        app.streamRegistry.begin('s1');
+        const bubble = app.currentStreamingMessage;
+
+        await listeners.message_error({ payload: promptFailure('s1', true, turnA) });
+        await flush();
+
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(app.currentStreamingMessage).toBe(bubble);
+        expect(bubble.isConnected).toBe(true);
+        expect(app.streamRegistry.isStreaming('s1')).toBe(true);
+        expect(document.getElementById('errorReconnectBtn')).toBeNull();
+    });
+
+    it("B's own error still ends B and may resend B", async () => {
+        const { app, invoke, listeners } = setupWithListeners();
+        await send(app, 'A');
+        app.stopGenerating();
+        await send(app, 'B');
+
+        await listeners.message_error({ payload: promptFailure('s1', true, lastTurnId(invoke)) });
+        await flush();
+        expect(app.isWaitingForResponse).toBe(false);
+
+        clickReconnect();
+        await flush();
+        expect(sends(invoke).map(([, a]) => a.message)).toEqual(['A', 'B', 'B']);
+    });
+
+    it('every send carries a fresh turn id', async () => {
+        const { app, invoke } = setupWithListeners();
+        await send(app, 'A');
+        app.stopGenerating();
+        await send(app, 'B');
+        const [a, b] = sends(invoke).map(([, args]) => args.turnId);
+        expect(typeof a).toBe('string');
+        expect(a).not.toBe('');
+        expect(b).not.toBe(a);
+    });
+
+    it('an error without a turn id is never resent', async () => {
+        const { app, invoke } = makeApp();
+        await sendAndFail(app, promptFailure('s1', true, undefined));
+
+        clickReconnect();
+        await flush();
+
+        expect(sends(invoke)).toHaveLength(1);
+    });
+
+    /**
+     * Send B on s2 (B completes), then switch back to s1 and attach to the
+     * turn still running there, as session-history's switch-in does.
+     */
+    async function sendElsewhereThenSwitchBack(app, listeners) {
+        app.currentStreamingMessage = null;
+        app.isWaitingForResponse = false;
+        app.activeSessionId = 's2';
+        app.currentAcpSessionId = 's2';
+        await send(app, 'B');
+        await listeners.message_complete({ payload: { sessionId: 's2', oldSessionId: 's2' } });
+        await flush();
+        app.activeSessionId = 's1';
+        app.currentAcpSessionId = 's1';
+        app.streamRegistry.begin('s1');
+        app.isWaitingForResponse = true;
+        app.currentStreamingMessage = app.createMessageElement('assistant', '');
+        app.elements.messagesArea.appendChild(app.currentStreamingMessage);
+    }
+
+    it("switched back to A after sending B elsewhere: A's own error ends A's stream", async () => {
+        const { app, invoke, listeners } = setupWithListeners();
+        await send(app, 'A');
+        const turnA = lastTurnId(invoke);
+        app.streamRegistry.begin('s1');
+        await sendElsewhereThenSwitchBack(app, listeners);
+
+        await listeners.message_error({ payload: promptFailure('s1', true, turnA) });
+        listeners.session_activity({ payload: { sessionId: 's1', kind: 'failed' } });
+        await flush();
+
+        expect(app.isWaitingForResponse).toBe(false);
+        expect(app.currentStreamingMessage).toBeNull();
+        expect(app.streamRegistry.isStreaming('s1')).toBe(false);
+        expect(app.elements.errorContainer.textContent).toContain(
+            'Kage restarted Kiro and tried again'
+        );
+        // A is not the window's last turn: nothing is resent for it.
+        document.getElementById('errorReconnectBtn')?.click();
+        await flush();
+        expect(sends(invoke).map(([, a]) => a.message)).toEqual(['A', 'B']);
+    });
+
+    it("switched back to A2 after sending B elsewhere: A's late error leaves A2 alone", async () => {
+        const { app, invoke, listeners } = setupWithListeners();
+        await send(app, 'A');
+        const turnA = lastTurnId(invoke);
+        app.stopGenerating();
+        await send(app, 'A2');
+        app.streamRegistry.begin('s1');
+        await sendElsewhereThenSwitchBack(app, listeners);
+        const bubble = app.currentStreamingMessage;
+
+        await listeners.message_error({ payload: promptFailure('s1', true, turnA) });
+        await flush();
+
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(app.currentStreamingMessage).toBe(bubble);
+        expect(bubble.isConnected).toBe(true);
+        expect(app.streamRegistry.isStreaming('s1')).toBe(true);
+    });
+
+    it("an error naming another turn's id is never resent", async () => {
+        const { app, invoke } = makeApp();
+        await sendAndFail(app, promptFailure('s1', true, 'some-other-turn'));
+        // Not this turn's: it goes on, and no Reconnect is offered for it.
+        expect(app.isWaitingForResponse).toBe(true);
+
+        document.getElementById('errorReconnectBtn')?.click();
+        await flush();
+
+        expect(sends(invoke)).toHaveLength(1);
     });
 });

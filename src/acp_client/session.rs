@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use super::turn_progress::TurnProgress;
+use super::turn_progress::{PromptOutcome, TurnProgress, TurnTally};
 use super::types::{
     format_acp_error, is_auth_required, AgentRpcError, PromptRecoveryError, ACP_AUTH_REQUIRED,
     JSONRPC_INTERNAL_ERROR,
@@ -408,7 +408,9 @@ impl AcpClient {
     /// visible prompt, `Some(keep_reply)` for a background one. What
     /// `hidden` gives goes ahead of `content` as a text block of its own
     /// (visible prompts other than slash commands only), chosen and settled
-    /// under the session's prompt lock (`send_prompt_with_prefix`).
+    /// under the session's prompt lock (`send_prompt_with_prefix`). `tally`
+    /// (a visible prompt's recovery ladder) gets what this attempt did and
+    /// how it ended.
     fn send_chat_prompt(
         &self,
         session_id: &str,
@@ -416,7 +418,7 @@ impl AcpClient {
         attachments: Option<&[serde_json::Value]>,
         muted: Option<bool>,
         hidden: Option<&dyn super::HiddenPrefix>,
-        progress_sink: Option<&std::cell::Cell<TurnProgress>>,
+        tally: Option<&TurnTally>,
     ) -> Result<()> {
         // Wait for any in-progress compaction to finish before sending
         self.wait_for_compaction();
@@ -508,10 +510,17 @@ impl AcpClient {
         };
         // Whether it failed or not: a connection that broke mid-turn may
         // still have streamed, run tools or asked for permission first.
-        if let Some(sink) = progress_sink {
-            let mut total = sink.get();
-            total.absorb(progress);
-            sink.set(total);
+        // And only a reply, or a request that never went out, says what the
+        // agent did with it; a timeout or a lost connection doesn't.
+        if let Some(tally) = tally {
+            let outcome = match &response {
+                Ok(_) => PromptOutcome::Answered,
+                Err(e) if e.downcast_ref::<super::types::RequestNotSent>().is_some() => {
+                    PromptOutcome::NotSent
+                }
+                Err(_) => PromptOutcome::Unknown,
+            };
+            tally.add_attempt(progress, outcome);
         }
         let response = response?;
 
@@ -602,36 +611,48 @@ impl AcpClient {
     ) -> super::PromptReport {
         let original = session_id.clone();
         let epoch = self.cancel_epoch(&original);
-        let progress = std::cell::Cell::new(TurnProgress::default());
+        let tally = TurnTally::default();
         let last_session = std::cell::RefCell::new(session_id.clone());
         let result = self.recovery_ladder(
             session_id,
             content,
             attachments,
             hidden,
-            &progress,
+            &tally,
             &last_session,
         );
         let session_id = last_session.into_inner();
         let stopped = self.cancel_epoch(&original) != epoch
             || (session_id != original && self.cancel_epoch(&session_id) != 0);
+        let outcome = tally.outcome();
+        let resendable = tally.resendable() && !stopped;
+        if result.is_err() && !resendable {
+            info!(
+                "Prompt on {} is not resendable (outcome {:?}, progress {:?}, stopped {})",
+                session_id,
+                outcome,
+                tally.progress(),
+                stopped
+            );
+        }
         super::PromptReport {
             result,
-            resendable: progress.get().resendable() && !stopped,
+            resendable,
+            outcome,
             session_id,
         }
     }
 
     /// The body of `send_chat_streaming_with_recovery`. What every attempt
-    /// did adds up in `progress`; `last_session` is the session of the
-    /// latest one.
+    /// did, and how it ended, adds up in `tally`; `last_session` is the
+    /// session of the latest one.
     fn recovery_ladder(
         &self,
         session_id: String,
         content: String,
         attachments: Option<Vec<serde_json::Value>>,
         hidden: Option<&dyn super::HiddenPrefix>,
-        progress: &std::cell::Cell<TurnProgress>,
+        tally: &TurnTally,
         last_session: &std::cell::RefCell<String>,
     ) -> Result<String> {
         // This turn is agent work for as long as it is recovering: a
@@ -646,7 +667,7 @@ impl AcpClient {
         let send = |id: &str| {
             *last_session.borrow_mut() = id.to_string();
             sent_at.set(Some(std::time::Instant::now()));
-            self.send_chat_prompt(id, &content, att_ref, None, hidden, Some(progress))
+            self.send_chat_prompt(id, &content, att_ref, None, hidden, Some(tally))
         };
         // Every restart below is gated like Reconnect's: it never cuts off
         // another window's turn, a turn queued on this session, a
@@ -657,7 +678,7 @@ impl AcpClient {
         // read, a tool it ran, an action they allowed. Only a turn that did
         // none of that is sent again.
         let may_resend = |id: &str| {
-            let p = progress.get();
+            let p = tally.progress();
             let ok = p.resendable();
             if !ok {
                 info!(

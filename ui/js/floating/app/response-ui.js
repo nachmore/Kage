@@ -345,6 +345,13 @@ export const ResponseUiMethods = {
         }
         if (!this.isWaitingForResponse) return;
         const payload = event.payload;
+        // An earlier turn's error (it names another turn id, e.g. one the
+        // user stopped before sending this one on the same session): not
+        // the turn on screen, which goes on.
+        if (this._errorIsForOtherTurn(payload)) {
+            console.log('[floating] message_error for an earlier turn; ignoring it');
+            return;
+        }
         // A turn on a session this window has since left (and maybe sent a
         // new prompt from): not the turn on screen, which goes on.
         if (this._errorIsForOtherSession(payload)) {
@@ -366,12 +373,16 @@ export const ResponseUiMethods = {
             this.showError(offlineMessage());
             return;
         }
-        // Reconnect may resend this turn only when the backend says nothing
-        // of it got through and the error is about its session (any id it
-        // had across a migration). A plain string is never resent.
+        // Reconnect may resend this turn only when the error names this very
+        // turn (its `turnId`), the backend says nothing of it got through,
+        // and the error is about its session (any id it had across a
+        // migration). A plain string, or an error naming no turn, is never
+        // resent.
         const turn = this._lastTurn;
         const retryTurn =
-            !hadOutput && isResendablePayload(payload) && this._turnWasOn(turn, payload.sessionId)
+            !hadOutput &&
+            isResendablePayload(payload, turn?.turnId) &&
+            this._turnWasOn(turn, payload.sessionId)
                 ? { ...turn }
                 : null;
         const text =

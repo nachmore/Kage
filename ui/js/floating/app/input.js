@@ -6,8 +6,10 @@ import {
     errorSessionId,
     getConfig,
     handleEnterAction,
+    isErrorForOtherTurn,
     looksLikePath,
     messageLengthBucket,
+    newTurnId,
     signalMascotRecovered,
     submitSelection,
     t,
@@ -42,10 +44,12 @@ export const InputMethods = {
                 const p = event?.payload;
                 if (p?.kind === 'failed' && p.sessionId) this._settleTurn(p.sessionId);
             }),
-            // The connect-failure path emits only MESSAGE_ERROR (no session
+            // A connect failure used to emit only MESSAGE_ERROR (no session
             // id, no SESSION_ACTIVITY) — settle on it so the next send
             // doesn't sit out the full timeout. Other MESSAGE_ERRORs (e.g.
             // rate limit) aren't terminal for the backend turn; ignore them.
+            // (The backend now follows its object form with SESSION_ACTIVITY
+            // "failed", which settles the turn by its session.)
             this.listen(EVT.MESSAGE_ERROR, (event) => {
                 const msg = event?.payload;
                 if (typeof msg === 'string' && msg.startsWith('Unable to connect')) {
@@ -126,6 +130,17 @@ export const InputMethods = {
     },
 
     /**
+     * Whether a `message_error` payload is about another turn than the one
+     * this window sent last: it names a turn id, and not that one (an
+     * earlier turn, stopped before a new prompt went out on the same
+     * session). Such an error must not end, or be resent as, the turn now
+     * on screen.
+     */
+    _errorIsForOtherTurn(payload) {
+        return isErrorForOtherTurn(payload, this._lastTurn?.turnId);
+    },
+
+    /**
      * Whether a `message_error` payload is about a turn on a session this
      * window has left (the object form names its session). Such an error
      * must not end, or be resent as, the turn now on screen. A plain string
@@ -145,19 +160,23 @@ export const InputMethods = {
         // final text (screen-context and app-mode prefixes included) and the
         // attachments as content blocks. `generation` ties it to this turn;
         // `sessionIds` holds every id its session had (a migration adds
-        // one), any of which its error may name.
+        // one), any of which its error may name. `turnId` goes with the
+        // send and comes back on its MESSAGE_ERROR: an error is this turn's
+        // only when it names this id.
         const sid = args.sessionId ?? null;
+        const turnId = newTurnId();
         this._lastTurn = {
             sessionId: sid,
             sessionIds: sid ? [sid] : [],
             message: args.message,
             attachments: args.attachments ?? null,
             generation: this._promptGeneration,
+            turnId,
         };
         await this._ensureTurnTracking();
         this._pendingTurns.push(sid);
         try {
-            await this.invoke('send_message_streaming', args);
+            await this.invoke('send_message_streaming', { ...args, turnId });
             // The backend accepted the prompt, so the connection is healthy
             // and we're no longer rate limited. Both are no-ops in the engine
             // when the corresponding situation wasn't active.
