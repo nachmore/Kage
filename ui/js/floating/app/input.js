@@ -3,6 +3,7 @@ import {
     cmdOrCtrlPressed,
     EVT,
     errLabel,
+    errorSessionId,
     getConfig,
     handleEnterAction,
     looksLikePath,
@@ -104,18 +105,56 @@ export const InputMethods = {
         return seq === this._turnSeq;
     },
 
+    /**
+     * Recovery moved the session `oldId` to `newId`: so did the last turn,
+     * if it was on it.
+     */
+    _followTurnSession(oldId, newId) {
+        const turn = this._lastTurn;
+        if (oldId && newId && turn?.sessionId === oldId) {
+            this._lastTurn = {
+                ...turn,
+                sessionId: newId,
+                sessionIds: [...(turn.sessionIds || []), newId],
+            };
+        }
+    },
+
+    /** Whether `turn` ran on `sessionId` (under any id it had). */
+    _turnWasOn(turn, sessionId) {
+        return !!sessionId && !!turn?.sessionIds?.includes(sessionId);
+    },
+
+    /**
+     * Whether a `message_error` payload is about a turn on a session this
+     * window has left (the object form names its session). Such an error
+     * must not end, or be resent as, the turn now on screen. A plain string
+     * names none and is taken as this window's turn.
+     */
+    _errorIsForOtherSession(payload) {
+        const named = errorSessionId(payload);
+        if (!named || named === this.floatingSessionId) return false;
+        const turn = this._lastTurn;
+        const shownTurn = !!this.floatingSessionId && turn?.sessionId === this.floatingSessionId;
+        return !(shownTurn && this._turnWasOn(turn, named));
+    },
+
     /** send_message_streaming, tracked so the next turn can wait for it. */
     async _sendTrackedTurn(args) {
         // What Reconnect resends if this turn fails before any output: the
         // final text (screen-context and app-mode prefixes included) and the
-        // attachments as content blocks. `generation` ties it to this turn.
+        // attachments as content blocks. `generation` ties it to this turn;
+        // `sessionIds` holds every id its session had (a migration adds
+        // one), any of which its error may name.
+        const sid = args.sessionId ?? null;
         this._lastTurn = {
+            sessionId: sid,
+            sessionIds: sid ? [sid] : [],
             message: args.message,
             attachments: args.attachments ?? null,
             generation: this._promptGeneration,
         };
         await this._ensureTurnTracking();
-        const sid = args.sessionId ?? null;
         this._pendingTurns.push(sid);
         try {
             await this.invoke('send_message_streaming', args);

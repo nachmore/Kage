@@ -34,7 +34,12 @@ import { sendAppNotification } from '../../shared/notify.js';
 import { EVT } from '../../shared/events.js';
 import { WINDOW } from '../../shared/window-labels.js';
 import { getWindowSessionOrNull } from '../../shared/session-resolve.js';
-import { errLabel, errMessage } from '../../shared/error-message.js';
+import {
+    errLabel,
+    errMessage,
+    errorSessionId,
+    isResendablePayload,
+} from '../../shared/error-message.js';
 import { getActionsForText, renderQuickActionChips } from '../../shared/quick-actions.js';
 import {
     startTimer,
@@ -93,7 +98,6 @@ import { BannerController } from '../banner.js';
 import {
     createToolActivityTracker,
     initMascotPointerSignals,
-    isRateLimitPayload,
     setHostTimerHint,
     signalMascot,
     signalMascotError,
@@ -121,6 +125,7 @@ export {
     drawContextRing,
     errLabel,
     errMessage,
+    errorSessionId,
     escapeHtml,
     EVT,
     executeShortcutCommand,
@@ -142,7 +147,7 @@ export {
     hideExtensionBar,
     initMascotPointerSignals,
     isClipboardTrigger,
-    isRateLimitPayload,
+    isResendablePayload,
     isUpdateCommandRunning,
     loadFrecency,
     loadSlashCommands,

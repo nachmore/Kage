@@ -1,8 +1,9 @@
 /**
  * Reconnect under a failed prompt in the floating window: it restarts the
- * agent (reconnect_acp) and then resends the failed turn, but only when
- * nothing of that turn got through, it wasn't a rate limit, and no newer
- * prompt went out since. The resend isn't a new message: no
+ * agent (reconnect_acp) and then resends the failed turn, but only when the
+ * backend's error says it is `resendable` for that turn's session, nothing
+ * of it showed here, it wasn't a rate limit, no newer prompt went out since,
+ * and the window still holds that session. The resend isn't a new message: no
  * floating_message_sent (the chat window already has the bubble) and the
  * input box is left alone.
  *
@@ -18,6 +19,22 @@ import { initEnglish } from '../helpers/sync-i18n.js';
 const INCIDENT =
     'Failed to send: ACP error: Internal error — Encountered an error in the response stream: An unknown error occurred: dispatch failure';
 const IMAGE = { type: 'image', mimeType: 'image/png', data: 'AAAA' };
+
+/**
+ * The backend's object form for a prompt that failed: `resendable` is true
+ * only when its turn progress shows nothing got through (no text, tool,
+ * permission request, fs/terminal request or cancel).
+ */
+function promptFailure(sessionId = 's1', resendable = true) {
+    return {
+        kind: 'agent_unreachable',
+        key: 'errors.agent.unreachable_after_restart_kiro',
+        message: 'Kage restarted Kiro and tried again, but it still failed.',
+        detail: INCIDENT,
+        sessionId,
+        resendable,
+    };
+}
 
 beforeAll(async () => {
     await initEnglish(i18n);
@@ -45,10 +62,10 @@ function makeApp({ reconnect } = {}) {
         listeners[evt] = cb;
         return () => {};
     });
-    app.invoke = vi.fn(async (cmd) => {
+    app.invoke = vi.fn(async (cmd, args) => {
         if (cmd === 'reconnect_acp') {
             if (reconnect) return reconnect();
-            return { reconnected: true, sessionId: 's1', sessionReloaded: true };
+            return { reconnected: true, sessionId: args.sessionId, sessionReloaded: true };
         }
         return null;
     });
@@ -112,7 +129,7 @@ function reconnectBtn() {
 describe('floating Reconnect after a failed prompt', () => {
     it('reconnects, then resends the same turn without a new message', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, INCIDENT);
+        await sendAndFail(app, listeners, promptFailure());
         app.elements.input.value = 'a draft';
         emit.mockClear();
 
@@ -137,7 +154,7 @@ describe('floating Reconnect after a failed prompt', () => {
 
     it('only reconnects when part of the turn already showed', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, INCIDENT, { output: 'Partial answer' });
+        await sendAndFail(app, listeners, promptFailure(), { output: 'Partial answer' });
 
         reconnectBtn().click();
         await flush();
@@ -150,7 +167,7 @@ describe('floating Reconnect after a failed prompt', () => {
 
     it('does not resend once a newer prompt went out', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, INCIDENT);
+        await sendAndFail(app, listeners, promptFailure());
         app._promptGeneration++;
 
         reconnectBtn().click();
@@ -207,7 +224,7 @@ describe('floating Reconnect after a failed prompt', () => {
         const { app, listeners } = makeApp({
             reconnect: async () => ({ reconnected: true, sessionId: 's2', sessionReloaded: false }),
         });
-        await sendAndFail(app, listeners, INCIDENT);
+        await sendAndFail(app, listeners, promptFailure());
 
         reconnectBtn().click();
         await flush();
@@ -223,12 +240,160 @@ describe('floating Reconnect after a failed prompt', () => {
 
     it('never resends a rate-limited prompt', async () => {
         const { app, listeners } = makeApp();
-        await sendAndFail(app, listeners, 'Rate limit exceeded. Please wait a moment.');
+        await sendAndFail(app, listeners, {
+            ...promptFailure(),
+            kind: 'rate_limited',
+            message: 'Rate limit exceeded. Please wait a moment.',
+        });
 
         reconnectBtn().click();
         await flush();
 
         expect(app.invoke).toHaveBeenCalledWith('reconnect_acp', { sessionId: 's1' });
         expect(sends(app)).toHaveLength(1);
+    });
+
+    // F3: the backend saw progress the window didn't (a permission request
+    // the user approved, an fs/terminal request), so it says not resendable.
+    it('does not resend when the backend says part of the turn got through', async () => {
+        const { app, listeners } = makeApp();
+        await sendAndFail(app, listeners, promptFailure('s1', false));
+
+        reconnectBtn().click();
+        await flush();
+
+        expect(app.invoke).toHaveBeenCalledWith('reconnect_acp', { sessionId: 's1' });
+        expect(sends(app)).toHaveLength(1);
+    });
+
+    it('never resends on a plain-string error (no session, no progress record)', async () => {
+        const { app, listeners } = makeApp();
+        await sendAndFail(app, listeners, INCIDENT);
+
+        reconnectBtn().click();
+        await flush();
+
+        expect(app.invoke).toHaveBeenCalledWith('reconnect_acp', { sessionId: 's1' });
+        expect(sends(app)).toHaveLength(1);
+    });
+
+    it('does not resend when the payload does not say it is resendable', async () => {
+        const { app, listeners } = makeApp();
+        const { resendable: _omitted, ...noFlag } = promptFailure();
+        await sendAndFail(app, listeners, noFlag);
+
+        reconnectBtn().click();
+        await flush();
+
+        expect(sends(app)).toHaveLength(1);
+    });
+
+    // F2: A fails on s1 after the window moved to s2 and sent B there.
+    it("another session's error neither stops the shown turn nor becomes its retry", async () => {
+        const { app } = makeApp();
+        await app._startResponseTurn();
+        await app._sendTrackedTurn({ sessionId: 's1', message: 'A', attachments: null });
+        app.floatingSessionId = 's2';
+        await app._startResponseTurn();
+        await app._sendTrackedTurn({ sessionId: 's2', message: 'B', attachments: null });
+
+        // A's error arrives before B has any output.
+        await app._onMessageError({ payload: promptFailure('s1') }, true);
+        await flush();
+
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(reconnectBtn()).toBeNull();
+        expect(sends(app).map(([, a]) => a.message)).toEqual(['A', 'B']);
+    });
+
+    it('matches an error naming the pre-migration id to the migrated turn', async () => {
+        const { app, listeners } = makeApp();
+        await app._startResponseTurn();
+        await app._sendTrackedTurn({ sessionId: 's1', message: 'hello', attachments: null });
+        // As the session_migrated listener does for this window's session.
+        app._followTurnSession('s1', 's7');
+        app.floatingSessionId = 's7';
+        listeners[EVT.SESSION_ACTIVITY]({ payload: { sessionId: 's1', kind: 'failed' } });
+        await app._onMessageError({ payload: promptFailure('s1') }, true);
+        await flush();
+        expect(app.isWaitingForResponse).toBe(false);
+
+        reconnectBtn().click();
+        await flush();
+
+        expect(sends(app)).toHaveLength(2);
+        expect(sends(app)[1][1].sessionId).toBe('s7');
+    });
+
+    // F6: Reconnect started on s1, the window moved to s2 before it finished.
+    it('does not repin or resend when the window moved during Reconnect', async () => {
+        let finish;
+        const { app, listeners } = makeApp({
+            reconnect: () =>
+                new Promise((r) => {
+                    finish = r;
+                }),
+        });
+        await sendAndFail(app, listeners, promptFailure());
+        reconnectBtn().click();
+        await flush();
+        app.floatingSessionId = 's2';
+        finish({ reconnected: true, sessionId: 's1-new', sessionReloaded: false });
+        await flush();
+
+        expect(app.floatingSessionId).toBe('s2');
+        const pins = app.invoke.mock.calls.filter(([cmd]) => cmd === 'set_window_session');
+        expect(pins.every(([, a]) => a.sessionId === 's2')).toBe(true);
+        expect(sends(app)).toHaveLength(1);
+    });
+
+    // F7 (floating): a refused Reconnect leaves the button, and the failed
+    // turn, for the next try.
+    it('a failed Reconnect keeps the failed turn for the next one, resent once', async () => {
+        let calls = 0;
+        const { app, listeners } = makeApp({
+            reconnect: async () => {
+                calls++;
+                if (calls === 1) {
+                    throw {
+                        kind: 'connection_lost',
+                        message: 'The agent is still working. Try again when it finishes.',
+                    };
+                }
+                return { reconnected: true, sessionId: 's1', sessionReloaded: true };
+            },
+        });
+        await sendAndFail(app, listeners, promptFailure());
+
+        reconnectBtn().click();
+        await flush();
+        expect(sends(app)).toHaveLength(1);
+
+        reconnectBtn().click();
+        await flush();
+        expect(sends(app)).toHaveLength(2);
+        expect(reconnectBtn()).toBeNull();
+    });
+
+    it('a Reconnect that reports not reconnected is a failure, not a resend', async () => {
+        let calls = 0;
+        const { app, listeners } = makeApp({
+            reconnect: async () => {
+                calls++;
+                return calls === 1
+                    ? { reconnected: false, sessionId: null, sessionReloaded: false }
+                    : { reconnected: true, sessionId: 's1', sessionReloaded: true };
+            },
+        });
+        await sendAndFail(app, listeners, promptFailure());
+
+        reconnectBtn().click();
+        await flush();
+        expect(sends(app)).toHaveLength(1);
+        expect(reconnectBtn()).not.toBeNull();
+
+        reconnectBtn().click();
+        await flush();
+        expect(sends(app)).toHaveLength(2);
     });
 });

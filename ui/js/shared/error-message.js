@@ -77,3 +77,28 @@ export function isRateLimitPayload(payload) {
     const text = typeof payload === 'string' ? payload : isObj ? payload.message || '' : '';
     return kind === 'rate_limited' || RATE_LIMIT_RE.test(text);
 }
+
+/**
+ * The session a `message_error` payload names: the session its failed turn
+ * ran on. Only the object form carries one; a plain string gives null.
+ */
+export function errorSessionId(payload) {
+    const isObj = payload !== null && typeof payload === 'object';
+    const sid = isObj ? payload.sessionId : null;
+    return typeof sid === 'string' && sid ? sid : null;
+}
+
+/**
+ * Whether the backend says the failed turn may be sent again: its turn
+ * progress shows nothing got through (no text, tool call, permission
+ * request, fs/terminal request or cancel). Only `resendable === true` on a
+ * payload that names its session counts; a plain string never does, and
+ * a rate limit never is.
+ */
+export function isResendablePayload(payload) {
+    return (
+        errorSessionId(payload) !== null &&
+        payload.resendable === true &&
+        !isRateLimitPayload(payload)
+    );
+}

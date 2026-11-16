@@ -15,8 +15,15 @@ function animateTitleSwap(el, newText, animate) {
 }
 
 export function createStreamListenersMixin(dependencies) {
-    const { EVT, errLabel, t, submitSelection, processToolCallUpdate, drawContextRing } =
-        dependencies;
+    const {
+        EVT,
+        errLabel,
+        errorSessionId,
+        t,
+        submitSelection,
+        processToolCallUpdate,
+        drawContextRing,
+    } = dependencies;
     return class {
         setupStreamingListeners() {
             // Track focus for notification suppression
@@ -116,9 +123,23 @@ export function createStreamListenersMixin(dependencies) {
                 this.handleMessageComplete();
             });
             this.listen(EVT.MESSAGE_ERROR, (event) => {
-                // MESSAGE_ERROR is emitted only to the originating window and
-                // carries no session id — it refers to the turn this window
-                // last sent. Terminal for the active session's stream.
+                // MESSAGE_ERROR is emitted only to the originating window. A
+                // prompt failure's object form names the turn's session: one
+                // the user has since left ends only that session's stream,
+                // never a turn on screen (the user may have sent another
+                // prompt from there). With nothing in flight the error still
+                // shows, but onError ties no resend to it: the turn's session
+                // isn't the one shown. A plain string names none and refers
+                // to the turn this window last sent. Terminal for the active
+                // session's stream.
+                const named = errorSessionId(event?.payload);
+                if (named && !this._errorIsForShownSession(named)) {
+                    console.log('[chat] message_error for a session not shown:', named);
+                    this.streamRegistry.fail(named);
+                    this.renderSessionList();
+                    if (!this.isWaitingForResponse) this.handleMessageError(event);
+                    return;
+                }
                 if (this.activeSessionId) this.streamRegistry.fail(this.activeSessionId);
                 this.handleMessageError(event);
             });
