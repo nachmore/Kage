@@ -260,6 +260,7 @@ export const InputMethods = {
                     this._tabCycleActive = true;
                 }
                 const pick = this.currentMatches[this._tabCycleIndex];
+                this._noteInputEdited();
                 if (pick.type === 'command') {
                     this.elements.input.value = '>' + pick.name + ' ';
                 } else if (pick.type === 'slash') {
@@ -280,6 +281,7 @@ export const InputMethods = {
             const { isLastRow } = caretVisualRowInfo(ta);
             if (isLastRow && this._historyIndex >= 0 && this.currentMatches.length === 0) {
                 event.preventDefault();
+                this._noteInputEdited();
                 this._historyIndex--;
                 if (this._historyIndex < 0) {
                     // Back to the original input
@@ -317,6 +319,7 @@ export const InputMethods = {
                 const canRecall = inputVal.trim() === '' || this._historyIndex >= 0;
                 if (canRecall && this._historyIndex < this._messageHistory.length - 1) {
                     event.preventDefault();
+                    this._noteInputEdited();
                     if (this._historyIndex < 0) {
                         this._historySaved = inputVal; // stash whatever was typed
                     }
@@ -442,19 +445,25 @@ export const InputMethods = {
             if (await this._openTypedPath(message)) return;
         }
 
+        // Whether it went to the agent: the input is then cleared as the
+        // window's own step, not an edit (_setInputValue).
+        let sent = false;
         const result = await handleEnterAction({
             message,
             suggestions: this.currentMatches,
             selectedIndex: this.selectedIndex,
             shortcuts: this.shortcuts,
             ctx: this._getExecCtx(),
-            onSend: (msg) => this.sendChatMessage(msg),
+            onSend: (msg) => {
+                sent = true;
+                return this.sendChatMessage(msg);
+            },
             onSystemCommand: (cmdId, needsConfirm, elevated) =>
                 this._executeSystemCommand(cmdId, needsConfirm, elevated),
             onSelection: (command, value) => this.executeSelection(command, value),
         });
 
-        await this._applyEnterActionResult(result);
+        await this._applyEnterActionResult(result, { sent });
     },
 
     /**
@@ -497,8 +506,11 @@ export const InputMethods = {
      * Apply the {handled, action} verdict from handleEnterAction. Shared by
      * the Enter key (handleEnterKey) and click-to-execute (_onResultClick) so
      * both paths treat hide / replace_input / keep_suggestions identically.
+     * `sent`: the input went to the agent as a message, so emptying it is
+     * the send's own step (a send it left waiting on a bootstrap still
+     * goes out after a sign-in), not an edit.
      */
-    async _applyEnterActionResult(result) {
+    async _applyEnterActionResult(result, { sent = false } = {}) {
         if (!result?.handled) return;
         if (result.action === 'replace_input') {
             /* input already replaced by onReplaceInput callback */
@@ -512,6 +524,9 @@ export const InputMethods = {
             // the picker we just painted, which was the silent-failure bug.
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
+        } else if (sent) {
+            this._setInputValue('');
+            this.clearSuggestions();
         } else {
             this._clearInput();
         }
@@ -544,18 +559,80 @@ export const InputMethods = {
             return;
         }
 
+        let sent = false;
         const actionResult = await handleEnterAction({
             message: this.elements.input.value.trim(),
             suggestions: this.currentMatches,
             selectedIndex: this.selectedIndex,
             shortcuts: this.shortcuts,
             ctx: this._getExecCtx(),
-            onSend: (msg) => this.sendChatMessage(msg),
+            onSend: (msg) => {
+                sent = true;
+                return this.sendChatMessage(msg);
+            },
             onSystemCommand: (cmdId, needsConfirm, elevated) =>
                 this._executeSystemCommand(cmdId, needsConfirm, elevated),
             onSelection: (command, value) => this.executeSelection(command, value),
         });
-        await this._applyEnterActionResult(actionResult);
+        await this._applyEnterActionResult(actionResult, { sent });
+    },
+
+    /**
+     * Count the edits to the input: typing, pasting or dropping text,
+     * cutting, deleting (each fires the input's own `input` event), and
+     * every write to its `value` that fires none: a Tab completion, a
+     * history recall, voice dictation, Ctrl+L / Escape's reset (resetUI), a
+     * view's composed text, a spelling fix, clearing it after running a
+     * result. The only writes not counted are the window's own emptying of
+     * what it just sent to the agent (_setInputValue). A
+     * send a failed bootstrap left waiting goes out after a sign-in only
+     * while there was none since it was submitted
+     * (_canSendWaitingAfterBootstrap), even when the text ends up the same
+     * or empty. Attaching a file or an image is not an edit: it stays in
+     * the composer for the next send.
+     */
+    _watchInputEdits() {
+        const input = this.elements.input;
+        if (!input || input._kageEditsWatched) return;
+        input._kageEditsWatched = true;
+        input.addEventListener('input', () => this._noteInputEdited());
+        let proto = Object.getPrototypeOf(input);
+        let native = null;
+        while (proto && !native) {
+            native = Object.getOwnPropertyDescriptor(proto, 'value') || null;
+            proto = Object.getPrototypeOf(proto);
+        }
+        if (!native?.get || !native?.set) return;
+        const app = this;
+        Object.defineProperty(input, 'value', {
+            configurable: true,
+            enumerable: native.enumerable,
+            get() {
+                return native.get.call(this);
+            },
+            set(value) {
+                native.set.call(this, value);
+                if (!app._writingOwnInput) app._noteInputEdited();
+            },
+        });
+    },
+
+    _noteInputEdited() {
+        this._inputEdits = (this._inputEdits || 0) + 1;
+    },
+
+    /**
+     * Set the input to `value` as the window's own step after a send (not
+     * an edit: _watchInputEdits doesn't count it).
+     */
+    _setInputValue(value) {
+        this._writingOwnInput = true;
+        try {
+            this.elements.input.value = value;
+        } finally {
+            this._writingOwnInput = false;
+        }
+        this.elements.input.style.height = 'auto';
     },
 
     _clearInput() {
@@ -565,6 +642,70 @@ export const InputMethods = {
     },
 
     async sendChatMessage(message, options = {}) {
+        return this._sendSubmission(this._captureSubmission(message, options));
+    },
+
+    /**
+     * What a send submits, taken the moment the user sends: the text, the
+     * attachments (as content blocks, plus the composer's own items so a
+     * replay takes only those out of it), the selected text when "use
+     * selection" is on, the App Mode steering, and the send's options.
+     * `inputEdits` is the input's edit count then (_noteInputEdited). A send
+     * held up by a bootstrap is replayed from this, never from the live
+     * composer, so nothing attached or typed since goes with it.
+     */
+    _captureSubmission(message, options = {}) {
+        const manager = this.attachmentManager;
+        const useSelection =
+            !options.skipSelection && document.getElementById('useSelectionCheckbox')?.checked;
+        return {
+            message,
+            options,
+            attachments: manager.toContentBlocks(),
+            attachmentItems: Array.isArray(manager.attachments) ? [...manager.attachments] : [],
+            selection: useSelection && this.lastSelection?.trim() ? this.lastSelection : null,
+            lastSelection: this.lastSelection ?? null,
+            appModeSteering: this._appModeMatch?.steering_payload || null,
+            inputEdits: this._inputEdits || 0,
+        };
+    },
+
+    /** Whether the user edited the input since `submission` was taken. */
+    _inputEditedSince(submission) {
+        return (this._inputEdits || 0) !== submission.inputEdits;
+    },
+
+    /**
+     * The composer after `submission` went out. A send the user just made
+     * empties it. A replay (`replay`: it was held up by a bootstrap) takes
+     * out only what it sent: the attachments it carried, and the text while
+     * the user hasn't edited it since; anything newer stays for their next
+     * send.
+     */
+    _clearSubmittedComposer(submission, replay) {
+        const manager = this.attachmentManager;
+        if (!replay) {
+            manager.clear();
+        } else if (typeof manager.removeAt === 'function' && Array.isArray(manager.attachments)) {
+            for (const item of submission.attachmentItems) {
+                const at = manager.attachments.indexOf(item);
+                if (at >= 0) manager.removeAt(at);
+            }
+        }
+        if (replay && this._inputEditedSince(submission)) return;
+        this._setInputValue('');
+        this.elements.appSuggestions.classList.remove('visible');
+        this.currentMatches = [];
+        this.selectedIndex = -1;
+    },
+
+    /**
+     * Send `submission` (_captureSubmission). `replay`: it is a send that
+     * waited on a bootstrap, going out now.
+     */
+    async _sendSubmission(submission, replay = false) {
+        const { options } = submission;
+        let message = submission.message;
         // A new send: the one a failed bootstrap left waiting is no longer
         // what the user wants sent (a sign-in's own send clears it first).
         this._bootstrapWaitingSend = null;
@@ -573,7 +714,7 @@ export const InputMethods = {
         // call _flushPendingSend() once the session arrives.
         if (this.bootstrappingSession) {
             this._showBootstrapSpinner();
-            this._pendingSend = { message, options };
+            this._pendingSend = submission;
             this._waitForBootstrapAndSend();
             return;
         }
@@ -582,7 +723,7 @@ export const InputMethods = {
         // launch left floating permanently dead), retry the bootstrap. It's
         // debounced so rapid sends can't cascade into repeated reconnects.
         if (this.sessionBootstrapError) {
-            this._retryBootstrapAndSend(message, options);
+            this._retryBootstrapAndSend(submission);
             return;
         }
 
@@ -610,8 +751,9 @@ export const InputMethods = {
             this.automationPlanController.reset();
             this.extensionToolController.reset();
             // Reset UI for the new response
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
+            if (!replay || !this._inputEditedSince(submission)) {
+                this._setInputValue('');
+            }
             this.currentResponse = '';
             this.elements.responseText.textContent = '';
             this.elements.contentArea.classList.add('visible');
@@ -639,30 +781,26 @@ export const InputMethods = {
             return;
         }
 
-        const attachments = this.attachmentManager.toContentBlocks();
-        this.attachmentManager.clear();
+        const attachments = submission.attachments;
 
-        // Include selected text as context if checkbox is checked
-        const useSelection =
-            !options.skipSelection && document.getElementById('useSelectionCheckbox')?.checked;
-        if (useSelection && this.lastSelection?.trim()) {
-            message = `The following text is currently selected in my active window:\n\`\`\`\n${this.lastSelection.trim()}\n\`\`\`\n\n${message}`;
+        // Include selected text as context if checkbox was checked
+        if (submission.selection?.trim()) {
+            message = `The following text is currently selected in my active window:\n\`\`\`\n${submission.selection.trim()}\n\`\`\`\n\n${message}`;
         }
-        // Hide selection indicator after use
-        const indicator = document.getElementById('selectionIndicator');
-        if (indicator) indicator.style.display = 'none';
-        this._setSelectionPreview(null);
+        // Hide selection indicator after use (a replay leaves a selection
+        // captured since for the user's next send)
+        if (!replay || this.lastSelection === submission.lastSelection) {
+            const indicator = document.getElementById('selectionIndicator');
+            if (indicator) indicator.style.display = 'none';
+            this._setSelectionPreview(null);
+            this.lastSelection = null;
+        }
         const quickActionsContainer = document.getElementById('quickActionsContainer');
         if (quickActionsContainer) quickActionsContainer.style.display = 'none';
         const responseActionsContainer = document.getElementById('responseActionsContainer');
         if (responseActionsContainer) responseActionsContainer.style.display = 'none';
-        this.lastSelection = null;
 
-        this.elements.input.value = '';
-        this.elements.input.style.height = 'auto';
-        this.elements.appSuggestions.classList.remove('visible');
-        this.currentMatches = [];
-        this.selectedIndex = -1;
+        this._clearSubmittedComposer(submission, replay);
 
         // Dismiss any pending permission request blocking OUR session so
         // it isn't stalled waiting for a response. Scoped by session id —
@@ -746,11 +884,12 @@ export const InputMethods = {
                 }
 
                 // App Mode steering — _appModeMatch was set by
-                // _refreshAppModeChip when the user summoned. Click-
-                // dismiss clears it without touching config; we just
-                // skip the splice in that case.
-                if (this._appModeMatch?.steering_payload) {
-                    message = `${this._appModeMatch.steering_payload}\n${message}`;
+                // _refreshAppModeChip when the user summoned, and taken
+                // with the submission when they sent. Click-dismiss
+                // clears it without touching config; we just skip the
+                // splice in that case.
+                if (submission.appModeSteering) {
+                    message = `${submission.appModeSteering}\n${message}`;
                 }
 
                 // Notify the chat window so it can show the user bubble

@@ -186,6 +186,7 @@ export function createSessionHistoryMixin(dependencies) {
 
         /** The window's session `id` is set up: ready to send. */
         _onSessionSwitched(id) {
+            this._setupFailedSessionId = null;
             this.currentAcpSessionId = id;
             this.isConnected = true;
             this.updateConnectionStatus();
@@ -199,8 +200,21 @@ export function createSessionHistoryMixin(dependencies) {
          * Switching to `sessionId` failed with `error`: show why (a
          * signed-out agent's error offers Sign in, which switches again
          * after it) and keep the input off.
+         *
+         * The backend still has the window pinned to the session it showed
+         * before (a refused switch pins nothing). Pin it to `sessionId`, the
+         * one it shows: the backend sends a prompt for this window on its
+         * pin (inline assist's open in chat), and the window records that
+         * turn on the session it shows, so a stale pin would send it on a
+         * session the window doesn't show and stream the reply where it
+         * can't paint it. `_setupFailedSessionId` remembers that the session
+         * shown isn't set up (_showUnsentTurnError).
          */
         _onSessionSwitchFailed(sessionId, error) {
+            if (this.activeSessionId === sessionId) {
+                this._setupFailedSessionId = sessionId;
+                this._repinWindowSession();
+            }
             const msg = this.formatError(error);
             const isLocked =
                 msg.includes('active in another process') || msg.includes('Session is active');

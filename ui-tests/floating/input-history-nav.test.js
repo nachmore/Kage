@@ -37,6 +37,7 @@ function makeApp({ history = [], matches = [] } = {}) {
         _historySaved: '',
         // Methods under test, bound to this mock instance.
         handleKeyDown: InputMethods.handleKeyDown,
+        _noteInputEdited: InputMethods._noteInputEdited,
         // Resize is a layout side-effect (SearchMethods, needs the window
         // manager); stub it — history state, not sizing, is under test here.
         _resizeInputToContent() {},

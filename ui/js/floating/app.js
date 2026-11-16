@@ -83,10 +83,14 @@ export class FloatingApp {
         // Sign in (shared/agent-sign-in.js).
         this.sessionBootstrapFailure = null;
         // The send that was waiting on a failed bootstrap, as shown under
-        // its error ({ message, options, generation }): a sign-in or
-        // Reconnect sends it once a session is up, if nothing was sent or
-        // typed since. Any new send drops it (sendChatMessage).
+        // its error ({ submission, generation }, `submission` being what
+        // the user sent, taken at the time: _captureSubmission): a sign-in
+        // or Reconnect sends it once a session is up, if nothing was sent
+        // and the input wasn't edited since. Any new send drops it
+        // (_sendSubmission).
         this._bootstrapWaitingSend = null;
+        // How many times the user edited the input (_watchInputEdits).
+        this._inputEdits = 0;
         // Epoch-ms of the last re-bootstrap attempt, used to debounce
         // retries so a burst of sends can't cascade into a respawn storm
         // against the agent backend. See `_retryBootstrap`.

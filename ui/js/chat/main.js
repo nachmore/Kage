@@ -318,22 +318,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                 if (exists) {
                     await app.selectSession(app.currentAcpSessionId);
                 } else {
-                    app.sessions.unshift({
-                        session_id: app.currentAcpSessionId,
-                        title: 'Current Session',
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                    });
-                    app.activeSessionId = app.currentAcpSessionId;
-                    app.renderSessionList();
-                    try {
-                        const data = await app.invoke('load_session', {
-                            sessionId: app.currentAcpSessionId,
-                        });
-                        app.displaySession(data);
-                    } catch (e) {
-                        console.log('[CHAT] Could not load current session from disk:', e);
-                    }
+                    // Not on disk yet: listed and shown as init does, and
+                    // painted only while the window still shows it.
+                    await app._showCurrentSession();
                 }
             }
 

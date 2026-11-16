@@ -21,6 +21,9 @@ import { FloatingApp } from '../../ui/js/floating/app.js';
 
 const DEBOUNCE = 5000; // BOOTSTRAP_RETRY_DEBOUNCE_MS (module-private constant)
 
+/** A send as `_captureSubmission` takes it (the fields these tests read). */
+const submitted = (message) => ({ message, options: {}, attachments: null, inputEdits: 0 });
+
 function makeApp() {
     const app = Object.create(FloatingApp.prototype);
     app.sessionBootstrapError = 'Failed to create session: Connection lost';
@@ -34,7 +37,7 @@ function makeApp() {
     app.invoke = vi.fn();
     app.showError = vi.fn();
     app._showBootstrapSpinner = vi.fn();
-    app.sendChatMessage = vi.fn();
+    app._sendSubmission = vi.fn();
     return app;
 }
 
@@ -53,11 +56,11 @@ describe('floating bootstrap retry', () => {
         const app = makeApp();
         app.invoke.mockResolvedValue('new-session-id');
 
-        app._retryBootstrapAndSend('hello', {});
+        app._retryBootstrapAndSend(submitted('hello'));
 
         // Kicked off a reconnect via switch_acp_session and queued the send.
         expect(app.invoke).toHaveBeenCalledWith('switch_acp_session', { sessionId: null });
-        expect(app._pendingSend).toEqual({ message: 'hello', options: {} });
+        expect(app._pendingSend).toEqual(submitted('hello'));
         expect(app.bootstrappingSession).toBe(true);
         expect(app.showError).not.toHaveBeenCalled();
     });
@@ -90,12 +93,12 @@ describe('floating bootstrap retry', () => {
         app.invoke.mockResolvedValue('new-session-id');
 
         // First send triggers a real retry.
-        app._retryBootstrapAndSend('one', {});
+        app._retryBootstrapAndSend(submitted('one'));
         expect(app.invoke).toHaveBeenCalledTimes(1);
 
         // Second send 1s later (< debounce) must NOT invoke the backend again.
         vi.advanceTimersByTime(1000);
-        app._retryBootstrapAndSend('two', {});
+        app._retryBootstrapAndSend(submitted('two'));
         expect(app.invoke).toHaveBeenCalledTimes(1);
         expect(app.showError).toHaveBeenCalledTimes(1);
     });
@@ -104,7 +107,7 @@ describe('floating bootstrap retry', () => {
         const app = makeApp();
         app.invoke.mockRejectedValue('Failed to create session: Connection lost');
 
-        app._retryBootstrapAndSend('one', {});
+        app._retryBootstrapAndSend(submitted('one'));
         expect(app.invoke).toHaveBeenCalledTimes(1);
         // That attempt settles (a retry while it is out joins it).
         for (let i = 0; i < 5; i++) await Promise.resolve();
@@ -112,7 +115,7 @@ describe('floating bootstrap retry', () => {
 
         // Past the debounce window — a new attempt is allowed.
         vi.advanceTimersByTime(DEBOUNCE + 1);
-        app._retryBootstrapAndSend('two', {});
+        app._retryBootstrapAndSend(submitted('two'));
         expect(app.invoke).toHaveBeenCalledTimes(2);
     });
 });

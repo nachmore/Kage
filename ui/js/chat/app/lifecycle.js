@@ -109,45 +109,65 @@ export function createLifecycleMixin(dependencies) {
         /**
          * Show the window's session (`currentAcpSessionId`) as selected: its
          * sidebar entry (a synthetic one while it isn't on disk), its
-         * transcript, and its title in the header. At init, and when a
-         * sign-in recovers the window's first session.
+         * transcript, and its title in the header. At init, on focus, and
+         * when a sign-in recovers the window's first session. After each
+         * await it first checks that the window still shows what it did (no
+         * selection or New Chat since): a late reply for a session the user
+         * left paints nothing.
          */
         async _showCurrentSession() {
+            const sid = this.currentAcpSessionId;
+            if (!sid) return;
+            const gen = this._selectGen;
+            const before = this.activeSessionId ?? null;
             // Ensure sessions are loaded before trying to find the current one
             if (this.sessions.length === 0) {
                 await this.loadSessions();
+                const moved =
+                    gen !== this._selectGen ||
+                    this.currentAcpSessionId !== sid ||
+                    (this.activeSessionId ?? null) !== before;
+                if (moved) return;
             }
-            const exists = this.sessions.find((s) => s.session_id === this.currentAcpSessionId);
+            const exists = this.sessions.find((s) => s.session_id === sid);
             if (!exists) {
                 // Session not on disk yet — add a synthetic entry so it appears in the list
-                console.log(
-                    '[CHAT] Current session not on disk, adding synthetic entry:',
-                    this.currentAcpSessionId
-                );
+                console.log('[CHAT] Current session not on disk, adding synthetic entry:', sid);
                 const synthetic = {
-                    session_id: this.currentAcpSessionId,
+                    session_id: sid,
                     title: t('chat.session.current_title'),
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                 };
                 this.sessions.unshift(synthetic);
-                this.renderSessionList();
             }
             // Select it — load from disk if available, otherwise just mark it active
-            this.activeSessionId = this.currentAcpSessionId;
+            this.activeSessionId = sid;
             this.renderSessionList();
             try {
-                const sessionData = await this.invoke('load_session', {
-                    sessionId: this.currentAcpSessionId,
-                });
+                const sessionData = await this.invoke('load_session', { sessionId: sid });
+                if (!this._isShowing(sid, gen)) {
+                    console.log('[CHAT] Not painting a session no longer shown:', sid);
+                    return;
+                }
                 this.displaySession(sessionData);
             } catch (e) {
+                if (!this._isShowing(sid, gen)) return;
                 console.log('[CHAT] Could not load session from disk (may be new):', e);
                 // Session is new / not on disk — just show empty chat
                 this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.continue')}</div>`;
             }
             this.elements.chatHeaderTitle.textContent =
                 stripKageTags(exists?.title) || t('chat.session.current_title');
+        }
+
+        /**
+         * Whether the window still shows `sid` as when a paint of it began
+         * (`gen`: the selection token then): no selection or New Chat
+         * since, and it is the session shown.
+         */
+        _isShowing(sid, gen) {
+            return gen === this._selectGen && this.activeSessionId === sid;
         }
 
         /**
