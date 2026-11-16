@@ -105,8 +105,14 @@ function setup({ switches, reconnect = null }) {
         label: 'main',
         show: vi.fn(async () => {}),
         setFocus: vi.fn(async () => {}),
+        listen: vi.fn(async () => () => {}),
     };
-    const app = new ChatApp(invoke, appWindow, vi.fn(async () => () => {}));
+    const listeners = {};
+    const listen = vi.fn(async (evt, cb) => {
+        listeners[evt] = cb;
+        return () => {};
+    });
+    const app = new ChatApp(invoke, appWindow, listen);
     app.elements = {
         errorContainer: document.getElementById('errorContainer'),
         messagesArea: document.getElementById('messagesArea'),
@@ -130,7 +136,7 @@ function setup({ switches, reconnect = null }) {
     app.currentAcpSessionId = 's-1';
     app.isWaitingForResponse = false;
     const named = (name) => calls.filter(([c]) => c === name);
-    return { app, starts, named };
+    return { app, starts, named, listeners };
 }
 
 const signInBtn = () => document.querySelector('#errorContainer .agent-sign-in-btn');
@@ -264,5 +270,164 @@ describe('chat: a New Chat a signed-out agent refuses', () => {
         await flush();
         expect(document.querySelector('#errorContainer').textContent).toBe('');
         expect(app.activeSessionId).toBe('s-1');
+    });
+});
+
+describe("chat: the window's first session a signed-out agent refuses", () => {
+    /** A `chat-<uuid>` window whose launch bootstrap is refused. */
+    async function peerWithFailedBootstrap(switches) {
+        const ctx = setup({ switches });
+        const { app } = ctx;
+        app.windowLabel = 'chat-abc';
+        app.activeSessionId = null;
+        app.currentAcpSessionId = null;
+        app.sessions = [{ session_id: 's-old', title: 'Older chat' }];
+        app.elements.chatHeaderTitle.textContent = 'chat.header.default_title';
+        await app._bootstrapChatPeerSession();
+        await flush();
+        return ctx;
+    }
+
+    it('shows the error with Sign in', async () => {
+        await peerWithFailedBootstrap([SIGNED_OUT]);
+        expect(signInBtn()).toBeTruthy();
+    });
+
+    it('after a clean exit draws the new session as init would', async () => {
+        const { app, starts, named } = await peerWithFailedBootstrap([SIGNED_OUT, 's-new']);
+        app.renderSessionList.mockClear();
+        await signInCleanly(starts);
+
+        expect(app.currentAcpSessionId).toBe('s-new');
+        expect(app.activeSessionId).toBe('s-new');
+        // A sidebar entry for it, highlighted, and the list redrawn.
+        expect(app.sessions.map((s) => s.session_id)).toEqual(['s-new', 's-old']);
+        expect(app.renderSessionList).toHaveBeenCalled();
+        // Its transcript loaded and shown, and the header names it.
+        expect(named('load_session')).toEqual([['load_session', { sessionId: 's-new' }]]);
+        expect(app.displaySession).toHaveBeenCalledWith({ messages: [] });
+        expect(app.elements.chatHeaderTitle.textContent).toBe('chat.session.current_title');
+        expect(named('send_message_streaming')).toEqual([]);
+        expect(status()).toBe('shared.agent_sign_in.status.ready');
+    });
+
+    it('still refused after the sign-in: the error again, nothing drawn', async () => {
+        const { app, starts, named } = await peerWithFailedBootstrap([SIGNED_OUT]);
+        await signInCleanly(starts);
+        expect(signInBtn()).toBeTruthy();
+        expect(app.currentAcpSessionId).toBeNull();
+        expect(named('load_session')).toEqual([]);
+        expect(status()).toBe('shared.agent_sign_in.status.restart_failed');
+    });
+});
+
+describe('chat: an open-in-chat prompt a signed-out agent refused to set up for', () => {
+    /**
+     * open_chat_with_message's MESSAGE_ERROR when the agent refused to set
+     * up for the prompt: nothing of it went out (`resendable`), naming its
+     * turn and main's session (null: main had none, and none was made).
+     */
+    const unsent = (sessionId) => ({
+        ...SIGNED_OUT,
+        detail: null,
+        sessionId,
+        resendable: true,
+        turnId: 'assist-turn-1',
+    });
+
+    /** Main (on `shown`) gets inline assist's prompt, which fails unsent. */
+    async function openedAndRefused({ switches = ['s-new'], shown = null } = {}) {
+        const ctx = setup({ switches });
+        const { app, listeners } = ctx;
+        app.activeSessionId = shown;
+        app.currentAcpSessionId = shown;
+        app.setupStreamingListeners();
+        app._listenForInitialMessageSession();
+        listeners.initial_message({
+            payload: { message: 'explain this', turnId: 'assist-turn-1' },
+        });
+        await app.messageStreamController.host.onError({ payload: unsent(shown) }, true);
+        await flush();
+        return ctx;
+    }
+
+    const sendsOf = (named) => named('send_message_streaming').map(([, a]) => a);
+    const userBubbles = () => document.querySelectorAll('#messagesArea .message.user');
+
+    it('with no session: after the sign-in main sets one up and sends the prompt once', async () => {
+        const { app, starts, named } = await openedAndRefused();
+        expect(signInBtn()).toBeTruthy();
+        await signInCleanly(starts);
+
+        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: null }]]);
+        expect(named('switch_acp_session')).toEqual([['switch_acp_session', { sessionId: null }]]);
+        expect(app.activeSessionId).toBe('s-new');
+        expect(app.currentAcpSessionId).toBe('s-new');
+        expect(app.sessions.map((s) => s.session_id)).toContain('s-new');
+        expect(app.elements.chatHeaderTitle.textContent).toBe('chat.session.current_title');
+        const sends = sendsOf(named);
+        expect(sends).toEqual([
+            {
+                sessionId: 's-new',
+                message: 'explain this',
+                attachments: null,
+                turnId: expect.any(String),
+            },
+        ]);
+        // A turn of its own; the user's bubble is not drawn again.
+        expect(sends[0].turnId).not.toBe('assist-turn-1');
+        expect(userBubbles().length).toBe(1);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+        await flush(10);
+        expect(sendsOf(named).length).toBe(1);
+    });
+
+    it('with no session: Reconnect does the same, once', async () => {
+        const { app, named } = await openedAndRefused();
+        document.getElementById('errorReconnectBtn').click();
+        await flush(20);
+        expect(named('switch_acp_session')).toEqual([['switch_acp_session', { sessionId: null }]]);
+        expect(app.activeSessionId).toBe('s-new');
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-new', 'explain this'],
+        ]);
+    });
+
+    it('with no session: nothing is sent when the user sent something since', async () => {
+        const { app, starts, named } = await openedAndRefused();
+        app._recordTurn(null, 'newer', null);
+        await signInCleanly(starts);
+        expect(app.activeSessionId).toBe('s-new');
+        expect(sendsOf(named)).toEqual([]);
+        expect(status()).toBe('shared.agent_sign_in.status.ready');
+    });
+
+    it('with no session: a setup still refused shows the error again and sends nothing, then works once', async () => {
+        const { app, starts, named } = await openedAndRefused({ switches: [SIGNED_OUT] });
+        await signInCleanly(starts);
+        expect(sendsOf(named)).toEqual([]);
+        expect(app.activeSessionId).toBeNull();
+        expect(signInBtn()).toBeTruthy();
+        expect(status()).toBe('shared.agent_sign_in.status.restart_failed');
+
+        const orig = app.invoke.getMockImplementation();
+        app.invoke.mockImplementation(async (cmd, args) =>
+            cmd === 'switch_acp_session' ? 's-later' : orig(cmd, args)
+        );
+        await signInCleanly(starts);
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-later', 'explain this'],
+        ]);
+    });
+
+    it("on main's session: after the sign-in it sends the prompt there, once", async () => {
+        const { app, starts, named } = await openedAndRefused({ shown: 's-1' });
+        await signInCleanly(starts);
+        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's-1' }]]);
+        expect(named('switch_acp_session')).toEqual([]);
+        expect(app.activeSessionId).toBe('s-1');
+        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
+            ['s-1', 'explain this'],
+        ]);
     });
 });

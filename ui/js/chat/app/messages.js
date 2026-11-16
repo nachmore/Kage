@@ -56,6 +56,8 @@ export function createMessagesMixin(dependencies) {
         mountSignInAction,
         canOfferSignIn,
         clearAgentSignInSlot,
+        errorSessionId,
+        errorTurnId,
         isResendablePayload,
         presentOverlayWindow,
         sendAppNotification,
@@ -506,8 +508,18 @@ export function createMessagesMixin(dependencies) {
                 if (reconnectBtn.isConnected) this.elements.errorContainer.innerHTML = '';
                 if (opts.establishSession) {
                     // The window's session never got set up: set it up on
-                    // the restarted agent (a failure shows its own error).
-                    await opts.establishSession(outcome).catch(() => {});
+                    // the restarted agent (a failure shows its own error),
+                    // then send the turn the setup failed for, if any
+                    // (_showUnsentTurnError), by the rules above.
+                    const sid = await opts.establishSession(outcome).catch(() => null);
+                    const turn = opts.retryTurn;
+                    if (
+                        sid &&
+                        sid === this.activeSessionId &&
+                        this._canResendTurn(turn, startedOn)
+                    ) {
+                        await this._resendTurn(turn);
+                    }
                     return;
                 }
                 const shown = startedOn;
@@ -521,7 +533,12 @@ export function createMessagesMixin(dependencies) {
             if (opts.signIn) {
                 const actions = this.elements.errorContainer.querySelector('.chat-error-actions');
                 const host = opts.establishSession
-                    ? this._sessionSetupSignInHost(opts.signIn, opts.establishSession, actions)
+                    ? this._sessionSetupSignInHost(
+                          opts.signIn,
+                          opts.establishSession,
+                          actions,
+                          opts.retryTurn ?? null
+                      )
                     : this._agentSignInHost(opts.signIn, opts.retryTurn ?? null, actions);
                 mountSignInAction?.(actions, opts.signIn, host)?.catch((e) =>
                     console.warn('[chat] sign-in action unavailable:', e)
@@ -555,15 +572,80 @@ export function createMessagesMixin(dependencies) {
         }
 
         /**
-         * The sign-in under a session-setup error (`_showSessionSetupError`):
-         * as a prompt's (`_agentSignInHost`) but nothing was waiting to be
-         * sent. After the restart it sets up the session the window wanted
-         * (`retry`), unless the window has moved on to another session
-         * since; then it keeps that one.
+         * open_chat_with_message never sent `turn` (the window's last turn,
+         * which `payload` names) because a signed-out agent refused to set
+         * up for it, and the window had no session: `payload` is
+         * `auth_required`, names no session and is `resendable` (nothing of
+         * it went out). Shown as `text` with Sign in and Reconnect, which
+         * set up the window's session on the restarted agent
+         * (_establishSessionForTurn) and then send `turn` there by
+         * Reconnect's rules: nothing was sent since, the window still has
+         * no other session, at most once. Returns false, showing nothing,
+         * for any other error.
          */
-        _sessionSetupSignInHost(payload, retry, ownActions = null) {
-            const base = this._agentSignInHost(payload, null, ownActions);
+        _showUnsentTurnError(text, payload, turn) {
+            if (!canOfferSignIn?.(payload) || payload?.resendable !== true) return false;
+            if (errorSessionId(payload) !== null || (this.activeSessionId ?? null) !== null) {
+                return false;
+            }
+            if (!turn || turn.sessionId || errorTurnId(payload) !== turn.turnId) return false;
+            const retryTurn = { ...turn };
+            this.showError(text, {
+                detail: payload?.detail,
+                signIn: payload,
+                retryTurn,
+                establishSession: (outcome) =>
+                    this._establishSessionForTurn(outcome, text, payload, retryTurn),
+            });
+            return true;
+        }
+
+        /**
+         * After the restart under `_showUnsentTurnError`: set up the window's
+         * session (the one the restart reloaded, else a new one) and show
+         * it as the one open_chat_with_message would have made. Resolves to
+         * its id, or null when the window took a session of its own
+         * meanwhile; a failure shows the error again (with Sign in while it
+         * still applies) and rejects.
+         */
+        async _establishSessionForTurn(outcome, text, payload, turn) {
+            let id;
+            try {
+                id =
+                    outcome?.sessionReloaded && outcome.sessionId
+                        ? outcome.sessionId
+                        : await this.invoke('switch_acp_session', { sessionId: null });
+            } catch (error) {
+                console.error('[chat] setting up a session for the unsent prompt failed:', error);
+                if ((this.activeSessionId ?? null) === null) {
+                    if (canOfferSignIn?.(error)) this._showUnsentTurnError(text, payload, turn);
+                    else this.showError(this.formatError(error));
+                }
+                throw error;
+            }
+            if ((this.activeSessionId ?? null) !== null) {
+                console.log('[chat] keeping the session the window took meanwhile');
+                this._repinWindowSession();
+                return null;
+            }
+            this._adoptOpenedChatSession(id);
+            this._onSessionSwitched(id);
+            return id;
+        }
+
+        /**
+         * The sign-in under a session-setup error (`_showSessionSetupError`,
+         * `_showUnsentTurnError`): as a prompt's (`_agentSignInHost`). After
+         * the restart it sets up the session the window wanted (`retry`),
+         * unless the window has moved on to another session since; then it
+         * keeps that one. `retryTurn`: the turn the setup failed for, if
+         * any (else nothing was waiting): sent on the session set up, by
+         * Reconnect's rules, at most once.
+         */
+        _sessionSetupSignInHost(payload, retry, ownActions = null, retryTurn = null) {
+            const base = this._agentSignInHost(payload, retryTurn, ownActions);
             const wanted = payload?.sessionId ?? null;
+            let resent = false;
             return {
                 ...base,
                 establishSession: async (outcome) => {
@@ -581,8 +663,17 @@ export function createMessagesMixin(dependencies) {
                     }
                     return retry(outcome);
                 },
-                canResend: () => false,
-                resend: async () => 'none',
+                canResend: (sid) =>
+                    !resent &&
+                    !!retryTurn &&
+                    !!sid &&
+                    sid === this.activeSessionId &&
+                    this._canResendTurn(retryTurn, wanted),
+                resend: async () => {
+                    if (resent) return 'none';
+                    resent = true;
+                    return base.resend();
+                },
             };
         }
 

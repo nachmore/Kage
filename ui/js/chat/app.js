@@ -540,23 +540,32 @@ export class ChatApp {
                 if (!online) app.showError(offlineMessage());
                 else {
                     const p = event.payload;
+                    const turn = app._lastTurn;
+                    const text =
+                        typeof p === 'string'
+                            ? t('chat.error.error_with_payload', { payload: p })
+                            : errMessage(p);
+                    // A prompt that never went out because a signed-out
+                    // agent refused to set up the session the window lacked
+                    // (open_chat_with_message): its Sign in sets one up,
+                    // then sends it.
+                    if (!hadOutput && app._showUnsentTurnError(text, p, turn)) {
+                        app.isConnected = online;
+                        app.updateConnectionStatus();
+                        return;
+                    }
                     // Reconnect may resend the window's last turn only when
                     // the error names that very turn (its `turnId`), the
                     // backend says nothing of it got through, and the error
                     // is about that turn's session (any id it had across a
                     // migration). A plain string, or an error naming no
                     // turn or another one, is never resent.
-                    const turn = app._lastTurn;
                     const retryTurn =
                         !hadOutput &&
                         isResendablePayload(p, turn?.turnId) &&
                         app._turnWasOn(turn, errorSessionId(p))
                             ? { ...turn }
                             : null;
-                    const text =
-                        typeof p === 'string'
-                            ? t('chat.error.error_with_payload', { payload: p })
-                            : errMessage(p);
                     // signIn: a signed-out agent's error object also gets
                     // "Sign in" (shared/agent-sign-in.js), which resends
                     // retryTurn after the sign-in; a plain string doesn't.

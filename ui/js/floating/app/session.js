@@ -282,14 +282,32 @@ export const SessionMethods = {
         const failure = this.sessionBootstrapFailure;
         if (!canOfferSignIn(failure)) {
             this.showError(text);
-            return;
+        } else {
+            this.showError(text, {
+                reconnect: true,
+                onReconnect: (btn) => this._reconnectBootstrap(btn, waiting),
+                signIn: failure,
+                signInHost: this._bootstrapSignInHost(waiting),
+            });
         }
-        this.showError(text, {
-            reconnect: true,
-            onReconnect: (btn) => this._reconnectBootstrap(btn, waiting),
-            signIn: failure,
-            signInHost: this._bootstrapSignInHost(waiting),
-        });
+        // Its first line: still on screen while nothing newer replaced it.
+        this._bootstrapErrorShown = this.elements.responseText?.firstChild ?? null;
+    },
+
+    /**
+     * A session is up after a failed bootstrap: take its error off the
+     * screen, as Reconnect does once the agent is back, unless something
+     * newer (a send's turn, another error) replaced it meanwhile.
+     */
+    _clearShownBootstrapError() {
+        const shown = this._bootstrapErrorShown;
+        this._bootstrapErrorShown = null;
+        if (!shown?.isConnected) return;
+        this.currentResponse = '';
+        this.elements.responseText.textContent = '';
+        this.elements.contentArea.classList.remove('visible');
+        this.elements.expandBtn.classList.remove('visible');
+        this.windowManager.resizeWindow();
     },
 
     /**
@@ -315,17 +333,22 @@ export const SessionMethods = {
                 this._bootstrapGen = (this._bootstrapGen || 0) + 1;
                 this._adoptReconnectSession(outcome.sessionId);
                 this._clearBootstrapFailure();
+                this._clearShownBootstrapError();
                 return outcome.sessionId;
             }
             if (this.floatingSessionId && !this.sessionBootstrapError) {
                 console.log(
                     `[floating] after the restart: keeping the session already set up: ${this.floatingSessionId}`
                 );
+                this._clearShownBootstrapError();
                 return this.floatingSessionId;
             }
             try {
                 const id = await this._runBootstrap();
                 console.log(`[floating] bootstrapped after the restart: ${id}`);
+                // The session is ready: its error goes (a waiting send, if
+                // any, then draws its own turn).
+                this._clearShownBootstrapError();
                 return id;
             } catch (e) {
                 console.error('[floating] bootstrap after the restart failed:', e);
@@ -421,15 +444,10 @@ export const SessionMethods = {
         } finally {
             this._bootstrapReconnecting = false;
         }
+        // The bootstrap took its error off the screen (_clearShownBootstrapError).
         if (this._canSendWaitingAfterBootstrap(waiting, sid)) {
             await this._sendWaitingAfterBootstrap(waiting);
-            return;
         }
-        if (!btn.isConnected) return;
-        this.elements.responseText.textContent = '';
-        this.elements.contentArea.classList.remove('visible');
-        this.elements.expandBtn.classList.remove('visible');
-        this.windowManager.resizeWindow();
     },
 
     /**

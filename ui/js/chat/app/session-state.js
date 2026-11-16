@@ -60,14 +60,21 @@ export function createSessionStateMixin(dependencies) {
             if (this._newSessionPending) return;
 
             // A signed-out agent refused the session: say so, with Sign in,
-            // which bootstraps again after it. Any other failure stays in
-            // the console, as before.
+            // which bootstraps again after it and then draws the session as
+            // init does (sidebar entry, transcript, header; init's own
+            // auto-select ran long ago, with no session). Any other failure
+            // stays in the console, as before.
             const failed = (e) => {
                 this._showSessionSetupError?.(this.formatError?.(e) ?? String(e), e, {
                     sessionId: this.activeSessionId ?? null,
                     retry: async () => {
                         await this._bootstrapChatPeerSession({ throwOnError: true });
-                        return this.currentAcpSessionId ?? null;
+                        const id = this.currentAcpSessionId ?? null;
+                        if (id) {
+                            await this._showCurrentSession();
+                            await this.checkConnection();
+                        }
+                        return id;
                     },
                     onlyIfSignIn: true,
                 });

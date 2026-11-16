@@ -610,6 +610,21 @@ fn unsent_error_payload(
     })
 }
 
+/// The MESSAGE_ERROR payload for `turn_id`, a prompt `open_chat_with_message`
+/// never sent because a signed-out agent refused to set up for it (`err`,
+/// `auth_required`): `resendable`, as nothing of it went out, so main's Sign
+/// in sends it once, after the sign-in, on `session_id` (main's session; or,
+/// with none, the one main sets up then).
+fn unsent_sign_in_payload(
+    err: AppError,
+    session_id: Option<&str>,
+    turn_id: &str,
+) -> serde_json::Value {
+    let mut payload = unsent_error_payload(err, session_id, Some(turn_id));
+    payload["resendable"] = serde_json::Value::Bool(true);
+    payload
+}
+
 /// `unsent_prompt_payload` for a connect that failed. The message keeps
 /// its "Unable to connect: " text, which older windows still look for.
 fn connect_failed_payload(
@@ -739,19 +754,31 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
         let tool_steering = acp.tool_steering.clone();
 
         async_runtime::spawn_blocking(move || {
-            if !client.is_connected() {
-                if let Err(e) = client.connect() {
-                    crate::event_targets::emit_to_self(
-                        &window,
-                        events::MESSAGE_ERROR,
-                        &connect_failed_payload(
-                            &e.to_string(),
-                            session_id.as_deref().filter(|s| !s.trim().is_empty()),
-                            Some(&turn_id),
-                        ),
-                    );
-                    return;
-                }
+            // Connect, and the handshake too: when main has a session none
+            // is created below, so this is where a signed-out agent refuses
+            // (`initialize`, `-32000`), and the prompt must not go out on a
+            // connection it refused.
+            let ready = if client.is_connected() {
+                Ok(())
+            } else {
+                client.connect()
+            }
+            .and_then(|()| client.ensure_initialized());
+            if let Err(e) = ready {
+                let shown = session_id.as_deref().filter(|s| !s.trim().is_empty());
+                let err = session_setup_error(&e, &config, "Connect", |e| {
+                    AppError::raw(
+                        ErrorKind::ConnectionLost,
+                        format!("Unable to connect: {}", e),
+                    )
+                });
+                let payload = if matches!(err.kind, ErrorKind::AuthRequired) {
+                    unsent_sign_in_payload(err, shown, &turn_id)
+                } else {
+                    connect_failed_payload(&e.to_string(), shown, Some(&turn_id))
+                };
+                crate::event_targets::emit_to_self(&window, events::MESSAGE_ERROR, &payload);
+                return;
             }
             // Resolve a real session — the main window may not have pinned
             // one yet (inline-assist's "inform" mode can fire before main
@@ -760,9 +787,9 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
                 Ok(id) => id,
                 Err(e) => {
                     // A signed-out agent: the error as it is, so main
-                    // offers Sign in.
+                    // offers Sign in (and sends the prompt after it).
                     let payload = if matches!(e.kind, ErrorKind::AuthRequired) {
-                        unsent_error_payload(e, None, Some(&turn_id))
+                        unsent_sign_in_payload(e, None, &turn_id)
                     } else {
                         unsent_prompt_payload(
                             plain_prompt_error_kind(&e.to_string()),
@@ -983,7 +1010,7 @@ impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
 mod prompt_error_tests {
     use super::{
         auth_required_error, connect_failed_payload, failed_prompt_payload, prompt_error_for_user,
-        session_setup_error, unsent_error_payload, unsent_prompt_payload,
+        session_setup_error, unsent_error_payload, unsent_prompt_payload, unsent_sign_in_payload,
     };
     use crate::acp_client::types::{AcpError, AgentRpcError, PromptRecoveryError};
     use crate::config::{AcpMode, AgentConnection, Config};
@@ -1202,10 +1229,14 @@ mod prompt_error_tests {
     #[test]
     fn an_unsent_prompt_whose_session_was_refused_for_a_sign_in_carries_auth_required() {
         crate::i18n::init(Some("en"));
-        let json = unsent_error_payload(auth_required_error(&kiro_local()), None, Some("turn-1"));
+        let json = unsent_sign_in_payload(auth_required_error(&kiro_local()), None, "turn-1");
         assert_eq!(json["kind"], "auth_required");
         assert_eq!(json["key"], "errors.agent.auth_required_kiro");
         assert_eq!(json["turnId"], "turn-1");
+        assert_eq!(json["sessionId"], serde_json::Value::Null);
+        // Nothing of it went out: main's Sign in may send it.
+        assert_eq!(json["resendable"], true);
+        let json = unsent_error_payload(auth_required_error(&kiro_local()), None, Some("turn-1"));
         assert_eq!(json["resendable"], false);
     }
 }

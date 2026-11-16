@@ -1499,3 +1499,114 @@ fn a_session_new_failure_that_is_not_a_sign_in_keeps_its_text() {
     assert!(message.starts_with("Failed to create session:"), "{err}");
     assert!(message.contains("disk full"), "{err}");
 }
+
+// ---------------------------------------------------------------------------
+// Inline assist's "open in chat" (`open_chat_with_message`) against a
+// signed-out agent: the prompt never goes out, and main hears so as
+// `auth_required` naming its turn and `resendable` (nothing of it got
+// through), so main's Sign in sends it after the sign-in, once.
+// ---------------------------------------------------------------------------
+
+/// `session_app` plus the main window, and every MESSAGE_ERROR payload.
+fn open_chat_app(
+    agent: &MockAgent,
+    connect: bool,
+) -> (
+    tauri::App<tauri::test::MockRuntime>,
+    tauri::WebviewWindow<tauri::test::MockRuntime>,
+    Arc<Mutex<Vec<Value>>>,
+) {
+    use tauri::Listener;
+    let (app, _floating) = session_app(agent, true, connect);
+    let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("mock main window must build");
+    let errors = Arc::new(Mutex::new(Vec::new()));
+    let sink = errors.clone();
+    app.listen_any("message_error", move |event| {
+        sink.lock()
+            .unwrap()
+            .push(serde_json::from_str(event.payload()).unwrap());
+    });
+    (app, main, errors)
+}
+
+/// The first MESSAGE_ERROR, within a few seconds.
+fn first_error(errors: &Arc<Mutex<Vec<Value>>>) -> Value {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Some(e) = errors.lock().unwrap().first() {
+            return e.clone();
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "no message_error reached main"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+fn assert_unsent_sign_in(err: &Value, session_id: Value) {
+    assert_kiro_sign_in(err);
+    assert_eq!(err["turnId"], "assist-turn-1", "{err}");
+    assert_eq!(err["sessionId"], session_id, "{err}");
+    assert_eq!(
+        err["resendable"], true,
+        "nothing of the prompt went out: {err}"
+    );
+}
+
+#[test]
+fn open_in_chat_refused_by_session_new_reaches_main_naming_its_turn_as_resendable() {
+    let agent = MockAgent::start(vec![Prompt::NewAuthRequired]);
+    let (_app, main, errors) = open_chat_app(&agent, true);
+
+    invoke(
+        &main,
+        "open_chat_with_message",
+        json!({ "sessionId": null, "message": "explain this", "turnId": "assist-turn-1" }),
+    )
+    .expect("the command itself answers at once");
+
+    assert_unsent_sign_in(&first_error(&errors), Value::Null);
+    assert_eq!(agent.count("session/prompt"), 0);
+}
+
+#[test]
+fn open_in_chat_refused_by_initialize_reaches_main_naming_its_turn_as_resendable() {
+    // Not connected: the command connects first; the agent refuses its
+    // handshake.
+    let agent = MockAgent::start(vec![Prompt::InitAuthRequired]);
+    let (_app, main, errors) = open_chat_app(&agent, false);
+
+    invoke(
+        &main,
+        "open_chat_with_message",
+        json!({ "sessionId": null, "message": "explain this", "turnId": "assist-turn-1" }),
+    )
+    .expect("the command itself answers at once");
+
+    assert_unsent_sign_in(&first_error(&errors), Value::Null);
+    assert_eq!(agent.count("session/new"), 0);
+    assert_eq!(agent.count("session/prompt"), 0);
+}
+
+#[test]
+fn open_in_chat_on_mains_session_refused_by_initialize_reaches_main_as_auth_required() {
+    // Main has a session, so none is created: the handshake of the
+    // connection the command makes is the agent's first chance to refuse,
+    // and the prompt must not go out on a connection it refused.
+    let agent = MockAgent::start(vec![Prompt::InitAuthRequired]);
+    let (_app, main, errors) = open_chat_app(&agent, false);
+
+    invoke(
+        &main,
+        "open_chat_with_message",
+        json!({ "sessionId": "S1", "message": "explain this", "turnId": "assist-turn-1" }),
+    )
+    .expect("the command itself answers at once");
+
+    assert_unsent_sign_in(&first_error(&errors), json!("S1"));
+    assert_eq!(agent.count("initialize"), 1);
+    assert_eq!(agent.count("session/prompt"), 0);
+}

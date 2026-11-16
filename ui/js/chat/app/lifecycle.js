@@ -85,43 +85,7 @@ export function createLifecycleMixin(dependencies) {
             );
 
             // Auto-select the current ACP session if one exists
-            if (this.currentAcpSessionId) {
-                // Ensure sessions are loaded before trying to find the current one
-                if (this.sessions.length === 0) {
-                    await this.loadSessions();
-                }
-                const exists = this.sessions.find((s) => s.session_id === this.currentAcpSessionId);
-                if (!exists) {
-                    // Session not on disk yet — add a synthetic entry so it appears in the list
-                    console.log(
-                        '[CHAT] Current session not on disk, adding synthetic entry:',
-                        this.currentAcpSessionId
-                    );
-                    const synthetic = {
-                        session_id: this.currentAcpSessionId,
-                        title: t('chat.session.current_title'),
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                    };
-                    this.sessions.unshift(synthetic);
-                    this.renderSessionList();
-                }
-                // Select it — load from disk if available, otherwise just mark it active
-                this.activeSessionId = this.currentAcpSessionId;
-                this.renderSessionList();
-                try {
-                    const sessionData = await this.invoke('load_session', {
-                        sessionId: this.currentAcpSessionId,
-                    });
-                    this.displaySession(sessionData);
-                } catch (e) {
-                    console.log('[CHAT] Could not load session from disk (may be new):', e);
-                    // Session is new / not on disk — just show empty chat
-                    this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.continue')}</div>`;
-                }
-                this.elements.chatHeaderTitle.textContent =
-                    stripKageTags(exists?.title) || t('chat.session.current_title');
-            }
+            if (this.currentAcpSessionId) await this._showCurrentSession();
 
             // Publish the extension tool definitions (or "no tools") to the
             // backend, and again whenever they change. The backend attaches
@@ -143,6 +107,50 @@ export function createLifecycleMixin(dependencies) {
         }
 
         /**
+         * Show the window's session (`currentAcpSessionId`) as selected: its
+         * sidebar entry (a synthetic one while it isn't on disk), its
+         * transcript, and its title in the header. At init, and when a
+         * sign-in recovers the window's first session.
+         */
+        async _showCurrentSession() {
+            // Ensure sessions are loaded before trying to find the current one
+            if (this.sessions.length === 0) {
+                await this.loadSessions();
+            }
+            const exists = this.sessions.find((s) => s.session_id === this.currentAcpSessionId);
+            if (!exists) {
+                // Session not on disk yet — add a synthetic entry so it appears in the list
+                console.log(
+                    '[CHAT] Current session not on disk, adding synthetic entry:',
+                    this.currentAcpSessionId
+                );
+                const synthetic = {
+                    session_id: this.currentAcpSessionId,
+                    title: t('chat.session.current_title'),
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                };
+                this.sessions.unshift(synthetic);
+                this.renderSessionList();
+            }
+            // Select it — load from disk if available, otherwise just mark it active
+            this.activeSessionId = this.currentAcpSessionId;
+            this.renderSessionList();
+            try {
+                const sessionData = await this.invoke('load_session', {
+                    sessionId: this.currentAcpSessionId,
+                });
+                this.displaySession(sessionData);
+            } catch (e) {
+                console.log('[CHAT] Could not load session from disk (may be new):', e);
+                // Session is new / not on disk — just show empty chat
+                this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.continue')}</div>`;
+            }
+            this.elements.chatHeaderTitle.textContent =
+                stripKageTags(exists?.title) || t('chat.session.current_title');
+        }
+
+        /**
          * open_chat_with_message created (and pinned) a session because this
          * window had none. Adopt it so the reply — which streams under that
          * id — renders here instead of being filed as another session's
@@ -152,27 +160,38 @@ export function createLifecycleMixin(dependencies) {
             this.listen('initial_message_session', (event) => {
                 const sid = event?.payload?.sessionId;
                 if (!sid || sid === this.activeSessionId) return;
-                this.activeSessionId = sid;
-                this.currentAcpSessionId = sid;
-                // The turn initial_message recorded before the session
-                // existed is on this session now.
-                this._adoptTurnSession?.(sid);
-                const existing = this.sessions.find((s) => s.session_id === sid);
-                if (!existing) {
-                    const now = new Date().toISOString();
-                    this.sessions.unshift({
-                        session_id: sid,
-                        title: t('chat.session.current_title'),
-                        created_at: now,
-                        updated_at: now,
-                    });
-                }
-                this.renderSessionList();
-                // Match the init-time auto-select: the header names the
-                // adopted session rather than keeping a stale title.
-                this.elements.chatHeaderTitle.textContent =
-                    stripKageTags(existing?.title) || t('chat.session.current_title');
+                this._adoptOpenedChatSession(sid);
             });
+        }
+
+        /**
+         * Take `sid`, a session made for the prompt open_chat_with_message
+         * brought here (by the backend, or after a sign-in when the backend
+         * couldn't), as the window's: the turn recorded without a session
+         * is on it, and the sidebar and header name it. The transcript (the
+         * user's message, its reply streaming) stays as it is.
+         */
+        _adoptOpenedChatSession(sid) {
+            this.activeSessionId = sid;
+            this.currentAcpSessionId = sid;
+            // The turn initial_message recorded before the session
+            // existed is on this session now.
+            this._adoptTurnSession?.(sid);
+            const existing = this.sessions.find((s) => s.session_id === sid);
+            if (!existing) {
+                const now = new Date().toISOString();
+                this.sessions.unshift({
+                    session_id: sid,
+                    title: t('chat.session.current_title'),
+                    created_at: now,
+                    updated_at: now,
+                });
+            }
+            this.renderSessionList();
+            // Match the init-time auto-select: the header names the
+            // adopted session rather than keeping a stale title.
+            this.elements.chatHeaderTitle.textContent =
+                stripKageTags(existing?.title) || t('chat.session.current_title');
         }
 
         /**

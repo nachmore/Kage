@@ -303,6 +303,49 @@ describe('floating: a signed-out agent refusing the bootstrap', () => {
         expect(status()).toBe('shared.agent_sign_in.status.ready');
     });
 
+    it('a sign-in that sends nothing clears the old error: the session is ready', async () => {
+        const { app, starts, sends } = setup({ bootstraps: ['s-new'] });
+        app._setBootstrapFailure(SIGNED_OUT);
+        app._showBootstrapError(null);
+        await flush();
+        await signInCleanly(starts);
+        expect(app.sessionBootstrapError).toBeNull();
+        expect(sends()).toEqual([]);
+        const response = document.querySelector('#responseText');
+        expect(response.textContent).not.toContain('floating.error.agent_unavailable');
+        expect(response.querySelector('.floating-error-reconnect')).toBeNull();
+        expect(app.elements.contentArea.classList.contains('visible')).toBe(false);
+        // The panel still says how the sign-in went.
+        expect(status()).toBe('shared.agent_sign_in.status.ready');
+    });
+
+    it('a sign-in after the user typed something else clears the old error too', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        app.elements.input.value = 'something else';
+        await signInCleanly(starts);
+        expect(sends()).toEqual([]);
+        expect(document.querySelector('#responseText').textContent).not.toContain(
+            'floating.error.agent_unavailable'
+        );
+        // The draft is the user's.
+        expect(app.elements.input.value).toBe('something else');
+    });
+
+    it('a sign-in leaves alone what replaced the error meanwhile', async () => {
+        const { app, starts } = setup({ bootstraps: ['s-new'] });
+        app._setBootstrapFailure(SIGNED_OUT);
+        app._showBootstrapError(null);
+        await flush();
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        app.showError('a newer error');
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(app.floatingSessionId).toBe('s-new');
+        expect(document.querySelector('#responseText').textContent).toContain('a newer error');
+    });
+
     it('Reconnect under the error does the same: restart, bootstrap, one send', async () => {
         const { app, named, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
         await failedBootstrapThenSend(app, SIGNED_OUT);
@@ -460,6 +503,35 @@ describe('floating: one bootstrap at a time after a failed one', () => {
         expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-b', 'hello agent']]);
         expect(sends()[0].turnId).toEqual(expect.any(String));
         expect(status()).toBe('shared.agent_sign_in.status.done');
+    });
+
+    it('a Reconnect that sends nothing clears the error, though a send redrew it meanwhile', async () => {
+        const { app, sends } = setup({ bootstraps: [SIGNED_OUT] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        const restart = deferred();
+        const ctl = controlBootstraps(app, () => restart.promise);
+        document
+            .querySelector('#responseText .floating-error-reconnect:not(.agent-sign-in-btn)')
+            .click();
+        await flush();
+        // Enter again within the debounce window: the same error, redrawn
+        // (a new Reconnect button), for the newer send.
+        app.elements.input.value = 'second';
+        await app.sendChatMessage('second');
+        await flush();
+        expect(document.querySelector('#responseText').textContent).toContain(
+            'floating.error.agent_unavailable'
+        );
+        restart.resolve(RESTARTED);
+        await flush(20);
+        ctl.pending[0].resolve('s-a');
+        await flush(20);
+        expect(app.floatingSessionId).toBe('s-a');
+        // Something was sent since the first message: neither goes.
+        expect(sends()).toEqual([]);
+        expect(document.querySelector('#responseText').textContent).not.toContain(
+            'floating.error.agent_unavailable'
+        );
     });
 
     it('a second Reconnect while one is under way starts no second restart', async () => {
