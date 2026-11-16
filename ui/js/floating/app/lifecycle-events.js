@@ -131,6 +131,77 @@ export const LifecycleEventsMethods = {
         }
     },
 
+    /** The window's keyboard shortcuts (a `keydown` anywhere in it). */
+    handleGlobalKeyDown(e) {
+        // Escape — stop speech/TTS first, then stop generating, then hide
+        if (e.key === 'Escape') {
+            // An uninstall confirmation: Esc means "no", not "hide".
+            if (this._resultConfirm) {
+                e.preventDefault();
+                this._cancelResultConfirm();
+                return;
+            }
+            // Stop speech recognition or TTS first
+            if (this.speech?.isActive || this.speech?.isListening) {
+                e.preventDefault();
+                this.speech.stopVoiceMode();
+                this.speech.cancelSpeech();
+                return;
+            }
+            if (this.isWaitingForResponse || this._heldSend) {
+                e.preventDefault();
+                this.stopGenerating();
+                return;
+            }
+            if (this._justStoppedGenerating) {
+                e.preventDefault();
+                return;
+            }
+            this.appWindow.hide();
+            return;
+        }
+        // Ctrl/⌘+, — open settings
+        if (cmdOrCtrlPressed(e) && e.key === ',') {
+            e.preventDefault();
+            this.invoke('open_settings_window');
+            return;
+        }
+        // Ctrl/⌘+E — expand to full chat
+        if (cmdOrCtrlPressed(e) && e.key === 'e') {
+            e.preventDefault();
+            this.handleExpandClick();
+            return;
+        }
+        // Ctrl/⌘+L — clear/reset (the tray keeps only commands still
+        // waiting for an answer or their run: resetUI). The user cleared
+        // the input: an edit, so a send waiting on a bootstrap stays unsent.
+        if (cmdOrCtrlPressed(e) && e.key === 'l') {
+            e.preventDefault();
+            this._noteInputEdited();
+            this.resetUI();
+            this.windowManager.userSetHeight = null;
+            this.windowManager.resizeWindow();
+            return;
+        }
+        // Ctrl/⌘+Shift+C — copy last response
+        if (cmdOrCtrlPressed(e) && e.shiftKey && e.key === 'C') {
+            e.preventDefault();
+            if (this.currentResponse) {
+                navigator.clipboard
+                    .writeText(this.currentResponse)
+                    .then(() => signalMascot('copy'))
+                    .catch(() => {});
+            }
+            return;
+        }
+        // Ctrl/⌘+W — hide window
+        if (cmdOrCtrlPressed(e) && e.key === 'w') {
+            e.preventDefault();
+            this.appWindow.hide();
+            return;
+        }
+    },
+
     setupEventListeners() {
         this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
         this._watchInputEdits();
@@ -140,73 +211,7 @@ export const LifecycleEventsMethods = {
         document.addEventListener('click', (e) => this.handleOutsideClick(e));
 
         // Global keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            // Escape — stop speech/TTS first, then stop generating, then hide
-            if (e.key === 'Escape') {
-                // An uninstall confirmation: Esc means "no", not "hide".
-                if (this._resultConfirm) {
-                    e.preventDefault();
-                    this._cancelResultConfirm();
-                    return;
-                }
-                // Stop speech recognition or TTS first
-                if (this.speech?.isActive || this.speech?.isListening) {
-                    e.preventDefault();
-                    this.speech.stopVoiceMode();
-                    this.speech.cancelSpeech();
-                    return;
-                }
-                if (this.isWaitingForResponse || this._heldSend) {
-                    e.preventDefault();
-                    this.stopGenerating();
-                    return;
-                }
-                if (this._justStoppedGenerating) {
-                    e.preventDefault();
-                    return;
-                }
-                this.appWindow.hide();
-                return;
-            }
-            // Ctrl/⌘+, — open settings
-            if (cmdOrCtrlPressed(e) && e.key === ',') {
-                e.preventDefault();
-                this.invoke('open_settings_window');
-                return;
-            }
-            // Ctrl/⌘+E — expand to full chat
-            if (cmdOrCtrlPressed(e) && e.key === 'e') {
-                e.preventDefault();
-                this.handleExpandClick();
-                return;
-            }
-            // Ctrl/⌘+L — clear/reset (the tray keeps only commands still
-            // waiting for an answer or their run: resetUI)
-            if (cmdOrCtrlPressed(e) && e.key === 'l') {
-                e.preventDefault();
-                this.resetUI();
-                this.windowManager.userSetHeight = null;
-                this.windowManager.resizeWindow();
-                return;
-            }
-            // Ctrl/⌘+Shift+C — copy last response
-            if (cmdOrCtrlPressed(e) && e.shiftKey && e.key === 'C') {
-                e.preventDefault();
-                if (this.currentResponse) {
-                    navigator.clipboard
-                        .writeText(this.currentResponse)
-                        .then(() => signalMascot('copy'))
-                        .catch(() => {});
-                }
-                return;
-            }
-            // Ctrl/⌘+W — hide window
-            if (cmdOrCtrlPressed(e) && e.key === 'w') {
-                e.preventDefault();
-                this.appWindow.hide();
-                return;
-            }
-        });
+        document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
 
         // Paste handler for images
         this.elements.input.addEventListener('paste', (e) =>

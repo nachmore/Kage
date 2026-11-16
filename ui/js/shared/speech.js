@@ -20,12 +20,15 @@ export class SpeechController {
      * @param {Function} opts.onSend - called with (text) to send a message
      * @param {Function} [opts.onVisibilityUpdate] - called when speech state changes (for datetime etc.)
      * @param {HTMLElement} [opts.barContainer] - Element to insert TTS playback bar before
+     * @param {Function} [opts.onTranscript] - called after dictated text is written to the
+     *   input (the user's own edit; the controller's clears before listening again are not)
      */
-    constructor({ invoke, elements, onSend, onVisibilityUpdate, barContainer }) {
+    constructor({ invoke, elements, onSend, onVisibilityUpdate, barContainer, onTranscript }) {
         this.invoke = invoke;
         this.elements = elements;
         this.onSend = onSend;
         this.onVisibilityUpdate = onVisibilityUpdate || (() => {});
+        this.onTranscript = onTranscript || (() => {});
         this.barContainer = barContainer || null;
 
         this.recognition = null;
@@ -128,6 +131,7 @@ export class SpeechController {
                 input.value = finalTranscript + interimTranscript;
                 input.style.height = 'auto';
                 input.style.height = input.scrollHeight + 'px';
+                this.onTranscript();
             }
             this.onVisibilityUpdate();
 

@@ -58,6 +58,7 @@ export function createSessionActionsMixin(dependencies) {
             this._toolCallIds = new Set();
             this._sourceDomains = new Set();
             this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.start_conversation')}</div>`;
+            this._transcriptOf = null;
             this.elements.chatHeaderTitle.textContent = t('chat.header.default_title');
 
             // The backend pin still names the old session until the switch

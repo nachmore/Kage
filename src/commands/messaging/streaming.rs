@@ -723,15 +723,26 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
         let turn_id = turn_id
             .filter(|t| !t.trim().is_empty())
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let session_id = session_id.filter(|s| !s.trim().is_empty());
         // Targeted emit: send to the main window only. Plain
         // `main.emit(...)` looks targeted but actually broadcasts to
         // every webview that has a listener — `emit_to` with a
         // WebviewWindow target is the one that actually scopes the
-        // dispatch. `turnId` names the turn main records for it.
+        // dispatch. `turnId` names the turn main records for it, and
+        // `sessionId` the session the prompt is sent on (main's pin, which
+        // is not the session main shows while a selection is still under
+        // way or was refused), or null when none is set up yet (one made
+        // below is announced by `initial_message_session`). Main records
+        // the turn on that session and shows it, so the prompt and its
+        // reply render where they went.
         let _ = app.emit_to(
             tauri::EventTarget::webview_window(window_labels::MAIN),
             "initial_message",
-            serde_json::json!({ "message": &message, "turnId": &turn_id }),
+            serde_json::json!({
+                "message": &message,
+                "turnId": &turn_id,
+                "sessionId": &session_id,
+            }),
         );
 
         // Nothing to send (e.g. the inline-assist icon clicked with no
@@ -744,7 +755,7 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
         // Main had no pinned session when the caller passed none; the one
         // created below must be pinned and announced or main drops every
         // chunk of the reply as another session's background activity.
-        let needs_pin = !matches!(session_id.as_deref(), Some(s) if !s.trim().is_empty());
+        let needs_pin = session_id.is_none();
         let client = acp.client.clone();
         let window = main.clone();
         let originators = ui.pending_prompt_originators.clone();
@@ -765,7 +776,7 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
             }
             .and_then(|()| client.ensure_initialized());
             if let Err(e) = ready {
-                let shown = session_id.as_deref().filter(|s| !s.trim().is_empty());
+                let shown = session_id.as_deref();
                 let err = session_setup_error(&e, &config, "Connect", |e| {
                     AppError::raw(
                         ErrorKind::ConnectionLost,

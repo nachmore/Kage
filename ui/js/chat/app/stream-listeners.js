@@ -142,9 +142,7 @@ export function createStreamListenersMixin(dependencies) {
                 // nothing in flight it still shows, with no resend. The
                 // exception is the stream on screen after the user switched
                 // back to a session: its turn is not the last one sent, but
-                // its error ends it (_errorEndsShownStream), unresent. And
-                // an error naming the last turn, recorded on the session
-                // shown, is that turn's whatever session it names.
+                // its error ends it (_errorEndsShownStream), unresent.
                 const named = errorSessionId(event?.payload);
                 if (isErrorForOtherTurn(event?.payload, this._lastTurn?.turnId)) {
                     if (this._errorEndsShownStream(event?.payload)) {
@@ -162,13 +160,7 @@ export function createStreamListenersMixin(dependencies) {
                     if (!this.isWaitingForResponse) this.handleMessageError(event);
                     return;
                 }
-                // The turn on screen's own error (its turn id) ends it,
-                // whatever session it names (_errorIsForShownTurn).
-                if (
-                    named &&
-                    !this._errorIsForShownSession(named) &&
-                    !this._errorIsForShownTurn(event?.payload)
-                ) {
+                if (named && !this._errorIsForShownSession(named)) {
                     console.log('[chat] message_error for a session not shown:', named);
                     this.streamRegistry.fail(named);
                     this.renderSessionList();
@@ -358,17 +350,26 @@ export function createStreamListenersMixin(dependencies) {
             });
 
             this.listen('initial_message', (event) => {
-                // `{ message, turnId }`: the backend sends it
-                // (open_chat_with_message) under that turn id, and its
-                // failure comes back here naming it, so Reconnect can
-                // resend it. A bare string (older backend) names no turn:
-                // its errors are never resent.
+                // `{ message, turnId, sessionId }`: the backend sends it
+                // (open_chat_with_message) under that turn id, on that
+                // session (main's pin; null: none yet, one is made and
+                // announced by initial_message_session), and its failure
+                // comes back here naming the turn, so Reconnect can resend
+                // it. The turn is recorded on that session, and the window
+                // shows it when it shows another one (or is still painting
+                // one), so the prompt and its reply render where they went.
+                // A bare string (older backend) names no turn, whose errors
+                // are never resent, and no session: the one shown.
                 const p = event.payload;
                 const message = typeof p === 'string' ? p : p?.message;
                 const turnId = typeof p?.turnId === 'string' && p.turnId ? p.turnId : null;
+                const shown = this.activeSessionId ?? null;
+                const sid =
+                    p && typeof p === 'object' && 'sessionId' in p ? p.sessionId || null : shown;
                 if (message) {
+                    if (sid !== shown || this._paintPending) this._showTurnSession(sid);
                     this.addUserMessage(message);
-                    this._recordTurn(this.activeSessionId, message, null, turnId);
+                    this._recordTurn(sid, message, null, turnId);
                     this.startStreaming();
                 }
             });
