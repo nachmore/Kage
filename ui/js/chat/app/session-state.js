@@ -20,19 +20,25 @@ export function createSessionStateMixin(dependencies) {
             // A New Chat in flight (or started while this read was in
             // flight) owns `currentAcpSessionId`: the pin may still be the
             // old session, and adopting it would let that session's
-            // MESSAGE_COMPLETE re-claim the view mid-switch.
+            // MESSAGE_COMPLETE re-claim the view mid-switch. Likewise while
+            // the window shows a session whose switch was refused
+            // (_onSessionSwitchFailed): it has no session of its own then,
+            // and the pin (the session it had) is not the one on screen, so
+            // a turn finishing there must stay a background one.
             const newChatGen = this._newSessionGen;
-            const newChatRaced = () =>
-                !!this._newSessionPending || newChatGen !== this._newSessionGen;
+            const raced = () =>
+                !!this._newSessionPending ||
+                newChatGen !== this._newSessionGen ||
+                (!!this.activeSessionId && this.activeSessionId === this._setupFailedSessionId);
             try {
                 const pinned = await this.invoke('get_window_session', {
                     label: this.windowLabel,
                 });
-                if (newChatRaced()) return;
+                if (raced()) return;
                 this.currentAcpSessionId = pinned;
             } catch (e) {
                 console.error('Failed to get current session ID:', e);
-                if (newChatRaced()) return;
+                if (raced()) return;
                 this.currentAcpSessionId = null;
             }
         }

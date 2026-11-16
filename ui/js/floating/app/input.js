@@ -445,25 +445,19 @@ export const InputMethods = {
             if (await this._openTypedPath(message)) return;
         }
 
-        // Whether it went to the agent: the input is then cleared as the
-        // window's own step, not an edit (_setInputValue).
-        let sent = false;
         const result = await handleEnterAction({
             message,
             suggestions: this.currentMatches,
             selectedIndex: this.selectedIndex,
             shortcuts: this.shortcuts,
             ctx: this._getExecCtx(),
-            onSend: (msg) => {
-                sent = true;
-                return this.sendChatMessage(msg);
-            },
+            onSend: (msg) => this.sendChatMessage(msg),
             onSystemCommand: (cmdId, needsConfirm, elevated) =>
                 this._executeSystemCommand(cmdId, needsConfirm, elevated),
             onSelection: (command, value) => this.executeSelection(command, value),
         });
 
-        await this._applyEnterActionResult(result, { sent });
+        await this._applyEnterActionResult(result);
     },
 
     /**
@@ -506,11 +500,8 @@ export const InputMethods = {
      * Apply the {handled, action} verdict from handleEnterAction. Shared by
      * the Enter key (handleEnterKey) and click-to-execute (_onResultClick) so
      * both paths treat hide / replace_input / keep_suggestions identically.
-     * `sent`: the input went to the agent as a message, so emptying it is
-     * the send's own step (a send it left waiting on a bootstrap still
-     * goes out after a sign-in), not an edit.
      */
-    async _applyEnterActionResult(result, { sent = false } = {}) {
+    async _applyEnterActionResult(result) {
         if (!result?.handled) return;
         if (result.action === 'replace_input') {
             /* input already replaced by onReplaceInput callback */
@@ -524,9 +515,6 @@ export const InputMethods = {
             // the picker we just painted, which was the silent-failure bug.
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
-        } else if (sent) {
-            this._setInputValue('');
-            this.clearSuggestions();
         } else {
             this._clearInput();
         }
@@ -559,80 +547,42 @@ export const InputMethods = {
             return;
         }
 
-        let sent = false;
         const actionResult = await handleEnterAction({
             message: this.elements.input.value.trim(),
             suggestions: this.currentMatches,
             selectedIndex: this.selectedIndex,
             shortcuts: this.shortcuts,
             ctx: this._getExecCtx(),
-            onSend: (msg) => {
-                sent = true;
-                return this.sendChatMessage(msg);
-            },
+            onSend: (msg) => this.sendChatMessage(msg),
             onSystemCommand: (cmdId, needsConfirm, elevated) =>
                 this._executeSystemCommand(cmdId, needsConfirm, elevated),
             onSelection: (command, value) => this.executeSelection(command, value),
         });
-        await this._applyEnterActionResult(actionResult, { sent });
+        await this._applyEnterActionResult(actionResult);
     },
 
     /**
-     * Count the edits to the input: typing, pasting or dropping text,
-     * cutting, deleting (each fires the input's own `input` event), and
-     * every write to its `value` that fires none: a Tab completion, a
-     * history recall, voice dictation, Ctrl+L / Escape's reset (resetUI), a
-     * view's composed text, a spelling fix, clearing it after running a
-     * result. The only writes not counted are the window's own emptying of
-     * what it just sent to the agent (_setInputValue). A
-     * send a failed bootstrap left waiting goes out after a sign-in only
-     * while there was none since it was submitted
-     * (_canSendWaitingAfterBootstrap), even when the text ends up the same
-     * or empty. Attaching a file or an image is not an edit: it stays in
-     * the composer for the next send.
+     * Count the user's own edits to the input. Typing, pasting or dropping
+     * text, cutting and deleting fire the input's `input` event (so does a
+     * view's composed text); the user's writes that fire none call
+     * `_noteInputEdited` where they happen: a Tab completion, a history
+     * recall, dictated text (the speech controller's `onTranscript`),
+     * Ctrl+L. The window's own writes are not edits: emptying the input
+     * after a send or a replay, voice mode clearing it to listen again,
+     * resetUI. A send that waited on a bootstrap goes out later only while
+     * the user made no edit since it was submitted (_inputEditedSince),
+     * even when the text ends up the same or empty. Attaching a file or an
+     * image is not an edit: it stays in the composer for the next send.
      */
     _watchInputEdits() {
         const input = this.elements.input;
         if (!input || input._kageEditsWatched) return;
         input._kageEditsWatched = true;
         input.addEventListener('input', () => this._noteInputEdited());
-        let proto = Object.getPrototypeOf(input);
-        let native = null;
-        while (proto && !native) {
-            native = Object.getOwnPropertyDescriptor(proto, 'value') || null;
-            proto = Object.getPrototypeOf(proto);
-        }
-        if (!native?.get || !native?.set) return;
-        const app = this;
-        Object.defineProperty(input, 'value', {
-            configurable: true,
-            enumerable: native.enumerable,
-            get() {
-                return native.get.call(this);
-            },
-            set(value) {
-                native.set.call(this, value);
-                if (!app._writingOwnInput) app._noteInputEdited();
-            },
-        });
     },
 
     _noteInputEdited() {
         this._inputEdits = (this._inputEdits || 0) + 1;
-    },
-
-    /**
-     * Set the input to `value` as the window's own step after a send (not
-     * an edit: _watchInputEdits doesn't count it).
-     */
-    _setInputValue(value) {
-        this._writingOwnInput = true;
-        try {
-            this.elements.input.value = value;
-        } finally {
-            this._writingOwnInput = false;
-        }
-        this.elements.input.style.height = 'auto';
     },
 
     _clearInput() {
@@ -693,7 +643,8 @@ export const InputMethods = {
             }
         }
         if (replay && this._inputEditedSince(submission)) return;
-        this._setInputValue('');
+        this.elements.input.value = '';
+        this.elements.input.style.height = 'auto';
         this.elements.appSuggestions.classList.remove('visible');
         this.currentMatches = [];
         this.selectedIndex = -1;
@@ -752,7 +703,8 @@ export const InputMethods = {
             this.extensionToolController.reset();
             // Reset UI for the new response
             if (!replay || !this._inputEditedSince(submission)) {
-                this._setInputValue('');
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
             }
             this.currentResponse = '';
             this.elements.responseText.textContent = '';

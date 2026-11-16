@@ -477,6 +477,8 @@ export const UiStateMethods = {
                 speechWave: this.elements.speechWave,
             },
             onSend: (text) => this.sendChatMessage(text),
+            // Dictated text is the user's edit (_watchInputEdits).
+            onTranscript: () => this._noteInputEdited(),
             onVisibilityUpdate: () => this.updateDatetimeVisibility(),
             barContainer: document.querySelector('.input-container'),
         });

@@ -1,22 +1,19 @@
 /**
- * The chat window acts on the session it shows, through the production
+ * The chat window and the session a prompt went to, through the production
  * listeners:
- *   - main is pinned (by the backend) to A, and selecting B fails before
- *     that pin is replaced. Inline assist's prompt then lands on B (its
- *     bubble, its turn) while the backend's setup refusal names A. That
- *     error is this window's own turn's (its `turnId`): it is never
- *     dropped for naming another session, it shows with Sign in, and the
- *     sign-in sends the turn once on B, the session shown, with the pin
- *     moved to B. Never on A, and not after the user moved on.
+ *   - inline assist's open in chat prompts on main's backend pin, A, and
+ *     `initial_message` names it. Main may show B meanwhile (a selection
+ *     still under way, or one that was refused): it records the turn on A
+ *     and shows A, so the prompt and its reply render there, and the
+ *     superseded selection's late answer changes nothing. A refused
+ *     selection never pins the window to B, nor makes A's turns its own
+ *     while B is shown (the focus refresh reads the pin); a signed-out
+ *     refusal of the prompt names A and its Sign in sends the turn there
+ *     once. A prompt that arrives while A's transcript is still painting
+ *     in batches lands after the whole transcript.
  *   - a session the sign-in sets up is painted only while the window still
  *     shows it: a late load_session reply for a session the user left
  *     paints nothing (transcript, header, sidebar highlight).
- *   - a refused selection moves the backend's pin to the session shown, so
- *     open in chat prompts there (for any refusal, not only a signed-out
- *     one) and its reply shows; a signed-out refusal of that prompt names
- *     the session shown and still gets Sign in, which sets it up and sends
- *     the turn there once; and a sign-in or Reconnect already under way
- *     for the selection's own refusal sends that turn once it is up.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { marked } from 'marked';
@@ -189,111 +186,300 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
-describe("chat: open-in-chat's refusal names the pin, main shows another session", () => {
-    /** open_chat_with_message's MESSAGE_ERROR: it never sent the prompt. */
-    const unsent = (sessionId) => ({
-        ...SIGNED_OUT,
-        detail: null,
-        sessionId,
-        resendable: true,
-        turnId: 'assist-turn-1',
-    });
+describe('chat: open in chat prompts on main\'s pin, and main shows that session', () => {
+    const LOCKED = 'Session is active in another process (PID 4242)';
+    const sendsOf = (named) => named('send_message_streaming').map(([, a]) => a);
+    const userBubbles = () => document.querySelectorAll('#messagesArea .message.user');
 
     /**
-     * Main is pinned to s-a; selecting s-b is refused (the pin stays s-a);
-     * inline assist's prompt lands on s-b and its refusal names s-a, as
-     * the production listeners see it. `refreshed`: the focus refresh read
-     * the backend pin (s-a) back into `currentAcpSessionId` first.
+     * Main shows s-a, its backend pin. `switches`: what selecting s-b
+     * answers (see `setup`).
      */
-    async function pinnedElsewhereAndRefused({ refreshed = false, switches } = {}) {
-        const ctx = setup({ switches: switches ?? [SIGNED_OUT, 's-b'] });
-        const { app, listeners } = ctx;
+    function shownOnA({ switches, loads }) {
+        const ctx = setup({ switches, loads, pins: { main: 's-a' } });
+        const { app } = ctx;
+        app.windowLabel = 'main';
         app.activeSessionId = 's-a';
         app.currentAcpSessionId = 's-a';
+        app.sessions = [
+            { session_id: 's-a', title: 'Chat A' },
+            { session_id: 's-b', title: 'Chat B' },
+        ];
+        app.handleMessageChunk = vi.fn();
+        app.handleMessageComplete = vi.fn(() => {
+            app.isWaitingForResponse = false;
+        });
         app.setupStreamingListeners();
         app._listenForInitialMessageSession();
-        await app.selectSession('s-b');
-        await flush();
-        expect(app.activeSessionId).toBe('s-b');
-        listeners.initial_message({
-            payload: { message: 'explain this', turnId: 'assist-turn-1' },
-        });
-        expect(app.isWaitingForResponse).toBe(true);
-        if (refreshed) app.currentAcpSessionId = 's-a';
-        await listeners.message_error({ payload: unsent('s-a') });
-        await flush(20);
         return ctx;
     }
 
-    const sendsOf = (named) => named('send_message_streaming').map(([, a]) => a);
-
-    for (const refreshed of [false, true]) {
-        const when = refreshed ? 'after the focus refresh' : 'before the focus refresh';
-        it(`${when}: the error shows with Sign in, which sends the turn once on the shown session`, async () => {
-            const { app, starts, named } = await pinnedElsewhereAndRefused({ refreshed });
-            expect(app.isWaitingForResponse).toBe(false);
-            expect(document.querySelector('#errorContainer').textContent).toContain(
-                'Kiro needs you to sign in'
-            );
-            expect(signInBtn()).toBeTruthy();
-
-            await signInCleanly(starts);
-            expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's-b' }]]);
-            // The refused selection, then the one after the sign-in: the
-            // pin moves to s-b before anything is sent.
-            expect(named('switch_acp_session')).toEqual([
-                ['switch_acp_session', { sessionId: 's-b' }],
-                ['switch_acp_session', { sessionId: 's-b' }],
-            ]);
-            expect(app.activeSessionId).toBe('s-b');
-            expect(app.currentAcpSessionId).toBe('s-b');
-            const sends = sendsOf(named);
-            expect(sends.map((a) => [a.sessionId, a.message])).toEqual([['s-b', 'explain this']]);
-            expect(sends[0].turnId).not.toBe('assist-turn-1');
-            expect(document.querySelectorAll('#messagesArea .message.user').length).toBe(1);
-            expect(status()).toBe('shared.agent_sign_in.status.done');
-            await flush(10);
-            expect(sendsOf(named).length).toBe(1);
-        });
+    /**
+     * Inline assist's open in chat, as the backend runs it: it reads main's
+     * pin (get_window_session), announces the prompt on it
+     * (initial_message names it) and prompts there. Resolves to that pin.
+     */
+    async function openInChat(app, listeners, message = 'explain this', turnId = 'assist-turn-1') {
+        const sessionId = await app.invoke('get_window_session', { label: 'main' });
+        listeners.initial_message({ payload: { message, turnId, sessionId } });
+        return sessionId;
     }
 
-    it('Reconnect does the same, once', async () => {
-        const { app, named } = await pinnedElsewhereAndRefused();
-        document.getElementById('errorReconnectBtn').click();
-        await flush(20);
-        expect(app.currentAcpSessionId).toBe('s-b');
-        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
-            ['s-b', 'explain this'],
-        ]);
-    });
-
-    it('nothing is sent after the user moved to another session', async () => {
-        const { app, starts, named } = await pinnedElsewhereAndRefused();
-        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    /** The reply streams on `sid` and completes, with the focus refresh in between. */
+    async function replyOn(app, listeners, sid) {
+        listeners.message_chunk({ payload: { sessionId: sid, text: 'Sure.' } });
+        // open_chat_with_message focused main: its refresh reads the pin.
+        await app.loadCurrentSessionId();
+        listeners.message_complete({ payload: { sessionId: sid, oldSessionId: sid } });
         await flush();
-        app.activeSessionId = 's-9';
-        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
-        await flush(20);
-        expect(app.activeSessionId).toBe('s-9');
+    }
+
+    it('a selection still under way: the prompt and its reply show on the pinned session, and a refusal of the selection after it changes nothing', async () => {
+        let refuse;
+        const { app, listeners, named, pins } = shownOnA({
+            switches: [() => new Promise((_, reject) => (refuse = reject))],
+        });
+        const selecting = app.selectSession('s-b');
+        await flush();
+        expect(app.activeSessionId).toBe('s-b');
+
+        const on = await openInChat(app, listeners);
+        expect(on).toBe('s-a');
+        // Main shows the session the prompt went to, with its turn there.
+        expect(app.activeSessionId).toBe('s-a');
+        expect(app.currentAcpSessionId).toBe('s-a');
+        expect(app._lastTurn).toMatchObject({ sessionId: 's-a', turnId: 'assist-turn-1' });
+        expect(app.elements.chatHeaderTitle.textContent).toBe('Chat A');
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(userBubbles().length).toBe(1);
+
+        refuse(SIGNED_OUT);
+        await selecting;
+        await flush();
+        // The superseded selection's refusal shows nothing and pins nothing.
+        expect(document.querySelector('#errorContainer').textContent).toBe('');
+        expect(app.activeSessionId).toBe('s-a');
+        expect(pins.main).toBe('s-a');
+
+        await replyOn(app, listeners, on);
+        expect(app.handleMessageChunk).toHaveBeenCalledTimes(1);
+        expect(app.handleMessageComplete).toHaveBeenCalledTimes(1);
+        expect(app.isWaitingForResponse).toBe(false);
+        expect(app.activeSessionId).toBe('s-a');
+        expect(app.elements.sendBtn.disabled).toBe(false);
+        expect(named('set_window_session').map(([, a]) => a.sessionId)).not.toContain('s-b');
         expect(sendsOf(named)).toEqual([]);
     });
 
-    it('still refused after the sign-in: the error again with Sign in, nothing sent, then once', async () => {
-        const { app, starts, named } = await pinnedElsewhereAndRefused({
-            switches: [SIGNED_OUT],
+    it('a selection that lands after the prompt went out: main stays on the pinned session and pins it back', async () => {
+        let land;
+        const { app, listeners, pins } = shownOnA({
+            switches: [() => new Promise((resolve) => (land = resolve))],
         });
-        await signInCleanly(starts);
-        expect(sendsOf(named)).toEqual([]);
-        expect(app.activeSessionId).toBe('s-b');
-        expect(signInBtn()).toBeTruthy();
+        const selecting = app.selectSession('s-b');
+        await flush();
+        const on = await openInChat(app, listeners);
+        land('s-b');
+        await selecting;
+        await flush();
+        expect(app.activeSessionId).toBe('s-a');
+        expect(app.currentAcpSessionId).toBe('s-a');
+        expect(pins.main).toBe('s-a');
+        await replyOn(app, listeners, on);
+        expect(app.handleMessageChunk).toHaveBeenCalledTimes(1);
+        expect(app.isWaitingForResponse).toBe(false);
+    });
+
+    it("the transcript on screen is kept while it is still the pinned session's", async () => {
+        let loadB;
+        const { app, listeners, named } = shownOnA({ switches: ['s-b'] });
         const orig = app.invoke.getMockImplementation();
         app.invoke.mockImplementation(async (cmd, args) =>
-            cmd === 'switch_acp_session' ? 's-b' : orig(cmd, args)
+            cmd === 'load_session' && args.sessionId === 's-b'
+                ? new Promise((resolve) => (loadB = () => resolve({ messages: [] })))
+                : orig(cmd, args)
         );
+        await app.selectSession('s-a', { force: true });
+        app.elements.messagesArea.innerHTML = '<div class="message">A transcript</div>';
+        // Selecting s-b: its transcript is still loading, s-a's is on screen.
+        const selecting = app.selectSession('s-b');
+        await flush();
+        await openInChat(app, listeners);
+        expect(app.elements.messagesArea.textContent).toContain('A transcript');
+        expect(userBubbles().length).toBe(1);
+
+        app.displaySession.mockClear();
+        loadB();
+        await selecting;
+        await flush();
+        // The superseded selection paints nothing and switches nothing.
+        expect(app.displaySession).not.toHaveBeenCalled();
+        expect(named('switch_acp_session')).toEqual([]);
+        expect(app.elements.messagesArea.textContent).toContain('A transcript');
+        expect(app.activeSessionId).toBe('s-a');
+    });
+
+    it('another session\'s transcript on screen gives way to the turn', async () => {
+        const { app, listeners } = shownOnA({ switches: [LOCKED] });
+        await app.selectSession('s-b');
+        await flush();
+        app.elements.messagesArea.innerHTML = '<div class="message">B transcript</div>';
+        await openInChat(app, listeners);
+        expect(app.elements.messagesArea.textContent).not.toContain('B transcript');
+        expect(userBubbles().length).toBe(1);
+    });
+
+    it('a refused selection never pins the window to that session: open in chat prompts on the pin, and its reply shows', async () => {
+        const { app, listeners, named, pins } = shownOnA({ switches: [LOCKED] });
+        await app.selectSession('s-b');
+        await flush();
+        expect(app.activeSessionId).toBe('s-b');
+        expect(app.elements.chatInput.disabled).toBe(true);
+        expect(pins.main).toBe('s-a');
+        expect(named('set_window_session')).toEqual([]);
+
+        const on = await openInChat(app, listeners);
+        expect(on).toBe('s-a');
+        expect(app.activeSessionId).toBe('s-a');
+        await replyOn(app, listeners, on);
+        expect(app.handleMessageChunk).toHaveBeenCalledTimes(1);
+        expect(app.handleMessageComplete).toHaveBeenCalledTimes(1);
+        expect(app.isWaitingForResponse).toBe(false);
+        expect(named('set_window_session').map(([, a]) => a.sessionId)).not.toContain('s-b');
+    });
+
+    it('an earlier selection landing after a refused one pins the session it loaded, never the refused one', async () => {
+        let landC;
+        const { app, pins } = shownOnA({
+            switches: [() => new Promise((resolve) => (landC = resolve)), LOCKED],
+        });
+        const selectingC = app.selectSession('s-c');
+        await flush();
+        await app.selectSession('s-b');
+        await flush();
+        expect(app.activeSessionId).toBe('s-b');
+        landC('s-c');
+        await selectingC;
+        await flush();
+        expect(app.activeSessionId).toBe('s-b');
+        expect(pins.main).toBe('s-c');
+    });
+
+    it("a refused selection, then the focus refresh and a turn finishing on the pin: the refused session stays shown and the turn is a background one", async () => {
+        const { app, listeners, pins } = shownOnA({ switches: [LOCKED] });
+        // A turn is streaming on s-a when the user selects s-b.
+        app.streamRegistry.begin('s-a');
+        app.isWaitingForResponse = true;
+        await app.selectSession('s-b');
+        await flush();
+        expect(app.activeSessionId).toBe('s-b');
+        expect(pins.main).toBe('s-a');
+        app.elements.messagesArea.innerHTML = '<div class="message">B transcript</div>';
+
+        // Any focus of the window reads the backend's pin.
+        await app.loadCurrentSessionId();
+        expect(app.currentAcpSessionId).toBeNull();
+        listeners.message_complete({ payload: { sessionId: 's-a', oldSessionId: 's-a' } });
+        await flush();
+        // s-a's turn finished in the background: nothing adopts it.
+        expect(app.activeSessionId).toBe('s-b');
+        expect(app.handleMessageComplete).not.toHaveBeenCalled();
+        expect(app.streamRegistry.isUnread('s-a')).toBe(true);
+
+        // Open in chat on the pin then shows s-a, not s-b's transcript.
+        await openInChat(app, listeners);
+        expect(app.activeSessionId).toBe('s-a');
+        expect(app.elements.messagesArea.textContent).not.toContain('B transcript');
+        expect(userBubbles().length).toBe(1);
+    });
+
+    it('open in chat during a batched paint of the pinned session: the prompt lands after the whole transcript', async () => {
+        const frames = new Map();
+        let frameId = 0;
+        vi.stubGlobal('requestAnimationFrame', (cb) => {
+            frames.set(++frameId, cb);
+            return frameId;
+        });
+        vi.stubGlobal('cancelAnimationFrame', (id) => frames.delete(id));
+        const runFrames = () => {
+            while (frames.size) {
+                const [id, cb] = frames.entries().next().value;
+                frames.delete(id);
+                cb();
+            }
+        };
+        const history = {
+            messages: Array.from({ length: 40 }, (_, i) => ({
+                kind: 'Prompt',
+                message_id: `m${i}`,
+                content: [{ kind: 'text', data: `history ${i}` }],
+            })),
+        };
+        const { app, listeners } = shownOnA({ switches: ['s-a'], loads: { 's-a': history } });
+        delete app.displaySession; // the production batched render
+        app.showSuggestionChips = vi.fn();
+        app.activeSessionId = null;
+        const painting = app._showCurrentSession();
+        await flush();
+        // The first batch is on screen, the rest wait for animation frames.
+        expect(userBubbles().length).toBe(10);
+        expect(frames.size).toBe(1);
+
+        await openInChat(app, listeners);
+        runFrames();
+        await painting;
+        await flush();
+        const texts = [...userBubbles()].map((el) => el.textContent);
+        expect(texts.length).toBe(41);
+        expect(texts[40]).toContain('explain this');
+        expect(texts[39]).toContain('history 39');
+        expect(app.isWaitingForResponse).toBe(true);
+        // A turn is under way: no suggestion chips under the history.
+        expect(app.showSuggestionChips).not.toHaveBeenCalled();
+    });
+
+    it("a signed-out refusal of the selection, then of open in chat's prompt on the pin: Sign in sends it there once", async () => {
+        const { app, starts, listeners, named, pins } = shownOnA({ switches: [SIGNED_OUT] });
+        // The restart reloads the session it is asked to.
+        const orig = app.invoke.getMockImplementation();
+        app.invoke.mockImplementation(async (cmd, args) => {
+            const answer = await orig(cmd, args);
+            return cmd === 'reconnect_acp' ? { ...answer, sessionReloaded: true } : answer;
+        });
+        await app.selectSession('s-b');
+        await flush();
+        expect(pins.main).toBe('s-a');
+        expect(signInBtn()).toBeTruthy();
+
+        const on = await openInChat(app, listeners);
+        // The backend's connect was refused: nothing of the prompt went out.
+        await listeners.message_error({
+            payload: {
+                ...SIGNED_OUT,
+                detail: null,
+                sessionId: on,
+                resendable: true,
+                turnId: 'assist-turn-1',
+            },
+        });
+        await flush(20);
+        expect(app.activeSessionId).toBe('s-a');
+        expect(app.isWaitingForResponse).toBe(false);
+        expect(document.querySelector('#errorContainer').textContent).toContain(
+            'Kiro needs you to sign in'
+        );
+
         await signInCleanly(starts);
-        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
-            ['s-b', 'explain this'],
-        ]);
+        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's-a' }]]);
+        // Only the refused selection: nothing switches to s-b again.
+        expect(named('switch_acp_session').map(([, a]) => a.sessionId)).toEqual(['s-b']);
+        const sends = sendsOf(named);
+        expect(sends.map((a) => [a.sessionId, a.message])).toEqual([['s-a', 'explain this']]);
+        expect(sends[0].turnId).not.toBe('assist-turn-1');
+        expect(userBubbles().length).toBe(1);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+        await flush(10);
+        expect(sendsOf(named).length).toBe(1);
     });
 });
 
@@ -367,184 +553,5 @@ describe('chat: a late paint of a session the window no longer shows', () => {
         await flush(20);
         expect(app.elements.messagesArea.textContent).toBe('B transcript');
         expect(app.elements.chatHeaderTitle.textContent).toBe('Chat B');
-    });
-});
-
-describe("chat: a refused selection moves the backend's pin to the session shown", () => {
-    const LOCKED = 'Session is active in another process (PID 4242)';
-    const sendsOf = (named) => named('send_message_streaming').map(([, a]) => a);
-
-    /**
-     * Inline assist's open in chat, as the backend runs it: it reads main's
-     * pin (get_window_session), announces the prompt (initial_message) and
-     * prompts on that pin. Resolves to the session it prompted on.
-     */
-    async function openInChat(app, listeners, message, turnId) {
-        const sessionId = await app.invoke('get_window_session', { label: 'main' });
-        listeners.initial_message({ payload: { message, turnId } });
-        return sessionId;
-    }
-
-    it('a selection refused for another reason: open in chat prompts on the session shown, and its reply shows', async () => {
-        const { app, listeners, named, pins } = setup({
-            switches: [LOCKED],
-            pins: { main: 's-a' },
-        });
-        app.windowLabel = 'main';
-        app.activeSessionId = 's-a';
-        app.currentAcpSessionId = 's-a';
-        app.handleMessageChunk = vi.fn();
-        app.handleMessageComplete = vi.fn(() => {
-            app.isWaitingForResponse = false;
-        });
-        app.setupStreamingListeners();
-        await app.selectSession('s-b');
-        await flush();
-        expect(app.activeSessionId).toBe('s-b');
-        expect(pins.main).toBe('s-b');
-
-        const on = await openInChat(app, listeners, 'explain this', 'assist-turn-1');
-        expect(on).toBe('s-b');
-        expect(app.isWaitingForResponse).toBe(true);
-        // The reply streams on the session the backend prompted on.
-        listeners.message_chunk({ payload: { sessionId: on, text: 'Sure.' } });
-        expect(app.handleMessageChunk).toHaveBeenCalledTimes(1);
-        // open_chat_with_message focused main: its refresh reads the pin.
-        await app.loadCurrentSessionId();
-        listeners.message_complete({ payload: { sessionId: on, oldSessionId: on } });
-        await flush();
-
-        expect(app.handleMessageComplete).toHaveBeenCalledTimes(1);
-        expect(app.isWaitingForResponse).toBe(false);
-        expect(app.activeSessionId).toBe('s-b');
-        expect(named('set_window_session').map(([, a]) => a.sessionId)).not.toContain('s-a');
-        expect(sendsOf(named)).toEqual([]);
-    });
-
-    it('a signed-out refusal of it names the session shown: Sign in sets that one up and sends the turn there once', async () => {
-        const { app, starts, listeners, named, pins } = setup({
-            switches: [SIGNED_OUT, 's-b'],
-            pins: { main: 's-a' },
-        });
-        app.windowLabel = 'main';
-        app.activeSessionId = 's-a';
-        app.currentAcpSessionId = 's-a';
-        app.setupStreamingListeners();
-        await app.selectSession('s-b');
-        await flush();
-        expect(pins.main).toBe('s-b');
-
-        const on = await openInChat(app, listeners, 'explain this', 'assist-turn-1');
-        await listeners.message_error({
-            payload: {
-                ...SIGNED_OUT,
-                detail: null,
-                sessionId: on,
-                resendable: true,
-                turnId: 'assist-turn-1',
-            },
-        });
-        await flush(20);
-        expect(app.isWaitingForResponse).toBe(false);
-        expect(signInBtn()).toBeTruthy();
-
-        await signInCleanly(starts);
-        expect(named('reconnect_acp')).toEqual([['reconnect_acp', { sessionId: 's-b' }]]);
-        expect(named('switch_acp_session').map(([, a]) => a.sessionId)).toEqual(['s-b', 's-b']);
-        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
-            ['s-b', 'explain this'],
-        ]);
-        expect(app.activeSessionId).toBe('s-b');
-        expect(status()).toBe('shared.agent_sign_in.status.done');
-    });
-
-    it("a sign-in already running for the selection's own refusal sends open in chat's turn once it sets the session up", async () => {
-        const { app, starts, listeners, named } = setup({
-            switches: [SIGNED_OUT, 's-b'],
-            pins: { main: 's-a' },
-        });
-        app.windowLabel = 'main';
-        app.activeSessionId = 's-a';
-        app.currentAcpSessionId = 's-a';
-        app.setupStreamingListeners();
-        await app.selectSession('s-b');
-        await flush();
-        // Sign in under the selection's own error: kiro-cli login runs.
-        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
-        await flush();
-
-        // Meanwhile inline assist's open in chat is refused too, and its
-        // error replaces the selection's.
-        const on = await openInChat(app, listeners, 'explain this', 'assist-turn-1');
-        await listeners.message_error({
-            payload: {
-                ...SIGNED_OUT,
-                detail: null,
-                sessionId: on,
-                resendable: true,
-                turnId: 'assist-turn-1',
-            },
-        });
-        await flush(20);
-        expect(document.querySelector('#errorContainer').textContent).toContain(
-            'Kiro needs you to sign in'
-        );
-
-        // The login ends: the running sign-in sets up s-b and sends the turn.
-        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
-        await flush(20);
-        expect(app.activeSessionId).toBe('s-b');
-        expect(app.currentAcpSessionId).toBe('s-b');
-        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
-            ['s-b', 'explain this'],
-        ]);
-        expect(sendsOf(named)[0].turnId).not.toBe('assist-turn-1');
-        expect(document.querySelector('#errorContainer').textContent).toBe('');
-        expect(app.isWaitingForResponse).toBe(true);
-        expect(status()).toBe('shared.agent_sign_in.status.done');
-        await flush(10);
-        expect(sendsOf(named).length).toBe(1);
-    });
-
-    it("a Reconnect already under way for the selection's refusal sends that turn too, once", async () => {
-        const { app, listeners, named } = setup({
-            switches: [SIGNED_OUT, 's-b'],
-            pins: { main: 's-a' },
-        });
-        app.windowLabel = 'main';
-        app.activeSessionId = 's-a';
-        app.currentAcpSessionId = 's-a';
-        app.setupStreamingListeners();
-        await app.selectSession('s-b');
-        await flush();
-        const orig = app.invoke.getMockImplementation();
-        let restarted;
-        app.invoke.mockImplementation(async (cmd, args) => {
-            if (cmd === 'reconnect_acp') {
-                await orig(cmd, args);
-                return new Promise((resolve) => (restarted = resolve));
-            }
-            return orig(cmd, args);
-        });
-        document.getElementById('errorReconnectBtn').click();
-        await flush();
-
-        const on = await openInChat(app, listeners, 'explain this', 'assist-turn-1');
-        await listeners.message_error({
-            payload: {
-                ...SIGNED_OUT,
-                detail: null,
-                sessionId: on,
-                resendable: true,
-                turnId: 'assist-turn-1',
-            },
-        });
-        await flush(20);
-        restarted({ reconnected: true, sessionId: 's-b', sessionReloaded: false });
-        await flush(20);
-        expect(sendsOf(named).map((a) => [a.sessionId, a.message])).toEqual([
-            ['s-b', 'explain this'],
-        ]);
-        expect(document.querySelector('#errorContainer').textContent).toBe('');
     });
 });

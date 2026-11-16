@@ -7,8 +7,11 @@
  * (`switch_acp_session`) and only then sends the message that was waiting
  * on the bootstrap, exactly once, with a turn id of its own. A bootstrap
  * that still fails shows the error again, with Sign in, and sends nothing;
- * any edit to the input since (an `input` event, or a write that fires
- * none: dictation, Ctrl+L) means nothing is sent; a send made meanwhile
+ * any edit the user made to the input since (an `input` event, or a write
+ * of theirs that fires none: dictation, Ctrl+L) means nothing is sent, on
+ * every replay path (a send queued on a bootstrap too), while the window's
+ * own clears (after a send, voice mode listening again, resetUI) are no
+ * edit; a send made meanwhile
  * that failed again is the one waiting, and the one sent; a plain-string
  * bootstrap error gets no Sign in.
  */
@@ -481,6 +484,57 @@ describe('floating: one bootstrap at a time after a failed one', () => {
         );
     });
 
+    it("a send queued on the sign-in's bootstrap goes out once, whatever the user types next", async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        const ctl = controlBootstraps(app, () => RESTARTED);
+        await signInCleanly(starts);
+        // The sign-in's bootstrap is under way: a newer send is queued on it.
+        expect(ctl.pending.length).toBe(1);
+        expect(app.bootstrappingSession).toBe(true);
+        typeInto(app, 'second');
+        await app.sendChatMessage('second');
+        // Then the user starts a replacement and erases it.
+        typeInto(app, 'something else');
+        typeInto(app, '');
+
+        ctl.pending[0].resolve('s-a');
+        await wait(250);
+        await flush(20);
+        expect(app.floatingSessionId).toBe('s-a');
+        expect(app.bootstrappingSession).toBe(false);
+        // The user pressed Enter on 'second'; the draft after it is their
+        // next message, not a change of mind.
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-a', 'second']]);
+    });
+
+    it('a send queued behind the launch spinner goes out though the user keeps typing', async () => {
+        const { app, sends } = setup({ bootstraps: [] });
+        app.bootstrappingSession = true;
+        app.floatingSessionId = null;
+        typeInto(app, 'hello');
+        await app.sendChatMessage('hello');
+        typeInto(app, 'next thought');
+        app.floatingSessionId = 's-launch';
+        app.bootstrappingSession = false;
+        await wait(250);
+        await flush(20);
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-launch', 'hello']]);
+    });
+
+    it("a send queued on the sign-in's bootstrap with no edit since goes out once", async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        const ctl = controlBootstraps(app, () => RESTARTED);
+        await signInCleanly(starts);
+        typeInto(app, 'second');
+        await app.sendChatMessage('second');
+        ctl.pending[0].resolve('s-a');
+        await wait(250);
+        await flush(20);
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-a', 'second']]);
+    });
+
     it('Sign in and Reconnect together: a superseded failure changes nothing, sent once', async () => {
         const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT] });
         await failedBootstrapThenSend(app, SIGNED_OUT);
@@ -766,7 +820,7 @@ describe('floating: the launch bootstrap keeps its typed error', () => {
     });
 });
 
-describe('floating: a write to the input that fires no `input` event is an edit too', () => {
+describe("floating: the user's writes that fire no `input` event are edits, the window's own are not", () => {
     /**
      * A fake Web Speech recognizer: `SpeechController.start()` builds one,
      * and `say(text, isFinal)` delivers a result the way the browser does.
@@ -789,11 +843,17 @@ describe('floating: a write to the input that fires no `input` event is an edit 
                 const result = Object.assign([{ transcript: text }], { isFinal });
                 rec.onresult({ resultIndex: 0, results: [result] });
             },
+            /** The recognizer ends by itself, as the browser's does. */
+            end() {
+                made[made.length - 1].onend?.();
+            },
+            started: () => made.length,
         };
     }
 
     afterEach(() => {
         delete window.SpeechRecognition;
+        delete window.speechSynthesis;
     });
 
     it('voice dictation during the sign-in: nothing is sent, and the dictated draft stays', async () => {
@@ -821,17 +881,59 @@ describe('floating: a write to the input that fires no `input` event is an edit 
         expect(status()).toBe('shared.agent_sign_in.status.ready');
     });
 
-    it('Ctrl+L (resetUI) during the sign-in: the old message is not sent', async () => {
+    it('Ctrl+L during the sign-in: the old message is not sent', async () => {
         const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
         await failedBootstrapThenSend(app, SIGNED_OUT);
         signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
         await flush();
-        app.resetUI();
+        const key = new KeyboardEvent('keydown', { key: 'l', ctrlKey: true, cancelable: true });
+        app.handleGlobalKeyDown(key);
+        expect(key.defaultPrevented).toBe(true);
         expect(app.elements.input.value).toBe('');
         starts[0].resolve({ outcome: 'exited', exitCode: 0 });
         await flush(20);
         expect(app.floatingSessionId).toBe('s-new');
         expect(sends()).toEqual([]);
+    });
+
+    it("the window's own reset during the sign-in (resetUI, as on hide) is no edit: still sent", async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        app.resetUI();
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-new', 'hello agent']]);
+    });
+
+    it("voice mode: the mic's restart clear after a dictated send is no edit: it still goes after the sign-in", async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT, 's-new'] });
+        // jsdom has no text-to-speech; the send cancels any playback.
+        window.speechSynthesis = { cancel: vi.fn() };
+        app.setupSpeech();
+        app.speech.silenceTimeout = 0;
+        const mic = fakeRecognition();
+        app._setBootstrapFailure(SIGNED_OUT);
+        // Voice mode: the user dictates, the recognizer ends, and the
+        // transcript is sent; the bootstrap's retry is refused.
+        app.speech.voiceMode = true;
+        app.speech.start();
+        mic.say('hello agent');
+        mic.end();
+        await wait(250);
+        await flush();
+        expect(signInBtn()).toBeTruthy();
+        // Voice mode then restarts the mic for the next utterance, and
+        // empties the input itself.
+        await wait(150);
+        expect(mic.started()).toBe(2);
+        expect(app.elements.input.value).toBe('');
+
+        await signInCleanly(starts);
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-new', 'hello agent']]);
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+        app.speech.stopVoiceMode();
     });
 
     it('Enter empties the input after the send it left waiting: still sent after the sign-in', async () => {

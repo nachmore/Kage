@@ -114,12 +114,37 @@ export function createLifecycleMixin(dependencies) {
          * await it first checks that the window still shows what it did (no
          * selection or New Chat since): a late reply for a session the user
          * left paints nothing.
+         *
+         * The composer stays off until the transcript is painted, as during
+         * any session switch (`_paintPending`; sendMessage refuses meanwhile):
+         * displaySession replaces the messages area, so a turn started
+         * before it would lose its bubble and its reply. A selection made
+         * meanwhile owns the composer from then on.
          */
         async _showCurrentSession() {
             const sid = this.currentAcpSessionId;
             if (!sid) return;
             const gen = this._selectGen;
             const before = this.activeSessionId ?? null;
+            const paint = { sid };
+            this._paintPending = paint;
+            this.elements.chatInput.disabled = true;
+            this.elements.sendBtn.disabled = true;
+            try {
+                await this._paintCurrentSession(sid, gen, before);
+            } finally {
+                if (this._paintPending === paint) {
+                    this._paintPending = null;
+                    if (gen === this._selectGen) {
+                        this.elements.chatInput.disabled = !!this.isWaitingForResponse;
+                        this.elements.sendBtn.disabled = false;
+                    }
+                }
+            }
+        }
+
+        /** _showCurrentSession's sidebar entry, transcript and header for `sid`. */
+        async _paintCurrentSession(sid, gen, before) {
             // Ensure sessions are loaded before trying to find the current one
             if (this.sessions.length === 0) {
                 await this.loadSessions();
@@ -150,13 +175,16 @@ export function createLifecycleMixin(dependencies) {
                     console.log('[CHAT] Not painting a session no longer shown:', sid);
                     return;
                 }
-                this.displaySession(sessionData);
+                this._transcriptOf = sid;
+                await this.displaySession(sessionData);
             } catch (e) {
                 if (!this._isShowing(sid, gen)) return;
                 console.log('[CHAT] Could not load session from disk (may be new):', e);
                 // Session is new / not on disk — just show empty chat
+                this._transcriptOf = sid;
                 this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.continue')}</div>`;
             }
+            if (!this._isShowing(sid, gen)) return;
             this.elements.chatHeaderTitle.textContent =
                 stripKageTags(exists?.title) || t('chat.session.current_title');
         }
@@ -192,13 +220,22 @@ export function createLifecycleMixin(dependencies) {
          * user's message, its reply streaming) stays as it is.
          */
         _adoptOpenedChatSession(sid) {
-            this.activeSessionId = sid;
-            this.currentAcpSessionId = sid;
             // The turn initial_message recorded before the session
             // existed is on this session now.
             this._adoptTurnSession?.(sid);
-            const existing = this.sessions.find((s) => s.session_id === sid);
-            if (!existing) {
+            this._nameShownSession(sid);
+        }
+
+        /**
+         * `sid` (a session that is set up, or null for a new chat) is the
+         * window's: its sidebar entry (a synthetic one while it isn't on
+         * disk) is selected and the header names it.
+         */
+        _nameShownSession(sid) {
+            this.activeSessionId = sid;
+            this.currentAcpSessionId = sid;
+            const existing = sid ? this.sessions.find((s) => s.session_id === sid) : null;
+            if (sid && !existing) {
                 const now = new Date().toISOString();
                 this.sessions.unshift({
                     session_id: sid,
@@ -210,8 +247,53 @@ export function createLifecycleMixin(dependencies) {
             this.renderSessionList();
             // Match the init-time auto-select: the header names the
             // adopted session rather than keeping a stale title.
-            this.elements.chatHeaderTitle.textContent =
-                stripKageTags(existing?.title) || t('chat.session.current_title');
+            this.elements.chatHeaderTitle.textContent = sid
+                ? stripKageTags(existing?.title) || t('chat.session.current_title')
+                : t('chat.header.default_title');
+        }
+
+        /**
+         * open_chat_with_message sends its prompt on `sid` (main's backend
+         * pin, or null when it has none and makes one), which is not the
+         * session the window shows: a selection is still under way, or was
+         * refused. Show `sid` instead, so the prompt and its reply render
+         * where they went (the caller adds the bubble and the stream).
+         * Supersedes that selection or New Chat: its late answer paints and
+         * adopts nothing, and a switch that still lands pins the window back
+         * to `sid` (_repinWindowSession). The transcript on screen stays
+         * when it is still `sid`'s (the selection hadn't painted its own;
+         * a batched paint of it still in flight finishes before the bubble,
+         * addUserMessage), else it gives way to the turn; the session's
+         * earlier messages show when it is selected again.
+         */
+        _showTurnSession(sid) {
+            this._nextSelectGen();
+            this._switchGen = (this._switchGen || 0) + 1;
+            this._pendingSwitchSessionId = null;
+            // Detach from a stream on screen, as selectSession does.
+            if (this.isWaitingForResponse) {
+                this.hideTypingIndicator();
+                this.currentStreamingMessage = null;
+                this.currentStreamingContent = '';
+                this.isWaitingForResponse = false;
+            }
+            if (this._transcriptOf !== sid) {
+                this._cancelDisplaySessionRender();
+                this.messages = [];
+                this.elements.messagesArea.innerHTML = '';
+                this._transcriptOf = sid;
+            }
+            this.elements.errorContainer.innerHTML = '';
+            this._clearAgentSignInSlot?.();
+            if (sid) {
+                this._seenSessionIds.add(sid);
+                this.streamRegistry.markRead(sid);
+            }
+            if (window.ChatPermissions) window.ChatPermissions.onSessionSwitch(sid);
+            this._nameShownSession(sid);
+            this.elements.chatInput.disabled = false;
+            this.elements.chatInput.placeholder = t('chat.placeholder.type_message');
+            this.elements.sendBtn.disabled = false;
         }
 
         /**

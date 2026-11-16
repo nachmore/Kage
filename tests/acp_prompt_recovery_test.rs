@@ -1610,3 +1610,80 @@ fn open_in_chat_on_mains_session_refused_by_initialize_reaches_main_as_auth_requ
     assert_eq!(agent.count("initialize"), 1);
     assert_eq!(agent.count("session/prompt"), 0);
 }
+
+/// Every payload of `event` the app emits, in order.
+fn record_event(app: &tauri::App<tauri::test::MockRuntime>, event: &str) -> Arc<Mutex<Vec<Value>>> {
+    use tauri::Listener;
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = seen.clone();
+    app.listen_any(event, move |e| {
+        sink.lock()
+            .unwrap()
+            .push(serde_json::from_str(e.payload()).unwrap());
+    });
+    seen
+}
+
+/// Wait until `agent` has had `n` requests of `method`.
+fn wait_for_count(agent: &MockAgent, method: &str, n: usize) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while agent.count(method) < n {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{method} never reached the agent"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn open_in_chat_tells_main_the_session_its_prompt_is_sent_on() {
+    // Main's pin is S1 (main may show another session meanwhile: one being
+    // selected, or one it could not set up): `initial_message` names S1,
+    // the session the prompt goes to, so main records the turn there and
+    // shows it.
+    let agent = MockAgent::start(vec![Prompt::Ok]);
+    let (app, main, _errors) = open_chat_app(&agent, true);
+    let announced = record_event(&app, "initial_message");
+
+    invoke(
+        &main,
+        "open_chat_with_message",
+        json!({ "sessionId": "S1", "message": "explain this", "turnId": "assist-turn-1" }),
+    )
+    .expect("the command itself answers at once");
+
+    assert_eq!(
+        *announced.lock().unwrap(),
+        vec![json!({ "message": "explain this", "turnId": "assist-turn-1", "sessionId": "S1" })]
+    );
+    wait_for_count(&agent, "session/prompt", 1);
+    assert_eq!(agent.params("session/prompt")[0]["sessionId"], "S1");
+    assert_eq!(agent.count("session/new"), 0);
+}
+
+#[test]
+fn open_in_chat_with_no_session_tells_main_none_and_then_the_one_made() {
+    // No pin (a blank id is none): `initial_message` names no session, and
+    // `initial_message_session` the one made for the prompt, which is
+    // where the prompt goes.
+    let agent = MockAgent::start(vec![Prompt::Ok]);
+    let (app, main, _errors) = open_chat_app(&agent, true);
+    let announced = record_event(&app, "initial_message");
+    let made = record_event(&app, "initial_message_session");
+
+    invoke(
+        &main,
+        "open_chat_with_message",
+        json!({ "sessionId": " ", "message": "explain this", "turnId": "assist-turn-1" }),
+    )
+    .expect("the command itself answers at once");
+
+    assert_eq!(
+        *announced.lock().unwrap(),
+        vec![json!({ "message": "explain this", "turnId": "assist-turn-1", "sessionId": null })]
+    );
+    wait_for_count(&agent, "session/prompt", 1);
+    assert_eq!(agent.params("session/prompt")[0]["sessionId"], "NEW");
+    assert_eq!(*made.lock().unwrap(), vec![json!({ "sessionId": "NEW" })]);
+}

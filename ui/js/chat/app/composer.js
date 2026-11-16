@@ -51,6 +51,9 @@ export function createComposerMixin(dependencies) {
             const hasPendingFiles = this._pendingFiles && this._pendingFiles.length > 0;
             if ((!message && !hasAttachments && !hasPendingFiles) || this.isWaitingForResponse)
                 return;
+            // The session's transcript is still being painted (_showCurrentSession):
+            // the paint would wipe this turn. The text stays in the input.
+            if (this._paintPending) return;
 
             // If a plan is pending review, send the message as a revision request
             if (this._pendingPlanRevision && message) {
@@ -335,26 +338,6 @@ export function createComposerMixin(dependencies) {
         }
 
         /**
-         * Whether a `message_error` is the error of the turn on screen,
-         * whatever session it names: it names this window's last turn (its
-         * `turnId`), and that turn was recorded on the session the window
-         * shows (or on none while it shows none). The backend can name
-         * another one for it: open-in-chat prompts on main's backend pin,
-         * which is still the session main showed before while a selection
-         * is being refused (_onSessionSwitchFailed then moves it). Such an
-         * error is never dropped as another session's.
-         */
-        _errorIsForShownTurn(payload) {
-            const turnId = errorTurnId(payload);
-            const turn = this._lastTurn;
-            return (
-                !!turnId &&
-                turnId === turn?.turnId &&
-                (turn.sessionId ?? null) === (this.activeSessionId ?? null)
-            );
-        }
-
-        /**
          * Whether a `message_error` naming a turn other than the window's
          * last one is the error of the stream on screen, so it ends that
          * stream (never with a resend: the turn isn't the last one). That
@@ -464,6 +447,9 @@ export function createComposerMixin(dependencies) {
         }
 
         addUserMessage(text, attachmentSnapshots) {
+            // A history render still in flight goes in first, so the prompt
+            // and its reply follow the whole transcript.
+            this._finishDisplaySessionRender?.();
             const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
             if (placeholder) placeholder.remove();
 
