@@ -176,6 +176,7 @@ pub fn invoke_handler<R: tauri::Runtime>(
         crate::commands::system::agent_sign_in::start_agent_sign_in,
         crate::commands::system::agent_sign_in::agent_sign_in_in_terminal,
         crate::commands::system::user_shell::terminal::write_user_terminal,
+        crate::commands::system::user_shell::terminal::ack_user_terminal,
         crate::commands::system::user_shell::terminal::resize_user_terminal,
         crate::commands::system::user_shell::terminal::stop_user_terminal,
         crate::commands::system::user_shell::terminal::open_user_terminal_link,

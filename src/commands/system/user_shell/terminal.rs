@@ -1,6 +1,6 @@
 //! The window side of a live terminal run (the sign-in terminal,
 //! `commands::system::agent_sign_in`): typing into it, resizing it,
-//! stopping it, and opening a link it printed. Each command answers only
+//! acknowledging its output, stopping it, and opening a link it printed. Each command answers only
 //! the window that shows the run; to any other window a live run looks
 //! exactly like an unknown id. What is typed, printed or opened is never
 //! logged (a sign-in prints device codes and URLs with tokens).
@@ -95,6 +95,23 @@ pub async fn resize_user_terminal<R: tauri::Runtime>(
     let io = owned_terminal(&procs, &label, &run_id)?;
     // A terminal that just closed can't be resized; nothing to report.
     let _ = io.resize(TerminalSize { cols, rows }.clamp());
+    Ok(())
+}
+
+/// The caller's terminal run `run_id` has written its output message
+/// `seq` and every one before it (xterm's write callback): the run may
+/// send more. Output stops after [`super::pty::MAX_UNACKED_BYTES`] that
+/// aren't acknowledged, so a window that stalls holds the program back
+/// instead of making Kage buffer.
+#[tauri::command]
+pub async fn ack_user_terminal<R: tauri::Runtime>(
+    run_id: String,
+    seq: u64,
+    window: WebviewWindow<R>,
+    procs: State<'_, ChildProcesses>,
+) -> Result<(), AppError> {
+    let label = window.label().to_string();
+    owned_terminal(&procs, &label, &run_id)?.ack(seq);
     Ok(())
 }
 

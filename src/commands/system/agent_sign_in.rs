@@ -7,8 +7,9 @@
 //!
 //! What runs is worked out here from the active connection in Config,
 //! never from a request argument: the configured program must literally
-//! be `kiro-cli` (basename), it runs with exactly `["login"]` in the
-//! home directory, and only a Local connection qualifies (a Remote
+//! be `kiro-cli` (basename), it runs with exactly [`sign_in_args`]
+//! (`login`; on Linux `login --use-device-flow`) in the home directory,
+//! and only a Local connection qualifies (a Remote
 //! agent's login lives on another machine). Only Kage's chat and floating
 //! windows may start it ([`user_shell::caller_allowed`]); one sign-in
 //! runs at a time in the whole app. Nothing the terminal shows or the
@@ -28,16 +29,41 @@ use serde::Serialize;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tauri::ipc::Channel;
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{State, WebviewWindow};
 
 /// A sign-in still going after this long is stopped: time to choose in
 /// the menu plus the 10-minute life of an OIDC device code.
 pub const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
-/// The only program the sign-in runs (by basename) and what it runs.
+/// The only program the sign-in runs (by basename).
 const SIGN_IN_PROGRAM: &str = "kiro-cli";
-const SIGN_IN_ARGS: &[&str] = &["login"];
+
+/// The sign-in's arguments on `linux` or not: fixed, never from a request.
+///
+/// On Linux, `--use-device-flow`. Without it `kiro-cli login` opens the
+/// browser itself (`xdg-open`) from inside the terminal's session, where a
+/// browser it starts can land in the session's foreground process group;
+/// the hang-up when the login exits, or Stop's group kill, would then
+/// close the browser in the middle of signing in. With it kiro-cli only
+/// prints a URL and a code; the user clicks the link in the terminal and
+/// Kage opens it from its own process (`open_user_terminal_link`),
+/// outside that session. On macOS `open` hands the URL to launchd and on
+/// Windows ShellExecute starts the browser outside the console, so neither
+/// makes the browser the login's child: they keep plain `login` and its
+/// usual browser sign-in.
+pub fn sign_in_args_for(linux: bool) -> &'static [&'static str] {
+    if linux {
+        &["login", "--use-device-flow"]
+    } else {
+        &["login"]
+    }
+}
+
+/// [`sign_in_args_for`] this platform.
+pub fn sign_in_args() -> &'static [&'static str] {
+    sign_in_args_for(cfg!(target_os = "linux"))
+}
 
 /// Sign-in terminals going at once in the whole app.
 const MAX_SIGN_INS: usize = 1;
@@ -183,7 +209,8 @@ fn posix_quote(s: &str) -> String {
     }
 }
 
-/// What the sign-in runs: `program login` in `home`, nothing else.
+/// What the sign-in runs: `program` with [`sign_in_args`] in `home`,
+/// nothing else.
 pub fn sign_in_spec(
     program: PathBuf,
     home: PathBuf,
@@ -192,16 +219,16 @@ pub fn sign_in_spec(
 ) -> TerminalSpec {
     TerminalSpec {
         program,
-        args: SIGN_IN_ARGS.iter().map(|a| a.to_string()).collect(),
+        args: sign_in_args().iter().map(|a| a.to_string()).collect(),
         cwd: home,
         env,
         size: size.clamp(),
     }
 }
 
-/// The command as audited and shown: `<program> login`.
+/// The command as audited and shown: `<program> login …`.
 fn command_text(program: &Path) -> String {
-    format!("{} {}", program.to_string_lossy(), SIGN_IN_ARGS.join(" "))
+    format!("{} {}", program.to_string_lossy(), sign_in_args().join(" "))
 }
 
 /// The login environment's PATH (else Kage's own). Can wait for the
@@ -252,7 +279,7 @@ pub fn sign_in_context(cfg: &Config) -> AgentSignInContext {
         available,
         reason,
         agent: available.then(|| AgentKind::Kiro.preset().display_name.to_string()),
-        command: available.then(|| format!("{SIGN_IN_PROGRAM} {}", SIGN_IN_ARGS.join(" "))),
+        command: available.then(|| format!("{SIGN_IN_PROGRAM} {}", sign_in_args().join(" "))),
         terminal: cfg!(target_os = "macos"),
         timeout_minutes: SIGN_IN_TIMEOUT.as_secs() / 60,
     }
@@ -293,8 +320,13 @@ enum StartFailure {
 /// Run the active agent's login (`kiro-cli login`) in a terminal shown by
 /// the calling window, until it exits, the user stops it, the window
 /// closes, or [`SIGN_IN_TIMEOUT`]. What it prints goes to `on_output`
-/// (`{ data, skipped }`) and only there; what the user types arrives
-/// through `write_user_terminal`. Resolves with how it ended.
+/// and only there, as `{ seq, data }` messages small enough that Tauri
+/// delivers each to this window by `eval` and never through its shared
+/// channel cache ([`pty::CHANNEL_DIRECT_JSON_LIMIT`]); the window
+/// acknowledges each with `ack_user_terminal` once written, and stops
+/// getting more when it falls [`pty::MAX_UNACKED_BYTES`] behind. What the
+/// user types arrives through `write_user_terminal`. Resolves with how it
+/// ended.
 ///
 /// There is deliberately no command, program or argument parameter: what
 /// runs comes from Config ([`sign_in_target`]). `session_id` is only
@@ -308,7 +340,7 @@ pub async fn start_agent_sign_in<R: tauri::Runtime>(
     cols: u16,
     rows: u16,
     session_id: Option<String>,
-    on_output: Channel<serde_json::Value>,
+    on_output: Channel,
     window: WebviewWindow<R>,
     app: tauri::AppHandle<R>,
     procs: State<'_, ChildProcesses>,
@@ -379,9 +411,11 @@ pub async fn start_agent_sign_in<R: tauri::Runtime>(
             spec,
             &control,
             move |io| runs.attach_terminal_io(&attach_id, &attach_label, io),
-            move |text, skipped| {
-                // The window may be gone; the run goes on until it's stopped.
-                let _ = on_output.send(serde_json::json!({ "data": text, "skipped": skipped }));
+            move |json| {
+                // Sent as the exact JSON pty measured against the limit.
+                // The window may be gone; the run goes on until it's
+                // stopped (with nothing acknowledged, it sends no more).
+                let _ = on_output.send(InvokeResponseBody::Json(json));
             },
         )
         .map_err(|e| StartFailure::Spawn {
@@ -486,7 +520,7 @@ pub async fn agent_sign_in_in_terminal<R: tauri::Runtime>(
         let typed = format!(
             "{} {}",
             posix_quote(&program.to_string_lossy()),
-            SIGN_IN_ARGS.join(" ")
+            sign_in_args().join(" ")
         );
         runner::validate_terminal_command(&typed).map_err(invalid)?;
         let result = crate::os::shell::run_in_terminal(&typed, &home);

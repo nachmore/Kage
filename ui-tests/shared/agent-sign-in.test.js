@@ -298,8 +298,8 @@ describe('the run', () => {
             expect(status(host)).toBe(
                 'shared.agent_sign_in.status.starting {"command":"kiro-cli login"}'
             );
-            tauri.channels[0].onmessage({ data: '? Select login method', skipped: 0 });
-            expect(term.write).toHaveBeenCalledWith('? Select login method');
+            tauri.channels[0].onmessage({ seq: 0, data: '? Select login method' });
+            expect(term.write).toHaveBeenCalledWith('? Select login method', expect.any(Function));
             expect(status(host)).toBe('shared.agent_sign_in.status.running');
             term.dataHandler('\u001b[B');
             expect(tauri.named('write_user_terminal')).toEqual([
@@ -321,6 +321,63 @@ describe('the run', () => {
             vi.useRealTimers();
             delete globalThis.ResizeObserver;
         }
+    });
+
+    it('acknowledges each output message only once xterm has written it', async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        await openPanel(tauri, host);
+        const { runId } = tauri.starts[0].args;
+        const term = terms[0];
+        tauri.channels[0].onmessage({ seq: 0, data: 'first' });
+        tauri.channels[0].onmessage({ seq: 1, data: 'second' });
+        await flush();
+        // Not written yet: nothing acknowledged, so the backend holds back.
+        expect(tauri.named('ack_user_terminal')).toEqual([]);
+        expect(term.write.mock.calls.map((c) => c[0])).toEqual(['first', 'second']);
+        term.write.mock.calls[0][1]();
+        expect(tauri.named('ack_user_terminal')).toEqual([
+            ['ack_user_terminal', { runId, seq: 0 }],
+        ]);
+        term.write.mock.calls[1][1]();
+        expect(tauri.named('ack_user_terminal')).toEqual([
+            ['ack_user_terminal', { runId, seq: 0 }],
+            ['ack_user_terminal', { runId, seq: 1 }],
+        ]);
+        // A message with no text, or no usable seq, writes nothing; the
+        // former is still acknowledged so the run never waits on it.
+        tauri.channels[0].onmessage({ seq: 2, data: '' });
+        tauri.channels[0].onmessage({ data: 'no seq' });
+        tauri.channels[0].onmessage({ seq: -1, data: 'bad seq' });
+        expect(tauri.named('ack_user_terminal').at(-1)).toEqual([
+            'ack_user_terminal',
+            { runId, seq: 2 },
+        ]);
+        term.write.mock.calls.at(-1)[1]();
+        term.write.mock.calls.at(-2)[1]();
+        expect(tauri.named('ack_user_terminal').length).toBe(3);
+    });
+
+    it('acknowledges output for a view that is gone instead of writing it', async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        await openPanel(tauri, host);
+        const { runId } = tauri.starts[0].args;
+        const oldChannel = tauri.channels[0];
+        click(host.slot.querySelector('.agent-sign-in-stop'));
+        await flush();
+        tauri.starts[0].resolve({ runId, outcome: 'cancelled', exitCode: null, signal: null });
+        await flush();
+        click(host.slot.querySelector('.agent-sign-in-again'));
+        await flush();
+        expect(tauri.starts.length).toBe(2);
+        const writes = () => terms.reduce((n, term) => n + term.write.mock.calls.length, 0);
+        const before = writes();
+        oldChannel.onmessage({ seq: 7, data: 'late output of the first run' });
+        expect(writes()).toBe(before);
+        expect(tauri.named('ack_user_terminal')).toEqual([
+            ['ack_user_terminal', { runId, seq: 7 }],
+        ]);
     });
 
     it('says it is waiting after a second without output', async () => {

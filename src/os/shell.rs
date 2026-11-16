@@ -2,7 +2,34 @@
 
 use anyhow::Result;
 
-/// Open a URL in the default browser
+/// `url` as it may appear in a log: `scheme://host[:port]/path`, with no
+/// query, fragment or userinfo (OAuth codes, device codes and tokens live
+/// there, and `app.jsonl` gets attached to bug reports). A URL with no
+/// hierarchy (`mailto:`, `data:`, `javascript:`) logs as its scheme only,
+/// since what follows it is the payload; one that doesn't parse, as its
+/// length. The path is cut at [`LOGGED_URL_PATH_CHARS`].
+pub fn url_for_log(url: &str) -> String {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return format!("<unparsed URL, {} bytes>", url.len());
+    };
+    if parsed.cannot_be_a_base() {
+        return format!("{}:", parsed.scheme());
+    }
+    let host = parsed.host_str().unwrap_or("");
+    let port = parsed.port().map(|p| format!(":{p}")).unwrap_or_default();
+    let path = parsed.path();
+    let path = match path.char_indices().nth(LOGGED_URL_PATH_CHARS) {
+        Some((cut, _)) => format!("{}…", &path[..cut]),
+        None => path.to_string(),
+    };
+    format!("{}://{host}{port}{path}", parsed.scheme())
+}
+
+/// Longest URL path [`url_for_log`] keeps.
+pub const LOGGED_URL_PATH_CHARS: usize = 120;
+
+/// Open a URL in the default browser. Platform code logs it only through
+/// [`url_for_log`].
 pub fn open_url(url: &str) -> Result<()> {
     crate::os::platform::shell::open_url_impl(url)
 }
@@ -81,6 +108,46 @@ pub fn run_in_terminal(command: &str, cwd: &std::path::Path) -> Result<(), Termi
 
 #[cfg(test)]
 mod tests {
+    use super::url_for_log;
+
+    #[test]
+    fn logged_urls_keep_no_query_fragment_or_userinfo() {
+        let cases = [
+            (
+                "https://view.awsapps.com/start/#/device?user_code=ABCD-EFGH",
+                "https://view.awsapps.com/start/",
+            ),
+            (
+                "https://accounts.spotify.com/authorize?client_id=x&code_challenge=SECRET&state=s",
+                "https://accounts.spotify.com/authorize",
+            ),
+            (
+                "https://user:pa55@example.com:8443/a/b?token=SECRET#frag",
+                "https://example.com:8443/a/b",
+            ),
+            (
+                "http://127.0.0.1:8080/callback?code=SECRET",
+                "http://127.0.0.1:8080/callback",
+            ),
+            ("mailto:someone@example.com?subject=SECRET", "mailto:"),
+            ("javascript:alert(document.cookie)", "javascript:"),
+            ("data:text/html,SECRET", "data:"),
+            ("file:///Users/me/notes.txt", "file:///Users/me/notes.txt"),
+        ];
+        for (url, logged) in cases {
+            assert_eq!(url_for_log(url), logged, "{url}");
+        }
+        for url in ["not a url SECRET", "www.example.com/?q=SECRET", ""] {
+            let logged = url_for_log(url);
+            assert!(!logged.contains("SECRET"), "{logged}");
+            assert!(logged.starts_with("<unparsed URL"), "{logged}");
+        }
+        let long = format!("https://example.com/{}?x=1", "p".repeat(500));
+        let logged = url_for_log(&long);
+        assert!(logged.ends_with('…'));
+        assert!(logged.chars().count() < 160, "{logged}");
+    }
+
     use super::{system_command, system_command_candidates};
 
     #[test]

@@ -767,14 +767,25 @@ sign-in method from its arrow-key menu (`ui/js/shared/agent-sign-in.js`,
   up on the login-shell PATH's absolute entries, a relative path is
   refused), and exactly `<that path> login` runs in the home folder, in
   a pseudo-terminal (openpty; ConPTY on Windows) with the login-shell
-  environment and `TERM=xterm-256color`.
+  environment and `TERM=xterm-256color`. On Linux it is
+  `<that path> login --use-device-flow`: without it kiro-cli starts the
+  browser itself (`xdg-open`) inside the terminal's session, where the
+  browser can land in the session's foreground process group and the
+  hang-up when the login exits (or Stop's group kill) would close it in
+  the middle of signing in. With it kiro-cli only prints a URL and a
+  code, and the user opens the link through Kage's own process
+  (`open_user_terminal_link`), outside that session. macOS (`open`, via
+  launchd) and Windows (ShellExecute) never make the browser the
+  login's child, so they keep plain `login`. (An organization that has
+  turned device-flow sign-in off can't sign in this way on Linux.)
 - **Who can type into it, resize it or stop it.** Only the window that
   started it, and only Kage's chat and floating windows can start one
   (`user_shell::caller_allowed`; Settings, welcome, store, context menu,
   inline assist and extension views are refused, whatever their
   capability file says). Its input side is registered by run id and
-  owner window; `write_user_terminal`, `resize_user_terminal`,
-  `stop_user_terminal` and `open_user_terminal_link` from any other
+  owner window; `write_user_terminal`, `ack_user_terminal`,
+  `resize_user_terminal`, `stop_user_terminal` and
+  `open_user_terminal_link` from any other
   window get the same "not running" error as an unknown id. Every one of
   these commands is `null` in `extension-permissions.js`.
 - **What the agent can't reach.** Agent output is rendered as text and
@@ -788,16 +799,40 @@ sign-in method from its arrow-key menu (`ui/js/shared/agent-sign-in.js`,
   codes, sign-in URLs, anything pasted) are never logged, audited, sent
   to telemetry or returned in the command's result. Output reaches only
   the starting webview, over a Tauri `Channel` it created (not a
-  broadcast event), and lives only in its terminal's scrollback (1000
-  lines) and the backend's pending batch (64 KiB at most). A link in the
-  terminal opens through `open_user_terminal_link`: https only, at most
-  2 KB, for a live run the caller owns; only its host is logged.
+  broadcast event), in messages whose JSON is always under 8 KiB. That
+  matters: Tauri 2.10 `eval`s a smaller channel message straight into
+  the webview that owns the channel, but parks a larger one in an
+  app-wide cache under a sequential id that any window can fetch with
+  `plugin:__TAURI_CHANNEL__|fetch`, and keeps it until someone does
+  (`tauri/src/ipc/channel.rs`). The window acknowledges each message once
+  xterm has written it (`ack_user_terminal`, owner only); the backend
+  sends at most 64 KiB ahead of the acknowledgements and then stops
+  reading the terminal, so a stalled window makes the program wait
+  instead of making Kage buffer. Output lives only in the terminal's
+  scrollback (1000 lines), what's in flight (64 KiB) and the backend's
+  pending buffer (64 KiB plus one read). A link in the terminal opens
+  through `open_user_terminal_link`: https only, at most 2 KB, for a
+  live run the caller owns; only its host is logged. (Opening any URL
+  logs at most `scheme://host/path`: never a query, fragment or
+  userinfo, `os::shell::url_for_log`.)
 - **Limits.** 15 minutes (choosing in the menu plus a 10-minute device
   code), then the process group is killed; it also stops on Stop,
   window close, page reload and quit. Input is at most 4 KiB per write
   through a bounded queue, so a program that stops reading never blocks
   Kage. Hiding the floating window never stops it: the window hides
   while the user is in the browser and comes back when the run ends.
+- **Teardown.** When the login exits (after a 1 s drain) or is stopped,
+  on macOS and Linux what is left of its process group gets SIGHUP and,
+  100 ms later, SIGKILL, so no descendant keeps the terminal open (the
+  login stays unreaped until then, so its group id can't be reused). The
+  reader and writer use their own non-blocking copies of the terminal
+  and give up within 50 ms of the run ending, so they end even if a
+  process that left the group still holds the terminal. On Windows the
+  pseudo console is closed on a thread of its own while the reader keeps
+  draining its output to the end (before Windows 11 24H2,
+  `ClosePseudoConsole` waits for that output to be read). The slot is
+  freed only after all of that, or after 2 s (logged), and the registry
+  never closes a terminal while it holds its locks.
 - **What's recorded.** Two `user_ran_command` entries in the permission
   audit log (`via: sign_in`; `outcome: started`, then how it ended, with
   the exit code and session id), English app-log lines with the window,

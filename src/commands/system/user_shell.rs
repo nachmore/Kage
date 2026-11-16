@@ -19,8 +19,8 @@
 //! window's own run (key `terminal:<label>`), so Stop, window close, page
 //! reload and shutdown reach it the same way; its input side lives in
 //! `terminals`, keyed by run id and owner window, and only that window's
-//! `write_user_terminal` / `resize_user_terminal` / `open_user_terminal_link`
-//! ([`terminal`]) can reach it.
+//! `write_user_terminal` / `ack_user_terminal` / `resize_user_terminal` /
+//! `open_user_terminal_link` ([`terminal`]) can reach it.
 
 pub mod pty;
 pub mod runner;
@@ -179,17 +179,27 @@ impl RunSlot {
 
 impl Drop for RunSlot {
     fn drop(&mut self) {
-        let mut active = self.runs.active.lock_or_recover();
-        if active
-            .get(&self.key)
-            .is_some_and(|run| run.run_id == self.run_id)
+        // Declared before the guards so it drops after them: the
+        // terminal's handle never goes while the registry is locked.
+        let detached;
         {
-            active.remove(&self.key);
+            let mut active = self.runs.active.lock_or_recover();
+            if active
+                .get(&self.key)
+                .is_some_and(|run| run.run_id == self.run_id)
+            {
+                active.remove(&self.key);
+            }
+            detached = if self.key.starts_with(TERMINAL_RUN_KEY) {
+                self.runs.terminals.lock_or_recover().remove(&self.run_id)
+            } else {
+                None
+            };
         }
-        if self.key.starts_with(TERMINAL_RUN_KEY) {
-            // The terminal closes once nothing else holds its IO.
-            self.runs.terminals.lock_or_recover().remove(&self.run_id);
-        }
+        // By now the run has closed its terminal (`pty::run_terminal`); if
+        // this was the last handle anyway, `TerminalIo`'s drop closes it on
+        // a thread of its own.
+        drop(detached);
     }
 }
 

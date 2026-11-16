@@ -152,10 +152,19 @@ describe('createTerminalView', () => {
         expect(terms[0].options.disableStdin).toBe(true);
         view.write('hello');
         expect(terms[0].write).toHaveBeenCalledWith('hello');
+        const written = vi.fn();
+        view.write('more', written);
+        expect(terms[0].write).toHaveBeenLastCalledWith('more', written);
+        expect(written).not.toHaveBeenCalled();
+        terms[0].write.mock.calls.at(-1)[1]();
+        expect(written).toHaveBeenCalledTimes(1);
         view.dispose();
         expect(terms[0].dispose).toHaveBeenCalled();
-        view.write('late');
-        expect(terms[0].write).toHaveBeenCalledTimes(1);
+        const late = vi.fn();
+        view.write('late', late);
+        expect(terms[0].write).toHaveBeenCalledTimes(2);
+        // Gone: nothing written, but the caller still hears it's done.
+        expect(late).toHaveBeenCalledTimes(1);
         expect(box.children.length).toBe(0);
     });
 

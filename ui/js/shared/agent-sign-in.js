@@ -586,12 +586,25 @@ function createSession({ slot, payload, host, ctx }) {
             return done;
         }
         const channel = new Channel();
+        // Output arrives as `{ seq, data }`. Each message is acknowledged
+        // once xterm has written it (or dropped, if this run's view is
+        // gone): the backend sends at most 64 KiB ahead of the last ack,
+        // so a stalled window holds the program back instead of piling up
+        // output in Kage.
+        const ack = (seq) => {
+            if (!Number.isSafeInteger(seq) || seq < 0) return;
+            invoke('ack_user_terminal', { runId, seq }).catch(() => {
+                /* the run ended */
+            });
+        };
         channel.onmessage = (msg) => {
-            if (session.runId !== runId || session.view !== view) return;
-            if (msg?.data) {
-                view.write(msg.data);
-                markRunning();
+            const seq = msg?.seq;
+            if (session.runId !== runId || session.view !== view || !msg?.data) {
+                ack(seq);
+                return;
             }
+            view.write(msg.data, () => ack(seq));
+            markRunning();
         };
         // Stop was pressed while xterm loaded: nothing was started.
         if (session.stopRequested === runId) {

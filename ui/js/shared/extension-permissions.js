@@ -220,6 +220,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     start_agent_sign_in: null,
     agent_sign_in_in_terminal: null,
     write_user_terminal: null,
+    ack_user_terminal: null,
     resize_user_terminal: null,
     stop_user_terminal: null,
     open_user_terminal_link: null,

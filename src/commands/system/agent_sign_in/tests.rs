@@ -189,6 +189,19 @@ fn resolve_program_refuses_relative_with_separator() {
     }
 }
 
+/// Linux signs in with the device flow, so kiro-cli never starts a
+/// browser inside the terminal's session (whose hang-up would close it);
+/// macOS and Windows run plain `login`.
+#[test]
+fn sign_in_args_per_platform() {
+    assert_eq!(sign_in_args_for(true), ["login", "--use-device-flow"]);
+    assert_eq!(sign_in_args_for(false), ["login"]);
+    #[cfg(target_os = "linux")]
+    assert_eq!(sign_in_args(), ["login", "--use-device-flow"]);
+    #[cfg(not(target_os = "linux"))]
+    assert_eq!(sign_in_args(), ["login"]);
+}
+
 #[test]
 fn sign_in_argv_is_fixed() {
     let home = std::env::temp_dir();
@@ -208,7 +221,7 @@ fn sign_in_argv_is_fixed() {
                 rows: 9999,
             },
         );
-        assert_eq!(spec.args, vec!["login".to_string()], "{command}");
+        assert_eq!(spec.args, sign_in_args(), "{command}");
         assert_eq!(spec.cwd, home);
         assert!(spec.program.ends_with("kiro-cli"));
         assert_eq!(
@@ -247,7 +260,12 @@ fn context_never_offers_for_remote_or_non_kiro() {
     assert!(ctx.available);
     assert_eq!(ctx.reason, None);
     assert_eq!(ctx.agent.as_deref(), Some("Kiro CLI"));
-    assert_eq!(ctx.command.as_deref(), Some("kiro-cli login"));
+    let shown = if cfg!(target_os = "linux") {
+        "kiro-cli login --use-device-flow"
+    } else {
+        "kiro-cli login"
+    };
+    assert_eq!(ctx.command.as_deref(), Some(shown));
     assert_eq!(ctx.timeout_minutes, 15);
     assert_eq!(ctx.terminal, cfg!(target_os = "macos"));
     let json = serde_json::to_value(&ctx).unwrap();

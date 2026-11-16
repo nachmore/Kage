@@ -30,7 +30,10 @@ pub fn open_url_impl(url: &str) -> Result<()> {
     // message loop. That collapses the double-open back to a single tab while
     // leaving browser choice entirely to the OS. ShellExecuteExW is required
     // because plain ShellExecuteW exposes no fMask.
-    log::info!("[open_url] ShellExecuteExW (NOASYNC): {}", url);
+    log::info!(
+        "[open_url] ShellExecuteExW (NOASYNC): {}",
+        crate::os::shell::url_for_log(url)
+    );
 
     let mut verb: Vec<u16> = "open".encode_utf16().collect();
     verb.push(0);

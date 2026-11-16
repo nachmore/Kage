@@ -780,3 +780,68 @@ mod running {
         assert!(run(&inv, &dir, &control(Duration::from_secs(5)), |_, _| {}).is_err());
     }
 }
+
+// --- Terminal teardown never runs under the registry locks (S3) -------------
+
+/// A pseudo console whose close blocks until released (ConPTY's
+/// ClosePseudoConsole with an undrained output pipe).
+struct BlockingCloseMaster(Option<std::sync::mpsc::Receiver<()>>);
+
+impl Drop for BlockingCloseMaster {
+    fn drop(&mut self) {
+        if let Some(rx) = self.0.take() {
+            let _ = rx.recv_timeout(Duration::from_secs(5));
+        }
+    }
+}
+
+impl portable_pty::MasterPty for BlockingCloseMaster {
+    fn resize(&self, _: portable_pty::PtySize) -> anyhow::Result<()> {
+        Ok(())
+    }
+    fn get_size(&self) -> anyhow::Result<portable_pty::PtySize> {
+        Ok(portable_pty::PtySize::default())
+    }
+    fn try_clone_reader(&self) -> anyhow::Result<Box<dyn std::io::Read + Send>> {
+        anyhow::bail!("fake")
+    }
+    fn take_writer(&self) -> anyhow::Result<Box<dyn std::io::Write + Send>> {
+        anyhow::bail!("fake")
+    }
+    #[cfg(unix)]
+    fn process_group_leader(&self) -> Option<libc::pid_t> {
+        None
+    }
+    #[cfg(unix)]
+    fn as_raw_fd(&self) -> Option<std::os::fd::RawFd> {
+        None
+    }
+    #[cfg(unix)]
+    fn tty_name(&self) -> Option<PathBuf> {
+        None
+    }
+}
+
+#[test]
+fn slot_release_never_closes_the_terminal_under_the_registry_locks() {
+    let runs = Arc::new(UserShellRuns::new());
+    let slot = runs.begin_terminal("floating", "kage-term-a", 1).unwrap();
+    let (release, rx) = std::sync::mpsc::channel::<()>();
+    runs.attach_terminal_io(
+        "kage-term-a",
+        "floating",
+        pty::TerminalIo::with_master_for_tests(Box::new(BlockingCloseMaster(Some(rx)))),
+    );
+    let dropper = std::thread::spawn(move || drop(slot));
+    std::thread::sleep(Duration::from_millis(100));
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let probe = runs.clone();
+    std::thread::spawn(move || {
+        let ok = probe.begin("main", "kage-run-b").is_some();
+        let _ = done_tx.send(ok);
+    });
+    let got = done_rx.recv_timeout(Duration::from_secs(1));
+    let _ = release.send(());
+    dropper.join().unwrap();
+    assert_eq!(got, Ok(true), "a new run waited on the terminal closing");
+}

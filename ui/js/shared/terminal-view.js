@@ -111,7 +111,10 @@ function newTerminal(options) {
  *   - `onResize(cols, rows)`: the view's size changed (debounced);
  *   - `onLink(uri)`: the user clicked a link the program printed;
  *   - `ariaLabel`: what screen readers call it.
- * Returns `{ write, focus, setInputEnabled, fit, size, dispose }`.
+ * Returns `{ write, focus, setInputEnabled, fit, size, dispose }`;
+ * `write(text, onWritten)` calls `onWritten` once xterm has processed
+ * `text` (or at once if the view is gone), which is when the caller
+ * acknowledges it to the backend.
  * Call `ensureXterm()` first.
  */
 export function createTerminalView(container, opts = {}) {
@@ -206,8 +209,20 @@ export function createTerminalView(container, opts = {}) {
     });
 
     return {
-        write(text) {
-            if (!disposed && text) term.write(text);
+        write(text, onWritten) {
+            if (disposed || !text) {
+                onWritten?.();
+                return;
+            }
+            if (!onWritten) {
+                term.write(text);
+                return;
+            }
+            try {
+                term.write(text, onWritten);
+            } catch {
+                onWritten();
+            }
         },
         focus() {
             if (!disposed) term.focus();
