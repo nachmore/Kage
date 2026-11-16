@@ -51,9 +51,10 @@ export function createComposerMixin(dependencies) {
             const hasPendingFiles = this._pendingFiles && this._pendingFiles.length > 0;
             if ((!message && !hasAttachments && !hasPendingFiles) || this.isWaitingForResponse)
                 return;
-            // The session's transcript is still being painted (_showCurrentSession):
-            // the paint would wipe this turn. The text stays in the input.
-            if (this._paintPending) return;
+            // A view change is still under way (a selection, New Chat, the
+            // current session's paint): its transcript would wipe this turn.
+            // The text stays in the input.
+            if (this._viewChangePending()) return;
 
             // If a plan is pending review, send the message as a revision request
             if (this._pendingPlanRevision && message) {
@@ -63,6 +64,8 @@ export function createComposerMixin(dependencies) {
                 this.elements.chatInput.style.height = 'auto';
                 this.clearSuggestions();
 
+                // A turn starting in the window (see _startTurnView).
+                this._startTurnView();
                 // Add user message to chat
                 const userMsg = this.createMessageElement('user', message);
                 this.elements.messagesArea.appendChild(userMsg);
@@ -320,6 +323,21 @@ export function createComposerMixin(dependencies) {
         }
 
         /**
+         * Whether `id` (a message_complete or session_migrated id) names the
+         * session this window shows: it is `activeSessionId`, or the turn
+         * the window last sent on the session shown also ran under `id` (a
+         * migration). Never by the pin (`currentAcpSessionId`), which can
+         * name a session the window has left.
+         */
+        _isShownSessionId(id) {
+            const shown = this.activeSessionId;
+            if (!id || !shown) return false;
+            if (id === shown) return true;
+            const turn = this._lastTurn;
+            return this._turnWasOn(turn, shown) && this._turnWasOn(turn, id);
+        }
+
+        /**
          * Whether a `message_error` naming `sessionId` is about the turn this
          * window shows: the session shown or pinned, or an earlier id of the
          * shown session's last turn. Otherwise it's a turn on a session the
@@ -401,13 +419,15 @@ export function createComposerMixin(dependencies) {
 
         /**
          * Whether a prompt can go to `sessionId` now: it's the session this
-         * window shows, and no turn is in flight on it (here, from another
-         * window, or a plan waiting for review).
+         * window shows, its view change (selection, paint) is done, and no
+         * turn is in flight on it (here, from another window, or a plan
+         * waiting for review).
          */
         canSendAgentPrompt(sessionId) {
             return (
                 !!sessionId &&
                 sessionId === this.activeSessionId &&
+                !this._viewChangePending() &&
                 !this.isWaitingForResponse &&
                 !this._pendingPlanRevision &&
                 !this.streamRegistry?.isStreaming(sessionId)
@@ -492,6 +512,7 @@ export function createComposerMixin(dependencies) {
         // completion notification — otherwise the floating window AND every
         // chat window viewing the same session each toast the same completion.
         startStreaming(originatedHere = true) {
+            this._startTurnView();
             this._turnOriginatedHere = originatedHere;
             // The user's next prompt from here: cards for commands outside
             // the sandbox that are over go (one still waiting stays).
@@ -519,6 +540,18 @@ export function createComposerMixin(dependencies) {
             this.currentStreamingMessage = this.createMessageElement('assistant', '');
             this.elements.messagesArea.appendChild(this.currentStreamingMessage);
             this.scrollToBottom();
+        }
+
+        /**
+         * A turn starts in the window (a local send, a resend, open in
+         * chat's prompt, a floating send mirrored here): a view change.
+         * A history render still in flight goes in first, whole; anything
+         * else still in flight for the view before (a pin read, a session
+         * list) is superseded.
+         */
+        _startTurnView() {
+            this._finishDisplaySessionRender?.();
+            this._bumpViewGen();
         }
 
         stopGenerating() {

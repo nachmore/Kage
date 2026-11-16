@@ -15,9 +15,11 @@ export function createSessionActionsMixin(dependencies) {
          * retry) rejects with the failure instead.
          */
         async createNewSession({ throwOnError = false } = {}) {
-            // Supersede any in-flight selectSession / earlier New Chat so its
-            // late IPC can't paint or adopt over this one.
-            const gen = this._nextSelectGen();
+            // A view change: supersedes whatever is in flight for the old
+            // view (a selection, an earlier New Chat, a paint, a pin read)
+            // so its late IPC can't paint or adopt over this one, and is
+            // superseded in turn by the next one (open in chat included).
+            const gen = this._beginViewChange();
             this._cancelDisplaySessionRender();
 
             // Detach from an in-flight turn exactly like selectSession does:
@@ -31,9 +33,8 @@ export function createSessionActionsMixin(dependencies) {
             this.updateInputState();
 
             // Drop the old id while the switch is in flight so the old
-            // session's chunks route to the registry instead of this view.
-            // Null the pin too: MESSAGE_COMPLETE treats a `currentAcpSessionId`
-            // match as ours and would re-adopt the old id mid-switch.
+            // session's chunks route to the registry instead of this view,
+            // and the pin: it is the old session's until the switch lands.
             const prevSessionId = this.activeSessionId;
             const prevAcpSessionId = this.currentAcpSessionId;
             this.activeSessionId = null;
@@ -62,22 +63,18 @@ export function createSessionActionsMixin(dependencies) {
             this.elements.chatHeaderTitle.textContent = t('chat.header.default_title');
 
             // The backend pin still names the old session until the switch
-            // lands. While this is set, the focus refresh must not re-read
-            // that pin or auto-select from the null `activeSessionId`
-            // (either would undo this New Chat). A counter, so overlapping
-            // New Chats don't clear each other's flag.
-            this._newSessionPending = (this._newSessionPending || 0) + 1;
-            // Also bump a token so a pin read that resolves only after this
-            // New Chat has settled (IPC replies aren't strictly ordered) is
-            // still recognised as predating it.
-            this._newSessionGen = (this._newSessionGen || 0) + 1;
+            // lands. While the view change is pending the focus refresh
+            // neither re-reads that pin nor auto-selects from the null
+            // `activeSessionId` (either would undo this New Chat), and a
+            // pin read that resolves after it is discarded (_pinChange).
             try {
-                const newId = await this.invoke('switch_acp_session', { sessionId: null });
-                if (gen !== this._selectGen) {
-                    // A newer selection/New Chat owns the view; undo our pin.
-                    this._repinWindowSession();
+                const newId = await this._switchAcpSession(null);
+                if (!this._viewIs(gen)) {
+                    // A newer view change owns the window; undo our pin.
+                    this._supersededPin(newId);
                     return null;
                 }
+                this._endViewChange(gen);
                 enableInput();
                 this.activeSessionId = newId;
                 this.currentAcpSessionId = newId;
@@ -103,7 +100,8 @@ export function createSessionActionsMixin(dependencies) {
                 return newId;
             } catch (error) {
                 console.error('Failed to create new session:', error);
-                if (gen !== this._selectGen) return null;
+                if (!this._viewIs(gen)) return null;
+                this._endViewChange(gen);
                 // The backend is still on the previous session; keep sends
                 // targeting it as before.
                 this.activeSessionId = prevSessionId;
@@ -123,7 +121,7 @@ export function createSessionActionsMixin(dependencies) {
                 if (throwOnError) throw error;
                 return null;
             } finally {
-                this._newSessionPending--;
+                this._endViewChange(gen);
             }
         }
 
@@ -151,12 +149,14 @@ export function createSessionActionsMixin(dependencies) {
             });
             if (!confirm(msg)) return;
 
+            const gen = this._viewGen;
             try {
                 await this.invoke('delete_session', { sessionId });
                 this.sessions = this.sessions.filter((s) => s.session_id !== sessionId);
 
-                if (isActive) {
-                    // Clear the display
+                // Clear the display, unless the window moved on meanwhile.
+                if (isActive && this._viewIs(gen) && this.activeSessionId === sessionId) {
+                    this._bumpViewGen();
                     this.activeSessionId = null;
                     this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.select_session')}</div>`;
                     this.elements.chatHeaderTitle.textContent = 'Kage';

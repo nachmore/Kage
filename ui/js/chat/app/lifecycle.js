@@ -43,6 +43,10 @@ export function createLifecycleMixin(dependencies) {
             // Peer chat windows (`chat-<uuid>`) have no pinned session
             // until they bootstrap one — load from URL or create fresh.
             await this._bootstrapChatPeerSession();
+            // The auto-select below paints the window's session only while
+            // nothing changed the view since (a selection, New Chat, a
+            // turn started by open in chat during the rest of init).
+            const viewGen = this._viewGen;
             await this.loadActionButtonConfig();
             await loadSlashCommands(this.invoke);
             await this.loadShortcuts();
@@ -85,7 +89,7 @@ export function createLifecycleMixin(dependencies) {
             );
 
             // Auto-select the current ACP session if one exists
-            if (this.currentAcpSessionId) await this._showCurrentSession();
+            if (this.currentAcpSessionId && this._viewIs(viewGen)) await this._showCurrentSession();
 
             // Publish the extension tool definitions (or "no tools") to the
             // backend, and again whenever they change. The backend attaches
@@ -110,35 +114,33 @@ export function createLifecycleMixin(dependencies) {
          * Show the window's session (`currentAcpSessionId`) as selected: its
          * sidebar entry (a synthetic one while it isn't on disk), its
          * transcript, and its title in the header. At init, on focus, and
-         * when a sign-in recovers the window's first session. After each
-         * await it first checks that the window still shows what it did (no
-         * selection or New Chat since): a late reply for a session the user
-         * left paints nothing.
+         * when a sign-in recovers the window's first session. A view change
+         * of its own (_beginViewChange): after each await it first checks
+         * that nothing changed the view since (a selection, New Chat, a turn
+         * started here or mirrored from Floating): a late reply for a
+         * session the user left, or one a turn has taken over, paints
+         * nothing.
          *
          * The composer stays off until the transcript is painted, as during
-         * any session switch (`_paintPending`; sendMessage refuses meanwhile):
-         * displaySession replaces the messages area, so a turn started
-         * before it would lose its bubble and its reply. A selection made
-         * meanwhile owns the composer from then on.
+         * any session switch (the view change is pending; sendMessage
+         * refuses meanwhile): displaySession replaces the messages area, so
+         * a turn started before it would lose its bubble and its reply. A
+         * view change made meanwhile owns the composer from then on.
          */
         async _showCurrentSession() {
             const sid = this.currentAcpSessionId;
             if (!sid) return;
-            const gen = this._selectGen;
             const before = this.activeSessionId ?? null;
-            const paint = { sid };
-            this._paintPending = paint;
+            const gen = this._beginViewChange();
             this.elements.chatInput.disabled = true;
             this.elements.sendBtn.disabled = true;
             try {
                 await this._paintCurrentSession(sid, gen, before);
             } finally {
-                if (this._paintPending === paint) {
-                    this._paintPending = null;
-                    if (gen === this._selectGen) {
-                        this.elements.chatInput.disabled = !!this.isWaitingForResponse;
-                        this.elements.sendBtn.disabled = false;
-                    }
+                this._endViewChange(gen);
+                if (this._viewIs(gen)) {
+                    this.elements.chatInput.disabled = !!this.isWaitingForResponse;
+                    this.elements.sendBtn.disabled = false;
                 }
             }
         }
@@ -149,7 +151,7 @@ export function createLifecycleMixin(dependencies) {
             if (this.sessions.length === 0) {
                 await this.loadSessions();
                 const moved =
-                    gen !== this._selectGen ||
+                    !this._viewIs(gen) ||
                     this.currentAcpSessionId !== sid ||
                     (this.activeSessionId ?? null) !== before;
                 if (moved) return;
@@ -191,11 +193,11 @@ export function createLifecycleMixin(dependencies) {
 
         /**
          * Whether the window still shows `sid` as when a paint of it began
-         * (`gen`: the selection token then): no selection or New Chat
-         * since, and it is the session shown.
+         * (`gen`: the view generation then): no view change since, and it
+         * is the session shown.
          */
         _isShowing(sid, gen) {
-            return gen === this._selectGen && this.activeSessionId === sid;
+            return this._viewIs(gen) && this.activeSessionId === sid;
         }
 
         /**
@@ -217,13 +219,18 @@ export function createLifecycleMixin(dependencies) {
          * brought here (by the backend, or after a sign-in when the backend
          * couldn't), as the window's: the turn recorded without a session
          * is on it, and the sidebar and header name it. The transcript (the
-         * user's message, its reply streaming) stays as it is.
+         * user's message, its reply streaming) stays as it is. A view
+         * change: a New Chat or selection still in flight changes nothing
+         * when it answers, and the window is pinned to `sid` (such a switch
+         * may have landed on the backend after the pin it made for `sid`).
          */
         _adoptOpenedChatSession(sid) {
+            this._bumpViewGen();
             // The turn initial_message recorded before the session
             // existed is on this session now.
             this._adoptTurnSession?.(sid);
             this._nameShownSession(sid);
+            this._repinWindowSession();
         }
 
         /**
@@ -255,21 +262,22 @@ export function createLifecycleMixin(dependencies) {
         /**
          * open_chat_with_message sends its prompt on `sid` (main's backend
          * pin, or null when it has none and makes one), which is not the
-         * session the window shows: a selection is still under way, or was
-         * refused. Show `sid` instead, so the prompt and its reply render
+         * session the window shows, or the window's view change (a
+         * selection, New Chat, a paint) is still under way; or a prompt
+         * sent from Floating on `sid`, the session shown, arrives while
+         * one is. Show `sid` instead, so the prompt and its reply render
          * where they went (the caller adds the bubble and the stream).
-         * Supersedes that selection or New Chat: its late answer paints and
+         * Supersedes that view change: its late answer paints, pins and
          * adopts nothing, and a switch that still lands pins the window back
-         * to `sid` (_repinWindowSession). The transcript on screen stays
-         * when it is still `sid`'s (the selection hadn't painted its own;
-         * a batched paint of it still in flight finishes before the bubble,
-         * addUserMessage), else it gives way to the turn; the session's
-         * earlier messages show when it is selected again.
+         * to `sid` (_supersededPin). The transcript on screen stays when it
+         * is still `sid`'s (the selection hadn't painted its own; a batched
+         * paint of it still in flight finishes now, before the bubble),
+         * else it gives way to the turn; the session's earlier messages
+         * show when it is selected again.
          */
         _showTurnSession(sid) {
-            this._nextSelectGen();
-            this._switchGen = (this._switchGen || 0) + 1;
-            this._pendingSwitchSessionId = null;
+            if (this._transcriptOf === sid) this._finishDisplaySessionRender();
+            this._bumpViewGen();
             // Detach from a stream on screen, as selectSession does.
             if (this.isWaitingForResponse) {
                 this.hideTypingIndicator();
@@ -316,7 +324,11 @@ export function createLifecycleMixin(dependencies) {
         async openDefaultSession(sessionId) {
             this.floatingSessionId = sessionId;
             if (!this.sessions.some((s) => s.session_id === sessionId)) {
+                // A view change while the list loads (the user picked a
+                // session, a turn started) wins over this one.
+                const gen = this._viewGen;
                 await this.loadSessions();
+                if (!this._viewIs(gen)) return;
             }
             if (!this.sessions.some((s) => s.session_id === sessionId)) {
                 // Not on disk yet (nothing sent in it): list it, as init does
@@ -331,8 +343,11 @@ export function createLifecycleMixin(dependencies) {
             }
             this.renderSessionList();
             if (sessionId === this.activeSessionId) return;
-            await this.selectSession(sessionId, { emptyIfNew: true });
-            if (this.activeSessionId !== sessionId) return;
+            const selecting = this.selectSession(sessionId, { emptyIfNew: true });
+            // The selection's own view change (it begins before its first await).
+            const gen = this._viewGen;
+            await selecting;
+            if (!this._viewIs(gen) || this.activeSessionId !== sessionId) return;
             const session = this.sessions.find((s) => s.session_id === sessionId);
             this.elements.chatHeaderTitle.textContent =
                 stripKageTags(session?.title) || t('chat.session.current_title');

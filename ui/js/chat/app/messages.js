@@ -465,7 +465,8 @@ export function createMessagesMixin(dependencies) {
                 // another while the agent restarts: then the outcome is
                 // not this window's to act on.
                 const startedOn = this.activeSessionId ?? null;
-                const moved = () => this.activeSessionId !== startedOn;
+                const gen = this._viewGen;
+                const moved = () => !this._viewIs(gen) || this.activeSessionId !== startedOn;
                 // A failed attempt's error keeps the failed turn, so the
                 // next Reconnect can still resend it.
                 // (and, for a signed-out agent, its Sign in).
@@ -640,23 +641,27 @@ export function createMessagesMixin(dependencies) {
          * (with Sign in while it still applies) and rejects.
          */
         async _establishSessionForTurn(outcome, text, payload, turn) {
+            // A view change meanwhile (the window took a session, a turn
+            // started) wins: this setup's answer changes nothing then.
+            const gen = this._viewGen;
+            const moved = () => !this._viewIs(gen) || (this.activeSessionId ?? null) !== null;
             let id;
             try {
                 id =
                     outcome?.sessionReloaded && outcome.sessionId
                         ? outcome.sessionId
-                        : await this.invoke('switch_acp_session', { sessionId: null });
+                        : await this._switchAcpSession(null);
             } catch (error) {
                 console.error('[chat] setting up a session for the unsent prompt failed:', error);
-                if ((this.activeSessionId ?? null) === null) {
+                if (!moved()) {
                     if (canOfferSignIn?.(error)) this._showUnsentTurnError(text, payload, turn);
                     else this.showError(this.formatError(error));
                 }
                 throw error;
             }
-            if ((this.activeSessionId ?? null) !== null) {
+            if (moved()) {
                 console.log('[chat] keeping the session the window took meanwhile');
-                this._repinWindowSession();
+                this._supersededPin(id);
                 return null;
             }
             this._adoptOpenedChatSession(id);
@@ -725,12 +730,11 @@ export function createMessagesMixin(dependencies) {
         _adoptReconnectSession(sid) {
             if (!sid || sid === this.activeSessionId) return;
             console.log('[chat] adopting reconnect session id:', sid);
+            // The window shows another session id: a view change.
+            this._bumpViewGen();
             this.activeSessionId = sid;
             this.currentAcpSessionId = sid;
-            this.invoke('set_window_session', {
-                label: this.windowLabel,
-                sessionId: sid,
-            }).catch(() => {});
+            this._pinWindow(sid);
         }
 
         /**
@@ -838,6 +842,8 @@ export function createMessagesMixin(dependencies) {
         }
 
         async showSessionLocked(sessionId, pid) {
+            // Shown only while the window still shows the session refused.
+            const gen = this._viewGen;
             let processInfo = '';
             if (pid) {
                 try {
@@ -847,6 +853,7 @@ export function createMessagesMixin(dependencies) {
                     processInfo = ` (PID ${pid})`;
                 }
             }
+            if (!this._viewIs(gen) || this.activeSessionId !== sessionId) return;
             this.elements.errorContainer.innerHTML = `
                 <div class="chat-error chat-warning">
                     <span>${t('chat.error.session_locked', { processInfo: escapeHtml(processInfo) })}</span>
@@ -856,28 +863,12 @@ export function createMessagesMixin(dependencies) {
                 </div>
             `;
 
-            document.getElementById('errorRetryBtn')?.addEventListener('click', async () => {
+            document.getElementById('errorRetryBtn')?.addEventListener('click', () => {
                 this.elements.errorContainer.innerHTML = '';
-                try {
-                    await this.invoke('switch_acp_session', { sessionId });
-                    this.isConnected = true;
-                    this.updateConnectionStatus();
-                    this.elements.chatInput.disabled = false;
-                    this.elements.chatInput.placeholder = t('chat.placeholder.type_message');
-                    this.elements.sendBtn.disabled = false;
-                    this.elements.chatInput.focus();
-                } catch (error) {
-                    const msg = this.formatError(error);
-                    const isLocked =
-                        msg.includes('active in another process') ||
-                        msg.includes('Session is active');
-                    if (isLocked) {
-                        const retryPidMatch = msg.match(/PID\s+(\d+)/);
-                        this.showSessionLocked(sessionId, retryPidMatch ? retryPidMatch[1] : null);
-                    } else {
-                        this.showError(msg);
-                    }
-                }
+                // Switches again; applied only while the window still shows
+                // `sessionId`, and a refusal shows its own error again
+                // (_retrySessionSwitch, _onSessionSwitchFailed).
+                this._retrySessionSwitch(sessionId).catch(() => {});
             });
         }
 

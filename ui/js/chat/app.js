@@ -226,6 +226,13 @@ export class ChatApp {
         this.activeSessionId = null;
         this.floatingSessionId = null;
         this.currentAcpSessionId = null;
+        // What the window shows, and the async work for it: see "View
+        // generation" in app/session-history.js.
+        this._viewGen = 0;
+        this._viewPending = null;
+        this._pendingSwitch = null;
+        this._pinsInFlight = 0;
+        this._pinGen = 0;
         this.toolSources = [];
         this.toolUsages = [];
         this._toolCallIds = new Set();

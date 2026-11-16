@@ -17,18 +17,24 @@ export function createSessionStateMixin(dependencies) {
             // Read this window's own pinned session id. For `main` that's
             // bootstrapped at app launch. For `chat-<uuid>` peers it's
             // bootstrapped on first load via _bootstrapChatPeerSession.
-            // A New Chat in flight (or started while this read was in
-            // flight) owns `currentAcpSessionId`: the pin may still be the
-            // old session, and adopting it would let that session's
-            // MESSAGE_COMPLETE re-claim the view mid-switch. Likewise while
-            // the window shows a session whose switch was refused
-            // (_onSessionSwitchFailed): it has no session of its own then,
-            // and the pin (the session it had) is not the one on screen, so
-            // a turn finishing there must stay a background one.
-            const newChatGen = this._newSessionGen;
+            // The answer is the window's only when nothing changed the view
+            // or the pin while it was in flight: not while a view change
+            // (a selection, New Chat, the bootstrap, a paint) is under way
+            // or happened since (it owns `currentAcpSessionId`), and not
+            // when a switch or re-pin overlapped the read (the pin may
+            // still be the old session, and adopting it would let that
+            // session's turns claim the view). Nor while the window shows
+            // a session whose switch was refused (_onSessionSwitchFailed):
+            // it has no session of its own then, and the pin (the session
+            // it had) is not the one on screen, so a turn finishing there
+            // must stay a background one.
+            const gen = this._viewGen;
+            const pinGen = this._pinGen;
+            const clear = this._pinsSettled() && !this._viewChangePending();
             const raced = () =>
-                !!this._newSessionPending ||
-                newChatGen !== this._newSessionGen ||
+                !clear ||
+                !this._viewIs(gen) ||
+                pinGen !== this._pinGen ||
                 (!!this.activeSessionId && this.activeSessionId === this._setupFailedSessionId);
             try {
                 const pinned = await this.invoke('get_window_session', {
@@ -61,19 +67,35 @@ export function createSessionStateMixin(dependencies) {
          */
         async _bootstrapChatPeerSession({ throwOnError = false } = {}) {
             if (this.currentAcpSessionId) return null; // already bootstrapped
-            // A New Chat clicked during init nulls the pin on purpose and
-            // will adopt its own session; bootstrapping here would race it.
-            if (this._newSessionPending) return null;
+            // A selection or New Chat under way (clicked during init) will
+            // adopt its own session; bootstrapping here would race it.
+            if (this._viewChangePending()) return null;
             // What the window shows now: if this changes while the switch
             // below is in flight, the user moved and their choice wins.
             const startedOn = this.currentAcpSessionId ?? this.activeSessionId ?? null;
+            // A view change of its own: whatever changes the view after it
+            // (a selection, New Chat, open in chat) supersedes it.
+            const gen = this._beginViewChange();
+            try {
+                return await this._runBootstrap(gen, startedOn, throwOnError);
+            } finally {
+                this._endViewChange(gen);
+            }
+        }
 
+        /** _bootstrapChatPeerSession's switch, under the view change `gen`. */
+        async _runBootstrap(gen, startedOn, throwOnError) {
             // A signed-out agent refused the session: say so, with Sign in,
             // which bootstraps again after it and then draws the session as
             // init does (sidebar entry, transcript, header; init's own
             // auto-select ran long ago, with no session). Any other failure
-            // stays in the console, as before.
+            // stays in the console, as before. A failure after the window
+            // moved on is not its to show.
             const failed = (e) => {
+                if (!this._viewIs(gen)) {
+                    console.log('[CHAT] bootstrap failed after the window moved on');
+                    return;
+                }
                 this._showSessionSetupError?.(this.formatError?.(e) ?? String(e), e, {
                     sessionId: this.activeSessionId ?? null,
                     retry: async () => {
@@ -98,10 +120,8 @@ export function createSessionStateMixin(dependencies) {
                 const params = new URLSearchParams(window.location.search);
                 const resumeId = params.get('resumeSessionId');
                 try {
-                    const adoptedId = await this.invoke('switch_acp_session', {
-                        sessionId: resumeId || null,
-                    });
-                    if (this._movedDuringBootstrap(startedOn)) return null;
+                    const adoptedId = await this._switchAcpSession(resumeId || null);
+                    if (this._movedDuringBootstrap(startedOn, gen, adoptedId)) return null;
                     this.currentAcpSessionId = adoptedId;
                     this.activeSessionId = adoptedId;
                     console.log(`[CHAT] Bootstrapped ${this.windowLabel} -> ${adoptedId}`);
@@ -117,15 +137,14 @@ export function createSessionStateMixin(dependencies) {
             // ongoing conversation. switch_acp_session sends session/load
             // and pins to this window's label (`main`).
             const floatingId = await getWindowSessionOrNull(this.invoke, WINDOW.FLOATING);
+            if (!this._viewIs(gen)) return null;
             if (!floatingId) {
                 console.log('[CHAT] main bootstrap: no floating session yet, leaving empty');
                 return null;
             }
             try {
-                const adoptedId = await this.invoke('switch_acp_session', {
-                    sessionId: floatingId,
-                });
-                if (this._movedDuringBootstrap(startedOn)) return null;
+                const adoptedId = await this._switchAcpSession(floatingId);
+                if (this._movedDuringBootstrap(startedOn, gen, adoptedId)) return null;
                 this.currentAcpSessionId = adoptedId;
                 this.activeSessionId = adoptedId;
                 console.log(`[CHAT] main adopted floating's session: ${adoptedId}`);
@@ -138,16 +157,17 @@ export function createSessionStateMixin(dependencies) {
         }
 
         /**
-         * The user picked a session (or New Chat) while a bootstrap's
-         * switch_acp_session was in flight: keep what they picked, and pin
-         * the window back to it, since the bootstrap's switch may have
-         * landed on the backend after theirs.
+         * The view changed (a selection, New Chat, open in chat) while a
+         * bootstrap's switch_acp_session was in flight (the view change
+         * `gen`): keep what the window shows, and pin it back to that, since
+         * the bootstrap's switch (to `landedId`) may have landed on the
+         * backend after theirs.
          */
-        _movedDuringBootstrap(startedOn) {
+        _movedDuringBootstrap(startedOn, gen, landedId) {
             const now = this.currentAcpSessionId ?? this.activeSessionId ?? null;
-            if (now === startedOn && !this._newSessionPending) return false;
+            if (this._viewIs(gen) && now === startedOn) return false;
             console.log('[CHAT] bootstrap finished after the window moved to', now);
-            this._repinWindowSession?.();
+            this._supersededPin(landedId);
             return true;
         }
 
@@ -221,9 +241,14 @@ export function createSessionStateMixin(dependencies) {
         }
 
         async loadSessions(loadAll = false) {
+            // A list asked for before a view change (a selection, New Chat,
+            // a turn starting) is not applied over it: the window may have
+            // listed its new session since. Ask again instead.
+            const gen = this._viewGen;
             try {
                 const params = loadAll ? { force: true } : { limit: 50, offset: 0 };
                 const sessions = await this.invoke('list_sessions', params);
+                if (!this._viewIs(gen)) return this.loadSessions(loadAll);
                 if (loadAll || !this._sessionsFullyLoaded) {
                     this.sessions = sessions;
                     this._sessionsFullyLoaded = loadAll || sessions.length < 50;
@@ -236,6 +261,7 @@ export function createSessionStateMixin(dependencies) {
                 this.renderSessionList();
             } catch (error) {
                 console.error('Failed to load sessions:', error);
+                if (!this._viewIs(gen)) return;
                 this.sessions = [];
                 this.renderSessionList();
             }
