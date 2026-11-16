@@ -3205,8 +3205,27 @@ body.light-theme .conn-edit-actions {
     justify-content: flex-end;
     gap: 6px;
 }
+/* The command for the user's own terminal (device flow turned off). */
+.agent-sign-in-manual {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.agent-sign-in-manual-cmd {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: var(--kage-term-bg-strong);
+    font-family: var(--kage-font-mono);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
 .agent-sign-in-term[hidden],
 .agent-sign-in-hint[hidden],
+.agent-sign-in-manual[hidden],
 .agent-sign-in-actions[hidden],
 .agent-sign-in .shell-cmd-copy[hidden] {
     display: none;

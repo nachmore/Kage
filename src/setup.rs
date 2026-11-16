@@ -239,15 +239,38 @@ pub fn parse_deep_link(url: &url::Url) -> Option<DeepLinkIntent> {
             // isn't in the allowed character set.
             let id = rest;
             if id.is_empty() || !is_safe_extension_id(&id) {
-                warn!("deep-link: install URL has invalid id '{}', ignoring", id);
+                warn!(
+                    "deep-link: install URL has an invalid id ({} bytes), ignoring",
+                    id.len()
+                );
                 return None;
             }
             Some(DeepLinkIntent::Install(id))
         }
         other => {
-            warn!("deep-link: unknown verb '{}' in URL '{}'", other, url);
+            warn!(
+                "deep-link: unknown verb {}, ignoring",
+                deep_link_verb_for_log(other)
+            );
             None
         }
+    }
+}
+
+/// A deep link's verb as it may appear in a log: the verb itself when it
+/// looks like one (a short lowercase word), else only its length. The
+/// rest of the link is never logged: the page that opened it chose all
+/// of it, and a link can carry a token.
+pub fn deep_link_verb_for_log(verb: &str) -> String {
+    let word = !verb.is_empty()
+        && verb.len() <= 32
+        && verb
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    if word {
+        format!("'{verb}'")
+    } else {
+        format!("<{} bytes>", verb.len())
     }
 }
 
@@ -971,7 +994,23 @@ pub fn start_session_watcher(app: &App) -> Option<crate::commands::sessions::Ses
 
 #[cfg(test)]
 mod tests {
-    use super::{is_real_window_label, settle, should_hide_app_on_close};
+    use super::{deep_link_verb_for_log, is_real_window_label, settle, should_hide_app_on_close};
+
+    #[test]
+    fn deep_link_logs_only_a_plain_verb() {
+        assert_eq!(deep_link_verb_for_log("install"), "'install'");
+        assert_eq!(deep_link_verb_for_log("open-chat_2"), "'open-chat_2'");
+        for (verb, logged) in [
+            ("SECRET", "<6 bytes>"),
+            ("", "<0 bytes>"),
+            ("token=SECRET", "<12 bytes>"),
+            ("a b", "<3 bytes>"),
+        ] {
+            assert_eq!(deep_link_verb_for_log(verb), logged, "{verb}");
+        }
+        let long = "a".repeat(33);
+        assert_eq!(deep_link_verb_for_log(&long), "<33 bytes>");
+    }
     use crate::window_labels;
     use std::sync::Arc;
     use std::time::Duration;

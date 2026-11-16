@@ -22,9 +22,11 @@ vi.mock('../../ui/js/shared/i18n.js', async (importOriginal) => {
 const {
     _resetAgentSignInForTests,
     canOfferSignIn,
+    createDeviceFlowWatch,
     isAgentSignInActive,
     mountSignInAction,
     normalizeReconnect,
+    outputSaysDeviceFlowDisabled,
     SIGN_IN_KINDS,
 } = await import('../../ui/js/shared/agent-sign-in.js');
 const { _setTerminalFactoryForTests } = await import('../../ui/js/shared/terminal-view.js');
@@ -717,5 +719,224 @@ describe('normalizeReconnect', () => {
             normalizeReconnect({ reconnected: true, sessionId: 's2', sessionReloaded: false }, 's1')
         ).toEqual({ reconnected: true, sessionId: 's2', sessionReloaded: false });
         expect(normalizeReconnect(undefined, 's1').reconnected).toBe(false);
+    });
+});
+
+/**
+ * Linux and Windows sign in with the device flow only (the backend tells
+ * kiro-cli it runs remotely, so it starts no browser inside the login).
+ * An organization that turned the device flow off can't sign in that way:
+ * the panel says so and offers the command for the user's own terminal.
+ * The messages are kiro-cli 3.3.0's own.
+ */
+const ORG_DISABLED = [
+    'Your organization has disabled device flow sign-in. Use browser sign-in.',
+    'Every available profile has device flow sign-in disabled',
+    'None of the sign-in methods your organization permits work without a browser. Sign in on a local machine instead.',
+];
+
+describe('outputSaysDeviceFlowDisabled', () => {
+    it("matches kiro-cli's messages, through colours, line wraps and case", () => {
+        for (const msg of ORG_DISABLED) {
+            expect(outputSaysDeviceFlowDisabled(msg)).toBe(true);
+            expect(outputSaysDeviceFlowDisabled(`\u001b[31mError:\u001b[0m ${msg}\r\n`)).toBe(true);
+        }
+        expect(
+            outputSaysDeviceFlowDisabled(
+                'Your organization has disabled \u001b[1mdevice\u001b[22m flow\r\n  sign-in.'
+            )
+        ).toBe(true);
+        expect(outputSaysDeviceFlowDisabled('YOUR ORGANIZATION HAS DISABLED DEVICE FLOW SIGN-IN')).toBe(
+            true
+        );
+    });
+
+    it('does not match an ordinary device-flow sign-in or other failures', () => {
+        for (const text of [
+            '',
+            null,
+            undefined,
+            'Confirm the following code in the browser\r\nCode: ABCD-EFGH\r\nOpen this URL: https://view.awsapps.com/start/#/device?user_code=ABCD-EFGH',
+            'Device code expired. Please try again.',
+            'Already logged in, please logout with kiro-cli logout first',
+            'Device flow error: access denied',
+        ]) {
+            expect(outputSaysDeviceFlowDisabled(text)).toBe(false);
+        }
+    });
+});
+
+describe('createDeviceFlowWatch', () => {
+    it('sees the message split across output messages, escapes and all', () => {
+        const msg = `\u001b[31m${ORG_DISABLED[0]}\u001b[0m`;
+        for (let cut = 1; cut < msg.length; cut += 7) {
+            const watch = createDeviceFlowWatch();
+            watch.push(msg.slice(0, cut));
+            watch.push(msg.slice(cut));
+            expect(watch.matched, `cut at ${cut}`).toBe(true);
+        }
+    });
+
+    it('stays matched, keeps a bounded tail, and ignores junk', () => {
+        const watch = createDeviceFlowWatch();
+        watch.push(ORG_DISABLED[1]);
+        watch.push('x'.repeat(100_000));
+        expect(watch.matched).toBe(true);
+        const other = createDeviceFlowWatch();
+        for (let i = 0; i < 50; i++) other.push('y'.repeat(4096));
+        other.push(null);
+        other.push(42);
+        expect(other.matched).toBe(false);
+        expect(other.tailLength).toBeLessThanOrEqual(1024);
+    });
+});
+
+describe('device flow turned off by the organization', () => {
+    const DEVICE_CTX = {
+        ...CTX,
+        terminal: false,
+        deviceFlowOnly: true,
+        manualCommand: 'kiro-cli login',
+    };
+    const manualBox = (host) => host.slot.querySelector('.agent-sign-in-manual');
+
+    async function runEnding(ctx, output, report) {
+        const tauri = fakeTauri({ ctx });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        output.forEach((data, seq) => tauri.channels[0].onmessage({ seq, data }));
+        tauri.starts[0].resolve(report);
+        await flush();
+        return { tauri, host };
+    }
+
+    it('says why and offers the command for their own terminal, with Copy', async () => {
+        const writeText = vi.fn(() => Promise.resolve());
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText },
+            configurable: true,
+        });
+        const logs = ['log', 'info', 'warn', 'error', 'debug'].map((m) =>
+            vi.spyOn(console, m).mockImplementation(() => {})
+        );
+        try {
+            const { tauri, host } = await runEnding(
+                DEVICE_CTX,
+                ['? Select login method\r\n', `\u001b[31m${ORG_DISABLED[0].slice(0, 20)}`, `${ORG_DISABLED[0].slice(20)}\u001b[0m\r\n`],
+                { outcome: 'exited', exitCode: 1, signal: null }
+            );
+            expect(status(host)).toBe(
+                'shared.agent_sign_in.status.device_flow_disabled {"agent":"Kiro CLI"}'
+            );
+            const box = manualBox(host);
+            expect(box).toBeTruthy();
+            expect(box.hidden).toBe(false);
+            const code = box.querySelector('code');
+            expect(code.textContent).toBe('kiro-cli login');
+            expect(code.dir).toBe('ltr');
+            const copy = box.querySelector('button.shell-cmd-copy');
+            expect(copy.textContent).toContain('shared.shell.copy_command');
+            copy.click();
+            await flush();
+            expect(writeText).toHaveBeenCalledWith('kiro-cli login');
+            // Signing in here again would fail the same way.
+            expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-again'))).toBe(false);
+            expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-open-terminal'))).toBe(false);
+            expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-close'))).toBe(true);
+            expect(tauri.named('reconnect_acp').length).toBe(0);
+            expect(host.onEnded).toHaveBeenCalledWith(
+                expect.objectContaining({ state: 'device_flow_disabled' })
+            );
+            expect(isAgentSignInActive()).toBe(false);
+            // Signed in from their own terminal: Reconnect restarts and resends.
+            click(host.slot.querySelector('.agent-sign-in-reconnect'));
+            await flush();
+            expect(tauri.named('reconnect_acp').length).toBe(1);
+            expect(host.resend).toHaveBeenCalledTimes(1);
+            // Nothing the terminal showed went to the console.
+            for (const spy of logs) {
+                for (const args of spy.mock.calls) {
+                    expect(args.join(' ')).not.toMatch(/device flow/i);
+                }
+            }
+        } finally {
+            for (const spy of logs) spy.mockRestore();
+            delete navigator.clipboard;
+        }
+    });
+
+    it('a clean exit still signs in, whatever was printed', async () => {
+        const { tauri, host } = await runEnding(DEVICE_CTX, [ORG_DISABLED[2]], {
+            outcome: 'exited',
+            exitCode: 0,
+            signal: null,
+        });
+        expect(tauri.named('reconnect_acp').length).toBe(1);
+        expect(manualBox(host)?.hidden ?? true).toBe(true);
+    });
+
+    it('a failure without the message is an ordinary failure', async () => {
+        const { host } = await runEnding(DEVICE_CTX, ['Device code expired. Please try again.'], {
+            outcome: 'exited',
+            exitCode: 1,
+            signal: null,
+        });
+        expect(status(host)).toBe('shared.agent_sign_in.status.failed_exit {"code":1}');
+        expect(manualBox(host)?.hidden ?? true).toBe(true);
+        expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-again'))).toBe(true);
+    });
+
+    it('Stop is Stop, even after the message', async () => {
+        const { host } = await runEnding(DEVICE_CTX, [ORG_DISABLED[0]], {
+            outcome: 'cancelled',
+            exitCode: null,
+            signal: null,
+        });
+        expect(status(host)).toBe('shared.agent_sign_in.status.stopped');
+        expect(manualBox(host)?.hidden ?? true).toBe(true);
+    });
+
+    it('macOS (browser sign-in, Terminal hand-off) keeps Open in Terminal', async () => {
+        const { host } = await runEnding(
+            { ...CTX, terminal: true, deviceFlowOnly: false, manualCommand: 'kiro-cli login' },
+            [ORG_DISABLED[0]],
+            { outcome: 'exited', exitCode: 1, signal: null }
+        );
+        expect(status(host)).toBe('shared.agent_sign_in.status.failed_exit {"code":1}');
+        expect(manualBox(host)?.hidden ?? true).toBe(true);
+        expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-open-terminal'))).toBe(true);
+    });
+
+    it("one run's output never decides the next run's ending", async () => {
+        const tauri = fakeTauri({ ctx: { ...DEVICE_CTX } });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        tauri.channels[0].onmessage({ seq: 0, data: ORG_DISABLED[0] });
+        tauri.starts[0].resolve({ outcome: 'timed_out', exitCode: null, signal: null });
+        await flush();
+        click(host.slot.querySelector('.agent-sign-in-again'));
+        await flush();
+        expect(tauri.starts.length).toBe(2);
+        tauri.starts[1].resolve({ outcome: 'exited', exitCode: 1, signal: null });
+        await flush();
+        expect(status(host)).toBe('shared.agent_sign_in.status.failed_exit {"code":1}');
+        expect(manualBox(host)?.hidden ?? true).toBe(true);
+    });
+
+    it('the hint says the browser does not open by itself where it is device flow only', async () => {
+        const tauri = fakeTauri({ ctx: DEVICE_CTX });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        expect(host.slot.querySelector('.agent-sign-in-hint').textContent).toBe(
+            'shared.agent_sign_in.hint_device_flow'
+        );
+        _resetAgentSignInForTests();
+        document.body.innerHTML = '';
+        const mac = fakeTauri({ ctx: CTX });
+        const macHost = makeHost();
+        await openPanel(mac, macHost);
+        expect(macHost.slot.querySelector('.agent-sign-in-hint').textContent).toBe(
+            'shared.agent_sign_in.hint'
+        );
     });
 });

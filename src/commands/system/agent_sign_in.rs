@@ -7,9 +7,10 @@
 //!
 //! What runs is worked out here from the active connection in Config,
 //! never from a request argument: the configured program must literally
-//! be `kiro-cli` (basename), it runs with exactly [`sign_in_args`]
-//! (`login`; on Linux `login --use-device-flow`) in the home directory,
-//! and only a Local connection qualifies (a Remote
+//! be `kiro-cli` (basename), it runs as exactly `<kiro-cli> login`
+//! ([`SIGN_IN_ARGS`]) in the home directory, with the fixed
+//! [`sign_in_env_for`] on top on Linux and Windows, and only a Local
+//! connection qualifies (a Remote
 //! agent's login lives on another machine). Only Kage's chat and floating
 //! windows may start it ([`user_shell::caller_allowed`]); one sign-in
 //! runs at a time in the whole app. Nothing the terminal shows or the
@@ -39,30 +40,108 @@ pub const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// The only program the sign-in runs (by basename).
 const SIGN_IN_PROGRAM: &str = "kiro-cli";
 
-/// The sign-in's arguments on `linux` or not: fixed, never from a request.
-///
-/// On Linux, `--use-device-flow`. Without it `kiro-cli login` opens the
-/// browser itself (`xdg-open`) from inside the terminal's session, where a
-/// browser it starts can land in the session's foreground process group;
-/// the hang-up when the login exits, or Stop's group kill, would then
-/// close the browser in the middle of signing in. With it kiro-cli only
-/// prints a URL and a code; the user clicks the link in the terminal and
-/// Kage opens it from its own process (`open_user_terminal_link`),
-/// outside that session. On macOS `open` hands the URL to launchd and on
-/// Windows ShellExecute starts the browser outside the console, so neither
-/// makes the browser the login's child: they keep plain `login` and its
-/// usual browser sign-in.
-pub fn sign_in_args_for(linux: bool) -> &'static [&'static str] {
-    if linux {
-        &["login", "--use-device-flow"]
-    } else {
-        &["login"]
+/// The sign-in's arguments, on every platform: fixed, never from a
+/// request. No `--use-device-flow`: on macOS that would lock out an
+/// organization that has turned device-flow sign-in off for nothing (the
+/// browser sign-in is safe there); Linux and Windows get the device flow
+/// from [`sign_in_env_for`] instead.
+pub const SIGN_IN_ARGS: &[&str] = &["login"];
+
+/// The platform a sign-in runs on, as far as how kiro-cli opens the
+/// browser goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignInPlatform {
+    /// kiro-cli opens a URL with `NSWorkspace openURL` (LaunchServices):
+    /// launchd starts the browser, never as the login's descendant.
+    MacOs,
+    /// Windows: kiro-cli would run `cmd /c start <url>`, so a browser it
+    /// starts is its descendant, in Kage's Job Object and in the login's
+    /// `taskkill /T` tree.
+    Windows,
+    /// Linux and the other Unixes: kiro-cli would run `xdg-open` (or
+    /// `wslview`) inside the terminal's session and process group.
+    Linux,
+}
+
+impl SignInPlatform {
+    pub fn current() -> Self {
+        if cfg!(target_os = "macos") {
+            Self::MacOs
+        } else if cfg!(windows) {
+            Self::Windows
+        } else {
+            Self::Linux
+        }
+    }
+
+    /// Whether kiro-cli is told it runs remotely, so it signs in with the
+    /// device flow and only prints the URL and code ([`sign_in_env_for`]).
+    pub fn device_flow_only(self) -> bool {
+        !matches!(self, Self::MacOs)
     }
 }
 
-/// [`sign_in_args_for`] this platform.
-pub fn sign_in_args() -> &'static [&'static str] {
-    sign_in_args_for(cfg!(target_os = "linux"))
+/// What makes kiro-cli's `is_remote()` true. Upstream
+/// (aws/amazon-q-developer-cli at 15cc8f3c,
+/// `crates/chat-cli/src/util/system_info/mod.rs:177-180`:
+/// `in_ssh() || in_wsl() || is_remote_fake()`; `util/env_var.rs:38-40`:
+/// `Q_FAKE_IS_REMOTE` is set at all) reads `Q_FAKE_IS_REMOTE`; kiro-cli
+/// 3.3.0 carries `KIRO_FAKE_IS_REMOTE` beside it in its table of
+/// `Q_*`/`KIRO_*` names, so both are set. Only presence counts; `1` for
+/// readability.
+pub const REMOTE_ENV: &[(&str, &str)] = &[("KIRO_FAKE_IS_REMOTE", "1"), ("Q_FAKE_IS_REMOTE", "1")];
+
+/// The environment the login gets on top of the terminal's, per platform:
+/// fixed, never from a request.
+///
+/// On Linux and Windows, [`REMOTE_ENV`]. Upstream's `LoginArgs::execute`
+/// (`crates/chat-cli/src/cli/user.rs:132`) takes the device flow whenever
+/// `is_remote()`, and `try_device_authorization` (`:300-305`) then only
+/// prints "Open this URL: …" next to the code, never calling
+/// `open_url_async`; the browser (PKCE) branch, the only other caller, is
+/// the `else` of `:132` (kiro-cli 3.3.0 has the same branch: its binary
+/// carries "Remote environment detected - using device flow
+/// authentication"). Without it kiro-cli
+/// starts the browser itself (`util/open.rs`): `xdg-open` (`:38-46`)
+/// inside the terminal's session on Linux, where the group hang-up after
+/// the login exits would close it, and `cmd /c start` (`:27-35`) on
+/// Windows, where the browser would be in the login's `taskkill /T` tree
+/// (and Kage's kill-on-close Job Object, which it inherits). With it the
+/// user clicks the printed link and Kage opens it from its own process
+/// (`open_user_terminal_link`), like every other link Kage opens. macOS
+/// gets nothing: LaunchServices starts the browser outside the login, so
+/// the usual browser sign-in stays.
+pub fn sign_in_env_for(platform: SignInPlatform) -> &'static [(&'static str, &'static str)] {
+    if platform.device_flow_only() {
+        REMOTE_ENV
+    } else {
+        &[]
+    }
+}
+
+/// The command a user types into their own terminal to sign in, when
+/// Kage can't do it for them (device flow turned off by their
+/// organization): the configured program and `login`. Their terminal has
+/// no [`REMOTE_ENV`], so kiro-cli signs in through the browser there.
+/// Quoted only when it has to be: POSIX single quotes, or PowerShell's
+/// call operator on Windows (Windows Terminal's default shell).
+pub fn manual_command_for(platform: SignInPlatform, program: &str) -> String {
+    let windows = platform == SignInPlatform::Windows;
+    let plain = !program.is_empty()
+        && program.chars().all(|c| {
+            c.is_ascii_alphanumeric()
+                || matches!(c, '/' | '.' | '_' | '-' | '+' | ':')
+                // A POSIX shell would read a backslash as an escape.
+                || (c == '\\' && windows)
+        });
+    let args = SIGN_IN_ARGS.join(" ");
+    if plain {
+        format!("{program} {args}")
+    } else if windows {
+        format!("& '{}' {args}", program.replace('\'', "''"))
+    } else {
+        format!("{} {args}", posix_quote(program))
+    }
 }
 
 /// Sign-in terminals going at once in the whole app.
@@ -209,26 +288,44 @@ fn posix_quote(s: &str) -> String {
     }
 }
 
-/// What the sign-in runs: `program` with [`sign_in_args`] in `home`,
-/// nothing else.
-pub fn sign_in_spec(
+/// What the sign-in runs on `platform`: `program` with [`SIGN_IN_ARGS`]
+/// in `home`, with `env` and then [`sign_in_env_for`] (which `env` can't
+/// override or drop), nothing else.
+pub fn sign_in_spec_for(
+    platform: SignInPlatform,
     program: PathBuf,
     home: PathBuf,
     env: Vec<(String, String)>,
     size: TerminalSize,
 ) -> TerminalSpec {
+    let fixed = sign_in_env_for(platform);
+    let mut env: Vec<(String, String)> = env
+        .into_iter()
+        .filter(|(k, _)| !REMOTE_ENV.iter().any(|(r, _)| k.eq_ignore_ascii_case(r)))
+        .collect();
+    env.extend(fixed.iter().map(|(k, v)| (k.to_string(), v.to_string())));
     TerminalSpec {
         program,
-        args: sign_in_args().iter().map(|a| a.to_string()).collect(),
+        args: SIGN_IN_ARGS.iter().map(|a| a.to_string()).collect(),
         cwd: home,
         env,
         size: size.clamp(),
     }
 }
 
-/// The command as audited and shown: `<program> login …`.
+/// [`sign_in_spec_for`] this platform.
+pub fn sign_in_spec(
+    program: PathBuf,
+    home: PathBuf,
+    env: Vec<(String, String)>,
+    size: TerminalSize,
+) -> TerminalSpec {
+    sign_in_spec_for(SignInPlatform::current(), program, home, env, size)
+}
+
+/// The command as audited and shown: `<program> login`.
 fn command_text(program: &Path) -> String {
-    format!("{} {}", program.to_string_lossy(), sign_in_args().join(" "))
+    format!("{} {}", program.to_string_lossy(), SIGN_IN_ARGS.join(" "))
 }
 
 /// The login environment's PATH (else Kage's own). Can wait for the
@@ -266,23 +363,37 @@ pub struct AgentSignInContext {
     pub command: Option<String>,
     /// Whether "Open in Terminal" can hand it to the terminal app (macOS).
     pub terminal: bool,
+    /// Whether the sign-in here can only use the device flow (Linux and
+    /// Windows, [`sign_in_env_for`]): an organization that turned it off
+    /// has to sign in from the user's own terminal.
+    pub device_flow_only: bool,
+    /// What to type into their own terminal then ([`manual_command_for`]).
+    pub manual_command: Option<String>,
     pub timeout_minutes: u64,
 }
 
-/// [`AgentSignInContext`] for `cfg`.
-pub fn sign_in_context(cfg: &Config) -> AgentSignInContext {
-    let (available, reason) = match sign_in_target(cfg) {
-        Ok(_) => (true, None),
-        Err(why) => (false, Some(why.reason())),
+/// [`AgentSignInContext`] for `cfg` on `platform`.
+pub fn sign_in_context_for(platform: SignInPlatform, cfg: &Config) -> AgentSignInContext {
+    let (target, reason) = match sign_in_target(cfg) {
+        Ok(program) => (Some(program), None),
+        Err(why) => (None, Some(why.reason())),
     };
+    let available = target.is_some();
     AgentSignInContext {
         available,
         reason,
         agent: available.then(|| AgentKind::Kiro.preset().display_name.to_string()),
-        command: available.then(|| format!("{SIGN_IN_PROGRAM} {}", sign_in_args().join(" "))),
-        terminal: cfg!(target_os = "macos"),
+        command: available.then(|| format!("{SIGN_IN_PROGRAM} {}", SIGN_IN_ARGS.join(" "))),
+        terminal: platform == SignInPlatform::MacOs,
+        device_flow_only: platform.device_flow_only(),
+        manual_command: target.map(|program| manual_command_for(platform, &program)),
         timeout_minutes: SIGN_IN_TIMEOUT.as_secs() / 60,
     }
+}
+
+/// [`sign_in_context_for`] this platform.
+pub fn sign_in_context(cfg: &Config) -> AgentSignInContext {
+    sign_in_context_for(SignInPlatform::current(), cfg)
 }
 
 /// A finished sign-in: its run id and how it ended (no output).
@@ -520,7 +631,7 @@ pub async fn agent_sign_in_in_terminal<R: tauri::Runtime>(
         let typed = format!(
             "{} {}",
             posix_quote(&program.to_string_lossy()),
-            sign_in_args().join(" ")
+            SIGN_IN_ARGS.join(" ")
         );
         runner::validate_terminal_command(&typed).map_err(invalid)?;
         let result = crate::os::shell::run_in_terminal(&typed, &home);

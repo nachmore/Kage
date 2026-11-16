@@ -330,7 +330,8 @@ pub async fn fetch_favicon(url: String) -> Result<String, AppError> {
     }
 
     let favicon_url = format!("https://www.google.com/s2/favicons?domain={}&sz=64", domain);
-    info!("Fetching favicon for {}: {}", domain, favicon_url);
+    // The favicon service's URL carries only the domain; log just that.
+    info!("Fetching favicon for {}", domain);
 
     let bytes = tauri::async_runtime::spawn_blocking(move || {
         reqwest::blocking::get(&favicon_url)

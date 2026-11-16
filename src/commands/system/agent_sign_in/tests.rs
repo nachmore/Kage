@@ -189,17 +189,132 @@ fn resolve_program_refuses_relative_with_separator() {
     }
 }
 
-/// Linux signs in with the device flow, so kiro-cli never starts a
-/// browser inside the terminal's session (whose hang-up would close it);
-/// macOS and Windows run plain `login`.
+const PLATFORMS: [SignInPlatform; 3] = [
+    SignInPlatform::MacOs,
+    SignInPlatform::Linux,
+    SignInPlatform::Windows,
+];
+
+fn spec_on(platform: SignInPlatform, env: Vec<(String, String)>) -> TerminalSpec {
+    sign_in_spec_for(
+        platform,
+        PathBuf::from("/abs/kiro-cli"),
+        std::env::temp_dir(),
+        env,
+        TerminalSize { cols: 80, rows: 24 },
+    )
+}
+
+/// The value the login sees for `key`: the last setting wins
+/// (`CommandBuilder::env`).
+fn env_value<'a>(spec: &'a TerminalSpec, key: &str) -> Option<&'a str> {
+    spec.env
+        .iter()
+        .rev()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.as_str())
+}
+
+/// `kiro-cli login` on every platform: no `--use-device-flow`, which
+/// would lock out organizations that turned device-flow sign-in off.
 #[test]
-fn sign_in_args_per_platform() {
-    assert_eq!(sign_in_args_for(true), ["login", "--use-device-flow"]);
-    assert_eq!(sign_in_args_for(false), ["login"]);
+fn sign_in_argv_is_login_on_every_platform() {
+    assert_eq!(SIGN_IN_ARGS, ["login"]);
+    for platform in PLATFORMS {
+        let spec = spec_on(platform, Vec::new());
+        assert_eq!(spec.args, ["login"], "{platform:?}");
+        assert_eq!(spec.program, PathBuf::from("/abs/kiro-cli"));
+    }
+}
+
+/// Linux and Windows tell kiro-cli it runs remotely, so it prints the URL
+/// and code and starts no browser inside the login's session, process
+/// group or process tree; macOS (LaunchServices) keeps the browser
+/// sign-in.
+#[test]
+fn sign_in_env_per_platform() {
+    assert!(sign_in_env_for(SignInPlatform::MacOs).is_empty());
+    assert!(!SignInPlatform::MacOs.device_flow_only());
+    for platform in [SignInPlatform::Linux, SignInPlatform::Windows] {
+        assert!(platform.device_flow_only(), "{platform:?}");
+        let env = sign_in_env_for(platform);
+        assert!(env.contains(&("KIRO_FAKE_IS_REMOTE", "1")), "{platform:?}");
+        assert!(env.contains(&("Q_FAKE_IS_REMOTE", "1")), "{platform:?}");
+        let spec = spec_on(platform, Vec::new());
+        assert_eq!(env_value(&spec, "KIRO_FAKE_IS_REMOTE"), Some("1"));
+        assert_eq!(env_value(&spec, "Q_FAKE_IS_REMOTE"), Some("1"));
+    }
+    let mac = spec_on(SignInPlatform::MacOs, vec![("PATH".into(), "/bin".into())]);
+    assert_eq!(mac.env, vec![("PATH".to_string(), "/bin".to_string())]);
+    #[cfg(target_os = "macos")]
+    assert_eq!(SignInPlatform::current(), SignInPlatform::MacOs);
+    #[cfg(windows)]
+    assert_eq!(SignInPlatform::current(), SignInPlatform::Windows);
     #[cfg(target_os = "linux")]
-    assert_eq!(sign_in_args(), ["login", "--use-device-flow"]);
-    #[cfg(not(target_os = "linux"))]
-    assert_eq!(sign_in_args(), ["login"]);
+    assert_eq!(SignInPlatform::current(), SignInPlatform::Linux);
+}
+
+/// The login-shell overlay can neither override nor smuggle in the
+/// remote override: it is Kage's fixed choice per platform.
+#[test]
+fn sign_in_env_is_not_overridable() {
+    let overlay = vec![
+        ("PATH".to_string(), "/usr/bin".to_string()),
+        ("KIRO_FAKE_IS_REMOTE".to_string(), "".to_string()),
+        ("q_fake_is_remote".to_string(), "0".to_string()),
+    ];
+    for platform in PLATFORMS {
+        let spec = spec_on(platform, overlay.clone());
+        assert_eq!(env_value(&spec, "PATH"), Some("/usr/bin"), "{platform:?}");
+        let remote: Vec<_> = spec
+            .env
+            .iter()
+            .filter(|(k, _)| k.to_ascii_uppercase().ends_with("_FAKE_IS_REMOTE"))
+            .cloned()
+            .collect();
+        let expected: Vec<(String, String)> = sign_in_env_for(platform)
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        assert_eq!(remote, expected, "{platform:?}");
+    }
+}
+
+#[test]
+fn manual_command_per_platform() {
+    use SignInPlatform::*;
+    for platform in PLATFORMS {
+        assert_eq!(manual_command_for(platform, "kiro-cli"), "kiro-cli login");
+        assert_eq!(
+            manual_command_for(platform, "/opt/homebrew/bin/kiro-cli"),
+            "/opt/homebrew/bin/kiro-cli login"
+        );
+    }
+    assert_eq!(
+        manual_command_for(Linux, "/home/me/My Tools/kiro-cli"),
+        "'/home/me/My Tools/kiro-cli' login"
+    );
+    assert_eq!(
+        manual_command_for(MacOs, "/a/it's/kiro-cli"),
+        r"'/a/it'\''s/kiro-cli' login"
+    );
+    // A backslash is an escape to a POSIX shell, a separator on Windows.
+    assert_eq!(
+        manual_command_for(Linux, r"/a\b/kiro-cli"),
+        r"'/a\b/kiro-cli' login"
+    );
+    assert_eq!(
+        manual_command_for(Windows, r"C:\Tools\kiro-cli.exe"),
+        r"C:\Tools\kiro-cli.exe login"
+    );
+    assert_eq!(
+        manual_command_for(Windows, r"C:\Program Files (x86)\Kiro\kiro-cli.exe"),
+        r"& 'C:\Program Files (x86)\Kiro\kiro-cli.exe' login"
+    );
+    assert_eq!(
+        manual_command_for(Windows, r"C:\it's\kiro-cli.exe"),
+        r"& 'C:\it''s\kiro-cli.exe' login"
+    );
 }
 
 #[test]
@@ -221,7 +336,7 @@ fn sign_in_argv_is_fixed() {
                 rows: 9999,
             },
         );
-        assert_eq!(spec.args, sign_in_args(), "{command}");
+        assert_eq!(spec.args, SIGN_IN_ARGS, "{command}");
         assert_eq!(spec.cwd, home);
         assert!(spec.program.ends_with("kiro-cli"));
         assert_eq!(
@@ -260,16 +375,36 @@ fn context_never_offers_for_remote_or_non_kiro() {
     assert!(ctx.available);
     assert_eq!(ctx.reason, None);
     assert_eq!(ctx.agent.as_deref(), Some("Kiro CLI"));
-    let shown = if cfg!(target_os = "linux") {
-        "kiro-cli login --use-device-flow"
-    } else {
-        "kiro-cli login"
-    };
-    assert_eq!(ctx.command.as_deref(), Some(shown));
+    assert_eq!(ctx.command.as_deref(), Some("kiro-cli login"));
     assert_eq!(ctx.timeout_minutes, 15);
     assert_eq!(ctx.terminal, cfg!(target_os = "macos"));
+    assert_eq!(ctx.device_flow_only, !cfg!(target_os = "macos"));
+    assert_eq!(ctx.manual_command.as_deref(), Some("kiro-cli login"));
     let json = serde_json::to_value(&ctx).unwrap();
     assert!(json.get("timeoutMinutes").is_some());
+    assert!(json.get("deviceFlowOnly").is_some());
+    assert!(json.get("manualCommand").is_some());
+}
+
+/// Only Linux and Windows are device-flow-only, and the command for the
+/// user's own terminal is the configured program (not the resolved path,
+/// which needs the login shell), quoted for that platform.
+#[test]
+fn context_per_platform() {
+    let c = cfg(Some("kiro"), local("\"/Users/me/My Tools/kiro-cli\" acp"));
+    for platform in PLATFORMS {
+        let ctx = sign_in_context_for(platform, &c);
+        assert!(ctx.available);
+        assert_eq!(ctx.command.as_deref(), Some("kiro-cli login"));
+        assert_eq!(ctx.terminal, platform == SignInPlatform::MacOs);
+        assert_eq!(ctx.device_flow_only, platform != SignInPlatform::MacOs);
+        assert_eq!(
+            ctx.manual_command,
+            Some(manual_command_for(platform, "/Users/me/My Tools/kiro-cli"))
+        );
+    }
+    let off = sign_in_context_for(SignInPlatform::Linux, &cfg(Some("kiro"), remote()));
+    assert_eq!(off.manual_command, None);
 }
 
 #[test]

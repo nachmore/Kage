@@ -28,13 +28,22 @@
  *
  * SIGN_IN_KINDS are the serialized names of ErrorKind::AuthRequired /
  * AgentUnreachable (src/error.rs).
+ *
+ * On Linux and Windows the backend has kiro-cli sign in with the device
+ * flow only (`ctx.deviceFlowOnly`), so it prints a link and a code and
+ * starts no browser of its own. An organization can turn that flow off;
+ * when a run then fails with kiro-cli's message saying so, the panel says
+ * sign-in from Kage needs the device flow here and offers the command
+ * (`ctx.manualCommand`) for the user's own terminal, where the browser
+ * sign-in works, and Reconnect for afterwards. The output is only looked at here, in memory, for that
+ * message (createDeviceFlowWatch); it is never logged or kept.
  */
 
 import { errMessage } from './error-message.js';
 import { t } from './i18n.js';
 import { onDeliberateClick } from './shell-run-view.js';
 import { createTerminalView, ensureXterm } from './terminal-view.js';
-import { el, icon } from './tool-call-dom.js';
+import { copyButton, el, icon } from './tool-call-dom.js';
 
 export const SIGN_IN_KINDS = Object.freeze(['auth_required', 'agent_unreachable']);
 
@@ -51,6 +60,76 @@ const LINE_PX = 17;
  */
 const STOP_RETRY_MS = 200;
 const STOP_RETRY_LIMIT = 100;
+
+/**
+ * What kiro-cli (3.3.0) prints when the organization has turned device-flow
+ * sign-in off, matched on output with escapes stripped, whitespace collapsed
+ * and case folded: "Your organization has disabled device flow sign-in",
+ * "Every available profile has device flow sign-in disabled", "None of the
+ * sign-in methods your organization permits work without a browser".
+ */
+const DEVICE_FLOW_DISABLED = [
+    /disabled device flow sign-in/,
+    /device flow sign-in disabled/,
+    /your organization permits work without a browser/,
+];
+/** Output kept from one message to the next, so a split message still matches. */
+const WATCH_TAIL_CHARS = 512;
+
+// The control characters are spliced in from char codes (as in
+// shell-commands.js) so Biome's `noControlCharactersInRegex` stays quiet:
+// matching them is the point. CSI, OSC (ended by BEL or ESC \) and the
+// other two-character escapes; then any other control character.
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+const ESCAPES = new RegExp(
+    `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)|${ESC}[@-Z\\\\-_]`,
+    'g'
+);
+const CONTROLS = new RegExp(
+    `[${String.fromCharCode(0)}-${String.fromCharCode(0x1f)}${String.fromCharCode(0x7f)}]+`,
+    'g'
+);
+
+/** Whether terminal `text` holds kiro-cli's "device flow turned off" message. */
+export function outputSaysDeviceFlowDisabled(text) {
+    if (typeof text !== 'string' || !text) return false;
+    const plain = text
+        .replace(ESCAPES, '')
+        .replace(CONTROLS, ' ')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+    return DEVICE_FLOW_DISABLED.some((re) => re.test(plain));
+}
+
+/**
+ * Watches one run's output for that message, message by message: keeps
+ * only the last WATCH_TAIL_CHARS of it, so a message split between two
+ * output messages (or inside an escape) still matches. Nothing it sees
+ * leaves it but `matched`.
+ */
+export function createDeviceFlowWatch() {
+    let tail = '';
+    let matched = false;
+    return {
+        push(text) {
+            if (matched || typeof text !== 'string' || !text) return;
+            const joined = tail + text;
+            if (outputSaysDeviceFlowDisabled(joined)) {
+                matched = true;
+                tail = '';
+                return;
+            }
+            tail = joined.slice(-WATCH_TAIL_CHARS);
+        },
+        get matched() {
+            return matched;
+        },
+        get tailLength() {
+            return tail.length;
+        },
+    };
+}
 
 let ctxCache = null;
 /** The window's sign-in, from the click until its last status. */
@@ -220,7 +299,9 @@ function createSession({ slot, payload, host, ctx }) {
     const hints = [];
     const hint = el('p', 'agent-sign-in-hint');
     hint.dir = 'auto';
-    hint.textContent = t('shared.agent_sign_in.hint');
+    hint.textContent = ctx?.deviceFlowOnly
+        ? t('shared.agent_sign_in.hint_device_flow')
+        : t('shared.agent_sign_in.hint');
     hints.push(hint);
     if (host?.compact) {
         const hides = el('p', 'agent-sign-in-hint agent-sign-in-hint-hides');
@@ -233,8 +314,11 @@ function createSession({ slot, payload, host, ctx }) {
     const status = el('div', 'agent-sign-in-status');
     status.setAttribute('role', 'status');
     status.dir = 'auto';
+    // The command for the user's own terminal, when the device flow is off.
+    const manual = el('div', 'agent-sign-in-manual');
+    manual.hidden = true;
     const actions = el('div', 'agent-sign-in-actions');
-    panel.append(head, ...hints, termEl, status, actions);
+    panel.append(head, ...hints, termEl, status, manual, actions);
     slot.append(panel);
 
     const session = {
@@ -248,6 +332,8 @@ function createSession({ slot, payload, host, ctx }) {
         startCalled: false,
         // Stop was pressed for this run id and hasn't taken yet.
         stopRequested: null,
+        // The current run's output, watched for "device flow turned off".
+        watch: null,
     };
 
     const layout = () => host?.layoutChanged?.();
@@ -298,6 +384,7 @@ function createSession({ slot, payload, host, ctx }) {
 
     function close() {
         disposeView();
+        hideManual();
         panel.remove();
         finish(null);
         layout();
@@ -368,6 +455,45 @@ function createSession({ slot, payload, host, ctx }) {
             session.startRun();
         });
         return btn;
+    }
+
+    function hideManual() {
+        manual.hidden = true;
+        manual.textContent = '';
+    }
+
+    function showManual(text) {
+        manual.textContent = '';
+        const code = el('code', 'agent-sign-in-manual-cmd');
+        code.dir = 'ltr';
+        code.textContent = text;
+        manual.append(
+            code,
+            copyButton(
+                () => t('shared.shell.copy_command'),
+                () => text
+            )
+        );
+        manual.hidden = false;
+    }
+
+    /**
+     * The organization has turned device-flow sign-in off, and that is the
+     * only way Kage signs in here: say so, and offer the command for the
+     * user's own terminal. Signing in again here would fail the same way.
+     */
+    function deviceFlowDisabled(hadFocus) {
+        setStatus('failed', t('shared.agent_sign_in.status.device_flow_disabled', { agent }));
+        showManual(ctx?.manualCommand || command);
+        // Signed in from their own terminal: Reconnect picks it up.
+        const list = [reconnectButton()];
+        if (ctx?.terminal) list.push(terminalButton());
+        list.push(closeButton());
+        setActions(list);
+        layout();
+        if (hadFocus) manual.querySelector('button')?.focus();
+        host?.onEnded?.({ state: 'device_flow_disabled', outcome: 'exited', agent });
+        finish('device_flow_disabled');
     }
 
     function failureActions() {
@@ -453,6 +579,16 @@ function createSession({ slot, payload, host, ctx }) {
             host?.onEnded?.({ state: 'success', outcome, agent });
             setActions([]);
             recover();
+            return;
+        }
+        if (
+            outcome === 'exited' &&
+            Number.isInteger(report.exitCode) &&
+            report.exitCode !== 0 &&
+            ctx?.deviceFlowOnly &&
+            session.watch?.matched
+        ) {
+            deviceFlowDisabled(hadFocus);
             return;
         }
         let state = 'failed';
@@ -541,12 +677,15 @@ function createSession({ slot, payload, host, ctx }) {
         stopBtn.hidden = false;
         stopBtn.disabled = false;
         setActions([]);
+        hideManual();
         setStatus('running', t('shared.agent_sign_in.status.starting', { command }));
         const runId = newRunId();
         session.runId = runId;
         session.settled = false;
         session.startCalled = false;
         session.stopRequested = null;
+        const watch = createDeviceFlowWatch();
+        session.watch = watch;
 
         if (!invoke || !(await ensureXterm())) {
             startFailed(new Error('The terminal view could not be loaded'));
@@ -599,6 +738,7 @@ function createSession({ slot, payload, host, ctx }) {
         };
         channel.onmessage = (msg) => {
             const seq = msg?.seq;
+            if (session.runId === runId) watch.push(msg?.data);
             if (session.runId !== runId || session.view !== view || !msg?.data) {
                 ack(seq);
                 return;

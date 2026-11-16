@@ -9873,6 +9873,10 @@
     "message": "Choose how to sign in with the arrow keys and Enter. Your browser may open to finish.",
     "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Hint above the terminal: the sign-in command shows a menu navigated with the keyboard."
   },
+  "shared.agent_sign_in.hint_device_flow": {
+    "message": "Choose how to sign in with the arrow keys and Enter, then click the link it shows and confirm the code in your browser.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Hint above the terminal on Windows and Linux, where the sign-in shows a link and a code instead of opening the browser itself."
+  },
   "shared.agent_sign_in.hint_hides": {
     "message": "This window may hide while you use your browser. It comes back when sign-in ends.",
     "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Second hint, only in the small floating launcher window, which hides when another app (the browser) comes to the front."
@@ -9936,6 +9940,10 @@
   "shared.agent_sign_in.status.timed_out": {
     "message": "Sign-in stopped after {minutes} minutes.",
     "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: Kage stopped the sign-in at its time limit. {minutes} is a number."
+  },
+  "shared.agent_sign_in.status.device_flow_disabled": {
+    "message": "Your organization has turned off device flow sign-in (a link and a code), and Kage needs it to sign in to {agent} on this computer. Run this command in your own terminal to sign in through your browser, then click Reconnect.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line on Windows and Linux when the sign-in failed because the user's organization disabled 'device flow' sign-in (a link plus a one-time code). A command to copy follows it; Reconnect is the name of a button next to it. {agent} is the agent's name, e.g. Kiro CLI."
   },
   "shared.agent_sign_in.status.start_failed": {
     "message": "Couldn't start sign-in: {error}",

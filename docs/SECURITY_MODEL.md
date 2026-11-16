@@ -767,17 +767,37 @@ sign-in method from its arrow-key menu (`ui/js/shared/agent-sign-in.js`,
   up on the login-shell PATH's absolute entries, a relative path is
   refused), and exactly `<that path> login` runs in the home folder, in
   a pseudo-terminal (openpty; ConPTY on Windows) with the login-shell
-  environment and `TERM=xterm-256color`. On Linux it is
-  `<that path> login --use-device-flow`: without it kiro-cli starts the
-  browser itself (`xdg-open`) inside the terminal's session, where the
-  browser can land in the session's foreground process group and the
-  hang-up when the login exits (or Stop's group kill) would close it in
-  the middle of signing in. With it kiro-cli only prints a URL and a
-  code, and the user opens the link through Kage's own process
-  (`open_user_terminal_link`), outside that session. macOS (`open`, via
-  launchd) and Windows (ShellExecute) never make the browser the
-  login's child, so they keep plain `login`. (An organization that has
-  turned device-flow sign-in off can't sign in this way on Linux.)
+  environment and `TERM=xterm-256color`, on every platform.
+- **Where the browser runs.** Never inside the login's process group,
+  session or process tree, so ending them never closes it. Upstream
+  kiro-cli (aws/amazon-q-developer-cli, `crates/chat-cli/src/util/open.rs`)
+  opens a URL with `NSWorkspace openURL` on macOS, `xdg-open` on Linux
+  and `cmd /c start` on Windows; the last two would make the browser the
+  login's descendant. So per platform:
+  - **macOS:** plain `login`. LaunchServices starts the browser, as
+    launchd's child, never the login's; the usual browser sign-in stays.
+  - **Linux and Windows:** the login also gets `KIRO_FAKE_IS_REMOTE=1`
+    and `Q_FAKE_IS_REMOTE=1` (fixed, set last so the login-shell
+    environment can't change them; `agent_sign_in::sign_in_env_for`).
+    kiro-cli's `is_remote()` is then true (`util/system_info/mod.rs`),
+    so `login` takes the device flow and only prints the URL and a code
+    (`cli/user.rs`, `try_device_authorization`), starting nothing. The
+    user clicks the link in the terminal and Kage opens it from its own
+    process (`open_user_terminal_link`, the same `open_url` as every
+    other Kage link).
+
+  With no browser among the login's descendants, the cleanup after it
+  stays: once it exits and its output is drained, what is left of its
+  process group is hung up and then killed (Unix: SIGHUP, 100 ms,
+  SIGKILL), and Stop or the time limit kills its tree (`taskkill /T` on
+  Windows). An organization can turn device-flow sign-in off; on Linux
+  and Windows that run then fails, and when it exits non-zero with
+  kiro-cli's message saying so (looked for only in the window's memory,
+  never logged), the panel says sign-in from Kage needs the device flow
+  here and shows the command for the user's own terminal (`kiro-cli
+  login`, the configured program), with Copy and Reconnect. On macOS a
+  failed run keeps the Terminal hand-off. `--use-device-flow` is never
+  passed: on macOS it would lock such organizations out for nothing.
 - **Who can type into it, resize it or stop it.** Only the window that
   started it, and only Kage's chat and floating windows can start one
   (`user_shell::caller_allowed`; Settings, welcome, store, context menu,
@@ -813,8 +833,9 @@ sign-in method from its arrow-key menu (`ui/js/shared/agent-sign-in.js`,
   pending buffer (64 KiB plus one read). A link in the terminal opens
   through `open_user_terminal_link`: https only, at most 2 KB, for a
   live run the caller owns; only its host is logged. (Opening any URL
-  logs at most `scheme://host/path`: never a query, fragment or
-  userinfo, `os::shell::url_for_log`.)
+  logs at most `scheme://host:port`: never a path, query, fragment or
+  userinfo, `os::shell::url_for_log`, since some paths carry secrets
+  too.)
 - **Limits.** 15 minutes (choosing in the menu plus a 10-minute device
   code), then the process group is killed; it also stops on Stop,
   window close, page reload and quit. Input is at most 4 KiB per write

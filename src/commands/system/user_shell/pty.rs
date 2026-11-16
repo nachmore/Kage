@@ -22,7 +22,8 @@
 //! **Teardown never blocks a caller and leaves nothing behind.** On Unix,
 //! once the program has exited (or been stopped) and its output drained,
 //! what is left of its process group is hung up and then killed, so no
-//! descendant keeps the terminal; the reader and writer use their own
+//! descendant keeps the terminal (the sign-in starts no browser in it:
+//! see [`end_process_group`]); the reader and writer use their own
 //! descriptors and give up within 50 ms of the run ending. On
 //! Windows the pseudo console is closed on a thread of its own while the
 //! reader keeps draining its output pipe to the end: before Windows 11
@@ -814,7 +815,10 @@ type ChildBox = Box<dyn portable_pty::Child + Send + Sync>;
 /// Kill what the program started: it leads its own session and process
 /// group (portable-pty's `setsid`), so a group kill (SIGTERM, then
 /// SIGKILL) reaches its children; on Windows `taskkill /T`. Only called
-/// while the child is unreaped, so its pid can't have been reused.
+/// while the child is unreaped, so its pid can't have been reused. The
+/// sign-in leaves no browser in either (`agent_sign_in::sign_in_env_for`:
+/// on Windows kiro-cli would otherwise start it with `cmd /c start`, as
+/// its descendant).
 ///
 /// On Unix the fallback is a plain SIGKILL, not portable-pty's `kill`,
 /// which reaps the child: it must stay unreaped until
@@ -874,11 +878,14 @@ fn has_exited(child: &mut ChildBox) -> io::Result<bool> {
 /// (and the reader) going. `pgid` is the program's pid (portable-pty runs
 /// it under `setsid`), still unreaped, so the group id can't name another.
 ///
-/// Nothing the user needs is in that group: on Linux the sign-in runs
-/// `kiro-cli login --use-device-flow`, which starts no browser (the user
-/// opens the link through Kage's own process, `open_user_terminal_link`),
-/// and on macOS `open` hands a URL to launchd, which starts the browser
-/// as its own child, never the program's.
+/// Nothing the user needs is in that group, on any platform: on Linux
+/// (and Windows) the sign-in runs `kiro-cli login` with
+/// `KIRO_FAKE_IS_REMOTE` set (`agent_sign_in::sign_in_env_for`), so
+/// kiro-cli takes the device flow and only prints the URL and code, never
+/// running `xdg-open`; the user opens the link through Kage's own process
+/// (`open_user_terminal_link`), outside this session. On macOS kiro-cli
+/// opens URLs through LaunchServices (`NSWorkspace openURL`), so launchd
+/// starts the browser, never as the program's descendant.
 #[cfg(unix)]
 fn end_process_group(pgid: u32) {
     use nix::sys::signal::{killpg, Signal};

@@ -2,31 +2,25 @@
 
 use anyhow::Result;
 
-/// `url` as it may appear in a log: `scheme://host[:port]/path`, with no
-/// query, fragment or userinfo (OAuth codes, device codes and tokens live
-/// there, and `app.jsonl` gets attached to bug reports). A URL with no
-/// hierarchy (`mailto:`, `data:`, `javascript:`) logs as its scheme only,
-/// since what follows it is the payload; one that doesn't parse, as its
-/// length. The path is cut at [`LOGGED_URL_PATH_CHARS`].
+/// `url` as it may appear in a log: `scheme://host[:port]` and nothing
+/// else. No path (some carry secrets: a reset token, a signed link, a
+/// session id), query, fragment or userinfo (OAuth codes, device codes
+/// and tokens live there), since `app.jsonl` gets attached to bug
+/// reports. A URL with no host (`mailto:`, `data:`, `javascript:`,
+/// `file:`) logs as its scheme only; one that doesn't parse, as its
+/// length.
 pub fn url_for_log(url: &str) -> String {
     let Ok(parsed) = url::Url::parse(url) else {
         return format!("<unparsed URL, {} bytes>", url.len());
     };
-    if parsed.cannot_be_a_base() {
-        return format!("{}:", parsed.scheme());
+    match parsed.host_str() {
+        Some(host) if !host.is_empty() => {
+            let port = parsed.port().map(|p| format!(":{p}")).unwrap_or_default();
+            format!("{}://{host}{port}", parsed.scheme())
+        }
+        _ => format!("{}:", parsed.scheme()),
     }
-    let host = parsed.host_str().unwrap_or("");
-    let port = parsed.port().map(|p| format!(":{p}")).unwrap_or_default();
-    let path = parsed.path();
-    let path = match path.char_indices().nth(LOGGED_URL_PATH_CHARS) {
-        Some((cut, _)) => format!("{}…", &path[..cut]),
-        None => path.to_string(),
-    };
-    format!("{}://{host}{port}{path}", parsed.scheme())
 }
-
-/// Longest URL path [`url_for_log`] keeps.
-pub const LOGGED_URL_PATH_CHARS: usize = 120;
 
 /// Open a URL in the default browser. Platform code logs it only through
 /// [`url_for_log`].
@@ -111,28 +105,40 @@ mod tests {
     use super::url_for_log;
 
     #[test]
-    fn logged_urls_keep_no_query_fragment_or_userinfo() {
+    fn logged_urls_keep_only_scheme_host_and_port() {
         let cases = [
             (
                 "https://view.awsapps.com/start/#/device?user_code=ABCD-EFGH",
-                "https://view.awsapps.com/start/",
+                "https://view.awsapps.com",
             ),
             (
                 "https://accounts.spotify.com/authorize?client_id=x&code_challenge=SECRET&state=s",
-                "https://accounts.spotify.com/authorize",
+                "https://accounts.spotify.com",
             ),
             (
                 "https://user:pa55@example.com:8443/a/b?token=SECRET#frag",
-                "https://example.com:8443/a/b",
+                "https://example.com:8443",
             ),
             (
                 "http://127.0.0.1:8080/callback?code=SECRET",
-                "http://127.0.0.1:8080/callback",
+                "http://127.0.0.1:8080",
             ),
+            // Secrets in the path: reset tokens, signed links, session ids.
+            (
+                "https://example.com/reset/SECRET-TOKEN/confirm",
+                "https://example.com",
+            ),
+            (
+                "https://hooks.slack.com/services/T000/B000/SECRET",
+                "https://hooks.slack.com",
+            ),
+            ("https://example.com", "https://example.com"),
+            ("https://[::1]:9000/SECRET", "https://[::1]:9000"),
+            ("kage://install/SECRET", "kage://install"),
             ("mailto:someone@example.com?subject=SECRET", "mailto:"),
             ("javascript:alert(document.cookie)", "javascript:"),
             ("data:text/html,SECRET", "data:"),
-            ("file:///Users/me/notes.txt", "file:///Users/me/notes.txt"),
+            ("file:///Users/me/SECRET.txt", "file:"),
         ];
         for (url, logged) in cases {
             assert_eq!(url_for_log(url), logged, "{url}");
@@ -143,9 +149,7 @@ mod tests {
             assert!(logged.starts_with("<unparsed URL"), "{logged}");
         }
         let long = format!("https://example.com/{}?x=1", "p".repeat(500));
-        let logged = url_for_log(&long);
-        assert!(logged.ends_with('…'));
-        assert!(logged.chars().count() < 160, "{logged}");
+        assert_eq!(url_for_log(&long), "https://example.com");
     }
 
     use super::{system_command, system_command_candidates};
