@@ -978,6 +978,22 @@ pub(crate) fn run_terminal_inner(
     on_started: impl FnOnce(Arc<TerminalIo>),
     on_output: impl FnMut(String),
 ) -> io::Result<(TerminalReport, Teardown)> {
+    // Stop pressed while the run was being prepared: start nothing. A
+    // login that ran anyway and exited 0 would read as a clean sign-in
+    // and resend the failed turn.
+    if control.cancel.load(Ordering::SeqCst) {
+        return Ok((
+            TerminalReport {
+                outcome: RunOutcome::Cancelled,
+                exit_code: None,
+                signal: None,
+                duration_ms: 0,
+                output_bytes: 0,
+                output_messages: 0,
+            },
+            Teardown { finished: true },
+        ));
+    }
     let pair = native_pty_system()
         .openpty(spec.size.pty_size())
         .map_err(io::Error::other)?;
@@ -1017,6 +1033,9 @@ pub(crate) fn run_terminal_inner(
     let outcome = loop {
         pump.step(POLL);
         match has_exited(&mut child) {
+            // A Stop seen on the same pass as the exit wins: the user
+            // stopped it, so it must not count as a clean exit.
+            Ok(true) if control.cancel.load(Ordering::SeqCst) => break Ok(RunOutcome::Cancelled),
             Ok(true) => break Ok(RunOutcome::Exited),
             Ok(false) => {}
             Err(e) => {

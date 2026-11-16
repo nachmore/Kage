@@ -1,4 +1,5 @@
 import {
+    clearAgentSignInSlot,
     _resetDiagramFailures,
     attachSourceClickHandler,
     createShellActivitySlot,
@@ -9,7 +10,6 @@ import {
     getActionsForText,
     getConfig,
     handOffShellActivity,
-    isAgentSignInActive,
     isResendablePayload,
     mountSignInAction,
     offlineMessage,
@@ -656,9 +656,7 @@ export const ResponseUiMethods = {
 
     /** Empty #agentSignInSlot, unless a sign-in still holds it. */
     _clearAgentSignInSlot() {
-        if (isAgentSignInActive()) return;
-        const slot = document.getElementById('agentSignInSlot');
-        if (slot) slot.textContent = '';
+        clearAgentSignInSlot(document.getElementById('agentSignInSlot'));
     },
 
     async openUrl(url) {

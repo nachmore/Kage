@@ -262,6 +262,47 @@ fn pty_cancel_kills_process_group() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Stop pressed while the run was still being prepared: nothing starts,
+/// and the run ends as stopped, never as a clean exit (which would resend
+/// the failed turn).
+#[cfg(unix)]
+#[test]
+fn a_stop_latched_before_launch_starts_nothing() {
+    let dir = std::env::temp_dir().join(format!("kage-pty-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let marker = dir.join("ran");
+    let ctl = control(Duration::from_secs(60));
+    ctl.cancel.store(true, Ordering::SeqCst);
+    let mut started = false;
+    let report = run_terminal(
+        sh(&format!("touch '{}'", marker.display())),
+        &ctl,
+        |_| started = true,
+        |_| {},
+    )
+    .expect("terminal run");
+    assert_eq!(report.outcome, RunOutcome::Cancelled);
+    assert_eq!(report.exit_code, None);
+    assert!(!started, "no terminal was handed out");
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(!marker.exists(), "the program ran despite the Stop");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Stop pressed while the program was already on its way out with 0 (here:
+/// the moment the terminal starts, on a program that exits at once): the
+/// loop sees the exit and the Stop together, and it is still a stop.
+#[cfg(unix)]
+#[test]
+fn a_stop_that_races_a_clean_exit_is_still_a_stop() {
+    let ctl = control(Duration::from_secs(60));
+    let cancel = ctl.cancel.clone();
+    let (report, _, _) = run_collect(sh("exit 0"), &ctl, |_| {
+        cancel.store(true, Ordering::SeqCst);
+    });
+    assert_eq!(report.outcome, RunOutcome::Cancelled, "{report:?}");
+}
+
 #[cfg(unix)]
 #[test]
 fn pty_timeout() {

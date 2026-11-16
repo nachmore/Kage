@@ -62,7 +62,11 @@ import {
 } from '../shared/shell-command-view.js';
 import { setShellRunHost } from '../shared/shell-run-view.js';
 import { clearFinishedHostCommandCards } from '../shared/host-command-view.js';
-import { isAgentSignInActive, mountSignInAction } from '../shared/agent-sign-in.js';
+import {
+    clearAgentSignInSlot,
+    isAgentSignInActive,
+    mountSignInAction,
+} from '../shared/agent-sign-in.js';
 import { presentOverlayWindow } from '../shared/overlay-window.js';
 import { renderToolSources } from '../shared/tool-call-view.js';
 import { sendAppNotification } from '../shared/notify.js';
@@ -144,6 +148,7 @@ const CHAT_APP_DEPENDENCIES = {
     handleEnterAction,
     handlePasteEvent,
     initMarkdown,
+    clearAgentSignInSlot,
     isAgentSignInActive,
     isChatLabel,
     isErrorForOtherTurn,

@@ -172,6 +172,27 @@ export function _resetAgentSignInForTests() {
 }
 
 /**
+ * The panel last opened in each slot, by its slot: how to let go of its
+ * terminal. A finished sign-in (failed, stopped, timed out) leaves its
+ * panel up with the terminal's last screen; whoever empties the slot must
+ * dispose that terminal, or its emulator, buffer and theme observers stay
+ * behind with every attempt.
+ */
+const panelDisposers = new WeakMap();
+
+/**
+ * Empty `slot` and dispose the sign-in terminal it held, unless a sign-in
+ * is still going in this window. Returns whether it emptied it.
+ */
+export function clearAgentSignInSlot(slot) {
+    if (!slot || active) return false;
+    panelDisposers.get(slot)?.();
+    panelDisposers.delete(slot);
+    slot.textContent = '';
+    return true;
+}
+
+/**
  * `reconnect_acp`'s answer (`ReconnectOutcome`) as `{ reconnected,
  * sessionId, sessionReloaded }`. A bare boolean (what it returned before it
  * reloaded the session) still reads as "same session".
@@ -293,6 +314,8 @@ function createSession({ slot, payload, host, ctx }) {
     const command = ctx?.command || 'kiro-cli login';
     const timeoutMinutes = ctx?.timeoutMinutes || 15;
 
+    // A finished panel from an earlier attempt: let go of its terminal.
+    panelDisposers.get(slot)?.();
     slot.textContent = '';
     const panel = el('div', 'agent-sign-in');
     const head = el('div', 'agent-sign-in-head shell-run-head');
@@ -391,6 +414,7 @@ function createSession({ slot, payload, host, ctx }) {
         termEl.hidden = true;
         for (const h of hints) h.hidden = true;
     }
+    panelDisposers.set(slot, disposeView);
 
     function close() {
         disposeView();

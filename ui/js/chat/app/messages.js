@@ -54,7 +54,7 @@ export function createMessagesMixin(dependencies) {
         formatErrorShared,
         splitPromptContext,
         mountSignInAction,
-        isAgentSignInActive,
+        clearAgentSignInSlot,
         isResendablePayload,
         presentOverlayWindow,
         sendAppNotification,
@@ -630,9 +630,7 @@ export function createMessagesMixin(dependencies) {
 
         /** Empty #agentSignInSlot, unless a sign-in still holds it. */
         _clearAgentSignInSlot() {
-            if (isAgentSignInActive?.()) return;
-            const slot = document.getElementById('agentSignInSlot');
-            if (slot) slot.textContent = '';
+            clearAgentSignInSlot?.(document.getElementById('agentSignInSlot'));
         }
 
         async showSessionLocked(sessionId, pid) {

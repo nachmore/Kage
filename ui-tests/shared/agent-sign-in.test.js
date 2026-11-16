@@ -22,6 +22,7 @@ vi.mock('../../ui/js/shared/i18n.js', async (importOriginal) => {
 const {
     _resetAgentSignInForTests,
     canOfferSignIn,
+    clearAgentSignInSlot,
     createDeviceFlowWatch,
     isAgentSignInActive,
     mountSignInAction,
@@ -675,6 +676,41 @@ describe('the run', () => {
         expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-open-terminal'))).toBe(true);
         expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-again'))).toBe(true);
         expect(buttonsIn(host).some((c) => c.includes('agent-sign-in-close'))).toBe(true);
+    });
+
+    it("emptying the slot after a failed run disposes that run's terminal", async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        await openPanel(tauri, host);
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 1, signal: null });
+        await flush();
+        expect(terms[0].dispose).not.toHaveBeenCalled();
+        expect(clearAgentSignInSlot(host.slot)).toBe(true);
+        expect(terms[0].dispose).toHaveBeenCalledTimes(1);
+        expect(host.slot.children.length).toBe(0);
+        // Nothing left to dispose a second time.
+        clearAgentSignInSlot(host.slot);
+        expect(terms[0].dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('a new attempt in the same slot disposes the finished one first', async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        await openPanel(tauri, host);
+        tauri.starts[0].resolve({ outcome: 'cancelled', exitCode: null, signal: null });
+        await flush();
+        await openPanel(tauri, host);
+        expect(terms[0].dispose).toHaveBeenCalledTimes(1);
+        expect(terms.length).toBe(2);
+    });
+
+    it('a slot with a sign-in still going is left alone', async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        await openPanel(tauri, host);
+        expect(clearAgentSignInSlot(host.slot)).toBe(false);
+        expect(terms[0].dispose).not.toHaveBeenCalled();
+        expect(host.slot.children.length).toBeGreaterThan(0);
     });
 
     it('no Open in Terminal where the backend has no terminal hand-off', async () => {
