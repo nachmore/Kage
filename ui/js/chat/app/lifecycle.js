@@ -261,9 +261,10 @@ export function createLifecycleMixin(dependencies) {
          * Supersedes that selection or New Chat: its late answer paints and
          * adopts nothing, and a switch that still lands pins the window back
          * to `sid` (_repinWindowSession). The transcript on screen stays
-         * when it is still `sid`'s (the selection hadn't painted its own),
-         * else it gives way to the turn; the session's earlier messages show
-         * when it is selected again.
+         * when it is still `sid`'s (the selection hadn't painted its own;
+         * a batched paint of it still in flight finishes before the bubble,
+         * addUserMessage), else it gives way to the turn; the session's
+         * earlier messages show when it is selected again.
          */
         _showTurnSession(sid) {
             this._nextSelectGen();

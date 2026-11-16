@@ -206,7 +206,8 @@ export function createSessionHistoryMixin(dependencies) {
          * The backend keeps the window pinned to the session it had (a
          * refused switch pins nothing), one that is set up, and the window
          * never pins `sessionId` while it isn't (`_setupFailedSessionId`,
-         * _repinWindowSession): a prompt the backend sends for the window on
+         * _repinWindowSession), nor takes the pin as its own session while
+         * it shows `sessionId` (loadCurrentSessionId): a prompt the backend sends for the window on
          * its pin (inline assist's open in chat) must not go to a session
          * the agent never loaded. That prompt names the session it went to
          * (initial_message), and the window shows it.
@@ -375,9 +376,19 @@ export function createSessionHistoryMixin(dependencies) {
                 cancelAnimationFrame(this._displaySessionRafId);
                 this._displaySessionRafId = null;
             }
+            this._displaySessionFinish = null;
             const resolve = this._displaySessionResolve;
             this._displaySessionResolve = null;
             resolve?.();
+        }
+
+        /**
+         * Render what is left of an in-flight batched history render now,
+         * so a message appended next (a prompt, its reply) lands after the
+         * whole transcript, not between its batches.
+         */
+        _finishDisplaySessionRender() {
+            this._displaySessionFinish?.();
         }
 
         /**
@@ -434,6 +445,27 @@ export function createSessionHistoryMixin(dependencies) {
             });
             this._displaySessionResolve = resolveRender;
 
+            const settle = () => {
+                if (this._displaySessionFinish === finish) this._displaySessionFinish = null;
+                if (this._displaySessionResolve === resolveRender) {
+                    this._displaySessionResolve = null;
+                }
+                resolveRender();
+            };
+            // A turn is starting (_finishDisplaySessionRender): the rest of
+            // the history goes in now, with no suggestion chips under it.
+            const finish = () => {
+                if (this._displaySessionRafId) {
+                    cancelAnimationFrame(this._displaySessionRafId);
+                    this._displaySessionRafId = null;
+                }
+                for (; idx < renderQueue.length; idx++) {
+                    this._renderQueueItem(renderQueue[idx]);
+                }
+                settle();
+            };
+            this._displaySessionFinish = finish;
+
             const renderBatch = () => {
                 const end = Math.min(idx + BATCH_SIZE, renderQueue.length);
                 for (; idx < end; idx++) {
@@ -460,10 +492,7 @@ export function createSessionHistoryMixin(dependencies) {
                     if (this.messages.length > 0 && !live) {
                         this.showSuggestionChips();
                     }
-                    if (this._displaySessionResolve === resolveRender) {
-                        this._displaySessionResolve = null;
-                    }
-                    resolveRender();
+                    settle();
                 }
             };
 

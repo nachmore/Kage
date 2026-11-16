@@ -6,8 +6,11 @@
  *     still under way, or one that was refused): it records the turn on A
  *     and shows A, so the prompt and its reply render there, and the
  *     superseded selection's late answer changes nothing. A refused
- *     selection never pins the window to B; a signed-out refusal of the
- *     prompt names A and its Sign in sends the turn there once.
+ *     selection never pins the window to B, nor makes A's turns its own
+ *     while B is shown (the focus refresh reads the pin); a signed-out
+ *     refusal of the prompt names A and its Sign in sends the turn there
+ *     once. A prompt that arrives while A's transcript is still painting
+ *     in batches lands after the whole transcript.
  *   - a session the sign-in sets up is painted only while the window still
  *     shows it: a late load_session reply for a session the user left
  *     paints nothing (transcript, header, sidebar highlight).
@@ -192,8 +195,8 @@ describe('chat: open in chat prompts on main\'s pin, and main shows that session
      * Main shows s-a, its backend pin. `switches`: what selecting s-b
      * answers (see `setup`).
      */
-    function shownOnA({ switches }) {
-        const ctx = setup({ switches, pins: { main: 's-a' } });
+    function shownOnA({ switches, loads }) {
+        const ctx = setup({ switches, loads, pins: { main: 's-a' } });
         const { app } = ctx;
         app.windowLabel = 'main';
         app.activeSessionId = 's-a';
@@ -360,6 +363,79 @@ describe('chat: open in chat prompts on main\'s pin, and main shows that session
         await flush();
         expect(app.activeSessionId).toBe('s-b');
         expect(pins.main).toBe('s-c');
+    });
+
+    it("a refused selection, then the focus refresh and a turn finishing on the pin: the refused session stays shown and the turn is a background one", async () => {
+        const { app, listeners, pins } = shownOnA({ switches: [LOCKED] });
+        // A turn is streaming on s-a when the user selects s-b.
+        app.streamRegistry.begin('s-a');
+        app.isWaitingForResponse = true;
+        await app.selectSession('s-b');
+        await flush();
+        expect(app.activeSessionId).toBe('s-b');
+        expect(pins.main).toBe('s-a');
+        app.elements.messagesArea.innerHTML = '<div class="message">B transcript</div>';
+
+        // Any focus of the window reads the backend's pin.
+        await app.loadCurrentSessionId();
+        expect(app.currentAcpSessionId).toBeNull();
+        listeners.message_complete({ payload: { sessionId: 's-a', oldSessionId: 's-a' } });
+        await flush();
+        // s-a's turn finished in the background: nothing adopts it.
+        expect(app.activeSessionId).toBe('s-b');
+        expect(app.handleMessageComplete).not.toHaveBeenCalled();
+        expect(app.streamRegistry.isUnread('s-a')).toBe(true);
+
+        // Open in chat on the pin then shows s-a, not s-b's transcript.
+        await openInChat(app, listeners);
+        expect(app.activeSessionId).toBe('s-a');
+        expect(app.elements.messagesArea.textContent).not.toContain('B transcript');
+        expect(userBubbles().length).toBe(1);
+    });
+
+    it('open in chat during a batched paint of the pinned session: the prompt lands after the whole transcript', async () => {
+        const frames = new Map();
+        let frameId = 0;
+        vi.stubGlobal('requestAnimationFrame', (cb) => {
+            frames.set(++frameId, cb);
+            return frameId;
+        });
+        vi.stubGlobal('cancelAnimationFrame', (id) => frames.delete(id));
+        const runFrames = () => {
+            while (frames.size) {
+                const [id, cb] = frames.entries().next().value;
+                frames.delete(id);
+                cb();
+            }
+        };
+        const history = {
+            messages: Array.from({ length: 40 }, (_, i) => ({
+                kind: 'Prompt',
+                message_id: `m${i}`,
+                content: [{ kind: 'text', data: `history ${i}` }],
+            })),
+        };
+        const { app, listeners } = shownOnA({ switches: ['s-a'], loads: { 's-a': history } });
+        delete app.displaySession; // the production batched render
+        app.showSuggestionChips = vi.fn();
+        app.activeSessionId = null;
+        const painting = app._showCurrentSession();
+        await flush();
+        // The first batch is on screen, the rest wait for animation frames.
+        expect(userBubbles().length).toBe(10);
+        expect(frames.size).toBe(1);
+
+        await openInChat(app, listeners);
+        runFrames();
+        await painting;
+        await flush();
+        const texts = [...userBubbles()].map((el) => el.textContent);
+        expect(texts.length).toBe(41);
+        expect(texts[40]).toContain('explain this');
+        expect(texts[39]).toContain('history 39');
+        expect(app.isWaitingForResponse).toBe(true);
+        // A turn is under way: no suggestion chips under the history.
+        expect(app.showSuggestionChips).not.toHaveBeenCalled();
     });
 
     it("a signed-out refusal of the selection, then of open in chat's prompt on the pin: Sign in sends it there once", async () => {

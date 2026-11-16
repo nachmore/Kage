@@ -447,6 +447,9 @@ export function createComposerMixin(dependencies) {
         }
 
         addUserMessage(text, attachmentSnapshots) {
+            // A history render still in flight goes in first, so the prompt
+            // and its reply follow the whole transcript.
+            this._finishDisplaySessionRender?.();
             const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
             if (placeholder) placeholder.remove();
 
