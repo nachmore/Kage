@@ -14692,5 +14692,245 @@
     "description": "Label on the Reconnect button while Kage restarts the agent and reloads the session.",
     "_machine_translated": true,
     "_source_hash": "4e1f30fa07996bea"
+  },
+  "settings.tool_permissions.audit.summary.user_ran_sign_in": {
+    "message": "Bạn đã đăng nhập vào agent từ Kage",
+    "description": "Audit log entry: the user ran the AI agent's sign-in command (e.g. kiro-cli login) in Kage's sign-in terminal. The command follows below it.",
+    "_machine_translated": true,
+    "_source_hash": "5f1bda2d09a920bf"
+  },
+  "settings.tool_permissions.audit.meta.started": {
+    "message": "đã bắt đầu",
+    "description": "Detail of an audit log entry for the agent sign-in: it started (a second entry records how it ended). Lowercase, like the other details.",
+    "_machine_translated": true,
+    "_source_hash": "de6f46815415f58c"
+  },
+  "errors.agent_sign_in.unavailable": {
+    "message": "Kage không thể đăng nhập vào agent này. Hãy đăng nhập từ terminal.",
+    "description": "Error from the agent sign-in (Kage running the AI agent's own sign-in command, e.g. kiro-cli login, in a terminal inside the window). The active agent isn't one Kage knows how to sign in to.",
+    "_machine_translated": true,
+    "_source_hash": "641b8b59ded24fed"
+  },
+  "errors.agent_sign_in.remote": {
+    "message": "Agent này chạy trên một máy tính khác. Hãy đăng nhập trên máy đó.",
+    "description": "Error from the agent sign-in (Kage running the AI agent's own sign-in command, e.g. kiro-cli login, in a terminal inside the window). The agent is reached over the network, so its sign-in happens on that computer.",
+    "_machine_translated": true,
+    "_source_hash": "819d2595cf9f1399"
+  },
+  "errors.agent_sign_in.not_found": {
+    "message": "Không tìm thấy {program}. Hãy kiểm tra lệnh của agent trong Cài đặt → Agent.",
+    "description": "Error from the agent sign-in (Kage running the AI agent's own sign-in command, e.g. kiro-cli login, in a terminal inside the window). {program} is the agent's program name or path, e.g. kiro-cli. Settings → Agents names a settings page.",
+    "_machine_translated": true,
+    "_source_hash": "fc833241b8ccbf76"
+  },
+  "errors.agent_sign_in.busy": {
+    "message": "Kage đang đăng nhập vào agent.",
+    "description": "Error from the agent sign-in (Kage running the AI agent's own sign-in command, e.g. kiro-cli login, in a terminal inside the window). A sign-in is already running in another window.",
+    "_machine_translated": true,
+    "_source_hash": "cfde096099f05555"
+  },
+  "errors.agent_sign_in.spawn_failed": {
+    "message": "Không thể khởi chạy {command}: {error}",
+    "description": "Error from the agent sign-in (Kage running the AI agent's own sign-in command, e.g. kiro-cli login, in a terminal inside the window). {command} is the command (not translated); {error} is a system error message.",
+    "_machine_translated": true,
+    "_source_hash": "962f67dc0f9cb6cc"
+  },
+  "errors.user_terminal.not_found": {
+    "message": "Terminal đó không còn chạy nữa.",
+    "description": "Error from the terminal inside Kage's window where the user signs in to the AI agent. The terminal's command has ended.",
+    "_machine_translated": true,
+    "_source_hash": "ff30af305edb9b86"
+  },
+  "errors.user_terminal.input_too_long": {
+    "message": "Văn bản quá dài để nhập cùng lúc (hơn {max_kib} KB).",
+    "description": "Error from the terminal inside Kage's window where the user signs in to the AI agent. A paste was too large. {max_kib} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "6322b0a193ddd936"
+  },
+  "errors.user_terminal.input_full": {
+    "message": "Terminal hiện không đọc dữ liệu nhập. Hãy thử lại sau giây lát.",
+    "description": "Error from the terminal inside Kage's window where the user signs in to the AI agent. Typed input is piling up because the command isn't reading it.",
+    "_machine_translated": true,
+    "_source_hash": "9a049fd7dea88cb0"
+  },
+  "errors.user_terminal.bad_link": {
+    "message": "Chỉ có thể mở liên kết https từ terminal.",
+    "description": "Error from the terminal inside Kage's window where the user signs in to the AI agent. The user clicked a link that isn't an https web address.",
+    "_machine_translated": true,
+    "_source_hash": "3f535e7440103842"
+  },
+  "errors.user_terminal.open_failed": {
+    "message": "Không thể mở liên kết đó trong trình duyệt của bạn.",
+    "description": "Error from the terminal inside Kage's window where the user signs in to the AI agent. Opening a link the terminal showed failed.",
+    "_machine_translated": true,
+    "_source_hash": "9ba726738a04ae1e"
+  },
+  "shared.agent_sign_in.btn.sign_in": {
+    "message": "Đăng nhập",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Button on the error message that opens the sign-in terminal.",
+    "_machine_translated": true,
+    "_source_hash": "7cd75759f3a528d3"
+  },
+  "shared.agent_sign_in.btn.sign_in_again": {
+    "message": "Đăng nhập lại",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Button: start the sign-in again after it didn't finish.",
+    "_machine_translated": true,
+    "_source_hash": "75410efe8c190272"
+  },
+  "shared.agent_sign_in.btn.stop": {
+    "message": "Dừng",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Button: stop the sign-in command that is running.",
+    "_machine_translated": true,
+    "_source_hash": "83a7de2b42daa327"
+  },
+  "shared.agent_sign_in.btn.open_terminal": {
+    "message": "Mở trong Terminal",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Button: run the sign-in command in the macOS Terminal app instead.",
+    "_machine_translated": true,
+    "_source_hash": "f1097c8b65454e43"
+  },
+  "shared.agent_sign_in.btn.close": {
+    "message": "Đóng",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Button: close the sign-in panel.",
+    "_machine_translated": true,
+    "_source_hash": "d87e3cd13a34f3fd"
+  },
+  "shared.agent_sign_in.title": {
+    "message": "Đăng nhập vào {agent}",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Panel title. {agent} is the agent's name, e.g. Kiro CLI.",
+    "_machine_translated": true,
+    "_source_hash": "3167949a808bd29a"
+  },
+  "shared.agent_sign_in.hint": {
+    "message": "Chọn cách đăng nhập bằng các phím mũi tên và Enter. Trình duyệt có thể mở ra để hoàn tất.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Hint above the terminal: the sign-in command shows a menu navigated with the keyboard.",
+    "_machine_translated": true,
+    "_source_hash": "94a5468fb4e8cab4"
+  },
+  "shared.agent_sign_in.hint_device_flow": {
+    "message": "Chọn cách đăng nhập bằng các phím mũi tên và Enter, sau đó nhấp vào liên kết hiển thị và xác nhận mã trong trình duyệt của bạn.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Hint above the terminal on Windows and Linux, where the sign-in shows a link and a code instead of opening the browser itself.",
+    "_machine_translated": true,
+    "_source_hash": "5308e38b5ff3a4b9"
+  },
+  "shared.agent_sign_in.hint_hides": {
+    "message": "Cửa sổ này có thể ẩn đi khi bạn dùng trình duyệt. Cửa sổ sẽ hiện lại khi quá trình đăng nhập kết thúc.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Second hint, only in the small floating launcher window, which hides when another app (the browser) comes to the front.",
+    "_machine_translated": true,
+    "_source_hash": "333af352b3c335cd"
+  },
+  "shared.agent_sign_in.terminal_label": {
+    "message": "Terminal đăng nhập",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Accessible label of the terminal area (screen readers).",
+    "_machine_translated": true,
+    "_source_hash": "1639fe7c122ff301"
+  },
+  "shared.agent_sign_in.status.starting": {
+    "message": "Đang khởi chạy {command}…",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line while the command starts. {command} is the command, e.g. kiro-cli login (not translated).",
+    "_machine_translated": true,
+    "_source_hash": "6cce9bbbf5a86547"
+  },
+  "shared.agent_sign_in.status.running": {
+    "message": "Đang chờ bạn đăng nhập…",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line while the sign-in command runs.",
+    "_machine_translated": true,
+    "_source_hash": "92e9cd602e489711"
+  },
+  "shared.agent_sign_in.status.stopping": {
+    "message": "Đang dừng…",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line after the user pressed Stop.",
+    "_machine_translated": true,
+    "_source_hash": "7e89248082baed31"
+  },
+  "shared.agent_sign_in.status.restarting": {
+    "message": "Đã đăng nhập. Đang khởi động lại tác tử…",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: sign-in succeeded and Kage is restarting the agent.",
+    "_machine_translated": true,
+    "_source_hash": "f83f94ca41f8e1a5"
+  },
+  "shared.agent_sign_in.status.resending": {
+    "message": "Đã khởi động lại tác tử. Đang gửi lại tin nhắn của bạn…",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: the agent restarted and Kage is resending the message that failed.",
+    "_machine_translated": true,
+    "_source_hash": "9bc7d78ebbc86bdc"
+  },
+  "shared.agent_sign_in.status.done": {
+    "message": "Đã đăng nhập. Tin nhắn của bạn đã được gửi lại.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: everything worked and the failed message was sent again.",
+    "_machine_translated": true,
+    "_source_hash": "9f1d889b1a8356b2"
+  },
+  "shared.agent_sign_in.status.done_new_session": {
+    "message": "Đã đăng nhập. Kage không thể mở lại cuộc trò chuyện, vì vậy tin nhắn của bạn đã được gửi trong một cuộc trò chuyện mới.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: signed in, but the old conversation couldn't be reopened, so the message was sent in a new conversation.",
+    "_machine_translated": true,
+    "_source_hash": "fa7dd79a3318261b"
+  },
+  "shared.agent_sign_in.status.ready": {
+    "message": "Đã đăng nhập. Tác tử đã sẵn sàng.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: signed in and the agent restarted; there was no message to resend.",
+    "_machine_translated": true,
+    "_source_hash": "e9b1732d8ec04e36"
+  },
+  "shared.agent_sign_in.status.restart_failed": {
+    "message": "Đã đăng nhập, nhưng tác tử không khởi động lại được: {error}",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: signed in, but restarting the agent failed. {error} is an error message.",
+    "_machine_translated": true,
+    "_source_hash": "d1010fe4d5785a88"
+  },
+  "shared.agent_sign_in.status.resend_failed": {
+    "message": "Đã đăng nhập, nhưng không thể gửi lại tin nhắn của bạn: {error}",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: signed in, but resending the message failed. {error} is an error message.",
+    "_machine_translated": true,
+    "_source_hash": "57736c5b50576d70"
+  },
+  "shared.agent_sign_in.status.failed_exit": {
+    "message": "Đăng nhập chưa hoàn tất (mã thoát {code}).",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: the sign-in command ended with an error. {code} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "d953edadca6d76c8"
+  },
+  "shared.agent_sign_in.status.failed_signal": {
+    "message": "Đăng nhập kết thúc bất ngờ (tín hiệu {signal}).",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: the sign-in command was killed. {signal} is a signal name, e.g. Killed: 9.",
+    "_machine_translated": true,
+    "_source_hash": "48075e40c0b2f8c9"
+  },
+  "shared.agent_sign_in.status.stopped": {
+    "message": "Đã dừng đăng nhập.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: the user stopped the sign-in.",
+    "_machine_translated": true,
+    "_source_hash": "0fb0f145a28588bb"
+  },
+  "shared.agent_sign_in.status.timed_out": {
+    "message": "Đã dừng đăng nhập sau {minutes} phút.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: Kage stopped the sign-in at its time limit. {minutes} is a number.",
+    "_machine_translated": true,
+    "_source_hash": "b6ec294240dfd478"
+  },
+  "shared.agent_sign_in.status.device_flow_disabled": {
+    "message": "Tổ chức của bạn đã tắt đăng nhập bằng device flow (một liên kết và một mã), trong khi Kage cần phương thức này để đăng nhập vào {agent} trên máy tính này. Hãy chạy lệnh này trong terminal của bạn để đăng nhập qua trình duyệt, sau đó nhấp vào Kết nối lại.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line on Windows and Linux when the sign-in failed because the user's organization disabled 'device flow' sign-in (a link plus a one-time code). A command to copy follows it; Reconnect is the name of a button next to it. {agent} is the agent's name, e.g. Kiro CLI.",
+    "_machine_translated": true,
+    "_source_hash": "74b3b51ca7066948"
+  },
+  "shared.agent_sign_in.status.start_failed": {
+    "message": "Không thể bắt đầu đăng nhập: {error}",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line: the sign-in command couldn't be started. {error} is an error message.",
+    "_machine_translated": true,
+    "_source_hash": "2d2793e21804b5c2"
+  },
+  "shared.agent_sign_in.status.terminal_opened": {
+    "message": "Hãy hoàn tất đăng nhập trong Terminal, sau đó nhấp vào Kết nối lại.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. Status line after the sign-in was handed to the macOS Terminal app. Reconnect is the name of a button next to it.",
+    "_machine_translated": true,
+    "_source_hash": "db5792707712056c"
+  },
+  "shared.agent_sign_in.notify.timed_out": {
+    "message": "Đăng nhập vào {agent} đã hết thời gian chờ.",
+    "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. System notification when the sign-in hit its time limit while the user was elsewhere. {agent} is the agent's name.",
+    "_machine_translated": true,
+    "_source_hash": "d65e1f9bd43e9f4f"
   }
 }

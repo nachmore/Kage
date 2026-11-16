@@ -2,9 +2,38 @@
 
 use anyhow::Result;
 
-/// Open a URL in the default browser
+/// `url` as it may appear in a log: `scheme://host[:port]` and nothing
+/// else. No path (some carry secrets: a reset token, a signed link, a
+/// session id), query, fragment or userinfo (OAuth codes, device codes
+/// and tokens live there), since `app.jsonl` gets attached to bug
+/// reports. A URL with no host (`mailto:`, `data:`, `javascript:`,
+/// `file:`) logs as its scheme only; one that doesn't parse, as its
+/// length.
+pub fn url_for_log(url: &str) -> String {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return format!("<unparsed URL, {} bytes>", url.len());
+    };
+    match parsed.host_str() {
+        Some(host) if !host.is_empty() => {
+            let port = parsed.port().map(|p| format!(":{p}")).unwrap_or_default();
+            format!("{}://{host}{port}", parsed.scheme())
+        }
+        _ => format!("{}:", parsed.scheme()),
+    }
+}
+
+/// Open a URL in the default browser. Platform code logs it only through
+/// [`url_for_log`].
 pub fn open_url(url: &str) -> Result<()> {
     crate::os::platform::shell::open_url_impl(url)
+}
+
+/// Open a URL in the default browser so that a browser this starts does not
+/// belong to Kage: on Windows it is started by Explorer, outside Kage's
+/// kill-on-close Job Object, so quitting Kage or a crash can't close it.
+/// Used for the agent sign-in link; elsewhere it is [`open_url`].
+pub fn open_url_outside_job(url: &str) -> Result<()> {
+    crate::os::platform::shell::open_url_outside_job_impl(url)
 }
 
 /// Open a file or directory path with the default application
@@ -81,6 +110,120 @@ pub fn run_in_terminal(command: &str, cwd: &std::path::Path) -> Result<(), Termi
 
 #[cfg(test)]
 mod tests {
+    use super::url_for_log;
+
+    #[test]
+    fn logged_urls_keep_only_scheme_host_and_port() {
+        let cases = [
+            (
+                "https://view.awsapps.com/start/#/device?user_code=ABCD-EFGH",
+                "https://view.awsapps.com",
+            ),
+            (
+                "https://accounts.spotify.com/authorize?client_id=x&code_challenge=SECRET&state=s",
+                "https://accounts.spotify.com",
+            ),
+            (
+                "https://user:pa55@example.com:8443/a/b?token=SECRET#frag",
+                "https://example.com:8443",
+            ),
+            (
+                "http://127.0.0.1:8080/callback?code=SECRET",
+                "http://127.0.0.1:8080",
+            ),
+            // Secrets in the path: reset tokens, signed links, session ids.
+            (
+                "https://example.com/reset/SECRET-TOKEN/confirm",
+                "https://example.com",
+            ),
+            (
+                "https://hooks.slack.com/services/T000/B000/SECRET",
+                "https://hooks.slack.com",
+            ),
+            ("https://example.com", "https://example.com"),
+            ("https://[::1]:9000/SECRET", "https://[::1]:9000"),
+            ("kage://install/SECRET", "kage://install"),
+            ("mailto:someone@example.com?subject=SECRET", "mailto:"),
+            ("javascript:alert(document.cookie)", "javascript:"),
+            ("data:text/html,SECRET", "data:"),
+            ("file:///Users/me/SECRET.txt", "file:"),
+        ];
+        for (url, logged) in cases {
+            assert_eq!(url_for_log(url), logged, "{url}");
+        }
+        for url in ["not a url SECRET", "www.example.com/?q=SECRET", ""] {
+            let logged = url_for_log(url);
+            assert!(!logged.contains("SECRET"), "{logged}");
+            assert!(logged.starts_with("<unparsed URL"), "{logged}");
+        }
+        let long = format!("https://example.com/{}?x=1", "p".repeat(500));
+        assert_eq!(url_for_log(&long), "https://example.com");
+    }
+
+    /// The body of `fn <name>` in `src`, up to the next top-level item.
+    fn fn_body<'a>(src: &'a str, name: &str) -> &'a str {
+        let start = src
+            .find(&format!("fn {name}("))
+            .unwrap_or_else(|| panic!("fn {name} not found"));
+        let rest = &src[start..];
+        let end = ["\nfn ", "\npub fn ", "\nunsafe fn ", "\n/// ", "\n#["]
+            .iter()
+            .filter_map(|m| rest[1..].find(m).map(|i| i + 1))
+            .min()
+            .unwrap_or(rest.len());
+        &rest[..end]
+    }
+
+    /// Windows: a browser Kage starts with `ShellExecuteExW` is Kage's
+    /// child and joins its `KILL_ON_JOB_CLOSE` Job Object, so quitting Kage
+    /// or a crash would close it. `open_url_outside_job` (the sign-in link)
+    /// must hand the URL to Explorer's desktop first and open it in-process
+    /// only as the fallback; `open_url` keeps the in-process path. The Windows code doesn't build here, so this reads it.
+    #[test]
+    fn windows_open_url_hands_the_url_to_the_desktop_shell_first() {
+        let src = include_str!("windows/shell.rs");
+        // Ordinary links keep the long-standing in-process path.
+        let plain = fn_body(src, "open_url_impl");
+        assert!(plain.contains("open_url_in_process(url)"), "{plain}");
+        assert!(!plain.contains("desktop_shell"), "{plain}");
+        assert!(plain.contains("url_for_log(url)"), "{plain}");
+        let open = fn_body(src, "open_url_outside_job_impl");
+        let desktop = open
+            .find("open_url_via_desktop_shell(url)")
+            .expect("open_url_outside_job_impl must try the desktop shell");
+        let fallback = open
+            .find("open_url_in_process(url)")
+            .expect("open_url_outside_job_impl keeps the in-process fallback");
+        assert!(desktop < fallback, "desktop shell first:\n{open}");
+        assert!(
+            !open.contains("ShellExecuteExW("),
+            "open_url_outside_job_impl must not call ShellExecuteExW directly:\n{open}"
+        );
+        // Logs carry `url_for_log` only, never the URL itself.
+        assert!(open.contains("url_for_log(url)"), "{open}");
+        assert!(
+            !open.contains("{url}") && !open.contains(", url)"),
+            "{open}"
+        );
+
+        // ShellExecute runs in Explorer, reached through the desktop window.
+        let execute = fn_body(src, "desktop_shell_execute");
+        for step in [
+            "SWC_DESKTOP",
+            "SID_STopLevelBrowser",
+            "SVGIO_BACKGROUND",
+            "IShellDispatch2",
+            "shell.ShellExecute(",
+        ] {
+            assert!(execute.contains(step), "missing {step}:\n{execute}");
+        }
+        assert!(!execute.contains("ShellExecuteExW"), "{execute}");
+
+        // The only in-process ShellExecuteExW is the fallback.
+        assert_eq!(src.matches("ShellExecuteExW(&mut").count(), 1);
+        assert!(fn_body(src, "open_url_in_process").contains("ShellExecuteExW(&mut"));
+    }
+
     use super::{system_command, system_command_candidates};
 
     #[test]

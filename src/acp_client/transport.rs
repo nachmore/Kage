@@ -31,7 +31,7 @@ enum ReaderSource {
     Tcp(BufReader<TcpStream>),
 }
 
-mod tokenize;
+pub(crate) mod tokenize;
 use tokenize::tokenize_spawn_command;
 
 thread_local! {

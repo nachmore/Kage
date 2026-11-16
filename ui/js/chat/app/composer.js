@@ -216,6 +216,8 @@ export function createComposerMixin(dependencies) {
 
             this.addUserMessage(message, attachmentSnapshots);
             this.startStreaming();
+            // A finished sign-in's status goes with the new turn.
+            this._clearAgentSignInSlot?.();
 
             try {
                 trackEvent('message_sent', {
@@ -358,9 +360,10 @@ export function createComposerMixin(dependencies) {
         /**
          * Resend a turn that failed before any output, after Reconnect. The
          * user's bubble is already in the transcript, so none is added, and
-         * the composer (draft, attachments) is left alone.
+         * the composer (draft, attachments) is left alone. A failed send is
+         * shown as an error; `throwOnError` (the agent sign-in) also throws.
          */
-        async _resendTurn(turn) {
+        async _resendTurn(turn, { throwOnError = false } = {}) {
             this.startStreaming();
             // A turn of its own: the failed one's late errors aren't its.
             const turnId = this._recordTurn(this.activeSessionId, turn.message, turn.attachments);
@@ -375,6 +378,7 @@ export function createComposerMixin(dependencies) {
                 this.updateConnectionStatus();
             } catch (error) {
                 this._abortStreamingSend(error);
+                if (throwOnError) throw error;
             }
         }
 

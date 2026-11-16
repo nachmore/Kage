@@ -1,6 +1,8 @@
 import {
     checkOnline,
+    focusAgentSignIn,
     getConfig,
+    isAgentSignInActive,
     onNetworkChange,
     renderUnifiedResults,
     signalMascot,
@@ -248,6 +250,10 @@ export const LifecycleVisibilityMethods = {
             } else if (!permissionModal || permissionModal.style.display === 'none') {
                 if (this.isWaitingForResponse) {
                     setTimeout(() => this.elements.input.focus(), 50);
+                } else if (isAgentSignInActive()) {
+                    // A sign-in going is like a response on its way: keep
+                    // it (no reset) and put the keyboard back in its terminal.
+                    setTimeout(() => focusAgentSignIn(), 50);
                 } else {
                     try {
                         const config = await getConfig(this.invoke);

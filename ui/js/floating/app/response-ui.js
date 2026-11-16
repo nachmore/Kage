@@ -1,4 +1,5 @@
 import {
+    clearAgentSignInSlot,
     _resetDiagramFailures,
     attachSourceClickHandler,
     createShellActivitySlot,
@@ -10,11 +11,13 @@ import {
     getConfig,
     handOffShellActivity,
     isResendablePayload,
+    mountSignInAction,
     offlineMessage,
     pruneShellActivity,
     renderMarkdown,
     renderSourceBubblesHtml,
     renderToolSources,
+    sendAppNotification,
     SHELL_LAYOUT_EVENT,
     showShellActivity,
     signalMascot,
@@ -23,6 +26,7 @@ import {
     t,
     WINDOW,
 } from './dependencies.js';
+import { presentOverlayWindow } from '../../shared/overlay-window.js';
 
 export const ResponseUiMethods = {
     flushStreamingRender() {
@@ -389,7 +393,15 @@ export const ResponseUiMethods = {
             typeof payload === 'string'
                 ? t('floating.error.error_with_payload', { payload })
                 : errMessage(payload);
-        this.showError(text, { reconnect: true, retryTurn, detail: payload?.detail });
+        // signIn: a signed-out agent's error object also gets "Sign in"
+        // (shared/agent-sign-in.js), which resends retryTurn after the
+        // sign-in under the same rules; a plain string doesn't.
+        this.showError(text, {
+            reconnect: true,
+            retryTurn,
+            detail: payload?.detail,
+            signIn: payload,
+        });
     },
 
     showError(message, opts = {}) {
@@ -415,13 +427,27 @@ export const ResponseUiMethods = {
             this.elements.responseText.appendChild(detail);
         }
 
+        // Reconnect, and "Sign in" for a signed-out agent (opts.signIn: the
+        // MESSAGE_ERROR payload; a plain string draws nothing).
+        const actions = document.createElement('span');
+        actions.className = 'floating-error-actions';
         if (opts.reconnect) {
             const btn = document.createElement('button');
             btn.className = 'floating-error-reconnect';
             btn.textContent = t('chat.error.btn.reconnect');
             btn.addEventListener('click', () => this._reconnectFromError(btn, opts.retryTurn));
+            actions.appendChild(btn);
+        }
+        if (opts.reconnect || opts.signIn) {
             this.elements.responseText.appendChild(document.createElement('br'));
-            this.elements.responseText.appendChild(btn);
+            this.elements.responseText.appendChild(actions);
+        }
+        if (opts.signIn) {
+            mountSignInAction(
+                actions,
+                opts.signIn,
+                this._agentSignInHost(opts.signIn, opts.retryTurn ?? null)
+            ).catch((e) => console.warn('[floating] sign-in action unavailable:', e));
         }
 
         this.windowManager.resizeWindow();
@@ -463,28 +489,12 @@ export const ResponseUiMethods = {
                 '[floating] reconnect finished after the window moved to',
                 this.floatingSessionId
             );
-            if (this.floatingSessionId) {
-                this.invoke('set_window_session', {
-                    label: WINDOW.FLOATING,
-                    sessionId: this.floatingSessionId,
-                }).catch(() => {});
-            }
-        } else if (sid && sid !== this.floatingSessionId) {
+            this._repinFloatingSession();
+        } else {
             // The reload made a fresh session: the resend below goes to it.
-            console.log('[floating] adopting reconnect session id:', sid);
-            this.floatingSessionId = sid;
-            this.invoke('set_window_session', {
-                label: WINDOW.FLOATING,
-                sessionId: sid,
-            }).catch(() => {});
+            this._adoptReconnectSession(sid);
         }
-        if (
-            !moved &&
-            retryTurn &&
-            retryTurn.sessionId === startedOn &&
-            retryTurn.generation === this._promptGeneration &&
-            this.canSendAgentPrompt(this.floatingSessionId)
-        ) {
+        if (!moved && this._canResendTurn(retryTurn, startedOn)) {
             await this._resendTurn(retryTurn);
             return;
         }
@@ -504,10 +514,149 @@ export const ResponseUiMethods = {
         if (!failure) {
             failure = document.createElement('div');
             failure.className = 'error-reconnect-failed';
-            btn.before(failure);
+            (btn.closest('.floating-error-actions') || btn).before(failure);
         }
         failure.textContent = text;
         this.windowManager.resizeWindow();
+    },
+
+    /** Pin the window back to the session it holds (reconnect_acp pinned it to another). */
+    _repinFloatingSession() {
+        if (!this.floatingSessionId) return;
+        this.invoke('set_window_session', {
+            label: WINDOW.FLOATING,
+            sessionId: this.floatingSessionId,
+        }).catch(() => {});
+    },
+
+    /** Take the session id `reconnect_acp` answered with, if it moved. */
+    _adoptReconnectSession(sid) {
+        if (!sid || sid === this.floatingSessionId) return;
+        console.log('[floating] adopting reconnect session id:', sid);
+        this.floatingSessionId = sid;
+        this.invoke('set_window_session', {
+            label: WINDOW.FLOATING,
+            sessionId: sid,
+        }).catch(() => {});
+    },
+
+    /**
+     * Whether the failed turn `retryTurn` (onError's: null when any of it got
+     * through, it was a rate limit, or the error named another turn) may go
+     * out again now: it went to `shownOn` (the session the window held
+     * before adopting a reconnect's id), no prompt was sent since and the
+     * window can send.
+     */
+    _canResendTurn(retryTurn, shownOn) {
+        return (
+            !!retryTurn &&
+            retryTurn.sessionId === shownOn &&
+            retryTurn.generation === this._promptGeneration &&
+            this.canSendAgentPrompt(this.floatingSessionId)
+        );
+    },
+
+    /**
+     * The floating window's side of the agent sign-in (shared/agent-sign-in.js)
+     * for one error. The run lives in #agentSignInSlot, outside the response,
+     * so a new turn or reset keeps it; hiding the window never stops it.
+     * `payload` is that error and `retryTurn` its failed turn (see
+     * _onMessageError): the sign-in resends only that turn, by Reconnect's
+     * rules — the error names it (`turnId`) and says it may go again
+     * (isResendablePayload), the window still holds its session and sent
+     * nothing since (_canResendTurn) — and at most once. The resend mints
+     * a turn id of its own (_sendTrackedTurn).
+     */
+    _agentSignInHost(payload, retryTurn) {
+        // The session the window held when the restart answered, before
+        // adopting a reloaded id; undefined until a restart answers.
+        let shownOn;
+        let resent = false;
+        return {
+            slot: () => document.getElementById('agentSignInSlot'),
+            rows: 10,
+            compact: true,
+            buttonClass: 'floating-error-reconnect',
+            invoke: (cmd, args) => this.invoke(cmd, args),
+            layoutChanged: () => this.windowManager.resizeWindow(),
+            onActiveChange: (active) => {
+                // Focus moving into the terminal must not read as a blur.
+                if (active) this._armSignInBlurSuppression();
+            },
+            onEnded: ({ state, outcome, agent }) => this._onAgentSignInEnded(state, outcome, agent),
+            // The restart pinned the window to `sid` (the failed session
+            // `from`, reloaded): follow it only while the window still
+            // holds `from`; else keep the session it holds now.
+            adoptSession: (sid, from) => {
+                shownOn = this.floatingSessionId ?? null;
+                if (from && from !== shownOn) {
+                    console.log('[floating] sign-in finished after the window moved to', shownOn);
+                    this._repinFloatingSession();
+                    return;
+                }
+                this._adoptReconnectSession(sid);
+            },
+            canResend: (sid) => {
+                const before = shownOn === undefined ? (this.floatingSessionId ?? null) : shownOn;
+                shownOn = undefined;
+                return (
+                    !resent &&
+                    !!retryTurn &&
+                    sid === this.floatingSessionId &&
+                    isResendablePayload(payload, retryTurn.turnId) &&
+                    this._canResendTurn(retryTurn, before)
+                );
+            },
+            resend: async () => {
+                if (resent) return 'none';
+                resent = true;
+                return (await this._resendTurn(retryTurn, { throwOnError: true }))
+                    ? 'sent'
+                    : 'none';
+            },
+            // The resend's new turn already replaced the error.
+            clearError: () => {},
+        };
+    },
+
+    _armSignInBlurSuppression() {
+        this._suppressBlurHideUntil = Math.max(this._suppressBlurHideUntil || 0, Date.now() + 1500);
+    },
+
+    /**
+     * A sign-in run ended. The user was most likely in the browser, and the
+     * launcher hid on blur: bring it back to show the result (and the resend
+     * streaming in). A run stopped by the time limit doesn't pull the window
+     * up (the user has likely moved on); a notification says so instead.
+     */
+    async _onAgentSignInEnded(state, outcome, agent) {
+        if (state === 'success') signalMascotRecovered();
+        if (outcome === 'timed_out') {
+            try {
+                await sendAppNotification(
+                    this.invoke,
+                    t('shared.notify.kage_title'),
+                    t('shared.agent_sign_in.notify.timed_out', { agent }),
+                    WINDOW.FLOATING
+                );
+            } catch {
+                /* ignore */
+            }
+            return;
+        }
+        if (outcome !== 'exited' || !window._kageFloatingHidden) return;
+        this._armSignInBlurSuppression();
+        try {
+            await presentOverlayWindow(this.appWindow);
+        } catch (e) {
+            console.warn('[floating] could not re-show after sign-in:', e);
+        }
+        this.windowManager.resizeWindow();
+    },
+
+    /** Empty #agentSignInSlot, unless a sign-in still holds it. */
+    _clearAgentSignInSlot() {
+        clearAgentSignInSlot(document.getElementById('agentSignInSlot'));
     },
 
     async openUrl(url) {

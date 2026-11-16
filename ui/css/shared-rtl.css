@@ -251,3 +251,14 @@ html[dir="rtl"] .tool-call-chip[aria-expanded="false"] .shell-chip-chevron {
     /* "Expand" points toward the reading direction. */
     transform: scaleX(-1);
 }
+
+/* ===== Agent sign-in terminal ============================================ */
+
+/* The panel's chrome (title, hint, status, buttons) follows the page
+   direction; the command chip carries dir="ltr" and the terminal itself
+   stays LTR (a terminal grid has no RTL mode). */
+html[dir="rtl"] .agent-sign-in-term,
+[dir="rtl"] .agent-sign-in-term {
+    direction: ltr;
+    text-align: left;
+}

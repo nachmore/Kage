@@ -26,20 +26,28 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
-def ensure_vendor(repo_root: Path) -> None:
-    vendor_tooling = repo_root / "ui-vendor"
-    lib = repo_root / "ui" / "vendor" / "lib"
-    # Sentinel check: every entry must exist for `lib/` to count as
-    # "ready". Adding a new vendor lib here is the trigger for older
-    # checkouts to re-run `npm install` + setup.js automatically.
-    # Pick one canonical file per lib so this stays a quick existence
-    # check — full coverage is enforced by setup.js itself.
-    sentinels = [
+def vendor_sentinels(lib: Path) -> list[Path]:
+    """Files that must all exist for `lib/` to count as "ready".
+
+    Adding a new vendor lib here is the trigger for older checkouts to
+    re-run `npm install` + setup.js automatically. Pick one canonical file
+    per lib so this stays a quick existence check — full coverage is
+    enforced by setup.js itself. scripts/test_ensure_vendor.py checks each
+    one is a file setup.js copies.
+    """
+    return [
         lib / "marked.min.js",
         lib / "mermaid.min.js",
         lib / "katex" / "katex.min.js",
         lib / "extension-module-lexer.js",
+        lib / "xterm" / "xterm.js",
     ]
+
+
+def ensure_vendor(repo_root: Path) -> None:
+    vendor_tooling = repo_root / "ui-vendor"
+    lib = repo_root / "ui" / "vendor" / "lib"
+    sentinels = vendor_sentinels(lib)
     if all(p.is_file() for p in sentinels):
         return  # Already populated
 

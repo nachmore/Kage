@@ -361,13 +361,13 @@ pub async fn open_url<R: tauri::Runtime>(
     url: String,
     app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
-    info!("Opening URL: {}", url);
-
     let full_url = if url.starts_with("www.") {
         format!("https://{}", url)
     } else {
         url.clone()
     };
+    // Never the query or fragment: OAuth and sign-in URLs carry codes there.
+    info!("Opening URL: {}", crate::os::shell::url_for_log(&full_url));
 
     os::open_url(&full_url).map_err(|e| format!("Failed to open URL: {}", e))?;
 

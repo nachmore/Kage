@@ -285,6 +285,41 @@ fn user_ran_command_entries_are_tagged_and_clipped() {
     assert!(clipped.trim_end_matches('…').chars().all(|c| c == 'é'));
 }
 
+#[test]
+fn user_ran_command_sign_in_round_trips() {
+    let dir = tempdir();
+    let path = dir.join("audit.jsonl");
+    let events = [
+        AuditEvent::UserRanCommand {
+            command: "/opt/homebrew/bin/kiro-cli login".into(),
+            cwd: "/Users/someone".into(),
+            via: "sign_in".into(),
+            outcome: "started".into(),
+            exit_code: None,
+            session_id: Some("s1".into()),
+        },
+        AuditEvent::UserRanCommand {
+            command: "/opt/homebrew/bin/kiro-cli login".into(),
+            cwd: "/Users/someone".into(),
+            via: "sign_in".into(),
+            outcome: "exited".into(),
+            exit_code: Some(0),
+            session_id: Some("s1".into()),
+        },
+    ];
+    for (i, event) in events.iter().cloned().enumerate() {
+        append_to(
+            &path,
+            &AuditEntry::at_time(format!("2026-04-28T12:00:0{i}.000Z"), event),
+        );
+    }
+    let got = read_recent(&path, 10);
+    assert_eq!(got.len(), 2);
+    assert_eq!(got[0].event, events[1]);
+    assert_eq!(got[1].event, events[0]);
+    assert_eq!(events[0].summary(), "User ran a command (sign_in, started)");
+}
+
 fn file_read(file_name: Option<&str>, outcome: &str) -> AuditEvent {
     AuditEvent::ExtensionFileRead {
         extension_id: "mindmap".into(),

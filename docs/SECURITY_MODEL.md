@@ -739,6 +739,152 @@ The trust boundary:
   equivalent (Windows Terminal re-parses `;`; Linux terminals each quote
   differently), so the notice only copies the command.
 
+## Signing in to the agent
+
+When Kiro CLI's sign-in has lapsed (its token refresh failed), every
+prompt fails until the user runs `kiro-cli login`. The error then
+offers **Sign in**, which runs that login in a small terminal inside the
+window that showed the error, with input enabled, so the user can pick a
+sign-in method from its arrow-key menu (`ui/js/shared/agent-sign-in.js`,
+`ui/js/shared/terminal-view.js`, `src/commands/system/agent_sign_in.rs`,
+`src/commands/system/user_shell/pty.rs`).
+
+- **Who can start it.** Only a click on Kage's own Sign in button (the
+  rest of a double-click is ignored). The button is drawn only for an
+  error object whose kind is `auth_required` or `agent_unreachable`, and
+  only when `agent_sign_in_context` says the active agent qualifies; a
+  plain-string error, any other kind, another agent or a Remote
+  connection gets no button. One sign-in runs at a time in the whole
+  app, and the backend refuses a second start.
+- **What runs.** Worked out by the backend from the active connection
+  in Config, never from a request argument: `start_agent_sign_in` has
+  no command, program or argument parameter. The connection must be
+  explicitly Kiro (its preset, else its command), Local (a Remote
+  agent's login is on another machine), and its spawn command's first
+  word must have the basename `kiro-cli` (so a wrapper, a sibling binary,
+  `wsl …` or `sh -c …` is refused). That word is resolved to an absolute
+  executable (an absolute path must be executable, a bare name is looked
+  up on the login-shell PATH's absolute entries, a relative path is
+  refused), and exactly `<that path> login` runs in the home folder, in
+  a pseudo-terminal (openpty; ConPTY on Windows) with the login-shell
+  environment and `TERM=xterm-256color`, on every platform.
+- **Where the browser runs.** Never inside the login's process group,
+  session or process tree, so ending them never closes it. Upstream
+  kiro-cli (aws/amazon-q-developer-cli, `crates/chat-cli/src/util/open.rs`)
+  opens a URL with `NSWorkspace openURL` on macOS, `xdg-open` on Linux
+  and `cmd /c start` on Windows; the last two would make the browser the
+  login's descendant. So per platform:
+  - **macOS:** plain `login`. LaunchServices starts the browser, as
+    launchd's child, never the login's; the usual browser sign-in stays.
+  - **Linux and Windows:** the login also gets `KIRO_FAKE_IS_REMOTE=1`
+    and `Q_FAKE_IS_REMOTE=1` (fixed, set last so the login-shell
+    environment can't change them; `agent_sign_in::sign_in_env_for`).
+    kiro-cli's `is_remote()` is then true (`util/system_info/mod.rs`),
+    so `login` takes the device flow and only prints the URL and a code
+    (`cli/user.rs`, `try_device_authorization`), starting nothing. The
+    user clicks the link in the terminal and Kage opens it
+    (`open_user_terminal_link` → `os::shell::open_url_outside_job`).
+
+  Quitting Kage or a crash doesn't close the browser either. On Windows,
+  Kage sits in a kill-on-close Job Object, and a browser started by
+  Kage's own `ShellExecuteExW` would be its child, join that job and die
+  with Kage. So the sign-in link (`open_url_outside_job`) goes to Explorer's desktop
+  (`IShellDispatch2::ShellExecute` on the `IShellWindows` desktop,
+  `src/os/windows/shell.rs`): Explorer starts the browser, as its own
+  child, outside the job. Only when no Explorer desktop answers (another
+  shell, a service session) does Kage open the URL itself, and log that
+  it did. Every other link still uses `open_url` (in-process
+  `ShellExecuteExW`) until the Explorer path has been exercised on
+  Windows. On macOS and Linux a URL Kage opens is started by
+  LaunchServices or `xdg-open`, and nothing kills Kage's children when
+  it exits.
+
+  With no browser among the login's descendants, the cleanup after it
+  stays: once it exits and its output is drained, what is left of its
+  process group is hung up and then killed (Unix: SIGHUP, 100 ms,
+  SIGKILL), and Stop or the time limit kills its tree (`taskkill /T` on
+  Windows). An organization can turn device-flow sign-in off; on Linux
+  and Windows that run then fails, and when it exits non-zero with
+  kiro-cli's message saying so (looked for only in the window's memory,
+  never logged), the panel says sign-in from Kage needs the device flow
+  here and shows the command for the user's own terminal (`kiro-cli
+  login`, the configured program), with Copy and Reconnect. On macOS a
+  failed run keeps the Terminal hand-off. `--use-device-flow` is never
+  passed: on macOS it would lock such organizations out for nothing.
+- **Who can type into it, resize it or stop it.** Only the window that
+  started it, and only Kage's chat and floating windows can start one
+  (`user_shell::caller_allowed`; Settings, welcome, store, context menu,
+  inline assist and extension views are refused, whatever their
+  capability file says). Its input side is registered by run id and
+  owner window; `write_user_terminal`, `ack_user_terminal`,
+  `resize_user_terminal`, `stop_user_terminal` and
+  `open_user_terminal_link` from any other
+  window get the same "not running" error as an unknown id. Every one of
+  these commands is `null` in `extension-permissions.js`.
+- **What the agent can't reach.** Agent output is rendered as text and
+  never becomes a click; at most it influences which error kind is
+  shown, which still needs the user's click and still runs only
+  `kiro-cli login`. The host-command bridge has no handle on the
+  terminal, and the sidecar's input tools refuse Kage's windows
+  (best-effort, as below). Output is never handed to the agent or put
+  into a prompt.
+- **Secrets.** What the terminal shows and what the user types (device
+  codes, sign-in URLs, anything pasted) are never logged, audited, sent
+  to telemetry or returned in the command's result. Output reaches only
+  the starting webview, over a Tauri `Channel` it created (not a
+  broadcast event), in messages whose JSON is always under 8 KiB. That
+  matters: Tauri 2.10 `eval`s a smaller channel message straight into
+  the webview that owns the channel, but parks a larger one in an
+  app-wide cache under a sequential id that any window can fetch with
+  `plugin:__TAURI_CHANNEL__|fetch`, and keeps it until someone does
+  (`tauri/src/ipc/channel.rs`). The window acknowledges each message once
+  xterm has written it (`ack_user_terminal`, owner only); the backend
+  sends at most 64 KiB ahead of the acknowledgements and then stops
+  reading the terminal, so a stalled window makes the program wait
+  instead of making Kage buffer. Output lives only in the terminal's
+  scrollback (1000 lines), what's in flight (64 KiB) and the backend's
+  pending buffer (64 KiB plus one read). A link in the terminal opens
+  through `open_user_terminal_link`: https only, at most 2 KB, for a
+  live run the caller owns; only its host is logged. (Opening any URL
+  logs at most `scheme://host:port`: never a path, query, fragment or
+  userinfo, `os::shell::url_for_log`, since some paths carry secrets
+  too.)
+- **Limits.** 15 minutes (choosing in the menu plus a 10-minute device
+  code), then the process group is killed; it also stops on Stop,
+  window close, page reload and quit. Input is at most 4 KiB per write
+  through a bounded queue, so a program that stops reading never blocks
+  Kage. Hiding the floating window never stops it: the window hides
+  while the user is in the browser and comes back when the run ends.
+- **Teardown.** When the login exits (after a 1 s drain) or is stopped,
+  on macOS and Linux what is left of its process group gets SIGHUP and,
+  100 ms later, SIGKILL, so no descendant keeps the terminal open (the
+  login stays unreaped until then, so its group id can't be reused). The
+  reader and writer use their own non-blocking copies of the terminal
+  and give up within 50 ms of the run ending, so they end even if a
+  process that left the group still holds the terminal. On Windows the
+  pseudo console is closed on a thread of its own while the reader keeps
+  draining its output to the end (before Windows 11 24H2,
+  `ClosePseudoConsole` waits for that output to be read). The slot is
+  freed only after all of that, or after 2 s (logged), and the registry
+  never closes a terminal while it holds its locks.
+- **What's recorded.** Two `user_ran_command` entries in the permission
+  audit log (`via: sign_in`; `outcome: started`, then how it ended, with
+  the exit code and session id), English app-log lines with the window,
+  outcome, exit code and duration only, and, with analytics on, an
+  `agent_sign_in` event with where it ran and an exit-code bucket.
+- **Afterwards.** On a clean exit Kage restarts the agent and may send the
+  failed message again, by the same rules as the error's Reconnect: only
+  the turn whose id the error names (`turnId`), only when the backend
+  marked that error resendable (nothing of the turn got through), only
+  while the window still shows the session it failed in (or the one the
+  restart replaced it with) and has sent nothing since, at most once, and
+  as a new turn with its own id. If the user moved to another session
+  meanwhile, the window keeps that one and nothing is resent. On any
+  other ending nothing is restarted or resent.
+- **Open in Terminal (macOS).** Hands the same `<path> login` (quoted as
+  one shell word) to Terminal.app the way "Run in Terminal" does; it's
+  audited as `via: terminal`, `outcome: opened`.
+
 ## Commands an agent runs outside its sandbox
 
 The agent can also ask for this itself. Kage's own MCP sidecar (the
@@ -1216,6 +1362,7 @@ not even encrypted (docs/design/SYNC.md §11.5).
 | Background agent consent imported from a backup or sync | ✅ Blocked | Every import keeps this machine's `extension_agent_access`; sync never copies it. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
 | Agent output or an extension runs a shell command outside the agent's sandbox | ✅ Blocked | Only the confirm's own click runs one, once; the commands are `null` for extensions and refuse non-Kage windows. See "Commands you run yourself". |
+| Agent output or an extension starts or types into the sign-in terminal | ✅ Blocked | Only Kage's own Sign in click starts it, and it runs only `kiro-cli login` resolved from Config; input, resize, stop and links answer only the window that started it; the commands are `null` for extensions and refuse non-Kage windows. See "Signing in to the agent". |
 | An agent runs a command outside its sandbox without the user | ✅ Blocked | Only the user's answer in Kage, or a rule they made for simple commands (never for credential-touching ones or ones with hidden characters), runs it. See "Commands an agent runs outside its sandbox". |
 | Another user's process reaches the host-command bridge | ✅ Blocked | 0700 socket directory and peer-uid check (macOS/Linux); per-user pipe DACL, remote clients refused and token-user check (Windows). |
 | The agent presses Kage's own approval buttons with computer-control tools | ⚠ Best-effort | Input tools refuse Kage's windows (by process); the agent's own shell could still script the UI. |

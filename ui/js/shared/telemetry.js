@@ -89,6 +89,12 @@ export const KNOWN_EVENTS = Object.freeze([
     // '2-125', '126', '127', 'other', 'signal', 'timeout', 'cancelled',
     // 'spawn_error', or 'opened' for Terminal) — never the command or output.
     'user_shell_run',
+    // Fired from Rust (src/commands/system/agent_sign_in.rs) when the user
+    // signs in to the agent from a signed-out error. Payload: where
+    // ('kage' for Kage's own terminal | 'terminal' for Terminal.app) and
+    // result (the user_shell_run bucket, or 'opened' for Terminal) — never
+    // the command, the output or anything typed.
+    'agent_sign_in',
 
     // Sessions
     'session_created',

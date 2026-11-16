@@ -11,8 +11,20 @@
 //! command to `null`, and their sandboxed iframes have no IPC of their
 //! own), from Kage's other windows ([`caller_allowed`]), or from agent
 //! output (which is rendered as text, never as a click).
+//!
+//! The same registry also holds the sign-in terminal
+//! (`commands::system::agent_sign_in`): a fixed program (`kiro-cli login`)
+//! run in a pseudo-terminal ([`pty`]) the user types into, at most one per
+//! window and one in the whole app. Its slot sits in `active` beside the
+//! window's own run (key `terminal:<label>`), so Stop, window close, page
+//! reload and shutdown reach it the same way; its input side lives in
+//! `terminals`, keyed by run id and owner window, and only that window's
+//! `write_user_terminal` / `ack_user_terminal` / `resize_user_terminal` /
+//! `open_user_terminal_link` ([`terminal`]) can reach it.
 
+pub mod pty;
 pub mod runner;
+pub mod terminal;
 #[cfg(test)]
 mod tests;
 
@@ -41,7 +53,7 @@ pub fn caller_allowed(label: &str) -> bool {
         || window_labels::is_chat_label(label)
 }
 
-fn ensure_caller(label: &str) -> Result<(), AppError> {
+pub(crate) fn ensure_caller(label: &str) -> Result<(), AppError> {
     if caller_allowed(label) {
         Ok(())
     } else {
@@ -54,7 +66,7 @@ fn ensure_caller(label: &str) -> Result<(), AppError> {
     }
 }
 
-fn invalid(e: InvalidRun) -> AppError {
+pub(crate) fn invalid(e: InvalidRun) -> AppError {
     let max_kib = (runner::MAX_COMMAND_BYTES / 1024).to_string();
     match e {
         InvalidRun::EmptyCommand => {
@@ -99,7 +111,7 @@ fn invalid(e: InvalidRun) -> AppError {
     }
 }
 
-fn join_error(e: impl std::fmt::Display) -> AppError {
+pub(crate) fn join_error(e: impl std::fmt::Display) -> AppError {
     AppError::internal(format!("user shell task failed: {e}"))
 }
 
@@ -116,6 +128,28 @@ struct ActiveRun {
 /// a window label never does.
 const AGENT_RUN_KEY: &str = "agent:";
 
+/// Slot keys of terminal runs (the sign-in terminal) are this plus the
+/// window's label: one per window, beside the window's own run.
+const TERMINAL_RUN_KEY: &str = "terminal:";
+
+/// Why [`UserShellRuns::begin_terminal`] refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalBusy {
+    /// This window already shows a terminal run.
+    Window,
+    /// The app-wide limit of terminal runs is reached (another window).
+    App,
+}
+
+/// Why [`UserShellRuns::lookup_terminal`] found nothing usable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TerminalLookup {
+    /// No live terminal run has that id.
+    Missing,
+    /// One does, but another window shows it (named, for the log only).
+    OtherWindow(String),
+}
+
 /// The runs in progress: the user's own, one per window at most (keyed by
 /// the window's label), and those an agent asked for through
 /// `run_outside_sandbox` (keyed by run id, shown in a window too). Lives in
@@ -123,6 +157,9 @@ const AGENT_RUN_KEY: &str = "agent:";
 #[derive(Default)]
 pub struct UserShellRuns {
     active: Mutex<HashMap<String, ActiveRun>>,
+    /// The input side of each live terminal run, keyed by run id, with the
+    /// window that shows it. Lock order: `active` before `terminals`.
+    terminals: Mutex<HashMap<String, (String, Arc<pty::TerminalIo>)>>,
 }
 
 /// A claim on a run slot. Dropping it — when the run ends, however it
@@ -142,13 +179,27 @@ impl RunSlot {
 
 impl Drop for RunSlot {
     fn drop(&mut self) {
-        let mut active = self.runs.active.lock_or_recover();
-        if active
-            .get(&self.key)
-            .is_some_and(|run| run.run_id == self.run_id)
+        // Declared before the guards so it drops after them: the
+        // terminal's handle never goes while the registry is locked.
+        let detached;
         {
-            active.remove(&self.key);
+            let mut active = self.runs.active.lock_or_recover();
+            if active
+                .get(&self.key)
+                .is_some_and(|run| run.run_id == self.run_id)
+            {
+                active.remove(&self.key);
+            }
+            detached = if self.key.starts_with(TERMINAL_RUN_KEY) {
+                self.runs.terminals.lock_or_recover().remove(&self.run_id)
+            } else {
+                None
+            };
         }
+        // By now the run has closed its terminal (`pty::run_terminal`); if
+        // this was the last handle anyway, `TerminalIo`'s drop closes it on
+        // a thread of its own.
+        drop(detached);
     }
 }
 
@@ -207,6 +258,67 @@ impl UserShellRuns {
             return None;
         }
         Some(self.claim(&mut active, key, label, run_id))
+    }
+
+    /// Claim `label`'s terminal slot for run `run_id`, independent of the
+    /// window's own run ([`Self::begin`]). Refused while the window shows a
+    /// terminal run ([`TerminalBusy::Window`]) or `max_app_wide` are going
+    /// anywhere ([`TerminalBusy::App`]).
+    pub fn begin_terminal(
+        self: &Arc<Self>,
+        label: &str,
+        run_id: &str,
+        max_app_wide: usize,
+    ) -> Result<RunSlot, TerminalBusy> {
+        let key = format!("{TERMINAL_RUN_KEY}{label}");
+        let mut active = self.active.lock_or_recover();
+        if active.contains_key(&key) {
+            return Err(TerminalBusy::Window);
+        }
+        let terminals = active
+            .keys()
+            .filter(|k| k.starts_with(TERMINAL_RUN_KEY))
+            .count();
+        if terminals >= max_app_wide {
+            return Err(TerminalBusy::App);
+        }
+        if active.values().any(|run| run.run_id == run_id) {
+            // Ids are random per run; a reused one is refused, never shared.
+            return Err(TerminalBusy::Window);
+        }
+        Ok(self.claim(&mut active, key, label, run_id))
+    }
+
+    /// Hand over the input side of `label`'s terminal run `run_id` once it
+    /// started. Ignored unless that run still holds its slot.
+    pub fn attach_terminal_io(&self, run_id: &str, label: &str, io: Arc<pty::TerminalIo>) {
+        let active = self.active.lock_or_recover();
+        let key = format!("{TERMINAL_RUN_KEY}{label}");
+        if active.get(&key).is_some_and(|run| run.run_id == run_id) {
+            self.terminals
+                .lock_or_recover()
+                .insert(run_id.to_string(), (label.to_string(), io));
+        }
+    }
+
+    /// The input side of terminal run `run_id`, only for the window that
+    /// shows it.
+    pub fn lookup_terminal(
+        &self,
+        label: &str,
+        run_id: &str,
+    ) -> Result<Arc<pty::TerminalIo>, TerminalLookup> {
+        match self.terminals.lock_or_recover().get(run_id) {
+            Some((owner, io)) if owner == label => Ok(io.clone()),
+            Some((owner, _)) => Err(TerminalLookup::OtherWindow(owner.clone())),
+            None => Err(TerminalLookup::Missing),
+        }
+    }
+
+    /// [`Self::lookup_terminal`], without saying why not.
+    #[cfg(test)]
+    pub fn terminal_io(&self, label: &str, run_id: &str) -> Option<Arc<pty::TerminalIo>> {
+        self.lookup_terminal(label, run_id).ok()
     }
 
     /// Ask the run `run_id` shown in window `label` to stop. A window can
@@ -319,7 +431,7 @@ pub async fn user_shell_run_context<R: tauri::Runtime>(
     .map_err(join_error)?
 }
 
-fn audit(
+pub(crate) fn audit(
     command: &str,
     cwd: &Path,
     via: &str,

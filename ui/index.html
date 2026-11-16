@@ -101,6 +101,10 @@
             </div>
 
             <div id="errorContainer"></div>
+            <!-- The agent sign-in terminal (shared/agent-sign-in.js): outside
+                 #errorContainer, so a later error or a session switch can't
+                 remove a live run. -->
+            <div id="agentSignInSlot" class="agent-sign-in-slot"></div>
 
             <div class="messages-area" id="messagesArea">
                 <div class="message-placeholder" data-i18n="chat.placeholder.start_conversation">Start a conversation with Kage...</div>

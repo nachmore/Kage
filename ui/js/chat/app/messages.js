@@ -53,6 +53,12 @@ export function createMessagesMixin(dependencies) {
         ExtensionToolController,
         formatErrorShared,
         splitPromptContext,
+        mountSignInAction,
+        clearAgentSignInSlot,
+        isResendablePayload,
+        presentOverlayWindow,
+        sendAppNotification,
+        WINDOW,
     } = dependencies;
     return class {
         /**
@@ -424,7 +430,10 @@ export function createMessagesMixin(dependencies) {
          * agent's raw text as a second line; `opts.retryTurn` (onError) is
          * the failed turn, resent after a Reconnect when it still applies:
          * the window still shows the session the Reconnect started on, the
-         * turn ran there, and nothing was sent since.
+         * turn ran there, and nothing was sent since. `opts.signIn`: the
+         * MESSAGE_ERROR payload — a signed-out agent's error object also
+         * gets "Sign in" (shared/agent-sign-in.js), which resends
+         * `opts.retryTurn` under the same rules; a plain string doesn't.
          */
         showError(message, opts = {}) {
             const detail = opts.detail
@@ -457,7 +466,8 @@ export function createMessagesMixin(dependencies) {
                 const moved = () => this.activeSessionId !== startedOn;
                 // A failed attempt's error keeps the failed turn, so the
                 // next Reconnect can still resend it.
-                const keep = { retryTurn: opts.retryTurn };
+                // (and, for a signed-out agent, its Sign in).
+                const keep = { retryTurn: opts.retryTurn, signIn: opts.signIn };
                 let outcome;
                 try {
                     outcome = await this.invoke('reconnect_acp', { sessionId: startedOn });
@@ -490,26 +500,137 @@ export function createMessagesMixin(dependencies) {
                 // cleared it) stays.
                 if (reconnectBtn.isConnected) this.elements.errorContainer.innerHTML = '';
                 const shown = startedOn;
-                const sid = outcome.sessionId;
-                if (sid && sid !== this.activeSessionId) {
-                    console.log('[chat] adopting reconnect session id:', sid);
-                    this.activeSessionId = sid;
-                    this.currentAcpSessionId = sid;
-                    this.invoke('set_window_session', {
-                        label: this.windowLabel,
-                        sessionId: sid,
-                    }).catch(() => {});
-                }
+                this._adoptReconnectSession(outcome.sessionId);
                 const turn = opts.retryTurn;
-                if (
-                    turn &&
-                    turn.seq === this._sendSeq &&
-                    turn.sessionId === shown &&
-                    this.canSendAgentPrompt(this.activeSessionId)
-                ) {
+                if (this._canResendTurn(turn, shown)) {
                     await this._resendTurn(turn);
                 }
             });
+
+            if (opts.signIn) {
+                const actions = this.elements.errorContainer.querySelector('.chat-error-actions');
+                mountSignInAction?.(
+                    actions,
+                    opts.signIn,
+                    this._agentSignInHost(opts.signIn, opts.retryTurn ?? null, actions)
+                )?.catch((e) => console.warn('[chat] sign-in action unavailable:', e));
+            }
+        }
+
+        /** Take the session id `reconnect_acp` answered with, if it moved. */
+        _adoptReconnectSession(sid) {
+            if (!sid || sid === this.activeSessionId) return;
+            console.log('[chat] adopting reconnect session id:', sid);
+            this.activeSessionId = sid;
+            this.currentAcpSessionId = sid;
+            this.invoke('set_window_session', {
+                label: this.windowLabel,
+                sessionId: sid,
+            }).catch(() => {});
+        }
+
+        /**
+         * Whether the failed turn `turn` (onError's retryTurn: null when any
+         * of it got through or it was a rate limit) may go out again now:
+         * nothing was sent since, it went to `shown` (the session the window
+         * showed before adopting a reconnect's id) and the window can send.
+         */
+        _canResendTurn(turn, shown) {
+            return (
+                !!turn &&
+                turn.seq === this._sendSeq &&
+                turn.sessionId === shown &&
+                this.canSendAgentPrompt(this.activeSessionId)
+            );
+        }
+
+        /**
+         * The chat window's side of the agent sign-in for one error: the run
+         * lives in #agentSignInSlot, outside #errorContainer. `payload` is
+         * that error and `retryTurn` its failed turn (onError): the sign-in
+         * resends only that turn, by Reconnect's rules — the error names it
+         * (`turnId`) and says it may go again (isResendablePayload), the
+         * window still shows its session and sent nothing since
+         * (_canResendTurn) — and at most once. The resend records a turn
+         * of its own, with a fresh id (_resendTurn).
+         */
+        _agentSignInHost(payload, retryTurn, ownActions = null) {
+            // The session the window showed when the restart answered,
+            // before adopting a reloaded id; undefined until one answers.
+            let shown;
+            let resent = false;
+            return {
+                slot: () => document.getElementById('agentSignInSlot'),
+                rows: 16,
+                compact: false,
+                buttonClass: 'chat-error-btn reconnect',
+                invoke: (cmd, args) => this.invoke(cmd, args),
+                layoutChanged: () => {},
+                onActiveChange: () => {},
+                onEnded: async ({ outcome, agent }) => {
+                    // The user was most likely in the browser: bring the
+                    // chat back to show the result (and the resend). Not at
+                    // the time limit; a notification says so instead.
+                    try {
+                        if (outcome === 'timed_out') {
+                            await sendAppNotification?.(
+                                this.invoke,
+                                t('shared.notify.kage_title'),
+                                t('shared.agent_sign_in.notify.timed_out', { agent }),
+                                this.windowLabel || WINDOW?.MAIN
+                            );
+                        } else if (outcome === 'exited' && this.appWindow) {
+                            await presentOverlayWindow?.(this.appWindow);
+                        }
+                    } catch (e) {
+                        console.warn('[chat] after sign-in:', e);
+                    }
+                },
+                // The restart pinned the window to `sid` (the failed
+                // session `from`, reloaded): follow it only while the window
+                // still shows `from`; else keep the session shown now.
+                adoptSession: (sid, from) => {
+                    shown = this.activeSessionId ?? null;
+                    if (from && from !== shown) {
+                        console.log('[chat] sign-in finished after the window moved to', shown);
+                        this._repinWindowSession();
+                        return;
+                    }
+                    this._adoptReconnectSession(sid);
+                },
+                canResend: (sid) => {
+                    const before = shown === undefined ? (this.activeSessionId ?? null) : shown;
+                    shown = undefined;
+                    return (
+                        !resent &&
+                        !!retryTurn &&
+                        sid === this.activeSessionId &&
+                        isResendablePayload(payload, retryTurn.turnId) &&
+                        this._canResendTurn(retryTurn, before)
+                    );
+                },
+                resend: async () => {
+                    if (resent) return 'none';
+                    resent = true;
+                    // Clear this sign-in's error before the resend, and only
+                    // while it is still the one shown (as Reconnect does):
+                    // the resent turn's own error, if it fails fast, must
+                    // stay on screen.
+                    if (!ownActions || ownActions.isConnected) {
+                        this.elements.errorContainer.innerHTML = '';
+                    }
+                    await this._resendTurn(retryTurn, { throwOnError: true });
+                    return 'sent';
+                },
+                // Cleared before the resend (above); after it, the box may
+                // hold the resent turn's own error.
+                clearError: () => {},
+            };
+        }
+
+        /** Empty #agentSignInSlot, unless a sign-in still holds it. */
+        _clearAgentSignInSlot() {
+            clearAgentSignInSlot?.(document.getElementById('agentSignInSlot'));
         }
 
         async showSessionLocked(sessionId, pid) {

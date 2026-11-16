@@ -46,7 +46,7 @@ pub async fn plugin_check<R: tauri::Runtime>(
     info!(
         "Checking for updates (channel={}, endpoint={})",
         channel.as_str(),
-        endpoint
+        crate::os::shell::url_for_log(endpoint)
     );
     let endpoint_url = reqwest::Url::parse(endpoint)
         .with_context(|| format!("Invalid endpoint URL: {endpoint}"))?;
@@ -64,7 +64,7 @@ pub async fn plugin_check<R: tauri::Runtime>(
             info!(
                 "No release available in the '{}' channel (nothing published at {}); reporting up-to-date",
                 channel.as_str(),
-                endpoint
+                crate::os::shell::url_for_log(endpoint)
             );
             Ok(None)
         }

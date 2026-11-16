@@ -64,6 +64,8 @@ export function createSessionHistoryMixin(dependencies) {
 
             // Clear any previous error
             this.elements.errorContainer.innerHTML = '';
+            // and a finished sign-in's status (one still going stays).
+            this._clearAgentSignInSlot?.();
 
             // Hide/show permission modal based on which session is active
             if (window.ChatPermissions) {

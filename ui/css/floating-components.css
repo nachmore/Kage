@@ -720,6 +720,12 @@ body.dark-theme button.datetime-date[aria-expanded="true"] {
     opacity: 0.6;
     cursor: default;
 }
+/* The error's buttons (Reconnect, and Sign in for a signed-out agent). */
+.floating-error-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
 
 /* Speech button — floating window positioning */
 .speech-btn {
