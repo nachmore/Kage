@@ -5,6 +5,9 @@
 //! (`crate::commands::system::X`) and the top-level
 //! `crate::commands::X` re-export keep working unchanged.
 
+/// The agent sign-in terminal (`kiro-cli login` run in a PTY the user
+/// types into). Not glob re-exported: the registry names them by full path.
+pub mod agent_sign_in;
 pub mod agents;
 pub mod config_io;
 pub mod diagnostics;

@@ -46,6 +46,8 @@ export const UiStateMethods = {
         const compactEl = document.getElementById('toolSourcesCompact');
         if (compactEl) compactEl.remove();
         this._removeShellActivity();
+        // A finished sign-in's status goes too; one still going stays.
+        this._clearAgentSignInSlot?.();
         // Cards for commands outside the sandbox that are over go with the
         // rest; one still waiting for an answer or its run stays in the tray.
         clearFinishedHostCommandCards();

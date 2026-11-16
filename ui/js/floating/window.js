@@ -81,6 +81,8 @@ export class WindowManager {
      * back to input height. Banner-only mode isn't a response either.
      */
     _hasResponseContent() {
+        // The agent sign-in panel sits beside the content area.
+        if (document.getElementById('agentSignInSlot')?.childElementCount) return true;
         const ca = document.getElementById('contentArea');
         if (!ca?.classList.contains('visible') || ca.classList.contains('banner-only')) {
             return false;

@@ -108,9 +108,17 @@ import {
 } from '../mascot-signals.js';
 import { t } from '../../shared/i18n.js';
 import { clearFinishedHostCommandCards } from '../../shared/host-command-view.js';
+import {
+    focusAgentSignIn,
+    isAgentSignInActive,
+    mountSignInAction,
+} from '../../shared/agent-sign-in.js';
 
 export {
     _resetDiagramFailures,
+    focusAgentSignIn,
+    isAgentSignInActive,
+    mountSignInAction,
     appendSendHint,
     AttachmentManager,
     attachSourceClickHandler,

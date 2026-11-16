@@ -10,7 +10,7 @@
 /// We intentionally do NOT interpret backslash escapes — on Windows the
 /// backslash is a path separator, and escaping isn't needed once quotes group
 /// the spaces.
-pub(super) fn tokenize_spawn_command(command: &str) -> Vec<String> {
+pub(crate) fn tokenize_spawn_command(command: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current = String::new();
     let mut in_token = false;

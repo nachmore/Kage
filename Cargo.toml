@@ -96,6 +96,10 @@ whoami = "2.1"
 base64 = "0.22"
 reqwest = { version = "0.13", features = ["blocking", "json"] }
 url = "2.5"
+# Pseudo-terminal for the agent sign-in terminal (`kiro-cli login`'s
+# arrow-key menu needs a real TTY): openpty on macOS/Linux, ConPTY on
+# Windows. MIT (wezterm). See src/commands/system/user_shell/pty.rs.
+portable-pty = "0.9"
 zip = { version = "8.1", default-features = false, features = ["deflate"] }
 # NFC for comparing backup file names the way APFS/NTFS do (already in
 # the tree via `url` → `idna`).

@@ -788,10 +788,13 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
             case 'user_ran_command': {
                 // A command the user ran themselves from a sandbox notice.
                 icon = '▶️';
-                summary =
-                    entry.via === 'terminal'
-                        ? t('settings.tool_permissions.audit.summary.user_ran_terminal')
-                        : t('settings.tool_permissions.audit.summary.user_ran');
+                // via 'sign_in': the agent's own login, from "Sign in" on a
+                // signed-out error (agent-sign-in.js).
+                if (entry.via === 'terminal')
+                    summary = t('settings.tool_permissions.audit.summary.user_ran_terminal');
+                else if (entry.via === 'sign_in')
+                    summary = t('settings.tool_permissions.audit.summary.user_ran_sign_in');
+                else summary = t('settings.tool_permissions.audit.summary.user_ran');
                 const details = [];
                 if (entry.outcome === 'exited' && Number.isInteger(entry.exit_code)) {
                     details.push(
@@ -805,6 +808,8 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                     details.push(t('settings.tool_permissions.audit.meta.timed_out'));
                 } else if (entry.outcome === 'failed_to_start') {
                     details.push(t('settings.tool_permissions.audit.meta.not_started'));
+                } else if (entry.outcome === 'started') {
+                    details.push(t('settings.tool_permissions.audit.meta.started'));
                 }
                 if (entry.session_id) {
                     details.push(

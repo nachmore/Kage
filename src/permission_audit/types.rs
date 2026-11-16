@@ -48,17 +48,23 @@ pub enum AuditEvent {
     TerminatorModeChanged { enabled: bool },
     /// The user ran a command themselves, outside the agent's sandbox,
     /// from a shell block's sandbox notice ("Run it here" / "Run in
-    /// Terminal"): their own click in a confirm, not an agent grant.
+    /// Terminal") or the agent's sign-in ("Sign in" on a signed-out
+    /// error, `commands::system::agent_sign_in`): their own click, not an
+    /// agent grant.
     UserRanCommand {
         /// The command, clipped to [`USER_RAN_COMMAND_PREVIEW`] bytes.
         command: String,
         /// The working directory it ran in.
         cwd: String,
-        /// `kage` (run by Kage, output captured) or `terminal` (handed
-        /// to the terminal app).
+        /// `kage` (run by Kage, output captured), `sign_in` (the agent's
+        /// login, run by Kage in a terminal the user typed into; nothing
+        /// it printed or was typed is recorded) or `terminal` (handed to
+        /// the terminal app).
         via: String,
-        /// `exited`, `cancelled`, `timed_out`, `failed_to_start`, or
-        /// `opened` (terminal: handed over, outcome unknown to Kage).
+        /// `started` (`sign_in`: written when it starts, then again with
+        /// how it ended), `exited`, `cancelled`, `timed_out`,
+        /// `failed_to_start`, or `opened` (terminal: handed over, outcome
+        /// unknown to Kage).
         outcome: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         exit_code: Option<i32>,

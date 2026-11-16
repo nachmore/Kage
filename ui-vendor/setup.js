@@ -55,6 +55,18 @@ const COPIES = [
     ['katex/dist/katex.min.js', 'katex/katex.min.js'],
     ['katex/dist/katex.min.css', 'katex/katex.min.css'],
 
+    // xterm.js — terminal emulator for the agent sign-in terminal
+    // (ui/js/shared/terminal-view.js). UMD bundles that set
+    // window.Terminal / window.FitAddon / window.WebLinksAddon; loaded
+    // lazily on the first Sign in click, never from HTML.
+    ['@xterm/xterm/lib/xterm.js', 'xterm/xterm.js'],
+    ['@xterm/xterm/css/xterm.css', 'xterm/xterm.css'],
+    ['@xterm/xterm/LICENSE', 'xterm/xterm.LICENSE'],
+    ['@xterm/addon-fit/lib/addon-fit.js', 'xterm/addon-fit.js'],
+    ['@xterm/addon-fit/LICENSE', 'xterm/addon-fit.LICENSE'],
+    ['@xterm/addon-web-links/lib/addon-web-links.js', 'xterm/addon-web-links.js'],
+    ['@xterm/addon-web-links/LICENSE', 'xterm/addon-web-links.LICENSE'],
+
     // prism language components
     ...PRISM_LANGUAGES.map(lang => [
         `prismjs/components/prism-${lang}.min.js`,

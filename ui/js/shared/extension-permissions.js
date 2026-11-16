@@ -213,6 +213,16 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     run_user_shell_command: null,
     cancel_user_shell_command: null,
     run_command_in_terminal: null,
+    // Agent sign-in terminal (agent-sign-in.js): never reachable from an
+    // extension. It runs the agent's own login with input from the user,
+    // and its output can hold device codes and sign-in URLs.
+    agent_sign_in_context: null,
+    start_agent_sign_in: null,
+    agent_sign_in_in_terminal: null,
+    write_user_terminal: null,
+    resize_user_terminal: null,
+    stop_user_terminal: null,
+    open_user_terminal_link: null,
     // Commands an agent asks Kage to run outside its sandbox
     // (host-command-view.js, Settings → Tool permissions): approving one,
     // the rules that skip the prompt, and the allow-all switch. Never

@@ -12,6 +12,9 @@ pub mod turn_progress;
 pub mod types;
 
 // Re-export public types so callers can still use `crate::acp_client::AcpRequest` etc.
+/// The agent sign-in reads the configured program the same way the
+/// transport spawns it.
+pub(crate) use transport::tokenize::tokenize_spawn_command;
 pub use transport::AcpTransport;
 #[allow(unused_imports)]
 pub use types::{

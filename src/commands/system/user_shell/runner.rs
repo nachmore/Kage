@@ -656,18 +656,28 @@ pub fn run(
 /// Telemetry bucket for how a run ended — never the command, never the
 /// exact code beyond the conventional ranges.
 pub fn outcome_bucket(report: &RunReport) -> &'static str {
-    match report.outcome {
+    outcome_bucket_parts(report.outcome, report.exit_code, report.signal.is_some())
+}
+
+/// [`outcome_bucket`] from its parts (also used for terminal runs, whose
+/// report names the signal instead of numbering it).
+pub fn outcome_bucket_parts(
+    outcome: RunOutcome,
+    exit_code: Option<i32>,
+    signaled: bool,
+) -> &'static str {
+    match outcome {
         RunOutcome::Cancelled => "cancelled",
         RunOutcome::TimedOut => "timeout",
-        RunOutcome::Exited => match (report.exit_code, report.signal) {
+        RunOutcome::Exited => match (exit_code, signaled) {
             (Some(0), _) => "0",
             (Some(1), _) => "1",
             (Some(126), _) => "126",
             (Some(127), _) => "127",
             (Some(c), _) if (2..126).contains(&c) => "2-125",
             (Some(_), _) => "other",
-            (None, Some(_)) => "signal",
-            (None, None) => "other",
+            (None, true) => "signal",
+            (None, false) => "other",
         },
     }
 }

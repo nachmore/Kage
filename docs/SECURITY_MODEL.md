@@ -739,6 +739,78 @@ The trust boundary:
   equivalent (Windows Terminal re-parses `;`; Linux terminals each quote
   differently), so the notice only copies the command.
 
+## Signing in to the agent
+
+When Kiro CLI's sign-in has lapsed (its token refresh failed), every
+prompt fails until the user runs `kiro-cli login`. The error then
+offers **Sign in**, which runs that login in a small terminal inside the
+window that showed the error, with input enabled, so the user can pick a
+sign-in method from its arrow-key menu (`ui/js/shared/agent-sign-in.js`,
+`ui/js/shared/terminal-view.js`, `src/commands/system/agent_sign_in.rs`,
+`src/commands/system/user_shell/pty.rs`).
+
+- **Who can start it.** Only a click on Kage's own Sign in button (the
+  rest of a double-click is ignored). The button is drawn only for an
+  error object whose kind is `auth_required` or `agent_unreachable`, and
+  only when `agent_sign_in_context` says the active agent qualifies; a
+  plain-string error, any other kind, another agent or a Remote
+  connection gets no button. One sign-in runs at a time in the whole
+  app, and the backend refuses a second start.
+- **What runs.** Worked out by the backend from the active connection
+  in Config, never from a request argument: `start_agent_sign_in` has
+  no command, program or argument parameter. The connection must be
+  explicitly Kiro (its preset, else its command), Local (a Remote
+  agent's login is on another machine), and its spawn command's first
+  word must have the basename `kiro-cli` (so a wrapper, a sibling binary,
+  `wsl …` or `sh -c …` is refused). That word is resolved to an absolute
+  executable (an absolute path must be executable, a bare name is looked
+  up on the login-shell PATH's absolute entries, a relative path is
+  refused), and exactly `<that path> login` runs in the home folder, in
+  a pseudo-terminal (openpty; ConPTY on Windows) with the login-shell
+  environment and `TERM=xterm-256color`.
+- **Who can type into it, resize it or stop it.** Only the window that
+  started it, and only Kage's chat and floating windows can start one
+  (`user_shell::caller_allowed`; Settings, welcome, store, context menu,
+  inline assist and extension views are refused, whatever their
+  capability file says). Its input side is registered by run id and
+  owner window; `write_user_terminal`, `resize_user_terminal`,
+  `stop_user_terminal` and `open_user_terminal_link` from any other
+  window get the same "not running" error as an unknown id. Every one of
+  these commands is `null` in `extension-permissions.js`.
+- **What the agent can't reach.** Agent output is rendered as text and
+  never becomes a click; at most it influences which error kind is
+  shown, which still needs the user's click and still runs only
+  `kiro-cli login`. The host-command bridge has no handle on the
+  terminal, and the sidecar's input tools refuse Kage's windows
+  (best-effort, as below). Output is never handed to the agent or put
+  into a prompt.
+- **Secrets.** What the terminal shows and what the user types (device
+  codes, sign-in URLs, anything pasted) are never logged, audited, sent
+  to telemetry or returned in the command's result. Output reaches only
+  the starting webview, over a Tauri `Channel` it created (not a
+  broadcast event), and lives only in its terminal's scrollback (1000
+  lines) and the backend's pending batch (64 KiB at most). A link in the
+  terminal opens through `open_user_terminal_link`: https only, at most
+  2 KB, for a live run the caller owns; only its host is logged.
+- **Limits.** 15 minutes (choosing in the menu plus a 10-minute device
+  code), then the process group is killed; it also stops on Stop,
+  window close, page reload and quit. Input is at most 4 KiB per write
+  through a bounded queue, so a program that stops reading never blocks
+  Kage. Hiding the floating window never stops it: the window hides
+  while the user is in the browser and comes back when the run ends.
+- **What's recorded.** Two `user_ran_command` entries in the permission
+  audit log (`via: sign_in`; `outcome: started`, then how it ended, with
+  the exit code and session id), English app-log lines with the window,
+  outcome, exit code and duration only, and, with analytics on, an
+  `agent_sign_in` event with where it ran and an exit-code bucket.
+- **Afterwards.** On a clean exit Kage restarts the agent and sends the
+  failed message again, once, only into the session it failed in (or
+  the one the restart replaced it with). On any other ending nothing is
+  restarted or resent.
+- **Open in Terminal (macOS).** Hands the same `<path> login` (quoted as
+  one shell word) to Terminal.app the way "Run in Terminal" does; it's
+  audited as `via: terminal`, `outcome: opened`.
+
 ## Commands an agent runs outside its sandbox
 
 The agent can also ask for this itself. Kage's own MCP sidecar (the
@@ -1216,6 +1288,7 @@ not even encrypted (docs/design/SYNC.md §11.5).
 | Background agent consent imported from a backup or sync | ✅ Blocked | Every import keeps this machine's `extension_agent_access`; sync never copies it. |
 | DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
 | Agent output or an extension runs a shell command outside the agent's sandbox | ✅ Blocked | Only the confirm's own click runs one, once; the commands are `null` for extensions and refuse non-Kage windows. See "Commands you run yourself". |
+| Agent output or an extension starts or types into the sign-in terminal | ✅ Blocked | Only Kage's own Sign in click starts it, and it runs only `kiro-cli login` resolved from Config; input, resize, stop and links answer only the window that started it; the commands are `null` for extensions and refuse non-Kage windows. See "Signing in to the agent". |
 | An agent runs a command outside its sandbox without the user | ✅ Blocked | Only the user's answer in Kage, or a rule they made for simple commands (never for credential-touching ones or ones with hidden characters), runs it. See "Commands an agent runs outside its sandbox". |
 | Another user's process reaches the host-command bridge | ✅ Blocked | 0700 socket directory and peer-uid check (macOS/Linux); per-user pipe DACL, remote clients refused and token-user check (Windows). |
 | The agent presses Kage's own approval buttons with computer-control tools | ⚠ Best-effort | Input tools refuse Kage's windows (by process); the agent's own shell could still script the UI. |

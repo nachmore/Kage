@@ -62,6 +62,8 @@ import {
 } from '../shared/shell-command-view.js';
 import { setShellRunHost } from '../shared/shell-run-view.js';
 import { clearFinishedHostCommandCards } from '../shared/host-command-view.js';
+import { isAgentSignInActive, mountSignInAction } from '../shared/agent-sign-in.js';
+import { presentOverlayWindow } from '../shared/overlay-window.js';
 import { renderToolSources } from '../shared/tool-call-view.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
@@ -142,6 +144,7 @@ const CHAT_APP_DEPENDENCIES = {
     handleEnterAction,
     handlePasteEvent,
     initMarkdown,
+    isAgentSignInActive,
     isChatLabel,
     isErrorForOtherTurn,
     isOnline,
@@ -150,12 +153,14 @@ const CHAT_APP_DEPENDENCIES = {
     loadSlashCommands,
     mascotHTML,
     messageLengthBucket,
+    mountSignInAction,
     newTurnId,
     offlineMessage,
     onNetworkChange,
     orderSessionsForSidebar,
     parseContextPercent,
     processToolCallUpdate,
+    presentOverlayWindow,
     pruneShellActivity,
     renderAttachmentPreviews,
     renderMarkdown,
@@ -165,6 +170,7 @@ const CHAT_APP_DEPENDENCIES = {
     renderToolSources,
     runToolbarHostEffect,
     sanitizeExtensionHtmlStatic,
+    sendAppNotification,
     sessionImageToDataUrl,
     setAppIconInvoke,
     setExtensionManager,
@@ -543,7 +549,10 @@ export class ChatApp {
                         typeof p === 'string'
                             ? t('chat.error.error_with_payload', { payload: p })
                             : errMessage(p);
-                    app.showError(text, { retryTurn, detail: p?.detail });
+                    // signIn: a signed-out agent's error object also gets
+                    // "Sign in" (shared/agent-sign-in.js), which resends
+                    // retryTurn after the sign-in; a plain string doesn't.
+                    app.showError(text, { retryTurn, detail: p?.detail, signIn: p });
                 }
                 app.isConnected = online;
                 app.updateConnectionStatus();

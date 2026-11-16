@@ -469,6 +469,146 @@ fn shutdown_stops_every_run_and_waits_for_them() {
     waiter.join().unwrap();
 }
 
+// --- The terminal slot (agent sign-in) ----------------------------------------
+
+#[test]
+fn caller_allowed_refuses_non_chat_windows() {
+    for label in [
+        window_labels::SETTINGS,
+        window_labels::WELCOME,
+        window_labels::STORE,
+        window_labels::CONTEXT_MENU,
+        window_labels::INLINE_ASSIST,
+        "ext-view:mindmap:explorer",
+    ] {
+        assert!(!caller_allowed(label), "{label}");
+    }
+    for label in [
+        window_labels::MAIN.to_string(),
+        window_labels::FLOATING.to_string(),
+        window_labels::chat_label("6f1c2a"),
+    ] {
+        assert!(caller_allowed(&label), "{label}");
+    }
+}
+
+#[test]
+fn begin_terminal_one_per_window() {
+    let runs = Arc::new(UserShellRuns::new());
+    let _t = runs.begin_terminal("floating", "kage-term-a", 2).unwrap();
+    assert_eq!(
+        runs.begin_terminal("floating", "kage-term-b", 2).err(),
+        Some(TerminalBusy::Window)
+    );
+}
+
+#[test]
+fn begin_terminal_one_app_wide() {
+    let runs = Arc::new(UserShellRuns::new());
+    let held = runs.begin_terminal("floating", "kage-term-a", 1).unwrap();
+    assert_eq!(
+        runs.begin_terminal("main", "kage-term-b", 1).err(),
+        Some(TerminalBusy::App)
+    );
+    drop(held);
+    assert!(runs.begin_terminal("main", "kage-term-b", 1).is_ok());
+}
+
+#[test]
+fn begin_terminal_refuses_a_reused_run_id() {
+    let runs = Arc::new(UserShellRuns::new());
+    let _t = runs.begin_terminal("floating", "kage-term-a", 2).unwrap();
+    assert!(runs.begin_terminal("main", "kage-term-a", 2).is_err());
+}
+
+#[test]
+fn terminal_slot_independent_of_user_run() {
+    let runs = Arc::new(UserShellRuns::new());
+    let term = runs.begin_terminal("main", "kage-term-a", 1).unwrap();
+    let user = runs
+        .begin("main", "kage-run-1")
+        .expect("Run it here still works");
+    drop(term);
+    drop(user);
+    let user = runs.begin("main", "kage-run-2").unwrap();
+    assert!(runs.begin_terminal("main", "kage-term-b", 1).is_ok());
+    drop(user);
+}
+
+#[test]
+fn terminal_io_owner_only() {
+    let runs = Arc::new(UserShellRuns::new());
+    let _slot = runs.begin_terminal("floating", "kage-term-a", 1).unwrap();
+    runs.attach_terminal_io("kage-term-a", "floating", pty::TerminalIo::idle_for_tests());
+    assert!(runs.terminal_io("main", "kage-term-a").is_none());
+    assert!(runs.terminal_io("floating", "kage-term-b").is_none());
+    assert!(runs.terminal_io("floating", "kage-term-a").is_some());
+    assert_eq!(
+        runs.lookup_terminal("main", "kage-term-a").err(),
+        Some(TerminalLookup::OtherWindow("floating".into()))
+    );
+    assert_eq!(
+        runs.lookup_terminal("main", "kage-term-x").err(),
+        Some(TerminalLookup::Missing)
+    );
+}
+
+#[test]
+fn attach_needs_the_live_slot() {
+    let runs = Arc::new(UserShellRuns::new());
+    // No slot: ignored.
+    runs.attach_terminal_io("kage-term-a", "floating", pty::TerminalIo::idle_for_tests());
+    assert!(runs.terminal_io("floating", "kage-term-a").is_none());
+    // A slot for another window or id: ignored.
+    let _slot = runs.begin_terminal("floating", "kage-term-a", 1).unwrap();
+    runs.attach_terminal_io("kage-term-a", "main", pty::TerminalIo::idle_for_tests());
+    runs.attach_terminal_io("kage-term-b", "floating", pty::TerminalIo::idle_for_tests());
+    assert!(runs.terminal_io("main", "kage-term-a").is_none());
+    assert!(runs.terminal_io("floating", "kage-term-b").is_none());
+}
+
+#[test]
+fn slot_drop_detaches_io() {
+    let runs = Arc::new(UserShellRuns::new());
+    let slot = runs.begin_terminal("floating", "kage-term-a", 1).unwrap();
+    runs.attach_terminal_io("kage-term-a", "floating", pty::TerminalIo::idle_for_tests());
+    drop(slot);
+    assert!(runs.terminal_io("floating", "kage-term-a").is_none());
+    assert!(runs.active.lock_or_recover().is_empty());
+}
+
+#[test]
+fn cancel_window_and_cancel_all_reach_terminal() {
+    let runs = Arc::new(UserShellRuns::new());
+    let slot = runs.begin_terminal("floating", "kage-term-a", 1).unwrap();
+    let flag = slot.cancel_flag();
+    assert!(runs.cancel_window("floating"));
+    assert!(flag.load(Ordering::SeqCst));
+    drop(slot);
+
+    let slot = runs.begin_terminal("main", "kage-term-b", 1).unwrap();
+    let flag = slot.cancel_flag();
+    let waiter = std::thread::spawn(move || {
+        while !flag.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        drop(slot);
+    });
+    runs.cancel_all_and_wait(Duration::from_secs(5));
+    waiter.join().unwrap();
+    assert!(runs.active.lock_or_recover().is_empty());
+}
+
+#[test]
+fn cancel_requires_owner() {
+    let runs = Arc::new(UserShellRuns::new());
+    let slot = runs.begin_terminal("floating", "kage-term-a", 1).unwrap();
+    assert!(!runs.cancel("main", "kage-term-a"));
+    assert!(!slot.cancel_flag().load(Ordering::SeqCst));
+    assert!(runs.cancel("floating", "kage-term-a"));
+    assert!(slot.cancel_flag().load(Ordering::SeqCst));
+}
+
 // --- Running ------------------------------------------------------------------
 
 #[cfg(unix)]

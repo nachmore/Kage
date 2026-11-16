@@ -784,6 +784,8 @@ export const InputMethods = {
         document.getElementById('toolSourcesCompact')?.remove();
         this._removeShellActivity();
         clearFinishedHostCommandCards();
+        // A sign-in still going (or resending this very turn) stays.
+        this._clearAgentSignInSlot?.();
         await this.windowManager.resetHeightForNewMessage();
         this.startThinking();
         this.updateDatetimeVisibility();
@@ -855,11 +857,13 @@ export const InputMethods = {
      * Resend a turn that failed before any output, after Reconnect. Not a
      * new message: no floating_message_sent (the chat window already shows
      * the bubble), no telemetry, and the input box is left alone so a draft
-     * typed meanwhile stays.
+     * typed meanwhile stays. Resolves whether it went out (false: an
+     * earlier turn is still settling). A failed send is shown as an error;
+     * `throwOnError` (the agent sign-in) also throws.
      */
-    async _resendTurn(turn) {
+    async _resendTurn(turn, { throwOnError = false } = {}) {
         await this._clearResponseForNewTurn();
-        if (!(await this._awaitPriorTurnsSettled())) return;
+        if (!(await this._awaitPriorTurnsSettled())) return false;
         await this._startResponseTurn();
         try {
             await this._sendTrackedTurn({
@@ -872,7 +876,10 @@ export const InputMethods = {
             this.isWaitingForResponse = false;
             this.stopThinking();
             this.showError(errLabel(t('floating.error.error_label'), error));
+            if (throwOnError) throw error;
+            return false;
         }
+        return true;
     },
 
     /** Force the streaming renderer to paint the full accumulated text now.

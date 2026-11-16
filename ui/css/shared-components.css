@@ -3128,6 +3128,90 @@ body.light-theme .conn-edit-actions {
     gap: 6px;
 }
 
+/* ===== Agent sign-in terminal (shared/agent-sign-in.js) =====================
+   A signed-out agent error's "Sign in": the agent's own login running in a
+   small terminal (xterm.js, shared/terminal-view.js) in the window that
+   showed the error. Same visual language as the shell run view above. */
+.agent-sign-in-slot:empty {
+    display: none;
+}
+.agent-sign-in {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0;
+    padding: 8px 10px;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 8px;
+    background: var(--kage-term-bg);
+    color: var(--kage-term-text);
+    font-size: 12px;
+}
+.agent-sign-in-head {
+    flex-wrap: wrap;
+}
+.agent-sign-in-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 600;
+}
+.agent-sign-in-cmd {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--kage-term-bg-strong);
+    font-family: var(--kage-font-mono);
+    font-size: 11px;
+}
+.agent-sign-in-hint {
+    margin: 0;
+    color: var(--kage-term-muted);
+    font-size: 11px;
+}
+.agent-sign-in-term {
+    box-sizing: border-box;
+    min-height: 0;
+    padding: 4px;
+    overflow: hidden;
+    border: 1px solid var(--kage-term-border);
+    border-radius: 6px;
+    background: var(--kage-term-bg-strong);
+    direction: ltr;
+    text-align: left;
+}
+.agent-sign-in-term .xterm {
+    height: 100%;
+}
+.agent-sign-in-status {
+    color: var(--kage-term-muted);
+}
+.agent-sign-in-status:empty {
+    display: none;
+}
+.agent-sign-in[data-state="success"] .shell-run-mark,
+.agent-sign-in-status[data-state="success"] {
+    color: var(--kage-term-success);
+}
+.agent-sign-in[data-state="failed"] .shell-run-mark,
+.agent-sign-in-status[data-state="failed"] {
+    color: var(--kage-term-error);
+}
+.agent-sign-in-status[data-state="running"] {
+    color: var(--kage-term-text);
+}
+.agent-sign-in-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+.agent-sign-in-term[hidden],
+.agent-sign-in-hint[hidden],
+.agent-sign-in-actions[hidden],
+.agent-sign-in .shell-cmd-copy[hidden] {
+    display: none;
+}
+
 /* Commands an agent asks Kage to run outside its sandbox
    (shared/host-command-view.js): the prompt, then the run, built from the
    confirm and run view above. The tray holds cards that aren't shown in
