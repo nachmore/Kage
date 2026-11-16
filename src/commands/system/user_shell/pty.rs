@@ -327,8 +327,9 @@ impl TerminalIo {
         self.flow.ack(seq);
     }
 
-    /// Output bytes (as JSON) the window hasn't acknowledged.
-    #[cfg(test)]
+    /// Output bytes (as JSON) the window hasn't acknowledged. Only the
+    /// Unix PTY tests read it.
+    #[cfg(all(test, unix))]
     pub fn unacked_bytes(&self) -> usize {
         self.flow.unacked_bytes()
     }

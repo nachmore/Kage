@@ -166,6 +166,7 @@ export function focusAgentSignIn() {
 }
 
 export function _resetAgentSignInForTests() {
+    clearTimeout(active?.runningTimer);
     active?.view?.dispose();
     active = null;
     ctxCache = null;
@@ -409,6 +410,7 @@ function createSession({ slot, payload, host, ctx }) {
     }
 
     function disposeView() {
+        clearTimeout(session.runningTimer);
         session.view?.dispose();
         session.view = null;
         termEl.hidden = true;
@@ -791,6 +793,8 @@ function createSession({ slot, payload, host, ctx }) {
             return done;
         }
         const runningTimer = setTimeout(markRunning, RUNNING_AFTER_MS);
+        // Kept on the session so a teardown can cancel it.
+        session.runningTimer = runningTimer;
         const { cols, rows: termRows } = view.size();
         let report;
         session.startCalled = true;
