@@ -32,6 +32,7 @@ import {
     errLabel,
     errMessage,
     errorSessionId,
+    errorTurnId,
     isErrorForOtherTurn,
     isResendablePayload,
     newTurnId,
@@ -120,6 +121,7 @@ const CHAT_APP_DEPENDENCIES = {
     drawContextRing,
     errLabel,
     errorSessionId,
+    errorTurnId,
     escapeHtml,
     EVT,
     executeCommand,
@@ -494,8 +496,15 @@ export class ChatApp {
                 }
                 // An earlier turn's error (it names another turn id) never
                 // ends a turn that is running now.
+                // Unless it is the error of the stream on screen: a turn
+                // this window sent earlier on the shown session, reattached
+                // after the user switched back to it (it ends, unresent).
                 const forOtherTurn = isErrorForOtherTurn(event?.payload, app._lastTurn?.turnId);
-                if (forOtherTurn && app.isWaitingForResponse) {
+                if (
+                    forOtherTurn &&
+                    app.isWaitingForResponse &&
+                    !app._errorEndsShownStream(event?.payload)
+                ) {
                     console.log('[chat] message_error for an earlier turn; ignoring it');
                     return;
                 }

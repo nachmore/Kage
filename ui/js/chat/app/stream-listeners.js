@@ -139,9 +139,19 @@ export function createStreamListenersMixin(dependencies) {
                 // prompt went out, maybe on the same session): it ends only
                 // its own session's stream when that isn't the one shown,
                 // and never the turn now running or its stream. With
-                // nothing in flight it still shows, with no resend.
+                // nothing in flight it still shows, with no resend. The
+                // exception is the stream on screen after the user switched
+                // back to a session: its turn is not the last one sent, but
+                // its error ends it (_errorEndsShownStream), unresent.
                 const named = errorSessionId(event?.payload);
                 if (isErrorForOtherTurn(event?.payload, this._lastTurn?.turnId)) {
+                    if (this._errorEndsShownStream(event?.payload)) {
+                        console.log('[chat] message_error for the reattached stream shown');
+                        this.streamRegistry.fail(named);
+                        this.renderSessionList();
+                        this.handleMessageError(event);
+                        return;
+                    }
                     console.log('[chat] message_error for an earlier turn; not this one');
                     if (named && !this._errorIsForShownSession(named)) {
                         this.streamRegistry.fail(named);

@@ -681,6 +681,68 @@ describe('chat MESSAGE_ERROR is matched to its turn by turnId', () => {
         expect(sends(invoke)).toHaveLength(1);
     });
 
+    /**
+     * Send B on s2 (B completes), then switch back to s1 and attach to the
+     * turn still running there, as session-history's switch-in does.
+     */
+    async function sendElsewhereThenSwitchBack(app, listeners) {
+        app.currentStreamingMessage = null;
+        app.isWaitingForResponse = false;
+        app.activeSessionId = 's2';
+        app.currentAcpSessionId = 's2';
+        await send(app, 'B');
+        await listeners.message_complete({ payload: { sessionId: 's2', oldSessionId: 's2' } });
+        await flush();
+        app.activeSessionId = 's1';
+        app.currentAcpSessionId = 's1';
+        app.streamRegistry.begin('s1');
+        app.isWaitingForResponse = true;
+        app.currentStreamingMessage = app.createMessageElement('assistant', '');
+        app.elements.messagesArea.appendChild(app.currentStreamingMessage);
+    }
+
+    it("switched back to A after sending B elsewhere: A's own error ends A's stream", async () => {
+        const { app, invoke, listeners } = setupWithListeners();
+        await send(app, 'A');
+        const turnA = lastTurnId(invoke);
+        app.streamRegistry.begin('s1');
+        await sendElsewhereThenSwitchBack(app, listeners);
+
+        await listeners.message_error({ payload: promptFailure('s1', true, turnA) });
+        listeners.session_activity({ payload: { sessionId: 's1', kind: 'failed' } });
+        await flush();
+
+        expect(app.isWaitingForResponse).toBe(false);
+        expect(app.currentStreamingMessage).toBeNull();
+        expect(app.streamRegistry.isStreaming('s1')).toBe(false);
+        expect(app.elements.errorContainer.textContent).toContain(
+            'Kage restarted Kiro and tried again'
+        );
+        // A is not the window's last turn: nothing is resent for it.
+        document.getElementById('errorReconnectBtn')?.click();
+        await flush();
+        expect(sends(invoke).map(([, a]) => a.message)).toEqual(['A', 'B']);
+    });
+
+    it("switched back to A2 after sending B elsewhere: A's late error leaves A2 alone", async () => {
+        const { app, invoke, listeners } = setupWithListeners();
+        await send(app, 'A');
+        const turnA = lastTurnId(invoke);
+        app.stopGenerating();
+        await send(app, 'A2');
+        app.streamRegistry.begin('s1');
+        await sendElsewhereThenSwitchBack(app, listeners);
+        const bubble = app.currentStreamingMessage;
+
+        await listeners.message_error({ payload: promptFailure('s1', true, turnA) });
+        await flush();
+
+        expect(app.isWaitingForResponse).toBe(true);
+        expect(app.currentStreamingMessage).toBe(bubble);
+        expect(bubble.isConnected).toBe(true);
+        expect(app.streamRegistry.isStreaming('s1')).toBe(true);
+    });
+
     it("an error naming another turn's id is never resent", async () => {
         const { app, invoke } = makeApp();
         await sendAndFail(app, promptFailure('s1', true, 'some-other-turn'));

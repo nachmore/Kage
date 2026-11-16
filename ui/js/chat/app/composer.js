@@ -13,6 +13,8 @@ export function createComposerMixin(dependencies) {
         trackEvent,
         messageLengthBucket,
         newTurnId,
+        errorSessionId,
+        errorTurnId,
     } = dependencies;
     return class {
         setupSpeech() {
@@ -256,6 +258,13 @@ export function createComposerMixin(dependencies) {
                 seq: this._sendSeq,
                 turnId,
             };
+            // The latest turn this window sent on each session: after the
+            // user switches back to a session, the stream shown there is
+            // that turn's (see _errorEndsShownStream).
+            if (sessionId) {
+                if (!this._turnOnSession) this._turnOnSession = new Map();
+                this._turnOnSession.set(sessionId, turnId);
+            }
             return turnId;
         }
 
@@ -264,6 +273,11 @@ export function createComposerMixin(dependencies) {
          * turn, if it was on it.
          */
         _followTurnSession(oldId, newId) {
+            if (oldId && newId && this._turnOnSession?.has(oldId)) {
+                if (!this._turnOnSession.has(newId)) {
+                    this._turnOnSession.set(newId, this._turnOnSession.get(oldId));
+                }
+            }
             const turn = this._lastTurn;
             if (oldId && newId && turn?.sessionId === oldId) {
                 this._lastTurn = {
@@ -295,6 +309,29 @@ export function createComposerMixin(dependencies) {
                 turn?.sessionId === this.activeSessionId &&
                 this._turnWasOn(turn, sessionId)
             );
+        }
+
+        /**
+         * Whether a `message_error` naming a turn other than the window's
+         * last one is the error of the stream on screen, so it ends that
+         * stream (never with a resend: the turn isn't the last one). That
+         * is so when the user sent the last turn on another session and
+         * then switched back here, reattaching to a turn still running:
+         * the error names the shown session and the latest turn this
+         * window sent on it. An earlier turn's late error on that session
+         * (stopped, then another prompt went out there) names an older
+         * id and leaves the stream alone.
+         */
+        _errorEndsShownStream(payload) {
+            const turnId = errorTurnId(payload);
+            const sessionId = errorSessionId(payload);
+            if (!turnId || !sessionId || !this.activeSessionId) return false;
+            if (sessionId !== this.activeSessionId && sessionId !== this.currentAcpSessionId) {
+                return false;
+            }
+            // The last turn runs on the shown session: the stream there is its.
+            if (this._turnWasOn(this._lastTurn, this.activeSessionId)) return false;
+            return this._turnOnSession?.get(sessionId) === turnId;
         }
 
         /**
