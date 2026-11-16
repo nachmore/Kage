@@ -87,7 +87,7 @@ export function createStreamListenersMixin(dependencies) {
                 // any in-flight recovery) OR oldSessionId (the session id
                 // we issued the send against) naming the session this
                 // window shows (_isShownSessionId: `activeSessionId`, or an
-                // id its last turn ran under), never the pin
+                // earlier id of the turn still running on it), never the pin
                 // (`currentAcpSessionId` may name a session the window left).
                 // Either match means this complete belongs to us; otherwise
                 // it's a background session finishing — flip its badge to

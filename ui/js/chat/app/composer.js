@@ -325,16 +325,23 @@ export function createComposerMixin(dependencies) {
         /**
          * Whether `id` (a message_complete or session_migrated id) names the
          * session this window shows: it is `activeSessionId`, or the turn
-         * the window last sent on the session shown also ran under `id` (a
-         * migration). Never by the pin (`currentAcpSessionId`), which can
-         * name a session the window has left.
+         * still running that the window last sent is now on the session
+         * shown and earlier ran under `id` (a migration). Never by the pin
+         * (`currentAcpSessionId`), which can name a session the window has
+         * left, and never by a turn that has moved on from the session
+         * shown or has ended: after a migration the user can select the
+         * old id again, and a later turn on the new one is a background one.
          */
         _isShownSessionId(id) {
             const shown = this.activeSessionId;
             if (!id || !shown) return false;
             if (id === shown) return true;
             const turn = this._lastTurn;
-            return this._turnWasOn(turn, shown) && this._turnWasOn(turn, id);
+            return (
+                !!this.isWaitingForResponse &&
+                turn?.sessionId === shown &&
+                this._turnWasOn(turn, id)
+            );
         }
 
         /**

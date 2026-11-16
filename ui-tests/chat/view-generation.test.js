@@ -308,6 +308,70 @@ describe('V2: a focus refresh during a switch that is then refused', () => {
     });
 });
 
+describe('the pre-migration session, selected again after its turn moved on', () => {
+    /**
+     * Main sent a turn on s-a; recovery migrated it to s-a2 and main took
+     * s-a2; the turn completed. Then the user selects the old s-a, still in
+     * the sidebar.
+     */
+    async function backOnPreMigration() {
+        const ctx = shownOnA();
+        const { app, listeners } = ctx;
+        app._recordTurn('s-a', 'hello', null);
+        listeners.session_migrated({ payload: { oldSessionId: 's-a', newSessionId: 's-a2' } });
+        await flush();
+        expect(app.activeSessionId).toBe('s-a2');
+        listeners.message_complete({ payload: { sessionId: 's-a2', oldSessionId: 's-a' } });
+        await flush();
+        expect(app.handleMessageComplete).toHaveBeenCalledTimes(1);
+        app.handleMessageComplete.mockClear();
+        await app.selectSession('s-a');
+        await flush();
+        expect(app.activeSessionId).toBe('s-a');
+        expect(ctx.pins.main).toBe('s-a');
+        return ctx;
+    }
+
+    it('a turn finishing on the migrated session (sent elsewhere) stays a background one', async () => {
+        const { app, listeners, pins } = await backOnPreMigration();
+        // A turn sent on s-a2 from another window streams in the background.
+        app.streamRegistry.begin('s-a2');
+        listeners.message_complete({ payload: { sessionId: 's-a2', oldSessionId: 's-a2' } });
+        await flush();
+        expect(app.activeSessionId).toBe('s-a');
+        expect(app.currentAcpSessionId).toBe('s-a');
+        expect(app.handleMessageComplete).not.toHaveBeenCalled();
+        expect(app.streamRegistry.isUnread('s-a2')).toBe(true);
+        expect(pins.main).toBe('s-a');
+    });
+
+    it("still in flight on the migrated session shown, a completion naming the send's first id is ours", async () => {
+        const { app, listeners, pins } = shownOnA();
+        app.isWaitingForResponse = true;
+        app._recordTurn('s-a', 'hello', null);
+        listeners.session_migrated({ payload: { oldSessionId: 's-a', newSessionId: 's-a2' } });
+        await flush();
+        expect(app.activeSessionId).toBe('s-a2');
+        // A second recovery whose session_migrated hasn't reached main: the
+        // completion names the final id and the id the send went out on.
+        listeners.message_complete({ payload: { sessionId: 's-a3', oldSessionId: 's-a' } });
+        await flush();
+        expect(app.handleMessageComplete).toHaveBeenCalledTimes(1);
+        expect(app.activeSessionId).toBe('s-a3');
+        expect(app.currentAcpSessionId).toBe('s-a3');
+        expect(pins.main).toBe('s-a3');
+    });
+
+    it('a later migration of the migrated session does not take the view either', async () => {
+        const { app, listeners, pins } = await backOnPreMigration();
+        listeners.session_migrated({ payload: { oldSessionId: 's-a2', newSessionId: 's-a3' } });
+        await flush();
+        expect(app.activeSessionId).toBe('s-a');
+        expect(app.currentAcpSessionId).toBe('s-a');
+        expect(pins.main).toBe('s-a');
+    });
+});
+
 describe("V3: a prompt from Floating while the shared session's history loads", () => {
     it('the late history neither erases the prompt nor detaches its reply', async () => {
         const { app, listeners, hold } = setup({
