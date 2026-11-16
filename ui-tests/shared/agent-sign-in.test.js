@@ -23,6 +23,7 @@ const {
     _resetAgentSignInForTests,
     canOfferSignIn,
     clearAgentSignInSlot,
+    outputSaysAlreadySignedIn,
     createDeviceFlowWatch,
     isAgentSignInActive,
     mountSignInAction,
@@ -240,6 +241,28 @@ describe('mountSignInAction', () => {
         expect(row.firstElementChild).toBe(btn);
         expect(btn.textContent).toBe('shared.agent_sign_in.btn.sign_in');
         expect(btn.classList.contains('chat-error-btn')).toBe(true);
+    });
+
+    it('says what Sign in does next to Reconnect, once: under the message in chat, under the buttons elsewhere', async () => {
+        fakeTauri();
+        // Chat: text and buttons side by side.
+        const box = document.createElement('div');
+        box.className = 'chat-error';
+        box.innerHTML = '<div class="chat-error-text"><span>Kiro needs you to sign in.</span></div>';
+        const row = actionsRow();
+        box.append(row);
+        document.body.append(box);
+        const btn = await mountSignInAction(row, PAYLOAD, makeHost());
+        await mountSignInAction(row, PAYLOAD, makeHost());
+        const lines = box.querySelectorAll('.agent-sign-in-or');
+        expect(lines.length).toBe(1);
+        expect(lines[0].parentElement.classList.contains('chat-error-text')).toBe(true);
+        expect(lines[0].textContent).toBe('shared.agent_sign_in.or_sign_in_here {"agent":"Kiro CLI"}');
+        expect(btn.title).toContain('shared.agent_sign_in.btn.sign_in_title');
+        // Floating: the line goes under the buttons.
+        const plainRow = actionsRow();
+        await mountSignInAction(plainRow, PAYLOAD, makeHost());
+        expect(plainRow.nextElementSibling?.classList.contains('agent-sign-in-or')).toBe(true);
     });
 
     it('caches the context', async () => {
@@ -712,6 +735,41 @@ describe('the run', () => {
         await flush();
         expect(host.resend).not.toHaveBeenCalled();
         expect(status(host)).toBe('shared.agent_sign_in.status.ready');
+    });
+
+    it('already signed in (kiro-cli exits 1 saying so): goes on like a clean sign-in', async () => {
+        const tauri = fakeTauri();
+        const host = makeHost();
+        await openPanel(tauri, host);
+        tauri.channels[0].onmessage({
+            seq: 0,
+            data: '\u001b[31merror\u001b[0m: Already logged in, please logout with kiro-cli logout first\r\n',
+        });
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 1, signal: null, outputMessages: 1 });
+        await flush();
+        expect(tauri.named('reconnect_acp').length).toBe(1);
+        expect(host.resend).toHaveBeenCalledTimes(1);
+    });
+
+    it('already signed in, but the user pressed Stop: nothing restarts', async () => {
+        const tauri = fakeTauri({ stopAnswers: [false] });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        click(host.slot.querySelector('.agent-sign-in-stop'));
+        await flush();
+        tauri.channels[0].onmessage({ seq: 0, data: 'Already logged in.' });
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 1, signal: null, outputMessages: 1 });
+        await flush();
+        expect(tauri.named('reconnect_acp').length).toBe(0);
+        expect(host.resend).not.toHaveBeenCalled();
+    });
+
+    it('reads only kiro-cli saying so as already signed in', () => {
+        expect(outputSaysAlreadySignedIn('Already logged in, please logout with kiro-cli logout first')).toBe(true);
+        expect(outputSaysAlreadySignedIn('ALREADY LOGGED IN.')).toBe(true);
+        for (const text of ['', null, 'Logged in successfully', 'Device code expired', 'not logged in']) {
+            expect(outputSaysAlreadySignedIn(text)).toBe(false);
+        }
     });
 
     it('exit 1: failed, read-only terminal, no restart or resend', async () => {

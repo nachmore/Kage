@@ -14932,5 +14932,17 @@
     "description": "Agent sign-in panel: shown when a prompt failed because the AI agent (Kiro CLI) is signed out, and Kage offers to run the agent's own sign-in command in a small terminal inside the window. System notification when the sign-in hit its time limit while the user was elsewhere. {agent} is the agent's name.",
     "_machine_translated": true,
     "_source_hash": "d65e1f9bd43e9f4f"
+  },
+  "shared.agent_sign_in.btn.sign_in_title": {
+    "message": "ここで {command} を実行し、再接続してメッセージを再送信します",
+    "description": "Tooltip on the Sign in button next to a signed-out agent error. {command} is the sign-in command, e.g. kiro-cli login.",
+    "_machine_translated": true,
+    "_source_hash": "3e8c9827f8445ccb"
+  },
+  "shared.agent_sign_in.or_sign_in_here": {
+    "message": "または、［サインイン］をクリックすると、ここで {agent} にサインインできます。完了すると、Kage が再接続してメッセージを再送信します。",
+    "description": "Line under a signed-out agent error that has a Sign in button. The error above says to sign in in a terminal and then click Reconnect; this says Sign in does it inside Kage instead. {agent} is the agent's name, e.g. Kiro CLI.",
+    "_machine_translated": true,
+    "_source_hash": "0da93bfc2c97075f"
   }
 }

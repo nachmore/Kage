@@ -110,15 +110,31 @@ const CONTROLS = new RegExp(
     'g'
 );
 
+/** Terminal `text` as plain, single-spaced, lower-case words. */
+function plainOutput(text) {
+    return text.replace(ESCAPES, '').replace(CONTROLS, ' ').replace(/\s+/g, ' ').toLowerCase();
+}
+
 /** Whether terminal `text` holds kiro-cli's "device flow turned off" message. */
 export function outputSaysDeviceFlowDisabled(text) {
     if (typeof text !== 'string' || !text) return false;
-    const plain = text
-        .replace(ESCAPES, '')
-        .replace(CONTROLS, ' ')
-        .replace(/\s+/g, ' ')
-        .toLowerCase();
+    const plain = plainOutput(text);
     return DEVICE_FLOW_DISABLED.some((re) => re.test(plain));
+}
+
+/**
+ * What kiro-cli (3.3.0) prints, exiting with an error, when the user is
+ * already signed in ("Already logged in, please logout with kiro-cli logout
+ * first"): the sign-in has nothing to do, which for Kage is a success (they
+ * signed in some other way, say in a terminal).
+ */
+const ALREADY_SIGNED_IN = [/\balready logged in\b/];
+
+/** Whether terminal `text` says the user is already signed in. */
+export function outputSaysAlreadySignedIn(text) {
+    if (typeof text !== 'string' || !text) return false;
+    const plain = plainOutput(text);
+    return ALREADY_SIGNED_IN.some((re) => re.test(plain));
 }
 
 /**
@@ -128,13 +144,22 @@ export function outputSaysDeviceFlowDisabled(text) {
  * leaves it but `matched`.
  */
 export function createDeviceFlowWatch() {
+    return createOutputWatch(outputSaysDeviceFlowDisabled);
+}
+
+/** The same watch, for kiro-cli's "already signed in" reply. */
+export function createSignedInWatch() {
+    return createOutputWatch(outputSaysAlreadySignedIn);
+}
+
+function createOutputWatch(says) {
     let tail = '';
     let matched = false;
     return {
         push(text) {
             if (matched || typeof text !== 'string' || !text) return;
             const joined = tail + text;
-            if (outputSaysDeviceFlowDisabled(joined)) {
+            if (says(joined)) {
                 matched = true;
                 tail = '';
                 return;
@@ -289,6 +314,9 @@ export async function mountSignInAction(actionsEl, payload, host) {
     const btn = el('button', `agent-sign-in-btn ${host?.buttonClass || ''}`.trim());
     btn.type = 'button';
     btn.textContent = t('shared.agent_sign_in.btn.sign_in');
+    btn.title = t('shared.agent_sign_in.btn.sign_in_title', {
+        command: ctx.command || 'kiro-cli login',
+    });
     onDeliberateClick(btn, () => {
         if (active) {
             focusAgentSignIn();
@@ -299,6 +327,17 @@ export async function mountSignInAction(actionsEl, payload, host) {
         openAgentSignIn({ slot, payload, host, ctx });
     });
     actionsEl.prepend(btn);
+    // The message says to sign in in a terminal and then Reconnect; say
+    // what Sign in does instead, so the two buttons read as alternatives.
+    const hint = el('div', 'agent-sign-in-or');
+    hint.textContent = t('shared.agent_sign_in.or_sign_in_here', {
+        agent: ctx.agent || 'Kiro CLI',
+    });
+    // Under the message where the error lays text and buttons side by side
+    // (chat), else under the buttons (floating).
+    const textEl = actionsEl.parentElement?.querySelector?.(':scope > .chat-error-text');
+    if (textEl) textEl.append(hint);
+    else actionsEl.after(hint);
     host?.layoutChanged?.();
     return btn;
 }
@@ -653,7 +692,15 @@ function createSession({ slot, payload, host, ctx }) {
         session.view?.setInputEnabled(false);
         stopBtn.hidden = true;
         const outcome = report?.outcome || null;
-        if (outcome === 'exited' && report.exitCode === 0) {
+        // "Already logged in": they signed in some other way (a terminal,
+        // say), so this goes on exactly like a clean sign-in, or Reconnect.
+        // Never for a run the user stopped.
+        const alreadySignedIn =
+            outcome === 'exited' &&
+            report.exitCode !== 0 &&
+            session.signedInWatch?.matched &&
+            session.stopRequested !== session.runId;
+        if ((outcome === 'exited' && report.exitCode === 0) || alreadySignedIn) {
             disposeView();
             host?.onEnded?.({ state: 'success', outcome, agent });
             setActions([]);
@@ -767,6 +814,8 @@ function createSession({ slot, payload, host, ctx }) {
         session.stopRequested = null;
         const watch = createDeviceFlowWatch();
         session.watch = watch;
+        const signedInWatch = createSignedInWatch();
+        session.signedInWatch = signedInWatch;
 
         if (!invoke || !(await ensureXterm())) {
             startFailed(new Error('The terminal view could not be loaded'));
@@ -823,7 +872,10 @@ function createSession({ slot, payload, host, ctx }) {
             const seq = msg?.seq;
             received += 1;
             if (settle && received >= settle.want) settle.resolve();
-            if (session.runId === runId) watch.push(msg?.data);
+            if (session.runId === runId) {
+                watch.push(msg?.data);
+                signedInWatch.push(msg?.data);
+            }
             if (session.runId !== runId || session.view !== view || !msg?.data) {
                 ack(seq);
                 return;

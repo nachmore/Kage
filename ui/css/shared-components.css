@@ -3168,6 +3168,13 @@ body.light-theme .conn-edit-actions {
     color: var(--kage-term-muted);
     font-size: 11px;
 }
+/* Under a signed-out error with Sign in: what Sign in does, next to the
+   message's "sign in in a terminal, then Reconnect". */
+.agent-sign-in-or {
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.85;
+}
 .agent-sign-in-term {
     box-sizing: border-box;
     min-height: 0;
