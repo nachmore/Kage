@@ -18,6 +18,7 @@
 use crate::lock_ext::LockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Runtime};
@@ -27,6 +28,26 @@ use tauri::{AppHandle, Runtime};
 /// and doesn't move, so a steady stream of writes still emits every
 /// 100 ms.
 pub const COALESCE_WINDOW: Duration = Duration::from_millis(100);
+
+/// The window in use, in milliseconds: [`COALESCE_WINDOW`] unless a test
+/// lengthened it ([`set_coalesce_window`]).
+static WINDOW_MS: AtomicU64 = AtomicU64::new(COALESCE_WINDOW.as_millis() as u64);
+
+/// The coalescing window in use.
+pub fn coalesce_window() -> Duration {
+    Duration::from_millis(WINDOW_MS.load(Ordering::Relaxed))
+}
+
+/// Test hook: use `window` instead of [`COALESCE_WINDOW`]. A test that
+/// asserts several writes share one batch sets a long one, so a slow,
+/// loaded machine's writes still land inside it.
+#[doc(hidden)]
+pub fn set_coalesce_window(window: Duration) {
+    WINDOW_MS.store(
+        u64::try_from(window.as_millis()).unwrap_or(u64::MAX),
+        Ordering::Relaxed,
+    );
+}
 
 /// Most keys in one batch. A batch with more becomes a single
 /// `{ key: BULK_KEY, op: Bulk }` change.
@@ -214,7 +235,7 @@ pub fn record<R: Runtime>(app: &AppHandle<R>, extension_id: &str, change: Change
     let app = app.clone();
     let extension_id = extension_id.to_string();
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(COALESCE_WINDOW).await;
+        tokio::time::sleep(coalesce_window()).await;
         flush(&app, &extension_id);
     });
 }

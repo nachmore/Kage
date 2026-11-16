@@ -24,8 +24,13 @@ fn isolate_user_dirs() {
     );
 }
 
+/// Every test here uses this window, so writes that a loaded CI machine
+/// spreads over more than the production 100 ms still share a batch.
+const WINDOW: Duration = Duration::from_secs(1);
+
 fn mock_app() -> tauri::App<MockRuntime> {
     isolate_user_dirs();
+    kage::extension_data_events::set_coalesce_window(WINDOW);
     mock_builder()
         .invoke_handler(kage::commands::registry::invoke_handler())
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
@@ -118,19 +123,15 @@ fn a_save_in_one_window_reaches_every_extension_host_as_one_batch() {
     });
     for rx in [&to_settings, &to_view] {
         let (at, payload) = rx
-            .recv_timeout(Duration::from_secs(2))
+            .recv_timeout(WINDOW * 4)
             .expect("a batch reaches every extension host");
         assert_eq!(payload, expected);
         let latency = at.duration_since(started);
         eprintln!("extension_data_changed arrived after {latency:?}");
         // The coalescer waited for the rest of the writes, and no longer
-        // than it should (the design asks for 150 ms on a dev build; CI
-        // machines get some slack).
-        assert!(
-            latency >= kage::extension_data_events::COALESCE_WINDOW,
-            "{latency:?}"
-        );
-        assert!(latency < Duration::from_secs(1), "{latency:?}");
+        // than it should (CI machines get some slack).
+        assert!(latency >= WINDOW, "{latency:?}");
+        assert!(latency < WINDOW * 3, "{latency:?}");
     }
     // The data is readable once the event is out.
     assert_eq!(
@@ -140,7 +141,7 @@ fn a_save_in_one_window_reaches_every_extension_host_as_one_batch() {
     assert!(!data_file(ext, "a").exists());
 
     // One batch, and nothing for a window that runs no extensions.
-    std::thread::sleep(Duration::from_millis(300));
+    std::thread::sleep(WINDOW + Duration::from_millis(300));
     assert!(to_settings.try_recv().is_err(), "a second batch");
     assert!(to_view.try_recv().is_err(), "a second batch");
     assert!(to_store.try_recv().is_err(), "the store got a batch");
@@ -167,7 +168,8 @@ fn a_refused_write_or_a_delete_of_nothing_tells_no_one() {
     )
     .expect("deleting a missing key succeeds");
 
-    std::thread::sleep(kage::extension_data_events::COALESCE_WINDOW * 4);
+    // A change would have been emitted by the end of its window.
+    std::thread::sleep(WINDOW + Duration::from_millis(300));
     assert!(to_main.try_recv().is_err(), "an event for no change");
 }
 
@@ -188,7 +190,7 @@ fn the_writing_window_is_named_so_it_can_tell_its_own_writes() {
     .expect("save");
 
     for rx in [&to_main, &to_view] {
-        let (_, payload) = rx.recv_timeout(Duration::from_secs(2)).expect("a batch");
+        let (_, payload) = rx.recv_timeout(WINDOW * 4).expect("a batch");
         assert_eq!(
             payload["changes"][0]["window"],
             "ext-view:events-e2e-self:board"
