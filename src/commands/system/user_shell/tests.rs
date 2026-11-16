@@ -5,6 +5,7 @@
 use super::runner::*;
 use super::*;
 use std::path::Path;
+use std::sync::atomic::Ordering;
 
 fn tempdir() -> PathBuf {
     let dir = std::env::temp_dir().join(format!("kage-user-shell-{}", uuid::Uuid::new_v4()));
@@ -628,6 +629,7 @@ mod running {
         RunControl {
             cancel: Arc::new(AtomicBool::new(false)),
             timeout,
+            stop_gate: Arc::default(),
         }
     }
 

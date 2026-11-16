@@ -452,6 +452,54 @@ pub struct RunReport {
 pub struct RunControl {
     pub cancel: Arc<AtomicBool>,
     pub timeout: Duration,
+    /// Orders a Stop against the run's launch and its final report (see
+    /// [`StopGate`]). Shared with the run's registry entry, which accepts
+    /// Stops through it.
+    pub stop_gate: Arc<StopGate>,
+}
+
+/// Makes "a Stop was accepted" exclusive with "the program was launched"
+/// and with "the run's outcome was decided":
+///
+/// - [`Self::launch`] runs the launch only if no Stop came first, and no
+///   Stop can be accepted while it runs.
+/// - [`Self::settle`] decides the outcome: after it, no Stop is accepted, so
+///   a Stop the caller was told was accepted is always reflected in the
+///   report (and the audit).
+/// - [`Self::stop`] accepts a Stop unless the run already settled.
+///
+/// A run nobody settles (the plain runner) accepts every Stop, as before.
+#[derive(Debug, Default)]
+pub struct StopGate {
+    settled: std::sync::Mutex<bool>,
+}
+
+impl StopGate {
+    /// Run `launch` unless a Stop was already accepted (`None` then).
+    pub fn launch<T>(&self, cancel: &AtomicBool, launch: impl FnOnce() -> T) -> Option<T> {
+        let _held = self.settled.lock().unwrap_or_else(|e| e.into_inner());
+        if cancel.load(Ordering::SeqCst) {
+            return None;
+        }
+        Some(launch())
+    }
+
+    /// Accept a Stop: set `cancel` and say so, unless the run settled.
+    pub fn stop(&self, cancel: &AtomicBool) -> bool {
+        let settled = self.settled.lock().unwrap_or_else(|e| e.into_inner());
+        if *settled {
+            return false;
+        }
+        cancel.store(true, Ordering::SeqCst);
+        true
+    }
+
+    /// Decide: from now on no Stop is accepted. Returns whether one was.
+    pub fn settle(&self, cancel: &AtomicBool) -> bool {
+        let mut settled = self.settled.lock().unwrap_or_else(|e| e.into_inner());
+        *settled = true;
+        cancel.load(Ordering::SeqCst)
+    }
 }
 
 /// Kill the whole tree the run started: the shell leads its own process

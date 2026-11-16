@@ -484,10 +484,7 @@ pub async fn start_agent_sign_in<R: tauri::Runtime>(
             ))
         }
     };
-    let control = runner::RunControl {
-        cancel: slot.cancel_flag(),
-        timeout: SIGN_IN_TIMEOUT,
-    };
+    let control = slot.control(SIGN_IN_TIMEOUT);
     let runs = procs.user_shell_runs.clone();
     let task_run_id = run_id.clone();
     let task_label = label.clone();

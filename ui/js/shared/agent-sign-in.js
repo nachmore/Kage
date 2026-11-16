@@ -60,11 +60,14 @@ const RUNNING_AFTER_MS = 1000;
 const LINE_PX = 17;
 /**
  * Stop pressed before the backend has claimed the run (xterm still
- * loading, or the start call in flight): ask again this often, until the
- * run is stopped or ends, for at most STOP_RETRY_LIMIT tries.
+ * loading, or the start call in flight): ask again this often for the
+ * first STOP_RETRY_LIMIT tries, then every STOP_RETRY_SLOW_MS, until the
+ * run is stopped or ends.
  */
 const STOP_RETRY_MS = 200;
 const STOP_RETRY_LIMIT = 100;
+/** After STOP_RETRY_LIMIT quick tries, how often Stop is asked again. */
+const STOP_RETRY_SLOW_MS = 2000;
 
 /**
  * What kiro-cli (3.3.0) prints when the organization has turned device-flow
@@ -167,6 +170,8 @@ export function focusAgentSignIn() {
 
 export function _resetAgentSignInForTests() {
     clearTimeout(active?.runningTimer);
+    // Ends a Stop still being delivered for it.
+    if (active) active.settled = true;
     active?.view?.dispose();
     active = null;
     ctxCache = null;
@@ -698,20 +703,22 @@ function createSession({ slot, payload, host, ctx }) {
         setStatus('running', t('shared.agent_sign_in.status.stopping'));
         // Not started yet: startRun sees stopRequested and never starts it.
         if (!session.startCalled) return;
+        // The Stop stays latched for this run however its delivery goes
+        // (ended() never restarts or resends a run the user stopped), and
+        // it keeps being asked for until the backend takes it or the run
+        // ends: first every STOP_RETRY_MS, then less often.
         const stillThisRun = () =>
             session.runId === runId && !session.settled && session.stopRequested === runId;
-        try {
-            for (let tries = 0; stillThisRun(); tries++) {
+        let warned = false;
+        for (let tries = 0; stillThisRun(); tries++) {
+            try {
                 if (await invoke('stop_user_terminal', { runId })) return;
-                if (tries + 1 >= STOP_RETRY_LIMIT) break;
-                await new Promise((r) => setTimeout(r, STOP_RETRY_MS));
+            } catch (e) {
+                if (!warned) console.warn('[sign-in] stop failed:', errMessage(e));
+                warned = true;
             }
-        } catch (e) {
-            console.warn('[sign-in] stop failed:', errMessage(e));
-        }
-        if (stillThisRun()) {
-            session.stopRequested = null;
-            stopBtn.disabled = false;
+            const wait = tries + 1 < STOP_RETRY_LIMIT ? STOP_RETRY_MS : STOP_RETRY_SLOW_MS;
+            await new Promise((r) => setTimeout(r, wait));
         }
     });
 

@@ -1060,10 +1060,7 @@ fn run<R: tauri::Runtime>(
         );
     };
     let cancel = slot.cancel_flag();
-    let control = runner::RunControl {
-        cancel: cancel.clone(),
-        timeout: Duration::from_secs(r.req.timeout_seconds),
-    };
+    let control = slot.control(Duration::from_secs(r.req.timeout_seconds));
     job.set_running(cancel.clone());
     emit_to(
         app,

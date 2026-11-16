@@ -113,7 +113,10 @@ function fakeTauri({ ctx = CTX, reconnect = true, stopAnswers = [] } = {}) {
             case 'stop_user_terminal':
                 // `stopAnswers` first (false: the backend has no such run
                 // yet), then true.
-                return Promise.resolve(stopAnswers.length ? stopAnswers.shift() : true);
+                {
+                    const answer = stopAnswers.length ? stopAnswers.shift() : true;
+                    return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
+                }
             default:
                 return Promise.resolve(null);
         }
@@ -488,6 +491,40 @@ describe('the run', () => {
         expect(host.onEnded).toHaveBeenCalledWith(
             expect.objectContaining({ state: 'stopped', outcome: 'cancelled' })
         );
+    });
+
+    it('a Stop whose delivery failed is not forgotten: a later clean exit still restarts nothing', async () => {
+        const tauri = fakeTauri({ stopAnswers: [new Error('busy')] });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        click(host.slot.querySelector('.agent-sign-in-stop'));
+        await flush();
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 0, signal: null });
+        await flush();
+        expect(tauri.named('reconnect_acp').length).toBe(0);
+        expect(host.resend).not.toHaveBeenCalled();
+        expect(status(host)).toBe('shared.agent_sign_in.status.stopped');
+    });
+
+    it('a Stop keeps being asked for after the quick tries, until it takes', async () => {
+        vi.useFakeTimers();
+        try {
+            const tauri = fakeTauri({ stopAnswers: Array(105).fill(false) });
+            const host = makeHost();
+            const btn = await mountSignInAction(actionsRow(), PAYLOAD, host);
+            click(btn);
+            await vi.advanceTimersByTimeAsync(10);
+            click(host.slot.querySelector('.agent-sign-in-stop'));
+            await vi.advanceTimersByTimeAsync(100 * 200 + 6 * 2000);
+            // 100 quick tries, then slower ones, until the 106th takes.
+            expect(tauri.named('stop_user_terminal').length).toBe(106);
+            tauri.starts[0].resolve({ outcome: 'exited', exitCode: 0, signal: null });
+            await vi.advanceTimersByTimeAsync(10);
+            expect(tauri.named('reconnect_acp').length).toBe(0);
+            expect(host.resend).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('Stop stops asking once the run ends on its own', async () => {

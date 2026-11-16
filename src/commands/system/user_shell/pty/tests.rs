@@ -2,6 +2,7 @@
 //! `sleep`, `stty`, `head`; `cmd /c exit` on Windows). Nothing here
 //! starts an agent or signs in to anything.
 
+use super::super::runner::StopGate;
 use super::*;
 use std::sync::atomic::AtomicBool;
 
@@ -9,6 +10,7 @@ fn control(timeout: Duration) -> RunControl {
     RunControl {
         cancel: Arc::new(AtomicBool::new(false)),
         timeout,
+        stop_gate: Arc::default(),
     }
 }
 
@@ -321,6 +323,53 @@ fn a_stop_seen_before_the_report_beats_a_clean_exit() {
         final_outcome(RunOutcome::Cancelled, false),
         RunOutcome::Cancelled
     );
+}
+
+/// The stop gate: a Stop accepted before the launch launches nothing; none
+/// lands while the launch runs; none is accepted once the run settled.
+#[test]
+fn the_stop_gate_orders_stop_against_launch_and_settle() {
+    let gate = StopGate::default();
+    let cancel = AtomicBool::new(false);
+    assert!(gate.stop(&cancel));
+    assert_eq!(gate.launch(&cancel, || "launched"), None);
+
+    // A Stop arriving mid-launch waits for it, then is accepted.
+    let gate = Arc::new(StopGate::default());
+    let cancel = Arc::new(AtomicBool::new(false));
+    let (tx, rx) = mpsc::channel();
+    let launched = gate.launch(&cancel, || {
+        let (g, c, tx) = (gate.clone(), cancel.clone(), tx.clone());
+        std::thread::spawn(move || tx.send(g.stop(&c)).unwrap());
+        // The Stop can't be accepted while the launch holds the gate.
+        assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+        "launched"
+    });
+    assert_eq!(launched, Some("launched"));
+    assert!(rx.recv_timeout(Duration::from_secs(2)).unwrap());
+    assert!(cancel.load(Ordering::SeqCst));
+
+    // Settled: what it reports is final, and later Stops are refused.
+    let gate = StopGate::default();
+    let cancel = AtomicBool::new(false);
+    assert!(!gate.settle(&cancel));
+    assert!(!gate.stop(&cancel));
+    assert!(!cancel.load(Ordering::SeqCst));
+    let gate = StopGate::default();
+    assert!(gate.stop(&cancel));
+    assert!(gate.settle(&cancel));
+}
+
+/// Once a run has reported, a Stop for it is refused (so the audit, made
+/// from the report, never disagrees with a Stop that was accepted).
+#[cfg(unix)]
+#[test]
+fn a_finished_run_refuses_stops() {
+    let ctl = control(Duration::from_secs(60));
+    let (report, _, _) = run_collect(sh("exit 0"), &ctl, |_| {});
+    assert_eq!(report.outcome, RunOutcome::Exited);
+    assert!(!ctl.stop_gate.stop(&ctl.cancel));
+    assert!(!ctl.cancel.load(Ordering::SeqCst));
 }
 
 #[cfg(unix)]

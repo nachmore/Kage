@@ -1020,14 +1020,18 @@ pub(crate) fn run_terminal_inner(
         cmd.env(k, v);
     }
 
-    // A Stop that arrived while the terminal was set up: still nothing runs.
-    if control.cancel.load(Ordering::SeqCst) {
+    // Launch through the stop gate: a Stop accepted before this point
+    // launches nothing, and none is accepted while the launch runs.
+    let started = Instant::now();
+    let launched = control
+        .stop_gate
+        .launch(&control.cancel, || pair.slave.spawn_command(cmd));
+    let Some(launched) = launched else {
         drop(pair.slave);
         drop(close_in_background(pair.master));
         return Ok(stopped_before_launch());
-    }
-    let started = Instant::now();
-    let mut child = pair.slave.spawn_command(cmd).map_err(io::Error::other)?;
+    };
+    let mut child = launched.map_err(io::Error::other)?;
     // Our copy of the program's end: without dropping it the reader would
     // never see the terminal close when the program exits.
     drop(pair.slave);
@@ -1118,7 +1122,11 @@ pub(crate) fn run_terminal_inner(
 
     // A Stop accepted while the output drained or the terminal closed
     // still wins over the clean exit the loop saw.
-    let outcome = final_outcome(outcome?, control.cancel.load(Ordering::SeqCst));
+    // Settled here: a Stop accepted up to now turns a clean exit into a
+    // stop, and none is accepted after, so the report (and its audit) always
+    // agrees with what Stop answered.
+    let stop_asked = control.stop_gate.settle(&control.cancel);
+    let outcome = final_outcome(outcome?, stop_asked);
     let (exit_code, signal) = report_parts(&status?);
     Ok((
         TerminalReport {

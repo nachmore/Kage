@@ -34,11 +34,11 @@ use crate::permission_audit::{AuditEntry, AuditEvent};
 use crate::state::ChildProcesses;
 use crate::window_labels;
 use log::{info, warn};
-use runner::{InvalidRun, RunControl, RunReport};
+use runner::{InvalidRun, RunReport};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{State, WebviewWindow};
@@ -122,6 +122,8 @@ struct ActiveRun {
     /// The window showing the run (and its Stop button).
     window: String,
     cancel: Arc<AtomicBool>,
+    /// Stops are accepted through it (`runner::StopGate`).
+    gate: Arc<runner::StopGate>,
 }
 
 /// Slot keys of runs an agent asked for (`host_commands`) start with this;
@@ -169,11 +171,26 @@ pub struct RunSlot {
     key: String,
     run_id: String,
     cancel: Arc<AtomicBool>,
+    gate: Arc<runner::StopGate>,
 }
 
 impl RunSlot {
     pub fn cancel_flag(&self) -> Arc<AtomicBool> {
         self.cancel.clone()
+    }
+
+    /// The gate this run's Stops go through.
+    pub fn stop_gate(&self) -> Arc<runner::StopGate> {
+        self.gate.clone()
+    }
+
+    /// The run's Stop request, time limit and gate.
+    pub fn control(&self, timeout: std::time::Duration) -> runner::RunControl {
+        runner::RunControl {
+            cancel: self.cancel_flag(),
+            timeout,
+            stop_gate: self.stop_gate(),
+        }
     }
 }
 
@@ -219,12 +236,14 @@ impl UserShellRuns {
         run_id: &str,
     ) -> RunSlot {
         let cancel = Arc::new(AtomicBool::new(false));
+        let gate = Arc::new(runner::StopGate::default());
         active.insert(
             key.clone(),
             ActiveRun {
                 run_id: run_id.to_string(),
                 window: label.to_string(),
                 cancel: cancel.clone(),
+                gate: gate.clone(),
             },
         );
         RunSlot {
@@ -232,6 +251,7 @@ impl UserShellRuns {
             key,
             run_id: run_id.to_string(),
             cancel,
+            gate,
         }
     }
 
@@ -329,10 +349,9 @@ impl UserShellRuns {
             .values()
             .find(|run| run.run_id == run_id && run.window == label)
         {
-            Some(run) => {
-                run.cancel.store(true, Ordering::SeqCst);
-                true
-            }
+            // Refused once the run has settled its outcome: a Stop it
+            // accepts is always the one its report says.
+            Some(run) => run.gate.stop(&run.cancel),
             None => false,
         }
     }
@@ -344,7 +363,7 @@ impl UserShellRuns {
         let active = self.active.lock_or_recover();
         let mut any = false;
         for run in active.values().filter(|run| run.window == label) {
-            run.cancel.store(true, Ordering::SeqCst);
+            run.gate.stop(&run.cancel);
             any = true;
         }
         any
@@ -368,7 +387,7 @@ impl UserShellRuns {
             }
             info!("Stopping {} user shell run(s) on shutdown", active.len());
             for run in active.values() {
-                run.cancel.store(true, Ordering::SeqCst);
+                run.gate.stop(&run.cancel);
             }
         }
         let deadline = Instant::now() + max;
@@ -490,10 +509,7 @@ pub async fn run_user_shell_command<R: tauri::Runtime>(
             &[],
         ));
     };
-    let control = RunControl {
-        cancel: slot.cancel_flag(),
-        timeout: runner::RUN_TIMEOUT,
-    };
+    let control = slot.control(runner::RUN_TIMEOUT);
 
     let task_command = command.clone();
     let task_run_id = run_id.clone();
