@@ -339,7 +339,8 @@ export class FloatingApp {
                     /* ignore */
                 }
             },
-            onError: (event, online) => this._onMessageError(event, online),
+            errorContext: () => this._errorContext(),
+            onError: (event, online, context) => this._onMessageError(event, online, context),
             onSessionReset: (_event, msg) => {
                 this.isWaitingForResponse = false;
                 this._finishShellActivity();

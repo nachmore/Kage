@@ -45,7 +45,13 @@
  *                                     suggestion chips, notifications, push
  *                                     to messages array, …)
  *
- *   - onError(event, online)          handle network/error UI
+ *   - errorContext()                  optional: what the window shows
+ *                                     when an error arrives (its turn,
+ *                                     its session), taken before the
+ *                                     online probe so onError can tell
+ *                                     the window moved on meanwhile
+ *   - onError(event, online, context) handle network/error UI; `context`
+ *                                     is what errorContext() returned
  *   - onSessionReset(event, msg)      session-reset UI
  *
  *   - flushPendingMarkdown()          called by the controller's public
@@ -144,8 +150,12 @@ export class MessageStreamController {
     }
 
     async handleError(event) {
+        // Taken now: the probe below can take seconds, and a newer turn may
+        // start (or the window move to another session) meanwhile. The
+        // error is about what the window showed when it arrived.
+        const context = this.host.errorContext?.();
         const online = await checkOnError();
-        await this.host.onError(event, online);
+        await this.host.onError(event, online, context);
     }
 
     handleSessionReset(event) {

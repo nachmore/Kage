@@ -39,6 +39,25 @@ impl TurnProgress {
     pub fn made_progress(&self) -> bool {
         self.updates > 0 || self.tool_calls > 0 || self.permission_requests > 0
     }
+
+    /// Add what another attempt of the same user turn did (the recovery
+    /// ladder resends it).
+    pub fn absorb(&mut self, other: TurnProgress) {
+        self.updates = self.updates.saturating_add(other.updates);
+        self.tool_calls = self.tool_calls.saturating_add(other.tool_calls);
+        self.permission_requests = self
+            .permission_requests
+            .saturating_add(other.permission_requests);
+        self.rate_limited |= other.rate_limited;
+        self.cancel_requested |= other.cancel_requested;
+    }
+
+    /// Whether the turn could be sent again without repeating anything or
+    /// overriding the user: it did nothing, and was neither rate limited
+    /// nor stopped.
+    pub fn resendable(&self) -> bool {
+        !self.made_progress() && !self.rate_limited && !self.cancel_requested
+    }
 }
 
 /// Open turns, keyed by session id.

@@ -3,9 +3,11 @@
 use super::*;
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri commands take state via parameters.
 pub async fn send_permission_response<R: tauri::Runtime>(
     session_id: Option<String>,
     request_id: serde_json::Value,
+    permission_token: Option<String>,
     option_id: String,
     tool_title: String,
     acp: State<'_, AcpHandles>,
@@ -14,26 +16,64 @@ pub async fn send_permission_response<R: tauri::Runtime>(
 ) -> Result<(), AppError> {
     info!("Permission response: {}={}", tool_title, option_id);
 
-    // Claim the request first. One that isn't pending was answered
-    // elsewhere, or died with an agent that was restarted; its id may now
-    // belong to an unrelated request of the new process, so nothing is
-    // written. The modal closes either way.
-    let Some((key, entry)) = claim_pending_permission(&acp.pending_permissions, &request_id) else {
-        info!("Permission response for a request that is no longer pending; not sent");
-        crate::event_targets::emit_permission_audience(
-            &app,
-            events::PERMISSION_DISMISSED,
-            &serde_json::json!({ "requestId": request_id }),
-        );
-        return Ok(());
+    // Claim the request first, by its token and on the current connection.
+    // One that isn't pending was answered elsewhere, or died with an agent
+    // that was restarted; its id may now belong to an unrelated request of
+    // the new process, so nothing is written.
+    let (key, entry) = match claim_pending_permission(
+        &acp.pending_permissions,
+        &request_id,
+        permission_token.as_deref(),
+        acp.client.connection_generation(),
+    ) {
+        PermissionClaim::Claimed { key, entry } => (key, entry),
+        PermissionClaim::Gone => {
+            info!("Permission response for a request that is no longer pending; not sent");
+            crate::event_targets::emit_permission_audience(
+                &app,
+                events::PERMISSION_DISMISSED,
+                &super::notifications::permission_dismissed_payload(
+                    &request_id,
+                    permission_token.as_deref(),
+                ),
+            );
+            return Ok(());
+        }
+        PermissionClaim::NotThisRequest => {
+            // A live request shares the id: it is someone else's to answer,
+            // and its modal stays.
+            warn!("Permission response does not name the pending request with its id; not sent");
+            return Ok(());
+        }
     };
-    if let Err(e) = acp.client.send_permission_response(&request_id, &option_id) {
-        acp.pending_permissions.lock_or_recover().insert(key, entry);
-        return Err(AppError::keyed(
-            ErrorKind::ConnectionLost,
-            "errors.permission.response_failed",
-            &[("reason", &e.to_string())],
-        ));
+    match acp
+        .client
+        .send_permission_response_on(entry.generation, &request_id, &option_id)
+    {
+        Ok(true) => {}
+        Ok(false) => {
+            // The connection went between the claim and the write.
+            info!("Permission response for a request whose agent is gone; not sent");
+            crate::event_targets::emit_permission_audience(
+                &app,
+                events::PERMISSION_DISMISSED,
+                &super::notifications::permission_dismissed_payload(
+                    &request_id,
+                    Some(&entry.token),
+                ),
+            );
+            return Ok(());
+        }
+        Err(e) => {
+            acp.pending_permissions
+                .lock_or_recover()
+                .insert(key, *entry);
+            return Err(AppError::keyed(
+                ErrorKind::ConnectionLost,
+                "errors.permission.response_failed",
+                &[("reason", &e.to_string())],
+            ));
+        }
     }
 
     if option_id == "allow_always" {
@@ -103,21 +143,56 @@ pub async fn send_permission_response<R: tauri::Runtime>(
     crate::event_targets::emit_permission_audience(
         &app,
         events::PERMISSION_DISMISSED,
-        &serde_json::json!({ "requestId": request_id }),
+        &super::notifications::permission_dismissed_payload(&request_id, Some(&entry.token)),
     );
 
     Ok(())
 }
 
-/// Take `request_id` out of the pending requests, if it is still there:
-/// only then may it be answered.
+type PendingPermissions =
+    std::sync::Mutex<std::collections::HashMap<String, crate::state::PendingPermission>>;
+
+/// What [`claim_pending_permission`] found.
+#[derive(Debug)]
+enum PermissionClaim {
+    /// The request, taken out of the pending ones: answer it now.
+    Claimed {
+        key: String,
+        entry: Box<crate::state::PendingPermission>,
+    },
+    /// Nothing pending is this request any more (answered elsewhere, or
+    /// its agent is gone); its modal should close.
+    Gone,
+    /// A pending request has this id but is another request (a restarted
+    /// agent reused the id), or the answer names none. Left pending.
+    NotThisRequest,
+}
+
+/// Take the request with `request_id` out of the pending ones, if the
+/// answer names it (`token`) and it was asked on the connection that is
+/// current now (`generation`): only then may it be answered. One from a
+/// connection that is gone is dropped.
 fn claim_pending_permission(
-    pending: &std::sync::Mutex<std::collections::HashMap<String, crate::state::PendingPermission>>,
+    pending: &PendingPermissions,
     request_id: &serde_json::Value,
-) -> Option<(String, crate::state::PendingPermission)> {
+    token: Option<&str>,
+    generation: u64,
+) -> PermissionClaim {
     let key = crate::state::permission_key(request_id);
-    let entry = pending.lock_or_recover().remove(&key)?;
-    Some((key, entry))
+    let mut map = pending.lock_or_recover();
+    let Some(entry) = map.get(&key) else {
+        return PermissionClaim::Gone;
+    };
+    if entry.answers(token, generation) {
+        let entry = Box::new(map.remove(&key).expect("present above"));
+        return PermissionClaim::Claimed { key, entry };
+    }
+    if token.is_some_and(|t| !t.is_empty() && t == entry.token) {
+        // Its own token, but asked on a connection that has gone since.
+        map.remove(&key);
+        return PermissionClaim::Gone;
+    }
+    PermissionClaim::NotThisRequest
 }
 
 /// Approve those of the given pending requests that the policy allows now.
@@ -131,25 +206,38 @@ fn claim_pending_permission(
 /// user set to Deny after the request was queued stays denied, and a
 /// background session's request stays outside category trust. Returns the
 /// ids approved; the rest stay pending for the user to answer.
+///
+/// `permission_tokens[i]` is the token the prompt got with
+/// `request_ids[i]`; a request is approved only if it matches, and was
+/// asked on the current connection (see `send_permission_response`).
 #[tauri::command]
 pub async fn approve_permissions_if_allowed<R: tauri::Runtime>(
     request_ids: Vec<serde_json::Value>,
+    permission_tokens: Option<Vec<Option<String>>>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<serde_json::Value>, AppError> {
+    let tokens = permission_tokens.unwrap_or_default();
+    let generation = acp.client.connection_generation();
     // Never hold the pending map and the config lock at the same time.
     let candidates: Vec<(String, crate::state::PendingPermission)> = {
         let pending = acp.pending_permissions.lock_or_recover();
         request_ids
             .iter()
-            .filter_map(|id| {
+            .enumerate()
+            .filter_map(|(i, id)| {
                 let key = crate::state::permission_key(id);
-                pending.get(&key).cloned().map(|p| (key, p))
+                let token = tokens.get(i).and_then(|t| t.as_deref());
+                pending
+                    .get(&key)
+                    .filter(|p| p.answers(token, generation))
+                    .cloned()
+                    .map(|p| (key, p))
             })
             .collect()
     };
-    let allowed: Vec<String> = {
+    let allowed: Vec<crate::state::PendingPermission> = {
         let config = features.config.lock_or_recover();
         candidates
             .into_iter()
@@ -157,24 +245,40 @@ pub async fn approve_permissions_if_allowed<R: tauri::Runtime>(
                 config.tool_permissions.resolve_request(&p.request)
                     == crate::config::PolicyKind::Allow
             })
-            .map(|(key, _)| key)
+            .map(|(_, p)| p)
             .collect()
     };
 
     let mut approved = Vec::new();
-    for key in allowed {
+    for candidate in allowed {
         // Claim it first: a request answered elsewhere meanwhile is gone,
-        // and must not get a second answer.
-        let Some(entry) = acp.pending_permissions.lock_or_recover().remove(&key) else {
+        // and must not get a second answer; nor may a new request that
+        // took over its id.
+        let PermissionClaim::Claimed { key, entry } = claim_pending_permission(
+            &acp.pending_permissions,
+            &candidate.request_id,
+            Some(&candidate.token),
+            generation,
+        ) else {
             continue;
         };
-        if let Err(e) = acp
-            .client
-            .send_permission_response(&entry.request_id, "allow_once")
-        {
-            warn!("Failed to approve a queued permission request: {}", e);
-            acp.pending_permissions.lock_or_recover().insert(key, entry);
-            continue;
+        match acp.client.send_permission_response_on(
+            entry.generation,
+            &entry.request_id,
+            "allow_once",
+        ) {
+            Ok(true) => {}
+            Ok(false) => {
+                info!("Not approving a queued permission request whose agent is gone");
+                continue;
+            }
+            Err(e) => {
+                warn!("Failed to approve a queued permission request: {}", e);
+                acp.pending_permissions
+                    .lock_or_recover()
+                    .insert(key, *entry);
+                continue;
+            }
         }
         info!(
             "Approved a queued permission request under a new category trust: {}",
@@ -192,7 +296,10 @@ pub async fn approve_permissions_if_allowed<R: tauri::Runtime>(
         crate::event_targets::emit_permission_audience(
             &app,
             events::PERMISSION_DISMISSED,
-            &serde_json::json!({ "requestId": entry.request_id }),
+            &super::notifications::permission_dismissed_payload(
+                &entry.request_id,
+                Some(&entry.token),
+            ),
         );
         approved.push(entry.request_id);
     }
@@ -360,22 +467,34 @@ pub async fn dismiss_pending_permission<R: tauri::Runtime>(
         // dismissal. If the send fails (broken pipe, transport error)
         // the agent still believes a prompt is open — clearing locally
         // would desynchronize state and stall the next user message on
-        // the agent's "prompt already in progress" guard.
-        match acp
-            .client
-            .send_permission_response(&perm.request_id, "reject_once")
-        {
-            Ok(()) => {
+        // the agent's "prompt already in progress" guard. A request asked
+        // on a connection that is gone is only dropped: its id may name an
+        // unrelated request of the agent now running.
+        match acp.client.send_permission_response_on(
+            perm.generation,
+            &perm.request_id,
+            "reject_once",
+        ) {
+            Ok(written) => {
+                if !written {
+                    info!("Dropped a pending permission request whose agent is gone");
+                }
                 if let Ok(mut guard) = acp.pending_permissions.lock() {
-                    guard.remove(&key);
+                    // Still this request, not a new one that took its id.
+                    if guard.get(&key).is_some_and(|p| p.token == perm.token) {
+                        guard.remove(&key);
+                    }
                 }
                 // PERMISSION_DISMISSED listens in chat hosts + floating +
-                // settings; carries the request id so only the matching
-                // modal closes.
+                // settings; carries the request's id and token so only the
+                // matching modal closes.
                 crate::event_targets::emit_permission_audience(
                     &app,
                     events::PERMISSION_DISMISSED,
-                    &serde_json::json!({ "requestId": perm.request_id }),
+                    &super::notifications::permission_dismissed_payload(
+                        &perm.request_id,
+                        Some(&perm.token),
+                    ),
                 );
                 dismissed_any = true;
             }
@@ -399,11 +518,13 @@ pub async fn dismiss_pending_permission<R: tauri::Runtime>(
     }
 }
 
-/// With `request_id`, checks whether THAT request is still pending;
-/// without, whether anything is.
+/// With `request_id`, checks whether THAT request is still pending (and,
+/// given its `permission_token`, still the same request); without, whether
+/// anything is.
 #[tauri::command]
 pub async fn has_pending_permission(
     request_id: Option<serde_json::Value>,
+    permission_token: Option<String>,
     acp: State<'_, AcpHandles>,
 ) -> Result<bool, AppError> {
     let guard = acp
@@ -411,7 +532,9 @@ pub async fn has_pending_permission(
         .lock()
         .map_err(|_| AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[]))?;
     Ok(match request_id {
-        Some(id) => guard.contains_key(&crate::state::permission_key(&id)),
+        Some(id) => guard
+            .get(&crate::state::permission_key(&id))
+            .is_some_and(|p| permission_token.as_ref().is_none_or(|t| *t == p.token)),
         None => !guard.is_empty(),
     })
 }
@@ -625,30 +748,54 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Mutex;
 
+    use serde_json::json;
+
+    /// A request as the handler records it: `id`, named `token`, asked on
+    /// connection `generation`.
+    fn request(
+        id: serde_json::Value,
+        token: &str,
+        generation: u64,
+    ) -> crate::state::PendingPermission {
+        crate::state::PendingPermission {
+            request_id: id,
+            token: token.to_string(),
+            generation,
+            ..Default::default()
+        }
+    }
+
     fn pending_with(
-        ids: &[serde_json::Value],
+        requests: Vec<crate::state::PendingPermission>,
     ) -> Mutex<HashMap<String, crate::state::PendingPermission>> {
         let mut map = HashMap::new();
-        for id in ids {
-            map.insert(
-                crate::state::permission_key(id),
-                crate::state::PendingPermission {
-                    request_id: id.clone(),
-                    ..Default::default()
-                },
-            );
+        for r in requests {
+            map.insert(crate::state::permission_key(&r.request_id), r);
         }
         Mutex::new(map)
     }
 
+    fn insert(pending: &PendingPermissions, r: crate::state::PendingPermission) {
+        pending
+            .lock()
+            .unwrap()
+            .insert(crate::state::permission_key(&r.request_id), r);
+    }
+
     #[test]
     fn claim_takes_a_pending_request_once() {
-        let pending = pending_with(&[serde_json::json!(7)]);
-        let (key, entry) = claim_pending_permission(&pending, &serde_json::json!(7))
-            .expect("a pending request is claimed");
-        assert_eq!(key, crate::state::permission_key(&serde_json::json!(7)));
-        assert_eq!(entry.request_id, serde_json::json!(7));
-        assert!(claim_pending_permission(&pending, &serde_json::json!(7)).is_none());
+        let pending = pending_with(vec![request(json!(7), "t7", 1)]);
+        let PermissionClaim::Claimed { key, entry } =
+            claim_pending_permission(&pending, &json!(7), Some("t7"), 1)
+        else {
+            panic!("a pending request is claimed");
+        };
+        assert_eq!(key, crate::state::permission_key(&json!(7)));
+        assert_eq!(entry.request_id, json!(7));
+        assert!(matches!(
+            claim_pending_permission(&pending, &json!(7), Some("t7"), 1),
+            PermissionClaim::Gone
+        ));
     }
 
     #[test]
@@ -656,14 +803,62 @@ mod tests {
         // A restart withdraws every pending request; a modal answered
         // afterwards must not write its old id to the new process, which
         // may be using that id for an unrelated request.
-        let pending = pending_with(&[serde_json::json!(3), serde_json::json!("r")]);
-        let mut withdrawn = super::super::notifications::take_pending_permission_ids(&pending);
+        let pending = pending_with(vec![request(json!(3), "a", 1), request(json!("r"), "b", 1)]);
+        let mut withdrawn: Vec<_> = super::super::notifications::take_pending_permissions(&pending)
+            .into_iter()
+            .map(|p| p.request_id)
+            .collect();
         withdrawn.sort_by_key(|v| v.to_string());
-        assert_eq!(
-            withdrawn,
-            vec![serde_json::json!("r"), serde_json::json!(3)]
-        );
-        assert!(claim_pending_permission(&pending, &serde_json::json!(3)).is_none());
-        assert!(claim_pending_permission(&pending, &serde_json::json!("r")).is_none());
+        assert_eq!(withdrawn, vec![json!("r"), json!(3)]);
+        assert!(matches!(
+            claim_pending_permission(&pending, &json!(3), Some("a"), 1),
+            PermissionClaim::Gone
+        ));
+        assert!(matches!(
+            claim_pending_permission(&pending, &json!("r"), Some("b"), 1),
+            PermissionClaim::Gone
+        ));
+    }
+
+    #[test]
+    fn a_delayed_reply_never_claims_the_new_processs_request_with_the_same_id() {
+        let pending = pending_with(vec![request(json!(5), "old", 1)]);
+        super::super::notifications::take_pending_permissions(&pending);
+        // The restarted agent numbers its requests afresh and asks again.
+        insert(&pending, request(json!(5), "new", 3));
+        // The old modal's Allow, delayed across the restart.
+        assert!(matches!(
+            claim_pending_permission(&pending, &json!(5), Some("old"), 3),
+            PermissionClaim::NotThisRequest
+        ));
+        // Left for its own modal, which can still answer it.
+        assert!(matches!(
+            claim_pending_permission(&pending, &json!(5), Some("new"), 3),
+            PermissionClaim::Claimed { .. }
+        ));
+    }
+
+    #[test]
+    fn a_reply_that_names_no_request_claims_nothing() {
+        let pending = pending_with(vec![request(json!(5), "t", 1)]);
+        for token in [None, Some("")] {
+            assert!(matches!(
+                claim_pending_permission(&pending, &json!(5), token, 1),
+                PermissionClaim::NotThisRequest
+            ));
+        }
+        assert_eq!(pending.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_request_from_a_connection_that_is_gone_is_dropped_not_answered() {
+        // The agent died (no restart drained the map) and a new one is up:
+        // the old request can't be answered on the new connection.
+        let pending = pending_with(vec![request(json!(5), "t", 1)]);
+        assert!(matches!(
+            claim_pending_permission(&pending, &json!(5), Some("t"), 3),
+            PermissionClaim::Gone
+        ));
+        assert!(pending.lock().unwrap().is_empty());
     }
 }

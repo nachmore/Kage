@@ -131,6 +131,81 @@ pub struct AcpClient {
     /// failed attempt and its resend) still keeps the prompt from going out
     /// again. Never pruned, like `prompt_locks`.
     cancel_epochs: Arc<Mutex<HashMap<String, u64>>>,
+    /// The working directory each session was created or loaded with this
+    /// run (the `cwd` sent on `session/new` / `session/load`). A reload that
+    /// names none (the recovery ladder, Reconnect when the history file has
+    /// no `cwd`), and a session that replaces one, use it: falling back to
+    /// Kage's own process directory would run the resent prompt in the
+    /// wrong project. Never pruned, like `prompt_locks`.
+    session_cwds: Arc<Mutex<HashMap<String, String>>>,
+    /// Serialises admitting new agent work against a restart's "is the
+    /// agent idle?" check and its teardown (`restart_if_idle`). Every
+    /// `session/prompt` registers in `admitted_work` under it, briefly; a
+    /// restart holds it from its check until the new agent is up, so
+    /// nothing slips in to be cut off between the two.
+    admission: Arc<Mutex<()>>,
+    /// Prompts admitted and not yet finished, by token, with their session:
+    /// each `session/prompt` from the moment it is admitted (before it
+    /// queues on its session's prompt lock) until its reply, and each user
+    /// turn's recovery ladder for its whole run. Lets a restart tell "the
+    /// failing turn itself" from another turn queued on the same session.
+    admitted_work: Arc<Mutex<HashMap<u64, String>>>,
+    next_work_token: Arc<std::sync::atomic::AtomicU64>,
+    /// Test hook run by `restart_if_idle` between its idle check and the
+    /// teardown, with the admission gate held.
+    #[doc(hidden)]
+    restart_idle_check_hook: Arc<Mutex<Option<SharedIdleCheckHook>>>,
+}
+
+type SharedIdleCheckHook = Arc<dyn Fn() + Send + Sync>;
+
+/// See `AcpClient::set_restart_idle_check_hook`.
+#[allow(dead_code)] // Integration tests only.
+pub type IdleCheckHook = Box<dyn Fn() + Send + Sync>;
+
+/// What [`AcpClient::restart_if_idle`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestartIfIdle {
+    /// The agent was restarted.
+    Restarted,
+    /// Not restarted: it has work in flight that the restart would cut off.
+    Busy,
+}
+
+/// A prompt admitted as agent work (see `AcpClient::admitted_work`); it
+/// stops counting when dropped.
+pub(crate) struct AdmittedWork {
+    map: Arc<Mutex<HashMap<u64, String>>>,
+    token: u64,
+}
+
+impl AdmittedWork {
+    pub(crate) fn token(&self) -> u64 {
+        self.token
+    }
+}
+
+impl Drop for AdmittedWork {
+    fn drop(&mut self) {
+        self.map.lock_or_recover().remove(&self.token);
+    }
+}
+
+/// How a failed user prompt ended, for the window that sent it
+/// ([`AcpClient::send_chat_streaming_with_recovery_report`]).
+#[derive(Debug)]
+pub struct PromptReport {
+    /// What `send_chat_streaming_with_recovery` returns.
+    pub result: Result<String>,
+    /// The session the last attempt ran on: the one sent on, or the one
+    /// recovery moved the turn to (windows adopted it from
+    /// `session_migrated`).
+    pub session_id: String,
+    /// Whether the turn may be sent again as it is: none of its attempts
+    /// streamed text, a thought or a plan, ran or updated a tool, asked for
+    /// permission or made an `fs/*` / `terminal/*` request, was rate
+    /// limited or stopped. A resend can then repeat nothing.
+    pub resendable: bool,
 }
 
 /// How long after an automatic restart failed to fix a prompt Kage keeps
@@ -207,6 +282,11 @@ impl AcpClient {
             turn_progress: Arc::new(Mutex::new(HashMap::new())),
             unreachable_latch: Arc::new(Mutex::new(None)),
             cancel_epochs: Arc::new(Mutex::new(HashMap::new())),
+            session_cwds: Arc::new(Mutex::new(HashMap::new())),
+            admission: Arc::new(Mutex::new(())),
+            admitted_work: Arc::new(Mutex::new(HashMap::new())),
+            next_work_token: Arc::new(std::sync::atomic::AtomicU64::new(1)),
+            restart_idle_check_hook: Arc::new(Mutex::new(None)),
         };
         // Counted on the reader thread whether or not a UI handler is
         // installed (integration tests, early startup).
@@ -256,13 +336,17 @@ impl AcpClient {
     }
 
     /// Whether the agent is doing anything a restart would cut off, apart
-    /// from `except`'s turn (`None`: anything at all): a user turn in any
-    /// window, any open `session/prompt` (background agent calls,
-    /// inline-assist, steering, titles), a background prompt, or a running
-    /// agent job (an automation plan, which is idle between its steps).
-    /// The same things that hold back a silent update
-    /// (`updater::is_agent_busy`).
-    pub fn agent_work_in_flight(&self, except: Option<&str>) -> bool {
+    /// from the admitted work `except` (a failing turn's own recovery,
+    /// `None`: anything at all): a user turn in any window, any admitted
+    /// or open `session/prompt` (background agent calls, inline-assist,
+    /// steering, titles), a background prompt, or a running agent job (an
+    /// automation plan, which is idle between its steps). The same things
+    /// that hold back a silent update (`updater::is_agent_busy`).
+    ///
+    /// Another turn on the failing turn's own session counts too: it is
+    /// admitted work of its own, queued on the session's prompt lock or
+    /// already running.
+    pub fn agent_work_in_flight(&self, except: Option<u64>) -> bool {
         self.agent_work_in_flight_here(except) || crate::updater::has_active_agent_jobs()
     }
 
@@ -275,15 +359,127 @@ impl AcpClient {
     }
 
     /// `agent_work_in_flight` without the process-wide agent jobs.
-    fn agent_work_in_flight_here(&self, except: Option<&str>) -> bool {
-        let other = |k: &String| except != Some(k.as_str());
+    fn agent_work_in_flight_here(&self, except: Option<u64>) -> bool {
+        let own_session = {
+            let admitted = self.admitted_work.lock_or_recover();
+            if admitted.keys().any(|t| Some(*t) != except) {
+                return true;
+            }
+            except.and_then(|t| admitted.get(&t).cloned())
+        };
+        // The failing turn's own record of its prompt text is keyed by its
+        // session; any other turn there is admitted work, counted above. Its
+        // own open turn and background mark are gone by the time its
+        // recovery asks, so every one left is another prompt's.
+        let other = |k: &String| own_session.as_deref() != Some(k.as_str());
         self.in_flight_prompts.lock_or_recover().keys().any(other)
-            || self.turn_progress.lock_or_recover().keys().any(other)
-            || self
-                .background_prompt_sessions
-                .lock_or_recover()
-                .iter()
-                .any(other)
+            || !self.turn_progress.lock_or_recover().is_empty()
+            || !self.background_prompt_sessions.lock_or_recover().is_empty()
+    }
+
+    /// Admit a prompt on `session_id` as agent work, waiting while a
+    /// restart is between its idle check and the new agent being up
+    /// (`restart_if_idle`). Blocking: call it from a blocking thread.
+    pub(crate) fn admit_work(&self, session_id: &str) -> AdmittedWork {
+        let _gate = self.admission.lock_or_recover();
+        self.register_work(session_id)
+    }
+
+    /// `admit_work` for a background prompt that must never wait: `None`
+    /// while a restart holds the gate.
+    fn try_admit_work(&self, session_id: &str) -> Option<AdmittedWork> {
+        let _gate = match self.admission.try_lock() {
+            Ok(g) => g,
+            Err(std::sync::TryLockError::WouldBlock) => return None,
+            Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner(),
+        };
+        Some(self.register_work(session_id))
+    }
+
+    fn register_work(&self, session_id: &str) -> AdmittedWork {
+        let token = self
+            .next_work_token
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.admitted_work
+            .lock_or_recover()
+            .insert(token, session_id.to_string());
+        AdmittedWork {
+            map: self.admitted_work.clone(),
+            token,
+        }
+    }
+
+    /// Restart the agent unless that would cut off work in flight
+    /// (`restart_would_interrupt_work`), the check and the teardown as one
+    /// step: no prompt is admitted between them, and one that arrives
+    /// meanwhile waits for the new agent. What Reconnect does.
+    pub fn restart_if_idle(&self) -> Result<RestartIfIdle> {
+        let _gate = self.admission.lock_or_recover();
+        if self.restart_would_interrupt_work() {
+            return Ok(RestartIfIdle::Busy);
+        }
+        let hook = self.restart_idle_check_hook.lock_or_recover().clone();
+        if let Some(hook) = hook {
+            hook();
+        }
+        self.restart_connection()?;
+        Ok(RestartIfIdle::Restarted)
+    }
+
+    /// The recovery ladder's restart for its turn (admitted as `own`, its
+    /// latest attempt sent at `sent_at`), by the same one-step check and
+    /// teardown as `restart_if_idle`. A live agent is restarted only when
+    /// nothing else is in flight; a dead one always is (whatever ran on it
+    /// is gone already). If another turn's recovery has already replaced
+    /// the connection this one was sent on, the turn shares that restart:
+    /// `Restarted`, with no second teardown under the other turn.
+    fn restart_unless_other_work(
+        &self,
+        own: u64,
+        sent_at: Option<std::time::Instant>,
+    ) -> Result<RestartIfIdle> {
+        let _gate = self.admission.lock_or_recover();
+        if self.is_healthy() {
+            if sent_at.is_some_and(|t| self.restarted_since(t)) {
+                log::info!("Recovery shares a restart made since its prompt was sent");
+                return Ok(RestartIfIdle::Restarted);
+            }
+            if self.agent_work_in_flight(Some(own)) {
+                return Ok(RestartIfIdle::Busy);
+            }
+        }
+        self.restart_connection()?;
+        Ok(RestartIfIdle::Restarted)
+    }
+
+    /// Whether a restart succeeded after `t`.
+    fn restarted_since(&self, t: std::time::Instant) -> bool {
+        self.restart_guard
+            .lock_or_recover()
+            .is_some_and(|last_ok| last_ok > t)
+    }
+
+    /// Run `hook` inside `restart_if_idle`, after its idle check and before
+    /// the teardown (tests: lets a concurrent send race the restart).
+    #[doc(hidden)]
+    #[allow(dead_code)] // Integration tests only.
+    pub fn set_restart_idle_check_hook(&self, hook: Option<IdleCheckHook>) {
+        *self.restart_idle_check_hook.lock_or_recover() = hook.map(Arc::from);
+    }
+
+    // --- Session working directories ---
+
+    /// Note the working directory `session_id` was created or loaded with.
+    fn note_session_cwd(&self, session_id: &str, cwd: &str) {
+        self.session_cwds
+            .lock_or_recover()
+            .insert(session_id.to_string(), cwd.to_string());
+    }
+
+    /// The working directory `session_id` was created or loaded with this
+    /// run, if it was.
+    pub fn session_cwd(&self, session_id: &str) -> Option<String> {
+        self.session_cwds.lock_or_recover().get(session_id).cloned()
     }
 
     /// Forget a failed automatic restart: the next failing prompt may
@@ -621,24 +817,26 @@ impl AcpClient {
     /// prompt's partial stream, because it can't reset until it owns the
     /// slot.
     pub fn send_prompt(&self, session_id: &str, params: serde_json::Value) -> Result<AcpResponse> {
-        self.send_prompt_tracked(session_id, params)
-            .map(|(response, _)| response)
+        self.send_prompt_tracked(session_id, params).0
     }
 
     /// `send_prompt`, also returning what the turn did before its reply
-    /// (see `turn_progress`). The turn is opened and closed under the lock.
+    /// or failure (see `turn_progress`). The turn is opened and closed
+    /// under the lock.
     fn send_prompt_tracked(
         &self,
         session_id: &str,
         params: serde_json::Value,
-    ) -> Result<(AcpResponse, turn_progress::TurnProgress)> {
+    ) -> (Result<AcpResponse>, turn_progress::TurnProgress) {
+        // Admitted before it queues, so a restart sees it waiting.
+        let _work = self.admit_work(session_id);
         let lock = self.prompt_lock_for(session_id);
         let _guard = lock.lock_or_recover();
         self.reset_session_accumulator(session_id);
         self.begin_turn_progress(session_id);
         let response = self.transport.send_prompt_request("session/prompt", params);
         let progress = self.take_turn_progress(session_id);
-        response.map(|r| (r, progress))
+        (response, progress)
     }
 
     /// `send_prompt` for a user prompt that may carry `prefix`'s hidden
@@ -659,17 +857,18 @@ impl AcpClient {
         build: &dyn Fn(Option<&str>) -> serde_json::Value,
     ) -> Result<AcpResponse> {
         self.send_prompt_with_prefix_tracked(session_id, prefix, build)
-            .map(|(response, _)| response)
+            .0
     }
 
     /// `send_prompt_with_prefix`, also returning what the turn did before
-    /// its reply (see `send_prompt_tracked`).
+    /// its reply or failure (see `send_prompt_tracked`).
     fn send_prompt_with_prefix_tracked(
         &self,
         session_id: &str,
         prefix: &dyn HiddenPrefix,
         build: &dyn Fn(Option<&str>) -> serde_json::Value,
-    ) -> Result<(AcpResponse, turn_progress::TurnProgress)> {
+    ) -> (Result<AcpResponse>, turn_progress::TurnProgress) {
+        let _work = self.admit_work(session_id);
         let lock = self.prompt_lock_for(session_id);
         let _guard = lock.lock_or_recover();
         let text = prefix.text_for(session_id, self.created_this_run(session_id));
@@ -685,7 +884,10 @@ impl AcpClient {
                 }
             });
         let progress = self.take_turn_progress(session_id);
-        let response = sent?;
+        let response = match sent {
+            Ok(r) => r,
+            Err(e) => return (Err(e), progress),
+        };
         // An error reply, or a turn cut short by a Stop, may not be in the
         // agent's history: the block stays pending.
         let stop_reason = response
@@ -696,7 +898,7 @@ impl AcpClient {
         if carried && response.error.is_none() && stop_reason != Some("cancelled") {
             prefix.completed(session_id);
         }
-        Ok((response, progress))
+        (Ok(response), progress)
     }
 
     /// Like `send_prompt`, but the reply is muted: still accumulated, but
@@ -714,6 +916,7 @@ impl AcpClient {
         params: serde_json::Value,
         keep_reply: bool,
     ) -> Result<AcpResponse> {
+        let _work = self.admit_work(session_id);
         let lock = self.prompt_lock_for(session_id);
         // Declared before the marker so it drops AFTER it: the mute must
         // clear before a queued prompt can take the lock, or that prompt's
@@ -750,6 +953,10 @@ impl AcpClient {
         session_id: &str,
         params: serde_json::Value,
     ) -> Result<Option<AcpResponse>> {
+        // Not while a restart is under way either.
+        let Some(_work) = self.try_admit_work(session_id) else {
+            return Ok(None);
+        };
         let lock = self.prompt_lock_for(session_id);
         let _guard = match lock.try_lock() {
             Ok(g) => g,
@@ -840,38 +1047,49 @@ mod tests {
     }
 
     #[test]
-    fn agent_work_in_flight_ignores_only_the_named_session() {
+    fn agent_work_in_flight_leaves_out_only_the_failing_turn_itself() {
         let client = AcpClient::new(AcpConnectionMode::Local {
             spawn_command: "true".to_string(),
         });
-        assert!(!client.agent_work_in_flight_here(Some("s1")));
-        assert!(!client.agent_work_in_flight_here(None));
-        client.set_in_flight_prompt("s2", "hello");
-        assert!(client.agent_work_in_flight_here(Some("s1")));
-        assert!(!client.agent_work_in_flight_here(Some("s2")));
+        let own = client.admit_work("s1");
+        client.set_in_flight_prompt("s1", "the failing turn's own text");
+        assert!(!client.agent_work_in_flight_here(Some(own.token())));
         assert!(client.agent_work_in_flight_here(None));
+
+        // Another window's turn elsewhere.
+        client.set_in_flight_prompt("s2", "hello");
+        assert!(client.agent_work_in_flight_here(Some(own.token())));
         client.clear_in_flight_prompt("s2");
-        assert!(!client.agent_work_in_flight_here(Some("s1")));
+        assert!(!client.agent_work_in_flight_here(Some(own.token())));
+
+        // Another turn on the SAME session, queued behind the failing one.
+        let queued = client.admit_work("s1");
+        assert!(client.agent_work_in_flight_here(Some(own.token())));
+        drop(queued);
+        assert!(!client.agent_work_in_flight_here(Some(own.token())));
     }
 
     #[test]
     fn agent_work_in_flight_counts_background_and_open_prompts() {
         // A background agent call or inline-assist prompt sets no
-        // in-flight user prompt, but a restart would still cut it off.
+        // in-flight user prompt, but a restart would still cut it off,
+        // even on the failing turn's own session.
         let client = AcpClient::new(AcpConnectionMode::Local {
             spawn_command: "true".to_string(),
         });
-        client.begin_turn_progress("scratch");
-        assert!(client.agent_work_in_flight_here(Some("s1")));
-        assert!(!client.agent_work_in_flight_here(Some("scratch")));
-        client.take_turn_progress("scratch");
-        assert!(!client.agent_work_in_flight_here(Some("s1")));
+        let own = client.admit_work("s1");
+        client.begin_turn_progress("s1");
+        assert!(client.agent_work_in_flight_here(Some(own.token())));
+        client.take_turn_progress("s1");
+        assert!(!client.agent_work_in_flight_here(Some(own.token())));
 
         {
-            let _bg = BackgroundPromptGuard::new(&client.background_prompt_sessions, "titler");
-            assert!(client.agent_work_in_flight_here(Some("s1")));
+            let _bg = BackgroundPromptGuard::new(&client.background_prompt_sessions, "s1");
+            assert!(client.agent_work_in_flight_here(Some(own.token())));
             assert!(client.agent_work_in_flight_here(None));
         }
+        assert!(!client.agent_work_in_flight_here(Some(own.token())));
+        drop(own);
         assert!(!client.agent_work_in_flight_here(None));
     }
 
@@ -881,8 +1099,23 @@ mod tests {
             spawn_command: "true".to_string(),
         });
         let _job = crate::updater::AgentJobGuard::acquire();
-        assert!(client.agent_work_in_flight(Some("s1")));
+        assert!(client.agent_work_in_flight(Some(1)));
         assert!(client.agent_work_in_flight(None));
+    }
+
+    #[test]
+    fn a_restart_holding_the_gate_keeps_background_prompts_out() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        let gate = client.admission.lock().unwrap();
+        assert!(client.try_admit_work("s1").is_none());
+        assert!(matches!(
+            client.try_send_prompt("s1", serde_json::json!({})),
+            Ok(None)
+        ));
+        drop(gate);
+        assert!(client.try_admit_work("s1").is_some());
     }
 
     #[test]
@@ -925,8 +1158,11 @@ mod tests {
         });
         assert!(client
             .send_prompt_tracked("s1", serde_json::json!({}))
+            .0
             .is_err());
         assert!(!client.turn_progress.lock_or_recover().contains_key("s1"));
+        // Nor does it stay admitted.
+        assert!(client.admitted_work.lock_or_recover().is_empty());
     }
 
     #[test]

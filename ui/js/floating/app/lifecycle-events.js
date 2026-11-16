@@ -320,6 +320,9 @@ export const LifecycleEventsMethods = {
             // message_error is only emitted to the window that owns the turn,
             // so there's no session filter to apply here (unlike the chunk
             // path). Rate limit gets its own pose; everything else is `error`.
+            // A prompt failure naming a session this window has left isn't
+            // about the turn on screen (handleMessageError ignores it too).
+            if (this._errorIsForOtherSession(event?.payload)) return;
             signalMascotError(event?.payload);
             this.handleMessageError(event);
         });
@@ -343,6 +346,9 @@ export const LifecycleEventsMethods = {
             // the resend renders clean rather than after a stray greeting.
             const oldId = event?.payload?.oldSessionId;
             const newId = event?.payload?.newSessionId;
+            // The last turn follows its session wherever it moved (its
+            // error may name either id).
+            this._followTurnSession(oldId, newId);
             const ours = oldId && oldId === this.floatingSessionId;
             if (!ours || !newId) return;
             console.log('[floating] session migrated mid-turn:', oldId, '→', newId);

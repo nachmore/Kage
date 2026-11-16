@@ -6,11 +6,11 @@ use super::*;
 mod slash_commands;
 use slash_commands::parse_standard_acp_commands;
 
-/// Empty the pending permission requests and return their ids: the agent
-/// that asked is gone, so none of them may be answered.
-pub(super) fn take_pending_permission_ids(
+/// Empty the pending permission requests and return them: the agent that
+/// asked is gone, so none of them may be answered.
+pub(super) fn take_pending_permissions(
     pending: &std::sync::Mutex<std::collections::HashMap<String, crate::state::PendingPermission>>,
-) -> Vec<serde_json::Value> {
+) -> Vec<crate::state::PendingPermission> {
     let drained: Vec<_> = pending.lock_or_recover().drain().collect();
     if !drained.is_empty() {
         info!(
@@ -18,7 +18,21 @@ pub(super) fn take_pending_permission_ids(
             drained.len()
         );
     }
-    drained.into_iter().map(|(_, p)| p.request_id).collect()
+    drained.into_iter().map(|(_, p)| p).collect()
+}
+
+/// The `permission_dismissed` payload for one request: its JSON-RPC id
+/// and, when Kage named it, its token. A window holding a request with a
+/// token matches on the token, so withdrawing an old process's request
+/// can't close a new one that reuses its id.
+pub(super) fn permission_dismissed_payload(
+    request_id: &serde_json::Value,
+    token: Option<&str>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "requestId": request_id,
+        "permissionToken": token.filter(|t| !t.is_empty()),
+    })
 }
 
 /// The handler dispatches all ACP notifications to the appropriate Tauri events.
@@ -115,11 +129,11 @@ pub fn setup_notification_handler(
             if let Some(procs) = app_handle.try_state::<crate::state::ChildProcesses>() {
                 procs.host_commands.agent_disconnected();
             }
-            for request_id in take_pending_permission_ids(&pending_perm) {
+            for p in take_pending_permissions(&pending_perm) {
                 crate::event_targets::emit_permission_audience(
                     &app_handle,
                     events::PERMISSION_DISMISSED,
-                    &serde_json::json!({ "requestId": request_id }),
+                    &permission_dismissed_payload(&p.request_id, Some(&p.token)),
                 );
             }
             return;
@@ -803,9 +817,14 @@ fn permission_prompt_payload(
     notification: &serde_json::Value,
     request: &crate::config::ToolRequest,
     source: &str,
+    token: &str,
 ) -> serde_json::Value {
     serde_json::json!({
         "notification": notification,
+        // Echoed back with the answer (`send_permission_response`): names
+        // this request, unlike its JSON-RPC id, which a restarted agent
+        // reuses. See `PendingPermission::token`.
+        "permissionToken": token,
         "auto_approve": false,
         "toolName": request.title,
         // Lets the prompt offer "Trust all commands" for shell runs.
@@ -966,7 +985,11 @@ fn handle_permission_notification(
         if !denied {
             info!("Allowed {tool_title}: Kage asks the user when the command reaches it");
             if let Some(request_id) = notification.get("id") {
-                if let Err(e) = client.send_permission_response(request_id, "allow_once") {
+                if let Err(e) = client.send_permission_response_on(
+                    client.dispatch_generation(),
+                    request_id,
+                    "allow_once",
+                ) {
                     warn!("Failed to send auto permission response: {}", e);
                 }
             }
@@ -1033,9 +1056,12 @@ fn handle_permission_notification(
         });
     }
 
+    // Only to the connection that asked: had it been torn down since, the
+    // id could name a request of the agent that replaced it.
+    let asked_on = client.dispatch_generation();
     let send_response = |option_id: &str| {
         if let Some(request_id) = notification.get("id") {
-            if let Err(e) = client.send_permission_response(request_id, option_id) {
+            if let Err(e) = client.send_permission_response_on(asked_on, request_id, option_id) {
                 warn!("Failed to send auto permission response: {}", e);
             }
         }
@@ -1116,6 +1142,7 @@ fn handle_permission_notification(
                 .get("id")
                 .cloned()
                 .unwrap_or(serde_json::Value::Null);
+            let token = crate::state::new_permission_token();
             if let Ok(mut pending) = pending_perm.lock() {
                 pending.insert(
                     crate::state::permission_key(&request_id),
@@ -1124,6 +1151,8 @@ fn handle_permission_notification(
                         session_id: session_id.clone(),
                         request: request.clone(),
                         args_preview,
+                        token: token.clone(),
+                        generation: client.dispatch_generation(),
                     },
                 );
             }
@@ -1147,7 +1176,7 @@ fn handle_permission_notification(
                 })
                 .unwrap_or_else(|| window_labels::FLOATING.to_string());
 
-            let payload = permission_prompt_payload(notification, &request, &source);
+            let payload = permission_prompt_payload(notification, &request, &source, &token);
 
             // Fan out to the windows that subscribe to permission prompts
             // (chat hosts, floating, settings). Each decides whether to show.
@@ -1334,8 +1363,9 @@ mod permission_payload_tests {
     #[test]
     fn prompt_payload_carries_what_the_trust_ui_needs() {
         let n = json!({ "id": 7, "params": { "sessionId": "s1" } });
-        let p = permission_prompt_payload(&n, &mcp_request(false), "main");
+        let p = permission_prompt_payload(&n, &mcp_request(false), "main", "tok-1");
         assert_eq!(p["notification"], n);
+        assert_eq!(p["permissionToken"], "tok-1");
         assert_eq!(p["auto_approve"], false);
         assert_eq!(p["toolName"], "Running: @builder-mcp/InternalSearch");
         assert_eq!(p["toolKind"], serde_json::Value::Null);
@@ -1343,14 +1373,14 @@ mod permission_payload_tests {
         assert_eq!(p["backgroundSession"], false);
         assert_eq!(p["source"], "main");
 
-        let p = permission_prompt_payload(&n, &mcp_request(true), "floating");
+        let p = permission_prompt_payload(&n, &mcp_request(true), "floating", "tok-2");
         assert_eq!(p["backgroundSession"], true);
         let shell = ToolRequest {
             title: "Running: ls".into(),
             kind: Some("execute".into()),
             ..Default::default()
         };
-        let p = permission_prompt_payload(&n, &shell, "main");
+        let p = permission_prompt_payload(&n, &shell, "main", "tok-3");
         assert_eq!(p["toolKind"], "execute");
         assert_eq!(p["mcpServer"], serde_json::Value::Null);
     }

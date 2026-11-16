@@ -239,7 +239,15 @@ export function createComposerMixin(dependencies) {
          */
         _recordTurn(sessionId, message, attachments) {
             this._sendSeq = (this._sendSeq || 0) + 1;
-            this._lastTurn = { sessionId, message, attachments, seq: this._sendSeq };
+            this._lastTurn = {
+                sessionId,
+                // Every id the turn's session had (a migration adds one):
+                // its error may name any of them.
+                sessionIds: sessionId ? [sessionId] : [],
+                message,
+                attachments,
+                seq: this._sendSeq,
+            };
         }
 
         /**
@@ -247,9 +255,37 @@ export function createComposerMixin(dependencies) {
          * turn, if it was on it.
          */
         _followTurnSession(oldId, newId) {
-            if (oldId && newId && this._lastTurn?.sessionId === oldId) {
-                this._lastTurn = { ...this._lastTurn, sessionId: newId };
+            const turn = this._lastTurn;
+            if (oldId && newId && turn?.sessionId === oldId) {
+                this._lastTurn = {
+                    ...turn,
+                    sessionId: newId,
+                    sessionIds: [...(turn.sessionIds || []), newId],
+                };
             }
+        }
+
+        /** Whether `turn` ran on `sessionId` (under any id it had). */
+        _turnWasOn(turn, sessionId) {
+            return !!sessionId && !!turn?.sessionIds?.includes(sessionId);
+        }
+
+        /**
+         * Whether a `message_error` naming `sessionId` is about the turn this
+         * window shows: the session shown or pinned, or an earlier id of the
+         * shown session's last turn. Otherwise it's a turn on a session the
+         * user left, and must not end (or be resent as) the one on screen.
+         */
+        _errorIsForShownSession(sessionId) {
+            if (sessionId === this.activeSessionId || sessionId === this.currentAcpSessionId) {
+                return true;
+            }
+            const turn = this._lastTurn;
+            return (
+                !!this.activeSessionId &&
+                turn?.sessionId === this.activeSessionId &&
+                this._turnWasOn(turn, sessionId)
+            );
         }
 
         /**

@@ -45,7 +45,10 @@ impl AcpClient {
         )
     }
 
-    /// Reply to the protocol's `session/request_permission` request.
+    /// Reply to the protocol's `session/request_permission` request, on
+    /// whatever connection is current. The app answers with
+    /// [`send_permission_response_on`](Self::send_permission_response_on).
+    #[allow(dead_code)] // Integration tests and the mock agents use it.
     pub fn send_permission_response(
         &self,
         request_id: &serde_json::Value,
@@ -58,5 +61,38 @@ impl AcpClient {
         });
         let line = serde_json::to_string(&response)?;
         self.transport.write_line(&line)
+    }
+
+    /// [`send_permission_response`](Self::send_permission_response) to the
+    /// connection of `generation` only (see
+    /// [`dispatch_generation`](Self::dispatch_generation)). `Ok(false)`:
+    /// that connection is gone, nothing was written. A restarted agent
+    /// numbers its requests afresh, so the old process's request id may now
+    /// name an unrelated request of the new one.
+    pub fn send_permission_response_on(
+        &self,
+        generation: u64,
+        request_id: &serde_json::Value,
+        option_id: &str,
+    ) -> Result<bool> {
+        let response = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
+        });
+        let line = serde_json::to_string(&response)?;
+        self.transport.write_line_on(generation, &line)
+    }
+
+    /// The current connection generation; it moves on with every
+    /// connection and every teardown.
+    pub fn connection_generation(&self) -> u64 {
+        self.transport.generation()
+    }
+
+    /// The generation of the connection a message being handled came
+    /// from: exact on the reader thread (the notification handler).
+    pub fn dispatch_generation(&self) -> u64 {
+        self.transport.dispatch_generation()
     }
 }
