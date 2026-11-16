@@ -181,16 +181,27 @@ export class DraftDialog {
             listen('permission_request', (e) => {
                 const n = e.payload?.notification;
                 if (!mine(n?.params?.sessionId)) return;
-                this._permission = { notification: n, toolName: e.payload.toolName };
+                this._permission = {
+                    notification: n,
+                    toolName: e.payload.toolName,
+                    token:
+                        typeof e.payload.permissionToken === 'string'
+                            ? e.payload.permissionToken
+                            : null,
+                };
                 this._renderLive();
             }),
             listen(EVT.PERMISSION_DISMISSED, (e) => {
                 const id = e.payload?.requestId;
+                const token = e.payload?.permissionToken || null;
                 if (!this._permission) return;
-                if (
-                    id == null ||
-                    JSON.stringify(id) === JSON.stringify(this._permission.notification.id)
-                ) {
+                // A restarted agent reuses ids; the token decides when both
+                // sides have one.
+                const same =
+                    token && this._permission.token
+                        ? token === this._permission.token
+                        : JSON.stringify(id) === JSON.stringify(this._permission.notification.id);
+                if (id == null || same) {
                     this._permission = null;
                     this._renderLive();
                 }
@@ -210,6 +221,7 @@ export class DraftDialog {
             .invoke('send_permission_response', {
                 sessionId: n.params?.sessionId || null,
                 requestId: n.id,
+                permissionToken: p.token,
                 optionId,
                 toolTitle: n.params?.toolCall?.title || p.toolName || '',
             })

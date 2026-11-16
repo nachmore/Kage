@@ -66,18 +66,56 @@ function setup() {
     );
     const handler = createPermissionHandler(invoke, appWindow);
     handler.init();
-    const request = async (id, { kind = null, title = `Running: cmd ${id}`, sessionId = 's1' } = {}) => {
+    const request = async (
+        id,
+        { kind = null, title = `Running: cmd ${id}`, sessionId = 's1', token = `tok-${id}` } = {}
+    ) => {
         await listeners.permission_request({
             payload: {
                 notification: { id, params: { sessionId, toolCall: { title }, options: [] } },
                 auto_approve: false,
                 toolName: title,
                 toolKind: kind,
+                permissionToken: token,
             },
         });
     };
-    return { invoke, handler, request };
+    return { invoke, handler, request, listeners };
 }
+
+describe('Permission tokens (a restarted agent reuses request ids)', () => {
+    it('withdrawing the old request leaves a new one with the same id on screen', async () => {
+        const { request, listeners, invoke } = setup();
+        await request(5, { token: 'new' });
+        // The restart's withdrawal of the OLD process's request 5.
+        listeners.permission_dismissed({ payload: { requestId: 5, permissionToken: 'old' } });
+        expect(el('permissionModal').style.display).toBe('flex');
+        // Its own dismissal closes it.
+        listeners.permission_dismissed({ payload: { requestId: 5, permissionToken: 'new' } });
+        await tick();
+        expect(el('permissionModal').style.display).toBe('none');
+        expect(invoke).not.toHaveBeenCalledWith('send_permission_response', expect.anything());
+    });
+
+    it('a dismissal without a token still matches by id', async () => {
+        const { request, listeners } = setup();
+        await request(5);
+        listeners.permission_dismissed({ payload: { requestId: 5 } });
+        await tick();
+        expect(el('permissionModal').style.display).toBe('none');
+    });
+
+    it('the answer carries the token the request came with', async () => {
+        const { request, invoke } = setup();
+        await request(9, { token: 'tok-nine' });
+        el('permissionDeny').click();
+        await tick(150);
+        expect(invoke).toHaveBeenCalledWith(
+            'send_permission_response',
+            expect.objectContaining({ requestId: 9, permissionToken: 'tok-nine', optionId: 'reject_once' })
+        );
+    });
+});
 
 describe('Trust all commands', () => {
     it('is offered for shell runs only', async () => {
@@ -132,10 +170,14 @@ describe('Trust all commands', () => {
         expect(invoke).toHaveBeenCalledWith('set_tool_kind_trusted', { kind: 'execute', trusted: true });
         const answered = invoke.mock.calls
             .filter(([cmd]) => cmd === 'send_permission_response')
-            .map(([, a]) => [a.requestId, a.optionId]);
-        expect(answered).toEqual([[1, 'allow_once']]);
-        // Queued commands go to the backend, which re-decides each.
-        expect(invoke).toHaveBeenCalledWith('approve_permissions_if_allowed', { requestIds: [2] });
+            .map(([, a]) => [a.requestId, a.permissionToken, a.optionId]);
+        expect(answered).toEqual([[1, 'tok-1', 'allow_once']]);
+        // Queued commands go to the backend, which re-decides each, by the
+        // token it named each with.
+        expect(invoke).toHaveBeenCalledWith('approve_permissions_if_allowed', {
+            requestIds: [2],
+            permissionTokens: ['tok-2'],
+        });
         // The edit request is shown next instead.
         await tick(200);
         expect(el('permissionToolTitle').textContent).toBe('Editing a.rs');

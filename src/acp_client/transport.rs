@@ -34,6 +34,15 @@ enum ReaderSource {
 mod tokenize;
 use tokenize::tokenize_spawn_command;
 
+thread_local! {
+    /// The connection generation a reader thread serves, set when it
+    /// starts. Lets code the reader dispatches to (the notification
+    /// handler) tag what it records with the connection it came from,
+    /// exactly, even when a teardown has bumped the generation since.
+    static READER_GENERATION: std::cell::Cell<Option<u64>> =
+        const { std::cell::Cell::new(None) };
+}
+
 /// Manages the low-level connection to the ACP server (pipe or TCP),
 /// the background reader thread, and raw line-based I/O.
 pub struct AcpTransport {
@@ -126,6 +135,22 @@ impl AcpTransport {
 
     pub fn is_connected(&self) -> bool {
         *self.connected.lock_or_recover()
+    }
+
+    /// The current connection generation. Every reader start and every
+    /// teardown bumps it, so a value taken from a connection never
+    /// matches again once that connection is gone.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
+    }
+
+    /// The generation of the connection whose message is being handled:
+    /// the reader thread's own when called from it (the notification
+    /// handler), the current one otherwise.
+    pub fn dispatch_generation(&self) -> u64 {
+        READER_GENERATION
+            .with(|g| g.get())
+            .unwrap_or_else(|| self.generation())
     }
 
     /// Stronger liveness check than `is_connected()`.
@@ -260,6 +285,11 @@ impl AcpTransport {
         // Read the mode under the lock: a `set_mode` that ran while we
         // waited must not be undone by spawning the old command.
         let mode = self.mode.lock_or_recover().clone();
+        // A connection that ended on its own (EOF) left the generation as
+        // it was. Move it on before the new write handle is stored, so
+        // nothing tagged with the old connection (`write_line_on`) can
+        // reach the new one in the moment before its reader starts.
+        self.generation.fetch_add(1, Ordering::SeqCst);
         // Before the connection is published (`connected = true` inside
         // the spawn / dial): a caller on the unlocked fast path must never
         // see the new agent paired with the old one's `initialized`.
@@ -429,6 +459,7 @@ impl AcpTransport {
         let pending = self.pending.clone();
 
         thread::Builder::new().name("acp-reader".into()).spawn(move || {
+            READER_GENERATION.with(|g| g.set(Some(my_generation)));
             let mut reader: Box<dyn BufRead + Send> = match source {
                 ReaderSource::Pipe(r) => Box::new(r),
                 ReaderSource::Tcp(r) => Box::new(r),
@@ -792,6 +823,47 @@ impl AcpTransport {
             return Ok(());
         }
 
+        anyhow::bail!("No write handle available")
+    }
+
+    /// [`write_line`](Self::write_line), but only to the connection of
+    /// `generation`: `Ok(false)` (nothing written) once that connection
+    /// has been torn down, even if a new one is up. For answers to requests
+    /// the agent made: a restarted agent numbers its requests afresh, so an
+    /// answer meant for the old process could answer an unrelated request
+    /// of the new one.
+    ///
+    /// The generation is checked under the outer lock of the write handle
+    /// it then clones. A teardown bumps the generation before it takes that
+    /// lock to drop the handle, so a check that passes holds the old
+    /// connection's handle, never a replacement's.
+    pub fn write_line_on(&self, generation: u64, line: &str) -> Result<bool> {
+        let stdin_arc = {
+            let guard = self.pipe_stdin.lock_or_recover();
+            if self.generation() != generation {
+                return Ok(false);
+            }
+            guard.as_ref().cloned()
+        };
+        if let Some(stdin_arc) = stdin_arc {
+            let mut stdin = stdin_arc.lock_or_recover();
+            writeln!(stdin, "{}", line)?;
+            stdin.flush()?;
+            return Ok(true);
+        }
+        let tcp_arc = {
+            let guard = self.tcp_writer.lock_or_recover();
+            if self.generation() != generation {
+                return Ok(false);
+            }
+            guard.as_ref().cloned()
+        };
+        if let Some(tcp_arc) = tcp_arc {
+            let mut writer = tcp_arc.lock_or_recover();
+            writeln!(writer, "{}", line)?;
+            writer.flush()?;
+            return Ok(true);
+        }
         anyhow::bail!("No write handle available")
     }
 

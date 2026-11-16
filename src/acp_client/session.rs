@@ -277,6 +277,7 @@ impl AcpClient {
 
         info!("Session created: {}", session_id);
         self.note_session_created(&session_id);
+        self.note_session_cwd(&session_id, &cwd);
         Ok((session_id, models_list))
     }
 
@@ -303,7 +304,10 @@ impl AcpClient {
             }
         }
 
-        let cwd = resolve_cwd(cwd);
+        // No directory given (a recovery reload, or a history file that
+        // names none): the one the session was created or loaded with this
+        // run, never Kage's own.
+        let cwd = resolve_cwd(cwd.or_else(|| self.session_cwd(session_id)));
 
         // Gate the conversation-history replay. kiro-cli answers
         // `session/load` by re-emitting every prior turn as a burst of
@@ -344,6 +348,7 @@ impl AcpClient {
         }
 
         info!("Session loaded: {}", session_id);
+        self.note_session_cwd(session_id, &cwd);
         Ok((session_id.to_string(), models_list))
     }
 
@@ -382,7 +387,7 @@ impl AcpClient {
         content: &str,
         attachments: Option<&[serde_json::Value]>,
     ) -> Result<()> {
-        self.send_chat_prompt(session_id, content, attachments, None, None)
+        self.send_chat_prompt(session_id, content, attachments, None, None, None)
     }
 
     /// `send_chat_streaming` for hidden prompts (steering, inline-assist,
@@ -396,7 +401,7 @@ impl AcpClient {
         content: &str,
         keep_reply: bool,
     ) -> Result<()> {
-        self.send_chat_prompt(session_id, content, None, Some(keep_reply), None)
+        self.send_chat_prompt(session_id, content, None, Some(keep_reply), None, None)
     }
 
     /// Shared body of the two senders above. `muted` is `None` for a
@@ -411,6 +416,7 @@ impl AcpClient {
         attachments: Option<&[serde_json::Value]>,
         muted: Option<bool>,
         hidden: Option<&dyn super::HiddenPrefix>,
+        progress_sink: Option<&std::cell::Cell<TurnProgress>>,
     ) -> Result<()> {
         // Wait for any in-progress compaction to finish before sending
         self.wait_for_compaction();
@@ -493,13 +499,21 @@ impl AcpClient {
             })
         };
         let (response, progress) = match (muted, hidden) {
-            (None, Some(h)) => self.send_prompt_with_prefix_tracked(session_id, h, &build)?,
-            (None, None) => self.send_prompt_tracked(session_id, build(None))?,
+            (None, Some(h)) => self.send_prompt_with_prefix_tracked(session_id, h, &build),
+            (None, None) => self.send_prompt_tracked(session_id, build(None)),
             (Some(keep_reply), _) => (
-                self.send_prompt_muted(session_id, build(None), keep_reply)?,
+                self.send_prompt_muted(session_id, build(None), keep_reply),
                 TurnProgress::default(),
             ),
         };
+        // Whether it failed or not: a connection that broke mid-turn may
+        // still have streamed, run tools or asked for permission first.
+        if let Some(sink) = progress_sink {
+            let mut total = sink.get();
+            total.absorb(progress);
+            sink.set(total);
+        }
+        let response = response?;
 
         if let Some(error) = response.error {
             return Err(bail_acp_error("ACP error", &error, progress));
@@ -525,9 +539,13 @@ impl AcpClient {
     /// one respawn-and-reset sequence to reason about (and the respawn itself
     /// is the single chokepoint in `transport::spawn_backend_process`, which
     /// reaps the previous child first).
-    pub fn restart_with_fresh_session(&self) -> Result<String> {
+    ///
+    /// `replacing`: the session the fresh one takes over from; it is
+    /// created in that session's working directory (`session_cwd`), so the
+    /// conversation stays in its project.
+    pub fn restart_with_fresh_session(&self, replacing: Option<&str>) -> Result<String> {
         self.restart_connection()?;
-        let (new_id, _) = self.create_session(None)?;
+        let (new_id, _) = self.create_session(replacing.and_then(|s| self.session_cwd(s)))?;
         self.send_builtin_steering(&new_id);
         Ok(new_id)
     }
@@ -547,6 +565,7 @@ impl AcpClient {
     ///
     /// `hidden` is asked again for every attempt, so whichever session the
     /// prompt lands on gets what that session needs.
+    #[allow(dead_code)] // The app reads the report; tests use this.
     pub fn send_chat_streaming_with_recovery(
         &self,
         session_id: String,
@@ -554,9 +573,65 @@ impl AcpClient {
         attachments: Option<Vec<serde_json::Value>>,
         hidden: Option<&dyn super::HiddenPrefix>,
     ) -> Result<String> {
+        self.send_chat_streaming_with_recovery_report(session_id, content, attachments, hidden)
+            .result
+    }
+
+    /// [`send_chat_streaming_with_recovery`](Self::send_chat_streaming_with_recovery),
+    /// also saying which session the turn last ran on and whether it may be
+    /// resent as it is (see [`super::PromptReport`]): what every attempt
+    /// did counts, and so does a Stop.
+    pub fn send_chat_streaming_with_recovery_report(
+        &self,
+        session_id: String,
+        content: String,
+        attachments: Option<Vec<serde_json::Value>>,
+        hidden: Option<&dyn super::HiddenPrefix>,
+    ) -> super::PromptReport {
+        let original = session_id.clone();
+        let epoch = self.cancel_epoch(&original);
+        let progress = std::cell::Cell::new(TurnProgress::default());
+        let last_session = std::cell::RefCell::new(session_id.clone());
+        let result = self.recovery_ladder(
+            session_id,
+            content,
+            attachments,
+            hidden,
+            &progress,
+            &last_session,
+        );
+        let session_id = last_session.into_inner();
+        let stopped = self.cancel_epoch(&original) != epoch
+            || (session_id != original && self.cancel_epoch(&session_id) != 0);
+        super::PromptReport {
+            result,
+            resendable: progress.get().resendable() && !stopped,
+            session_id,
+        }
+    }
+
+    /// The body of `send_chat_streaming_with_recovery`. What every attempt
+    /// did adds up in `progress`; `last_session` is the session of the
+    /// latest one.
+    fn recovery_ladder(
+        &self,
+        session_id: String,
+        content: String,
+        attachments: Option<Vec<serde_json::Value>>,
+        hidden: Option<&dyn super::HiddenPrefix>,
+        progress: &std::cell::Cell<TurnProgress>,
+        last_session: &std::cell::RefCell<String>,
+    ) -> Result<String> {
+        // This turn is agent work for as long as it is recovering: a
+        // restart for another window's turn must wait for it, and its own
+        // restart can tell it from other turns on its session.
+        let own_work = self.admit_work(&session_id);
         let att_ref = attachments.as_deref();
         let had_attachments = att_ref.is_some_and(|a| !a.is_empty());
-        let send = |id: &str| self.send_chat_prompt(id, &content, att_ref, None, hidden);
+        let send = |id: &str| {
+            *last_session.borrow_mut() = id.to_string();
+            self.send_chat_prompt(id, &content, att_ref, None, hidden, Some(progress))
+        };
         // A Stop from here on keeps the prompt from being resent, even one
         // pressed while no turn is open (mid-restart).
         let epoch = self.cancel_epoch(&session_id);
@@ -586,7 +661,13 @@ impl AcpClient {
                 return Err(first_err);
             }
             PromptFailure::AgentInternal => {
-                return self.restart_reload_resend_once(&session_id, &send, &stopped, first_err);
+                return self.restart_reload_resend_once(
+                    &session_id,
+                    own_work.token(),
+                    &send,
+                    &stopped,
+                    first_err,
+                );
             }
             PromptFailure::Corrupted => {
                 warn!("Prompt failed ({}), attempting recovery…", first_err);
@@ -594,7 +675,7 @@ impl AcpClient {
                     return Ok(session_id);
                 }
                 warn!("Session corrupted — skipping reload, creating fresh session");
-                let new_id = self.restart_with_fresh_session()?;
+                let new_id = self.restart_with_fresh_session(Some(&session_id))?;
                 // The fresh session's steering reply accumulated under
                 // new_id; drop it so the resend renders clean, then tell
                 // live windows to adopt new_id before the resend streams.
@@ -646,7 +727,7 @@ impl AcpClient {
         }
 
         // --- Attempt 3: restart + brand-new session + resend (last chance) ---
-        let new_id = self.restart_with_fresh_session()?;
+        let new_id = self.restart_with_fresh_session(Some(&session_id))?;
         self.reset_session_accumulator(&new_id);
         self.notify_session_migrated(&session_id, &new_id);
         if stopped(&new_id) {
@@ -679,6 +760,7 @@ impl AcpClient {
     /// A sign-in demand from `session/load` is returned, not papered over
     /// with a fresh session that would fail the same way.
     fn reload_or_replace_session(&self, session_id: &str) -> Result<String> {
+        // `None`: in the directory the session was created or loaded with.
         match self.load_existing_session(session_id, None) {
             Ok(_) => {
                 info!("Session {} reloaded successfully", session_id);
@@ -688,7 +770,7 @@ impl AcpClient {
             Err(e) => {
                 warn!("Could not reload session {}: {}", session_id, e);
                 info!("Creating fresh session for retry");
-                let (new_id, _) = self.create_session(None)?;
+                let (new_id, _) = self.create_session(self.session_cwd(session_id))?;
                 self.send_builtin_steering(&new_id);
                 // Drop the steering reply and tell live windows to adopt the
                 // fresh id before the resend streams under it. Reloading onto
@@ -708,17 +790,22 @@ impl AcpClient {
     /// session that won't reload is reported, not replaced).
     ///
     /// Not while the agent is doing anything else (another window's turn,
-    /// a background agent call, an automation: the restart would cut it
-    /// off), nor while the loop guard holds (a restart failed to fix this
-    /// within the last minute), nor once the user has stopped the prompt.
+    /// another turn queued on this session, a background agent call, an
+    /// automation: the restart would cut it off), nor while the loop guard
+    /// holds (a restart failed to fix this within the last minute), nor
+    /// once the user has stopped the prompt. `own_work` is this turn's
+    /// admission, the one piece of work the check leaves out.
     fn restart_reload_resend_once(
         &self,
         session_id: &str,
+        own_work: u64,
         send: &dyn Fn(&str) -> Result<()>,
         stopped: &dyn Fn(&str) -> bool,
         first_err: anyhow::Error,
     ) -> Result<String> {
-        if self.agent_work_in_flight(Some(session_id)) {
+        // A cheap first look; the restart below checks again, atomically
+        // with its teardown.
+        if self.agent_work_in_flight(Some(own_work)) {
             warn!(
                 "Not restarting the agent for {}: it has other work in flight",
                 session_id
@@ -740,7 +827,14 @@ impl AcpClient {
             session_id,
             rpc_code(&first_err).unwrap_or(JSONRPC_INTERNAL_ERROR)
         );
-        self.restart_connection()?;
+        if self.restart_unless_other_work(own_work)? == super::RestartIfIdle::Busy {
+            warn!(
+                "Not restarting the agent for {}: other work was admitted meanwhile",
+                session_id
+            );
+            return Err(first_err);
+        }
+        // `None`: in the directory the session was created or loaded with.
         match self.load_existing_session(session_id, None) {
             Ok(_) => info!("Session {} reloaded successfully", session_id),
             Err(e) if is_auth_required(&e) => return Err(e),

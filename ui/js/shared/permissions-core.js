@@ -170,6 +170,9 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
 
         currentPermissionRequest = {
             id: notification.id,
+            // Echoed with the answer: the backend answers only the request
+            // it gave this token to (a restarted agent reuses ids).
+            permissionToken: notification._kagePermissionToken || null,
             sessionId: params.sessionId || '',
             toolCall: toolCall,
             options: params.options || [],
@@ -406,6 +409,9 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         try {
             approved = await invoke('approve_permissions_if_allowed', {
                 requestIds: candidates.map((q) => q.notification.id),
+                permissionTokens: candidates.map(
+                    (q) => q.notification._kagePermissionToken || null
+                ),
             });
         } catch (e) {
             console.error('Failed to approve queued requests:', e);
@@ -481,6 +487,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             await invoke('send_permission_response', {
                 sessionId: currentPermissionRequest.sessionId || null,
                 requestId: currentPermissionRequest.id,
+                permissionToken: currentPermissionRequest.permissionToken,
                 optionId: optionId,
                 toolTitle: policyTitle,
             });
@@ -651,11 +658,16 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             notification._kageMcpServer =
                 typeof event.payload.mcpServer === 'string' ? event.payload.mcpServer : null;
             notification._kageBackground = event.payload.backgroundSession === true;
+            notification._kagePermissionToken =
+                typeof event.payload.permissionToken === 'string'
+                    ? event.payload.permissionToken
+                    : null;
 
             if (auto_approve) {
                 invoke('send_permission_response', {
                     sessionId: notification.params?.sessionId || null,
                     requestId: notification.id,
+                    permissionToken: notification._kagePermissionToken,
                     optionId: 'allow_once',
                     toolTitle:
                         notification.params?.toolCall?.title || t('shared.permission.unknown'),
@@ -679,10 +691,22 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 hidePermissionModal();
                 return;
             }
-            const matches = (id) => JSON.stringify(id) === JSON.stringify(dismissedId);
+            // A restarted agent reuses ids: when both sides know the
+            // request's token, the token decides, so withdrawing the old
+            // process's request leaves the new one's prompt alone.
+            const dismissedToken = event?.payload?.permissionToken || null;
+            const matches = (id, token) =>
+                dismissedToken && token
+                    ? token === dismissedToken
+                    : JSON.stringify(id) === JSON.stringify(dismissedId);
             // Remove any queued copy of that request either way.
-            _permissionQueue = _permissionQueue.filter((q) => !matches(q.notification?.id));
-            if (currentPermissionRequest && matches(currentPermissionRequest.id)) {
+            _permissionQueue = _permissionQueue.filter(
+                (q) => !matches(q.notification?.id, q.notification?._kagePermissionToken)
+            );
+            if (
+                currentPermissionRequest &&
+                matches(currentPermissionRequest.id, currentPermissionRequest.permissionToken)
+            ) {
                 console.log('Permission dismissed externally');
                 // hidePermissionModal advances to the next queued request.
                 hidePermissionModal();

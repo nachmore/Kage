@@ -432,6 +432,28 @@ pub struct PendingPermission {
     /// The audit log's `args_preview` should the request be approved that
     /// way (see `notifications::auto_allow_args_preview`).
     pub args_preview: Option<String>,
+    /// Kage's own name for this request, sent to the windows with it and
+    /// echoed back with the answer. JSON-RPC ids are reused by a restarted
+    /// agent; this never is, so an answer to an old prompt can't claim a
+    /// new request that happens to share its id.
+    pub token: String,
+    /// The connection the request arrived on
+    /// (`AcpClient::dispatch_generation`). It is answered only on that
+    /// connection: once it's gone, the request died with it.
+    pub generation: u64,
+}
+
+impl PendingPermission {
+    /// Whether an answer naming `token` is for this request, asked on the
+    /// connection that is current now (`generation`).
+    pub fn answers(&self, token: Option<&str>, generation: u64) -> bool {
+        token.is_some_and(|t| !t.is_empty() && t == self.token) && self.generation == generation
+    }
+}
+
+/// A fresh [`PendingPermission::token`].
+pub fn new_permission_token() -> String {
+    uuid::Uuid::new_v4().to_string()
 }
 
 /// Canonical map key for a pending permission: the compact JSON encoding
