@@ -49,8 +49,11 @@ pub use streaming::*;
 /// on the floating session, slash commands, opening a chat. The session
 /// gets built-in steering primed, exactly like a normal new chat. Call
 /// from a blocking context (the ACP calls are synchronous).
+/// A signed-out agent's refusal comes back as `auth_required`
+/// (`session_setup_error`).
 fn resolve_or_create_session(
     client: &std::sync::Arc<crate::acp_client::AcpClient>,
+    config: &std::sync::Mutex<crate::config::Config>,
     session_id: Option<String>,
 ) -> Result<String, AppError> {
     if let Some(id) = session_id {
@@ -59,11 +62,13 @@ fn resolve_or_create_session(
         }
     }
     let (id, _) = client.create_session(None).map_err(|e| {
-        AppError::keyed(
-            ErrorKind::Internal,
-            "errors.session.create_failed",
-            &[("reason", &e.to_string())],
-        )
+        session_setup_error(&e, config, "Session creation", |e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.create_failed",
+                &[("reason", &e.to_string())],
+            )
+        })
     })?;
     client.send_builtin_steering(&id);
     Ok(id)

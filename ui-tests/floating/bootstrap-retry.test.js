@@ -100,12 +100,15 @@ describe('floating bootstrap retry', () => {
         expect(app.showError).toHaveBeenCalledTimes(1);
     });
 
-    it('allows a fresh retry once the debounce window elapses', () => {
+    it('allows a fresh retry once the debounce window elapses', async () => {
         const app = makeApp();
-        app.invoke.mockResolvedValue('new-session-id');
+        app.invoke.mockRejectedValue('Failed to create session: Connection lost');
 
         app._retryBootstrapAndSend('one', {});
         expect(app.invoke).toHaveBeenCalledTimes(1);
+        // That attempt settles (a retry while it is out joins it).
+        for (let i = 0; i < 5; i++) await Promise.resolve();
+        expect(app.bootstrappingSession).toBe(false);
 
         // Past the debounce window — a new attempt is allowed.
         vi.advanceTimersByTime(DEBOUNCE + 1);

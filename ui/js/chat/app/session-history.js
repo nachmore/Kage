@@ -174,35 +174,82 @@ export function createSessionHistoryMixin(dependencies) {
                     this._repinWindowSession();
                     return;
                 }
-                this.currentAcpSessionId = adoptedId;
                 console.log('ACP session switched to:', adoptedId);
-                this.isConnected = true;
-                this.updateConnectionStatus();
-                this.elements.chatInput.disabled = false;
-                this.elements.chatInput.placeholder = t('chat.placeholder.type_message');
-                this.elements.sendBtn.disabled = false;
-                this.elements.chatInput.focus();
+                this._onSessionSwitched(adoptedId);
             } catch (error) {
                 // A stale failure must not lock the input of the newer session.
                 if (switchStale()) return;
                 console.error('Failed to switch ACP session:', error);
-                const msg = this.formatError(error);
-                const isLocked =
-                    msg.includes('active in another process') || msg.includes('Session is active');
-                if (isLocked) {
-                    const pidMatch = msg.match(/PID\s+(\d+)/);
-                    this.showSessionLocked(sessionId, pidMatch ? pidMatch[1] : null);
-                } else {
-                    this.showError(msg);
+                this._onSessionSwitchFailed(sessionId, error);
+            }
+        }
+
+        /** The window's session `id` is set up: ready to send. */
+        _onSessionSwitched(id) {
+            this.currentAcpSessionId = id;
+            this.isConnected = true;
+            this.updateConnectionStatus();
+            this.elements.chatInput.disabled = false;
+            this.elements.chatInput.placeholder = t('chat.placeholder.type_message');
+            this.elements.sendBtn.disabled = false;
+            this.elements.chatInput.focus();
+        }
+
+        /**
+         * Switching to `sessionId` failed with `error`: show why (a
+         * signed-out agent's error offers Sign in, which switches again
+         * after it) and keep the input off.
+         */
+        _onSessionSwitchFailed(sessionId, error) {
+            const msg = this.formatError(error);
+            const isLocked =
+                msg.includes('active in another process') || msg.includes('Session is active');
+            if (isLocked) {
+                const pidMatch = msg.match(/PID\s+(\d+)/);
+                this.showSessionLocked(sessionId, pidMatch ? pidMatch[1] : null);
+            } else {
+                this._showSessionSetupError(msg, error, {
+                    sessionId,
+                    retry: (outcome) => this._retrySessionSwitch(sessionId, outcome),
+                });
+            }
+            this.isConnected = false;
+            this.updateConnectionStatus();
+            // Keep input disabled on session error
+            this.elements.chatInput.disabled = true;
+            this.elements.chatInput.placeholder = isLocked
+                ? t('chat.placeholder.session_readonly')
+                : t('chat.placeholder.session_unavailable');
+            this.elements.sendBtn.disabled = true;
+        }
+
+        /**
+         * After a restart (sign-in or Reconnect) under a failed switch to
+         * `sessionId`: use the session the restart reloaded, else switch
+         * again. Resolves to the session id (null when the window moved on);
+         * a failure is shown again and thrown.
+         */
+        async _retrySessionSwitch(sessionId, outcome) {
+            if (outcome?.sessionReloaded && outcome.sessionId) {
+                // reconnect_acp loaded it and pinned the window to it.
+                this._adoptReconnectSession(outcome.sessionId);
+                this._onSessionSwitched(this.activeSessionId);
+                return this.activeSessionId;
+            }
+            try {
+                const id = await this.invoke('switch_acp_session', { sessionId });
+                if (this.activeSessionId !== sessionId) {
+                    this._repinWindowSession();
+                    return null;
                 }
-                this.isConnected = false;
-                this.updateConnectionStatus();
-                // Keep input disabled on session error
-                this.elements.chatInput.disabled = true;
-                this.elements.chatInput.placeholder = isLocked
-                    ? t('chat.placeholder.session_readonly')
-                    : t('chat.placeholder.session_unavailable');
-                this.elements.sendBtn.disabled = true;
+                this._onSessionSwitched(id);
+                return id;
+            } catch (error) {
+                console.error('Failed to switch ACP session again:', error);
+                if (this.activeSessionId === sessionId) {
+                    this._onSessionSwitchFailed(sessionId, error);
+                }
+                throw error;
             }
         }
 

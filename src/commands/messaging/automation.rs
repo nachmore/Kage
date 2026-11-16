@@ -300,6 +300,7 @@ pub async fn send_inline_assist<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<(), AppError> {
     let client = acp.client.clone();
+    let config = app.state::<FeatureServices>().config.clone();
 
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
@@ -316,7 +317,7 @@ pub async fn send_inline_assist<R: tauri::Runtime>(
         // Resolve a real session — the floating window may not have
         // pinned one yet (inline-assist is hotkey-driven and can fire
         // before the floating UI was ever opened).
-        let session_id = match resolve_or_create_session(&client, session_id) {
+        let session_id = match resolve_or_create_session(&client, &config, session_id) {
             Ok(id) => id,
             Err(e) => {
                 crate::event_targets::emit_to_inline_assist(
@@ -411,6 +412,7 @@ pub async fn execute_macro<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<String, AppError> {
     let client = acp.client.clone();
+    let config = app.state::<FeatureServices>().config.clone();
     let step_count = steps.len();
     // Cloned for the post-await telemetry track. Used to also be used
     // by a per-step `macro_progress` emit, but that event has no
@@ -423,7 +425,7 @@ pub async fn execute_macro<R: tauri::Runtime>(
         // Only ai_prompt steps actually need it, but resolving once here
         // keeps the per-step code simple and the cost is one create at
         // most (skipped entirely when the caller passed a live id).
-        let session_id = resolve_or_create_session(&client, session_id)?;
+        let session_id = resolve_or_create_session(&client, &config, session_id)?;
 
         for (i, step) in steps.iter().enumerate() {
             let step_type = step.get("step_type").and_then(|v| v.as_str()).unwrap_or("ai_prompt");

@@ -233,18 +233,24 @@ impl AcpClient {
         Ok(())
     }
 
+    /// `initialize` the connection unless it already was: the handshake a
+    /// fresh agent needs before any session op or prompt. A signed-out
+    /// agent may refuse it (`-32000`).
+    pub fn ensure_initialized(&self) -> Result<()> {
+        let init = self.initialized.lock_or_recover();
+        if !*init {
+            drop(init);
+            self.initialize()?;
+        }
+        Ok(())
+    }
+
     // --- Session management ---
 
     pub fn create_session(&self, cwd: Option<String>) -> Result<(String, Vec<serde_json::Value>)> {
         info!("Creating new ACP session");
 
-        {
-            let init = self.initialized.lock_or_recover();
-            if !*init {
-                drop(init);
-                self.initialize()?;
-            }
-        }
+        self.ensure_initialized()?;
 
         let cwd = resolve_cwd(cwd);
 
@@ -296,13 +302,7 @@ impl AcpClient {
     ) -> Result<(String, Vec<serde_json::Value>)> {
         info!("Loading existing ACP session: {}", session_id);
 
-        {
-            let init = self.initialized.lock_or_recover();
-            if !*init {
-                drop(init);
-                self.initialize()?;
-            }
-        }
+        self.ensure_initialized()?;
 
         // No directory given (a recovery reload, or a history file that
         // names none): the one the session was created or loaded with this

@@ -1,4 +1,13 @@
-import { errMessage, getConfig, getWindowSessionOrNull, t, WINDOW } from './dependencies.js';
+import {
+    canOfferSignIn,
+    errLabel,
+    errMessage,
+    getConfig,
+    getWindowSessionOrNull,
+    signalMascotRecovered,
+    t,
+    WINDOW,
+} from './dependencies.js';
 import { BOOTSTRAP_RETRY_DEBOUNCE_MS } from './helpers.js';
 
 export const SessionMethods = {
@@ -80,8 +89,7 @@ export const SessionMethods = {
                 console.log(`[floating] recovered with own session: ${id}`);
             } catch (e) {
                 console.error('[floating] recovery session/new also failed:', e);
-                this.floatingSessionId = null;
-                this.sessionBootstrapError = errMessage(e);
+                this._setBootstrapFailure(e);
             } finally {
                 this.bootstrappingSession = false;
             }
@@ -89,6 +97,7 @@ export const SessionMethods = {
             console.error('[floating] failed to adopt session:', e);
             this.floatingSessionId = null;
             this.sessionBootstrapError = String(e);
+            this.sessionBootstrapFailure = null;
             this.bootstrappingSession = false;
         } finally {
             if (typeof unlistenPinned === 'function') unlistenPinned();
@@ -120,9 +129,7 @@ export const SessionMethods = {
             // Too soon since the last attempt — a retry is likely still in
             // flight or only just failed. Surface the error rather than
             // kicking off another reconnect.
-            this.showError(
-                t('floating.error.agent_unavailable', { reason: this.sessionBootstrapError })
-            );
+            this._showBootstrapError(this._waitingSendEntry(message, options));
             return;
         }
         this._lastBootstrapRetryAt = now;
@@ -143,17 +150,63 @@ export const SessionMethods = {
     async _retryBootstrap() {
         console.log('[floating] retrying session bootstrap after prior failure');
         try {
-            const id = await this.invoke('switch_acp_session', { sessionId: null });
-            this.floatingSessionId = id;
-            this.sessionBootstrapError = null;
+            const id = await this._runBootstrap();
             console.log(`[floating] re-bootstrap succeeded: ${id}`);
         } catch (e) {
             console.error('[floating] re-bootstrap failed:', e);
-            this.floatingSessionId = null;
-            this.sessionBootstrapError = errMessage(e);
-        } finally {
-            this.bootstrappingSession = false;
         }
+    },
+
+    /**
+     * The one bootstrap (`switch_acp_session`, no session) this window runs
+     * at a time after a failed launch bootstrap: a send's retry and a
+     * sign-in's or Reconnect's bootstrap after the restart all come through
+     * here, and a call while one is under way joins it, so two never create
+     * two sessions and pin the window to whichever answered last. Each
+     * attempt has a token (`_bootstrapGen`); an attempt something else
+     * superseded (a restart's reloaded session adopted) changes nothing,
+     * success or failure. Resolves to the session id; rejects with the
+     * error, remembered for the window when the attempt is still current.
+     */
+    _runBootstrap() {
+        if (this._bootstrapInFlight) return this._bootstrapInFlight;
+        const gen = (this._bootstrapGen || 0) + 1;
+        this._bootstrapGen = gen;
+        this.bootstrappingSession = true;
+        // Asked for now (not a tick later); a throw becomes the attempt's rejection.
+        let request;
+        try {
+            request = Promise.resolve(this.invoke('switch_acp_session', { sessionId: null }));
+        } catch (e) {
+            request = Promise.reject(e);
+        }
+        const attempt = (async () => {
+            try {
+                const id = await request;
+                if (gen === this._bootstrapGen) {
+                    this.floatingSessionId = id;
+                    this._clearBootstrapFailure();
+                }
+                return id;
+            } catch (e) {
+                if (gen === this._bootstrapGen) this._setBootstrapFailure(e);
+                throw e;
+            } finally {
+                if (this._bootstrapInFlight === attempt) this._bootstrapInFlight = null;
+                this._settleBootstrapping();
+            }
+        })();
+        this._bootstrapInFlight = attempt;
+        return attempt;
+    },
+
+    /**
+     * `bootstrappingSession` after a bootstrap or a restart's bootstrap
+     * settled: still set while another one is under way, so a send queued
+     * meanwhile waits for the last of them.
+     */
+    _settleBootstrapping() {
+        this.bootstrappingSession = !!this._bootstrapInFlight || (this._restartBootstraps || 0) > 0;
     },
 
     /**
@@ -188,9 +241,7 @@ export const SessionMethods = {
             this.elements.responseText.innerHTML = '';
         }
         if (this.sessionBootstrapError) {
-            this.showError(
-                t('floating.error.agent_unavailable', { reason: this.sessionBootstrapError })
-            );
+            this._showBootstrapError(this._waitingSendEntry(pending.message, pending.options));
             return;
         }
         if (!this.floatingSessionId) {
@@ -200,6 +251,203 @@ export const SessionMethods = {
         // Re-enter sendChatMessage; the bootstrap-guard at the top
         // will pass through now.
         this.sendChatMessage(pending.message, pending.options);
+    },
+
+    /** Remember a failed bootstrap: its text, and the error itself (Sign in reads its `kind`). */
+    _setBootstrapFailure(e) {
+        this.floatingSessionId = null;
+        this.sessionBootstrapError = errMessage(e);
+        this.sessionBootstrapFailure = e && typeof e === 'object' ? e : null;
+    },
+
+    _clearBootstrapFailure() {
+        this.sessionBootstrapError = null;
+        this.sessionBootstrapFailure = null;
+    },
+
+    /** A send held up by a failed bootstrap, as `_showBootstrapError` remembers it. */
+    _waitingSendEntry(message, options) {
+        return { message, options, generation: this._promptGeneration };
+    },
+
+    /**
+     * Show the failed bootstrap's error, `waiting` being the send it held up
+     * (or null). A signed-out agent's error also gets Sign in and Reconnect:
+     * either restarts the agent, sets up a session and then sends `waiting`
+     * once (`_sendWaitingAfterBootstrap`). Any other error is shown as text.
+     */
+    _showBootstrapError(waiting = null) {
+        this._bootstrapWaitingSend = waiting;
+        const text = t('floating.error.agent_unavailable', { reason: this.sessionBootstrapError });
+        const failure = this.sessionBootstrapFailure;
+        if (!canOfferSignIn(failure)) {
+            this.showError(text);
+        } else {
+            this.showError(text, {
+                reconnect: true,
+                onReconnect: (btn) => this._reconnectBootstrap(btn, waiting),
+                signIn: failure,
+                signInHost: this._bootstrapSignInHost(waiting),
+            });
+        }
+        // Its first line: still on screen while nothing newer replaced it.
+        this._bootstrapErrorShown = this.elements.responseText?.firstChild ?? null;
+    },
+
+    /**
+     * A session is up after a failed bootstrap: take its error off the
+     * screen, as Reconnect does once the agent is back, unless something
+     * newer (a send's turn, another error) replaced it meanwhile.
+     */
+    _clearShownBootstrapError() {
+        const shown = this._bootstrapErrorShown;
+        this._bootstrapErrorShown = null;
+        if (!shown?.isConnected) return;
+        this.currentResponse = '';
+        this.elements.responseText.textContent = '';
+        this.elements.contentArea.classList.remove('visible');
+        this.elements.expandBtn.classList.remove('visible');
+        this.windowManager.resizeWindow();
+    },
+
+    /**
+     * After the agent restarted under a failed bootstrap: set up the
+     * window's session on it, the one the restart reloaded or else a new
+     * one, and resolve to its id. Never a second bootstrap beside one under
+     * way (a send's retry, the other of Sign in and Reconnect): that one
+     * settles first, and when it left the window a session (and no
+     * failure), that is the one. A failure is remembered and shown again
+     * (with Sign in, if it still applies) for the send that is waiting now,
+     * unless another restart's bootstrap is still to come and will show
+     * its own, and thrown.
+     */
+    async _bootstrapAfterRestart(outcome) {
+        this._restartBootstraps = (this._restartBootstraps || 0) + 1;
+        this.bootstrappingSession = true;
+        try {
+            if (this._bootstrapInFlight) {
+                await this._bootstrapInFlight.catch(() => {});
+            }
+            if (outcome?.sessionId && outcome.sessionReloaded !== false) {
+                // Supersedes any bootstrap that might still answer.
+                this._bootstrapGen = (this._bootstrapGen || 0) + 1;
+                this._adoptReconnectSession(outcome.sessionId);
+                this._clearBootstrapFailure();
+                this._clearShownBootstrapError();
+                return outcome.sessionId;
+            }
+            if (this.floatingSessionId && !this.sessionBootstrapError) {
+                console.log(
+                    `[floating] after the restart: keeping the session already set up: ${this.floatingSessionId}`
+                );
+                this._clearShownBootstrapError();
+                return this.floatingSessionId;
+            }
+            try {
+                const id = await this._runBootstrap();
+                console.log(`[floating] bootstrapped after the restart: ${id}`);
+                // The session is ready: its error goes (a waiting send, if
+                // any, then draws its own turn).
+                this._clearShownBootstrapError();
+                return id;
+            } catch (e) {
+                console.error('[floating] bootstrap after the restart failed:', e);
+                if (this._restartBootstraps <= 1) {
+                    this._showBootstrapError(this._bootstrapWaitingSend);
+                }
+                throw e;
+            }
+        } finally {
+            this._restartBootstraps -= 1;
+            this._settleBootstrapping();
+        }
+    },
+
+    /**
+     * Whether `waiting` (the send a failed bootstrap held up) may go out now
+     * on `sid`: it is still the one waiting (no send since), no prompt went
+     * out since, the input holds nothing else, and the window can send.
+     */
+    _canSendWaitingAfterBootstrap(waiting, sid) {
+        if (!waiting || this._bootstrapWaitingSend !== waiting) return false;
+        if (waiting.generation !== this._promptGeneration) return false;
+        const typed = this.elements.input?.value?.trim() ?? '';
+        if (typed && typed !== String(waiting.message ?? '').trim()) return false;
+        return !!sid && sid === this.floatingSessionId && this.canSendAgentPrompt(sid);
+    },
+
+    /** Send `waiting` through the normal send path (a turn id of its own), once. */
+    async _sendWaitingAfterBootstrap(waiting) {
+        if (this._bootstrapWaitingSend !== waiting) return false;
+        this._bootstrapWaitingSend = null;
+        await this.sendChatMessage(waiting.message, waiting.options);
+        return true;
+    },
+
+    /**
+     * The sign-in under a failed bootstrap's error: as a prompt's
+     * (`_agentSignInHost`), except that after the restart it sets up the
+     * window's session (`establishSession`) and then sends the message that
+     * was waiting, at most once.
+     */
+    _bootstrapSignInHost(waiting) {
+        const base = this._agentSignInHost(this.sessionBootstrapFailure, null);
+        let resent = false;
+        return {
+            ...base,
+            establishSession: (outcome) => this._bootstrapAfterRestart(outcome),
+            canResend: (sid) => !resent && this._canSendWaitingAfterBootstrap(waiting, sid),
+            resend: async () => {
+                if (resent) return 'none';
+                resent = true;
+                return (await this._sendWaitingAfterBootstrap(waiting)) ? 'sent' : 'none';
+            },
+            // The send's own turn replaced the error.
+            clearError: () => {},
+        };
+    },
+
+    /**
+     * Reconnect under a failed bootstrap's error: restart the agent, set up
+     * a session, then send the message that was waiting (as the sign-in
+     * does). A failed attempt leaves the button for the next one.
+     */
+    async _reconnectBootstrap(btn, waiting) {
+        // One Reconnect at a time (a redrawn error has a new button).
+        if (this._bootstrapReconnecting) return;
+        this._bootstrapReconnecting = true;
+        btn.disabled = true;
+        btn.textContent = t('chat.error.btn.reconnecting');
+        let sid;
+        try {
+            let outcome;
+            try {
+                outcome = await this.invoke('reconnect_acp', { sessionId: null });
+            } catch (e) {
+                console.log('Reconnect failed:', e);
+                this._showReconnectFailure(
+                    btn,
+                    errLabel(t('chat.error.reconnect_failed_label'), e)
+                );
+                return;
+            }
+            if (!outcome?.reconnected) {
+                this._showReconnectFailure(btn, t('chat.error.reconnect_failed'));
+                return;
+            }
+            signalMascotRecovered();
+            try {
+                sid = await this._bootstrapAfterRestart(outcome);
+            } catch {
+                return; // shown again by _bootstrapAfterRestart
+            }
+        } finally {
+            this._bootstrapReconnecting = false;
+        }
+        // The bootstrap took its error off the screen (_clearShownBootstrapError).
+        if (this._canSendWaitingAfterBootstrap(waiting, sid)) {
+            await this._sendWaitingAfterBootstrap(waiting);
+        }
     },
 
     /**

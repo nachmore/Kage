@@ -55,7 +55,19 @@ enum Prompt {
     /// The first prompt is never answered; the second closes the
     /// connection (the agent crashed with two turns running).
     HangThenCloseOnSecond,
+    /// `session/new` answers `-32000` with kiro-cli's signed-out text.
+    NewAuthRequired,
+    /// `session/load` answers `-32000` with kiro-cli's signed-out text.
+    LoadAuthRequired,
+    /// `initialize` answers `-32000` with kiro-cli's signed-out text.
+    InitAuthRequired,
+    /// `session/new` answers `-32603` (a failure that isn't a sign-in).
+    NewFails,
 }
+
+/// What kiro-cli answers `session/new` with when it is signed out.
+const KIRO_SIGNED_OUT: &str = "Authentication required. Not logged in. Set the KIRO_API_KEY \
+environment variable or run kiro-cli login first.";
 
 struct MockAgent {
     port: u16,
@@ -165,7 +177,13 @@ fn serve(
                     "code": -32603, "message": "Internal error", "data": INCIDENT_DETAIL
                 });
                 match behaviour {
-                    Prompt::Ok | Prompt::LoadFails | Prompt::SlowLoad => {
+                    Prompt::Ok
+                    | Prompt::LoadFails
+                    | Prompt::SlowLoad
+                    | Prompt::NewAuthRequired
+                    | Prompt::LoadAuthRequired
+                    | Prompt::InitAuthRequired
+                    | Prompt::NewFails => {
                         json!({ "result": { "stopReason": "end_turn" } })
                     }
                     Prompt::DispatchFailure => json!({ "error": internal }),
@@ -245,6 +263,18 @@ fn serve(
                     }
                 }
             }
+            "initialize" if matches!(behaviour, Prompt::InitAuthRequired) => json!({
+                "error": { "code": -32000, "message": KIRO_SIGNED_OUT }
+            }),
+            "session/new" if matches!(behaviour, Prompt::NewAuthRequired) => json!({
+                "error": { "code": -32000, "message": KIRO_SIGNED_OUT }
+            }),
+            "session/new" if matches!(behaviour, Prompt::NewFails) => json!({
+                "error": { "code": -32603, "message": "Internal error", "data": "disk full" }
+            }),
+            "session/load" if matches!(behaviour, Prompt::LoadAuthRequired) => json!({
+                "error": { "code": -32000, "message": KIRO_SIGNED_OUT }
+            }),
             "session/new" => json!({ "result": { "sessionId": "NEW" } }),
             "session/load" if matches!(behaviour, Prompt::LoadFails) => json!({
                 "error": { "code": -32603, "message": "Internal error", "data": "session store unavailable" }
@@ -1299,4 +1329,284 @@ fn a_dropped_connection_whose_resend_got_an_agent_error_is_not_resendable() {
     assert!(r.result.is_err());
     assert_eq!(agent.count("session/prompt"), 2, "resent once by recovery");
     assert!(!r.resendable, "an unknown first attempt was resendable");
+}
+
+// ---------------------------------------------------------------------------
+// A signed-out agent refusing to set up a session (`initialize`,
+// `session/new`, `session/load`) reaches the window as `auth_required`, like
+// a refused prompt, so the window can offer Sign in.
+// ---------------------------------------------------------------------------
+
+/// A mock app whose config names a Local Kiro connection (`local_kiro`; what
+/// decides the sign-in message) or an unnamed Remote one, while its client
+/// talks to `agent` over TCP either way.
+fn session_app(
+    agent: &MockAgent,
+    local_kiro: bool,
+    connect: bool,
+) -> (
+    tauri::App<tauri::test::MockRuntime>,
+    tauri::WebviewWindow<tauri::test::MockRuntime>,
+) {
+    isolate_user_dirs();
+    let mut config = kage::config::Config::default();
+    {
+        let conn = config
+            .acp
+            .active_connection_mut()
+            .expect("the default config has a connection");
+        if local_kiro {
+            conn.preset_id = Some("kiro".into());
+            conn.mode = kage::config::AcpMode::Local {
+                spawn_command: "kiro-cli acp".into(),
+            };
+        } else {
+            conn.preset_id = None;
+            conn.mode = kage::config::AcpMode::Remote {
+                host: "127.0.0.1".into(),
+                port: agent.port,
+                timeout_ms: 5_000,
+            };
+        }
+    }
+    let client = Arc::new(AcpClient::new(AcpConnectionMode::Remote {
+        host: "127.0.0.1".into(),
+        port: agent.port,
+    }));
+    if connect {
+        client.connect().expect("connect to the mock agent");
+    }
+    let kage::state::ManagedState {
+        acp_handles,
+        ui_state,
+        child_processes,
+        feature_services,
+    } = kage::state::build_managed_state(Arc::new(Mutex::new(config)), client, false);
+    let app = tauri::test::mock_builder()
+        .manage(acp_handles)
+        .manage(ui_state)
+        .manage(child_processes)
+        .manage(feature_services)
+        .invoke_handler(kage::commands::registry::invoke_handler())
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .expect("mock app must build");
+    let window = tauri::WebviewWindowBuilder::new(&app, "floating", Default::default())
+        .build()
+        .expect("mock floating window must build");
+    (app, window)
+}
+
+/// Invoke `cmd` as the window would; an error is the JSON it receives.
+fn invoke(
+    window: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+    cmd: &str,
+    args: Value,
+) -> Result<Value, Value> {
+    tauri::test::get_ipc_response(
+        window,
+        tauri::webview::InvokeRequest {
+            cmd: cmd.into(),
+            callback: tauri::ipc::CallbackFn(0),
+            error: tauri::ipc::CallbackFn(1),
+            url: "http://tauri.localhost".parse().unwrap(),
+            body: tauri::ipc::InvokeBody::Json(args),
+            headers: Default::default(),
+            invoke_key: tauri::test::INVOKE_KEY.to_string(),
+        },
+    )
+    .map(|body| match body {
+        tauri::ipc::InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+        tauri::ipc::InvokeResponseBody::Raw(_) => panic!("{cmd} answered raw bytes"),
+    })
+}
+
+fn assert_kiro_sign_in(err: &Value) {
+    assert_eq!(err["kind"], "auth_required", "{err}");
+    assert_eq!(err["key"], "errors.agent.auth_required_kiro", "{err}");
+    let message = err["message"].as_str().unwrap_or_default();
+    assert!(message.contains("kiro-cli login"), "{err}");
+    assert!(
+        !message.contains("Failed to create session"),
+        "the old passthrough text reached the window: {err}"
+    );
+}
+
+#[test]
+fn a_signed_out_agent_refusing_session_new_reaches_the_window_as_auth_required() {
+    let agent = MockAgent::start(vec![Prompt::NewAuthRequired]);
+    let (_app, window) = session_app(&agent, true, true);
+
+    let err = invoke(&window, "switch_acp_session", json!({ "sessionId": null })).unwrap_err();
+
+    assert_kiro_sign_in(&err);
+    assert_eq!(agent.count("session/new"), 1);
+}
+
+#[test]
+fn a_signed_out_agent_refusing_initialize_reaches_the_window_as_auth_required() {
+    let agent = MockAgent::start(vec![Prompt::InitAuthRequired]);
+    let (_app, window) = session_app(&agent, true, true);
+
+    let err = invoke(&window, "switch_acp_session", json!({ "sessionId": null })).unwrap_err();
+
+    assert_kiro_sign_in(&err);
+    assert_eq!(agent.count("session/new"), 0);
+}
+
+#[test]
+fn a_signed_out_agent_refusing_the_restart_before_a_session_reaches_the_window_as_auth_required() {
+    // Not connected: the command restarts the agent first, and that
+    // restart's `initialize` is what's refused.
+    let agent = MockAgent::start(vec![Prompt::InitAuthRequired]);
+    let (_app, window) = session_app(&agent, true, false);
+
+    let err = invoke(&window, "switch_acp_session", json!({ "sessionId": null })).unwrap_err();
+
+    assert_kiro_sign_in(&err);
+    assert_eq!(agent.count("session/new"), 0);
+}
+
+#[test]
+fn a_signed_out_agent_refusing_session_load_reaches_the_window_as_auth_required() {
+    let agent = MockAgent::start(vec![Prompt::LoadAuthRequired]);
+    let (_app, window) = session_app(&agent, true, true);
+
+    let err = invoke(&window, "switch_acp_session", json!({ "sessionId": "S1" })).unwrap_err();
+
+    assert_kiro_sign_in(&err);
+}
+
+#[test]
+fn another_agent_refusing_session_new_gets_the_generic_sign_in_message() {
+    let agent = MockAgent::start(vec![Prompt::NewAuthRequired]);
+    let (_app, window) = session_app(&agent, false, true);
+
+    let err = invoke(&window, "switch_acp_session", json!({ "sessionId": null })).unwrap_err();
+
+    assert_eq!(err["kind"], "auth_required", "{err}");
+    assert_eq!(err["key"], "errors.agent.auth_required", "{err}");
+}
+
+#[test]
+fn a_session_new_failure_that_is_not_a_sign_in_keeps_its_text() {
+    let agent = MockAgent::start(vec![Prompt::NewFails]);
+    let (_app, window) = session_app(&agent, true, true);
+
+    let err = invoke(&window, "switch_acp_session", json!({ "sessionId": null })).unwrap_err();
+
+    assert_ne!(err["kind"], "auth_required", "{err}");
+    let message = err["message"].as_str().unwrap_or_default();
+    assert!(message.starts_with("Failed to create session:"), "{err}");
+    assert!(message.contains("disk full"), "{err}");
+}
+
+// ---------------------------------------------------------------------------
+// Inline assist's "open in chat" (`open_chat_with_message`) against a
+// signed-out agent: the prompt never goes out, and main hears so as
+// `auth_required` naming its turn and `resendable` (nothing of it got
+// through), so main's Sign in sends it after the sign-in, once.
+// ---------------------------------------------------------------------------
+
+/// `session_app` plus the main window, and every MESSAGE_ERROR payload.
+fn open_chat_app(
+    agent: &MockAgent,
+    connect: bool,
+) -> (
+    tauri::App<tauri::test::MockRuntime>,
+    tauri::WebviewWindow<tauri::test::MockRuntime>,
+    Arc<Mutex<Vec<Value>>>,
+) {
+    use tauri::Listener;
+    let (app, _floating) = session_app(agent, true, connect);
+    let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("mock main window must build");
+    let errors = Arc::new(Mutex::new(Vec::new()));
+    let sink = errors.clone();
+    app.listen_any("message_error", move |event| {
+        sink.lock()
+            .unwrap()
+            .push(serde_json::from_str(event.payload()).unwrap());
+    });
+    (app, main, errors)
+}
+
+/// The first MESSAGE_ERROR, within a few seconds.
+fn first_error(errors: &Arc<Mutex<Vec<Value>>>) -> Value {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Some(e) = errors.lock().unwrap().first() {
+            return e.clone();
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "no message_error reached main"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+fn assert_unsent_sign_in(err: &Value, session_id: Value) {
+    assert_kiro_sign_in(err);
+    assert_eq!(err["turnId"], "assist-turn-1", "{err}");
+    assert_eq!(err["sessionId"], session_id, "{err}");
+    assert_eq!(
+        err["resendable"], true,
+        "nothing of the prompt went out: {err}"
+    );
+}
+
+#[test]
+fn open_in_chat_refused_by_session_new_reaches_main_naming_its_turn_as_resendable() {
+    let agent = MockAgent::start(vec![Prompt::NewAuthRequired]);
+    let (_app, main, errors) = open_chat_app(&agent, true);
+
+    invoke(
+        &main,
+        "open_chat_with_message",
+        json!({ "sessionId": null, "message": "explain this", "turnId": "assist-turn-1" }),
+    )
+    .expect("the command itself answers at once");
+
+    assert_unsent_sign_in(&first_error(&errors), Value::Null);
+    assert_eq!(agent.count("session/prompt"), 0);
+}
+
+#[test]
+fn open_in_chat_refused_by_initialize_reaches_main_naming_its_turn_as_resendable() {
+    // Not connected: the command connects first; the agent refuses its
+    // handshake.
+    let agent = MockAgent::start(vec![Prompt::InitAuthRequired]);
+    let (_app, main, errors) = open_chat_app(&agent, false);
+
+    invoke(
+        &main,
+        "open_chat_with_message",
+        json!({ "sessionId": null, "message": "explain this", "turnId": "assist-turn-1" }),
+    )
+    .expect("the command itself answers at once");
+
+    assert_unsent_sign_in(&first_error(&errors), Value::Null);
+    assert_eq!(agent.count("session/new"), 0);
+    assert_eq!(agent.count("session/prompt"), 0);
+}
+
+#[test]
+fn open_in_chat_on_mains_session_refused_by_initialize_reaches_main_as_auth_required() {
+    // Main has a session, so none is created: the handshake of the
+    // connection the command makes is the agent's first chance to refuse,
+    // and the prompt must not go out on a connection it refused.
+    let agent = MockAgent::start(vec![Prompt::InitAuthRequired]);
+    let (_app, main, errors) = open_chat_app(&agent, false);
+
+    invoke(
+        &main,
+        "open_chat_with_message",
+        json!({ "sessionId": "S1", "message": "explain this", "turnId": "assist-turn-1" }),
+    )
+    .expect("the command itself answers at once");
+
+    assert_unsent_sign_in(&first_error(&errors), json!("S1"));
+    assert_eq!(agent.count("initialize"), 1);
+    assert_eq!(agent.count("session/prompt"), 0);
 }

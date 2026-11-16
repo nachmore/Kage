@@ -428,14 +428,21 @@ export const ResponseUiMethods = {
         }
 
         // Reconnect, and "Sign in" for a signed-out agent (opts.signIn: the
-        // MESSAGE_ERROR payload; a plain string draws nothing).
+        // MESSAGE_ERROR payload, or a failed bootstrap's error; a plain
+        // string draws nothing). `opts.onReconnect` / `opts.signInHost`
+        // replace what they do after a prompt failed (the bootstrap's own,
+        // see session.js).
         const actions = document.createElement('span');
         actions.className = 'floating-error-actions';
         if (opts.reconnect) {
             const btn = document.createElement('button');
             btn.className = 'floating-error-reconnect';
             btn.textContent = t('chat.error.btn.reconnect');
-            btn.addEventListener('click', () => this._reconnectFromError(btn, opts.retryTurn));
+            btn.addEventListener('click', () =>
+                opts.onReconnect
+                    ? opts.onReconnect(btn)
+                    : this._reconnectFromError(btn, opts.retryTurn)
+            );
             actions.appendChild(btn);
         }
         if (opts.reconnect || opts.signIn) {
@@ -446,7 +453,7 @@ export const ResponseUiMethods = {
             mountSignInAction(
                 actions,
                 opts.signIn,
-                this._agentSignInHost(opts.signIn, opts.retryTurn ?? null)
+                opts.signInHost || this._agentSignInHost(opts.signIn, opts.retryTurn ?? null)
             ).catch((e) => console.warn('[floating] sign-in action unavailable:', e));
         }
 

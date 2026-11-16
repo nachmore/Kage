@@ -9,7 +9,12 @@ export function createSessionActionsMixin(dependencies) {
             }
         }
 
-        async createNewSession() {
+        /**
+         * New Chat. Resolves to the new session's id (null when it failed
+         * or a newer selection took over); `throwOnError` (the sign-in's
+         * retry) rejects with the failure instead.
+         */
+        async createNewSession({ throwOnError = false } = {}) {
             // Supersede any in-flight selectSession / earlier New Chat so its
             // late IPC can't paint or adopt over this one.
             const gen = this._nextSelectGen();
@@ -70,7 +75,7 @@ export function createSessionActionsMixin(dependencies) {
                 if (gen !== this._selectGen) {
                     // A newer selection/New Chat owns the view; undo our pin.
                     this._repinWindowSession();
-                    return;
+                    return null;
                 }
                 enableInput();
                 this.activeSessionId = newId;
@@ -94,9 +99,10 @@ export function createSessionActionsMixin(dependencies) {
                 } catch (e) {
                     console.log('Steering message not sent (may be disabled):', e);
                 }
+                return newId;
             } catch (error) {
                 console.error('Failed to create new session:', error);
-                if (gen !== this._selectGen) return;
+                if (gen !== this._selectGen) return null;
                 // The backend is still on the previous session; keep sends
                 // targeting it as before.
                 this.activeSessionId = prevSessionId;
@@ -106,6 +112,15 @@ export function createSessionActionsMixin(dependencies) {
                 }
                 enableInput();
                 this.renderSessionList();
+                // A signed-out agent: say so, with Sign in, which makes the
+                // new chat after it. Any other failure stays quiet as before.
+                this._showSessionSetupError?.(this.formatError(error), error, {
+                    sessionId: prevSessionId ?? null,
+                    retry: () => this.createNewSession({ throwOnError: true }),
+                    onlyIfSignIn: true,
+                });
+                if (throwOnError) throw error;
+                return null;
             } finally {
                 this._newSessionPending--;
             }

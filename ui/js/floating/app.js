@@ -78,6 +78,15 @@ export class FloatingApp {
         // unavailable at launch) heals itself once the backend recovers,
         // without requiring an app restart.
         this.sessionBootstrapError = null;
+        // The failed bootstrap's error itself (an AppError object, or null
+        // for a plain string): its `kind` decides whether the error offers
+        // Sign in (shared/agent-sign-in.js).
+        this.sessionBootstrapFailure = null;
+        // The send that was waiting on a failed bootstrap, as shown under
+        // its error ({ message, options, generation }): a sign-in or
+        // Reconnect sends it once a session is up, if nothing was sent or
+        // typed since. Any new send drops it (sendChatMessage).
+        this._bootstrapWaitingSend = null;
         // Epoch-ms of the last re-bootstrap attempt, used to debounce
         // retries so a burst of sends can't cascade into a respawn storm
         // against the agent backend. See `_retryBootstrap`.

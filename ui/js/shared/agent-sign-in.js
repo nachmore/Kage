@@ -24,7 +24,13 @@
  *     the backend pinned the window to `sid`, the failed session `failedSid`
  *     as reloaded; the window follows it while it still shows `failedSid`,
  *     else keeps the session it shows),
- *     `canResend(sid)`, `resend(sid)` → 'sent' | 'none', `clearError()`.
+ *     `canResend(sid)`, `resend(sid)` → 'sent' | 'none', `clearError()`;
+ *   - `establishSession(outcome)` (optional, instead of `adoptSession`): for
+ *     an error the window got setting up its session (create, load, the
+ *     launch bootstrap) rather than from a turn. After the restart the
+ *     window sets up the session it wanted on the new agent and resolves
+ *     to its id (or null); a rejection is shown as a failed restart, with
+ *     Reconnect, and the window shows its error again.
  *     The window decides what to resend, by the same rules as its
  *     Reconnect button: only the failed turn the error names (`turnId`),
  *     only when the error says it may be sent again (isResendablePayload),
@@ -570,9 +576,29 @@ function createSession({ slot, payload, host, ctx }) {
             finish('restart_failed');
             return;
         }
-        const sid = r.sessionId || sessionId;
-        // Even with the same id: the restart pinned the window to it.
-        if (sid) host?.adoptSession?.(sid, sessionId);
+        let sid = r.sessionId || sessionId;
+        if (typeof host?.establishSession === 'function') {
+            // The error was the window failing to set up its session (no
+            // turn failed): the window sets one up on the restarted agent
+            // and answers with its id. A failure is the window's to show
+            // again; here it is a failed restart, with Reconnect.
+            try {
+                sid = (await host.establishSession(r)) || null;
+            } catch (e) {
+                setStatus(
+                    'failed',
+                    t('shared.agent_sign_in.status.restart_failed', { error: errMessage(e) })
+                );
+                setActions([reconnectButton(), closeButton()]);
+                finish('restart_failed');
+                return;
+            }
+            // The session the window set up is the one it wanted.
+            r = { ...r, sessionId: sid, sessionReloaded: true };
+        } else if (sid) {
+            // Even with the same id: the restart pinned the window to it.
+            host?.adoptSession?.(sid, sessionId);
+        }
         if (!sid || !host?.canResend?.(sid)) {
             setStatus('success', t('shared.agent_sign_in.status.ready'));
             setActions([]);

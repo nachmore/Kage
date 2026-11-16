@@ -109,6 +109,7 @@ import {
 import { t } from '../../shared/i18n.js';
 import { clearFinishedHostCommandCards } from '../../shared/host-command-view.js';
 import {
+    canOfferSignIn,
     clearAgentSignInSlot,
     focusAgentSignIn,
     isAgentSignInActive,
@@ -117,6 +118,7 @@ import {
 
 export {
     _resetDiagramFailures,
+    canOfferSignIn,
     clearAgentSignInSlot,
     focusAgentSignIn,
     isAgentSignInActive,
