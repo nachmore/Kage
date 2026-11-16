@@ -28,7 +28,12 @@ import { WINDOW, isChatLabel } from '../shared/window-labels.js';
 import { applyMixin } from '../shared/mixin.js';
 import { getWindowSessionOrNull } from '../shared/session-resolve.js';
 import { SessionStreamRegistry, STREAM } from '../shared/session-streams.js';
-import { errLabel, errMessage, isRateLimitPayload } from '../shared/error-message.js';
+import {
+    errLabel,
+    errMessage,
+    errorSessionId,
+    isResendablePayload,
+} from '../shared/error-message.js';
 import { t } from '../shared/i18n.js';
 import { submitSelection, loadSelection } from '../shared/slash-selection.js';
 import { mascotHTML } from '../shared/mascot.js';
@@ -112,6 +117,7 @@ const CHAT_APP_DEPENDENCIES = {
     defaultExportFilename,
     drawContextRing,
     errLabel,
+    errorSessionId,
     escapeHtml,
     EVT,
     executeCommand,
@@ -468,8 +474,10 @@ export class ChatApp {
             },
             onError: async (event, online) => {
                 app.hideTypingIndicator();
-                // Before the streaming bubble goes: did any of the turn get
-                // through? Reconnect resends it only if nothing did.
+                // Before the streaming bubble goes: did any of the turn show
+                // here? An extra veto on top of the backend's `resendable`
+                // (it sees progress this window doesn't, e.g. a permission
+                // request that was approved).
                 const hadOutput =
                     !!app.currentStreamingContent?.trim() || app.toolUsages?.length > 0;
                 if (app.currentStreamingMessage) {
@@ -483,12 +491,16 @@ export class ChatApp {
                 if (!online) app.showError(offlineMessage());
                 else {
                     const p = event.payload;
-                    // The session the turn went to (kept up to date across
-                    // a migration by session_migrated), not the one shown
-                    // now: the user may have switched while it was failing.
+                    // Reconnect may resend the window's last turn only when
+                    // the backend says nothing of it got through and the
+                    // error is about that turn's session (any id it had
+                    // across a migration). A plain string is never resent.
+                    const turn = app._lastTurn;
                     const retryTurn =
-                        !hadOutput && !isRateLimitPayload(p) && app._lastTurn
-                            ? { ...app._lastTurn }
+                        !hadOutput &&
+                        isResendablePayload(p) &&
+                        app._turnWasOn(turn, errorSessionId(p))
+                            ? { ...turn }
                             : null;
                     const text =
                         typeof p === 'string'

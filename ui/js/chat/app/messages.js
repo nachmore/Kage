@@ -422,7 +422,9 @@ export function createMessagesMixin(dependencies) {
         /**
          * Show an error with Reconnect and Dismiss. `opts.detail` adds the
          * agent's raw text as a second line; `opts.retryTurn` (onError) is
-         * the failed turn, resent after a Reconnect when it still applies.
+         * the failed turn, resent after a Reconnect when it still applies:
+         * the window still shows the session the Reconnect started on, the
+         * turn ran there, and nothing was sent since.
          */
         showError(message, opts = {}) {
             const detail = opts.detail
@@ -448,25 +450,46 @@ export function createMessagesMixin(dependencies) {
             reconnectBtn?.addEventListener('click', async () => {
                 reconnectBtn.disabled = true;
                 reconnectBtn.textContent = t('chat.error.btn.reconnecting');
+                // The session this Reconnect is for. The user may select
+                // another while the agent restarts: then the outcome is
+                // not this window's to act on.
+                const startedOn = this.activeSessionId ?? null;
+                const moved = () => this.activeSessionId !== startedOn;
+                // A failed attempt's error keeps the failed turn, so the
+                // next Reconnect can still resend it.
+                const keep = { retryTurn: opts.retryTurn };
                 let outcome;
                 try {
-                    outcome = await this.invoke('reconnect_acp', {
-                        sessionId: this.activeSessionId ?? null,
-                    });
+                    outcome = await this.invoke('reconnect_acp', { sessionId: startedOn });
                 } catch (e) {
-                    this.showError(errLabel(t('chat.error.reconnect_failed_label'), e));
+                    if (moved()) {
+                        console.warn('[chat] reconnect failed for a session no longer shown');
+                        return;
+                    }
+                    this.showError(errLabel(t('chat.error.reconnect_failed_label'), e), keep);
                     return;
                 }
                 if (!outcome?.reconnected) {
-                    this.showError(t('chat.error.reconnect_failed'));
+                    if (!moved()) this.showError(t('chat.error.reconnect_failed'), keep);
                     return;
                 }
                 this.isConnected = true;
                 this.updateConnectionStatus();
-                this.elements.errorContainer.innerHTML = '';
-                // The session the window shows now (the user may have moved
-                // on while the agent restarted), before adopting a new id.
-                const shown = this.activeSessionId;
+                if (moved()) {
+                    // reconnect_acp pinned the window to the session it
+                    // reloaded; the window shows another one now. Keep that
+                    // one, and resend nothing.
+                    console.log(
+                        '[chat] reconnect finished after the window moved to',
+                        this.activeSessionId
+                    );
+                    this._repinWindowSession();
+                    return;
+                }
+                // Only this error's box: a newer one (or a new prompt that
+                // cleared it) stays.
+                if (reconnectBtn.isConnected) this.elements.errorContainer.innerHTML = '';
+                const shown = startedOn;
                 const sid = outcome.sessionId;
                 if (sid && sid !== this.activeSessionId) {
                     console.log('[chat] adopting reconnect session id:', sid);

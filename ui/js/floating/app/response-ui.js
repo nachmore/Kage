@@ -9,7 +9,7 @@ import {
     getActionsForText,
     getConfig,
     handOffShellActivity,
-    isRateLimitPayload,
+    isResendablePayload,
     offlineMessage,
     pruneShellActivity,
     renderMarkdown,
@@ -319,6 +319,13 @@ export const ResponseUiMethods = {
      */
     async _onMessageError(event, online) {
         if (!this.isWaitingForResponse) return;
+        const payload = event.payload;
+        // A turn on a session this window has since left (and maybe sent a
+        // new prompt from): not the turn on screen, which goes on.
+        if (this._errorIsForOtherSession(payload)) {
+            console.log('[floating] message_error for a session not shown:', payload.sessionId);
+            return;
+        }
         this.isWaitingForResponse = false;
         this._finishShellActivity();
         this.computerControlActive = false;
@@ -326,18 +333,21 @@ export const ResponseUiMethods = {
         this.elements.floatingStopBtn.style.display = 'none';
         this.updateDatetimeVisibility();
         _resetDiagramFailures();
-        // Read before showError, which overwrites currentResponse.
+        // Read before showError, which overwrites currentResponse. An extra
+        // veto on top of the backend's `resendable` (it sees progress this
+        // window doesn't, e.g. a permission request that was approved).
         const hadOutput = !!this.currentResponse?.trim() || this.toolUsages?.length > 0;
         if (!online) {
             this.showError(offlineMessage());
             return;
         }
-        const payload = event.payload;
-        // Reconnect may resend this turn only if nothing of it got through
-        // (nothing to repeat) and it wasn't a rate limit.
+        // Reconnect may resend this turn only when the backend says nothing
+        // of it got through and the error is about its session (any id it
+        // had across a migration). A plain string is never resent.
+        const turn = this._lastTurn;
         const retryTurn =
-            !hadOutput && !isRateLimitPayload(payload) && this._lastTurn
-                ? { ...this._lastTurn }
+            !hadOutput && isResendablePayload(payload) && this._turnWasOn(turn, payload.sessionId)
+                ? { ...turn }
                 : null;
         const text =
             typeof payload === 'string'
@@ -383,35 +393,48 @@ export const ResponseUiMethods = {
 
     /**
      * Reconnect clicked under an error: restart the agent and reload this
-     * window's session, then resend the failed turn when nothing of it got
-     * through and nothing was sent since (`retryTurn`, see onError).
+     * window's session, then resend the failed turn when the backend said it
+     * may be (`retryTurn`, see _onMessageError), nothing was sent since, and
+     * the window still holds the session the Reconnect started on. A failed
+     * attempt leaves the button, and the turn, for the next one.
      */
     async _reconnectFromError(btn, retryTurn) {
         btn.disabled = true;
         btn.textContent = t('chat.error.btn.reconnecting');
+        const startedOn = this.floatingSessionId ?? null;
         let outcome;
         try {
-            outcome = await this.invoke('reconnect_acp', {
-                sessionId: this.floatingSessionId ?? null,
-            });
+            outcome = await this.invoke('reconnect_acp', { sessionId: startedOn });
         } catch (e) {
             console.log('Reconnect failed:', e);
-            btn.textContent = t('chat.error.btn.reconnect');
-            btn.disabled = false;
-            let failure = this.elements.responseText.querySelector('.error-reconnect-failed');
-            if (!failure) {
-                failure = document.createElement('div');
-                failure.className = 'error-reconnect-failed';
-                btn.before(failure);
-            }
-            failure.textContent = errLabel(t('chat.error.reconnect_failed_label'), e);
-            this.windowManager.resizeWindow();
+            this._showReconnectFailure(btn, errLabel(t('chat.error.reconnect_failed_label'), e));
             return;
         }
-        // The session may have moved (the reload made a fresh one): the
-        // resend below goes to whichever id the window holds now.
-        const sid = outcome?.sessionId;
-        if (sid && sid !== this.floatingSessionId) {
+        if (!outcome?.reconnected) {
+            console.log('Reconnect failed: the agent did not come back');
+            this._showReconnectFailure(btn, t('chat.error.reconnect_failed'));
+            return;
+        }
+        // The agent is back — drop the error/limit pose.
+        signalMascotRecovered();
+        const moved = (this.floatingSessionId ?? null) !== startedOn;
+        const sid = outcome.sessionId;
+        if (moved) {
+            // reconnect_acp pinned the window to the session it reloaded;
+            // the window holds another one now. Keep that one, resend
+            // nothing.
+            console.log(
+                '[floating] reconnect finished after the window moved to',
+                this.floatingSessionId
+            );
+            if (this.floatingSessionId) {
+                this.invoke('set_window_session', {
+                    label: WINDOW.FLOATING,
+                    sessionId: this.floatingSessionId,
+                }).catch(() => {});
+            }
+        } else if (sid && sid !== this.floatingSessionId) {
+            // The reload made a fresh session: the resend below goes to it.
             console.log('[floating] adopting reconnect session id:', sid);
             this.floatingSessionId = sid;
             this.invoke('set_window_session', {
@@ -419,19 +442,35 @@ export const ResponseUiMethods = {
                 sessionId: sid,
             }).catch(() => {});
         }
-        // The agent is back — drop the error/limit pose.
-        signalMascotRecovered();
         if (
+            !moved &&
             retryTurn &&
+            retryTurn.sessionId === startedOn &&
             retryTurn.generation === this._promptGeneration &&
             this.canSendAgentPrompt(this.floatingSessionId)
         ) {
             await this._resendTurn(retryTurn);
             return;
         }
+        // Only this error goes: a turn started since keeps its response.
+        if (!btn.isConnected) return;
         this.elements.responseText.textContent = '';
         this.elements.contentArea.classList.remove('visible');
         this.elements.expandBtn.classList.remove('visible');
+        this.windowManager.resizeWindow();
+    },
+
+    /** A Reconnect that failed: say why above the button, ready again. */
+    _showReconnectFailure(btn, text) {
+        btn.textContent = t('chat.error.btn.reconnect');
+        btn.disabled = false;
+        let failure = this.elements.responseText.querySelector('.error-reconnect-failed');
+        if (!failure) {
+            failure = document.createElement('div');
+            failure.className = 'error-reconnect-failed';
+            btn.before(failure);
+        }
+        failure.textContent = text;
         this.windowManager.resizeWindow();
     },
 
