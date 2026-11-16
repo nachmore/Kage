@@ -320,9 +320,11 @@ export const LifecycleEventsMethods = {
             // message_error is only emitted to the window that owns the turn,
             // so there's no session filter to apply here (unlike the chunk
             // path). Rate limit gets its own pose; everything else is `error`.
-            // A prompt failure naming a session this window has left isn't
-            // about the turn on screen (handleMessageError ignores it too).
+            // A prompt failure naming a session this window has left, or a
+            // turn other than its last one, isn't about the turn on screen
+            // (handleMessageError ignores it too).
             if (this._errorIsForOtherSession(event?.payload)) return;
+            if (this._errorIsForOtherTurn(event?.payload)) return;
             signalMascotError(event?.payload);
             this.handleMessageError(event);
         });

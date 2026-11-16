@@ -123,6 +123,17 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     // — a module-level callback would capture the answer to whichever
     // prompt happens to be visible. Any path that drops a request without
     // an answer must resolve it false so the awaiting tool call ends.
+    /**
+     * The Kage permission token a request came with (`permission_request`'s
+     * `permissionToken`), or null. Every cleanup matches requests by it:
+     * a restarted agent reuses JSON-RPC ids, so an id alone can name a
+     * different request.
+     */
+    function tokenOf(notification) {
+        const token = notification?._kagePermissionToken;
+        return typeof token === 'string' && token ? token : null;
+    }
+
     function rejectDropped(req) {
         const cb = req?.extCallback;
         if (!cb) return;
@@ -172,7 +183,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             id: notification.id,
             // Echoed with the answer: the backend answers only the request
             // it gave this token to (a restarted agent reuses ids).
-            permissionToken: notification._kagePermissionToken || null,
+            permissionToken: tokenOf(notification),
             sessionId: params.sessionId || '',
             toolCall: toolCall,
             options: params.options || [],
@@ -394,14 +405,19 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
 
     /**
      * Ask the backend to approve the queued requests `plan` covers. It
-     * approves only those its policy allows now and returns their ids;
-     * the rest stay queued for the user to answer.
+     * approves only those its policy allows now and returns their
+     * permission tokens; the rest stay queued for the user to answer.
+     *
+     * Removed from the queue by token only: while the call is in flight a
+     * restarted agent can ask a new request under an approved one's id, and
+     * that one was answered by nobody.
      */
     async function approveCoveredQueued(plan) {
         const candidates = _permissionQueue.filter(
             (q) =>
                 !q.notification?.extCallback &&
                 !q.notification?._kageBackground &&
+                !!tokenOf(q.notification) &&
                 plan.covers(q.notification)
         );
         if (candidates.length === 0) return;
@@ -409,20 +425,18 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         try {
             approved = await invoke('approve_permissions_if_allowed', {
                 requestIds: candidates.map((q) => q.notification.id),
-                permissionTokens: candidates.map(
-                    (q) => q.notification._kagePermissionToken || null
-                ),
+                permissionTokens: candidates.map((q) => tokenOf(q.notification)),
             });
         } catch (e) {
             console.error('Failed to approve queued requests:', e);
             return;
         }
         const done = new Set(
-            (Array.isArray(approved) ? approved : []).map((id) => JSON.stringify(id))
+            (Array.isArray(approved) ? approved : []).filter(
+                (t) => typeof t === 'string' && t !== ''
+            )
         );
-        _permissionQueue = _permissionQueue.filter(
-            (q) => !done.has(JSON.stringify(q.notification?.id))
-        );
+        _permissionQueue = _permissionQueue.filter((q) => !done.has(tokenOf(q.notification)));
     }
 
     /**
@@ -680,10 +694,13 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
 
     function wireDismissalListener() {
         appWindow.listen(EVT.PERMISSION_DISMISSED, (event) => {
-            // The payload carries the dismissed request's id (multiple
-            // windows can each have their own pending permission).
+            // The payload names the dismissed request by its id and its
+            // Kage permission token (multiple windows can each have their
+            // own pending permission).
             const dismissedId = event?.payload?.requestId;
-            if (dismissedId === undefined || dismissedId === null) {
+            const rawToken = event?.payload?.permissionToken;
+            const dismissedToken = typeof rawToken === 'string' && rawToken ? rawToken : null;
+            if ((dismissedId === undefined || dismissedId === null) && !dismissedToken) {
                 // Broadcast dismissal (legacy shape) — drop everything.
                 console.log('Permission dismissed externally (broadcast)');
                 for (const q of _permissionQueue) rejectDropped(q.notification);
@@ -691,22 +708,18 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 hidePermissionModal();
                 return;
             }
-            // A restarted agent reuses ids: when both sides know the
-            // request's token, the token decides, so withdrawing the old
-            // process's request leaves the new one's prompt alone.
-            const dismissedToken = event?.payload?.permissionToken || null;
-            const matches = (id, token) =>
-                dismissedToken && token
-                    ? token === dismissedToken
-                    : JSON.stringify(id) === JSON.stringify(dismissedId);
-            // Remove any queued copy of that request either way.
+            // The token decides, never the id alone: a restarted agent
+            // reuses ids, so withdrawing the old process's request leaves
+            // the new one's prompt alone. A dismissal without a token
+            // can't say which request it means, and closes nothing.
+            if (!dismissedToken) {
+                console.log('Permission dismissal without a token; nothing to match');
+                return;
+            }
             _permissionQueue = _permissionQueue.filter(
-                (q) => !matches(q.notification?.id, q.notification?._kagePermissionToken)
+                (q) => tokenOf(q.notification) !== dismissedToken
             );
-            if (
-                currentPermissionRequest &&
-                matches(currentPermissionRequest.id, currentPermissionRequest.permissionToken)
-            ) {
+            if (currentPermissionRequest?.permissionToken === dismissedToken) {
                 console.log('Permission dismissed externally');
                 // hidePermissionModal advances to the next queued request.
                 hidePermissionModal();

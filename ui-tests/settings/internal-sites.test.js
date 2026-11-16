@@ -232,6 +232,42 @@ describe('InternalSitesSettingsModule', () => {
         expect(mod._profiles[0].proxy.script).toBe('echo ok');
     });
 
+    // R3: a dismissal is matched by the Kage permission token only.
+    it("a dismissal closes the draft's permission prompt only by its token", async () => {
+        tauri = setupTauriMock({
+            internal_sites_draft_script: () => new Promise(() => {}),
+        });
+        mount({});
+        click('[data-is-action="add"]');
+        type('[data-is-field="sample_url"]', 'https://wiki.example.test/');
+        click('[data-is-action="draft-script"]');
+        await flush();
+        click('[data-isd-action="start"]');
+        await flush();
+        await flush();
+        const [, args] = tauri.invoke.mock.calls.find(
+            ([cmd]) => cmd === 'internal_sites_draft_script'
+        );
+        tauri.emit('internal_sites_draft_session', { requestId: args.requestId, sessionId: 's1' });
+        tauri.emit('permission_request', {
+            toolName: 'shell',
+            permissionToken: 'new-7',
+            notification: {
+                id: 7,
+                params: { sessionId: 's1', toolCall: { title: 'shell' }, options: [] },
+            },
+        });
+        expect(document.querySelector('.isd-permission')).not.toBeNull();
+
+        // The old process's request 7, and an id with no token: not this one.
+        tauri.emit('permission_dismissed', { requestId: 7, permissionToken: 'old-7' });
+        tauri.emit('permission_dismissed', { requestId: 7 });
+        expect(document.querySelector('.isd-permission')).not.toBeNull();
+
+        tauri.emit('permission_dismissed', { requestId: 7, permissionToken: 'new-7' });
+        expect(document.querySelector('.isd-permission')).toBeNull();
+    });
+
     it('cancels a running draft and discards its late result', async () => {
         let finish;
         tauri = setupTauriMock({

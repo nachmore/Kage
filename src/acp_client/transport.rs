@@ -43,6 +43,43 @@ thread_local! {
         const { std::cell::Cell::new(None) };
 }
 
+/// A [`RequestNotSent`](super::types::RequestNotSent) saying `detail`.
+fn not_sent(detail: impl std::fmt::Display) -> anyhow::Error {
+    anyhow::Error::new(super::types::RequestNotSent {
+        detail: detail.to_string(),
+    })
+}
+
+/// Write `line` and a newline to `w`, keeping count of what went out. A
+/// failure before the first byte is a
+/// [`RequestNotSent`](super::types::RequestNotSent): the agent cannot have
+/// read any of it. One after that is a plain error, since the agent may
+/// have read the whole line (only the newline, or the flush, failed).
+pub(crate) fn write_line_counted(w: &mut dyn Write, line: &str) -> Result<()> {
+    let mut buf = Vec::with_capacity(line.len() + 1);
+    buf.extend_from_slice(line.as_bytes());
+    buf.push(b'\n');
+    let mut written = 0usize;
+    while written < buf.len() {
+        let err = match w.write(&buf[written..]) {
+            Ok(0) => std::io::Error::new(std::io::ErrorKind::WriteZero, "failed to write line"),
+            Ok(n) => {
+                written += n;
+                continue;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => e,
+        };
+        return Err(if written == 0 {
+            not_sent(err)
+        } else {
+            err.into()
+        });
+    }
+    w.flush()?;
+    Ok(())
+}
+
 /// Manages the low-level connection to the ACP server (pipe or TCP),
 /// the background reader thread, and raw line-based I/O.
 pub struct AcpTransport {
@@ -106,6 +143,8 @@ pub struct AcpTransport {
     pub connected: Arc<Mutex<bool>>,
     /// Epoch millis of the last message from the server.
     pub last_activity: Arc<Mutex<u64>>,
+    /// Test hook: overrides `PROMPT_IDLE_TIMEOUT` (`None`: the default).
+    prompt_idle_timeout: Mutex<Option<Duration>>,
 }
 
 impl AcpTransport {
@@ -130,7 +169,15 @@ impl AcpTransport {
             debug_mode: Arc::new(Mutex::new(false)),
             connected: Arc::new(Mutex::new(false)),
             last_activity: Arc::new(Mutex::new(0)),
+            prompt_idle_timeout: Mutex::new(None),
         }
+    }
+
+    /// Test hook: how long a `session/prompt` may go with no inbound
+    /// activity at all before it times out (`None`: `PROMPT_IDLE_TIMEOUT`).
+    #[doc(hidden)]
+    pub fn set_prompt_idle_timeout(&self, timeout: Option<Duration>) {
+        *self.prompt_idle_timeout.lock_or_recover() = timeout;
     }
 
     pub fn is_connected(&self) -> bool {
@@ -681,7 +728,7 @@ impl AcpTransport {
             method: method.to_string(),
             params,
         };
-        let request_json = serde_json::to_string(&request)?;
+        let request_json = serde_json::to_string(&request).map_err(not_sent)?;
         let debug = *self.debug_mode.lock_or_recover();
 
         if debug {
@@ -750,13 +797,19 @@ impl AcpTransport {
     ) -> Result<AcpResponse> {
         // Poll cadence: short enough that a wedged connection is detected
         // promptly after the idle window elapses, long enough not to spin.
-        const POLL_SLICE: Duration = Duration::from_secs(1);
+        let idle_timeout = self
+            .prompt_idle_timeout
+            .lock_or_recover()
+            .unwrap_or(Self::PROMPT_IDLE_TIMEOUT);
+        let poll_slice = Duration::from_secs(1)
+            .min(idle_timeout / 4)
+            .max(Duration::from_millis(10));
 
         let mut last_seen_activity = *self.last_activity.lock_or_recover();
         let mut idle = Duration::ZERO;
 
         loop {
-            match rx.recv_timeout(POLL_SLICE) {
+            match rx.recv_timeout(poll_slice) {
                 Ok(response) => {
                     if debug {
                         info!("[RECV] Response id={}", id);
@@ -772,13 +825,13 @@ impl AcpTransport {
                         idle = Duration::ZERO;
                         continue;
                     }
-                    idle += POLL_SLICE;
-                    if idle >= Self::PROMPT_IDLE_TIMEOUT {
+                    idle += poll_slice;
+                    if idle >= idle_timeout {
                         self.pending.lock_or_recover().remove(&id);
                         anyhow::bail!(
                             "Timeout waiting for response to {} (no activity for {}s)",
                             method,
-                            Self::PROMPT_IDLE_TIMEOUT.as_secs()
+                            idle_timeout.as_secs()
                         )
                     }
                 }
@@ -798,6 +851,11 @@ impl AcpTransport {
     /// `writeln!` + `flush`. This keeps the outer lock contention-free for
     /// readers (connect/disconnect) and avoids the per-write `TcpStream::try_clone`
     /// that was previously burning a kernel handle allocation on every message.
+    ///
+    /// A failure that left the agent with none of the line (no connection,
+    /// or the first write failed) is a
+    /// [`RequestNotSent`](super::types::RequestNotSent); see
+    /// [`write_line_counted`].
     pub fn write_line(&self, line: &str) -> Result<()> {
         // Pipe first
         let stdin_arc = {
@@ -806,9 +864,7 @@ impl AcpTransport {
         };
         if let Some(stdin_arc) = stdin_arc {
             let mut stdin = stdin_arc.lock_or_recover();
-            writeln!(stdin, "{}", line)?;
-            stdin.flush()?;
-            return Ok(());
+            return write_line_counted(&mut *stdin, line);
         }
 
         // Fall back to TCP
@@ -818,12 +874,10 @@ impl AcpTransport {
         };
         if let Some(tcp_arc) = tcp_arc {
             let mut writer = tcp_arc.lock_or_recover();
-            writeln!(writer, "{}", line)?;
-            writer.flush()?;
-            return Ok(());
+            return write_line_counted(&mut *writer, line);
         }
 
-        anyhow::bail!("No write handle available")
+        Err(not_sent("No write handle available"))
     }
 
     /// [`write_line`](Self::write_line), but only to the connection of

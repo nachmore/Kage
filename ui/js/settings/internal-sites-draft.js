@@ -193,15 +193,15 @@ export class DraftDialog {
             }),
             listen(EVT.PERMISSION_DISMISSED, (e) => {
                 const id = e.payload?.requestId;
-                const token = e.payload?.permissionToken || null;
+                const raw = e.payload?.permissionToken;
+                const token = typeof raw === 'string' && raw ? raw : null;
                 if (!this._permission) return;
-                // A restarted agent reuses ids; the token decides when both
-                // sides have one.
-                const same =
-                    token && this._permission.token
-                        ? token === this._permission.token
-                        : JSON.stringify(id) === JSON.stringify(this._permission.notification.id);
-                if (id == null || same) {
+                // The token decides, never the id alone: a restarted agent
+                // reuses ids. Only a broadcast (no id, no token) drops it
+                // whatever it is.
+                const broadcast = id == null && !token;
+                const same = !!token && token === this._permission.token;
+                if (broadcast || same) {
                     this._permission = null;
                     this._renderLive();
                 }

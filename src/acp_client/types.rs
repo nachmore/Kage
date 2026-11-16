@@ -107,6 +107,25 @@ impl AgentRpcError {
     }
 }
 
+/// A request that provably never reached the agent: there was no
+/// connection to write it to, or the write failed before any byte of it
+/// went out. `Display` is the underlying error's own text, so the substring
+/// checks that classify failures ("No write handle", "Broken pipe") see what
+/// they always saw. A write that failed part-way is not this: the agent may
+/// have read a whole line by then.
+#[derive(Debug, Clone)]
+pub struct RequestNotSent {
+    pub detail: String,
+}
+
+impl std::fmt::Display for RequestNotSent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.detail)
+    }
+}
+
+impl std::error::Error for RequestNotSent {}
+
 impl std::fmt::Display for AgentRpcError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.rendered)

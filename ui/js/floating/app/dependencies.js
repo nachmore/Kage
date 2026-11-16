@@ -38,7 +38,9 @@ import {
     errLabel,
     errMessage,
     errorSessionId,
+    isErrorForOtherTurn,
     isResendablePayload,
+    newTurnId,
 } from '../../shared/error-message.js';
 import { getActionsForText, renderQuickActionChips } from '../../shared/quick-actions.js';
 import {
@@ -147,12 +149,14 @@ export {
     hideExtensionBar,
     initMascotPointerSignals,
     isClipboardTrigger,
+    isErrorForOtherTurn,
     isResendablePayload,
     isUpdateCommandRunning,
     loadFrecency,
     loadSlashCommands,
     markOnline,
     matchShortcutFn,
+    newTurnId,
     messageLengthBucket,
     MessageStreamController,
     mountPromptForm,

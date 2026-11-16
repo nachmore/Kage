@@ -12,6 +12,7 @@ export function createComposerMixin(dependencies) {
         SpeechController,
         trackEvent,
         messageLengthBucket,
+        newTurnId,
     } = dependencies;
     return class {
         setupSpeech() {
@@ -84,11 +85,12 @@ export function createComposerMixin(dependencies) {
                         source: 'chat',
                         length: messageLengthBucket(message),
                     });
-                    this._recordTurn(this.activeSessionId, message, null);
+                    const turnId = this._recordTurn(this.activeSessionId, message, null);
                     await this.invoke('send_message_streaming', {
                         sessionId: this.activeSessionId,
                         message,
                         attachments: null,
+                        turnId,
                     });
                 } catch (e) {
                     this.handleMessageError({ payload: errLabel(t('chat.error.error_label'), e) });
@@ -219,11 +221,12 @@ export function createComposerMixin(dependencies) {
                     length: messageLengthBucket(message),
                     attachments: attachments?.length || 0,
                 });
-                this._recordTurn(this.activeSessionId, message, attachments);
+                const turnId = this._recordTurn(this.activeSessionId, message, attachments);
                 await this.invoke('send_message_streaming', {
                     sessionId: this.activeSessionId,
                     message,
                     attachments,
+                    turnId,
                 });
                 this.isConnected = true;
                 this.updateConnectionStatus();
@@ -235,9 +238,13 @@ export function createComposerMixin(dependencies) {
         /**
          * Remember the prompt going out, for Reconnect to resend if it fails
          * before any output. `seq` ties it to this send: a newer one
-         * replaces it.
+         * replaces it. Returns the turn's id, which goes with the send
+         * (`turnId`) and comes back on its MESSAGE_ERROR: an error is this
+         * turn's only when it names this id. `turnId` given: a turn the
+         * backend started and named (open_chat_with_message); `null`: one
+         * it named nothing, whose errors are then never this turn's.
          */
-        _recordTurn(sessionId, message, attachments) {
+        _recordTurn(sessionId, message, attachments, turnId = newTurnId()) {
             this._sendSeq = (this._sendSeq || 0) + 1;
             this._lastTurn = {
                 sessionId,
@@ -247,7 +254,9 @@ export function createComposerMixin(dependencies) {
                 message,
                 attachments,
                 seq: this._sendSeq,
+                turnId,
             };
+            return turnId;
         }
 
         /**
@@ -295,12 +304,14 @@ export function createComposerMixin(dependencies) {
          */
         async _resendTurn(turn) {
             this.startStreaming();
-            this._recordTurn(this.activeSessionId, turn.message, turn.attachments);
+            // A turn of its own: the failed one's late errors aren't its.
+            const turnId = this._recordTurn(this.activeSessionId, turn.message, turn.attachments);
             try {
                 await this.invoke('send_message_streaming', {
                     sessionId: this.activeSessionId,
                     message: turn.message,
                     attachments: turn.attachments,
+                    turnId,
                 });
                 this.isConnected = true;
                 this.updateConnectionStatus();
@@ -355,11 +366,12 @@ export function createComposerMixin(dependencies) {
                     source: 'shell_run',
                     length: messageLengthBucket(message),
                 });
-                this._recordTurn(sessionId, message, null);
+                const turnId = this._recordTurn(sessionId, message, null);
                 await this.invoke('send_message_streaming', {
                     sessionId,
                     message,
                     attachments: null,
+                    turnId,
                 });
                 this.isConnected = true;
                 this.updateConnectionStatus();

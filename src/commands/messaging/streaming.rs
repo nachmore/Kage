@@ -9,6 +9,11 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
     session_id: String,
     message: String,
     attachments: Option<Vec<serde_json::Value>>,
+    // The window's id for this prompt, echoed as `turnId` on its
+    // MESSAGE_ERROR so the window matches the error to this turn, not to a
+    // newer one on the same session. Absent (an extension's send): its
+    // errors name no turn and are never resent.
+    turn_id: Option<String>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
@@ -77,6 +82,8 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
         }),
     );
 
+    let turn_id = turn_id.filter(|t| !t.trim().is_empty());
+
     async_runtime::spawn_blocking(move || {
         let client_arc = client.clone();
         let config_arc = config.clone();
@@ -86,7 +93,13 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
                 crate::event_targets::emit_to_self(
                     &window,
                     events::MESSAGE_ERROR,
-                    &format!("Unable to connect: {}", e),
+                    &connect_failed_payload(&e.to_string(), Some(&session_id), turn_id.as_deref()),
+                );
+                // The turn started above ends here: badges in other windows.
+                crate::event_targets::emit_streaming_audience(
+                    &app_for_send,
+                    events::SESSION_ACTIVITY,
+                    &serde_json::json!({ "sessionId": &session_id, "kind": "failed" }),
                 );
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
@@ -103,6 +116,7 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
             result: send_result,
             session_id: failed_on,
             resendable,
+            outcome,
         } = send_user_prompt_report(
             &client,
             &tool_steering,
@@ -129,6 +143,10 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
 
         if let Err(e) = send_result {
             let error_str = format!("{}", e);
+            info!(
+                "Prompt on {} failed (outcome {:?}, resendable {})",
+                failed_on, outcome, resendable
+            );
             // A sign-in demand, or the agent still failing after an
             // automatic restart: say so, and keep the image heuristic below
             // from restarting a second time and dropping the session.
@@ -187,7 +205,13 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
                 crate::event_targets::emit_to_self(
                     &window,
                     events::MESSAGE_ERROR,
-                    &failed_prompt_payload(for_user, &error_str, &failed_on, resendable),
+                    &failed_prompt_payload(
+                        for_user,
+                        &error_str,
+                        &failed_on,
+                        resendable,
+                        turn_id.as_deref(),
+                    ),
                 );
             }
             // Clear activity badges in windows that aren't the originator
@@ -479,16 +503,21 @@ fn prompt_error_for_user(
 }
 
 /// The MESSAGE_ERROR payload for a user prompt that failed:
-/// `{ kind, key, message, detail, sessionId, resendable }`, `message` in
-/// the active locale.
+/// `{ kind, key, message, detail, sessionId, resendable, turnId }`,
+/// `message` in the active locale.
 ///
 /// - `sessionId`: the session the failed turn last ran on (recovery may
 ///   have moved it; windows adopted that id from `session_migrated`).
 /// - `resendable`: whether a window may send the prompt again as it is
-///   (Reconnect does): true only when no attempt of the turn streamed
-///   anything, ran or updated a tool, asked for permission or made an
-///   `fs/*` / `terminal/*` request, was rate limited or stopped
+///   (Reconnect does): true only when every attempt is known to have left
+///   the agent untouched (answered with an error, or never sent; never
+///   after a timeout or a connection lost after the write) and none of
+///   them streamed anything, ran or updated a tool, asked for permission
+///   or made an `fs/*` / `terminal/*` request, was rate limited or stopped
 ///   (`PromptReport::resendable`). Absent means false.
+/// - `turnId`: the id the window sent the prompt with (null if it gave
+///   none). A window attributes the error, and any resend, to the turn of
+///   that id only; one naming no turn is never resent.
 ///
 /// `for_user` is what `prompt_error_for_user` made of the error, if
 /// anything (`detail` is then the agent's raw text); otherwise the message
@@ -499,6 +528,7 @@ fn failed_prompt_payload(
     error_text: &str,
     session_id: &str,
     resendable: bool,
+    turn_id: Option<&str>,
 ) -> serde_json::Value {
     let (err, detail) = match for_user {
         Some((err, detail)) => (err, Some(detail)),
@@ -517,7 +547,44 @@ fn failed_prompt_payload(
         "detail": detail,
         "sessionId": session_id,
         "resendable": resendable,
+        "turnId": turn_id,
     })
+}
+
+/// The MESSAGE_ERROR payload for a user prompt that failed before it was
+/// sent (no connection, no session to send it on): the same shape as
+/// `failed_prompt_payload`, never resendable.
+fn unsent_prompt_payload(
+    kind: ErrorKind,
+    message: String,
+    session_id: Option<&str>,
+    turn_id: Option<&str>,
+) -> serde_json::Value {
+    let err = AppError::raw(kind, message);
+    serde_json::json!({
+        "kind": err.kind,
+        "key": err.key,
+        "message": err.localised_message(),
+        "detail": serde_json::Value::Null,
+        "sessionId": session_id,
+        "resendable": false,
+        "turnId": turn_id,
+    })
+}
+
+/// `unsent_prompt_payload` for a connect that failed. The message keeps
+/// its "Unable to connect: " text, which older windows still look for.
+fn connect_failed_payload(
+    reason: &str,
+    session_id: Option<&str>,
+    turn_id: Option<&str>,
+) -> serde_json::Value {
+    unsent_prompt_payload(
+        ErrorKind::ConnectionLost,
+        format!("Unable to connect: {}", reason),
+        session_id,
+        turn_id,
+    )
 }
 
 /// The `kind` of a failed prompt's error that the recovery ladder gave no
@@ -579,9 +646,14 @@ pub async fn cancel_generation(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri commands take state via parameters; can't be condensed.
 pub async fn open_chat_with_message<R: tauri::Runtime>(
     session_id: Option<String>,
     message: String,
+    // The caller's id for this prompt (see `send_message_streaming`); one
+    // is minted when it gives none. The main window learns it from
+    // `initial_message` and matches the prompt's MESSAGE_ERROR by it.
+    turn_id: Option<String>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
@@ -595,15 +667,18 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
         crate::commands::window::center_window_on_active_monitor(&main);
         let _ = main.show();
         let _ = main.set_focus();
+        let turn_id = turn_id
+            .filter(|t| !t.trim().is_empty())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         // Targeted emit: send to the main window only. Plain
         // `main.emit(...)` looks targeted but actually broadcasts to
         // every webview that has a listener — `emit_to` with a
         // WebviewWindow target is the one that actually scopes the
-        // dispatch.
+        // dispatch. `turnId` names the turn main records for it.
         let _ = app.emit_to(
             tauri::EventTarget::webview_window(window_labels::MAIN),
             "initial_message",
-            message.clone(),
+            serde_json::json!({ "message": &message, "turnId": &turn_id }),
         );
 
         // Nothing to send (e.g. the inline-assist icon clicked with no
@@ -631,7 +706,11 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
                     crate::event_targets::emit_to_self(
                         &window,
                         events::MESSAGE_ERROR,
-                        &format!("Unable to connect: {}", e),
+                        &connect_failed_payload(
+                            &e.to_string(),
+                            session_id.as_deref().filter(|s| !s.trim().is_empty()),
+                            Some(&turn_id),
+                        ),
                     );
                     return;
                 }
@@ -645,7 +724,12 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
                     crate::event_targets::emit_to_self(
                         &window,
                         events::MESSAGE_ERROR,
-                        &format!("Failed to send: {}", e),
+                        &unsent_prompt_payload(
+                            plain_prompt_error_kind(&e.to_string()),
+                            format!("Failed to send: {}", e),
+                            None,
+                            Some(&turn_id),
+                        ),
                     );
                     return;
                 }
@@ -681,6 +765,7 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
                 result,
                 session_id: failed_on,
                 resendable,
+                outcome,
             } = send_user_prompt_report(
                 &client,
                 &tool_steering,
@@ -701,11 +786,21 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
                 super::notifications::flush_session_chunks(app, &client, &session_id);
             }
             if let Err(e) = result {
+                info!(
+                    "Prompt on {} failed (outcome {:?}, resendable {})",
+                    failed_on, outcome, resendable
+                );
                 let for_user = prompt_error_for_user(&e, &config.lock_or_recover());
                 crate::event_targets::emit_to_self(
                     &window,
                     events::MESSAGE_ERROR,
-                    &failed_prompt_payload(for_user, &e.to_string(), &failed_on, resendable),
+                    &failed_prompt_payload(
+                        for_user,
+                        &e.to_string(),
+                        &failed_on,
+                        resendable,
+                        Some(&turn_id),
+                    ),
                 );
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
@@ -845,7 +940,9 @@ impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
 
 #[cfg(test)]
 mod prompt_error_tests {
-    use super::{failed_prompt_payload, prompt_error_for_user};
+    use super::{
+        connect_failed_payload, failed_prompt_payload, prompt_error_for_user, unsent_prompt_payload,
+    };
     use crate::acp_client::types::{AcpError, AgentRpcError, PromptRecoveryError};
     use crate::config::{AcpMode, AgentConnection, Config};
 
@@ -959,13 +1056,14 @@ mod prompt_error_tests {
     fn payload_carries_kind_key_message_detail_and_session() {
         crate::i18n::init(Some("en"));
         let for_user = prompt_error_for_user(&unreachable(RAW), &kiro_local());
-        let json = failed_prompt_payload(for_user, RAW, "s1", true);
+        let json = failed_prompt_payload(for_user, RAW, "s1", true, Some("turn-7"));
         assert_eq!(json["kind"], "agent_unreachable");
         assert_eq!(json["key"], "errors.agent.unreachable_after_restart_kiro");
         assert!(json["message"].as_str().unwrap().contains("kiro-cli login"));
         assert_eq!(json["detail"], RAW);
         assert_eq!(json["sessionId"], "s1");
         assert_eq!(json["resendable"], true);
+        assert_eq!(json["turnId"], "turn-7");
     }
 
     #[test]
@@ -974,18 +1072,39 @@ mod prompt_error_tests {
         // to say a permission-approved action ran before the error.
         crate::i18n::init(Some("en"));
         let text = "ACP error: Internal error — dispatch failure";
-        let json = failed_prompt_payload(None, text, "s9", false);
+        let json = failed_prompt_payload(None, text, "s9", false, None);
         assert_eq!(json["kind"], "internal");
         assert_eq!(json["message"], format!("Failed to send: {text}"));
         assert_eq!(json["detail"], serde_json::Value::Null);
         assert_eq!(json["sessionId"], "s9");
         assert_eq!(json["resendable"], false);
+        assert_eq!(json["turnId"], serde_json::Value::Null);
 
-        let json = failed_prompt_payload(None, "Rate limit exceeded", "s9", false);
+        let json = failed_prompt_payload(None, "Rate limit exceeded", "s9", false, None);
         assert_eq!(json["kind"], "rate_limited");
-        let json = failed_prompt_payload(None, "Timeout waiting for response", "s9", true);
+        let json = failed_prompt_payload(None, "Timeout waiting for response", "s9", true, None);
         assert_eq!(json["kind"], "timeout");
         assert_eq!(json["resendable"], true);
+    }
+
+    #[test]
+    fn a_connect_failure_is_an_object_naming_its_turn_and_never_resendable() {
+        crate::i18n::init(Some("en"));
+        let json = connect_failed_payload("refused", Some("s3"), Some("turn-1"));
+        assert_eq!(json["kind"], "connection_lost");
+        assert_eq!(json["message"], "Unable to connect: refused");
+        assert_eq!(json["sessionId"], "s3");
+        assert_eq!(json["turnId"], "turn-1");
+        assert_eq!(json["resendable"], false);
+        let json = unsent_prompt_payload(
+            crate::error::ErrorKind::ConnectionLost,
+            "Failed to send: no session".to_string(),
+            None,
+            None,
+        );
+        assert_eq!(json["sessionId"], serde_json::Value::Null);
+        assert_eq!(json["turnId"], serde_json::Value::Null);
+        assert_eq!(json["resendable"], false);
     }
 }
 

@@ -60,6 +60,85 @@ impl TurnProgress {
     }
 }
 
+/// How one `session/prompt` attempt ended, as far as Kage can know.
+///
+/// Turn progress only says what Kage saw; it can't tell "the agent did
+/// nothing" from "the agent is still at it, or did things Kage never heard
+/// of". So a prompt is resent as it is only when how it ended rules that
+/// out (see [`TurnTally::resendable`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptOutcome {
+    /// The agent answered the request: a result, or a JSON-RPC error reply
+    /// to it. Either way it is done with the turn.
+    Answered,
+    /// The request provably never reached the agent: no byte of it was
+    /// written (`RequestNotSent`).
+    NotSent,
+    /// Anything else: it timed out, the connection was lost after it went
+    /// out, the reader went away. The agent may have run it, or may still
+    /// be running it.
+    Unknown,
+}
+
+impl PromptOutcome {
+    /// How a turn whose attempts ended as `self` and `other` stands: unknown
+    /// if either is, answered if either was.
+    pub fn and(self, other: PromptOutcome) -> PromptOutcome {
+        use PromptOutcome::*;
+        match (self, other) {
+            (Unknown, _) | (_, Unknown) => Unknown,
+            (Answered, _) | (_, Answered) => Answered,
+            (NotSent, NotSent) => NotSent,
+        }
+    }
+
+    /// Whether the agent is known to be done with it, or never had it.
+    pub fn is_settled(self) -> bool {
+        self != PromptOutcome::Unknown
+    }
+}
+
+/// What every attempt of one user turn did and how each ended, added up
+/// as the recovery ladder goes (it may resend the turn). Read once the
+/// ladder is done, so nothing depends on a progress record that is gone by
+/// then.
+#[derive(Debug, Default)]
+pub(crate) struct TurnTally {
+    progress: std::cell::Cell<TurnProgress>,
+    /// `None` until an attempt has ended.
+    outcome: std::cell::Cell<Option<PromptOutcome>>,
+}
+
+impl TurnTally {
+    /// One attempt ended as `outcome`, having done `progress`.
+    pub(crate) fn add_attempt(&self, progress: TurnProgress, outcome: PromptOutcome) {
+        let mut total = self.progress.get();
+        total.absorb(progress);
+        self.progress.set(total);
+        let outcome = match self.outcome.get() {
+            Some(before) => before.and(outcome),
+            None => outcome,
+        };
+        self.outcome.set(Some(outcome));
+    }
+
+    pub(crate) fn progress(&self) -> TurnProgress {
+        self.progress.get()
+    }
+
+    /// How the attempts ended, together. No attempt ended at all: unknown.
+    pub(crate) fn outcome(&self) -> PromptOutcome {
+        self.outcome.get().unwrap_or(PromptOutcome::Unknown)
+    }
+
+    /// Whether the turn may be sent again as it is: every attempt is known
+    /// to have left the agent untouched (answered with an error, or never
+    /// sent), and none of them did anything (`TurnProgress::resendable`).
+    pub(crate) fn resendable(&self) -> bool {
+        self.outcome().is_settled() && self.progress().resendable()
+    }
+}
+
 /// Open turns, keyed by session id.
 pub(crate) type TurnProgressMap = Arc<Mutex<HashMap<String, TurnProgress>>>;
 
@@ -337,6 +416,43 @@ mod tests {
             &json!({ "jsonrpc": "2.0", "method": "session/update", "params": { "update": { "sessionUpdate": "plan" } } }),
         );
         assert_eq!(get(&map, "s2"), TurnProgress::default());
+    }
+
+    #[test]
+    fn only_a_turn_known_to_have_left_the_agent_untouched_is_resendable() {
+        use PromptOutcome::*;
+        let nothing = TurnProgress::default();
+        let tally = |attempts: &[PromptOutcome]| {
+            let t = TurnTally::default();
+            for o in attempts {
+                t.add_attempt(nothing, *o);
+            }
+            t
+        };
+        // No attempt ended: nothing is known.
+        assert!(!tally(&[]).resendable());
+        assert!(tally(&[Answered]).resendable());
+        assert!(tally(&[NotSent]).resendable());
+        assert!(tally(&[NotSent, Answered]).resendable());
+        assert_eq!(tally(&[NotSent, Answered]).outcome(), Answered);
+        assert_eq!(tally(&[NotSent, NotSent]).outcome(), NotSent);
+        // A timeout or a connection lost after the write, at any attempt.
+        assert!(!tally(&[Unknown]).resendable());
+        assert!(!tally(&[Unknown, Answered]).resendable());
+        assert!(!tally(&[Answered, Unknown]).resendable());
+        assert_eq!(tally(&[Unknown, NotSent]).outcome(), Unknown);
+
+        // A settled turn that did something is not resendable either.
+        let t = TurnTally::default();
+        t.add_attempt(
+            TurnProgress {
+                tool_calls: 1,
+                ..Default::default()
+            },
+            Answered,
+        );
+        assert!(!t.resendable());
+        assert_eq!(t.progress().tool_calls, 1);
     }
 
     #[test]
