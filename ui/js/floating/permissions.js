@@ -129,6 +129,10 @@ waitForTauri(({ invoke, appWindow }) => {
             try {
                 stillPending = await invokeFn('has_pending_permission', {
                     requestId: notification.id ?? null,
+                    permissionToken:
+                        typeof event.payload.permissionToken === 'string'
+                            ? event.payload.permissionToken
+                            : null,
                 });
             } catch (_e) {
                 stillPending = true;

@@ -35,13 +35,24 @@ enum Prompt {
     LoadFails,
     /// Prompts succeed, and `session/load` takes 600 ms.
     SlowLoad,
+    /// A `session/request_permission` request, then `-32603` (the agent
+    /// asked, was answered, acted, and then failed).
+    PermissionThenFailure,
+    /// The connection closes on the first prompt (the agent died mid-turn).
+    ConnectionCloses,
+    /// Prompts are never answered while the connection lives.
+    Hang,
+    /// The first prompt fails with `-32603` after 300 ms; later prompts on
+    /// the same connection succeed after 500 ms.
+    SlowFailThenSlowOk,
 }
 
 struct MockAgent {
     port: u16,
     connections: Arc<AtomicUsize>,
-    /// (connection index, method) of every request, in arrival order.
-    requests: Arc<Mutex<Vec<(usize, String)>>>,
+    /// (connection index, method, params) of every request, in arrival
+    /// order.
+    requests: Arc<Mutex<Vec<(usize, String, Value)>>>,
 }
 
 impl MockAgent {
@@ -78,8 +89,29 @@ impl MockAgent {
             .lock()
             .unwrap()
             .iter()
-            .filter(|(_, m)| m == method)
+            .filter(|(_, m, _)| m == method)
             .count()
+    }
+
+    /// How many requests of `method` connection `index` had.
+    fn count_on(&self, index: usize, method: &str) -> usize {
+        self.requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(i, m, _)| *i == index && m == method)
+            .count()
+    }
+
+    /// The params of every request of `method`, in arrival order.
+    fn params(&self, method: &str) -> Vec<Value> {
+        self.requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, m, _)| m == method)
+            .map(|(_, _, p)| p.clone())
+            .collect()
     }
 
     fn client(&self) -> AcpClient {
@@ -96,9 +128,10 @@ fn serve(
     index: usize,
     behaviour: Prompt,
     stream: std::net::TcpStream,
-    log: Arc<Mutex<Vec<(usize, String)>>>,
+    log: Arc<Mutex<Vec<(usize, String, Value)>>>,
 ) {
     let mut writer = stream.try_clone().unwrap();
+    let mut prompts_here = 0usize;
     for line in BufReader::new(stream).lines() {
         let Ok(line) = line else { return };
         let Ok(msg) = serde_json::from_str::<Value>(&line) else {
@@ -110,11 +143,14 @@ fn serve(
         if msg.get("id").is_none() {
             continue; // a notification (session/cancel)
         }
-        log.lock().unwrap().push((index, method.to_string()));
+        log.lock()
+            .unwrap()
+            .push((index, method.to_string(), msg["params"].clone()));
         let sid = msg["params"]["sessionId"].clone();
         let mut lines = Vec::new();
         let reply = match method {
             "session/prompt" => {
+                prompts_here += 1;
                 let internal = json!({
                     "code": -32603, "message": "Internal error", "data": INCIDENT_DETAIL
                 });
@@ -146,6 +182,27 @@ fn serve(
                     Prompt::AuthRequired => json!({
                         "error": { "code": -32000, "message": "Authentication required" }
                     }),
+                    Prompt::PermissionThenFailure => {
+                        lines.push(json!({
+                            "jsonrpc": "2.0", "id": "perm-1",
+                            "method": "session/request_permission",
+                            "params": { "sessionId": sid, "toolCall": {
+                                "toolCallId": "t1", "title": "Delete build/"
+                            }, "options": [] }
+                        }));
+                        json!({ "error": internal })
+                    }
+                    Prompt::ConnectionCloses => return,
+                    Prompt::Hang => continue,
+                    Prompt::SlowFailThenSlowOk => {
+                        if prompts_here == 1 {
+                            std::thread::sleep(std::time::Duration::from_millis(300));
+                            json!({ "error": internal })
+                        } else {
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                            json!({ "result": { "stopReason": "end_turn" } })
+                        }
+                    }
                 }
             }
             "session/new" => json!({ "result": { "sessionId": "NEW" } }),
@@ -512,4 +569,352 @@ fn a_restart_would_interrupt_any_turn_on_a_live_agent() {
     client.set_in_flight_prompt("S1", "a prompt on a dead agent");
     client.disconnect();
     assert!(!client.restart_would_interrupt_work());
+}
+
+// --- The session's own working directory on every recovery reload ---
+
+const PROJECT: &str = "/tmp/original-project";
+
+/// A session created in `PROJECT`, on a client of `agent`.
+fn client_with_project_session(agent: &MockAgent) -> (AcpClient, String) {
+    let client = agent.client();
+    let (id, _) = client
+        .create_session(Some(PROJECT.to_string()))
+        .expect("session/new");
+    assert_eq!(agent.params("session/new")[0]["cwd"], PROJECT);
+    (client, id)
+}
+
+#[test]
+fn the_automatic_restart_reloads_the_session_in_its_own_directory() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::DispatchFailure, Prompt::Ok]);
+    let (client, id) = client_with_project_session(&agent);
+
+    client
+        .send_chat_streaming_with_recovery(id, "hello".into(), None, None)
+        .expect("recovered by the restart");
+
+    let loads = agent.params("session/load");
+    assert_eq!(loads.len(), 1);
+    assert_eq!(loads[0]["cwd"], PROJECT, "{loads:?}");
+}
+
+#[test]
+fn the_transport_restart_reloads_the_session_in_its_own_directory() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::ConnectionCloses, Prompt::Ok]);
+    let (client, id) = client_with_project_session(&agent);
+
+    client
+        .send_chat_streaming_with_recovery(id, "hello".into(), None, None)
+        .expect("recovered by the restart");
+
+    let loads = agent.params("session/load");
+    assert_eq!(loads.len(), 1);
+    assert_eq!(loads[0]["cwd"], PROJECT, "{loads:?}");
+}
+
+#[test]
+fn a_replacement_session_is_created_in_the_original_directory() {
+    isolate_user_dirs();
+    // Connection 0 drops the prompt; connection 1 can't load the session,
+    // so the ladder replaces it with a fresh one.
+    let agent = MockAgent::start(vec![Prompt::ConnectionCloses, Prompt::LoadFails]);
+    let (client, id) = client_with_project_session(&agent);
+
+    client
+        .send_chat_streaming_with_recovery(id, "hello".into(), None, None)
+        .expect("resent on a fresh session");
+
+    let news = agent.params("session/new");
+    assert_eq!(news.len(), 2, "{news:?}");
+    assert_eq!(news[1]["cwd"], PROJECT, "{news:?}");
+}
+
+#[test]
+fn a_reload_without_a_directory_uses_the_one_the_session_was_created_in() {
+    // Reconnect reloads the window's session on the restarted agent; when
+    // its history file names no directory, the one recorded this run holds.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::Ok]);
+    let (client, id) = client_with_project_session(&agent);
+
+    client.restart_connection().expect("restart");
+    client
+        .load_existing_session(&id, None)
+        .expect("session/load");
+
+    assert_eq!(agent.params("session/load")[0]["cwd"], PROJECT);
+}
+
+// --- Answers to the agent's requests stay on their connection ---
+
+#[test]
+fn a_permission_answer_is_never_written_to_a_restarted_agent() {
+    // A restarted agent numbers its requests afresh: an answer meant for
+    // the old process's request must not reach the new one, where the same
+    // id may be an unrelated request.
+    isolate_user_dirs();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    // (connection index, line) of every answer (a line with no method).
+    let answers = Arc::new(Mutex::new(Vec::<(usize, Value)>::new()));
+    {
+        let answers = answers.clone();
+        std::thread::spawn(move || {
+            for (index, stream) in listener.incoming().enumerate() {
+                let Ok(stream) = stream else { return };
+                let answers = answers.clone();
+                std::thread::spawn(move || {
+                    let mut writer = stream.try_clone().unwrap();
+                    for line in BufReader::new(stream).lines() {
+                        let Ok(line) = line else { return };
+                        let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+                            continue;
+                        };
+                        if msg.get("method").is_none() {
+                            answers.lock().unwrap().push((index, msg));
+                            continue;
+                        }
+                        if msg.get("id").is_none() {
+                            continue;
+                        }
+                        let reply = json!({ "jsonrpc": "2.0", "id": msg["id"], "result": {} });
+                        if writeln!(writer, "{reply}").is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+    }
+    let client = AcpClient::new(AcpConnectionMode::Remote {
+        host: "127.0.0.1".to_string(),
+        port,
+    });
+    client.connect().expect("connect");
+    let old = client.connection_generation();
+
+    client.restart_connection().expect("restart");
+    let current = client.connection_generation();
+    assert_ne!(old, current);
+
+    assert!(!client
+        .send_permission_response_on(old, &json!(5), "allow_always")
+        .expect("no write error"));
+    assert!(client
+        .send_permission_response_on(current, &json!(5), "reject_once")
+        .expect("written"));
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while answers.lock().unwrap().is_empty() {
+        assert!(std::time::Instant::now() < deadline, "no answer arrived");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let answers = answers.lock().unwrap().clone();
+    assert_eq!(answers.len(), 1, "{answers:?}");
+    assert_eq!(answers[0].0, 1, "on the restarted connection");
+    assert_eq!(answers[0].1["result"]["outcome"]["optionId"], "reject_once");
+}
+
+// --- Whether a failed prompt may be resent ---
+
+fn report(client: &AcpClient, session: &str) -> kage::acp_client::PromptReport {
+    client.send_chat_streaming_with_recovery_report(
+        session.to_string(),
+        "hello".to_string(),
+        None,
+        None,
+    )
+}
+
+#[test]
+fn a_turn_that_asked_permission_then_failed_is_not_resendable() {
+    // The agent asked, the user allowed it, the action ran, then -32603:
+    // nothing was displayed, but resending would repeat the action.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::PermissionThenFailure, Prompt::Ok]);
+    let client = agent.client();
+
+    let r = report(&client, "S1");
+
+    assert!(r.result.is_err());
+    assert!(
+        !r.resendable,
+        "a turn that asked for permission was resendable"
+    );
+    assert_eq!(r.session_id, "S1");
+    assert_eq!(
+        agent.count("session/prompt"),
+        1,
+        "no automatic resend either"
+    );
+}
+
+#[test]
+fn a_turn_that_did_nothing_before_still_failing_is_resendable() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::DispatchFailure]);
+    let client = agent.client();
+
+    let r = report(&client, "S1");
+
+    assert!(r.result.is_err());
+    assert!(r.resendable);
+    assert_eq!(r.session_id, "S1");
+}
+
+#[test]
+fn a_turn_that_streamed_text_is_not_resendable() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::ChunkThenFailure]);
+    let client = agent.client();
+
+    let r = report(&client, "S1");
+
+    assert!(r.result.is_err());
+    assert!(!r.resendable);
+}
+
+#[test]
+fn what_an_automatic_resend_did_counts_for_the_whole_turn() {
+    // The connection broke on the first attempt; the resend streamed text
+    // and then failed.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::ConnectionCloses, Prompt::ChunkThenFailure]);
+    let client = agent.client();
+
+    let r = report(&client, "S1");
+
+    assert!(r.result.is_err());
+    assert!(!r.resendable);
+}
+
+#[test]
+fn a_turn_stopped_while_recovering_is_not_resendable() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::DispatchFailure, Prompt::SlowLoad]);
+    let client = Arc::new(agent.client());
+    let sender = {
+        let client = client.clone();
+        std::thread::spawn(move || report(&client, "S1"))
+    };
+    wait_for(&agent, "session/load", 1);
+    let _ = client.cancel_session("S1");
+
+    let r = sender.join().unwrap();
+    assert!(r.result.is_ok(), "a stopped turn ends as a Stop does");
+    assert!(!r.resendable);
+}
+
+// --- Restarts never cut off work admitted meanwhile ---
+
+#[test]
+fn reconnect_does_not_admit_a_prompt_between_its_idle_check_and_the_teardown() {
+    // Another window sends the moment Reconnect has found the agent idle.
+    // Without a gate the prompt reaches the old agent, the teardown cuts
+    // it off, and the transport recovery resends work it may have done.
+    isolate_user_dirs();
+    let agent = Arc::new(MockAgent::start(vec![Prompt::Hang, Prompt::Ok]));
+    let client = Arc::new(agent.client());
+
+    type Sender = std::thread::JoinHandle<anyhow::Result<String>>;
+    let sender: Arc<Mutex<Option<Sender>>> = Arc::new(Mutex::new(None));
+    {
+        let (weak, agent, sender) = (Arc::downgrade(&client), agent.clone(), sender.clone());
+        client.set_restart_idle_check_hook(Some(Box::new(move || {
+            let client = weak.upgrade().expect("client alive");
+            let handle = std::thread::spawn(move || {
+                client.send_chat_streaming_with_recovery(
+                    "S2".to_string(),
+                    "other window".to_string(),
+                    None,
+                    None,
+                )
+            });
+            *sender.lock().unwrap() = Some(handle);
+            // Give the prompt every chance to reach the old agent before
+            // the teardown.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(800);
+            while agent.count("session/prompt") == 0 && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        })));
+    }
+
+    assert_eq!(
+        client.restart_if_idle().expect("restart"),
+        kage::acp_client::RestartIfIdle::Restarted
+    );
+    client.set_restart_idle_check_hook(None);
+    let handle = sender.lock().unwrap().take().expect("the hook ran");
+    handle
+        .join()
+        .unwrap()
+        .expect("the other window's prompt went through");
+
+    assert_eq!(
+        agent.count_on(0, "session/prompt"),
+        0,
+        "admitted to the agent being torn down"
+    );
+    assert_eq!(agent.count("session/prompt"), 1, "the prompt was resent");
+}
+
+#[test]
+fn reconnect_refuses_while_a_background_prompt_runs() {
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::Hang, Prompt::Ok]);
+    let client = Arc::new(agent.client());
+    {
+        let client = client.clone();
+        std::thread::spawn(move || client.send_chat_streaming_background("BG", "steer", false));
+    }
+    wait_for(&agent, "session/prompt", 1);
+
+    assert_eq!(
+        client.restart_if_idle().expect("no restart attempted"),
+        kage::acp_client::RestartIfIdle::Busy
+    );
+    assert_eq!(agent.connections(), 1);
+}
+
+#[test]
+fn the_automatic_restart_waits_for_a_turn_queued_on_the_same_session() {
+    // Window A's turn on S1 fails before doing anything, while window B's
+    // prompt on S1 is queued behind it. The restart would cut B's turn
+    // off mid-work and its recovery would resend it.
+    isolate_user_dirs();
+    let agent = MockAgent::start(vec![Prompt::SlowFailThenSlowOk, Prompt::Ok]);
+    let client = Arc::new(agent.client());
+
+    let a = {
+        let client = client.clone();
+        std::thread::spawn(move || send(&client))
+    };
+    wait_for(&agent, "session/prompt", 1);
+    let b = {
+        let client = client.clone();
+        std::thread::spawn(move || {
+            client.send_chat_streaming_with_recovery(
+                "S1".to_string(),
+                "window B".to_string(),
+                None,
+                None,
+            )
+        })
+    };
+
+    let a_err = a.join().unwrap().unwrap_err();
+    b.join().unwrap().expect("B's turn completed");
+
+    assert_eq!(a_err.downcast_ref::<AgentRpcError>().unwrap().code, -32603);
+    assert_eq!(
+        agent.connections(),
+        1,
+        "the agent was restarted under B's turn"
+    );
+    assert_eq!(agent.count("session/prompt"), 2, "B's prompt was resent");
 }

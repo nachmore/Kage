@@ -198,6 +198,7 @@ describe('InternalSitesSettingsModule', () => {
         tauri.emit('message_chunk', { sessionId: 's2', text: 'not mine' });
         tauri.emit('permission_request', {
             toolName: 'shell',
+            permissionToken: 'tok-7',
             notification: {
                 id: 7,
                 params: {
@@ -218,6 +219,8 @@ describe('InternalSitesSettingsModule', () => {
         expect(tauri.invoke).toHaveBeenCalledWith('send_permission_response', {
             sessionId: 's1',
             requestId: 7,
+            // Echoed so the backend answers only the request it named.
+            permissionToken: 'tok-7',
             optionId: 'allow_once',
             toolTitle: 'shell',
         });

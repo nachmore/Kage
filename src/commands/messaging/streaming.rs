@@ -99,7 +99,11 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
         // The notification handler (set up at app init) handles all streaming
         // chunks, permissions, and tool calls via Tauri events.
         let had_attachments = attachments.as_ref().is_some_and(|a| !a.is_empty());
-        let send_result = send_user_prompt(
+        let crate::acp_client::PromptReport {
+            result: send_result,
+            session_id: failed_on,
+            resendable,
+        } = send_user_prompt_report(
             &client,
             &tool_steering,
             &window_label,
@@ -146,7 +150,7 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
                 // sessions are unaffected — they'll reconnect lazily on
                 // their next send.
                 info!("Image-related error detected — resetting ACP connection and session");
-                let new_session_id = match client.restart_with_fresh_session() {
+                let new_session_id = match client.restart_with_fresh_session(Some(&session_id)) {
                     Ok(id) => Some(id),
                     Err(e) => {
                         error!("Failed to reset connection after image error: {}", e);
@@ -169,17 +173,11 @@ pub async fn send_message_streaming<R: tauri::Runtime>(
                         "newSessionId": new_session_id,
                     }),
                 );
-            } else if let Some((app_err, detail)) = for_user {
-                crate::event_targets::emit_to_self(
-                    &window,
-                    events::MESSAGE_ERROR,
-                    &prompt_error_payload(&app_err, &detail, &session_id),
-                );
             } else {
                 crate::event_targets::emit_to_self(
                     &window,
                     events::MESSAGE_ERROR,
-                    &format!("Failed to send: {}", error_str),
+                    &failed_prompt_payload(for_user, &error_str, &failed_on, resendable),
                 );
             }
             // Clear activity badges in windows that aren't the originator
@@ -320,28 +318,38 @@ pub async fn reconnect_acp<R: tauri::Runtime>(
         // A stale Reconnect (an old error still on screen) must not kill a
         // live agent mid-turn: the killed turn would lose its connection
         // and the recovery ladder would resend it, repeating its tools.
-        if client.restart_would_interrupt_work() {
-            info!(
-                "Reconnect requested by {}: not restarting, the agent has work in flight",
-                label
-            );
-            return Err(AppError::keyed(
-                ErrorKind::ConnectionLost,
-                "errors.connection.reconnect_busy",
-                &[],
-            ));
-        }
-        info!("Reconnect requested by {}: restarting the agent", label);
-        client.clear_unreachable_latch();
-        if let Err(e) = client.restart_connection() {
-            if crate::acp_client::types::is_auth_required(&e) {
-                return Err(auth_required_error(&config.lock_or_recover()));
+        // The check and the teardown are one step: a prompt another window
+        // sends meanwhile waits for the new agent instead of being cut off.
+        info!("Reconnect requested by {}", label);
+        match client.restart_if_idle() {
+            Ok(crate::acp_client::RestartIfIdle::Restarted) => {
+                info!("Reconnect for {}: agent restarted", label);
+                client.clear_unreachable_latch();
             }
-            return Err(AppError::keyed(
-                ErrorKind::ConnectionLost,
-                "errors.connection.reconnect_failed",
-                &[("reason", &e.to_string())],
-            ));
+            Ok(crate::acp_client::RestartIfIdle::Busy) => {
+                info!(
+                    "Reconnect requested by {}: not restarting, the agent has work in flight",
+                    label
+                );
+                return Err(AppError::keyed(
+                    ErrorKind::ConnectionLost,
+                    "errors.connection.reconnect_busy",
+                    &[],
+                ));
+            }
+            Err(e) => {
+                // The user asked for a fresh start: the next failing prompt
+                // may restart the agent again.
+                client.clear_unreachable_latch();
+                if crate::acp_client::types::is_auth_required(&e) {
+                    return Err(auth_required_error(&config.lock_or_recover()));
+                }
+                return Err(AppError::keyed(
+                    ErrorKind::ConnectionLost,
+                    "errors.connection.reconnect_failed",
+                    &[("reason", &e.to_string())],
+                ));
+            }
         }
 
         let session_id = session_id
@@ -460,17 +468,78 @@ fn prompt_error_for_user(
     Some((auth_required_error(cfg), e.to_string()))
 }
 
-/// The MESSAGE_ERROR payload for an error `prompt_error_for_user` gave a
-/// meaning to: `{ kind, key, message, detail, sessionId }`, `message` in the
-/// active locale. Every other MESSAGE_ERROR stays a plain string.
-fn prompt_error_payload(err: &AppError, detail: &str, session_id: &str) -> serde_json::Value {
+/// The MESSAGE_ERROR payload for a user prompt that failed:
+/// `{ kind, key, message, detail, sessionId, resendable }`, `message` in
+/// the active locale.
+///
+/// - `sessionId`: the session the failed turn last ran on (recovery may
+///   have moved it; windows adopted that id from `session_migrated`).
+/// - `resendable`: whether a window may send the prompt again as it is
+///   (Reconnect does): true only when no attempt of the turn streamed
+///   anything, ran or updated a tool, asked for permission or made an
+///   `fs/*` / `terminal/*` request, was rate limited or stopped
+///   (`PromptReport::resendable`). Absent means false.
+///
+/// `for_user` is what `prompt_error_for_user` made of the error, if
+/// anything (`detail` is then the agent's raw text); otherwise the message
+/// is the error's own text, as the plain-string payload used to carry it.
+/// MESSAGE_ERRORs that aren't a failed prompt stay plain strings.
+fn failed_prompt_payload(
+    for_user: Option<(AppError, String)>,
+    error_text: &str,
+    session_id: &str,
+    resendable: bool,
+) -> serde_json::Value {
+    let (err, detail) = match for_user {
+        Some((err, detail)) => (err, Some(detail)),
+        None => (
+            AppError::raw(
+                plain_prompt_error_kind(error_text),
+                format!("Failed to send: {}", error_text),
+            ),
+            None,
+        ),
+    };
     serde_json::json!({
         "kind": err.kind,
         "key": err.key,
         "message": err.localised_message(),
         "detail": detail,
         "sessionId": session_id,
+        "resendable": resendable,
     })
+}
+
+/// The `kind` of a failed prompt's error that the recovery ladder gave no
+/// meaning to, from its text.
+fn plain_prompt_error_kind(text: &str) -> ErrorKind {
+    let lower = text.to_lowercase();
+    if [
+        "rate limit",
+        "ratelimit",
+        "too many requests",
+        "429",
+        "throttl",
+    ]
+    .iter()
+    .any(|t| lower.contains(t))
+    {
+        ErrorKind::RateLimited
+    } else if lower.contains("timeout") {
+        ErrorKind::Timeout
+    } else if [
+        "connection lost",
+        "broken pipe",
+        "no write handle",
+        "no reader thread",
+    ]
+    .iter()
+    .any(|t| lower.contains(t))
+    {
+        ErrorKind::ConnectionLost
+    } else {
+        ErrorKind::Internal
+    }
 }
 
 #[tauri::command]
@@ -598,7 +667,11 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
             }
             // Same mid-stream switch-in support as send_message_streaming.
             client.set_in_flight_prompt(&session_id, &message);
-            let result = send_user_prompt(
+            let crate::acp_client::PromptReport {
+                result,
+                session_id: failed_on,
+                resendable,
+            } = send_user_prompt_report(
                 &client,
                 &tool_steering,
                 window_labels::MAIN,
@@ -619,18 +692,11 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
             }
             if let Err(e) = result {
                 let for_user = prompt_error_for_user(&e, &config.lock_or_recover());
-                match for_user {
-                    Some((app_err, detail)) => crate::event_targets::emit_to_self(
-                        &window,
-                        events::MESSAGE_ERROR,
-                        &prompt_error_payload(&app_err, &detail, &session_id),
-                    ),
-                    None => crate::event_targets::emit_to_self(
-                        &window,
-                        events::MESSAGE_ERROR,
-                        &format!("Failed to send: {}", e),
-                    ),
-                }
+                crate::event_targets::emit_to_self(
+                    &window,
+                    events::MESSAGE_ERROR,
+                    &failed_prompt_payload(for_user, &e.to_string(), &failed_on, resendable),
+                );
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
                 }
@@ -674,6 +740,29 @@ pub async fn open_chat_with_message<R: tauri::Runtime>(
 /// command (`/usage`), which the agent needs as typed: the block stays
 /// pending for the next prompt. Nor do `commands/execute` slash commands
 /// (`execute_slash_command`) touch it, as they aren't prompts.
+fn send_user_prompt_report(
+    client: &crate::acp_client::AcpClient,
+    tool_steering: &std::sync::Mutex<crate::state::ToolSteeringState>,
+    window: &str,
+    session_id: &str,
+    message: String,
+    attachments: Option<Vec<serde_json::Value>>,
+) -> crate::acp_client::PromptReport {
+    let steering = ToolSteeringPrefix {
+        state: tool_steering,
+        window,
+        attempt: std::cell::RefCell::new(None),
+    };
+    client.send_chat_streaming_with_recovery_report(
+        session_id.to_string(),
+        message,
+        attachments,
+        Some(&steering),
+    )
+}
+
+/// `send_user_prompt_report`'s result alone.
+#[cfg(test)]
 fn send_user_prompt(
     client: &crate::acp_client::AcpClient,
     tool_steering: &std::sync::Mutex<crate::state::ToolSteeringState>,
@@ -682,17 +771,15 @@ fn send_user_prompt(
     message: String,
     attachments: Option<Vec<serde_json::Value>>,
 ) -> anyhow::Result<String> {
-    let steering = ToolSteeringPrefix {
-        state: tool_steering,
+    send_user_prompt_report(
+        client,
+        tool_steering,
         window,
-        attempt: std::cell::RefCell::new(None),
-    };
-    client.send_chat_streaming_with_recovery(
-        session_id.to_string(),
+        session_id,
         message,
         attachments,
-        Some(&steering),
     )
+    .result
 }
 
 /// A user prompt's extension tool steering, decided per send attempt (the
@@ -748,7 +835,7 @@ impl crate::acp_client::HiddenPrefix for ToolSteeringPrefix<'_> {
 
 #[cfg(test)]
 mod prompt_error_tests {
-    use super::{prompt_error_for_user, prompt_error_payload};
+    use super::{failed_prompt_payload, prompt_error_for_user};
     use crate::acp_client::types::{AcpError, AgentRpcError, PromptRecoveryError};
     use crate::config::{AcpMode, AgentConnection, Config};
 
@@ -861,13 +948,34 @@ mod prompt_error_tests {
     #[test]
     fn payload_carries_kind_key_message_detail_and_session() {
         crate::i18n::init(Some("en"));
-        let (err, detail) = prompt_error_for_user(&unreachable(RAW), &kiro_local()).unwrap();
-        let json = prompt_error_payload(&err, &detail, "s1");
+        let for_user = prompt_error_for_user(&unreachable(RAW), &kiro_local());
+        let json = failed_prompt_payload(for_user, RAW, "s1", true);
         assert_eq!(json["kind"], "agent_unreachable");
         assert_eq!(json["key"], "errors.agent.unreachable_after_restart_kiro");
         assert!(json["message"].as_str().unwrap().contains("kiro-cli login"));
         assert_eq!(json["detail"], RAW);
         assert_eq!(json["sessionId"], "s1");
+        assert_eq!(json["resendable"], true);
+    }
+
+    #[test]
+    fn a_plain_prompt_failure_is_an_object_with_its_session_and_resendability() {
+        // Was the bare string "Failed to send: …": no session, and nothing
+        // to say a permission-approved action ran before the error.
+        crate::i18n::init(Some("en"));
+        let text = "ACP error: Internal error — dispatch failure";
+        let json = failed_prompt_payload(None, text, "s9", false);
+        assert_eq!(json["kind"], "internal");
+        assert_eq!(json["message"], format!("Failed to send: {text}"));
+        assert_eq!(json["detail"], serde_json::Value::Null);
+        assert_eq!(json["sessionId"], "s9");
+        assert_eq!(json["resendable"], false);
+
+        let json = failed_prompt_payload(None, "Rate limit exceeded", "s9", false);
+        assert_eq!(json["kind"], "rate_limited");
+        let json = failed_prompt_payload(None, "Timeout waiting for response", "s9", true);
+        assert_eq!(json["kind"], "timeout");
+        assert_eq!(json["resendable"], true);
     }
 }
 
