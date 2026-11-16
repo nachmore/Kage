@@ -406,6 +406,11 @@ pub struct TerminalReport {
     pub duration_ms: u64,
     /// Everything the program printed that Kage read, in bytes.
     pub output_bytes: u64,
+    /// How many output messages went to the window (`seq` 0 up to this,
+    /// exclusive). The window waits for all of them before reading the
+    /// result off the output: Tauri does not order a channel's messages
+    /// against the command's own reply.
+    pub output_messages: u64,
 }
 
 /// One output message, as sent: `seq` counts from 0 within the run (the
@@ -1060,6 +1065,7 @@ pub(crate) fn run_terminal_inner(
     }
     pump.finish();
     let output_bytes = pump.total;
+    let output_messages = pump.seq;
 
     #[cfg(unix)]
     if let Some(pid) = child.process_id() {
@@ -1078,6 +1084,7 @@ pub(crate) fn run_terminal_inner(
             signal,
             duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             output_bytes,
+            output_messages,
         },
         ended,
     ))

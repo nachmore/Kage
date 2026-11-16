@@ -155,7 +155,7 @@ pub async fn open_user_terminal_link<R: tauri::Runtime>(
     let host = link.host_str().unwrap_or("").to_string();
     info!("User terminal {run_id}: opening a link (host {host})");
     let target = link.to_string();
-    tauri::async_runtime::spawn_blocking(move || crate::os::shell::open_url(&target))
+    tauri::async_runtime::spawn_blocking(move || crate::os::shell::open_url_outside_job(&target))
         .await
         .map_err(super::join_error)?
         .map_err(|e| {

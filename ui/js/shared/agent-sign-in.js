@@ -63,16 +63,21 @@ const STOP_RETRY_LIMIT = 100;
 
 /**
  * What kiro-cli (3.3.0) prints when the organization has turned device-flow
- * sign-in off, matched on output with escapes stripped, whitespace collapsed
- * and case folded: "Your organization has disabled device flow sign-in",
- * "Every available profile has device flow sign-in disabled", "None of the
- * sign-in methods your organization permits work without a browser".
+ * sign-in off, matched whole on output with escapes stripped, whitespace
+ * collapsed and case folded: "Your organization has disabled device flow
+ * sign-in. Use browser sign-in.", "Every available profile has device flow
+ * sign-in disabled", "None of the sign-in methods your organization permits
+ * work without a browser". Whole sentences, so the notice a sign-in that is
+ * still succeeding can print ("N profile(s) hidden: your organization has
+ * disabled device flow sign-in for them") never matches.
  */
 const DEVICE_FLOW_DISABLED = [
-    /disabled device flow sign-in/,
-    /device flow sign-in disabled/,
-    /your organization permits work without a browser/,
+    /your organization has disabled device flow sign-in\. use browser sign-in/,
+    /every available profile has device flow sign-in disabled/,
+    /none of the sign-in methods your organization permits work without a browser/,
 ];
+/** Longest wait for output messages still in flight when the run ends. */
+const OUTPUT_SETTLE_MS = 1000;
 /** Output kept from one message to the next, so a split message still matches. */
 const WATCH_TAIL_CHARS = 512;
 
@@ -736,8 +741,12 @@ function createSession({ slot, payload, host, ctx }) {
                 /* the run ended */
             });
         };
+        let received = 0;
+        let settle = null;
         channel.onmessage = (msg) => {
             const seq = msg?.seq;
+            received += 1;
+            if (settle && received >= settle.want) settle.resolve();
             if (session.runId === runId) watch.push(msg?.data);
             if (session.runId !== runId || session.view !== view || !msg?.data) {
                 ack(seq);
@@ -769,6 +778,23 @@ function createSession({ slot, payload, host, ctx }) {
             return done;
         }
         clearTimeout(runningTimer);
+        // The reply can overtake the last output messages; the result is
+        // read off them (createDeviceFlowWatch), so wait for every one the
+        // backend sent, for at most OUTPUT_SETTLE_MS.
+        const want = Number.isSafeInteger(report?.outputMessages) ? report.outputMessages : 0;
+        if (received < want) {
+            await new Promise((resolve) => {
+                const timer = setTimeout(resolve, OUTPUT_SETTLE_MS);
+                settle = {
+                    want,
+                    resolve: () => {
+                        clearTimeout(timer);
+                        resolve();
+                    },
+                };
+            });
+            settle = null;
+        }
         ended(report);
         return done;
     };

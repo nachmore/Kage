@@ -11,6 +11,12 @@ pub fn open_url_impl(url: &str) -> Result<()> {
     Ok(())
 }
 
+/// Nothing kills Kage's children when it exits here, and the browser is
+/// started by the system opener, so this is plain [`open_url_impl`].
+pub fn open_url_outside_job_impl(url: &str) -> Result<()> {
+    open_url_impl(url)
+}
+
 pub fn open_path_impl(path: &str) -> Result<()> {
     Command::new("open")
         .arg(path)

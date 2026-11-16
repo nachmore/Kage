@@ -5,8 +5,22 @@ use std::process::Command;
 
 use super::process::spawn_detached_impl;
 
+/// Open `url` in the default browser from Kage's own process
+/// (`ShellExecuteExW`). A browser this starts, when none was running, is
+/// Kage's child and shares its Job Object; see
+/// [`open_url_outside_job_impl`] for the path that avoids that.
+pub fn open_url_impl(url: &str) -> Result<()> {
+    log::info!(
+        "[open_url] ShellExecuteExW (NOASYNC): {}",
+        crate::os::shell::url_for_log(url)
+    );
+    open_url_in_process(url)
+}
+
 /// Open `url` in the default browser, started by Explorer rather than by
-/// Kage.
+/// Kage. Used only for the agent sign-in link for now
+/// (`open_user_terminal_link`); every other link still goes through
+/// [`open_url_impl`] until this path has been exercised on Windows.
 ///
 /// Kage runs inside a `KILL_ON_JOB_CLOSE` Job Object
 /// (`install_kill_on_exit_job_impl`), and a process Kage starts joins it
@@ -30,7 +44,7 @@ use super::process::spawn_detached_impl;
 /// as a known way to run code (and it runs `ShellExecute` with no message
 /// pump, so the double-tab below comes back). Not `explorer.exe <url>`:
 /// Explorer's command line splits on commas.
-pub fn open_url_impl(url: &str) -> Result<()> {
+pub fn open_url_outside_job_impl(url: &str) -> Result<()> {
     let shown = crate::os::shell::url_for_log(url);
     match open_url_via_desktop_shell(url) {
         Ok(()) => {

@@ -28,6 +28,14 @@ pub fn open_url(url: &str) -> Result<()> {
     crate::os::platform::shell::open_url_impl(url)
 }
 
+/// Open a URL in the default browser so that a browser this starts does not
+/// belong to Kage: on Windows it is started by Explorer, outside Kage's
+/// kill-on-close Job Object, so quitting Kage or a crash can't close it.
+/// Used for the agent sign-in link; elsewhere it is [`open_url`].
+pub fn open_url_outside_job(url: &str) -> Result<()> {
+    crate::os::platform::shell::open_url_outside_job_impl(url)
+}
+
 /// Open a file or directory path with the default application
 pub fn open_path(path: &str) -> Result<()> {
     crate::os::platform::shell::open_path_impl(path)
@@ -168,23 +176,28 @@ mod tests {
 
     /// Windows: a browser Kage starts with `ShellExecuteExW` is Kage's
     /// child and joins its `KILL_ON_JOB_CLOSE` Job Object, so quitting Kage
-    /// or a crash would close it. `open_url` must hand the URL to
-    /// Explorer's desktop first and open it in-process only as the
-    /// fallback. The Windows code doesn't build here, so this reads it.
+    /// or a crash would close it. `open_url_outside_job` (the sign-in link)
+    /// must hand the URL to Explorer's desktop first and open it in-process
+    /// only as the fallback; `open_url` keeps the in-process path. The Windows code doesn't build here, so this reads it.
     #[test]
     fn windows_open_url_hands_the_url_to_the_desktop_shell_first() {
         let src = include_str!("windows/shell.rs");
-        let open = fn_body(src, "open_url_impl");
+        // Ordinary links keep the long-standing in-process path.
+        let plain = fn_body(src, "open_url_impl");
+        assert!(plain.contains("open_url_in_process(url)"), "{plain}");
+        assert!(!plain.contains("desktop_shell"), "{plain}");
+        assert!(plain.contains("url_for_log(url)"), "{plain}");
+        let open = fn_body(src, "open_url_outside_job_impl");
         let desktop = open
             .find("open_url_via_desktop_shell(url)")
-            .expect("open_url_impl must try the desktop shell");
+            .expect("open_url_outside_job_impl must try the desktop shell");
         let fallback = open
             .find("open_url_in_process(url)")
-            .expect("open_url_impl keeps the in-process fallback");
+            .expect("open_url_outside_job_impl keeps the in-process fallback");
         assert!(desktop < fallback, "desktop shell first:\n{open}");
         assert!(
             !open.contains("ShellExecuteExW("),
-            "open_url_impl must not call ShellExecuteExW directly:\n{open}"
+            "open_url_outside_job_impl must not call ShellExecuteExW directly:\n{open}"
         );
         // Logs carry `url_for_log` only, never the URL itself.
         assert!(open.contains("url_for_log(url)"), "{open}");

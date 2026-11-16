@@ -743,12 +743,12 @@ describe('outputSaysDeviceFlowDisabled', () => {
         }
         expect(
             outputSaysDeviceFlowDisabled(
-                'Your organization has disabled \u001b[1mdevice\u001b[22m flow\r\n  sign-in.'
+                'Your organization has disabled \u001b[1mdevice\u001b[22m flow\r\n  sign-in. Use browser sign-in.'
             )
         ).toBe(true);
-        expect(outputSaysDeviceFlowDisabled('YOUR ORGANIZATION HAS DISABLED DEVICE FLOW SIGN-IN')).toBe(
-            true
-        );
+        expect(
+            outputSaysDeviceFlowDisabled('YOUR ORGANIZATION HAS DISABLED DEVICE FLOW SIGN-IN. USE BROWSER SIGN-IN.')
+        ).toBe(true);
     });
 
     it('does not match an ordinary device-flow sign-in or other failures', () => {
@@ -760,6 +760,10 @@ describe('outputSaysDeviceFlowDisabled', () => {
             'Device code expired. Please try again.',
             'Already logged in, please logout with kiro-cli logout first',
             'Device flow error: access denied',
+            // Printed while a sign-in is still succeeding: some profiles are
+            // hidden, not the device flow turned off.
+            '2 profile(s) hidden: your organization has disabled device flow sign-in for them',
+            'Your organization has disabled device flow sign-in for some profiles',
         ]) {
             expect(outputSaysDeviceFlowDisabled(text)).toBe(false);
         }
@@ -863,6 +867,22 @@ describe('device flow turned off by the organization', () => {
             for (const spy of logs) spy.mockRestore();
             delete navigator.clipboard;
         }
+    });
+
+    it('still sees the message when the reply overtakes the last output', async () => {
+        const tauri = fakeTauri({ ctx: DEVICE_CTX });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        tauri.channels[0].onmessage({ seq: 0, data: '? Select login method\r\n' });
+        // The command's reply arrives before the message that matters.
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 1, signal: null, outputMessages: 2 });
+        await flush();
+        tauri.channels[0].onmessage({ seq: 1, data: `${ORG_DISABLED[0]}\r\n` });
+        await flush();
+        expect(status(host)).toBe(
+            'shared.agent_sign_in.status.device_flow_disabled {"agent":"Kiro CLI"}'
+        );
+        expect(manualBox(host)?.hidden).toBe(false);
     });
 
     it('a clean exit still signs in, whatever was printed', async () => {
