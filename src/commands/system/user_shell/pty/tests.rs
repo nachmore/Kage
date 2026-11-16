@@ -303,6 +303,26 @@ fn a_stop_that_races_a_clean_exit_is_still_a_stop() {
     assert_eq!(report.outcome, RunOutcome::Cancelled, "{report:?}");
 }
 
+/// A Stop accepted while the run drained or tore down (after the loop saw
+/// a clean exit) still ends it as stopped.
+#[test]
+fn a_stop_seen_before_the_report_beats_a_clean_exit() {
+    assert_eq!(
+        final_outcome(RunOutcome::Exited, true),
+        RunOutcome::Cancelled
+    );
+    assert_eq!(final_outcome(RunOutcome::Exited, false), RunOutcome::Exited);
+    // A timeout stays a timeout; a stop stays a stop.
+    assert_eq!(
+        final_outcome(RunOutcome::TimedOut, true),
+        RunOutcome::TimedOut
+    );
+    assert_eq!(
+        final_outcome(RunOutcome::Cancelled, false),
+        RunOutcome::Cancelled
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn pty_timeout() {

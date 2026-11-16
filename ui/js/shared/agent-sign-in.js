@@ -606,6 +606,17 @@ function createSession({ slot, payload, host, ctx }) {
 
     /** The run ended with `report` (`outcome`, `exitCode`, `signal`). */
     function ended(report) {
+        // A Stop the user pressed for this run wins over a clean exit the
+        // backend reports, even one that finished before the Stop took: it
+        // must not restart the agent or resend.
+        if (
+            session.stopRequested &&
+            session.stopRequested === session.runId &&
+            report?.outcome === 'exited' &&
+            report.exitCode === 0
+        ) {
+            report = { ...report, outcome: 'cancelled', exitCode: null };
+        }
         session.settled = true;
         const hadFocus = focusInPanel();
         session.view?.setInputEnabled(false);

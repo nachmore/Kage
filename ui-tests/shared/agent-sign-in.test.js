@@ -472,6 +472,24 @@ describe('the run', () => {
         expect(tauri.named('stop_user_terminal').length).toBe(3);
     });
 
+    it('a Stop that had not taken yet still wins over a clean exit: no restart, no resend', async () => {
+        const tauri = fakeTauri({ stopAnswers: [false] });
+        const host = makeHost();
+        await openPanel(tauri, host);
+        click(host.slot.querySelector('.agent-sign-in-stop'));
+        await flush();
+        expect(tauri.named('stop_user_terminal').length).toBe(1);
+        // The login finishes before the retry asks again.
+        tauri.starts[0].resolve({ outcome: 'exited', exitCode: 0, signal: null });
+        await flush();
+        expect(tauri.named('reconnect_acp').length).toBe(0);
+        expect(host.resend).not.toHaveBeenCalled();
+        expect(status(host)).toBe('shared.agent_sign_in.status.stopped');
+        expect(host.onEnded).toHaveBeenCalledWith(
+            expect.objectContaining({ state: 'stopped', outcome: 'cancelled' })
+        );
+    });
+
     it('Stop stops asking once the run ends on its own', async () => {
         const tauri = fakeTauri({ stopAnswers: Array(50).fill(false) });
         const host = makeHost();

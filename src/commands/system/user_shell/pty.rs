@@ -973,6 +973,31 @@ pub fn run_terminal(
     Ok(report)
 }
 
+/// The report of a run stopped before anything was launched.
+fn stopped_before_launch() -> (TerminalReport, Teardown) {
+    (
+        TerminalReport {
+            outcome: RunOutcome::Cancelled,
+            exit_code: None,
+            signal: None,
+            duration_ms: 0,
+            output_bytes: 0,
+            output_messages: 0,
+        },
+        Teardown { finished: true },
+    )
+}
+
+/// How a run that ended as `outcome` is reported, given whether a Stop was
+/// asked for by the time the report is made: a Stop turns a clean exit into
+/// a stop (which never counts as a sign-in), and changes nothing else.
+fn final_outcome(outcome: RunOutcome, stop_asked: bool) -> RunOutcome {
+    match outcome {
+        RunOutcome::Exited if stop_asked => RunOutcome::Cancelled,
+        other => other,
+    }
+}
+
 pub(crate) fn run_terminal_inner(
     spec: TerminalSpec,
     control: &RunControl,
@@ -983,17 +1008,7 @@ pub(crate) fn run_terminal_inner(
     // login that ran anyway and exited 0 would read as a clean sign-in
     // and resend the failed turn.
     if control.cancel.load(Ordering::SeqCst) {
-        return Ok((
-            TerminalReport {
-                outcome: RunOutcome::Cancelled,
-                exit_code: None,
-                signal: None,
-                duration_ms: 0,
-                output_bytes: 0,
-                output_messages: 0,
-            },
-            Teardown { finished: true },
-        ));
+        return Ok(stopped_before_launch());
     }
     let pair = native_pty_system()
         .openpty(spec.size.pty_size())
@@ -1005,6 +1020,12 @@ pub(crate) fn run_terminal_inner(
         cmd.env(k, v);
     }
 
+    // A Stop that arrived while the terminal was set up: still nothing runs.
+    if control.cancel.load(Ordering::SeqCst) {
+        drop(pair.slave);
+        drop(close_in_background(pair.master));
+        return Ok(stopped_before_launch());
+    }
     let started = Instant::now();
     let mut child = pair.slave.spawn_command(cmd).map_err(io::Error::other)?;
     // Our copy of the program's end: without dropping it the reader would
@@ -1095,7 +1116,9 @@ pub(crate) fn run_terminal_inner(
     let ended = teardown(&io, &stop, Some(reader_thread));
     drop(pump);
 
-    let outcome = outcome?;
+    // A Stop accepted while the output drained or the terminal closed
+    // still wins over the clean exit the loop saw.
+    let outcome = final_outcome(outcome?, control.cancel.load(Ordering::SeqCst));
     let (exit_code, signal) = report_parts(&status?);
     Ok((
         TerminalReport {
