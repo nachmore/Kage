@@ -239,6 +239,25 @@ describe('chat: after the run', () => {
         expect(appWindow.show).toHaveBeenCalled();
     });
 
+    it("the resent turn's own fast error stays on screen", async () => {
+        const { app, starts } = setup();
+        app._recordTurn('s1', 'hello agent', null);
+        await failTurn(app, own(app));
+        await clickSignIn();
+        // The resent turn fails before send_message_streaming has returned.
+        const invoke = app.invoke;
+        app.invoke = vi.fn(async (cmd, args) => {
+            if (cmd === 'send_message_streaming') {
+                app.showError('second failure', {});
+                return null;
+            }
+            return invoke(cmd, args);
+        });
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush();
+        expect(document.getElementById('errorContainer').textContent).toContain('second failure');
+    });
+
     it('a failed, stopped or timed-out run sends nothing', async () => {
         for (const report of [
             { outcome: 'exited', exitCode: 1 },

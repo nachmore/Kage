@@ -512,7 +512,7 @@ export function createMessagesMixin(dependencies) {
                 mountSignInAction?.(
                     actions,
                     opts.signIn,
-                    this._agentSignInHost(opts.signIn, opts.retryTurn ?? null)
+                    this._agentSignInHost(opts.signIn, opts.retryTurn ?? null, actions)
                 )?.catch((e) => console.warn('[chat] sign-in action unavailable:', e));
             }
         }
@@ -554,7 +554,7 @@ export function createMessagesMixin(dependencies) {
          * (_canResendTurn) — and at most once. The resend records a turn
          * of its own, with a fresh id (_resendTurn).
          */
-        _agentSignInHost(payload, retryTurn) {
+        _agentSignInHost(payload, retryTurn, ownActions = null) {
             // The session the window showed when the restart answered,
             // before adopting a reloaded id; undefined until one answers.
             let shown;
@@ -612,12 +612,19 @@ export function createMessagesMixin(dependencies) {
                 resend: async () => {
                     if (resent) return 'none';
                     resent = true;
+                    // Clear this sign-in's error before the resend, and only
+                    // while it is still the one shown (as Reconnect does):
+                    // the resent turn's own error, if it fails fast, must
+                    // stay on screen.
+                    if (!ownActions || ownActions.isConnected) {
+                        this.elements.errorContainer.innerHTML = '';
+                    }
                     await this._resendTurn(retryTurn, { throwOnError: true });
                     return 'sent';
                 },
-                clearError: () => {
-                    this.elements.errorContainer.innerHTML = '';
-                },
+                // Cleared before the resend (above); after it, the box may
+                // hold the resent turn's own error.
+                clearError: () => {},
             };
         }
 
