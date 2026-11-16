@@ -520,9 +520,14 @@ impl StopGate {
     /// Stop it whatever the launch is doing (unless it already settled):
     /// the window that shows it closed, or Kage is quitting.
     pub fn force_stop(&self, cancel: &AtomicBool) {
-        if !self.lock().settled {
+        // Held until the store is made: a temporary in the `if` condition
+        // would be dropped before the body, and a settle in that gap would
+        // report a clean exit for a run this then stops.
+        let state = self.lock();
+        if !state.settled {
             cancel.store(true, Ordering::SeqCst);
         }
+        drop(state);
     }
 
     /// Decide: from now on no Stop is accepted. Returns whether one was.

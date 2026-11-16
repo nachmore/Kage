@@ -380,6 +380,27 @@ fn the_stop_gate_orders_stop_against_launch_and_settle() {
     assert!(gate.settle(&cancel));
 }
 
+/// A forced stop (window closed, quitting) racing the run's settle: either
+/// the settle sees it, or it sees the settle and stops nothing. Never a
+/// clean-exit report for a run that ends up stopped.
+#[test]
+fn a_forced_stop_never_races_past_the_settle() {
+    for _ in 0..5_000 {
+        let gate = Arc::new(StopGate::default());
+        let cancel = Arc::new(AtomicBool::new(false));
+        let start = Arc::new(std::sync::Barrier::new(2));
+        let (g, c, b) = (gate.clone(), cancel.clone(), start.clone());
+        let forcer = std::thread::spawn(move || {
+            b.wait();
+            g.force_stop(&c);
+        });
+        start.wait();
+        let reported_stop = gate.settle(&cancel);
+        forcer.join().unwrap();
+        assert_eq!(reported_stop, cancel.load(Ordering::SeqCst));
+    }
+}
+
 /// Once a run has reported, a Stop for it is refused (so the audit, made
 /// from the report, never disagrees with a Stop that was accepted).
 #[cfg(unix)]
