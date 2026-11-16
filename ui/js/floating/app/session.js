@@ -150,16 +150,63 @@ export const SessionMethods = {
     async _retryBootstrap() {
         console.log('[floating] retrying session bootstrap after prior failure');
         try {
-            const id = await this.invoke('switch_acp_session', { sessionId: null });
-            this.floatingSessionId = id;
-            this._clearBootstrapFailure();
+            const id = await this._runBootstrap();
             console.log(`[floating] re-bootstrap succeeded: ${id}`);
         } catch (e) {
             console.error('[floating] re-bootstrap failed:', e);
-            this._setBootstrapFailure(e);
-        } finally {
-            this.bootstrappingSession = false;
         }
+    },
+
+    /**
+     * The one bootstrap (`switch_acp_session`, no session) this window runs
+     * at a time after a failed launch bootstrap: a send's retry and a
+     * sign-in's or Reconnect's bootstrap after the restart all come through
+     * here, and a call while one is under way joins it, so two never create
+     * two sessions and pin the window to whichever answered last. Each
+     * attempt has a token (`_bootstrapGen`); an attempt something else
+     * superseded (a restart's reloaded session adopted) changes nothing,
+     * success or failure. Resolves to the session id; rejects with the
+     * error, remembered for the window when the attempt is still current.
+     */
+    _runBootstrap() {
+        if (this._bootstrapInFlight) return this._bootstrapInFlight;
+        const gen = (this._bootstrapGen || 0) + 1;
+        this._bootstrapGen = gen;
+        this.bootstrappingSession = true;
+        // Asked for now (not a tick later); a throw becomes the attempt's rejection.
+        let request;
+        try {
+            request = Promise.resolve(this.invoke('switch_acp_session', { sessionId: null }));
+        } catch (e) {
+            request = Promise.reject(e);
+        }
+        const attempt = (async () => {
+            try {
+                const id = await request;
+                if (gen === this._bootstrapGen) {
+                    this.floatingSessionId = id;
+                    this._clearBootstrapFailure();
+                }
+                return id;
+            } catch (e) {
+                if (gen === this._bootstrapGen) this._setBootstrapFailure(e);
+                throw e;
+            } finally {
+                if (this._bootstrapInFlight === attempt) this._bootstrapInFlight = null;
+                this._settleBootstrapping();
+            }
+        })();
+        this._bootstrapInFlight = attempt;
+        return attempt;
+    },
+
+    /**
+     * `bootstrappingSession` after a bootstrap or a restart's bootstrap
+     * settled: still set while another one is under way, so a send queued
+     * meanwhile waits for the last of them.
+     */
+    _settleBootstrapping() {
+        this.bootstrappingSession = !!this._bootstrapInFlight || (this._restartBootstraps || 0) > 0;
     },
 
     /**
@@ -248,30 +295,48 @@ export const SessionMethods = {
     /**
      * After the agent restarted under a failed bootstrap: set up the
      * window's session on it, the one the restart reloaded or else a new
-     * one (`switch_acp_session`), and resolve to its id. A failure is
-     * remembered and shown again (with Sign in, if it still applies) for
-     * the send that is waiting now, and thrown.
+     * one, and resolve to its id. Never a second bootstrap beside one under
+     * way (a send's retry, the other of Sign in and Reconnect): that one
+     * settles first, and when it left the window a session (and no
+     * failure), that is the one. A failure is remembered and shown again
+     * (with Sign in, if it still applies) for the send that is waiting now,
+     * unless another restart's bootstrap is still to come and will show
+     * its own, and thrown.
      */
     async _bootstrapAfterRestart(outcome) {
-        if (outcome?.sessionId && outcome.sessionReloaded !== false) {
-            this._adoptReconnectSession(outcome.sessionId);
-            this._clearBootstrapFailure();
-            return outcome.sessionId;
-        }
+        this._restartBootstraps = (this._restartBootstraps || 0) + 1;
         this.bootstrappingSession = true;
         try {
-            const id = await this.invoke('switch_acp_session', { sessionId: null });
-            this.floatingSessionId = id;
-            this._clearBootstrapFailure();
-            console.log(`[floating] bootstrapped after the restart: ${id}`);
-            return id;
-        } catch (e) {
-            console.error('[floating] bootstrap after the restart failed:', e);
-            this._setBootstrapFailure(e);
-            this._showBootstrapError(this._bootstrapWaitingSend);
-            throw e;
+            if (this._bootstrapInFlight) {
+                await this._bootstrapInFlight.catch(() => {});
+            }
+            if (outcome?.sessionId && outcome.sessionReloaded !== false) {
+                // Supersedes any bootstrap that might still answer.
+                this._bootstrapGen = (this._bootstrapGen || 0) + 1;
+                this._adoptReconnectSession(outcome.sessionId);
+                this._clearBootstrapFailure();
+                return outcome.sessionId;
+            }
+            if (this.floatingSessionId && !this.sessionBootstrapError) {
+                console.log(
+                    `[floating] after the restart: keeping the session already set up: ${this.floatingSessionId}`
+                );
+                return this.floatingSessionId;
+            }
+            try {
+                const id = await this._runBootstrap();
+                console.log(`[floating] bootstrapped after the restart: ${id}`);
+                return id;
+            } catch (e) {
+                console.error('[floating] bootstrap after the restart failed:', e);
+                if (this._restartBootstraps <= 1) {
+                    this._showBootstrapError(this._bootstrapWaitingSend);
+                }
+                throw e;
+            }
         } finally {
-            this.bootstrappingSession = false;
+            this._restartBootstraps -= 1;
+            this._settleBootstrapping();
         }
     },
 
@@ -325,26 +390,36 @@ export const SessionMethods = {
      * does). A failed attempt leaves the button for the next one.
      */
     async _reconnectBootstrap(btn, waiting) {
+        // One Reconnect at a time (a redrawn error has a new button).
+        if (this._bootstrapReconnecting) return;
+        this._bootstrapReconnecting = true;
         btn.disabled = true;
         btn.textContent = t('chat.error.btn.reconnecting');
-        let outcome;
-        try {
-            outcome = await this.invoke('reconnect_acp', { sessionId: null });
-        } catch (e) {
-            console.log('Reconnect failed:', e);
-            this._showReconnectFailure(btn, errLabel(t('chat.error.reconnect_failed_label'), e));
-            return;
-        }
-        if (!outcome?.reconnected) {
-            this._showReconnectFailure(btn, t('chat.error.reconnect_failed'));
-            return;
-        }
-        signalMascotRecovered();
         let sid;
         try {
-            sid = await this._bootstrapAfterRestart(outcome);
-        } catch {
-            return; // shown again by _bootstrapAfterRestart
+            let outcome;
+            try {
+                outcome = await this.invoke('reconnect_acp', { sessionId: null });
+            } catch (e) {
+                console.log('Reconnect failed:', e);
+                this._showReconnectFailure(
+                    btn,
+                    errLabel(t('chat.error.reconnect_failed_label'), e)
+                );
+                return;
+            }
+            if (!outcome?.reconnected) {
+                this._showReconnectFailure(btn, t('chat.error.reconnect_failed'));
+                return;
+            }
+            signalMascotRecovered();
+            try {
+                sid = await this._bootstrapAfterRestart(outcome);
+            } catch {
+                return; // shown again by _bootstrapAfterRestart
+            }
+        } finally {
+            this._bootstrapReconnecting = false;
         }
         if (this._canSendWaitingAfterBootstrap(waiting, sid)) {
             await this._sendWaitingAfterBootstrap(waiting);

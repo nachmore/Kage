@@ -339,3 +339,139 @@ describe('floating: other bootstrap failures', () => {
         expect(signInBtn()).toBeNull();
     });
 });
+
+/** A promise and the functions that settle it. */
+function deferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
+
+/**
+ * From now on `switch_acp_session` answers with a deferred each (`pending`,
+ * in call order), counting how many are open at once (`maxOpen()`), and
+ * `reconnect_acp` with `reconnect()` (a value or a promise).
+ */
+function controlBootstraps(app, reconnect) {
+    const orig = app.invoke.getMockImplementation();
+    const pending = [];
+    let open = 0;
+    let max = 0;
+    app.invoke.mockImplementation(async (cmd, args) => {
+        if (cmd === 'switch_acp_session') {
+            orig(cmd, args).catch(() => {}); // recorded in `calls`
+            const d = deferred();
+            pending.push(d);
+            open += 1;
+            max = Math.max(max, open);
+            try {
+                return await d.promise;
+            } finally {
+                open -= 1;
+            }
+        }
+        if (cmd === 'reconnect_acp') {
+            await orig(cmd, args);
+            return reconnect();
+        }
+        return orig(cmd, args);
+    });
+    return { pending, maxOpen: () => max };
+}
+
+const RESTARTED = { reconnected: true, sessionId: null, sessionReloaded: false };
+
+describe('floating: one bootstrap at a time after a failed one', () => {
+    it('a send during the sign-in restart shares its bootstrap: one session, sent once', async () => {
+        const { app, starts, named, sends } = setup({ bootstraps: [SIGNED_OUT] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        const restart = deferred();
+        const ctl = controlBootstraps(app, () => restart.promise);
+
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush();
+        expect(status()).toBe('shared.agent_sign_in.status.restarting');
+
+        // Enter while the panel says "Restarting…": the send retries the
+        // bootstrap, and the restart's bootstrap must join that one.
+        app._lastBootstrapRetryAt = 0;
+        app.elements.input.value = 'second';
+        await app.sendChatMessage('second');
+        expect(ctl.pending.length).toBe(1);
+        restart.resolve(RESTARTED);
+        await flush(20);
+        expect(ctl.pending.length).toBe(1);
+
+        ctl.pending[0].resolve('s-a');
+        await wait(250);
+        await flush(20);
+
+        expect(named('switch_acp_session').length).toBe(2); // the failed retry, then one
+        expect(ctl.maxOpen()).toBe(1);
+        expect(app.floatingSessionId).toBe('s-a');
+        expect(app.bootstrappingSession).toBe(false);
+        // The newer send went, once, on the one session; the older one not.
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-a', 'second']]);
+        // That send's turn cleared the panel, which had ended ready, not failed.
+        expect(status()).toBeUndefined();
+        expect(document.querySelector('#responseText').textContent).not.toContain(
+            'floating.error.agent_unavailable'
+        );
+    });
+
+    it('Sign in and Reconnect together: a superseded failure changes nothing, sent once', async () => {
+        const { app, starts, sends } = setup({ bootstraps: [SIGNED_OUT] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        const ctl = controlBootstraps(app, () => RESTARTED);
+
+        signInBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+        await flush();
+        document
+            .querySelector('#responseText .floating-error-reconnect:not(.agent-sign-in-btn)')
+            .click();
+        await flush(20);
+        expect(ctl.pending.length).toBe(1);
+
+        // The sign-in ends while Reconnect's bootstrap is still out: its
+        // restart's bootstrap waits on that one rather than starting another.
+        starts[0].resolve({ outcome: 'exited', exitCode: 0 });
+        await flush(20);
+        expect(ctl.pending.length).toBe(1);
+
+        const shown = vi.spyOn(app, '_showBootstrapError');
+        // The second restart killed it; the sign-in's bootstrap goes next.
+        ctl.pending[0].reject({ kind: 'connection_lost', message: 'Connection lost' });
+        await flush(20);
+        expect(shown).not.toHaveBeenCalled();
+        expect(ctl.pending.length).toBe(2);
+        ctl.pending[1].resolve('s-b');
+        await flush(20);
+
+        expect(ctl.maxOpen()).toBe(1);
+        expect(shown).not.toHaveBeenCalled();
+        expect(app.floatingSessionId).toBe('s-b');
+        expect(app.sessionBootstrapError).toBeNull();
+        expect(sends().map((a) => [a.sessionId, a.message])).toEqual([['s-b', 'hello agent']]);
+        expect(sends()[0].turnId).toEqual(expect.any(String));
+        expect(status()).toBe('shared.agent_sign_in.status.done');
+    });
+
+    it('a second Reconnect while one is under way starts no second restart', async () => {
+        const { app, named } = setup({ bootstraps: [SIGNED_OUT] });
+        await failedBootstrapThenSend(app, SIGNED_OUT);
+        const restart = deferred();
+        controlBootstraps(app, () => restart.promise);
+        const waiting = app._bootstrapWaitingSend;
+        const first = app._reconnectBootstrap(document.createElement('button'), waiting);
+        await app._reconnectBootstrap(document.createElement('button'), waiting);
+        expect(named('reconnect_acp').length).toBe(1);
+        restart.resolve({ reconnected: false });
+        await first;
+    });
+});
