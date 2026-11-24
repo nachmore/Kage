@@ -113,6 +113,46 @@ export function classifyMcpCall(firstTitle, latestTitle, kind) {
     return first;
 }
 
+// --- Kage's own bridge tool --------------------------------------------------
+
+/** Kage's MCP sidecar (src/mcp_registration.rs `MCP_SERVER_KEY`). */
+const KAGE_MCP_SERVER = 'kage-computer-control';
+/** Its tool that asks Kage to run a command outside the agent's sandbox. */
+const RUN_OUTSIDE_SANDBOX_TOOL = 'run_outside_sandbox';
+
+/** Whether a tool usage entry is a call of Kage's `run_outside_sandbox` tool. */
+export function isRunOutsideSandboxCall(entry) {
+    const mcp = parseMcpTitle(entry?.title);
+    return mcp?.server === KAGE_MCP_SERVER && mcp.tool === RUN_OUTSIDE_SANDBOX_TOOL;
+}
+
+/**
+ * Mark each shell record of a response that a later `run_outside_sandbox`
+ * call follows (`rec.handedOff`): the agent took the command outside its
+ * sandbox itself, so that request's card supersedes the shell block's own
+ * sandbox notice — two offers to run much the same command, one of them
+ * stale. Returns the shell records whose mark changed (their `rev` bumped).
+ */
+export function markSandboxHandoffs(toolUsages) {
+    const changed = [];
+    if (!Array.isArray(toolUsages)) return changed;
+    let later = false;
+    for (let i = toolUsages.length - 1; i >= 0; i--) {
+        const u = toolUsages[i];
+        if (isRunOutsideSandboxCall(u)) {
+            later = true;
+            continue;
+        }
+        const rec = u?.shell;
+        if (rec && !!rec.handedOff !== later) {
+            rec.handedOff = later;
+            rec.rev += 1;
+            changed.push(rec);
+        }
+    }
+    return changed;
+}
+
 // --- Categories -------------------------------------------------------------
 
 /** ACP tool kinds (agent-client-protocol `ToolKind`). */

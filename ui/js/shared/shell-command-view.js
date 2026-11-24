@@ -37,6 +37,10 @@
  * withheld for a command with hidden characters, and a multi-line one
  * gets a warning. Such a block stays in the activity slot, and opens the
  * command list it's handed off to, so the notice stays in view.
+ *
+ * No notice once the agent itself asked Kage to run a command outside its
+ * sandbox later in the response (`rec.handedOff`, `markSandboxHandoffs`):
+ * that request's card (host-command-view.js) is the one to answer.
  */
 
 import { errMessage } from './error-message.js';
@@ -63,7 +67,7 @@ import {
     shellSandboxDenial,
 } from './shell-commands.js';
 import { createRunControls, syncRunControls } from './shell-run-view.js';
-import { settleToolCalls } from './tool-calls.js';
+import { markSandboxHandoffs, settleToolCalls } from './tool-calls.js';
 
 /** Bubbling event fired from a block or the chip when its height changes. */
 export const SHELL_LAYOUT_EVENT = TOOL_LAYOUT_EVENT;
@@ -493,7 +497,7 @@ export function updateShellCommandBlock(root, record) {
         st.headerCommand = commandKey(record);
     }
     renderStatus(st.status, state, out);
-    syncSandboxNotice(root, shellSandboxDenial(record));
+    syncSandboxNotice(root, record.handedOff ? null : shellSandboxDenial(record));
     if (isShellCommandExpanded(root)) renderPanel(root);
     st.renderedRev = record.rev;
     st.renderedState = state;
@@ -601,6 +605,17 @@ export function showShellActivity(slot, record) {
 }
 
 /**
+ * Repaint every block in the activity slot from its record, then drop the
+ * ones with nothing more to show — for records another call changed (a
+ * later `run_outside_sandbox` call superseding a sandbox notice).
+ */
+export function refreshShellActivity(slot) {
+    if (!slot) return;
+    for (const b of blocksOf(slot)) updateShellCommandBlock(b, b._kageShell.record);
+    pruneShellActivity(slot);
+}
+
+/**
  * The turn ended: calls that never reported a terminal status stop showing
  * as running (shell and every other tool's), every block repaints and finished collapsed ones go. Blocks
  * the user has open stay until `handOffShellActivity` moves them into the
@@ -610,6 +625,7 @@ export function finishShellActivity(slot, toolUsages) {
     settleShellCalls(toolUsages);
     // Other tools' calls end with the turn too (tool-call-view.js).
     settleToolCalls(toolUsages);
+    markSandboxHandoffs(toolUsages);
     for (const b of blocksOf(slot)) updateShellCommandBlock(b, b._kageShell.record);
     pruneShellActivity(slot);
 }
@@ -697,6 +713,9 @@ function createShellChip(listId) {
  */
 export function syncShellCommandList(container, toolUsages, opts = {}) {
     if (!container) return;
+    // A response drawn whole (a reopened session's) never went through
+    // processToolCallUpdate's marking.
+    markSandboxHandoffs(toolUsages);
     const calls = getShellCalls(toolUsages);
     let chip = container.querySelector(':scope > .shell-chip');
     let list = container.querySelector(':scope > .shell-cmd-list');

@@ -58,6 +58,7 @@ import {
     finishShellActivity,
     handOffShellActivity,
     pruneShellActivity,
+    refreshShellActivity,
     showShellActivity,
 } from '../shared/shell-command-view.js';
 import { setShellRunHost } from '../shared/shell-run-view.js';
@@ -184,6 +185,7 @@ const CHAT_APP_DEPENDENCIES = {
     setExtensionManager,
     setupDragDrop,
     setupRtlDetection,
+    refreshShellActivity,
     showShellActivity,
     SpeechController,
     STREAM,
@@ -628,6 +630,7 @@ export class ChatApp {
                 spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${escapeHtml(friendly)}...`;
             },
             showShellCommand: (record) => app._showShellCommand(record),
+            refreshShellActivity: () => app._refreshShellActivity(),
             // Chat doesn't render sources inline during streaming — they're
             // rendered once when the message completes.
             onToolCallTracked: () => {},

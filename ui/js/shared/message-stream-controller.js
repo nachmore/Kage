@@ -68,6 +68,10 @@
  *                                     record changed (status, arguments,
  *                                     output): refresh its block in place
  *                                     if the chip row is on screen
+ *   - refreshShellActivity()          optional — earlier shell records
+ *                                     changed (a later run_outside_sandbox
+ *                                     call superseded their sandbox
+ *                                     notices): repaint the command blocks
  *   - onToolCallTracked(update, updated)  after processToolCallUpdate
  */
 
@@ -170,7 +174,7 @@ export class MessageStreamController {
         const evtSessionId = event?.payload?.params?.sessionId;
         if (evtSessionId && !host.acceptSessionId(evtSessionId)) return;
 
-        const { updated, update, shell, call } = processToolCallUpdate(event, host);
+        const { updated, update, shell, call, handedOff } = processToolCallUpdate(event, host);
 
         // Note: we deliberately do NOT call host.flushPendingMarkdown() here
         // any more. Tool-call updates fire on every kind/title change and
@@ -191,6 +195,9 @@ export class MessageStreamController {
             host.showToolRunningSpinner?.(getToolFriendlyName(update.title));
         }
         if (call) host.onToolCallChanged?.(call);
+        // The agent's own `run_outside_sandbox` request supersedes earlier
+        // commands' sandbox notices: repaint those blocks.
+        if (handedOff?.length) host.refreshShellActivity?.();
 
         host.onToolCallTracked?.(update, updated);
     }

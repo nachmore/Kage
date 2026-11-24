@@ -12,13 +12,20 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '../../ui/js/shared/i18n.js';
-import { createShellCommandBlock } from '../../ui/js/shared/shell-command-view.js';
+import {
+    createShellActivitySlot,
+    createShellCommandBlock,
+    refreshShellActivity,
+    showShellActivity,
+    syncShellCommandList,
+} from '../../ui/js/shared/shell-command-view.js';
 import {
     detectSandboxDenial,
     hasUnquotedPipe,
     shellSandboxDenial,
 } from '../../ui/js/shared/shell-commands.js';
 import { processToolCallUpdate } from '../../ui/js/shared/streaming-utils.js';
+import { isRunOutsideSandboxCall, markSandboxHandoffs } from '../../ui/js/shared/tool-calls.js';
 
 // Real EN strings, so the notice's copy (and its {error} param) is checked
 // as the user reads it.
@@ -458,5 +465,75 @@ describe('the notice, in English', () => {
         expect(block.querySelector('.shell-cmd-sandbox-status').textContent).toBe(
             "The command is copied, but the terminal didn't open: Failed to execute: not found"
         );
+    });
+});
+
+describe("the agent's own run_outside_sandbox request supersedes the notice", () => {
+    const bridgeCall = (title = 'Running: @kage-computer-control/run_outside_sandbox') => ({
+        sessionUpdate: 'tool_call',
+        toolCallId: 'c2',
+        title,
+        kind: 'other',
+        status: 'in_progress',
+        rawInput: { command: 'brew install --cask ghostty' },
+    });
+
+    function blockedTurn() {
+        const state = { toolUsages: [], toolSources: [] };
+        processToolCallUpdate(evt(start('brew install --cask ghostty 2>&1 | tail -15')), state);
+        const { shell } = processToolCallUpdate(evt(kiroResult(0, BREW_CASK, '')), state);
+        return { state, shell };
+    }
+
+    it('recognises only Kage\'s own tool', () => {
+        expect(isRunOutsideSandboxCall({ title: 'Running: @kage-computer-control/run_outside_sandbox' })).toBe(true);
+        expect(isRunOutsideSandboxCall({ title: 'mcp__kage-computer-control__run_outside_sandbox' })).toBe(true);
+        for (const title of [
+            'Running: @evil/run_outside_sandbox',
+            'Running: @kage-computer-control/get_outside_sandbox_result',
+            'run_outside_sandbox',
+            undefined,
+        ]) {
+            expect(isRunOutsideSandboxCall({ title })).toBe(false);
+        }
+    });
+
+    it('drops the notice from the live block once the request comes in', () => {
+        const { state, shell } = blockedTurn();
+        const slot = createShellActivitySlot();
+        const block = showShellActivity(slot, shell);
+        expect(block.querySelector('.shell-cmd-sandbox')).not.toBeNull();
+
+        const { handedOff } = processToolCallUpdate(evt(bridgeCall()), state);
+        expect(handedOff).toEqual([shell]);
+        refreshShellActivity(slot);
+        expect(block.querySelector('.shell-cmd-sandbox')).toBeNull();
+        // Finished, collapsed and no notice: nothing left to show live.
+        expect(slot.contains(block)).toBe(false);
+    });
+
+    it('only for commands before the request, and not for another tool', () => {
+        const { state, shell } = blockedTurn();
+        expect(processToolCallUpdate(evt({ ...bridgeCall('Running: @evil/run_outside_sandbox'), toolCallId: 'c9' }), state).handedOff).toEqual([]);
+        expect(shell.handedOff).toBeFalsy();
+
+        processToolCallUpdate(evt(bridgeCall()), state);
+        processToolCallUpdate(evt({ ...start('brew install x'), toolCallId: 'c3' }), state);
+        const after = processToolCallUpdate(evt({ ...kiroResult(1, '', BREW_CASK), toolCallId: 'c3' }), state).shell;
+        expect(shell.handedOff).toBe(true);
+        expect(after.handedOff).toBeFalsy();
+        expect(createShellCommandBlock(after).querySelector('.shell-cmd-sandbox')).not.toBeNull();
+        expect(markSandboxHandoffs(state.toolUsages)).toEqual([]);
+    });
+
+    it('a response drawn whole gets no notice for a superseded command', () => {
+        const { state } = blockedTurn();
+        state.toolUsages.push({ ...bridgeCall(), shell: undefined });
+        for (const u of state.toolUsages) if (u.shell) u.shell.handedOff = undefined;
+        const row = document.createElement('div');
+        syncShellCommandList(row, state.toolUsages, { revealSandboxBlocked: true });
+        const list = row.querySelector('.shell-cmd-list');
+        expect(list.querySelector('.shell-cmd-sandbox')).toBeNull();
+        expect(list.hidden).toBe(true);
     });
 });

@@ -26,6 +26,7 @@ import {
     finishShellActivity,
     handOffShellActivity,
     pruneShellActivity,
+    refreshShellActivity,
     SHELL_LAYOUT_EVENT,
     showShellActivity,
 } from '../../shared/shell-command-view.js';
@@ -202,6 +203,7 @@ export {
     setupTimerBarControls,
     SHELL_LAYOUT_EVENT,
     showExtensionBar,
+    refreshShellActivity,
     showShellActivity,
     signalMascot,
     signalMascotError,

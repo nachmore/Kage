@@ -19,6 +19,7 @@ import {
     renderToolSources,
     sendAppNotification,
     SHELL_LAYOUT_EVENT,
+    refreshShellActivity,
     showShellActivity,
     signalMascot,
     signalMascotRecovered,
@@ -270,6 +271,14 @@ export const ResponseUiMethods = {
         const sourcesEl = document.getElementById('toolSources');
         if (!sourcesEl || sourcesEl.style.display === 'none') return;
         syncToolSources(sourcesEl, this.toolUsages);
+    },
+
+    /** Earlier commands' records changed: repaint their blocks. */
+    _refreshShellActivity() {
+        const slot = this._shellActivitySlot();
+        if (slot) refreshShellActivity(slot);
+        this._refreshToolCall();
+        this.windowManager.resizeWindow();
     },
 
     _pruneShellActivity() {

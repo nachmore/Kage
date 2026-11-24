@@ -48,6 +48,7 @@ export function createMessagesMixin(dependencies) {
         handOffShellActivity,
         pruneShellActivity,
         renderToolSources,
+        refreshShellActivity,
         showShellActivity,
         getConfig,
         ExtensionToolController,
@@ -310,6 +311,12 @@ export function createMessagesMixin(dependencies) {
             contentDiv?.querySelector('.tool-running-indicator')?.remove();
             showShellActivity(slot, record);
             this.scrollToBottom();
+        }
+
+        /** Earlier commands' records changed: repaint their blocks. */
+        _refreshShellActivity() {
+            const slot = this._shellActivitySlot();
+            if (slot) refreshShellActivity(slot);
         }
 
         _pruneShellActivity() {

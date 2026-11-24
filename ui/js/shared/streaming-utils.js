@@ -8,7 +8,7 @@ import { tHtml } from './i18n.js';
 import { escapeAttr, escapeHtml, getToolIcon } from './tool-utils.js';
 import { isInternalHost } from './internal-hosts.js';
 import { applyShellUpdate, SHELL_RESPONSE_OUTPUT_CAP, shellOutputSize } from './shell-commands.js';
-import { applyToolUpdate, toolCallSize, toolChipGroup } from './tool-calls.js';
+import { applyToolUpdate, markSandboxHandoffs, toolCallSize, toolChipGroup } from './tool-calls.js';
 
 // `escapeAttr` is re-exported here so existing call sites that import
 // it from this module keep working. Canonical home is `tool-utils.js`.
@@ -27,16 +27,18 @@ export { escapeAttr };
  *
  * @param {Object} event - Tauri event payload
  * @param {Object} state - { toolUsages: [], toolSources: [] }
- * @returns {{ updated: boolean, update: Object|null, shell: Object|null, call: Object|null }}
+ * @returns {{ updated: boolean, update: Object|null, shell: Object|null, call: Object|null, handedOff: Object[] }}
  *   `updated`: the chip row needs re-rendering — a new tool or new sources
  *   were tracked, or a tracked call moved to another chip (its kind or
  *   title came late: plain → shell, or into an MCP server's chip).
  *   Status/output changes don't set it; they come back as `shell` / `call`.
+ *   `handedOff`: earlier shell records a new `run_outside_sandbox` call now
+ *   supersedes (`markSandboxHandoffs`) — repaint them.
  */
 export function processToolCallUpdate(event, state) {
     const notification = event.payload;
     const update = notification?.params?.update;
-    if (!update) return { updated: false, update: null, shell: null, call: null };
+    if (!update) return { updated: false, update: null, shell: null, call: null, handedOff: [] };
 
     let updated = false;
     let entry = null;
@@ -114,7 +116,11 @@ export function processToolCallUpdate(event, state) {
         }
     }
 
-    return { updated, update, shell, call };
+    // A new call (or one that changed chip) can be the agent's own
+    // `run_outside_sandbox` request for a command its sandbox refused.
+    const handedOff = updated ? markSandboxHandoffs(state.toolUsages) : [];
+
+    return { updated, update, shell, call, handedOff };
 }
 
 /**

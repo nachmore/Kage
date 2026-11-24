@@ -383,6 +383,7 @@ export class FloatingApp {
             },
             showShellCommand: (record) => this._showShellCommand(record),
             onToolCallChanged: () => this._refreshToolCall(),
+            refreshShellActivity: () => this._refreshShellActivity(),
             onToolCallTracked: (update, updated) => {
                 // Detect computer-control tool usage and keep window visible
                 if (update?.title) {
